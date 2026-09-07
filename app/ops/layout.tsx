@@ -11,7 +11,8 @@ import {
   Plus,
   Building2,
   ChevronDown,
-  Users
+  Users,
+  Plug
 } from "lucide-react"
 
 export default function OpsLayout({
@@ -60,6 +61,10 @@ export default function OpsLayout({
           <Link href="/ops/definicoes" className="flex items-center gap-4 px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold text-[15px] transition-colors">
             <Settings className="w-5 h-5" strokeWidth={2} />
             Definições
+          </Link>
+          <Link href="/ops/integracoes" className="flex items-center gap-4 px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold text-[15px] transition-colors">
+            <Plug className="w-5 h-5" strokeWidth={2} />
+            Integrações
           </Link>
         </nav>
         
