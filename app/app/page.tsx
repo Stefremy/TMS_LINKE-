@@ -18,7 +18,7 @@ export default function OpsDashboardPage() {
       <div className="flex-1 flex flex-col gap-6">
         
         {/* Criar Nova Guia Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <div id="criar-guia" className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 scroll-mt-6">
           <h2 className="text-xl font-bold text-slate-800 mb-6">Criar Nova Guia de Transporte</h2>
           
           {/* Stepper */}
@@ -107,7 +107,7 @@ export default function OpsDashboardPage() {
         </div>
 
         {/* Pedir Recolha Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <div id="recolhas" className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 scroll-mt-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
               <Calendar className="w-5 h-5" />
@@ -189,7 +189,7 @@ export default function OpsDashboardPage() {
         </div>
 
         {/* Últimos Envios Table Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <div id="envios" className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 scroll-mt-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-800">Últimos Envios</h2>
             <a href="#" className="text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1">

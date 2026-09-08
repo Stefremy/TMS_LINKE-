@@ -20,7 +20,8 @@ import {
   RefreshCw,
   MapPin,
   FileText,
-  UserCheck
+  UserCheck,
+  ExternalLink
 } from "lucide-react"
 import { toggleClienteStatusAction, deleteClienteAction } from "@/app/actions/clientes"
 import { Cliente, DEFAULT_CLIENT_CATEGORIES } from "../types"
@@ -305,7 +306,7 @@ export function ClientesClient({ initialClientes }: ClientesClientProps) {
                 return (
                   <tr 
                     key={item.id}
-                    onDoubleClick={() => handleOpenEditModal(item)}
+                    onClick={() => handleOpenEditModal(item)}
                     className={`transition-colors hover:bg-slate-50/80 cursor-pointer ${
                       isSelected ? "bg-emerald-50/40" : ""
                     }`}
@@ -419,15 +420,20 @@ export function ClientesClient({ initialClientes }: ClientesClientProps) {
                         </button>
 
                         {isActionOpen && (
-                          <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-slate-200 rounded-lg shadow-xl z-30 py-1 text-left animate-in fade-in zoom-in-95 duration-100">
+                          <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl z-30 py-1 text-left animate-in fade-in zoom-in-95 duration-100">
                             <button
                               type="button"
-                              onClick={() => handleOpenEditModal(item)}
-                              className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium"
+                              onClick={() => {
+                                setOpenActionId(null)
+                                handleOpenEditModal(item)
+                              }}
+                              className="w-full px-3 py-2 text-xs text-slate-800 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 font-bold transition-colors"
                             >
-                              <Edit className="w-3.5 h-3.5 text-slate-500" />
-                              Editar Detalhes
+                              <Edit className="w-3.5 h-3.5 text-emerald-600" />
+                              Abrir Detalhes do Cliente
                             </button>
+
+                            <div className="my-1 border-t border-slate-100" />
 
                             <button
                               type="button"
