@@ -606,7 +606,7 @@ export default function EnviosPage() {
 
                 {/* Ações Column */}
                 <td className="px-4 py-3 align-top text-right overflow-visible">
-                  <ActionMenu />
+                  <ActionMenu trackingRef={envio.trk.ref} isCtt={envio.service.code.includes('CTT')} />
                 </td>
               </tr>
             ))}
