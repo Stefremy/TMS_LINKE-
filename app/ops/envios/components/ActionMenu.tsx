@@ -15,13 +15,17 @@ import {
   Truck
 } from "lucide-react"
 
+import { dispatchShipmentAction } from "@/app/actions/shipments"
+
 interface ActionMenuProps {
+  shipmentId?: string
   trackingRef?: string
   isCtt?: boolean
 }
 
-export function ActionMenu({ trackingRef, isCtt = true }: ActionMenuProps) {
+export function ActionMenu({ shipmentId, trackingRef, isCtt = true }: ActionMenuProps) {
   const [isOpen, setIsOpen] = React.useState(false)
+  const [isEmitting, setIsEmitting] = React.useState(false)
   const menuRef = React.useRef<HTMLDivElement>(null)
 
   // Close when clicking outside
@@ -34,6 +38,20 @@ export function ActionMenu({ trackingRef, isCtt = true }: ActionMenuProps) {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  const handleEmitCtt = async () => {
+    if (!shipmentId) return
+    setIsEmitting(true)
+    try {
+      await dispatchShipmentAction(shipmentId)
+      alert("Envio CTT emitido com sucesso!")
+    } catch (err: any) {
+      alert("Erro ao emitir CTT: " + err.message)
+    } finally {
+      setIsEmitting(false)
+      setIsOpen(false)
+    }
+  }
 
   return (
     <div className="relative inline-flex items-center justify-end" ref={menuRef}>
@@ -66,6 +84,27 @@ export function ActionMenu({ trackingRef, isCtt = true }: ActionMenuProps) {
           {/* CTT SPECIFIC ACTIONS */}
           <div className="px-2 py-1 bg-red-50/50">
             <div className="px-2 py-0.5 text-[10px] font-bold text-red-600 uppercase tracking-wider">Ações CTT Expresso</div>
+            
+            <button 
+              onClick={handleEmitCtt}
+              disabled={isEmitting || !shipmentId}
+              className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-red-100/50 rounded text-[13px] text-red-700 font-semibold disabled:opacity-50"
+            >
+              <Truck className={`w-4 h-4 text-red-600 ${isEmitting ? 'animate-pulse' : ''}`} />
+              {isEmitting ? 'A Emitir...' : 'Emitir Envio CTT'}
+            </button>
+
+            <button 
+              onClick={() => {
+                alert(`A sincronizar estado CTT para ${trackingRef || "envio selecionado"} (Server Action: syncCttTrackingAction)`)
+                setIsOpen(false)
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-red-100/50 rounded text-[13px] text-red-700 font-semibold"
+            >
+              <History className="w-4 h-4 text-red-600" />
+              Atualizar Tracking CTT
+            </button>
+
             <button 
               onClick={() => {
                 alert(`A abrir etiqueta oficial CTT para ${trackingRef || "envio selecionado"}`)

@@ -27,26 +27,13 @@ export async function createCliente(formData: FormData) {
   const supabase = createAdminClient()
   
   const name = formData.get("name") as string
-  const nif = formData.get("nif") as string
-  const email = formData.get("email") as string
-  const phone = formData.get("phone") as string
-  const address = formData.get("address") as string
-  const postal_code = formData.get("postal_code") as string
-  const city = formData.get("city") as string
 
+  // We are only inserting "name" for now to test the flow quickly as agreed.
   const { error } = await supabase
     .from("clients")
     .insert({
       tenant_id: LINKE_TENANT_ID,
       name,
-      nif,
-      email,
-      phone,
-      address,
-      postal_code,
-      city,
-      plan_type: "Starter",
-      is_active: true
     })
 
   if (error) {
