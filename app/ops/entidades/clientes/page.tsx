@@ -1,10 +1,10 @@
-import * as React from "react"
+import { getClientesAction } from "@/app/actions/clientes"
+import { ClientesClient } from "./components/ClientesClient"
 
-export default function ClientesPage() {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 h-[calc(100vh-8rem)]">
-      <h1 className="text-2xl font-bold text-slate-800 mb-2">Clientes</h1>
-      <p className="text-slate-500">Este módulo está em desenvolvimento.</p>
-    </div>
-  )
+export const dynamic = "force-dynamic"
+
+export default async function EntidadesClientesPage() {
+  const clientes = await getClientesAction()
+
+  return <ClientesClient initialClientes={clientes} />
 }
