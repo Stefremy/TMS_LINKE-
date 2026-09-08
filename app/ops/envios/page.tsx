@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { 
   Plus, 
@@ -12,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { ActionMenu } from "./components/ActionMenu"
+import { FerramentasMenu } from "./components/FerramentasMenu"
 
 const mockEnvios = [
   {
@@ -87,6 +90,23 @@ const mockEnvios = [
 ]
 
 export default function EnviosPage() {
+  const [searchQuery, setSearchQuery] = React.useState("")
+  const [showFilters, setShowFilters] = React.useState(false)
+
+  const filteredEnvios = mockEnvios.filter((envio) => {
+    if (!searchQuery) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      envio.trk.id.toLowerCase().includes(q) ||
+      envio.trk.ref.toLowerCase().includes(q) ||
+      envio.sender.name.toLowerCase().includes(q) ||
+      envio.recipient.name.toLowerCase().includes(q) ||
+      envio.service.name.toLowerCase().includes(q) ||
+      envio.status.label.toLowerCase().includes(q) ||
+      envio.value.amount.toLowerCase().includes(q)
+    )
+  })
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       
@@ -117,16 +137,19 @@ export default function EnviosPage() {
             Localizar
           </button>
 
-          <button className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5">
-            <Settings className="w-4 h-4" />
-            Ferramentas
-            <ChevronDown className="w-4 h-4 ml-1" />
-          </button>
+          <FerramentasMenu />
           
-          <button className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5">
+          <button 
+            onClick={() => setShowFilters(!showFilters)}
+            className={`border px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5 ${
+              showFilters 
+                ? "bg-slate-200 border-slate-400 text-slate-900" 
+                : "bg-white border-slate-300 hover:bg-slate-50 text-slate-700"
+            }`}
+          >
             <Filter className="w-4 h-4" />
             Filtrar
-            <ChevronDown className="w-4 h-4 ml-1" />
+            <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${showFilters ? "rotate-180" : ""}`} />
           </button>
 
           <div className="flex items-center ml-2 border-l border-slate-200 pl-4">
@@ -155,13 +178,264 @@ export default function EnviosPage() {
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
-              placeholder="" 
+              placeholder="Pesquisar..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-48 pl-8 pr-3 py-1 bg-white border border-slate-300 rounded text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm h-8"
             />
           </div>
         </div>
 
       </div>
+
+      {/* Expanded Filters Area */}
+      {showFilters && (
+        <div className="px-4 py-4 border-b border-slate-200 bg-slate-50 shrink-0 flex flex-col gap-3 text-[11px]">
+          
+          {/* Row 1 */}
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="flex flex-col gap-1 w-32">
+              <label className="font-semibold text-slate-600">Filtrar Data</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Data Recolha</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-56">
+              <label className="font-semibold text-slate-600">Data</label>
+              <div className="flex items-center gap-1">
+                <input type="text" placeholder="Início" className="w-full border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+                <span className="text-slate-400 px-1">até</span>
+                <input type="text" placeholder="Fim" className="w-full border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 w-32">
+              <label className="font-semibold text-slate-600">Serviço</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-40">
+              <label className="font-semibold text-slate-600">Fornecedor</label>
+              <div className="flex">
+                <span className="bg-slate-100 border border-slate-300 border-r-0 rounded-l px-2 py-1.5 text-slate-500 font-bold">=</span>
+                <select className="w-full border border-slate-300 rounded-r px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                  <option>Todos</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Contexto</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Tipo</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-32">
+              <div className="flex justify-between items-center"><label className="font-semibold text-slate-600">Motorista</label><span className="text-[9px] text-blue-500 cursor-pointer hover:underline">Todos</span></div>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-32">
+              <div className="flex justify-between items-center"><label className="font-semibold text-slate-600">Motorista Rec.</label><span className="text-[9px] text-blue-500 cursor-pointer hover:underline">Todos</span></div>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-32">
+              <label className="font-semibold text-slate-600">Viatura</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Row 2 */}
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">País Origem</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">País Destino</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-32">
+              <label className="font-semibold text-slate-600">Distrito Destino</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-32">
+              <label className="font-semibold text-slate-600">Concelho Destino</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-20">
+              <label className="font-semibold text-slate-600">CP Origem</label>
+              <input type="text" className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+            </div>
+            <div className="flex flex-col gap-1 w-20">
+              <label className="font-semibold text-slate-600">CP Destino</label>
+              <input type="text" className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Cobrança</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Portes</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Anexos</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Fatura</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Nº Fatura</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todas</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Taxas</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Row 3 */}
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="flex flex-col gap-1 w-36">
+              <label className="font-semibold text-slate-600">Tipo Taxa</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Fatura Compra</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Subcontrato</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-32">
+              <label className="font-semibold text-slate-600 flex items-center gap-1"><Plus className="w-3 h-3"/> Outros Filtros</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Bloqueado</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-28">
+              <label className="font-semibold text-slate-600">Impresso</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-64">
+              <label className="font-semibold text-slate-600">Cliente</label>
+              <div className="flex">
+                <span className="bg-slate-100 border border-slate-300 border-r-0 rounded-l px-2 py-1.5 text-slate-500 font-bold">=</span>
+                <select className="w-full border border-slate-300 rounded-r px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                  <option>Todos</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 w-32">
+              <label className="font-semibold text-slate-600">Tipo Cliente</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-32">
+              <label className="font-semibold text-slate-600">Vendedor</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Row 4 */}
+          <div className="flex items-end gap-4 flex-wrap mt-2">
+            <div className="flex flex-col gap-1 w-36">
+              <label className="font-semibold text-slate-600">Criado Por</label>
+              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <option>Todos</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-40">
+              <label className="font-semibold text-slate-600">Volumes</label>
+              <div className="flex items-center gap-1">
+                <input type="text" placeholder="Min" className="w-full border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+                <span className="text-slate-400">até</span>
+                <input type="text" placeholder="Max" className="w-full border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 w-40">
+              <label className="font-semibold text-slate-600">Peso</label>
+              <div className="flex items-center gap-1">
+                <input type="text" placeholder="Min" className="w-full border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+                <span className="text-slate-400">até</span>
+                <input type="text" placeholder="Max" className="w-full border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 ml-2 mb-1.5">
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" className="rounded border-slate-300 text-green-600 focus:ring-green-500" />
+                <span className="text-slate-700 font-semibold">Ocultar Finalizados</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" className="rounded border-slate-300 text-green-600 focus:ring-green-500" />
+                <span className="text-slate-700 font-semibold">Ocultar Agendados</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" className="rounded border-slate-300 text-green-600 focus:ring-green-500" />
+                <span className="text-slate-700 font-semibold">Apagados</span>
+              </label>
+
+              <button className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 font-bold ml-4">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21 21-4.3-4.3"/><path d="M11 20A9 9 0 1 0 11 2a9 9 0 0 0 0 18Z"/><path d="m14 14-6-6"/><path d="m8 14 6-6"/></svg>
+                Limpar Filtros
+              </button>
+            </div>
+          </div>
+
+        </div>
+      )}
 
       {/* Table Area */}
       <div className="flex-1 overflow-auto">
@@ -183,7 +457,13 @@ export default function EnviosPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {mockEnvios.map((envio, idx) => (
+            {filteredEnvios.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
+                  Nenhum envio encontrado com a pesquisa atual.
+                </td>
+              </tr>
+            ) : filteredEnvios.map((envio, idx) => (
               <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                 <td className="px-4 py-4 align-top">
                   <input type="checkbox" className="rounded border-slate-300 text-green-600 focus:ring-green-500 mt-1" />
