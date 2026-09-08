@@ -196,15 +196,71 @@ export function FornecedorModal({
   React.useEffect(() => {
     if (initialData) {
       setFormData({
-        ...initialData,
-        price_families: initialData.price_families || DEFAULT_PRICE_FAMILIES,
-        additional_fees: initialData.additional_fees || DEFAULT_ADDITIONAL_FEES,
-        volumetrics: initialData.volumetrics || DEFAULT_VOLUMETRICS,
-        certificates: initialData.certificates || DEFAULT_CERTIFICATES,
+        id: initialData.id,
+        code: initialData.code || "",
+        center_code: initialData.center_code || "A01",
+        short_name: initialData.short_name || "",
+        color: initialData.color || "#00a3e0",
+        legal_name: initialData.legal_name || "",
+        nif: initialData.nif || "",
+        role: initialData.role || "Transportador Subcontratado",
+        category: initialData.category || initialData.role || "Transportador Subcontratado",
+        city: initialData.city || "",
+        email: initialData.email || "",
+        traffic_email: initialData.traffic_email || "",
+        phone: initialData.phone || "",
+        mobile_phone: initialData.mobile_phone || "",
+        balance: initialData.balance || "0,00€",
+        payment_terms: initialData.payment_terms || "A 30 dias",
+        is_active: initialData.is_active ?? true,
+        country_code: initialData.country_code || "PT",
+        created_at: initialData.created_at || new Date().toISOString(),
+
+        is_carrier: initialData.is_carrier ?? true,
+        is_forwarder: initialData.is_forwarder ?? false,
+        is_own_company: initialData.is_own_company ?? false,
+        alvara_number: initialData.alvara_number || "",
+        associated_network: initialData.associated_network || "",
+        address: initialData.address || "",
+        postal_code: initialData.postal_code || "",
+        manager_name: initialData.manager_name || "",
+        billing_agency: initialData.billing_agency || "A01 - Sede Guimarães",
+        retention_rate: initialData.retention_rate ?? 0,
+        vat_regime: initialData.vat_regime || "Regime Geral (23%)",
+        shipping_address: initialData.shipping_address || {
+          use_different: false,
+          address: "",
+          postal_code: "",
+          city: "",
+          contact: "",
+        },
+        iban: initialData.iban || "",
+        swift: initialData.swift || "",
+        daily_summary_enabled: initialData.daily_summary_enabled ?? true,
+        daily_summary_email: initialData.daily_summary_email || "",
+        owner_company: initialData.owner_company || "GO LINKE UNIPESSOAL LIMITADA",
+        authorized_agencies: initialData.authorized_agencies || ["A01", "A02", "A03", "A04"],
+        language_preference: initialData.language_preference || "Português",
+        observations: initialData.observations || "",
+        sync_external_invoicing: initialData.sync_external_invoicing ?? true,
+
+        global_markup_pct: initialData.global_markup_pct ?? 15,
+        price_families: initialData.price_families && initialData.price_families.length > 0 
+          ? initialData.price_families 
+          : DEFAULT_PRICE_FAMILIES,
+        additional_fees: initialData.additional_fees && initialData.additional_fees.length > 0
+          ? initialData.additional_fees
+          : DEFAULT_ADDITIONAL_FEES,
+        volumetrics: initialData.volumetrics && initialData.volumetrics.length > 0
+          ? initialData.volumetrics
+          : DEFAULT_VOLUMETRICS,
         vehicles: initialData.vehicles || [],
         drivers: initialData.drivers || [],
         ledger_entries: initialData.ledger_entries || [],
         branches: initialData.branches || [],
+        certificates: initialData.certificates && initialData.certificates.length > 0
+          ? initialData.certificates
+          : DEFAULT_CERTIFICATES,
         documents: initialData.documents || [],
       })
     }
@@ -512,7 +568,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Código *</label>
                       <input
                         type="text"
-                        value={formData.code}
+                        value={formData.code || ""}
                         onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="LK003"
@@ -523,7 +579,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Designação Curta *</label>
                       <input
                         type="text"
-                        value={formData.short_name}
+                        value={formData.short_name || ""}
                         onChange={(e) => setFormData({ ...formData, short_name: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="CORREOS.EXPRESS"
@@ -536,7 +592,7 @@ export function FornecedorModal({
                         <span className="text-[11px] text-emerald-600 hover:underline cursor-pointer">Gerir categorias</span>
                       </div>
                       <select
-                        value={formData.category}
+                        value={formData.category || "Transportador Subcontratado"}
                         onChange={(e) => setFormData({ ...formData, category: e.target.value, role: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       >
@@ -587,7 +643,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Nº Alvará / Licença Transporte</label>
                       <input
                         type="text"
-                        value={formData.alvara_number}
+                        value={formData.alvara_number || ""}
                         onChange={(e) => setFormData({ ...formData, alvara_number: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="Ex: 504134-DGT"
@@ -598,7 +654,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Rede associada</label>
                       <input
                         type="text"
-                        value={formData.associated_network}
+                        value={formData.associated_network || ""}
                         onChange={(e) => setFormData({ ...formData, associated_network: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="Ex: Rede Ibérica Expresso"
@@ -615,7 +671,7 @@ export function FornecedorModal({
                       <div className="relative flex items-center">
                         <input
                           type="color"
-                          value={formData.color}
+                          value={formData.color || "#00a3e0"}
                           onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                           className="w-9 h-9 rounded-lg border border-slate-300 p-0.5 cursor-pointer"
                         />
@@ -657,7 +713,7 @@ export function FornecedorModal({
                     <div className="sm:col-span-4">
                       <label className="block text-xs font-semibold text-slate-700 mb-1">País</label>
                       <select
-                        value={formData.country_code}
+                        value={formData.country_code || "PT"}
                         onChange={(e) => setFormData({ ...formData, country_code: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       >
@@ -675,7 +731,7 @@ export function FornecedorModal({
                       <div className="flex gap-2">
                         <input
                           type="text"
-                          value={formData.nif}
+                          value={formData.nif || ""}
                           onChange={(e) => setFormData({ ...formData, nif: e.target.value })}
                           className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                           placeholder="504134507"
@@ -695,7 +751,7 @@ export function FornecedorModal({
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Designação Social (Razão Social Completa)</label>
                     <input
                       type="text"
-                      value={formData.legal_name}
+                      value={formData.legal_name || ""}
                       onChange={(e) => setFormData({ ...formData, legal_name: e.target.value })}
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       placeholder="CEP II - CORREOS EXPRESS PORTUGAL, S.A."
@@ -706,7 +762,7 @@ export function FornecedorModal({
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Morada de Faturação</label>
                     <input
                       type="text"
-                      value={formData.address}
+                      value={formData.address || ""}
                       onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       placeholder="Rua do Barreiro, 495"
@@ -718,7 +774,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Código Postal</label>
                       <input
                         type="text"
-                        value={formData.postal_code}
+                        value={formData.postal_code || ""}
                         onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="4470-558"
@@ -729,7 +785,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Localidade</label>
                       <input
                         type="text"
-                        value={formData.city}
+                        value={formData.city || ""}
                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm uppercase text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="MAIA"
@@ -740,7 +796,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Responsável de Conta</label>
                       <input
                         type="text"
-                        value={formData.manager_name}
+                        value={formData.manager_name || ""}
                         onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="Jorge Nunes"
@@ -752,7 +808,7 @@ export function FornecedorModal({
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Agência Faturação</label>
                       <select
-                        value={formData.billing_agency}
+                        value={formData.billing_agency || "A01 - Sede Guimarães"}
                         onChange={(e) => setFormData({ ...formData, billing_agency: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       >
@@ -769,7 +825,7 @@ export function FornecedorModal({
                         type="number"
                         min="0"
                         max="100"
-                        value={formData.retention_rate}
+                        value={formData.retention_rate ?? 0}
                         onChange={(e) => setFormData({ ...formData, retention_rate: Number(e.target.value) })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="0"
@@ -779,7 +835,7 @@ export function FornecedorModal({
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Regime de IVA</label>
                       <select
-                        value={formData.vat_regime}
+                        value={formData.vat_regime || "Regime Geral (23%)"}
                         onChange={(e) => setFormData({ ...formData, vat_regime: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       >
@@ -807,7 +863,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">E-mail Faturação</label>
                       <input
                         type="email"
-                        value={formData.email}
+                        value={formData.email || ""}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="Jorge.nunes@correosexpress.com"
@@ -818,7 +874,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">E-mail Tráfego / Gestão Cargas</label>
                       <input
                         type="email"
-                        value={formData.traffic_email}
+                        value={formData.traffic_email || ""}
                         onChange={(e) => setFormData({ ...formData, traffic_email: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="trafego.norte@correosexpress.com"
@@ -829,7 +885,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Telefone Fixo</label>
                       <input
                         type="tel"
-                        value={formData.phone}
+                        value={formData.phone || ""}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="229438000"
@@ -840,7 +896,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Telemóvel</label>
                       <input
                         type="tel"
-                        value={formData.mobile_phone}
+                        value={formData.mobile_phone || ""}
                         onChange={(e) => setFormData({ ...formData, mobile_phone: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="915882310"
@@ -923,7 +979,7 @@ export function FornecedorModal({
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Prazo / Vencimento</label>
                       <select
-                        value={formData.payment_terms}
+                        value={formData.payment_terms || "A 30 dias"}
                         onChange={(e) => setFormData({ ...formData, payment_terms: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       >
@@ -939,7 +995,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">IBAN</label>
                       <input
                         type="text"
-                        value={formData.iban}
+                        value={formData.iban || ""}
                         onChange={(e) => setFormData({ ...formData, iban: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="PT50 0033 0000 4521 8892 1012 4"
@@ -950,7 +1006,7 @@ export function FornecedorModal({
                       <label className="block text-xs font-semibold text-slate-700 mb-1">SWIFT / BIC</label>
                       <input
                         type="text"
-                        value={formData.swift}
+                        value={formData.swift || ""}
                         onChange={(e) => setFormData({ ...formData, swift: e.target.value })}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                         placeholder="BCOMPTPL"
@@ -986,7 +1042,7 @@ export function FornecedorModal({
                         <label className="block text-xs font-semibold text-slate-700 mb-1">Email Destinatário do Resumo</label>
                         <input
                           type="email"
-                          value={formData.daily_summary_email}
+                          value={formData.daily_summary_email || ""}
                           onChange={(e) => setFormData({ ...formData, daily_summary_email: e.target.value })}
                           className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                           placeholder="operacoes@correosexpress.com"
@@ -1032,7 +1088,7 @@ export function FornecedorModal({
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Empresa Proprietária</label>
                     <select
-                      value={formData.owner_company}
+                      value={formData.owner_company || "GO LINKE UNIPESSOAL LIMITADA"}
                       onChange={(e) => setFormData({ ...formData, owner_company: e.target.value })}
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     >
@@ -1069,7 +1125,7 @@ export function FornecedorModal({
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Preferência de Idioma</label>
                     <select
-                      value={formData.language_preference}
+                      value={formData.language_preference || "Português"}
                       onChange={(e) => setFormData({ ...formData, language_preference: e.target.value })}
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     >
@@ -1083,7 +1139,7 @@ export function FornecedorModal({
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Observações Internas</label>
                     <textarea
                       rows={4}
-                      value={formData.observations}
+                      value={formData.observations || ""}
                       onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       placeholder="Notas e condições contratuais específicas..."
@@ -1127,7 +1183,7 @@ export function FornecedorModal({
                       <input
                         type="number"
                         step="0.5"
-                        value={formData.global_markup_pct}
+                        value={formData.global_markup_pct ?? 15}
                         onChange={(e) => setFormData({ ...formData, global_markup_pct: Number(e.target.value) })}
                         className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-emerald-700 pr-6 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
@@ -1280,7 +1336,7 @@ export function FornecedorModal({
                                   <td className="py-2.5 px-4 font-bold text-slate-800">
                                     <input
                                       type="text"
-                                      value={tier.label}
+                                      value={tier.label || ""}
                                       onChange={(e) => {
                                         const updated = (formData.price_families || DEFAULT_PRICE_FAMILIES).map((f) =>
                                           f.id === fam.id
@@ -1307,10 +1363,10 @@ export function FornecedorModal({
                                       <input
                                         type="number"
                                         step="0.01"
-                                        value={tier.cost_price}
+                                        value={tier.cost_price ?? 0}
                                         onChange={(e) => {
                                           const cost = Number(e.target.value)
-                                          const sell = Number((cost * (1 + tier.margin_pct / 100)).toFixed(2))
+                                          const sell = Number((cost * (1 + (tier.margin_pct ?? 0) / 100)).toFixed(2))
                                           const updated = (formData.price_families || DEFAULT_PRICE_FAMILIES).map((f) =>
                                             f.id === fam.id
                                               ? {
@@ -1332,7 +1388,7 @@ export function FornecedorModal({
                                       <input
                                         type="number"
                                         step="1"
-                                        value={tier.margin_pct}
+                                        value={tier.margin_pct ?? 0}
                                         onChange={(e) => {
                                           const margin = Number(e.target.value)
                                           const sell = Number((tier.cost_price * (1 + margin / 100)).toFixed(2))
@@ -1526,7 +1582,7 @@ export function FornecedorModal({
                           <input
                             type="number"
                             step="0.001"
-                            value={vol.min_volume}
+                            value={vol.min_volume ?? 0}
                             onChange={(e) => {
                               const val = Number(e.target.value)
                               const updated = (formData.volumetrics || DEFAULT_VOLUMETRICS).map((v) =>
@@ -1541,7 +1597,7 @@ export function FornecedorModal({
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
-                              value={vol.cost_coefficient}
+                              value={vol.cost_coefficient ?? 0}
                               onChange={(e) => {
                                 const val = Number(e.target.value)
                                 const updated = (formData.volumetrics || DEFAULT_VOLUMETRICS).map((v) =>
@@ -1558,7 +1614,7 @@ export function FornecedorModal({
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
-                              value={vol.sell_coefficient}
+                              value={vol.sell_coefficient ?? 0}
                               onChange={(e) => {
                                 const val = Number(e.target.value)
                                 const updated = (formData.volumetrics || DEFAULT_VOLUMETRICS).map((v) =>

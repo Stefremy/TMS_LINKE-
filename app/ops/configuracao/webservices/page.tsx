@@ -1,8 +1,15 @@
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
+import { getFornecedoresAction } from "@/app/actions/fornecedores"
 import { WebservicesClient } from "./components/WebservicesClient"
 
-export default async function WebservicesPage() {
-  const connections = await getCarrierConnectionsAction()
+export const dynamic = "force-dynamic"
 
-  return <WebservicesClient connections={connections || []} />
+export default async function WebservicesPage() {
+  const [connections, fornecedores] = await Promise.all([
+    getCarrierConnectionsAction(),
+    getFornecedoresAction(),
+  ])
+
+  return <WebservicesClient connections={connections || []} fornecedores={fornecedores || []} />
 }
+

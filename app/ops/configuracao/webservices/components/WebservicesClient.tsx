@@ -22,6 +22,7 @@ import {
   toggleCarrierConnectionAction, 
   deleteCarrierConnectionAction 
 } from "@/app/actions/ctt"
+import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 
 const tabs = [
   { id: "transportadoras", label: "Transportadoras", icon: Package },
@@ -29,9 +30,10 @@ const tabs = [
 
 interface WebservicesClientProps {
   connections: any[]
+  fornecedores?: Fornecedor[]
 }
 
-export function WebservicesClient({ connections: initialConnections }: WebservicesClientProps) {
+export function WebservicesClient({ connections: initialConnections, fornecedores = [] }: WebservicesClientProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = React.useState("transportadoras")
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -343,11 +345,43 @@ export function WebservicesClient({ connections: initialConnections }: Webservic
                     </div>
                   </td>
                   <td className="px-3 py-3.5 text-slate-700 font-medium">
-                    {conn.supplier_id === "ctt_portugal" ? "CTT Portugal" :
-                     conn.supplier_id === "ctt_expresso" ? "CTT Expresso" :
-                     conn.supplier_id === "dpd_portugal" ? "DPD Portugal" :
-                     conn.supplier_id === "gls_portugal" ? "GLS Portugal" :
-                     (conn.carrier_code?.replace(/_/g, " ").toUpperCase() || "CTT")}
+                    {(() => {
+                      const sid = conn.supplier_id
+                      if (!sid || sid === "none") {
+                        return <span className="text-slate-400 text-xs italic">Não associado</span>
+                      }
+                      const match = fornecedores.find(
+                        f => f.id === sid || f.code.toLowerCase() === sid.toLowerCase() || f.id.endsWith(sid)
+                      )
+                      if (match) {
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            <span 
+                              className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs" 
+                              style={{ backgroundColor: match.color || "#00a3e0" }} 
+                            />
+                            <span className="font-bold text-slate-800 text-[13px]">{match.short_name}</span>
+                            <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1 py-0.2 rounded border border-slate-200">
+                              {match.code}
+                            </span>
+                          </div>
+                        )
+                      }
+                      // Fallbacks for known supplier keys
+                      const fallbackLabel = 
+                        sid === "ctt_portugal" ? "CTT Portugal" :
+                        sid === "ctt_expresso" ? "CTT Expresso" :
+                        sid === "dpd_portugal" ? "DPD Portugal" :
+                        sid === "gls_portugal" ? "GLS Portugal" :
+                        (conn.carrier_code?.replace(/_/g, " ").toUpperCase() || "CTT")
+
+                      return (
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
+                          <span className="font-bold text-slate-800 text-[13px]">{fallbackLabel}</span>
+                        </div>
+                      )
+                    })()}
                   </td>
                   <td className="px-3 py-3.5 text-slate-700 font-mono text-xs">{conn.client_id}</td>
                   <td className="px-3 py-3.5 font-mono text-xs text-slate-600">{conn.contract_number}</td>

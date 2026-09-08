@@ -284,7 +284,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                       <input 
                         type="text" 
                         placeholder="Ex: 12345678"
-                        value={credentials.contract_number}
+                        value={credentials.contract_number || ""}
                         onChange={(e) => setCredentials({ ...credentials, contract_number: e.target.value })}
                         className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-green-500 focus:outline-none" 
                       />
@@ -295,7 +295,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                       <input 
                         type="text" 
                         placeholder="Ex: 10000001"
-                        value={credentials.client_number}
+                        value={credentials.client_number || ""}
                         onChange={(e) => setCredentials({ ...credentials, client_number: e.target.value })}
                         className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-green-500 focus:outline-none" 
                       />
@@ -306,7 +306,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                       <input 
                         type="text" 
                         placeholder="Ex: 00000000-0000-0000-0000-000000000000"
-                        value={credentials.auth_id}
+                        value={credentials.auth_id || ""}
                         onChange={(e) => setCredentials({ ...credentials, auth_id: e.target.value })}
                         className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:outline-none" 
                       />
@@ -317,7 +317,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                       <input 
                         type="text" 
                         placeholder="Identificador opcional de utilizador CTT"
-                        value={credentials.user_id}
+                        value={credentials.user_id || ""}
                         onChange={(e) => setCredentials({ ...credentials, user_id: e.target.value })}
                         className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:outline-none" 
                       />
