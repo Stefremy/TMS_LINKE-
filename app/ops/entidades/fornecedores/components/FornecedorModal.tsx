@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Plus,
   Trash2,
+  Pencil,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -380,44 +381,280 @@ export function FornecedorModal({
     })
   }
 
-  // Add new vehicle
-  const handleAddVehicle = () => {
-    const newVehicle: SubcontractedVehicle = {
-      id: `veh_${Date.now()}`,
-      plate: "00-AA-00",
-      designation: "Carrinha Mercadorias 3.5T",
-      category: "Ligeiro de Mercadorias",
-      group: "Norte Expresso",
-      driver: "Motorista Atribuído",
-      insurance_policy: "Apólice Ativa",
-      insurance_expiry: "2026-12-31",
-      iuc_status: "Regularizado",
-      ipo_expiry: "2026-12-31",
-      status: "Ativo"
+  // Additional Fees Modal State
+  const [isFeeModalOpen, setIsFeeModalOpen] = React.useState(false)
+  const [editingFee, setEditingFee] = React.useState<SurchargeFee | null>(null)
+  const [feeFormData, setFeeFormData] = React.useState<Partial<SurchargeFee>>({
+    code: "",
+    name: "",
+    fee_type: "fixed",
+    service_scope: "Todos os Serviços",
+    zone: "Geral",
+    min_cost: 0,
+    max_cost: 0,
+    vat_rate: 23,
+    supplier_cost: 0,
+  })
+
+  const handleOpenFeeModal = (fee?: SurchargeFee) => {
+    if (fee) {
+      setEditingFee(fee)
+      setFeeFormData({
+        code: fee.code || "",
+        name: fee.name || "",
+        fee_type: fee.fee_type || "fixed",
+        service_scope: fee.service_scope || "Todos os Serviços",
+        zone: fee.zone || "Geral",
+        min_cost: fee.min_cost ?? 0,
+        max_cost: fee.max_cost ?? 0,
+        vat_rate: fee.vat_rate ?? 23,
+        supplier_cost: fee.supplier_cost ?? 0,
+      })
+    } else {
+      setEditingFee(null)
+      setFeeFormData({
+        code: "",
+        name: "",
+        fee_type: "fixed",
+        service_scope: "Todos os Serviços",
+        zone: "Geral",
+        min_cost: 0,
+        max_cost: 0,
+        vat_rate: 23,
+        supplier_cost: 0,
+      })
     }
-    setFormData({
-      ...formData,
-      vehicles: [...(formData.vehicles || []), newVehicle]
-    })
+    setIsFeeModalOpen(true)
   }
 
-  // Add new driver
-  const handleAddDriver = () => {
-    const newDriver: SubcontractedDriver = {
-      id: `drv_${Date.now()}`,
-      code: `MOT0${(formData.drivers?.length || 0) + 1}`,
-      name: "Novo Motorista",
-      nif_cc: "00000000 0 ZZ0",
-      phone: "910000000",
-      email: "motorista@transportador.pt",
-      group: "Rota Diária",
-      qualifications: "CAM Válido",
-      status: "Ativo"
+  const handleSaveFee = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!feeFormData.name?.trim()) {
+      alert("Por favor indique o nome / descrição da taxa.")
+      return
     }
-    setFormData({
-      ...formData,
-      drivers: [...(formData.drivers || []), newDriver]
-    })
+
+    const currentFees = formData.additional_fees || DEFAULT_ADDITIONAL_FEES
+
+    if (editingFee) {
+      const updated = currentFees.map((f) =>
+        f.id === editingFee.id
+          ? {
+              ...f,
+              code: (feeFormData.code || "TAXA").toUpperCase().trim(),
+              name: feeFormData.name!.trim(),
+              fee_type: feeFormData.fee_type || "fixed",
+              service_scope: feeFormData.service_scope || "Todos os Serviços",
+              zone: feeFormData.zone || "Geral",
+              min_cost: Number(feeFormData.min_cost ?? 0),
+              max_cost: Number(feeFormData.max_cost ?? 0),
+              vat_rate: Number(feeFormData.vat_rate ?? 23),
+              supplier_cost: Number(feeFormData.supplier_cost ?? 0),
+            }
+          : f
+      )
+      setFormData({ ...formData, additional_fees: updated })
+    } else {
+      const newFee: SurchargeFee = {
+        id: `fee_${Date.now()}`,
+        code: (feeFormData.code || "TAXA").toUpperCase().trim(),
+        name: feeFormData.name!.trim(),
+        fee_type: feeFormData.fee_type || "fixed",
+        service_scope: feeFormData.service_scope || "Todos os Serviços",
+        zone: feeFormData.zone || "Geral",
+        min_cost: Number(feeFormData.min_cost ?? 0),
+        max_cost: Number(feeFormData.max_cost ?? 0),
+        vat_rate: Number(feeFormData.vat_rate ?? 23),
+        supplier_cost: Number(feeFormData.supplier_cost ?? 0),
+      }
+      setFormData({ ...formData, additional_fees: [...currentFees, newFee] })
+    }
+
+    setIsFeeModalOpen(false)
+  }
+
+  // Vehicle Modal State
+  const [isVehicleModalOpen, setIsVehicleModalOpen] = React.useState(false)
+  const [editingVehicle, setEditingVehicle] = React.useState<SubcontractedVehicle | null>(null)
+  const [vehicleFormData, setVehicleFormData] = React.useState<Partial<SubcontractedVehicle>>({
+    plate: "",
+    designation: "",
+    category: "Ligeiro de Mercadorias",
+    group: "Norte Expresso",
+    driver: "",
+    insurance_policy: "",
+    insurance_expiry: "2026-12-31",
+    iuc_status: "Regularizado",
+    ipo_expiry: "2026-12-31",
+    status: "Ativo",
+  })
+
+  const handleOpenVehicleModal = (veh?: SubcontractedVehicle) => {
+    if (veh) {
+      setEditingVehicle(veh)
+      setVehicleFormData({
+        plate: veh.plate || "",
+        designation: veh.designation || "",
+        category: veh.category || "Ligeiro de Mercadorias",
+        group: veh.group || "Norte Expresso",
+        driver: veh.driver || "",
+        insurance_policy: veh.insurance_policy || "",
+        insurance_expiry: veh.insurance_expiry || "2026-12-31",
+        iuc_status: veh.iuc_status || "Regularizado",
+        ipo_expiry: veh.ipo_expiry || "2026-12-31",
+        status: veh.status || "Ativo",
+      })
+    } else {
+      setEditingVehicle(null)
+      setVehicleFormData({
+        plate: "",
+        designation: "",
+        category: "Ligeiro de Mercadorias",
+        group: "Norte Expresso",
+        driver: "",
+        insurance_policy: "",
+        insurance_expiry: "2026-12-31",
+        iuc_status: "Regularizado",
+        ipo_expiry: "2026-12-31",
+        status: "Ativo",
+      })
+    }
+    setIsVehicleModalOpen(true)
+  }
+
+  const handleSaveVehicle = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!vehicleFormData.plate?.trim()) {
+      alert("Por favor indique a matrícula da viatura.")
+      return
+    }
+
+    const currentVehicles = formData.vehicles || []
+
+    if (editingVehicle) {
+      const updated = currentVehicles.map((v) =>
+        v.id === editingVehicle.id
+          ? {
+              ...v,
+              plate: vehicleFormData.plate!.toUpperCase().trim(),
+              designation: vehicleFormData.designation?.trim() || "Viatura Subcontratada",
+              category: vehicleFormData.category || "Ligeiro de Mercadorias",
+              group: vehicleFormData.group || "Norte Expresso",
+              driver: vehicleFormData.driver || "Não Atribuído",
+              insurance_policy: vehicleFormData.insurance_policy || "Apólice em validação",
+              insurance_expiry: vehicleFormData.insurance_expiry || "2026-12-31",
+              iuc_status: vehicleFormData.iuc_status || "Regularizado",
+              ipo_expiry: vehicleFormData.ipo_expiry || "2026-12-31",
+              status: vehicleFormData.status || "Ativo",
+            }
+          : v
+      )
+      setFormData({ ...formData, vehicles: updated })
+    } else {
+      const newVeh: SubcontractedVehicle = {
+        id: `veh_${Date.now()}`,
+        plate: vehicleFormData.plate!.toUpperCase().trim(),
+        designation: vehicleFormData.designation?.trim() || "Viatura Subcontratada",
+        category: vehicleFormData.category || "Ligeiro de Mercadorias",
+        group: vehicleFormData.group || "Norte Expresso",
+        driver: vehicleFormData.driver || "Não Atribuído",
+        insurance_policy: vehicleFormData.insurance_policy || "Apólice em validação",
+        insurance_expiry: vehicleFormData.insurance_expiry || "2026-12-31",
+        iuc_status: vehicleFormData.iuc_status || "Regularizado",
+        ipo_expiry: vehicleFormData.ipo_expiry || "2026-12-31",
+        status: vehicleFormData.status || "Ativo",
+      }
+      setFormData({ ...formData, vehicles: [...currentVehicles, newVeh] })
+    }
+
+    setIsVehicleModalOpen(false)
+  }
+
+  // Driver Modal State
+  const [isDriverModalOpen, setIsDriverModalOpen] = React.useState(false)
+  const [editingDriver, setEditingDriver] = React.useState<SubcontractedDriver | null>(null)
+  const [driverFormData, setDriverFormData] = React.useState<Partial<SubcontractedDriver>>({
+    code: "",
+    name: "",
+    nif_cc: "",
+    phone: "",
+    email: "",
+    group: "Rotas Nacionais",
+    qualifications: "CAM Válido",
+    status: "Ativo",
+  })
+
+  const handleOpenDriverModal = (drv?: SubcontractedDriver) => {
+    if (drv) {
+      setEditingDriver(drv)
+      setDriverFormData({
+        code: drv.code || "",
+        name: drv.name || "",
+        nif_cc: drv.nif_cc || "",
+        phone: drv.phone || "",
+        email: drv.email || "",
+        group: drv.group || "Rotas Nacionais",
+        qualifications: drv.qualifications || "CAM Válido",
+        status: drv.status || "Ativo",
+      })
+    } else {
+      setEditingDriver(null)
+      setDriverFormData({
+        code: `MOT0${(formData.drivers?.length || 0) + 1}`,
+        name: "",
+        nif_cc: "",
+        phone: "",
+        email: "",
+        group: "Rotas Nacionais",
+        qualifications: "CAM Válido",
+        status: "Ativo",
+      })
+    }
+    setIsDriverModalOpen(true)
+  }
+
+  const handleSaveDriver = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!driverFormData.name?.trim()) {
+      alert("Por favor indique o nome do motorista.")
+      return
+    }
+
+    const currentDrivers = formData.drivers || []
+
+    if (editingDriver) {
+      const updated = currentDrivers.map((d) =>
+        d.id === editingDriver.id
+          ? {
+              ...d,
+              code: driverFormData.code?.trim() || "MOT01",
+              name: driverFormData.name!.trim(),
+              nif_cc: driverFormData.nif_cc?.trim() || "—",
+              phone: driverFormData.phone?.trim() || "—",
+              email: driverFormData.email?.trim() || "—",
+              group: driverFormData.group || "Rotas Nacionais",
+              qualifications: driverFormData.qualifications || "CAM Válido",
+              status: driverFormData.status || "Ativo",
+            }
+          : d
+      )
+      setFormData({ ...formData, drivers: updated })
+    } else {
+      const newDrv: SubcontractedDriver = {
+        id: `drv_${Date.now()}`,
+        code: driverFormData.code?.trim() || `MOT0${currentDrivers.length + 1}`,
+        name: driverFormData.name!.trim(),
+        nif_cc: driverFormData.nif_cc?.trim() || "—",
+        phone: driverFormData.phone?.trim() || "—",
+        email: driverFormData.email?.trim() || "—",
+        group: driverFormData.group || "Rotas Nacionais",
+        qualifications: driverFormData.qualifications || "CAM Válido",
+        status: driverFormData.status || "Ativo",
+      }
+      setFormData({ ...formData, drivers: [...currentDrivers, newDrv] })
+    }
+
+    setIsDriverModalOpen(false)
   }
 
   return (
@@ -1460,24 +1697,7 @@ export function FornecedorModal({
 
                 <button
                   type="button"
-                  onClick={() => {
-                    const newFee: SurchargeFee = {
-                      id: `fee_${Date.now()}`,
-                      code: "TAXA",
-                      name: "Nova Taxa Personalizada",
-                      fee_type: "fixed",
-                      service_scope: "Todos os Serviços",
-                      zone: "Geral",
-                      min_cost: 5.0,
-                      max_cost: 5.0,
-                      vat_rate: 23,
-                      supplier_cost: 5.0,
-                    }
-                    setFormData({
-                      ...formData,
-                      additional_fees: [...(formData.additional_fees || DEFAULT_ADDITIONAL_FEES), newFee],
-                    })
-                  }}
+                  onClick={() => handleOpenFeeModal()}
                   className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -1498,12 +1718,16 @@ export function FornecedorModal({
                       <th className="py-3 px-4 w-24">Custo Max.</th>
                       <th className="py-3 px-4 w-20">IVA (%)</th>
                       <th className="py-3 px-4 w-28 font-bold text-emerald-800">Custo Forn.</th>
-                      <th className="py-3 px-4 w-16 text-center">Ações</th>
+                      <th className="py-3 px-4 w-20 text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {(formData.additional_fees || DEFAULT_ADDITIONAL_FEES).map((fee) => (
-                      <tr key={fee.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr 
+                        key={fee.id} 
+                        className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                        onDoubleClick={() => handleOpenFeeModal(fee)}
+                      >
                         <td className="py-3 px-4 font-mono font-bold text-slate-800">{fee.code}</td>
                         <td className="py-3 px-4 font-semibold text-slate-800">{fee.name}</td>
                         <td className="py-3 px-4">
@@ -1522,16 +1746,31 @@ export function FornecedorModal({
                           {fee.fee_type === "percentage" ? `${fee.supplier_cost}%` : `${fee.supplier_cost.toFixed(2)}€`}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = (formData.additional_fees || DEFAULT_ADDITIONAL_FEES).filter((f) => f.id !== fee.id)
-                              setFormData({ ...formData, additional_fees: updated })
-                            }}
-                            className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleOpenFeeModal(fee)
+                              }}
+                              className="p-1 text-slate-400 hover:text-emerald-600 rounded transition-colors"
+                              title="Editar Taxa"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                const updated = (formData.additional_fees || DEFAULT_ADDITIONAL_FEES).filter((f) => f.id !== fee.id)
+                                setFormData({ ...formData, additional_fees: updated })
+                              }}
+                              className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
+                              title="Remover Taxa"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1654,7 +1893,7 @@ export function FornecedorModal({
                 </div>
                 <button
                   type="button"
-                  onClick={handleAddVehicle}
+                  onClick={() => handleOpenVehicleModal()}
                   className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -1680,7 +1919,11 @@ export function FornecedorModal({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {formData.vehicles.map((v) => (
-                        <tr key={v.id} className="hover:bg-slate-50">
+                        <tr 
+                          key={v.id} 
+                          className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                          onDoubleClick={() => handleOpenVehicleModal(v)}
+                        >
                           <td className="py-3 px-4 font-mono font-bold text-slate-900">{v.plate}</td>
                           <td className="py-3 px-4 font-medium text-slate-800">{v.designation}</td>
                           <td className="py-3 px-4 text-slate-600">{v.category}</td>
@@ -1694,13 +1937,30 @@ export function FornecedorModal({
                             </span>
                           </td>
                           <td className="py-3 px-4 text-center">
-                            <button
-                              type="button"
-                              onClick={() => setFormData({ ...formData, vehicles: formData.vehicles?.filter((x) => x.id !== v.id) })}
-                              className="text-slate-400 hover:text-red-600"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOpenVehicleModal(v)
+                                }}
+                                className="p-1 text-slate-400 hover:text-emerald-600 rounded transition-colors"
+                                title="Editar Viatura"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setFormData({ ...formData, vehicles: formData.vehicles?.filter((x) => x.id !== v.id) })
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
+                                title="Remover Viatura"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1718,8 +1978,8 @@ export function FornecedorModal({
                   </p>
                   <button
                     type="button"
-                    onClick={handleAddVehicle}
-                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 inline-flex items-center gap-1.5"
+                    onClick={() => handleOpenVehicleModal()}
+                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 inline-flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Registar Primeira Viatura
@@ -1739,7 +1999,7 @@ export function FornecedorModal({
                 </div>
                 <button
                   type="button"
-                  onClick={handleAddDriver}
+                  onClick={() => handleOpenDriverModal()}
                   className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -1765,7 +2025,11 @@ export function FornecedorModal({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {formData.drivers.map((d) => (
-                        <tr key={d.id} className="hover:bg-slate-50">
+                        <tr 
+                          key={d.id} 
+                          className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                          onDoubleClick={() => handleOpenDriverModal(d)}
+                        >
                           <td className="py-3 px-4 font-mono font-bold text-slate-800">{d.code}</td>
                           <td className="py-3 px-4 font-semibold text-slate-800">{d.name}</td>
                           <td className="py-3 px-4 font-mono text-slate-600">{d.nif_cc}</td>
@@ -1779,13 +2043,30 @@ export function FornecedorModal({
                             </span>
                           </td>
                           <td className="py-3 px-4 text-center">
-                            <button
-                              type="button"
-                              onClick={() => setFormData({ ...formData, drivers: formData.drivers?.filter((x) => x.id !== d.id) })}
-                              className="text-slate-400 hover:text-red-600"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOpenDriverModal(d)
+                                }}
+                                className="p-1 text-slate-400 hover:text-emerald-600 rounded transition-colors"
+                                title="Editar Motorista"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setFormData({ ...formData, drivers: formData.drivers?.filter((x) => x.id !== d.id) })
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
+                                title="Remover Motorista"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1803,8 +2084,8 @@ export function FornecedorModal({
                   </p>
                   <button
                     type="button"
-                    onClick={handleAddDriver}
-                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 inline-flex items-center gap-1.5"
+                    onClick={() => handleOpenDriverModal()}
+                    className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 inline-flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Registar Primeiro Motorista
@@ -2118,6 +2399,489 @@ export function FornecedorModal({
         </div>
 
       </div>
+
+      {/* ===================== MODAL: TAXA ADICIONAL ===================== */}
+      {isFeeModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    {editingFee ? "Editar Taxa Adicional" : "Nova Taxa Adicional"}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Configure as regras de cobrança e custo do transportador
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFeeModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveFee} className="p-6 space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Código *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: COMB"
+                    value={feeFormData.code || ""}
+                    onChange={(e) => setFeeFormData({ ...feeFormData, code: e.target.value.toUpperCase() })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-800 uppercase focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nome / Descrição da Taxa *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Taxa de Combustível"
+                    value={feeFormData.name || ""}
+                    onChange={(e) => setFeeFormData({ ...feeFormData, name: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Taxa</label>
+                  <select
+                    value={feeFormData.fee_type || "fixed"}
+                    onChange={(e) => setFeeFormData({ ...feeFormData, fee_type: e.target.value as any })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="fixed">Valor Fixo (€)</option>
+                    <option value="percentage">Percentual (%)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Custo Fornecedor {feeFormData.fee_type === "percentage" ? "(%)" : "(€)"} *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      placeholder="0.00"
+                      value={feeFormData.supplier_cost ?? 0}
+                      onChange={(e) => setFeeFormData({ ...feeFormData, supplier_cost: Number(e.target.value) })}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-emerald-700 pr-8 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                      {feeFormData.fee_type === "percentage" ? "%" : "€"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Âmbito do Serviço</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Todos os Serviços"
+                    value={feeFormData.service_scope || "Todos os Serviços"}
+                    onChange={(e) => setFeeFormData({ ...feeFormData, service_scope: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Zona Geográfica</label>
+                  <select
+                    value={feeFormData.zone || "Geral"}
+                    onChange={(e) => setFeeFormData({ ...feeFormData, zone: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="Geral">Geral (Todas as zonas)</option>
+                    <option value="Nacional (Continente)">Nacional (Continente)</option>
+                    <option value="Espanha Peninsular">Espanha Peninsular</option>
+                    <option value="Ilhas (Açores/Madeira)">Ilhas (Açores / Madeira)</option>
+                    <option value="Internacional Europa">Internacional Europa</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Custo Mínimo (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={feeFormData.min_cost ?? 0}
+                    onChange={(e) => setFeeFormData({ ...feeFormData, min_cost: Number(e.target.value) })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Custo Máximo (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={feeFormData.max_cost ?? 0}
+                    onChange={(e) => setFeeFormData({ ...feeFormData, max_cost: Number(e.target.value) })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Taxa IVA</label>
+                  <select
+                    value={feeFormData.vat_rate ?? 23}
+                    onChange={(e) => setFeeFormData({ ...feeFormData, vat_rate: Number(e.target.value) })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value={23}>23% (Normal)</option>
+                    <option value={13}>13% (Intermédio)</option>
+                    <option value={6}>6% (Reduzido)</option>
+                    <option value={0}>0% (Isento)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFeeModalOpen(false)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  {editingFee ? "Atualizar Taxa" : "Adicionar Taxa"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL: VIATURA ===================== */}
+      {isVehicleModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <Truck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    {editingVehicle ? "Editar Viatura" : "Adicionar Viatura Subcontratada"}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Registo de veículo e conformidade regulamentar
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsVehicleModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveVehicle} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Matrícula *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: 00-AA-00"
+                    value={vehicleFormData.plate || ""}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, plate: e.target.value.toUpperCase() })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-800 uppercase focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Designação da Viatura</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Carrinha 3.5T Frigo"
+                    value={vehicleFormData.designation || ""}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, designation: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Categoria</label>
+                  <select
+                    value={vehicleFormData.category || "Ligeiro de Mercadorias"}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, category: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="Ligeiro de Mercadorias">Ligeiro de Mercadorias</option>
+                    <option value="Pesado de Mercadorias">Pesado de Mercadorias</option>
+                    <option value="Trator / Semirreboque">Trator / Semirreboque</option>
+                    <option value="Moto / Furgão Pequeno">Moto / Furgão Pequeno</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Grupo / Rota</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Rota Norte Expresso"
+                    value={vehicleFormData.group || ""}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, group: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Motorista Habitual</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: João Silva"
+                    value={vehicleFormData.driver || ""}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, driver: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Apólice de Seguro</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Fidelidade 992384"
+                    value={vehicleFormData.insurance_policy || ""}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, insurance_policy: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Validade Seguro</label>
+                  <input
+                    type="date"
+                    value={vehicleFormData.insurance_expiry || "2026-12-31"}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, insurance_expiry: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Validade IPO</label>
+                  <input
+                    type="date"
+                    value={vehicleFormData.ipo_expiry || "2026-12-31"}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, ipo_expiry: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Estado</label>
+                  <select
+                    value={vehicleFormData.status || "Ativo"}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, status: e.target.value as any })}
+                    className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="Ativo">Ativo</option>
+                    <option value="Manutenção">Manutenção</option>
+                    <option value="Inativo">Inativo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsVehicleModalOpen(false)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  {editingVehicle ? "Atualizar Viatura" : "Adicionar Viatura"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MODAL: MOTORISTA ===================== */}
+      {isDriverModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    {editingDriver ? "Editar Motorista" : "Adicionar Motorista Subcontratado"}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Dados de identificação e qualificações de condução
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDriverModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDriver} className="p-6 space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Código</label>
+                  <input
+                    type="text"
+                    value={driverFormData.code || ""}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, code: e.target.value.toUpperCase() })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-800 uppercase focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nome Completo *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Carlos Manuel Fernandes"
+                    value={driverFormData.name || ""}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, name: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">NIF / CC</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 245 120 980"
+                    value={driverFormData.nif_cc || ""}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, nif_cc: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Telefone Móvel</label>
+                  <input
+                    type="tel"
+                    placeholder="Ex: 912 345 678"
+                    value={driverFormData.phone || ""}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, phone: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    placeholder="Ex: motorista@transportador.pt"
+                    value={driverFormData.email || ""}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, email: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Grupo / Rota</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Rotas Porto e Norte"
+                    value={driverFormData.group || ""}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, group: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Qualificações</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: CAM + ADR Básicos"
+                    value={driverFormData.qualifications || ""}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, qualifications: e.target.value })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Estado</label>
+                  <select
+                    value={driverFormData.status || "Ativo"}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, status: e.target.value as any })}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    <option value="Ativo">Ativo</option>
+                    <option value="Férias">Férias</option>
+                    <option value="Baixa">Baixa</option>
+                    <option value="Inativo">Inativo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDriverModalOpen(false)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  {editingDriver ? "Atualizar Motorista" : "Adicionar Motorista"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
+
