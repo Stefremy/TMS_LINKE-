@@ -80,6 +80,7 @@ const navConfig: NavItem[] = [
     icon: Settings,
     subItems: [
       { title: "Geral", href: "/ops/configuracao/geral" },
+      { title: "Webservices Globais", href: "/ops/configuracao/webservices" },
       { title: "Empresas", href: "/ops/configuracao/empresas" },
       { title: "Serviços de Transporte", href: "/ops/configuracao/servicos" },
       { title: "Taxas Adicionais", href: "/ops/configuracao/taxas" },

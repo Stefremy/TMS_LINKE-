@@ -89,21 +89,47 @@ const mockEnvios = [
   },
 ]
 
+const mockRecolhas = [
+  {
+    trk: { id: "REC001", date: "2026-09-08 10:00", ref: "R-9921", tag: "R01" },
+    sender: { name: "Armazém Central", flag: "PT", zip: "4000-000", city: "PORTO, PT", phone: "910000000" },
+    recipient: { name: "Cliente B", flag: "PT", zip: "4700-000", city: "BRAGA, PT", phone: "920000000" },
+    service: { code: "REC_STD", name: "Recolha Standard", bgColor: "bg-orange-500", textColor: "text-white" },
+    package: { count: "1 Vol.", weight: "15.00 kg" },
+    delivery: { date: "2026-09-09", time: "--/--/--" },
+    status: { label: "Por Atribuir", subCode: "R: 0", color: "bg-orange-100 text-orange-700" },
+    value: { amount: "0,00€", diff: "0,00€", diffColor: "text-slate-600 border-slate-200 bg-slate-50", ref: "REC1" }
+  },
+  {
+    trk: { id: "REC002", date: "2026-09-08 11:30", ref: "R-9922", tag: "R02" },
+    sender: { name: "Fábrica Norte", flag: "PT", zip: "4800-000", city: "GUIMARÃES, PT", phone: "930000000" },
+    recipient: { name: "Loja Lisboa", flag: "PT", zip: "1000-000", city: "LISBOA, PT", phone: "940000000" },
+    service: { code: "REC_URG", name: "Recolha Urgente", bgColor: "bg-blue-600", textColor: "text-white" },
+    package: { count: "5 Vol.", weight: "120.00 kg" },
+    delivery: { date: "2026-09-08", time: "18:00" },
+    status: { label: "Agendado", subCode: "M: 1", color: "bg-blue-100 text-blue-700" },
+    value: { amount: "45,00€", diff: "+5,00€", diffColor: "text-green-600 border-green-200 bg-green-50", ref: "REC2" }
+  }
+]
+
 export default function EnviosPage() {
   const [searchQuery, setSearchQuery] = React.useState("")
   const [showFilters, setShowFilters] = React.useState(false)
+  const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
 
-  const filteredEnvios = mockEnvios.filter((envio) => {
+  const dataSource = viewMode === "envios" ? mockEnvios : mockRecolhas
+
+  const filteredEnvios = dataSource.filter((item) => {
     if (!searchQuery) return true
     const q = searchQuery.toLowerCase()
     return (
-      envio.trk.id.toLowerCase().includes(q) ||
-      envio.trk.ref.toLowerCase().includes(q) ||
-      envio.sender.name.toLowerCase().includes(q) ||
-      envio.recipient.name.toLowerCase().includes(q) ||
-      envio.service.name.toLowerCase().includes(q) ||
-      envio.status.label.toLowerCase().includes(q) ||
-      envio.value.amount.toLowerCase().includes(q)
+      item.trk.id.toLowerCase().includes(q) ||
+      item.trk.ref.toLowerCase().includes(q) ||
+      item.sender.name.toLowerCase().includes(q) ||
+      item.recipient.name.toLowerCase().includes(q) ||
+      item.service.name.toLowerCase().includes(q) ||
+      item.status.label.toLowerCase().includes(q) ||
+      item.value.amount.toLowerCase().includes(q)
     )
   })
 
@@ -112,9 +138,13 @@ export default function EnviosPage() {
       
       {/* Header Area */}
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
-        <h1 className="text-xl font-bold text-slate-800">Envios e Serviços</h1>
+        <h1 className="text-xl font-bold text-slate-800">
+          {viewMode === "envios" ? "Envios e Serviços" : "Pedidos de Recolha"}
+        </h1>
         <div className="text-sm font-medium text-slate-500 flex items-center">
-          Painel de Resumo <span className="mx-1 text-lg leading-none mb-1">&rsaquo;</span> <span className="text-slate-800">Envios e Serviços</span>
+          Painel de Resumo <span className="mx-1 text-lg leading-none mb-1">&rsaquo;</span> <span className="text-slate-800">
+            {viewMode === "envios" ? "Envios e Serviços" : "Recolhas"}
+          </span>
         </div>
       </div>
 
@@ -127,9 +157,16 @@ export default function EnviosPage() {
             Novo
           </button>
           
-          <button className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5">
+          <button 
+            onClick={() => setViewMode(viewMode === "envios" ? "recolhas" : "envios")}
+            className={`border px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5 ${
+              viewMode === "recolhas" 
+                ? "bg-slate-200 border-slate-400 text-slate-900" 
+                : "bg-white border-slate-300 hover:bg-slate-50 text-slate-700"
+            }`}
+          >
             <Package className="w-4 h-4" />
-            Recolhas
+            {viewMode === "envios" ? "Recolhas" : "Envios"}
           </button>
           
           <button className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5">
