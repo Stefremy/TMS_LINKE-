@@ -3,24 +3,15 @@
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
 
-export interface Fornecedor {
-  id: string
-  code: string
-  center_code: string
-  short_name: string
-  color: string
-  legal_name: string
-  nif: string
-  role: string
-  city: string
-  email?: string
-  phone?: string
-  balance: string
-  payment_terms: string
-  is_active: boolean
-  country_code: string
-  created_at: string
-}
+import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
+import { 
+  DEFAULT_PRICE_FAMILIES, 
+  DEFAULT_ADDITIONAL_FEES, 
+  DEFAULT_VOLUMETRICS, 
+  DEFAULT_CERTIFICATES 
+} from "@/app/ops/entidades/fornecedores/types"
+
+export type { Fornecedor }
 
 const DEFAULT_FORNECEDORES: Fornecedor[] = [
   {
@@ -32,14 +23,70 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     legal_name: "CEP II - CORREOS EXPRESS PORTUGAL, S.A.",
     nif: "504134507",
     role: "Transportador Subcontratado",
+    category: "Transportador Subcontratado",
     city: "MAIA",
     email: "Jorge.nunes@correosexpress.com",
-    phone: "",
+    traffic_email: "trafego.norte@correosexpress.com",
+    phone: "229438000",
+    mobile_phone: "915882310",
+    address: "Rua do Barreiro, 495",
+    postal_code: "4470-558",
+    manager_name: "Jorge Nunes",
+    billing_agency: "A01 - Sede Guimarães",
+    retention_rate: 0,
+    vat_regime: "Regime Geral (23%)",
+    is_carrier: true,
+    is_forwarder: false,
+    is_own_company: false,
+    alvara_number: "504134-DGT",
+    associated_network: "Rede Correos Express Ibérica",
     balance: "0,00€",
     payment_terms: "A 30 dias",
+    iban: "PT50 0033 0000 4521 8892 1012 4",
+    swift: "BCOMPTPL",
+    daily_summary_enabled: true,
+    daily_summary_email: "operacoes@correosexpress.com",
+    owner_company: "GO LINKE UNIPESSOAL LIMITADA",
+    authorized_agencies: ["A01", "A02", "A03", "A04"],
+    language_preference: "Português",
+    observations: "Parceiro estratégico ibérico com integração webservice ativa e SLAs de entrega 24H.",
+    sync_external_invoicing: true,
     is_active: true,
     country_code: "PT",
     created_at: "2026-09-01T10:00:00Z",
+    global_markup_pct: 15.0,
+    price_families: DEFAULT_PRICE_FAMILIES,
+    additional_fees: DEFAULT_ADDITIONAL_FEES,
+    volumetrics: DEFAULT_VOLUMETRICS,
+    vehicles: [],
+    drivers: [],
+    ledger_entries: [],
+    branches: [
+      {
+        id: "br_1",
+        code: "HUB-MAIA",
+        name: "Plataforma Logística da Maia (Norte)",
+        address: "Rua do Barreiro, 495",
+        postal_code: "4470-558",
+        city: "MAIA",
+        phone: "229438000",
+        email: "cais.maia@correosexpress.com",
+        contact_person: "Eng. Rui Moreira",
+      },
+      {
+        id: "br_2",
+        code: "HUB-LX",
+        name: "Plataforma de Lisboa (Prior Velho)",
+        address: "Av. Severiano Falcão, 14",
+        postal_code: "2685-379",
+        city: "Prior Velho",
+        phone: "218987000",
+        email: "cais.lisboa@correosexpress.com",
+        contact_person: "António Duarte",
+      },
+    ],
+    certificates: DEFAULT_CERTIFICATES,
+    documents: [],
   },
   {
     id: "forn_lk002",
@@ -50,6 +97,7 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     legal_name: "DPD PORTUGAL - TRANSPORTE EXPRESSO, S.A.",
     nif: "501964991",
     role: "Transportador Subcontratado",
+    category: "Transportador Subcontratado",
     city: "SANTO ANTÓNIO CAVALEIROS",
     phone: "919558084",
     email: "jose.rufino@dpd.pt",
@@ -58,6 +106,16 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     is_active: true,
     country_code: "PT",
     created_at: "2026-09-02T10:00:00Z",
+    global_markup_pct: 15.0,
+    price_families: DEFAULT_PRICE_FAMILIES,
+    additional_fees: DEFAULT_ADDITIONAL_FEES,
+    volumetrics: DEFAULT_VOLUMETRICS,
+    vehicles: [],
+    drivers: [],
+    ledger_entries: [],
+    branches: [],
+    certificates: DEFAULT_CERTIFICATES,
+    documents: [],
   },
   {
     id: "forn_lk001",
@@ -68,6 +126,7 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     legal_name: "PRINCEPS - COMÉRCIO POR GROSSO LDA",
     nif: "503501522",
     role: "Transportador Subcontratado",
+    category: "Transportador Subcontratado",
     city: "VILA NOVA DE FAMALICÃO",
     phone: "966224621",
     email: "",
@@ -76,6 +135,16 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     is_active: true,
     country_code: "PT",
     created_at: "2026-09-03T10:00:00Z",
+    global_markup_pct: 15.0,
+    price_families: DEFAULT_PRICE_FAMILIES,
+    additional_fees: DEFAULT_ADDITIONAL_FEES,
+    volumetrics: DEFAULT_VOLUMETRICS,
+    vehicles: [],
+    drivers: [],
+    ledger_entries: [],
+    branches: [],
+    certificates: DEFAULT_CERTIFICATES,
+    documents: [],
   },
   {
     id: "forn_lk000_1",
@@ -86,6 +155,7 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     legal_name: "Ctt - Correios de Portugal, S.a.",
     nif: "500077568",
     role: "Transportador Subcontratado",
+    category: "Transportador Subcontratado",
     city: "Lisboa",
     email: "rui.m.teixeira@ctt.pt",
     phone: "",
@@ -94,6 +164,16 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     is_active: true,
     country_code: "PT",
     created_at: "2026-09-04T10:00:00Z",
+    global_markup_pct: 15.0,
+    price_families: DEFAULT_PRICE_FAMILIES,
+    additional_fees: DEFAULT_ADDITIONAL_FEES,
+    volumetrics: DEFAULT_VOLUMETRICS,
+    vehicles: [],
+    drivers: [],
+    ledger_entries: [],
+    branches: [],
+    certificates: DEFAULT_CERTIFICATES,
+    documents: [],
   },
   {
     id: "forn_lk000_2",
@@ -104,6 +184,7 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     legal_name: "Vasp Premium - Entrega Personalizada de Publicações Lda",
     nif: "503178489",
     role: "Transportador Subcontratado",
+    category: "Transportador Subcontratado",
     city: "Agualva-Cacém",
     email: "",
     phone: "",
@@ -112,6 +193,16 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     is_active: true,
     country_code: "PT",
     created_at: "2026-09-05T10:00:00Z",
+    global_markup_pct: 15.0,
+    price_families: DEFAULT_PRICE_FAMILIES,
+    additional_fees: DEFAULT_ADDITIONAL_FEES,
+    volumetrics: DEFAULT_VOLUMETRICS,
+    vehicles: [],
+    drivers: [],
+    ledger_entries: [],
+    branches: [],
+    certificates: DEFAULT_CERTIFICATES,
+    documents: [],
   },
   {
     id: "forn_2",
@@ -122,6 +213,7 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     legal_name: "CTT EXPRESSO SERVIÇOS POSTAIS E LOGÍSTICA, S.A.",
     nif: "504520296",
     role: "Transportador Subcontratado",
+    category: "Transportador Subcontratado",
     city: "LISBOA",
     phone: "926388679",
     email: "rui.m.teixeira@ctt.pt",
@@ -130,6 +222,16 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     is_active: true,
     country_code: "PT",
     created_at: "2026-09-06T10:00:00Z",
+    global_markup_pct: 15.0,
+    price_families: DEFAULT_PRICE_FAMILIES,
+    additional_fees: DEFAULT_ADDITIONAL_FEES,
+    volumetrics: DEFAULT_VOLUMETRICS,
+    vehicles: [],
+    drivers: [],
+    ledger_entries: [],
+    branches: [],
+    certificates: DEFAULT_CERTIFICATES,
+    documents: [],
   },
   {
     id: "forn_1",
@@ -140,6 +242,7 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     legal_name: "GO LINKE UNIPESSOAL LIMITADA",
     nif: "518600300",
     role: "Transportador Subcontratado",
+    category: "Transportador Subcontratado",
     city: "GUIMARAES",
     phone: "912840061",
     email: "geral@linke.pt",
@@ -148,6 +251,16 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     is_active: true,
     country_code: "PT",
     created_at: "2026-09-07T10:00:00Z",
+    global_markup_pct: 15.0,
+    price_families: DEFAULT_PRICE_FAMILIES,
+    additional_fees: DEFAULT_ADDITIONAL_FEES,
+    volumetrics: DEFAULT_VOLUMETRICS,
+    vehicles: [],
+    drivers: [],
+    ledger_entries: [],
+    branches: [],
+    certificates: DEFAULT_CERTIFICATES,
+    documents: [],
   },
 ]
 
@@ -202,6 +315,7 @@ export async function saveFornecedorAction(fornecedor: Partial<Fornecedor>): Pro
 
   const id = fornecedor.id || `forn_${Date.now()}`
   const fullRecord: Fornecedor = {
+    ...fornecedor,
     id,
     code: fornecedor.code || `LK${Math.floor(100 + Math.random() * 900)}`,
     center_code: fornecedor.center_code || "A01",
@@ -210,6 +324,7 @@ export async function saveFornecedorAction(fornecedor: Partial<Fornecedor>): Pro
     legal_name: fornecedor.legal_name || fornecedor.short_name || "Novo Fornecedor, Lda",
     nif: fornecedor.nif || "",
     role: fornecedor.role || "Transportador Subcontratado",
+    category: fornecedor.category || "Transportador Subcontratado",
     city: fornecedor.city || "Portugal",
     email: fornecedor.email || "",
     phone: fornecedor.phone || "",
@@ -218,6 +333,16 @@ export async function saveFornecedorAction(fornecedor: Partial<Fornecedor>): Pro
     is_active: fornecedor.is_active ?? true,
     country_code: fornecedor.country_code || "PT",
     created_at: fornecedor.created_at || new Date().toISOString(),
+    global_markup_pct: fornecedor.global_markup_pct ?? 15,
+    price_families: fornecedor.price_families || DEFAULT_PRICE_FAMILIES,
+    additional_fees: fornecedor.additional_fees || DEFAULT_ADDITIONAL_FEES,
+    volumetrics: fornecedor.volumetrics || DEFAULT_VOLUMETRICS,
+    vehicles: fornecedor.vehicles || [],
+    drivers: fornecedor.drivers || [],
+    ledger_entries: fornecedor.ledger_entries || [],
+    branches: fornecedor.branches || [],
+    certificates: fornecedor.certificates || DEFAULT_CERTIFICATES,
+    documents: fornecedor.documents || [],
   }
 
   // 1. Tentar tabela fornecedores

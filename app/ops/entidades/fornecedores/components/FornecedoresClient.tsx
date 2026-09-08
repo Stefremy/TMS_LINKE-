@@ -20,7 +20,8 @@ import {
   Power,
   Check
 } from "lucide-react"
-import { Fornecedor, toggleFornecedorStatusAction, deleteFornecedorAction } from "@/app/actions/fornecedores"
+import { toggleFornecedorStatusAction, deleteFornecedorAction } from "@/app/actions/fornecedores"
+import { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 import { FornecedorModal } from "./FornecedorModal"
 
 interface FornecedoresClientProps {
@@ -557,6 +558,8 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
       {isModalOpen && (
         <FornecedorModal
           initialData={editingFornecedor}
+          allFornecedores={fornecedores}
+          onSelectFornecedor={(f) => setEditingFornecedor(f)}
           onClose={() => {
             setIsModalOpen(false)
             setEditingFornecedor(null)

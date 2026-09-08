@@ -4,7 +4,8 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { X, ChevronRight, ChevronDown, Save, Key, Settings, MapPin, Search, CheckCircle2, AlertCircle, Loader2, Play } from "lucide-react"
 import { testCttConnectionAction, saveCttConnectionAction } from "@/app/actions/ctt"
-import { getFornecedoresAction, Fornecedor } from "@/app/actions/fornecedores"
+import { getFornecedoresAction } from "@/app/actions/fornecedores"
+import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 
 interface WizardProps {
   onClose: () => void
