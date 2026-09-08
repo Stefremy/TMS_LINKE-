@@ -44,7 +44,30 @@ export async function getCttCredentials(): Promise<CTTConnectionCredentials> {
     // Ignorar se a tabela ainda não existir no schema cache
   }
 
-  // 2. Fallback para variáveis de ambiente
+  // 2. Tentar ler de audit_log (resiliência caso a tabela carrier_connections ainda não tenha sido criada)
+  try {
+    const { data: logs } = await supabase
+      .from("audit_log")
+      .select("*")
+      .eq("action", "carrier_connection_config")
+      .order("created_at", { ascending: false })
+      .limit(1)
+
+    if (logs && logs[0]?.details) {
+      const d = logs[0].details
+      return {
+        contract_number: d.contract_number,
+        client_number: d.client_id,
+        auth_id: d.auth_id,
+        user_id: d.user_id || undefined,
+        distribution_channel: d.distribution_channel || 99,
+        environment: d.environment || "qa",
+        default_subproduct: d.default_subproduct || "ERS 24",
+      }
+    }
+  } catch {}
+
+  // 3. Fallback para variáveis de ambiente
   return {
     contract_number: process.env.CTT_CONTRACT_ID || "12345678",
     client_number: process.env.CTT_CLIENT_ID || "10000001",
@@ -66,25 +89,32 @@ export async function saveCttConnectionAction(creds: {
   environment?: "qa" | "production"
   default_subproduct?: string
   description?: string
+  supplier_id?: string
 }) {
   const supabase = createAdminClient()
 
+  const payload = {
+    carrier_code: "ctt_expresso",
+    description: creds.description || "Integração CTT Expresso",
+    client_id: creds.client_number,
+    contract_number: creds.contract_number,
+    auth_id: creds.auth_id,
+    user_id: creds.user_id || null,
+    distribution_channel: 99,
+    environment: creds.environment || "qa",
+    default_subproduct: creds.default_subproduct || "ERS 24",
+    supplier_id: creds.supplier_id || "ctt_portugal",
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  }
+
+  // 1. Tentar tabela carrier_connections
   try {
     const { error: err1 } = await supabase
       .from("carrier_connections")
       .upsert({
         tenant_id: LINKE_TENANT_ID,
-        carrier_code: "ctt_expresso",
-        description: creds.description || "Integração Principal CTT",
-        client_id: creds.client_number,
-        contract_number: creds.contract_number,
-        auth_id: creds.auth_id,
-        user_id: creds.user_id || null,
-        distribution_channel: 99,
-        environment: creds.environment || "qa",
-        default_subproduct: creds.default_subproduct || "ERS 24",
-        is_active: true,
-        updated_at: new Date().toISOString(),
+        ...payload,
       }, { onConflict: "tenant_id,carrier_code" })
 
     if (err1) {
@@ -92,6 +122,184 @@ export async function saveCttConnectionAction(creds: {
     }
   } catch (err: any) {
     console.warn("Could not save to carrier_connections:", err.message)
+  }
+
+  // 2. Gravar em audit_log (sempre funcional em Supabase mesmo antes de correr migrações manuais)
+  try {
+    await supabase
+      .from("audit_log")
+      .delete()
+      .eq("action", "carrier_connection_config")
+
+    await supabase
+      .from("audit_log")
+      .insert({
+        tenant_id: LINKE_TENANT_ID,
+        action: "carrier_connection_config",
+        details: payload,
+      })
+  } catch (err: any) {
+    console.warn("audit_log insert error:", err?.message)
+  }
+
+  revalidatePath("/ops/configuracao/webservices")
+  return { success: true }
+}
+
+/**
+ * Obtém a lista de conexões configuradas
+ */
+export async function getCarrierConnectionsAction() {
+  const supabase = createAdminClient()
+
+  // 1. Tentar carrier_connections
+  try {
+    const { data, error } = await supabase
+      .from("carrier_connections")
+      .select("*")
+      .order("created_at", { ascending: false })
+
+    if (!error && data && data.length > 0) {
+      return data
+    }
+  } catch {}
+
+  // 2. Fallback: Ler do audit_log
+  try {
+    const { data: logs } = await supabase
+      .from("audit_log")
+      .select("*")
+      .eq("action", "carrier_connection_config")
+      .order("created_at", { ascending: false })
+
+    if (logs && logs.length > 0) {
+      const seen = new Set<string>()
+      const list: any[] = []
+      for (const item of logs) {
+        const d = item.details
+        if (d && !seen.has(d.carrier_code || d.client_id)) {
+          seen.add(d.carrier_code || d.client_id)
+          list.push({
+            id: item.id,
+            carrier_code: d.carrier_code || "ctt_expresso",
+            description: d.description || "Integração CTT Expresso",
+            client_id: d.client_id || d.client_number || "",
+            contract_number: d.contract_number || "",
+            auth_id: d.auth_id || "",
+            user_id: d.user_id || null,
+            environment: d.environment || "qa",
+            default_subproduct: d.default_subproduct || "ERS 24",
+            supplier_id: d.supplier_id || "ctt_portugal",
+            is_active: d.is_active ?? true,
+            created_at: item.created_at,
+          })
+        }
+      }
+      if (list.length > 0) {
+        return list
+      }
+    }
+  } catch (err: any) {
+    console.warn("Fallback audit_log read error:", err?.message)
+  }
+
+  return []
+}
+
+/**
+ * Ativa ou desativa uma conexão de transportadora
+ */
+export async function toggleCarrierConnectionAction(
+  id: string,
+  is_active: boolean,
+  carrier_code: string = "ctt_expresso"
+) {
+  const supabase = createAdminClient()
+
+  // 1. Atualizar em carrier_connections
+  try {
+    await supabase
+      .from("carrier_connections")
+      .update({ is_active, updated_at: new Date().toISOString() })
+      .or(`id.eq.${id},carrier_code.eq.${carrier_code}`)
+  } catch (err: any) {
+    console.warn("carrier_connections toggle error:", err?.message)
+  }
+
+  // 2. Atualizar em audit_log (fallback storage)
+  try {
+    const { data: logs } = await supabase
+      .from("audit_log")
+      .select("*")
+      .eq("action", "carrier_connection_config")
+
+    if (logs && logs.length > 0) {
+      for (const item of logs) {
+        if (
+          item.id === id ||
+          item.details?.carrier_code === carrier_code ||
+          item.details?.client_id === id
+        ) {
+          await supabase
+            .from("audit_log")
+            .update({
+              details: {
+                ...item.details,
+                is_active,
+                updated_at: new Date().toISOString(),
+              },
+            })
+            .eq("id", item.id)
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn("audit_log toggle error:", err?.message)
+  }
+
+  revalidatePath("/ops/configuracao/webservices")
+  return { success: true, is_active }
+}
+
+/**
+ * Elimina uma ligação de transportadora
+ */
+export async function deleteCarrierConnectionAction(
+  id: string,
+  carrier_code: string = "ctt_expresso"
+) {
+  const supabase = createAdminClient()
+
+  // 1. Eliminar em carrier_connections
+  try {
+    await supabase
+      .from("carrier_connections")
+      .delete()
+      .or(`id.eq.${id},carrier_code.eq.${carrier_code}`)
+  } catch (err: any) {
+    console.warn("carrier_connections delete error:", err?.message)
+  }
+
+  // 2. Eliminar em audit_log
+  try {
+    const { data: logs } = await supabase
+      .from("audit_log")
+      .select("*")
+      .eq("action", "carrier_connection_config")
+
+    if (logs && logs.length > 0) {
+      for (const item of logs) {
+        if (
+          item.id === id ||
+          item.details?.carrier_code === carrier_code ||
+          item.details?.client_id === id
+        ) {
+          await supabase.from("audit_log").delete().eq("id", item.id)
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn("audit_log delete error:", err?.message)
   }
 
   revalidatePath("/ops/configuracao/webservices")

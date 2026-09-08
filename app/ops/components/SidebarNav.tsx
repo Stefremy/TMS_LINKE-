@@ -44,10 +44,8 @@ const navConfig: NavItem[] = [
       { title: "Lista de Envios", href: "/ops/envios" },
       { title: "Criar Envio", href: "/ops/envios/novo" },
       { title: "Pedidos de Recolha", href: "/ops/envios/recolhas" },
-      { title: "Mapas de Distribuição", href: "/ops/envios/mapas" },
       { title: "Rastreabilidade", href: "/ops/envios/rastreabilidade" },
       { title: "Gestão Operacional", href: "/ops/envios/operacional" },
-      { title: "Gestor de Tarefas", href: "/ops/envios/tarefas" },
     ]
   },
   {
@@ -55,12 +53,7 @@ const navConfig: NavItem[] = [
     icon: Euro,
     subItems: [
       { title: "Reembolsos", href: "/ops/tesouraria/reembolsos" },
-      { title: "Portes no Destino", href: "/ops/tesouraria/portes" },
-      { title: "Ajudas de Custo", href: "/ops/tesouraria/ajudas-custo" },
       { title: "Salários", href: "/ops/tesouraria/salarios" },
-      { title: "Movimentos Bancários", href: "/ops/tesouraria/movimentos" },
-      { title: "Multibanco / Visa", href: "/ops/tesouraria/cartoes" },
-      { title: "SEPA", href: "/ops/tesouraria/sepa" },
     ]
   },
   {
@@ -71,7 +64,6 @@ const navConfig: NavItem[] = [
       { title: "Compras", href: "/ops/faturacao/compras" },
       { title: "Contas Corrente", href: "/ops/faturacao/contas-corrente" },
       { title: "Faturação Clientes", href: "/ops/faturacao/clientes" },
-      { title: "Faturação Terceiros", href: "/ops/faturacao/terceiros" },
       { title: "Análise Estatística", href: "/ops/faturacao/estatistica" },
     ]
   },
@@ -81,13 +73,11 @@ const navConfig: NavItem[] = [
     subItems: [
       { title: "Geral", href: "/ops/configuracao/geral" },
       { title: "Webservices Globais", href: "/ops/configuracao/webservices" },
-      { title: "Empresas", href: "/ops/configuracao/empresas" },
       { title: "Serviços de Transporte", href: "/ops/configuracao/servicos" },
       { title: "Taxas Adicionais", href: "/ops/configuracao/taxas" },
       { title: "Tabelas de Preço", href: "/ops/configuracao/precos" },
       { title: "Zonas de Preço", href: "/ops/configuracao/zonas" },
       { title: "Estados de Envio", href: "/ops/configuracao/estados" },
-      { title: "Permissões", href: "/ops/configuracao/permissoes" },
     ]
   }
 ]

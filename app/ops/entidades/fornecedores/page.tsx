@@ -1,10 +1,15 @@
 import * as React from "react"
+import { getFornecedoresAction } from "@/app/actions/fornecedores"
+import { FornecedoresClient } from "./components/FornecedoresClient"
 
-export default function FornecedoresPage() {
+export const dynamic = "force-dynamic"
+
+export default async function FornecedoresPage() {
+  const fornecedores = await getFornecedoresAction()
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 h-[calc(100vh-8rem)]">
-      <h1 className="text-2xl font-bold text-slate-800 mb-2">Fornecedores</h1>
-      <p className="text-slate-500">Este módulo está em desenvolvimento.</p>
+    <div className="py-2">
+      <FornecedoresClient initialFornecedores={fornecedores} />
     </div>
   )
 }

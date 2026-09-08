@@ -1,8 +1,27 @@
 "use client"
 
 import * as React from "react"
-import { Plus, Settings, Power, Check, X, Search, ChevronDown, Edit2, Trash2, Package, Map, MessageSquare, CreditCard, ShoppingCart, Key, Brain, Shield } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { 
+  Plus, 
+  Settings, 
+  Power, 
+  Check, 
+  X, 
+  Search, 
+  ChevronDown, 
+  Edit2, 
+  Trash2, 
+  Package, 
+  Loader2,
+  CheckCircle2,
+  AlertTriangle
+} from "lucide-react"
 import { NewConnectionWizard } from "./NewConnectionWizard"
+import { 
+  toggleCarrierConnectionAction, 
+  deleteCarrierConnectionAction 
+} from "@/app/actions/ctt"
 
 const tabs = [
   { id: "transportadoras", label: "Transportadoras", icon: Package },
@@ -12,10 +31,153 @@ interface WebservicesClientProps {
   connections: any[]
 }
 
-export function WebservicesClient({ connections }: WebservicesClientProps) {
+export function WebservicesClient({ connections: initialConnections }: WebservicesClientProps) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = React.useState("transportadoras")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isWizardOpen, setIsWizardOpen] = React.useState(false)
+  const [editingConnection, setEditingConnection] = React.useState<any | null>(null)
+  const [connections, setConnections] = React.useState(initialConnections || [])
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([])
+  const [togglingId, setTogglingId] = React.useState<string | null>(null)
+  const [deletingId, setDeletingId] = React.useState<string | null>(null)
+  const [feedback, setFeedback] = React.useState<{ message: string; type: "success" | "error" } | null>(null)
+
+  React.useEffect(() => {
+    setConnections(initialConnections || [])
+  }, [initialConnections])
+
+  // Clear feedback after 4 seconds
+  React.useEffect(() => {
+    if (feedback) {
+      const timer = setTimeout(() => setFeedback(null), 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [feedback])
+
+  const handleOpenNewWizard = () => {
+    setEditingConnection(null)
+    setIsWizardOpen(true)
+  }
+
+  const handleOpenEditWizard = (conn: any) => {
+    setEditingConnection(conn)
+    setIsWizardOpen(true)
+  }
+
+  const handleConnectionSaved = (newConn: any) => {
+    setConnections(prev => {
+      const filtered = prev.filter(c => c.id !== newConn.id && c.carrier_code !== newConn.carrier_code)
+      return [newConn, ...filtered]
+    })
+    setFeedback({
+      message: `Ligação "${newConn.description}" gravada com sucesso!`,
+      type: "success"
+    })
+  }
+
+  const handleToggleActive = async (conn: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    const nextState = !conn.is_active
+    setTogglingId(conn.id)
+
+    // Optimistic UI update
+    setConnections(prev =>
+      prev.map(c => (c.id === conn.id ? { ...c, is_active: nextState } : c))
+    )
+
+    try {
+      await toggleCarrierConnectionAction(conn.id, nextState, conn.carrier_code)
+      router.refresh()
+      setFeedback({
+        message: `Ligação ${nextState ? "ativada" : "desativada"} com sucesso.`,
+        type: "success"
+      })
+    } catch (err: any) {
+      // Revert optimistic update
+      setConnections(prev =>
+        prev.map(c => (c.id === conn.id ? { ...c, is_active: !nextState } : c))
+      )
+      setFeedback({
+        message: `Erro ao alterar estado: ${err.message}`,
+        type: "error"
+      })
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
+  const handleDeleteConnection = async (conn: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    const confirmed = window.confirm(
+      `Tem a certeza de que deseja eliminar a ligação "${conn.description}" (${conn.carrier_code})?\nEsta ação não pode ser revertida.`
+    )
+    if (!confirmed) return
+
+    setDeletingId(conn.id)
+    try {
+      await deleteCarrierConnectionAction(conn.id, conn.carrier_code)
+      setConnections(prev => prev.filter(c => c.id !== conn.id && c.carrier_code !== conn.carrier_code))
+      setSelectedIds(prev => prev.filter(id => id !== conn.id))
+      router.refresh()
+      setFeedback({
+        message: `Ligação "${conn.description}" eliminada com sucesso.`,
+        type: "success"
+      })
+    } catch (err: any) {
+      setFeedback({
+        message: `Erro ao eliminar ligação: ${err.message}`,
+        type: "error"
+      })
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(filteredConnections.map(c => c.id))
+    } else {
+      setSelectedIds([])
+    }
+  }
+
+  const handleToggleSelectRow = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    )
+  }
+
+  const handleBulkToggleActive = async () => {
+    if (selectedIds.length === 0) {
+      alert("Selecione pelo menos uma ligação na tabela.")
+      return
+    }
+
+    const selectedConns = connections.filter(c => selectedIds.includes(c.id))
+    const shouldActivate = selectedConns.some(c => !c.is_active)
+
+    setConnections(prev =>
+      prev.map(c =>
+        selectedIds.includes(c.id) ? { ...c, is_active: shouldActivate } : c
+      )
+    )
+
+    for (const conn of selectedConns) {
+      try {
+        await toggleCarrierConnectionAction(conn.id, shouldActivate, conn.carrier_code)
+      } catch (err) {
+        console.error("Bulk toggle error for:", conn.id, err)
+      }
+    }
+
+    router.refresh()
+    setFeedback({
+      message: `${selectedConns.length} ligação(ões) ${shouldActivate ? "ativadas" : "desativadas"} com sucesso.`,
+      type: "success"
+    })
+  }
 
   const filteredConnections = connections.filter((conn) => {
     if (!searchQuery) return true
@@ -27,9 +189,27 @@ export function WebservicesClient({ connections }: WebservicesClientProps) {
     )
   })
 
+  const isAllSelected =
+    filteredConnections.length > 0 &&
+    filteredConnections.every(c => selectedIds.includes(c.id))
+
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-8rem)] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
       
+      {/* Toast Feedback */}
+      {feedback && (
+        <div className={`absolute top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-2 ${
+          feedback.type === "success" ? "bg-emerald-800 text-white" : "bg-red-800 text-white"
+        }`}>
+          {feedback.type === "success" ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-300 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-red-300 shrink-0" />
+          )}
+          <span>{feedback.message}</span>
+        </div>
+      )}
+
       {/* Header Area */}
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
         <h1 className="text-xl font-bold text-slate-800">Webservices Globais</h1>
@@ -67,16 +247,24 @@ export function WebservicesClient({ connections }: WebservicesClientProps) {
         
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => setIsWizardOpen(true)}
-            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-bold shadow-sm transition-colors flex items-center gap-1.5"
+            onClick={handleOpenNewWizard}
+            className="bg-green-600 hover:bg-green-700 active:scale-[0.99] text-white px-3.5 py-1.5 rounded-lg text-sm font-bold shadow-sm transition-all flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" strokeWidth={3} />
             Nova Ligação
           </button>
           
-          <button className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5">
+          <button 
+            onClick={handleBulkToggleActive}
+            disabled={selectedIds.length === 0}
+            className={`border px-3.5 py-1.5 rounded-lg text-sm font-semibold shadow-xs transition-colors flex items-center gap-1.5 ${
+              selectedIds.length > 0
+                ? "bg-white border-slate-300 hover:bg-slate-50 text-slate-700 cursor-pointer"
+                : "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
+            }`}
+          >
             <Power className="w-4 h-4" />
-            Ativar/Desativar em Massa
+            Ativar/Desativar em Massa ({selectedIds.length})
           </button>
         </div>
 
@@ -101,7 +289,12 @@ export function WebservicesClient({ connections }: WebservicesClientProps) {
           <thead className="bg-white sticky top-0 z-10 shadow-sm">
             <tr className="border-b border-slate-200">
               <th className="px-4 py-3 w-10">
-                <input type="checkbox" className="rounded border-slate-300 text-green-600 focus:ring-green-500" />
+                <input 
+                  type="checkbox" 
+                  checked={isAllSelected}
+                  onChange={handleSelectAll}
+                  className="rounded border-slate-300 text-green-600 focus:ring-green-500 cursor-pointer" 
+                />
               </th>
               <th className="px-3 py-3 font-bold text-slate-700">Descrição</th>
               <th className="px-3 py-3 font-bold text-slate-700">Fornecedor</th>
@@ -120,55 +313,116 @@ export function WebservicesClient({ connections }: WebservicesClientProps) {
                   Nenhuma ligação configurada.
                 </td>
               </tr>
-            ) : filteredConnections.map((conn) => (
-              <tr key={conn.id} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="px-4 py-4 align-top">
-                  <input type="checkbox" className="rounded border-slate-300 text-green-600 focus:ring-green-500 mt-1" />
-                </td>
-                <td className="px-3 py-3">
-                  <div className="font-bold text-slate-800">{conn.description}</div>
-                  <div className="text-[11px] text-slate-500 font-medium bg-slate-100 inline-block px-1.5 py-0.5 rounded mt-1">
-                    {conn.carrier_code}
-                  </div>
-                </td>
-                <td className="px-3 py-3 text-slate-600 uppercase">{conn.carrier_code}</td>
-                <td className="px-3 py-3 text-slate-700">{conn.client_id}</td>
-                <td className="px-3 py-3 font-mono text-slate-600">{conn.contract_number}</td>
-                <td className="px-3 py-3 text-center">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                    conn.environment === 'production' 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'bg-orange-100 text-orange-700'
-                  }`}>
-                    {conn.environment || 'QA'}
-                  </span>
-                </td>
-                <td className="px-3 py-3 text-center">
-                  <div className={`inline-flex items-center justify-center w-8 h-5 rounded-full ${conn.is_active ? 'bg-green-500' : 'bg-slate-300'}`}>
-                    <div className={`w-3.5 h-3.5 bg-white rounded-full transition-transform ${conn.is_active ? 'translate-x-1.5' : '-translate-x-1.5'}`} />
-                  </div>
-                </td>
-                <td className="px-3 py-3 text-slate-500">
-                  {new Date(conn.created_at).toLocaleDateString('pt-PT')}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded" title="Editar">
-                      <Edit2 className="w-4 h-4" />
+            ) : filteredConnections.map((conn) => {
+              const isSelected = selectedIds.includes(conn.id)
+              const isToggling = togglingId === conn.id
+              const isDeleting = deletingId === conn.id
+
+              return (
+                <tr 
+                  key={conn.id} 
+                  onClick={() => handleOpenEditWizard(conn)}
+                  className={`hover:bg-slate-50/80 transition-colors cursor-pointer group ${
+                    isSelected ? "bg-green-50/40" : ""
+                  }`}
+                >
+                  <td className="px-4 py-3.5 align-middle" onClick={(e) => handleToggleSelectRow(conn.id, e)}>
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected}
+                      onChange={() => {}}
+                      className="rounded border-slate-300 text-green-600 focus:ring-green-500 cursor-pointer" 
+                    />
+                  </td>
+                  <td className="px-3 py-3.5">
+                    <div className="font-bold text-slate-800 hover:text-green-700 transition-colors flex items-center gap-1.5">
+                      {conn.description}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-medium bg-slate-100 inline-block px-1.5 py-0.5 rounded mt-0.5">
+                      {conn.carrier_code}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3.5 text-slate-700 font-medium">
+                    {conn.supplier_id === "ctt_portugal" ? "CTT Portugal" :
+                     conn.supplier_id === "ctt_expresso" ? "CTT Expresso" :
+                     conn.supplier_id === "dpd_portugal" ? "DPD Portugal" :
+                     conn.supplier_id === "gls_portugal" ? "GLS Portugal" :
+                     (conn.carrier_code?.replace(/_/g, " ").toUpperCase() || "CTT")}
+                  </td>
+                  <td className="px-3 py-3.5 text-slate-700 font-mono text-xs">{conn.client_id}</td>
+                  <td className="px-3 py-3.5 font-mono text-xs text-slate-600">{conn.contract_number}</td>
+                  <td className="px-3 py-3.5 text-center">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      conn.environment === 'production' 
+                        ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                        : 'bg-orange-100 text-orange-700 border border-orange-200'
+                    }`}>
+                      {conn.environment || 'QA'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      disabled={isToggling}
+                      onClick={(e) => handleToggleActive(conn, e)}
+                      title={conn.is_active ? "Clique para desativar" : "Clique para ativar"}
+                      className={`inline-flex items-center justify-center w-10 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500 cursor-pointer ${
+                        conn.is_active ? 'bg-emerald-600' : 'bg-slate-300'
+                      }`}
+                    >
+                      {isToggling ? (
+                        <Loader2 className="w-3 h-3 text-white animate-spin" />
+                      ) : (
+                        <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                          conn.is_active ? 'translate-x-2.5' : '-translate-x-2.5'
+                        }`} />
+                      )}
                     </button>
-                    <button className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded" title="Eliminar">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-3 py-3.5 text-slate-500 text-xs">
+                    {new Date(conn.created_at).toLocaleDateString('pt-PT')}
+                  </td>
+                  <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button 
+                        type="button"
+                        onClick={() => handleOpenEditWizard(conn)}
+                        className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition-all shadow-2xs" 
+                        title="Editar Ligação"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        type="button"
+                        disabled={isDeleting}
+                        onClick={(e) => handleDeleteConnection(conn, e)}
+                        className="p-1.5 text-slate-500 hover:text-red-700 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-lg transition-all shadow-2xs" 
+                        title="Eliminar Ligação"
+                      >
+                        {isDeleting ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-red-600" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
 
       {isWizardOpen && (
-        <NewConnectionWizard onClose={() => setIsWizardOpen(false)} />
+        <NewConnectionWizard 
+          initialData={editingConnection}
+          onClose={() => {
+            setIsWizardOpen(false)
+            setEditingConnection(null)
+          }} 
+          onSaved={handleConnectionSaved}
+        />
       )}
     </div>
   )

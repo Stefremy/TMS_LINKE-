@@ -1,11 +1,15 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { X, ChevronRight, ChevronDown, Save, Key, Settings, MapPin, Search, CheckCircle2, AlertCircle, Loader2, Play } from "lucide-react"
 import { testCttConnectionAction, saveCttConnectionAction } from "@/app/actions/ctt"
+import { getFornecedoresAction, Fornecedor } from "@/app/actions/fornecedores"
 
 interface WizardProps {
   onClose: () => void
+  onSaved?: (newConnection: any) => void
+  initialData?: any
 }
 
 const CONNECTORS = [
@@ -31,19 +35,30 @@ const STEPS: StepItem[] = [
   { num: 3, label: "Tipos de Mercadoria", icon: Settings },
 ]
 
-export function NewConnectionWizard({ onClose }: WizardProps) {
+export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardProps) {
+  const router = useRouter()
   const [step, setStep] = React.useState(1)
-  const [selectedConnector, setSelectedConnector] = React.useState("ctt_expresso")
+  const [selectedConnector, setSelectedConnector] = React.useState(initialData?.carrier_code || "ctt_expresso")
+  const [availableFornecedores, setAvailableFornecedores] = React.useState<Fornecedor[]>([])
+
+  // Fetch real suppliers
+  React.useEffect(() => {
+    getFornecedoresAction().then(data => {
+      if (data && data.length > 0) {
+        setAvailableFornecedores(data)
+      }
+    }).catch(() => {})
+  }, [])
 
   // Form State
   const [credentials, setCredentials] = React.useState({
-    contract_number: "",
-    client_number: "",
-    auth_id: "",
-    user_id: "",
-    environment: "qa" as "qa" | "production",
-    default_subproduct: "ERS 24",
-    description: "Integração CTT Expresso",
+    contract_number: initialData?.contract_number || "",
+    client_number: initialData?.client_id || initialData?.client_number || "",
+    auth_id: initialData?.auth_id || "",
+    user_id: initialData?.user_id || "",
+    environment: (initialData?.environment as "qa" | "production") || "qa",
+    supplier_id: initialData?.supplier_id || "forn_2",
+    description: initialData?.description || "Integração CTT Expresso",
   })
 
   // Test Connection State
@@ -66,7 +81,6 @@ export function NewConnectionWizard({ onClose }: WizardProps) {
         auth_id: credentials.auth_id || "00000000-0000-0000-0000-000000000000",
         user_id: credentials.user_id || undefined,
         environment: credentials.environment,
-        default_subproduct: credentials.default_subproduct,
       })
 
       if (res.success) {
@@ -90,10 +104,28 @@ export function NewConnectionWizard({ onClose }: WizardProps) {
           auth_id: credentials.auth_id,
           user_id: credentials.user_id,
           environment: credentials.environment,
-          default_subproduct: credentials.default_subproduct,
+          supplier_id: credentials.supplier_id,
           description: credentials.description,
         })
       }
+
+      const savedRecord = {
+        id: initialData?.id || ("conn_" + Date.now()),
+        carrier_code: selectedConnector,
+        description: credentials.description || "Integração CTT Expresso",
+        client_id: credentials.client_number,
+        contract_number: credentials.contract_number,
+        auth_id: credentials.auth_id,
+        user_id: credentials.user_id || null,
+        environment: credentials.environment,
+        supplier_id: credentials.supplier_id,
+        is_active: initialData?.is_active ?? true,
+        created_at: initialData?.created_at || new Date().toISOString(),
+      }
+
+      onSaved?.(savedRecord)
+      router.refresh()
+
       setSaveSuccessMessage("Dados de ligação gravados com sucesso na base de dados!")
       if (options?.advanceToNext) {
         setStep(prev => Math.min(prev + 1, 3))
@@ -114,7 +146,9 @@ export function NewConnectionWizard({ onClose }: WizardProps) {
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
           <div>
-            <h2 className="text-lg font-bold text-slate-800">Nova Ligação Webservices CTT</h2>
+            <h2 className="text-lg font-bold text-slate-800">
+              {initialData ? "Editar Ligação Webservices" : "Nova Ligação Webservices CTT"}
+            </h2>
             <p className="text-sm text-slate-500 mt-0.5">Configure os parâmetros de comunicação SOAP SGEE V1.8 e RecolhasWS.</p>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors">
@@ -187,28 +221,35 @@ export function NewConnectionWizard({ onClose }: WizardProps) {
                     </select>
                   </div>
 
-                  <div className="flex flex-col gap-1.5 mb-4">
-                    <label className="text-[13px] font-semibold text-slate-700">SubProduto Padrão</label>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[13px] font-semibold text-slate-700 flex items-center justify-between">
+                      <span>Associar a Fornecedor</span>
+                      <span className="text-[11px] text-slate-400 font-normal">Opcional</span>
+                    </label>
                     <select 
-                      value={credentials.default_subproduct}
-                      onChange={(e) => setCredentials({ ...credentials, default_subproduct: e.target.value })}
+                      value={credentials.supplier_id}
+                      onChange={(e) => setCredentials({ ...credentials, supplier_id: e.target.value })}
                       className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-green-500 focus:outline-none"
                     >
-                      <option value="ERS 24">ERS 24 (Entrega 24 Horas)</option>
-                      <option value="ERS 48">ERS 48 (Entrega 48 Horas)</option>
-                      <option value="D+1">D+1 (Dia Seguinte)</option>
-                      <option value="D+2">D+2 (2 Dias)</option>
+                      {availableFornecedores.length > 0 ? (
+                        availableFornecedores.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.short_name} ({f.legal_name || f.code})
+                          </option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="forn_2">CTT Expresso (CTT EXPRESSO SERVIÇOS POSTAIS)</option>
+                          <option value="forn_lk002">DPD PORTUGAL (DPD PORTUGAL - TRANSPORTE EXPRESSO)</option>
+                          <option value="forn_lk000_1">CORREIOS (Ctt - Correios de Portugal, S.a.)</option>
+                          <option value="forn_lk003">CORREOS.EXPRESS (CEP II - CORREOS EXPRESS PORTUGAL)</option>
+                        </>
+                      )}
+                      <option value="none">-- Nenhum (associar mais tarde) --</option>
                     </select>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[13px] font-semibold text-slate-700">Canal de Distribuição</label>
-                    <input 
-                      type="text" 
-                      value="99 (EMS CTT Expresso)" 
-                      disabled 
-                      className="w-full bg-slate-100 border border-slate-200 rounded px-3 py-2 text-sm text-slate-500 cursor-not-allowed" 
-                    />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Associe este webservice aos fornecedores configurados em Entidades &rsaquo; Fornecedores.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -226,7 +267,7 @@ export function NewConnectionWizard({ onClose }: WizardProps) {
                         auth_id: "e4a7b512-4c28-48b2-b7e6-123456789abc",
                         user_id: "",
                         environment: "qa",
-                        default_subproduct: "ERS 24",
+                        supplier_id: "ctt_portugal",
                         description: "CTT Expresso - Homologação",
                       })}
                       className="text-xs font-bold text-green-600 hover:text-green-700 hover:underline"
@@ -330,20 +371,11 @@ export function NewConnectionWizard({ onClose }: WizardProps) {
                   </div>
 
                   {saveSuccessMessage && (
-                    <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <div>
-                          <strong>Guardado:</strong> {saveSuccessMessage}
-                        </div>
+                    <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <strong>Guardado:</strong> {saveSuccessMessage}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setStep(2)}
-                        className="ml-3 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors shadow-sm"
-                      >
-                        Configurar Mapeamento <ChevronRight className="w-3 h-3" />
-                      </button>
                     </div>
                   )}
 
@@ -493,11 +525,13 @@ export function NewConnectionWizard({ onClose }: WizardProps) {
                   Gravar
                 </button>
                 <button 
-                  onClick={() => setStep(2)}
-                  className="px-4 py-2 text-sm font-bold text-white bg-slate-800 hover:bg-slate-900 rounded shadow transition-colors flex items-center gap-1"
+                  type="button"
+                  onClick={() => handleSave({ closeAfter: true })}
+                  disabled={isSaving}
+                  className="px-5 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded shadow transition-colors flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  Seguinte: Mapeamento Serviços
-                  <ChevronRight className="w-4 h-4" />
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Gravar e Fechar
                 </button>
               </>
             )}

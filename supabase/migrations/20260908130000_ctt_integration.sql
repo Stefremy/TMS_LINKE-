@@ -38,6 +38,9 @@ alter table shipments
   add column if not exists ctt_label_base64 text,
   add column if not exists ctt_manifest_pdf text;
 
--- Enable RLS
+-- Enable RLS & Policies
 alter table carrier_connections enable row level security;
 alter table tenant_integrations enable row level security;
+
+create policy if not exists "Allow all operations for carrier_connections" on carrier_connections for all using (true) with check (true);
+create policy if not exists "Allow all operations for tenant_integrations" on tenant_integrations for all using (true) with check (true);

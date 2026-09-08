@@ -75,10 +75,6 @@ export default function OpsLayout({
                 3
               </span>
             </button>
-            <button className="bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
-              <Plus className="w-5 h-5" />
-              Nova Guia
-            </button>
           </div>
         </header>
 
