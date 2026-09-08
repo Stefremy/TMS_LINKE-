@@ -1,5 +1,6 @@
 import * as React from "react"
 import Link from "next/link"
+import { SidebarNav } from "./components/SidebarNav"
 import { 
   Home, 
   Package, 
@@ -33,40 +34,7 @@ export default function OpsLayout({
         </div>
         
         {/* Navigation */}
-        <nav className="flex-1 px-4 space-y-2 overflow-y-auto mt-4">
-          <Link href="/ops" className="flex items-center gap-4 px-4 py-3 text-green-800 bg-green-50 rounded-xl font-bold text-[15px] transition-colors">
-            <Home className="w-5 h-5 text-green-600" strokeWidth={2.5} />
-            Dashboard
-          </Link>
-          <Link href="/ops/clientes" className="flex items-center gap-4 px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold text-[15px] transition-colors">
-            <Users className="w-5 h-5" strokeWidth={2} />
-            Clientes
-          </Link>
-          <Link href="/ops/envios" className="flex items-center gap-4 px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold text-[15px] transition-colors">
-            <Package className="w-5 h-5" strokeWidth={2} />
-            Envios
-          </Link>
-          <Link href="/ops/recolhas" className="flex items-center gap-4 px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold text-[15px] transition-colors">
-            <Truck className="w-5 h-5" strokeWidth={2} />
-            Recolhas
-          </Link>
-          <Link href="/ops/rastreamento" className="flex items-center gap-4 px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold text-[15px] transition-colors">
-            <Search className="w-5 h-5" strokeWidth={2} />
-            Rastreamento
-          </Link>
-          <Link href="/ops/faturacao" className="flex items-center gap-4 px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold text-[15px] transition-colors">
-            <Receipt className="w-5 h-5" strokeWidth={2} />
-            Faturação
-          </Link>
-          <Link href="/ops/definicoes" className="flex items-center gap-4 px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold text-[15px] transition-colors">
-            <Settings className="w-5 h-5" strokeWidth={2} />
-            Definições
-          </Link>
-          <Link href="/ops/integracoes" className="flex items-center gap-4 px-4 py-3 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-xl font-semibold text-[15px] transition-colors">
-            <Plug className="w-5 h-5" strokeWidth={2} />
-            Integrações
-          </Link>
-        </nav>
+        <SidebarNav />
         
         {/* Footer actions */}
         <div className="p-4">
