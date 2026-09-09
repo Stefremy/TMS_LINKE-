@@ -240,14 +240,19 @@ export async function dispatchShipmentAction(shipmentId: string) {
       sender: {
         name: shipment.sender_name,
         address: shipment.sender_address,
-        zip: `${shipment.sender_zip3}-${shipment.sender_zip4}`,
+        // zip4 = 4-digit prefix, zip3 = 3-digit extension → format: "4610-001"
+        zip: shipment.sender_zip4
+          ? `${shipment.sender_zip4}-${shipment.sender_zip3 || "001"}`
+          : "1000-001",
         city: "Localidade",
         phone: "910000000"
       },
       recipient: {
         name: shipment.recipient_name,
         address: shipment.recipient_address,
-        zip: `${shipment.recipient_zip3}-${shipment.recipient_zip4}`,
+        zip: shipment.recipient_zip4
+          ? `${shipment.recipient_zip4}-${shipment.recipient_zip3 || "001"}`
+          : "1000-001",
         city: "Localidade",
         phone: "920000000"
       },
@@ -523,8 +528,18 @@ export async function regenerateCttLabelAction(shipmentId: string) {
     throw new Error("Envio não encontrado para reemitir etiqueta.")
   }
 
-  const senderZip = shipment.sender_zip3 ? `${shipment.sender_zip3}-${shipment.sender_zip4 || "001"}` : "1000-001"
-  const recipientZip = shipment.recipient_zip3 ? `${shipment.recipient_zip3}-${shipment.recipient_zip4 || "001"}` : "1000-001"
+  // zip3 = 3-digit extension (e.g. "001"), zip4 = 4-digit prefix (e.g. "4610")
+  // Correct format: "4610-001" = ${zip4}-${zip3}
+  const senderZip = shipment.sender_zip4
+    ? `${shipment.sender_zip4}-${shipment.sender_zip3 || "001"}`
+    : shipment.sender_zip3
+    ? `${shipment.sender_zip3}-001`
+    : "1000-001"
+  const recipientZip = shipment.recipient_zip4
+    ? `${shipment.recipient_zip4}-${shipment.recipient_zip3 || "001"}`
+    : shipment.recipient_zip3
+    ? `${shipment.recipient_zip3}-001`
+    : "1000-001"
 
   const cttRes = await emitCttShipmentAction({
     id: shipment.id,
@@ -578,9 +593,19 @@ export async function regenerateCttLabelAction(shipmentId: string) {
     revalidatePath("/ops/envios")
   } catch {}
 
+  // Extract the error message string from cttRes (which may have .error or .errors)
+  const errorStr: string = (() => {
+    const r = cttRes as any
+    if (typeof r.error === 'string') return r.error
+    if (Array.isArray(r.errors) && r.errors.length > 0) {
+      return r.errors.map((e: any) => `${e.ErrorCode ? `[${e.ErrorCode}] ` : ''}${e.Message || 'Erro desconhecido'}`).join('; ')
+    }
+    return 'Erro desconhecido na comunicação CTT'
+  })()
+
   return {
     success: cttRes.success,
-    error: (cttRes as any).error,
+    error: errorStr,
     labelBase64: cttRes.labelBase64,
     trackingNumber: cttRes.trackingNumber || shipment.tracking_number
   }

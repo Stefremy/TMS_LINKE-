@@ -18,6 +18,14 @@ export class CTTSoapClient {
       attributeNamePrefix: "@_",
       removeNSPrefix: true,
       textNodeName: "#text",
+      // Decode XML character references (&#xD; → \r, &#xA; → \n, &amp; → &, etc.)
+      // This is critical for CTT ZPL labels which use &#xD; as line separators
+      processEntities: true,
+      htmlEntities: true,
+      // Prevent fast-xml-parser from converting numeric strings to numbers
+      // (important for Base64 label strings and postal codes)
+      parseTagValue: false,
+      parseAttributeValue: false,
     })
   }
 

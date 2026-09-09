@@ -42,7 +42,20 @@ function isLikelyBase64(s: string): boolean {
  * APENAS para uso em Server Actions (Node.js) — não chamar do browser.
  */
 export async function convertZplToPdfBase64(zpl: string): Promise<string> {
-  const trimmed = (zpl || "").trim()
+  let trimmed = (zpl || "").trim()
+
+  // Decodificar entidades XML que o parser possa não ter decodificado
+  // (e.g. &#xD; → \r, &#xA; → \n, &amp; → &)
+  trimmed = trimmed
+    .replace(/&#xD;/gi, "\r")
+    .replace(/&#xA;/gi, "\n")
+    .replace(/&#x9;/gi, "\t")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+
   if (!trimmed.startsWith("^XA")) {
     return trimmed
   }
@@ -56,11 +69,13 @@ export async function convertZplToPdfBase64(zpl: string): Promise<string> {
       const arrayBuf = await res.arrayBuffer()
       return Buffer.from(arrayBuf).toString("base64")
     }
+    console.warn("Labelary respondeu com erro:", res.status, res.statusText)
   } catch (err: any) {
     console.warn("Falha ao converter ZPL para PDF via Labelary:", err?.message)
   }
   return trimmed
 }
+
 
 /**
  * Descarrega o PDF da etiqueta CTT usando uma data URL (abordagem mais fiável).
