@@ -2,7 +2,8 @@
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { emitCttShipmentAction } from "@/app/actions/ctt"
+import { emitCttShipmentAction, getCttCredentials } from "@/app/actions/ctt"
+import { CTTPickupService } from "@/lib/services/ctt"
 
 const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 const DEFAULT_FALLBACK_CLIENT_ID = "44444444-4444-4444-4444-444444444444"
@@ -477,7 +478,7 @@ export async function emitClientGuiaAction(data: {
         realGuia = cttRes.trackingNumber || trackingNumber
         labelBase64 = cttRes.labelBase64
         
-        // Save the label and real tracking number to the database
+        // Guardar etiqueta e tracking real na BD
         try {
           await supabase.from("shipments").update({
             tracking_number: realGuia,
@@ -494,6 +495,66 @@ export async function emitClientGuiaAction(data: {
             }
           }).eq("action", "shipment_data").contains("details", { id: shipmentId })
         } catch (e) { console.warn("Failed to update audit_log with label") }
+
+        // Agendar Recolha CTT automaticamente
+        try {
+          const cttCreds = await getCttCredentials()
+          const pickupSvc = new CTTPickupService()
+
+          // Determinar data e hora de recolha:
+          // Se ainda for antes das 16h (hora PT), agenda para hoje — caso contrário, próximo dia útil
+          const nowPT = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Lisbon" }))
+          const hour = nowPT.getHours()
+          const isWeekend = nowPT.getDay() === 0 || nowPT.getDay() === 6
+          
+          let pickupDate = new Date(nowPT)
+          if (hour >= 16 || isWeekend) {
+            // Próximo dia útil
+            pickupDate.setDate(pickupDate.getDate() + 1)
+            while (pickupDate.getDay() === 0 || pickupDate.getDay() === 6) {
+              pickupDate.setDate(pickupDate.getDate() + 1)
+            }
+          }
+          const dateStr = pickupDate.toISOString().slice(0, 10) // YYYY-MM-DD
+          // CP4 = 4-digit prefix (zip4), CP3 = 3-digit extension (zip3)
+          const senderCP4 = senderZip4 || data.senderPostal?.split("-")[0] || "1000"
+          const senderCP3 = senderZip3 || data.senderPostal?.split("-")[1] || "001"
+
+          const pickupRes = await pickupSvc.newOfferPickUp(cttCreds, {
+            // Campos de credencial (o serviço usa creds, mas o tipo exige)
+            AuthenticationID: cttCreds.auth_id,
+            ClientId: cttCreds.client_number,
+            ContractId: cttCreds.contract_number,
+            DataRecolha: dateStr,
+            HoraInicio: "09:00",
+            HoraFim: "18:00",
+            Expedidor: {
+              Nome: shipmentData.sender_name,
+              Morada: data.senderAddress || "Sede Comercial",
+              CP4: senderCP4,
+              CP3: senderCP3,
+              Localidade: data.senderCity || "Portugal",
+              Telefone: "910000000",
+            },
+            QuantidadeVolumes: data.volumesCount || 1,
+            PesoKg: data.weightKg || 1,
+          })
+
+          if (pickupRes.Success && pickupRes.PickUpID) {
+            console.log(`[CTT Pickup] Recolha agendada: ${pickupRes.PickUpID} para ${dateStr}`)
+            try {
+              await supabase.from("shipments").update({
+                pickup_id: pickupRes.PickUpID,
+                pickup_date: dateStr,
+              }).eq("id", shipmentId)
+            } catch { /* coluna pode não existir ainda — ignorar */ }
+          } else {
+            console.warn("[CTT Pickup] Falha ao agendar recolha:", pickupRes.Errors)
+          }
+        } catch (pickupErr: any) {
+          // A falha de recolha não bloqueia o envio — o operador pode reagendar
+          console.warn("[CTT Pickup] Erro ao agendar recolha automática:", pickupErr.message)
+        }
       }
     } catch (e: any) {
       console.error("Failed to generate CTT real shipment:", e.message)

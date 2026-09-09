@@ -58,8 +58,6 @@ export function ClientCreateGuia() {
   // Special Services selections
   const [isCOD, setIsCOD] = React.useState(false)
   const [codAmount, setCodAmount] = React.useState("50.00")
-  const [isInsurance, setIsInsurance] = React.useState(false)
-  const [insuredValue, setInsuredValue] = React.useState("250.00")
   const [isFragil, setIsFragil] = React.useState(false)
   const [isSMSNotification, setIsSMSNotification] = React.useState(true)
 
@@ -154,16 +152,6 @@ export function ClientCreateGuia() {
       activeSpecialItems.push({ name: "Cobrança / Reembolso", amount: fee })
     }
 
-    // 2. Special Insurance
-    if (isInsurance) {
-      const feeCfg = specialFeesList.find((f) => f.special_service_code === "insurance")
-      const pct = feeCfg?.percentage_value ?? 1.0
-      const minVal = feeCfg?.min_value ?? 3.50
-      const insVal = parseFloat(insuredValue) || 0
-      const fee = Math.max(insVal * (pct / 100), minVal)
-      specialTotal += fee
-      activeSpecialItems.push({ name: "Seguro Extra", amount: fee })
-    }
 
     // 3. Fragil
     if (isFragil) {
@@ -204,8 +192,6 @@ export function ClientCreateGuia() {
     specialFeesList,
     isCOD,
     codAmount,
-    isInsurance,
-    insuredValue,
     isFragil,
     isSMSNotification,
   ])
@@ -591,33 +577,6 @@ export function ClientCreateGuia() {
                 )}
               </div>
 
-              {/* 2. Special Insurance */}
-              <div className={`p-3 rounded-xl border transition-colors ${isInsurance ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="opt_ins"
-                    checked={isInsurance} 
-                    onChange={(e) => setIsInsurance(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
-                  />
-                  <label htmlFor="opt_ins" className="font-bold text-slate-800 cursor-pointer text-xs">
-                    Seguro Extra / Valor Declarado
-                  </label>
-                </div>
-                {isInsurance && (
-                  <div className="mt-2 pl-6 flex items-center gap-1.5">
-                    <span className="text-[11px] text-slate-500">Valor (€):</span>
-                    <input
-                      type="number"
-                      step="10"
-                      value={insuredValue}
-                      onChange={(e) => setInsuredValue(e.target.value)}
-                      className="w-24 border border-slate-300 rounded-lg px-2 py-0.5 text-xs font-mono font-bold bg-white"
-                    />
-                  </div>
-                )}
-              </div>
 
               {/* 3. Fragil */}
               <div className={`p-3 rounded-xl border transition-colors ${isFragil ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
