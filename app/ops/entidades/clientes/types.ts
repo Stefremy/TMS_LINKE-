@@ -1,3 +1,65 @@
+export interface ClientPricingRate {
+  zone_code: string
+  zone_name: string
+  w_0_1: number
+  w_1_2: number
+  w_2_5: number
+  w_5_10: number
+  w_10_20: number
+  w_20_30: number
+  kg_extra: number
+}
+
+export interface ClientServicePrice {
+  service_code: string
+  service_name: string
+  subproduct_id: string
+  category: "Nacional" | "Ilhas" | "Espanha" | "Internacional" | "Postal"
+  description: string
+  is_enabled: boolean
+  w_0_1: number
+  w_1_2: number
+  w_2_5: number
+  w_5_10: number
+  w_10_20: number
+  w_20_30: number
+  kg_extra: number
+}
+
+export interface ClientSpecialServiceFee {
+  special_service_code: string
+  special_service_name: string
+  api_type_code: number
+  fee_type: "percentage" | "fixed" | "discount"
+  percentage_value?: number
+  fixed_value?: number
+  min_value?: number
+  description: string
+  is_enabled: boolean
+}
+
+export interface ClientPricingConfig {
+  table_name: string
+  fuel_surcharge_pct: number
+  discount_pct?: number
+  rates?: ClientPricingRate[]
+  services_pricing: ClientServicePrice[]
+  special_services_fees: ClientSpecialServiceFee[]
+}
+
+export interface ClientAllowedWebservice {
+  id: string
+  code: string
+  name: string
+  provider_name: string
+  badge_color: string
+  is_enabled: boolean
+  is_default?: boolean
+  client_custom_code?: string
+  available_services: string[]
+  allowed_services: string[]
+}
+
 export interface Cliente {
   id: string
   code: string
@@ -24,6 +86,10 @@ export interface Cliente {
   observations?: string
   is_active: boolean
   created_at: string
+
+  // Preçário & Webservices
+  pricing?: ClientPricingConfig
+  allowed_webservices?: ClientAllowedWebservice[]
 }
 
 export const DEFAULT_CLIENT_CATEGORIES = [
@@ -44,4 +110,425 @@ export const CLIENT_COLOR_OPTIONS = [
   { label: "Vermelho Rubi", value: "#ef4444" },
   { label: "Ciano Turquesa", value: "#06b6d4" },
   { label: "Cinza Grafite", value: "#475569" },
+]
+
+/**
+ * 1. PRODUTOS & SUB-PRODUTOS DE TRANSPORTE CTT (SubProductId)
+ */
+export const DEFAULT_CTT_SERVICES_PRICING: ClientServicePrice[] = [
+  {
+    service_code: "ctt_24h",
+    service_name: "ERS 24 / CTT 24H (Para Amanhã)",
+    subproduct_id: "ERS 24",
+    category: "Nacional",
+    description: "Entrega expresso no dia útil seguinte em todo o território continental.",
+    is_enabled: true,
+    w_0_1: 3.85,
+    w_1_2: 4.25,
+    w_2_5: 4.95,
+    w_5_10: 6.30,
+    w_10_20: 8.95,
+    w_20_30: 12.80,
+    kg_extra: 0.45,
+  },
+  {
+    service_code: "ctt_48h",
+    service_name: "ERS 48 / CTT 48H (2 Dias)",
+    subproduct_id: "ERS 48",
+    category: "Nacional",
+    description: "Serviço expresso económico com prazo de entrega em 48 horas úteis.",
+    is_enabled: true,
+    w_0_1: 3.35,
+    w_1_2: 3.75,
+    w_2_5: 4.35,
+    w_5_10: 5.50,
+    w_10_20: 7.80,
+    w_20_30: 10.90,
+    kg_extra: 0.38,
+  },
+  {
+    service_code: "ctt_multiplo",
+    service_name: "CTT Múltiplo (Multi-Volume)",
+    subproduct_id: "ERS MULT",
+    category: "Nacional",
+    description: "Envio de múltiplos volumes sob a mesma guia com numeração sequencial.",
+    is_enabled: true,
+    w_0_1: 4.20,
+    w_1_2: 4.60,
+    w_2_5: 5.40,
+    w_5_10: 6.90,
+    w_10_20: 9.80,
+    w_20_30: 13.90,
+    kg_extra: 0.48,
+  },
+  {
+    service_code: "ctt_10h_13h",
+    service_name: "CTT 10H / CTT 13H (Compromisso Horário)",
+    subproduct_id: "EMS 10/13",
+    category: "Nacional",
+    description: "Entrega garantida antes das 10h00 ou antes das 13h00 do dia seguinte.",
+    is_enabled: true,
+    w_0_1: 7.90,
+    w_1_2: 8.50,
+    w_2_5: 9.80,
+    w_5_10: 12.50,
+    w_10_20: 16.90,
+    w_20_30: 22.00,
+    kg_extra: 0.85,
+  },
+  {
+    service_code: "ctt_ilhas_aereo",
+    service_name: "CTT Ilhas Expresso (Aéreo)",
+    subproduct_id: "AIR ISL",
+    category: "Ilhas",
+    description: "Ligações urgentes por via aérea para os Açores e Madeira.",
+    is_enabled: true,
+    w_0_1: 9.80,
+    w_1_2: 12.50,
+    w_2_5: 16.90,
+    w_5_10: 24.50,
+    w_10_20: 38.50,
+    w_20_30: 52.00,
+    kg_extra: 1.85,
+  },
+  {
+    service_code: "ctt_ilhas_maritimo",
+    service_name: "CTT Ilhas Carga (Marítimo)",
+    subproduct_id: "SEA ISL",
+    category: "Ilhas",
+    description: "Transporte marítimo regular para volumes pesados ou grandes remessas.",
+    is_enabled: true,
+    w_0_1: 6.50,
+    w_1_2: 7.80,
+    w_2_5: 9.90,
+    w_5_10: 14.20,
+    w_10_20: 21.50,
+    w_20_30: 28.90,
+    kg_extra: 0.95,
+  },
+  {
+    service_code: "ctt_hoje",
+    service_name: "CTT Hoje (Same-Day)",
+    subproduct_id: "SAME DAY",
+    category: "Nacional",
+    description: "Recolha e entrega no próprio dia útil nas áreas metropolitanas (Porto/Lisboa).",
+    is_enabled: true,
+    w_0_1: 8.50,
+    w_1_2: 9.50,
+    w_2_5: 11.20,
+    w_5_10: 14.80,
+    w_10_20: 19.50,
+    w_20_30: 26.00,
+    kg_extra: 0.90,
+  },
+  {
+    service_code: "ctt_postal",
+    service_name: "Rede Postal (D+1, D+2, D+5)",
+    subproduct_id: "POSTAL",
+    category: "Postal",
+    description: "Correio Registado em mão, Encomenda Postal e formatos especiais.",
+    is_enabled: true,
+    w_0_1: 2.95,
+    w_1_2: 3.45,
+    w_2_5: 4.10,
+    w_5_10: 5.20,
+    w_10_20: 7.10,
+    w_20_30: 9.80,
+    kg_extra: 0.35,
+  },
+  {
+    service_code: "ctt_espanha_24h",
+    service_name: "CTT Espanha 24H (Paq Iberia)",
+    subproduct_id: "IBERIA 24",
+    category: "Espanha",
+    description: "Distribuição porta-a-porta em toda a Espanha Peninsular em 24h.",
+    is_enabled: true,
+    w_0_1: 5.60,
+    w_1_2: 6.30,
+    w_2_5: 7.90,
+    w_5_10: 10.20,
+    w_10_20: 14.80,
+    w_20_30: 19.80,
+    kg_extra: 0.72,
+  },
+  {
+    service_code: "ctt_europa_classic",
+    service_name: "CTT Europa Classic (Road)",
+    subproduct_id: "EU ROAD",
+    category: "Internacional",
+    description: "Distribuição rodoviária para toda a União Europeia com rastreio contínuo.",
+    is_enabled: true,
+    w_0_1: 14.50,
+    w_1_2: 18.20,
+    w_2_5: 24.50,
+    w_5_10: 32.80,
+    w_10_20: 48.50,
+    w_20_30: 65.00,
+    kg_extra: 2.25,
+  },
+  {
+    service_code: "ctt_internacional_express",
+    service_name: "CTT Internacional Express (Air)",
+    subproduct_id: "INT AIR",
+    category: "Internacional",
+    description: "Serviço urgente aéreo mundial para mais de 200 países.",
+    is_enabled: true,
+    w_0_1: 28.50,
+    w_1_2: 36.00,
+    w_2_5: 49.00,
+    w_5_10: 68.00,
+    w_10_20: 98.00,
+    w_20_30: 135.00,
+    kg_extra: 4.80,
+  },
+]
+
+/**
+ * 2. SERVIÇOS ESPECIAIS E SUPLEMENTARES (SpecialServices)
+ */
+export const DEFAULT_CTT_SPECIAL_SERVICES_FEES: ClientSpecialServiceFee[] = [
+  {
+    special_service_code: "cod",
+    special_service_name: "AgainstReimbursement (Cobrança / Reembolso - COD)",
+    api_type_code: 2,
+    fee_type: "percentage",
+    percentage_value: 2.0,
+    min_value: 1.80,
+    description: "Recebimento do valor da mercadoria ou frete no ato de entrega.",
+    is_enabled: true,
+  },
+  {
+    special_service_code: "saturday",
+    special_service_name: "Saturday (Entrega ao Sábado 10h-14h)",
+    api_type_code: 4,
+    fee_type: "fixed",
+    fixed_value: 8.50,
+    description: "Distribuição prioritária ao sábado de manhã.",
+    is_enabled: true,
+  },
+  {
+    special_service_code: "return_signed",
+    special_service_name: "ReturnDocumentSigned (Guia / Fatura Assinada e Carimbada)",
+    api_type_code: 5,
+    fee_type: "fixed",
+    fixed_value: 2.20,
+    description: "Devolução física ou digitalizada do comprovativo assinado pelo destinatário.",
+    is_enabled: true,
+  },
+  {
+    special_service_code: "insurance",
+    special_service_name: "SpecialInsurance (Seguro Extra de Valor Declarado)",
+    api_type_code: 6,
+    fee_type: "percentage",
+    percentage_value: 1.0,
+    min_value: 3.50,
+    description: "Cobertura total até ao montante declarado da mercadoria.",
+    is_enabled: true,
+  },
+  {
+    special_service_code: "fragil",
+    special_service_name: "Fragil (Tratamento Diferenciado Frágil)",
+    api_type_code: 7,
+    fee_type: "fixed",
+    fixed_value: 1.50,
+    description: "Acondicionamento e manuseamento prioritário contra quebras.",
+    is_enabled: true,
+  },
+  {
+    special_service_code: "delivery_point",
+    special_service_name: "DeliveryPoint (Ponto CTT / Cacifo 24H Lockers)",
+    api_type_code: 18,
+    fee_type: "fixed",
+    fixed_value: 0.0,
+    description: "Entrega direta em cacifo eletrónico ou posto parceiro da rede CTT.",
+    is_enabled: true,
+  },
+  {
+    special_service_code: "time_window",
+    special_service_name: "TimeWindow (Janela Horária Agendada de 2h/3h)",
+    api_type_code: 22,
+    fee_type: "fixed",
+    fixed_value: 3.50,
+    description: "Agendamento da entrega numa faixa horária definida pelo destinatário.",
+    is_enabled: true,
+  },
+  {
+    special_service_code: "sms_tracking",
+    special_service_name: "SMS / LiveTracking (Alerta SMS e Seguimento em Tempo Real)",
+    api_type_code: 14,
+    fee_type: "fixed",
+    fixed_value: 0.15,
+    description: "Envio de SMS com janela estimada e link de tracking no mapa ao destinatário.",
+    is_enabled: true,
+  },
+  {
+    special_service_code: "auth_return",
+    special_service_name: "AuthorizeReturn / Back (Logística Inversa de Devoluções)",
+    api_type_code: 20,
+    fee_type: "fixed",
+    fixed_value: 3.85,
+    description: "Emissão de guias de retorno autorizadas para trocas de e-commerce.",
+    is_enabled: true,
+  },
+  {
+    special_service_code: "second_delivery",
+    special_service_name: "SecondScheduledDelivery (2ª Tentativa Agendada)",
+    api_type_code: 12,
+    fee_type: "fixed",
+    fixed_value: 2.50,
+    description: "Re-agendamento de segunda passagem após ausência.",
+    is_enabled: true,
+  },
+]
+
+export const DEFAULT_CLIENT_PRICING: ClientPricingConfig = {
+  table_name: "Tabela Base CTT & Transportes 2026",
+  fuel_surcharge_pct: 12.5,
+  discount_pct: 0,
+  services_pricing: DEFAULT_CTT_SERVICES_PRICING,
+  special_services_fees: DEFAULT_CTT_SPECIAL_SERVICES_FEES,
+  rates: [
+    {
+      zone_code: "PT_CONT",
+      zone_name: "Portugal Continental",
+      w_0_1: 3.85,
+      w_1_2: 4.25,
+      w_2_5: 4.95,
+      w_5_10: 6.30,
+      w_10_20: 8.95,
+      w_20_30: 12.80,
+      kg_extra: 0.45,
+    },
+    {
+      zone_code: "PT_ILHAS",
+      zone_name: "Ilhas (Açores & Madeira)",
+      w_0_1: 9.80,
+      w_1_2: 12.50,
+      w_2_5: 16.90,
+      w_5_10: 24.50,
+      w_10_20: 38.50,
+      w_20_30: 52.00,
+      kg_extra: 1.85,
+    },
+    {
+      zone_code: "ES_PEN",
+      zone_name: "Espanha Peninsular",
+      w_0_1: 5.60,
+      w_1_2: 6.30,
+      w_2_5: 7.90,
+      w_5_10: 10.20,
+      w_10_20: 14.80,
+      w_20_30: 19.80,
+      kg_extra: 0.72,
+    },
+    {
+      zone_code: "EU_Z1",
+      zone_name: "Europa Zona 1",
+      w_0_1: 14.50,
+      w_1_2: 18.20,
+      w_2_5: 24.50,
+      w_5_10: 32.80,
+      w_10_20: 48.50,
+      w_20_30: 65.00,
+      kg_extra: 2.25,
+    },
+  ],
+}
+
+export const SYSTEM_AVAILABLE_WEBSERVICES: ClientAllowedWebservice[] = [
+  {
+    id: "ws_ctt",
+    code: "ctt_expresso",
+    name: "CTT Expresso",
+    provider_name: "CTT Correios de Portugal",
+    badge_color: "#dc2626",
+    is_enabled: true,
+    is_default: true,
+    available_services: [
+      "ERS 24 / CTT 24H",
+      "ERS 48 / CTT 48H",
+      "CTT Múltiplo",
+      "CTT 10H / 13H",
+      "CTT Ilhas Expresso (Aéreo)",
+      "CTT Ilhas Carga (Marítimo)",
+      "CTT Hoje (Same-Day)",
+      "Rede Postal (D+1, D+2)",
+      "CTT Espanha 24H",
+      "CTT Europa Classic",
+      "CTT Internacional Express",
+    ],
+    allowed_services: [
+      "ERS 24 / CTT 24H",
+      "ERS 48 / CTT 48H",
+      "CTT Múltiplo",
+      "CTT Ilhas Expresso (Aéreo)",
+      "CTT Espanha 24H",
+    ],
+  },
+  {
+    id: "ws_correos",
+    code: "correos_express",
+    name: "Correos Express",
+    provider_name: "Correos Express Portugal",
+    badge_color: "#eab308",
+    is_enabled: true,
+    is_default: false,
+    available_services: ["Paq 24", "Paq Empresa 14h", "Paq Iberia 24h", "Paq Marítimo Ilhas"],
+    allowed_services: ["Paq 24", "Paq Iberia 24h"],
+  },
+  {
+    id: "ws_dpd",
+    code: "dpd",
+    name: "DPD Portugal",
+    provider_name: "DPDgroup",
+    badge_color: "#b91c1c",
+    is_enabled: true,
+    is_default: false,
+    available_services: ["DPD Classic 24h", "DPD 13:00 Express", "DPD Pickup & Lockers", "DPD Fresh"],
+    allowed_services: ["DPD Classic 24h", "DPD Pickup & Lockers"],
+  },
+  {
+    id: "ws_gls",
+    code: "gls",
+    name: "GLS Portugal",
+    provider_name: "General Logistics Systems",
+    badge_color: "#1e40af",
+    is_enabled: false,
+    is_default: false,
+    available_services: ["BusinessParcel 24h", "ExpressParcel 10h30", "EuroBusinessParcel", "ParcelShop"],
+    allowed_services: ["BusinessParcel 24h", "EuroBusinessParcel"],
+  },
+  {
+    id: "ws_linke_direct",
+    code: "linke_direct",
+    name: "Linke Frota Dedicada",
+    provider_name: "Linke Distribuição & Logística",
+    badge_color: "#059669",
+    is_enabled: true,
+    is_default: false,
+    available_services: ["Entrega Dedicada Porto/Guimarães", "Distribuição Noturna Linha Norte", "Carga Completa FTL"],
+    allowed_services: ["Entrega Dedicada Porto/Guimarães", "Distribuição Noturna Linha Norte"],
+  },
+  {
+    id: "ws_vasp",
+    code: "vasp",
+    name: "VASP Expresso",
+    provider_name: "VASP Distribuição",
+    badge_color: "#0284c7",
+    is_enabled: false,
+    is_default: false,
+    available_services: ["VASP Matinal", "VASP Kiosque / Rede Ponto", "VASP Direct"],
+    allowed_services: ["VASP Matinal", "VASP Kiosque / Rede Ponto"],
+  },
+  {
+    id: "ws_ups",
+    code: "ups",
+    name: "UPS Worldwide",
+    provider_name: "United Parcel Service",
+    badge_color: "#78350f",
+    is_enabled: false,
+    is_default: false,
+    available_services: ["UPS Standard Europe", "UPS Express Saver", "UPS Worldwide Expedited"],
+    allowed_services: ["UPS Standard Europe"],
+  },
 ]

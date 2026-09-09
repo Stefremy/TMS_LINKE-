@@ -1,32 +1,24 @@
 import { createAdminClient } from "@/lib/supabase/server"
+import { getShipmentsAction } from "@/app/actions/shipments"
+import { getClientesAction } from "@/app/actions/clientes"
 import { EnviosClient } from "./components/EnviosClient"
 
 export default async function EnviosPage() {
   const supabase = createAdminClient()
 
-  // Fetch real data from DB
-  const [shipmentsResult, recolhasResult, clientsResult] = await Promise.all([
-    supabase
-      .from("shipments")
-      .select("*")
-      .order("created_at", { ascending: false }),
+  // Fetch real data from DB & persistent actions
+  const [shipments, recolhasResult, clients] = await Promise.all([
+    getShipmentsAction(),
     supabase
       .from("recolhas")
       .select("*")
       .order("created_at", { ascending: false }),
-    supabase
-      .from("clients")
-      .select("id, name")
-      .order("name", { ascending: true })
+    getClientesAction()
   ])
 
-  if (shipmentsResult.error) console.error("Error fetching shipments:", shipmentsResult.error)
   if (recolhasResult.error) console.error("Error fetching recolhas:", recolhasResult.error)
-  if (clientsResult.error) console.error("Error fetching clients:", clientsResult.error)
 
-  const shipments = shipmentsResult.data || []
   const recolhas = recolhasResult.data || []
-  const clients = clientsResult.data || []
 
   // Map to the shape expected by EnviosClient (formerly mock data)
   const mappedEnvios = shipments.map((s: any) => ({
@@ -130,7 +122,7 @@ export default async function EnviosPage() {
     <EnviosClient 
       envios={mappedEnvios} 
       recolhas={mappedRecolhas}
-      clients={clients} 
+      clients={clients.map(c => ({ id: c.id, name: c.short_name || c.legal_name || "Cliente" }))} 
     />
   )
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase/server"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
+import { DEFAULT_CLIENT_PRICING, SYSTEM_AVAILABLE_WEBSERVICES } from "@/app/ops/entidades/clientes/types"
 
 const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -34,6 +35,28 @@ const DEFAULT_CLIENTES: Cliente[] = [
     observations: "Cliente prioritário do setor têxtil com entregas diárias e recolhas às 17h00.",
     is_active: true,
     created_at: "2026-09-01T09:00:00Z",
+    pricing: {
+      ...DEFAULT_CLIENT_PRICING,
+      table_name: "Tabela Especial Têxtil 2026",
+      discount_pct: 5,
+    },
+    allowed_webservices: [
+      {
+        ...SYSTEM_AVAILABLE_WEBSERVICES[0], // CTT Expresso
+        is_enabled: true,
+        is_default: true,
+      },
+      {
+        ...SYSTEM_AVAILABLE_WEBSERVICES[1], // Correos Express
+        is_enabled: true,
+        is_default: false,
+      },
+      {
+        ...SYSTEM_AVAILABLE_WEBSERVICES[4], // Linke Frota Dedicada
+        is_enabled: true,
+        is_default: false,
+      },
+    ],
   },
   {
     id: "33333333-3333-3333-3333-333333333333",
@@ -61,9 +84,28 @@ const DEFAULT_CLIENTES: Cliente[] = [
     observations: "Expedições e-commerce com envio direto de tracking SMS aos destinatários.",
     is_active: true,
     created_at: "2026-09-02T11:30:00Z",
+    pricing: {
+      ...DEFAULT_CLIENT_PRICING,
+      table_name: "Tabela E-Commerce B2C",
+      special_services_fees: DEFAULT_CLIENT_PRICING.special_services_fees.map((fee) =>
+        fee.special_service_code === "cod" ? { ...fee, percentage_value: 1.8 } : fee
+      ),
+    },
+    allowed_webservices: [
+      {
+        ...SYSTEM_AVAILABLE_WEBSERVICES[0], // CTT Expresso
+        is_enabled: true,
+        is_default: false,
+      },
+      {
+        ...SYSTEM_AVAILABLE_WEBSERVICES[2], // DPD Portugal
+        is_enabled: true,
+        is_default: true,
+      },
+    ],
   },
   {
-    id: "client_linke_store",
+    id: "44444444-4444-4444-4444-444444444444",
     code: "CL003",
     short_name: "LINKE STORE",
     legal_name: "Linke Distribuição & Logística, Lda",
@@ -88,6 +130,16 @@ const DEFAULT_CLIENTES: Cliente[] = [
     observations: "Conta institucional e rede interna de distribuição.",
     is_active: true,
     created_at: "2026-09-03T14:15:00Z",
+    pricing: {
+      ...DEFAULT_CLIENT_PRICING,
+      table_name: "Tabela Corporate VIP",
+      discount_pct: 10,
+    },
+    allowed_webservices: SYSTEM_AVAILABLE_WEBSERVICES.map((ws, i) => ({
+      ...ws,
+      is_enabled: true,
+      is_default: i === 0,
+    })),
   },
 ]
 
@@ -133,14 +185,33 @@ export async function getClientesAction(): Promise<Cliente[]> {
     console.warn("Could not query audit_log for clients:", err?.message)
   }
 
+  // 0. Obter lista de IDs eliminados (tombstones) para nunca ressurgirem
+  const deletedIds = new Set<string>()
+  try {
+    const { data: deletedLogs } = await supabase
+      .from("audit_log")
+      .select("details")
+      .eq("action", "deleted_client")
+
+    if (deletedLogs) {
+      deletedLogs.forEach((log: any) => {
+        if (log.details?.id) {
+          deletedIds.add(log.details.id)
+        }
+      })
+    }
+  } catch (err: any) {
+    console.warn("Could not query deleted_client tombstones:", err?.message)
+  }
+
   // Mapa final combinando defaults, base de dados e logs
   const clientMap = new Map<string, Cliente>()
 
-  // 1. Defaults base
-  DEFAULT_CLIENTES.forEach((c) => clientMap.set(c.id, c))
+  // 1. Defaults base (ignorando clientes eliminados)
+  DEFAULT_CLIENTES.filter((c) => !deletedIds.has(c.id)).forEach((c) => clientMap.set(c.id, c))
 
-  // 2. Clientes da tabela
-  dbClients.forEach((db) => {
+  // 2. Clientes da tabela (ignorando eliminados)
+  dbClients.filter((db) => !deletedIds.has(db.id)).forEach((db) => {
     const existing = clientMap.get(db.id)
     if (existing) {
       clientMap.set(db.id, {
@@ -168,13 +239,19 @@ export async function getClientesAction(): Promise<Cliente[]> {
         balance: "0,00€",
         is_active: db.is_active !== false,
         created_at: db.created_at || new Date().toISOString(),
+        pricing: DEFAULT_CLIENT_PRICING,
+        allowed_webservices: SYSTEM_AVAILABLE_WEBSERVICES.slice(0, 3),
       })
     }
   })
 
-  // 3. Sobrescrever com audit_log atualizado
-  Object.values(auditClients).forEach((aud) => {
-    clientMap.set(aud.id, aud)
+  // 3. Sobrescrever com audit_log atualizado (ignorando eliminados)
+  Object.values(auditClients).filter((aud) => !deletedIds.has(aud.id)).forEach((aud) => {
+    clientMap.set(aud.id, {
+      ...aud,
+      pricing: aud.pricing || DEFAULT_CLIENT_PRICING,
+      allowed_webservices: aud.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.slice(0, 3),
+    })
   })
 
   return Array.from(clientMap.values()).sort((a, b) => {
@@ -183,12 +260,22 @@ export async function getClientesAction(): Promise<Cliente[]> {
 }
 
 /**
+ * Obtém um cliente por ID
+ */
+export async function getClienteByIdAction(id: string): Promise<Cliente | null> {
+  const list = await getClientesAction()
+  const found = list.find((c) => c.id === id || c.code.toLowerCase() === id.toLowerCase() || c.short_name.toLowerCase() === id.toLowerCase())
+  return found || null
+}
+
+/**
  * Grava ou atualiza um cliente
  */
 export async function saveClienteAction(cliente: Partial<Cliente>) {
   const supabase = createAdminClient()
 
-  const id = cliente.id || `cli_${Date.now()}`
+  const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
+  const id = isValidUuid(cliente.id) ? (cliente.id as string) : (cliente.id === "client_linke_store" ? "44444444-4444-4444-4444-444444444444" : crypto.randomUUID())
   const fullRecord: Cliente = {
     id,
     code: cliente.code?.trim().toUpperCase() || `CL${Math.floor(100 + Math.random() * 900)}`,
@@ -215,7 +302,25 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     observations: cliente.observations?.trim() || "",
     is_active: cliente.is_active ?? true,
     created_at: cliente.created_at || new Date().toISOString(),
+    pricing: cliente.pricing || DEFAULT_CLIENT_PRICING,
+    allowed_webservices: cliente.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.slice(0, 3),
   }
+
+  // Se o cliente estava marcado como eliminado, remover o tombstone
+  try {
+    const { data: delLogs } = await supabase
+      .from("audit_log")
+      .select("id, details")
+      .eq("action", "deleted_client")
+
+    if (delLogs) {
+      for (const d of delLogs) {
+        if (d.details?.id === id) {
+          await supabase.from("audit_log").delete().eq("id", d.id)
+        }
+      }
+    }
+  } catch {}
 
   // 1. Tentar gravar na tabela de clients (inserção de chave primária para integridade referencial)
   try {
@@ -254,6 +359,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
 
   revalidatePath("/ops/entidades/clientes")
   revalidatePath("/ops/clientes")
+  revalidatePath("/app")
   return { success: true, data: fullRecord }
 }
 
@@ -289,15 +395,19 @@ export async function toggleClienteStatusAction(id: string, is_active: boolean) 
 }
 
 /**
- * Elimina cliente
+ * Elimina cliente de forma permanente
  */
 export async function deleteClienteAction(id: string) {
   const supabase = createAdminClient()
 
+  // 1. Apagar da tabela clients
   try {
     await supabase.from("clients").delete().eq("id", id)
-  } catch {}
+  } catch (err: any) {
+    console.warn("Error deleting client from clients table:", err?.message)
+  }
 
+  // 2. Apagar dados do audit_log
   try {
     const { data: logs } = await supabase
       .from("audit_log")
@@ -311,10 +421,24 @@ export async function deleteClienteAction(id: string) {
         }
       }
     }
-  } catch {}
+  } catch (err: any) {
+    console.warn("Error deleting client_data from audit_log:", err?.message)
+  }
+
+  // 3. Registar tombstone para nunca ressurgir de defaults
+  try {
+    await supabase.from("audit_log").insert({
+      tenant_id: LINKE_TENANT_ID,
+      action: "deleted_client",
+      details: { id, deleted_at: new Date().toISOString() },
+    })
+  } catch (err: any) {
+    console.warn("Error saving deleted_client tombstone:", err?.message)
+  }
 
   revalidatePath("/ops/entidades/clientes")
   revalidatePath("/ops/clientes")
+  revalidatePath("/app")
   return { success: true }
 }
 

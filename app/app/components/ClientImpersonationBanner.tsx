@@ -40,7 +40,7 @@ export function ClientProfileSidebar() {
   const searchParams = useSearchParams()
   const clientName = searchParams.get("clientName")
 
-  const displayName = clientName ? decodeURIComponent(clientName) : "Cacto Lda."
+  const displayName = clientName ? decodeURIComponent(clientName) : "Conta Cliente"
   const initial = displayName.substring(0, 2).toUpperCase()
 
   return (

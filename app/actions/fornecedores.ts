@@ -272,6 +272,23 @@ const LINKE_TENANT_ID = "00000000-0000-0000-0000-000000000001"
 export async function getFornecedoresAction(): Promise<Fornecedor[]> {
   const supabase = createAdminClient()
 
+  // 0. Obter lista de IDs eliminados (tombstones)
+  const deletedIds = new Set<string>()
+  try {
+    const { data: deletedLogs } = await supabase
+      .from("audit_log")
+      .select("details")
+      .eq("action", "deleted_fornecedor")
+
+    if (deletedLogs) {
+      deletedLogs.forEach((log: any) => {
+        if (log.details?.id) {
+          deletedIds.add(log.details.id)
+        }
+      })
+    }
+  } catch {}
+
   // 1. Tentar ler da tabela fornecedores
   try {
     const { data, error } = await supabase
@@ -280,7 +297,7 @@ export async function getFornecedoresAction(): Promise<Fornecedor[]> {
       .order("created_at", { ascending: false })
 
     if (!error && data && data.length > 0) {
-      return data
+      return data.filter((f: any) => !deletedIds.has(f.id))
     }
   } catch {}
 
@@ -298,13 +315,13 @@ export async function getFornecedoresAction(): Promise<Fornecedor[]> {
         .filter(Boolean) as Fornecedor[]
 
       if (parsed.length > 0) {
-        return parsed
+        return parsed.filter((f) => !deletedIds.has(f.id))
       }
     }
   } catch {}
 
-  // 3. Fallback inicial com os 7 registos de referência
-  return DEFAULT_FORNECEDORES
+  // 3. Fallback inicial com registos de referência (excluindo os eliminados)
+  return DEFAULT_FORNECEDORES.filter((f) => !deletedIds.has(f.id))
 }
 
 /**
@@ -344,6 +361,22 @@ export async function saveFornecedorAction(fornecedor: Partial<Fornecedor>): Pro
     certificates: fornecedor.certificates || DEFAULT_CERTIFICATES,
     documents: fornecedor.documents || [],
   }
+
+  // Se estava como eliminado, remover tombstone
+  try {
+    const { data: delLogs } = await supabase
+      .from("audit_log")
+      .select("id, details")
+      .eq("action", "deleted_fornecedor")
+
+    if (delLogs) {
+      for (const d of delLogs) {
+        if (d.details?.id === id) {
+          await supabase.from("audit_log").delete().eq("id", d.id)
+        }
+      }
+    }
+  } catch {}
 
   // 1. Tentar tabela fornecedores
   try {
@@ -414,7 +447,7 @@ export async function toggleFornecedorStatusAction(id: string, is_active: boolea
 }
 
 /**
- * Elimina um fornecedor
+ * Elimina um fornecedor permanentemente
  */
 export async function deleteFornecedorAction(id: string) {
   const supabase = createAdminClient()
@@ -438,6 +471,15 @@ export async function deleteFornecedorAction(id: string) {
         }
       }
     }
+  } catch {}
+
+  // 3. Registar tombstone para nunca ressurgir
+  try {
+    await supabase.from("audit_log").insert({
+      tenant_id: LINKE_TENANT_ID,
+      action: "deleted_fornecedor",
+      details: { id, deleted_at: new Date().toISOString() },
+    })
   } catch {}
 
   revalidatePath("/ops/entidades/fornecedores")

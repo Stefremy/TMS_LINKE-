@@ -26,6 +26,7 @@ import {
 import { toggleClienteStatusAction, deleteClienteAction } from "@/app/actions/clientes"
 import { Cliente, DEFAULT_CLIENT_CATEGORIES } from "../types"
 import { ClienteModal } from "./ClienteModal"
+import { ClientAuthModal } from "./ClientAuthModal"
 
 interface ClientesClientProps {
   initialClientes: Cliente[]
@@ -41,6 +42,9 @@ export function ClientesClient({ initialClientes }: ClientesClientProps) {
   // Modal state
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [editingCliente, setEditingCliente] = React.useState<Cliente | null>(null)
+  
+  // Auth Modal state
+  const [authModalCliente, setAuthModalCliente] = React.useState<Cliente | null>(null)
 
   // Actions dropdown per row
   const [openActionId, setOpenActionId] = React.useState<string | null>(null)
@@ -437,6 +441,20 @@ export function ClientesClient({ initialClientes }: ClientesClientProps) {
 
                             <button
                               type="button"
+                              onClick={() => {
+                                setOpenActionId(null)
+                                setAuthModalCliente(item)
+                              }}
+                              className="w-full px-3 py-2 text-xs text-slate-800 hover:bg-blue-50 hover:text-blue-800 flex items-center gap-2 font-bold transition-colors"
+                            >
+                              <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                              Definir Acesso Portal
+                            </button>
+
+                            <div className="my-1 border-t border-slate-100" />
+
+                            <button
+                              type="button"
                               onClick={(e) => handleToggleStatus(item, e)}
                               className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium"
                             >
@@ -503,6 +521,16 @@ export function ClientesClient({ initialClientes }: ClientesClientProps) {
           initialData={editingCliente}
           onClose={() => setIsModalOpen(false)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {/* Auth Modal */}
+      {authModalCliente && (
+        <ClientAuthModal
+          clientId={authModalCliente.id}
+          clientName={authModalCliente.short_name}
+          clientEmail={authModalCliente.email}
+          onClose={() => setAuthModalCliente(null)}
         />
       )}
 

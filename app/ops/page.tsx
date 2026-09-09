@@ -1,35 +1,84 @@
 import * as React from "react"
+import Link from "next/link"
 import { 
   Package, 
   ClipboardList, 
   ReceiptEuro, 
   PieChart, 
   TrendingUp,
-  MoreVertical,
   MapPin,
   CheckCircle2,
-  Clock
+  Clock,
+  ArrowRight,
+  PlusCircle,
+  Truck
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { createAdminClient } from "@/lib/supabase/server"
+import { getShipmentsAction } from "@/app/actions/shipments"
+import { getClientesAction } from "@/app/actions/clientes"
 
-const stats = [
-  { label: "Envios Hoje", value: "1,248", icon: Package, trend: "+12%" },
-  { label: "Recolhas Pendentes", value: "34", icon: ClipboardList, trend: null },
-  { label: "Faturação Mês", value: "€18,450", icon: ReceiptEuro, trend: "+9%" },
-  { label: "Taxa de Entrega", value: "96%", icon: PieChart, trend: null },
-]
+export default async function OpsDashboardPage() {
+  const supabase = createAdminClient()
 
-const enviosRecentes = [
-  { guia: "LK25051600124", cliente: "Techstore, Lda.", transportadora: "CTT", estado: "entregue", peso: "2.35 kg" },
-  { guia: "LK25051600123", cliente: "Fashion Hub Portugal", transportadora: "Correos Express", estado: "em transito", peso: "1.20 kg" },
-  { guia: "LK25051600122", cliente: "Livraria do Bairro", transportadora: "CTT", estado: "pendente", peso: "0.80 kg" },
-  { guia: "LK25051600121", cliente: "Green Planet, Lda.", transportadora: "Correos Express", estado: "entregue", peso: "3.10 kg" },
-  { guia: "LK25051600120", cliente: "Watt Store", transportadora: "CTT", estado: "em transito", peso: "1.65 kg" },
-]
+  // Fetch real data from DB & persistent actions
+  const [shipments, recolhasResult, clients] = await Promise.all([
+    getShipmentsAction(),
+    supabase
+      .from("recolhas")
+      .select("*")
+      .order("created_at", { ascending: false }),
+    getClientesAction()
+  ])
 
-export default function OpsDashboardPage() {
+  const recolhas = recolhasResult.data || []
+
+  // Create client map
+  const clientMap = new Map<string, string>()
+  clients.forEach((c: any) => {
+    clientMap.set(c.id, c.short_name || c.legal_name || c.name)
+    if (c.code) clientMap.set(c.code, c.short_name || c.legal_name)
+  })
+
+  // Real KPI calculations
+  const totalShipments = shipments.length
+  const pendingRecolhas = recolhas.filter((r: any) => r.status === "pendente" || r.status === "rascunho").length
+  const totalRevenue = shipments.reduce((acc: number, s: any) => acc + (Number(s.sell_price) || 0), 0)
+  const deliveredCount = shipments.filter((s: any) => s.status === "entregue").length
+  const deliveryRate = totalShipments > 0 ? Math.round((deliveredCount / totalShipments) * 100) : 0
+
+  const stats = [
+    { 
+      label: "Envios Registados", 
+      value: totalShipments.toLocaleString("pt-PT"), 
+      icon: Package, 
+      subtext: `${deliveredCount} entregues` 
+    },
+    { 
+      label: "Recolhas Pendentes", 
+      value: pendingRecolhas.toString(), 
+      icon: ClipboardList, 
+      subtext: `${recolhas.length} total agendadas` 
+    },
+    { 
+      label: "Faturação Total", 
+      value: `€${totalRevenue.toFixed(2)}`, 
+      icon: ReceiptEuro, 
+      subtext: "Valor acumulado de envios" 
+    },
+    { 
+      label: "Taxa de Entrega", 
+      value: `${deliveryRate}%`, 
+      icon: PieChart, 
+      subtext: totalShipments > 0 ? `${deliveredCount} de ${totalShipments} envios` : "Sem envios finalizados" 
+    },
+  ]
+
+  const recentShipments = shipments.slice(0, 5)
+  const latestActiveShipment = shipments[0] || null
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 font-sans">
       
       {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -43,15 +92,10 @@ export default function OpsDashboardPage() {
             </div>
             
             <div className="flex items-end justify-between mt-auto">
-              <span className="text-4xl font-extrabold text-slate-800">{stat.value}</span>
+              <span className="text-3xl font-black text-slate-900 font-mono">{stat.value}</span>
               
               <div className="flex flex-col items-end gap-1">
-                {stat.trend && (
-                  <span className="text-sm font-bold text-green-600">{stat.trend}</span>
-                )}
-                <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center text-green-600">
-                  <TrendingUp className="w-4 h-4" strokeWidth={2.5} />
-                </div>
+                <span className="text-[11px] font-medium text-slate-400">{stat.subtext}</span>
               </div>
             </div>
           </div>
@@ -64,133 +108,172 @@ export default function OpsDashboardPage() {
         {/* Envios Recentes Table */}
         <div className="flex-[2] bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-800">Envios Recentes</h2>
-            <a href="#" className="text-sm font-semibold text-indigo-600 hover:underline flex items-center gap-1">
-              Ver todos <span className="text-lg leading-none">&rsaquo;</span>
-            </a>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Envios Recentes</h2>
+              <p className="text-xs text-slate-500">Últimos transportes registados no sistema</p>
+            </div>
+            <Link 
+              href="/ops/envios" 
+              className="text-xs font-bold text-green-700 hover:text-green-800 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+            >
+              Ver todos ({totalShipments}) <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="pb-4 font-semibold text-slate-500">Guia</th>
-                  <th className="pb-4 font-semibold text-slate-500">Cliente</th>
-                  <th className="pb-4 font-semibold text-slate-500">Transportadora</th>
-                  <th className="pb-4 font-semibold text-slate-500">Estado</th>
-                  <th className="pb-4 font-semibold text-slate-500">Peso</th>
-                  <th className="pb-4 font-semibold text-slate-500">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {enviosRecentes.map((envio, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-4 font-semibold text-slate-700">{envio.guia}</td>
-                    <td className="py-4 text-slate-600 font-medium">{envio.cliente}</td>
-                    <td className="py-4">
-                      {/* Placeholder for Transportadora Logos */}
-                      {envio.transportadora === "CTT" ? (
-                        <div className="flex items-center gap-2">
-                           <div className="w-6 h-6 bg-red-600 rounded-sm"></div>
-                           <span className="font-bold text-slate-800 tracking-tight">ctt</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                           <span className="font-bold text-blue-800 tracking-tight leading-none text-xs">
-                             Correos<br/><span className="text-red-600">Express</span>
-                           </span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-4">
-                      <Badge variant={
-                        envio.estado === 'entregue' ? 'success' :
-                        envio.estado === 'pendente' ? 'warning' : 'info'
-                      }>
-                        {envio.estado === 'em transito' ? 'Em Trânsito' : 
-                         envio.estado.charAt(0).toUpperCase() + envio.estado.slice(1)}
-                      </Badge>
-                    </td>
-                    <td className="py-4 text-slate-600">{envio.peso}</td>
-                    <td className="py-4">
-                      <div className="flex items-center gap-3">
-                        <button className="px-4 py-1.5 border border-green-600 text-green-600 rounded-md text-xs font-bold hover:bg-green-50 transition-colors">
-                          Ver Detalhes
-                        </button>
-                        <button className="text-slate-400 hover:text-slate-600">
-                          <MoreVertical className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </td>
+          {recentShipments.length === 0 ? (
+            <div className="py-12 px-4 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+              <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm font-bold text-slate-700">Nenhum envio registado ainda</p>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                Crie novos envios através do módulo de operações ou através da Área de Cliente.
+              </p>
+              <Link 
+                href="/ops/envios" 
+                className="mt-4 inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs transition-colors"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Criar Envio
+              </Link>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead>
+                  <tr className="border-b border-slate-100 text-xs text-slate-500 font-semibold">
+                    <th className="pb-3">Guia / Ref</th>
+                    <th className="pb-3">Cliente / Destinatário</th>
+                    <th className="pb-3">Transportadora</th>
+                    <th className="pb-3">Estado</th>
+                    <th className="pb-3 text-right">Valor</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-50 text-xs">
+                  {recentShipments.map((envio: any) => {
+                    const clientName = envio.sender_name || (envio.client_id && clientMap.get(envio.client_id)) || "Cliente Direto"
+                    const ref = envio.tracking_number || envio.ctt_object_id || envio.id.substring(0, 8).toUpperCase()
+                    const isCtt = envio.service_type?.includes("ctt") || !envio.service_type
+
+                    return (
+                      <tr key={envio.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-3.5 font-bold font-mono text-slate-800">
+                          {ref}
+                        </td>
+                        <td className="py-3.5">
+                          <div className="font-semibold text-slate-800">{clientName}</div>
+                          <div className="text-[11px] text-slate-400 truncate max-w-[180px]">
+                            Para: {envio.recipient_name || "Destinatário"}
+                          </div>
+                        </td>
+                        <td className="py-3.5">
+                          {isCtt ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-red-600" />
+                              <span className="font-bold text-slate-700">CTT Expresso</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-blue-600" />
+                              <span className="font-bold text-slate-700">{envio.service_type}</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3.5">
+                          <Badge variant={
+                            envio.status === "entregue" ? "success" :
+                            envio.status === "pendente" ? "warning" : "info"
+                          }>
+                            {envio.status === "em transito" ? "Em Trânsito" : 
+                             envio.status.charAt(0).toUpperCase() + envio.status.slice(1)}
+                          </Badge>
+                        </td>
+                        <td className="py-3.5 text-right font-mono font-bold text-slate-800">
+                          {envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Right side - Rastreamento Widget */}
-        <div className="flex-1 flex flex-col justify-end">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 mt-auto">
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                  <MapPin className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-slate-800">Rastreamento</h3>
-                    <span className="text-indigo-600 font-bold text-sm">LK25051600124</span>
+        <div className="flex-1 flex flex-col">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex-1 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                    <MapPin className="w-5 h-5" />
                   </div>
-                  <p className="text-sm text-slate-500 mt-0.5">CTT • 99999999PT</p>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm">Último Rastreamento</h3>
+                    <p className="text-[11px] text-slate-400">Estado em tempo real</p>
+                  </div>
                 </div>
+                <Link href="/ops/envios" className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
+                  Ver envios <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
               </div>
-              <a href="#" className="text-sm font-semibold text-indigo-600 hover:underline flex items-center gap-1">
-                Ver detalhes <span className="text-lg leading-none">&rsaquo;</span>
-              </a>
+
+              {latestActiveShipment ? (
+                <div className="space-y-4">
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-bold text-slate-700">Guia:</span>
+                      <span className="font-mono font-bold text-indigo-600">
+                        {latestActiveShipment.tracking_number || latestActiveShipment.ctt_object_id || latestActiveShipment.id.substring(0, 8).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Destino: <strong>{latestActiveShipment.recipient_name || "Destinatário"}</strong>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Status Progression */}
+                  <div className="pt-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
+                      <span>Progresso do Envio</span>
+                      <Badge variant={
+                        latestActiveShipment.status === "entregue" ? "success" :
+                        latestActiveShipment.status === "pendente" ? "warning" : "info"
+                      }>
+                        {latestActiveShipment.status}
+                      </Badge>
+                    </div>
+
+                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full transition-all duration-500"
+                        style={{
+                          width: latestActiveShipment.status === "entregue" ? "100%" :
+                                 latestActiveShipment.status === "em transito" ? "65%" :
+                                 latestActiveShipment.status === "pendente" ? "35%" : "15%"
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 my-auto">
+                  <Truck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-600">Sem envios ativos</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    O acompanhamento do último envio ativo aparecerá aqui.
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Timeline */}
-            <div className="relative pt-2">
-              <div className="absolute top-5 left-6 right-6 h-1 bg-green-600 -z-10"></div>
-              
-              <div className="flex justify-between">
-                <div className="flex flex-col items-center w-1/4">
-                  <div className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center mb-3 ring-4 ring-white">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-800">Recebido</span>
-                  <span className="text-[10px] text-slate-500 mt-1">16 Mai, 09:12</span>
-                  <span className="text-[10px] text-slate-500">Lisboa</span>
-                </div>
-                
-                <div className="flex flex-col items-center w-1/4">
-                  <div className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center mb-3 ring-4 ring-white">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-800">Em Trânsito</span>
-                  <span className="text-[10px] text-slate-500 mt-1">16 Mai, 14:45</span>
-                  <span className="text-[10px] text-slate-500">Lisboa</span>
-                </div>
-
-                <div className="flex flex-col items-center w-1/4">
-                  <div className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center mb-3 ring-4 ring-white">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-800">Em Distribuição</span>
-                  <span className="text-[10px] text-slate-500 mt-1">17 Mai, 08:32</span>
-                  <span className="text-[10px] text-slate-500">Porto</span>
-                </div>
-
-                <div className="flex flex-col items-center w-1/4">
-                  <div className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center mb-3 ring-4 ring-white">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                  <span className="text-xs font-bold text-slate-800">Entregue</span>
-                  <span className="text-[10px] text-slate-500 mt-1">17 Mai, 14:18</span>
-                  <span className="text-[10px] text-slate-500">Porto</span>
-                </div>
-              </div>
+            <div className="pt-6 border-t border-slate-100 mt-6">
+              <Link 
+                href="/ops/envios" 
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-2"
+              >
+                <span>Aceder à Gestão de Envios</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
           </div>
         </div>

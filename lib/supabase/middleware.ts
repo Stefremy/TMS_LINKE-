@@ -37,26 +37,27 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
-  if (!user && (pathname.startsWith('/ops') || pathname.startsWith('/app'))) {
-    // no user, potentially respond by redirecting the user to the login page
-    // const url = request.nextUrl.clone()
-    // url.pathname = '/login'
-    // return NextResponse.redirect(url)
-  }
+  // We only want to protect the Client portal (/app)
+  if (!user && pathname.startsWith('/app')) {
+    // Allow Ops impersonation bypass (Ops portal passes clientId in URL)
+    if (request.nextUrl.searchParams.has('clientId')) {
+      return supabaseResponse
+    }
 
-  if (user && pathname === '/login') {
-    // Already logged in, redirect to ops or app depending on what they are
-    // For Phase 1 we will just redirect to /ops if they go to login while logged in
     const url = request.nextUrl.clone()
-    url.pathname = '/ops'
+    url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // Phase 1 Rules:
-  // If user is accessing /ops but they are a client -> redirect to /app
-  // If user is accessing /app but they are staff without active_tenant_id -> stay on /app or redirect back to /ops?
-  // We can enforce those deeper role checks via DB queries here if we want,
-  // but usually it's better to protect components or layout by fetching the membership.
+  if (user && pathname === '/login') {
+    const url = request.nextUrl.clone()
+    if (user.user_metadata?.role === 'client') {
+      url.pathname = '/app'
+    } else {
+      url.pathname = '/ops'
+    }
+    return NextResponse.redirect(url)
+  }
 
   return supabaseResponse
 }
