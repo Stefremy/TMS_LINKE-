@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { regenerateCttLabelAction } from "@/app/actions/shipments"
+import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 
 interface ClientShipmentDetailModalProps {
@@ -57,16 +58,30 @@ export function ClientShipmentDetailModal({
       })
     : "Recentemente"
 
+  // Resolve a etiqueta: se for ZPL cru, converte server-side via Labelary
+  const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
+    if (!rawLabel) return null
+    if (rawLabel.trimStart().startsWith("^XA")) {
+      const res = await convertZplToPdfAction(rawLabel)
+      if (res.success && res.base64) return res.base64
+      alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+      return null
+    }
+    return rawLabel
+  }
+
   // 1. Imprimir Etiqueta CTT
-  const printLabel = () => {
-    if (!currentShipment.ctt_label_base64) return
-    printCttLabel(currentShipment.ctt_label_base64)
+  const printLabel = async () => {
+    const label = await resolveLabel(currentShipment.ctt_label_base64)
+    if (!label) return
+    printCttLabel(label)
   }
 
   // 2. Descarregar Etiqueta PDF
-  const downloadLabel = () => {
-    if (!currentShipment.ctt_label_base64) return
-    downloadCttLabel(currentShipment.ctt_label_base64, `${tracking}_Etiqueta_CTT.pdf`)
+  const downloadLabel = async () => {
+    const label = await resolveLabel(currentShipment.ctt_label_base64)
+    if (!label) return
+    downloadCttLabel(label, `${tracking}_Etiqueta_CTT.pdf`)
   }
 
   // 3. Solicitar / Reemitir Etiqueta aos CTT

@@ -23,6 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
+import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { 
   Cliente, 
@@ -344,9 +345,18 @@ export function ClientCreateGuia() {
               <>
                 <button
                   type="button"
-                  onClick={() => {
-                    console.log('[CTT Label] Tipo:', typeof generatedLabelBase64, '| Tamanho:', generatedLabelBase64?.length, '| Início:', generatedLabelBase64?.slice(0, 80))
-                    printCttLabel(generatedLabelBase64)
+                  onClick={async () => {
+                    let label = generatedLabelBase64
+                    // Se for ZPL cru, converter server-side antes de imprimir
+                    if (label?.trimStart().startsWith("^XA")) {
+                      const res = await convertZplToPdfAction(label)
+                      if (!res.success || !res.base64) {
+                        alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+                        return
+                      }
+                      label = res.base64
+                    }
+                    printCttLabel(label)
                   }}
                   className="bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-950 px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
                 >
@@ -355,10 +365,20 @@ export function ClientCreateGuia() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    console.log('[CTT Label] Download | Tamanho:', generatedLabelBase64?.length, '| Início:', generatedLabelBase64?.slice(0, 80))
-                    const ok = downloadCttLabel(generatedLabelBase64, `${generatedGuia || "Envio"}_Etiqueta_CTT.pdf`)
-                    if (!ok) alert('Não foi possível descarregar a etiqueta. Verifique a consola do browser para mais detalhes.')
+                  onClick={async () => {
+                    let label = generatedLabelBase64
+                    const fname = `${generatedGuia || "Envio"}_Etiqueta_CTT.pdf`
+                    // Se for ZPL cru, converter server-side antes de descarregar
+                    if (label?.trimStart().startsWith("^XA")) {
+                      const res = await convertZplToPdfAction(label)
+                      if (!res.success || !res.base64) {
+                        alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+                        return
+                      }
+                      label = res.base64
+                    }
+                    const ok = downloadCttLabel(label, fname)
+                    if (!ok) alert('Não foi possível descarregar a etiqueta. Verifique a consola do browser.')
                   }}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
                 >

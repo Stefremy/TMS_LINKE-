@@ -656,3 +656,70 @@ export async function validateCttRouteAction(options: {
     return { success: false, error: err?.message, valido: false }
   }
 }
+
+/**
+ * Converte uma etiqueta ZPL para PDF Base64 via Labelary (server-side, sem CORS).
+ * Chamada pelo cliente quando a etiqueta guardada é ZPL cru em vez de PDF Base64.
+ */
+export async function convertZplToPdfAction(
+  label: string
+): Promise<{ success: boolean; base64?: string; error?: string }> {
+  if (!label) {
+    return { success: false, error: "Etiqueta vazia" }
+  }
+
+  // Decodificar entidades XML se ainda existirem
+  let zpl = label.trim()
+    .replace(/&#xD;/gi, "\r")
+    .replace(/&#xA;/gi, "\n")
+    .replace(/&#x9;/gi, "\t")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+
+  if (!zpl.startsWith("^XA")) {
+    // Já é Base64 PDF — devolver tal como está
+    return { success: true, base64: label }
+  }
+
+  // Tentar Labelary com timeout de 15s
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15_000)
+
+  try {
+    console.log(`[Labelary] Iniciando conversão ZPL→PDF (${zpl.length} chars)`)
+
+    const res = await fetch("https://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/", {
+      method: "POST",
+      headers: {
+        "Accept": "application/pdf",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: zpl,
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeout)
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "")
+      console.error(`[Labelary] Erro HTTP ${res.status}: ${body.slice(0, 200)}`)
+      return { success: false, error: `Labelary respondeu com erro ${res.status}: ${res.statusText}` }
+    }
+
+    const arrayBuf = await res.arrayBuffer()
+    const base64 = Buffer.from(arrayBuf).toString("base64")
+    console.log(`[Labelary] Conversão OK — PDF Base64 com ${base64.length} chars`)
+    return { success: true, base64 }
+
+  } catch (err: any) {
+    clearTimeout(timeout)
+    if (err.name === "AbortError") {
+      console.error("[Labelary] Timeout (15s) — Labelary não respondeu")
+      return { success: false, error: "Timeout ao contactar Labelary (15s). Verifique a ligação à internet do servidor." }
+    }
+    console.error("[Labelary] Erro:", err.message)
+    return { success: false, error: `Erro ao converter ZPL: ${err.message}` }
+  }
+}
+
