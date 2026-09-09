@@ -14,7 +14,7 @@ export interface CTTConnectionCredentials {
   user_id?: string        // UserId (GUID)
   distribution_channel?: number // Default: 99 (EMS)
   environment?: "qa" | "production"
-  default_subproduct?: string // Default: 'ERS 24' or 'D+1'
+  default_subproduct?: string // Default: 'ERS24' or 'D+1'
 }
 
 export type AddressType = 1 | 2 | 3 | 4 | "Sender" | "Receiver" | "Return" | "SecondReceiver"
@@ -94,7 +94,7 @@ export interface CTTDeliveryNote {
   ClientId: string
   ContractId: string
   DistributionChannelId: number // 99
-  SubProductId: string          // 'ERS 24', 'ERS 48', 'D+1', 'D+2', 'D+5'
+  SubProductId: string          // 'ERS24', 'ERS48', 'D+1', 'D+2', 'D+5'
   ShipmentCTT: Array<{
     HasSenderInformation: boolean
     SenderData: CTTAddressData

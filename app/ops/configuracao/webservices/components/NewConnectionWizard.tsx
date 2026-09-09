@@ -58,6 +58,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
     auth_id: initialData?.auth_id || "",
     user_id: initialData?.user_id || "",
     environment: (initialData?.environment as "qa" | "production") || "qa",
+    default_subproduct: initialData?.default_subproduct || "ERS24",
     supplier_id: initialData?.supplier_id || "forn_2",
     description: initialData?.description || "Integração CTT Expresso",
   })
@@ -82,6 +83,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
         auth_id: credentials.auth_id || "00000000-0000-0000-0000-000000000000",
         user_id: credentials.user_id || undefined,
         environment: credentials.environment,
+        default_subproduct: credentials.default_subproduct || "ERS24",
       })
 
       if (res.success) {
@@ -105,6 +107,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
           auth_id: credentials.auth_id,
           user_id: credentials.user_id,
           environment: credentials.environment,
+          default_subproduct: credentials.default_subproduct,
           supplier_id: credentials.supplier_id,
           description: credentials.description,
         })
@@ -119,6 +122,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
         auth_id: credentials.auth_id,
         user_id: credentials.user_id || null,
         environment: credentials.environment,
+        default_subproduct: credentials.default_subproduct || "ERS24",
         supplier_id: credentials.supplier_id,
         is_active: initialData?.is_active ?? true,
         created_at: initialData?.created_at || new Date().toISOString(),
@@ -322,6 +326,17 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                         className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:outline-none" 
                       />
                     </div>
+
+                    <div className="col-span-2 flex flex-col gap-1">
+                      <label className="text-[12px] font-semibold text-slate-600">SubProduto Padrão (SubProductId)</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: ERS 24, D+1, CTT 24H, etc."
+                        value={credentials.default_subproduct || "ERS24"}
+                        onChange={(e) => setCredentials({ ...credentials, default_subproduct: e.target.value })}
+                        className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-green-500 focus:outline-none" 
+                      />
+                    </div>
                   </div>
 
                   {/* Test Connection Button & Result Box */}
@@ -446,7 +461,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                           <td className="px-4 py-2">
                             <input 
                               type="text" 
-                              defaultValue={srv === "CTT 48H" ? "ERS 48" : "ERS 24"} 
+                              defaultValue={srv === "CTT 48H" ? "ERS48" : "ERS24"} 
                               className="w-full border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-green-500 focus:outline-none" 
                             />
                           </td>

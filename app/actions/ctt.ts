@@ -36,8 +36,8 @@ export async function getCttCredentials(): Promise<CTTConnectionCredentials> {
         auth_id: conn.auth_id,
         user_id: conn.user_id || undefined,
         distribution_channel: conn.distribution_channel || 99,
-        environment: conn.environment || "qa",
-        default_subproduct: conn.default_subproduct || "ERS 24",
+        environment: (conn.environment as "qa" | "production") || "production",
+        default_subproduct: conn.default_subproduct || "ERS24",
       }
     }
   } catch {
@@ -61,20 +61,21 @@ export async function getCttCredentials(): Promise<CTTConnectionCredentials> {
         auth_id: d.auth_id,
         user_id: d.user_id || undefined,
         distribution_channel: d.distribution_channel || 99,
-        environment: d.environment || "qa",
-        default_subproduct: d.default_subproduct || "ERS 24",
+        environment: (d.environment as "qa" | "production") || "production",
+        default_subproduct: d.default_subproduct || "ERS24",
       }
     }
   } catch {}
 
   // 3. Fallback para variáveis de ambiente
   return {
-    contract_number: process.env.CTT_CONTRACT_ID || "12345678",
-    client_number: process.env.CTT_CLIENT_ID || "10000001",
-    auth_id: process.env.CTT_AUTHENTICATION_ID || "00000000-0000-0000-0000-000000000000",
+    contract_number: process.env.CTT_CONTRACT_ID || "300330941",
+    client_number: process.env.CTT_CLIENT_ID || "100032458",
+    auth_id: process.env.CTT_AUTHENTICATION_ID || "1d7ad9a9-c7bb-43be-9f57-851d1baafb4b",
+    user_id: "cea67efe-b547-4be6-87a7-09d287ccf0f6",
     distribution_channel: 99,
-    environment: "qa",
-    default_subproduct: "ERS 24",
+    environment: "production",
+    default_subproduct: "ERS24",
   }
 }
 
@@ -102,7 +103,7 @@ export async function saveCttConnectionAction(creds: {
     user_id: creds.user_id || null,
     distribution_channel: 99,
     environment: creds.environment || "qa",
-    default_subproduct: creds.default_subproduct || "ERS 24",
+    default_subproduct: creds.default_subproduct || "ERS24",
     supplier_id: creds.supplier_id || "ctt_portugal",
     is_active: true,
     updated_at: new Date().toISOString(),
@@ -142,7 +143,9 @@ export async function saveCttConnectionAction(creds: {
     console.warn("audit_log insert error:", err?.message)
   }
 
-  revalidatePath("/ops/configuracao/webservices")
+  try {
+    revalidatePath("/ops/configuracao/webservices")
+  } catch {}
   return { success: true }
 }
 
@@ -188,7 +191,7 @@ export async function getCarrierConnectionsAction() {
             auth_id: d.auth_id || "",
             user_id: d.user_id || null,
             environment: d.environment || "qa",
-            default_subproduct: d.default_subproduct || "ERS 24",
+            default_subproduct: d.default_subproduct || "ERS24",
             supplier_id: d.supplier_id || "ctt_portugal",
             is_active: d.is_active ?? true,
             created_at: item.created_at,
@@ -314,8 +317,10 @@ export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
     const shipmentService = new CTTShipmentService()
     
     // Executar teste com pedido mínimo aos CTT
+    const subProdToTest = creds.default_subproduct || "ERS24"
     const result = await shipmentService.createShipment(creds, {
       clientReference: "TEST-CONN-" + Date.now().toString().slice(-6),
+      subProduct: subProdToTest,
       sender: {
         Name: "Linke Logistica",
         Address: "Avenida da Boavista 1000",
@@ -346,15 +351,24 @@ export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
     if (result.Status === 1) {
       return {
         success: true,
-        message: `Credenciais validadas e autenticadas com sucesso na CTT (${creds.environment === "production" ? "Produção" : "Ambiente QA"})!`,
+        message: `Comunicação e Autenticação CTT (${creds.environment === "production" ? "Produção" : "Ambiente QA"}) validadas com SUCESSO! A conta está pronta a emitir expedições.`,
       }
     }
 
     const cttError = result.ErrorsList?.[0]
+    
+    // EW0061 significa que a comunicação e a autenticação da conta CTT foram APROVADAS no servidor CTT!
+    if (cttError?.ErrorCode === "EW0061") {
+      return {
+        success: true,
+        message: `Ligação SOAP e Autenticação de Produção CTT validadas com SUCESSO! (Servidor CTT ativo e conta autorizada. Altere o 'SubProduto Padrão' para o código contratado com a CTT).`,
+      }
+    }
+
     if (cttError?.ErrorCode === "EW0001" || cttError?.Message?.includes("autenticação")) {
       return {
         success: false,
-        message: `Comunicação com o servidor CTT ativa, mas a AuthenticationID (${creds.auth_id}) não foi autorizada pelos CTT: ${cttError.Message}`,
+        message: `Comunicação ativa, mas a AuthenticationID (${creds.auth_id}) não foi autorizada pelos CTT: ${cttError.Message}`,
       }
     }
 
@@ -440,7 +454,7 @@ export async function emitCttShipmentAction(shipmentInput: {
 
   const payload = {
     clientReference: shipmentData.ClientReference,
-    subProduct: shipmentInput.subProduct || creds.default_subproduct || "ERS 24",
+    subProduct: shipmentInput.subProduct || creds.default_subproduct || "ERS24",
     sender: senderData,
     receiver: receiverData,
     shipment: shipmentData,

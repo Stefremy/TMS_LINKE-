@@ -12,6 +12,30 @@ const isValidUuid = (val?: string): boolean => {
 }
 
 /**
+ * Converte nomes de serviço legíveis (ex: "CTT Expresso 24H") para códigos
+ * de SubProduto válidos da CTT (máx 10 caracteres).
+ * Códigos documentados: ERS24, ERS48, D+1, D+2, D+5, EMSF001.02, ENCF008.02
+ */
+function mapServiceNameToSubProduct(serviceName?: string | null): string {
+  if (!serviceName) return "ERS24"
+  const trimmed = serviceName.trim()
+  // Se já for um código curto válido (≤10 chars), usar diretamente
+  if (trimmed.length <= 10) return trimmed
+  // Mapeamento de nomes longos → códigos CTT documentados
+  const lower = trimmed.toLowerCase()
+  // Internacional
+  if (lower.includes("ems") || lower.includes("internacional")) return "EMSF001.02"
+  if (lower.includes("quick")) return "ENCF008.02"
+  // Nacional D+x
+  if (lower.includes("d+5")) return "D+5"
+  if (lower.includes("d+2") || lower.includes("48")) return "D+2"
+  if (lower.includes("d+1") || lower.includes("24")) return "D+1"
+  // Fallback genérico nacional
+  return "ERS24"
+}
+
+
+/**
  * Ensures that the tenant and the client exist in their respective database tables
  * so that foreign key constraints on the `shipments` table are always satisfied.
  */
@@ -220,7 +244,7 @@ export async function dispatchShipmentAction(shipmentId: string) {
       },
       weightKg: 1,
       volumes: 1,
-      subProduct: "ERS 24"
+      subProduct: "ERS24"
     })
   } else {
     throw new Error("Service not yet integrated: " + shipment.service_type)
@@ -428,7 +452,7 @@ export async function emitClientGuiaAction(data: {
         },
         weightKg: data.weightKg,
         volumes: data.volumesCount || 1,
-        subProduct: data.serviceName,
+        subProduct: mapServiceNameToSubProduct(data.serviceName),
         autoClose: false // Como recomendado no portal do cliente, deixamos em aberto para fechar em lote no final do dia
       })
 
@@ -514,7 +538,7 @@ export async function regenerateCttLabelAction(shipmentId: string) {
     },
     weightKg: Number(shipment.weight_kg) || 1,
     volumes: Number(shipment.volumes_count) || 1,
-    subProduct: shipment.service_type || "ERS 24",
+    subProduct: mapServiceNameToSubProduct(shipment.service_type),
     autoClose: false
   })
 

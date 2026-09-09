@@ -122,7 +122,7 @@ export class CTTShipmentService {
     }
   ): Promise<CTTCompleteShipmentOutput> {
     const esc = CTTSoapClient.escapeXml
-    const subProduct = input.subProduct || creds.default_subproduct || "ERS 24"
+    const subProduct = input.subProduct || creds.default_subproduct || "ERS24"
     const distChannel = creds.distribution_channel || 99
     const requestId = crypto.randomUUID()
 
@@ -180,7 +180,7 @@ export class CTTShipmentService {
     }
   ): Promise<CTTCompleteShipmentOutput> {
     const esc = CTTSoapClient.escapeXml
-    const subProduct = input.subProduct || creds.default_subproduct || "ERS 24"
+    const subProduct = input.subProduct || creds.default_subproduct || "ERS24"
     const distChannel = creds.distribution_channel || 99
     const requestId = crypto.randomUUID()
 
