@@ -2,31 +2,46 @@
 
 import * as React from "react"
 import { 
-  Info, 
-  History, 
-  Settings, 
+  Package, 
   Printer, 
+  Download, 
+  RotateCcw, 
+  Truck, 
   Mail, 
-  FileText, 
-  Plus, 
-  ChevronRight,
-  ChevronDown,
-  Barcode,
-  Truck
+  ChevronDown, 
+  Loader2, 
+  Info,
+  Barcode
 } from "lucide-react"
 
-import { dispatchShipmentAction } from "@/app/actions/shipments"
+import { dispatchShipmentAction, regenerateCttLabelAction } from "@/app/actions/shipments"
+import { convertZplToPdfAction, syncCttTrackingAction } from "@/app/actions/ctt"
+import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 
 interface ActionMenuProps {
+  shipment?: any
   shipmentId?: string
   trackingRef?: string
   isCtt?: boolean
+  onOpenDetails?: () => void
+  onUpdateShipment?: (updated: any) => void
 }
 
-export function ActionMenu({ shipmentId, trackingRef, isCtt = true }: ActionMenuProps) {
+export function ActionMenu({ 
+  shipment, 
+  shipmentId, 
+  trackingRef, 
+  isCtt = true,
+  onOpenDetails,
+  onUpdateShipment
+}: ActionMenuProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [isEmitting, setIsEmitting] = React.useState(false)
+  const [isProcessing, setIsProcessing] = React.useState(false)
   const menuRef = React.useRef<HTMLDivElement>(null)
+
+  const effectiveId = shipmentId || shipment?.id
+  const effectiveRef = trackingRef || shipment?.tracking_number || effectiveId
 
   // Close when clicking outside
   React.useEffect(() => {
@@ -39,11 +54,56 @@ export function ActionMenu({ shipmentId, trackingRef, isCtt = true }: ActionMenu
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
+    if (!rawLabel) return null
+    if (rawLabel.trimStart().startsWith("^XA")) {
+      const res = await convertZplToPdfAction(rawLabel)
+      if (res.success && res.base64) return res.base64
+      alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+      return null
+    }
+    return rawLabel
+  }
+
+  const handlePrint = async () => {
+    setIsOpen(false)
+    const rawLabel = shipment?.ctt_label_base64
+    if (!rawLabel) {
+      if (onOpenDetails) onOpenDetails()
+      return
+    }
+    setIsProcessing(true)
+    try {
+      const label = await resolveLabel(rawLabel)
+      if (label) printCttLabel(label)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    setIsOpen(false)
+    const rawLabel = shipment?.ctt_label_base64
+    if (!rawLabel) {
+      if (onOpenDetails) onOpenDetails()
+      return
+    }
+    setIsProcessing(true)
+    try {
+      const label = await resolveLabel(rawLabel)
+      if (label) {
+        downloadCttLabel(label, `${effectiveRef}_Etiqueta_CTT.pdf`)
+      }
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   const handleEmitCtt = async () => {
-    if (!shipmentId) return
+    if (!effectiveId) return
     setIsEmitting(true)
     try {
-      await dispatchShipmentAction(shipmentId)
+      await dispatchShipmentAction(effectiveId)
       alert("Envio CTT emitido com sucesso!")
     } catch (err: any) {
       alert("Erro ao emitir CTT: " + err.message)
@@ -53,116 +113,135 @@ export function ActionMenu({ shipmentId, trackingRef, isCtt = true }: ActionMenu
     }
   }
 
+  const handleSyncTracking = async () => {
+    if (!effectiveRef) return
+    setIsProcessing(true)
+    try {
+      const res = await syncCttTrackingAction(effectiveRef, effectiveId)
+      if (res.success) {
+        alert(`Estado CTT sincronizado com sucesso: ${res.latestStatus || "Atualizado"}`)
+      } else {
+        alert("Não foi possível atualizar o rastreio.")
+      }
+    } catch (e: any) {
+      alert("Erro ao sincronizar tracking: " + e.message)
+    } finally {
+      setIsProcessing(false)
+      setIsOpen(false)
+    }
+  }
+
   return (
     <div className="relative inline-flex items-center justify-end" ref={menuRef}>
-      <button className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1 rounded-l text-[12px] font-semibold shadow-sm transition-colors h-7 flex items-center">
-        Editar
-      </button>
+      {/* Botão Principal: Editar / Ver Detalhes */}
       <button 
-        onClick={() => setIsOpen(!isOpen)}
-        className="bg-slate-100 border border-l-0 border-slate-300 hover:bg-slate-200 text-slate-700 px-1.5 py-1 rounded-r shadow-sm transition-colors h-7 flex items-center"
+        type="button"
+        onClick={() => onOpenDetails?.()}
+        className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1 rounded-l text-[12px] font-semibold shadow-sm transition-colors h-7 flex items-center gap-1.5 cursor-pointer"
+        title="Ver Detalhes e Editar Envio"
       >
-        <ChevronDown className="w-4 h-4" />
+        <span>Editar</span>
+      </button>
+
+      {/* Botão Dropdown */}
+      <button 
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="bg-slate-100 border border-l-0 border-slate-300 hover:bg-slate-200 text-slate-700 px-1.5 py-1 rounded-r shadow-sm transition-colors h-7 flex items-center cursor-pointer"
+      >
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full right-0 mt-1 w-64 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50 text-left">
+        <div className="absolute top-full right-0 mt-1 w-60 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5 z-50 text-left animate-in fade-in-50 zoom-in-95 duration-150">
           
-          <div className="px-2 py-1">
-            <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[13px] text-slate-600 font-medium">
-              <Info className="w-4 h-4 text-slate-400" />
-              Detalhes do Serviço
-            </button>
-            <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[13px] text-slate-600 font-medium">
-              <History className="w-4 h-4 text-slate-400" />
-              Histórico de Edições
+          {/* 1. Detalhes Principais */}
+          <div className="px-1.5 py-1">
+            <button 
+              type="button"
+              onClick={() => {
+                setIsOpen(false)
+                onOpenDetails?.()
+              }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 hover:bg-slate-50 rounded-lg text-xs text-slate-800 font-bold transition-colors cursor-pointer"
+            >
+              <Package className="w-4 h-4 text-slate-500" />
+              <span>Ver Detalhes</span>
             </button>
           </div>
 
           <div className="h-px bg-slate-100 my-1" />
 
-          {/* CTT SPECIFIC ACTIONS */}
-          <div className="px-2 py-1 bg-red-50/50">
-            <div className="px-2 py-0.5 text-[10px] font-bold text-red-600 uppercase tracking-wider">Ações CTT Expresso</div>
+          {/* 2. Impressão & Download da Guia/Etiqueta */}
+          <div className="px-1.5 py-1">
+            <button 
+              type="button"
+              onClick={handlePrint}
+              disabled={isProcessing}
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 hover:bg-slate-50 rounded-lg text-xs text-slate-700 font-semibold transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+              ) : (
+                <Printer className="w-4 h-4 text-emerald-600" />
+              )}
+              <span>Imprimir Etiqueta CTT</span>
+            </button>
+
+            <button 
+              type="button"
+              onClick={handleDownload}
+              disabled={isProcessing}
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 hover:bg-slate-50 rounded-lg text-xs text-slate-700 font-semibold transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-4 h-4 text-emerald-600" />
+              <span>Descarregar PDF</span>
+            </button>
+          </div>
+
+          <div className="h-px bg-slate-100 my-1" />
+
+          {/* 3. Ações CTT Expresso */}
+          <div className="px-1.5 py-1 bg-red-50/40 rounded-lg mx-1 my-0.5">
+            <div className="px-2 py-1 text-[10px] font-black text-red-600 uppercase tracking-wider">Ações CTT Expresso</div>
             
-            <button 
-              onClick={handleEmitCtt}
-              disabled={isEmitting || !shipmentId}
-              className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-red-100/50 rounded text-[13px] text-red-700 font-semibold disabled:opacity-50"
-            >
-              <Truck className={`w-4 h-4 text-red-600 ${isEmitting ? 'animate-pulse' : ''}`} />
-              {isEmitting ? 'A Emitir...' : 'Emitir Envio CTT'}
-            </button>
+            {shipment?.status === "pendente" && (
+              <button 
+                type="button"
+                onClick={handleEmitCtt}
+                disabled={isEmitting || !effectiveId}
+                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-red-100/60 rounded-md text-xs text-red-700 font-bold disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                <Truck className={`w-3.5 h-3.5 text-red-600 ${isEmitting ? 'animate-pulse' : ''}`} />
+                <span>{isEmitting ? 'A Emitir...' : 'Emitir Envio CTT'}</span>
+              </button>
+            )}
 
             <button 
-              onClick={() => {
-                alert(`A sincronizar estado CTT para ${trackingRef || "envio selecionado"} (Server Action: syncCttTrackingAction)`)
-                setIsOpen(false)
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-red-100/50 rounded text-[13px] text-red-700 font-semibold"
+              type="button"
+              onClick={handleSyncTracking}
+              disabled={isProcessing}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-red-100/60 rounded-md text-xs text-red-700 font-semibold transition-colors cursor-pointer disabled:opacity-50"
             >
-              <History className="w-4 h-4 text-red-600" />
-              Atualizar Tracking CTT
-            </button>
-
-            <button 
-              onClick={() => {
-                alert(`A abrir etiqueta oficial CTT para ${trackingRef || "envio selecionado"}`)
-                setIsOpen(false)
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-red-100/50 rounded text-[13px] text-red-700 font-semibold"
-            >
-              <Barcode className="w-4 h-4 text-red-600" />
-              Imprimir Etiqueta CTT
-            </button>
-            <button 
-              onClick={() => {
-                alert(`Consultar Track & Trace CTT para ${trackingRef || "envio selecionado"}`)
-                setIsOpen(false)
-              }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-red-100/50 rounded text-[13px] text-red-700 font-semibold"
-            >
-              <Truck className="w-4 h-4 text-red-600" />
-              Rastreio CTT em Tempo Real
+              <RotateCcw className="w-3.5 h-3.5 text-red-600" />
+              <span>Atualizar Tracking CTT</span>
             </button>
           </div>
 
           <div className="h-px bg-slate-100 my-1" />
 
-          <div className="px-2 py-1">
-            <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[13px] text-purple-700 font-medium">
-              <Printer className="w-4 h-4" />
-              Guia Transporte
-            </button>
-            <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[13px] text-purple-700 font-medium">
-              <Printer className="w-4 h-4" />
-              Etiquetas Internas
-            </button>
-          </div>
-
-          <div className="h-px bg-slate-100 my-1" />
-
-          <div className="px-2 py-1">
-            <button className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded text-[13px] text-green-600 font-medium">
-              <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4" />
-                Enviar por e-mail...
-              </div>
-              <ChevronRight className="w-4 h-4 text-slate-300" />
-            </button>
-          </div>
-
-          <div className="h-px bg-slate-100 my-1" />
-
-          <div className="px-2 pt-1 pb-1">
-            <div className="px-2 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Faturação</div>
-            <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[13px] text-blue-600 font-medium">
-              <FileText className="w-4 h-4" />
-              Emitir fatura
-            </button>
-            <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[13px] text-blue-600 font-medium">
-              <FileText className="w-4 h-4" />
-              Emitir Guia AT
+          {/* 4. Enviar por E-mail */}
+          <div className="px-1.5 py-1">
+            <button 
+              type="button"
+              onClick={() => {
+                alert(`Enviar detalhes do envio ${effectiveRef} por e-mail`)
+                setIsOpen(false)
+              }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 hover:bg-slate-50 rounded-lg text-xs text-slate-600 font-medium transition-colors cursor-pointer"
+            >
+              <Mail className="w-4 h-4 text-slate-400" />
+              <span>Enviar por e-mail...</span>
             </button>
           </div>
 

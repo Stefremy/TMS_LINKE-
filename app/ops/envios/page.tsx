@@ -23,6 +23,7 @@ export default async function EnviosPage() {
   // Map to the shape expected by EnviosClient (formerly mock data)
   const mappedEnvios = shipments.map((s: any) => ({
     rawId: s.id,
+    rawShipment: s,
     trk: { 
       id: s.tracking_number || "N/A", 
       date: new Date(s.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }), 

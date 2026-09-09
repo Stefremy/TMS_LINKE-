@@ -17,6 +17,7 @@ import { ActionMenu } from "./ActionMenu"
 import { FerramentasMenu } from "./FerramentasMenu"
 import { NovaRecolhaModal } from "./NovaRecolhaModal"
 import { NovoEnvioModal } from "./NovoEnvioModal"
+import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 
 interface EnviosClientProps {
   envios: any[]
@@ -30,6 +31,7 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
   const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
   const [showRecolhaModal, setShowRecolhaModal] = React.useState(false)
   const [showNovoEnvioModal, setShowNovoEnvioModal] = React.useState(false)
+  const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
 
   const dataSource = viewMode === "envios" ? envios : recolhas
 
@@ -250,10 +252,15 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                 {/* TRK Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5">
-                    <a href="#" className="font-semibold text-blue-600 hover:underline flex items-center gap-1 text-[13px]">
+                    <button 
+                      type="button"
+                      onClick={() => setSelectedShipment(envio.rawShipment || envio)}
+                      className="font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 text-[13px] text-left cursor-pointer transition-colors"
+                      title="Clique para ver os detalhes do envio"
+                    >
                       {envio.trk?.id || "N/A"}
                       <span className="text-[12px] text-slate-400">📋</span>
-                    </a>
+                    </button>
                     <span className="text-slate-400 text-[11px]">{envio.trk?.date}</span>
                     <span className="text-slate-600 font-medium text-[11px] mt-0.5">{envio.trk?.ref}</span>
                     <span className="inline-block mt-1 px-1.5 py-0.5 bg-green-500 text-white text-[9px] font-bold rounded-sm w-fit leading-none">
@@ -347,7 +354,13 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
 
                 {/* Ações Column */}
                 <td className="px-4 py-3 align-top text-right overflow-visible">
-                  <ActionMenu shipmentId={envio.rawId} trackingRef={envio.trk?.ref} isCtt={envio.service?.code?.includes('CTT')} />
+                  <ActionMenu 
+                    shipment={envio.rawShipment || envio}
+                    shipmentId={envio.rawId} 
+                    trackingRef={envio.trk?.ref || envio.trk?.id} 
+                    isCtt={envio.service?.code?.includes('CTT')}
+                    onOpenDetails={() => setSelectedShipment(envio.rawShipment || envio)}
+                  />
                 </td>
               </tr>
             ))}
@@ -361,6 +374,16 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
       
       {showNovoEnvioModal && (
         <NovoEnvioModal clients={clients} onClose={() => setShowNovoEnvioModal(false)} />
+      )}
+
+      {selectedShipment && (
+        <ClientShipmentDetailModal 
+          shipment={selectedShipment} 
+          onClose={() => setSelectedShipment(null)}
+          onUpdateShipment={(updated) => {
+            setSelectedShipment(updated)
+          }}
+        />
       )}
     </div>
   )
