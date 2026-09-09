@@ -257,7 +257,7 @@ export function ClientStoreShippingPortal() {
       guia: newCode,
       destinatario: `${recipientName}${recipientCity ? `, ${recipientCity}` : ""}`,
       transportadora: "CTT Expresso",
-      servico: activeServiceObj?.service_name || "ERS 24 / CTT 24H",
+      servico: activeServiceObj?.service_name || "CTT 24H (Premium D+1)",
       estado: "pendente",
       data: new Date().toLocaleDateString("pt-PT"),
       valor: `${calculatedPrice.total}€`,

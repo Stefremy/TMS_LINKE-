@@ -58,7 +58,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
     auth_id: initialData?.auth_id || "",
     user_id: initialData?.user_id || "",
     environment: (initialData?.environment as "qa" | "production") || "qa",
-    default_subproduct: initialData?.default_subproduct || "ERS24",
+    default_subproduct: initialData?.default_subproduct || "EMSF056.01",
     supplier_id: initialData?.supplier_id || "forn_2",
     description: initialData?.description || "Integração CTT Expresso",
   })
@@ -83,7 +83,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
         auth_id: credentials.auth_id || "00000000-0000-0000-0000-000000000000",
         user_id: credentials.user_id || undefined,
         environment: credentials.environment,
-        default_subproduct: credentials.default_subproduct || "ERS24",
+        default_subproduct: credentials.default_subproduct || "EMSF056.01",
       })
 
       if (res.success) {
@@ -122,7 +122,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
         auth_id: credentials.auth_id,
         user_id: credentials.user_id || null,
         environment: credentials.environment,
-        default_subproduct: credentials.default_subproduct || "ERS24",
+        default_subproduct: credentials.default_subproduct || "EMSF056.01",
         supplier_id: credentials.supplier_id,
         is_active: initialData?.is_active ?? true,
         created_at: initialData?.created_at || new Date().toISOString(),
@@ -272,8 +272,9 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                         auth_id: "e4a7b512-4c28-48b2-b7e6-123456789abc",
                         user_id: "",
                         environment: "qa",
+                        default_subproduct: "EMSF056.01",
                         supplier_id: "ctt_portugal",
-                        description: "CTT Expresso - Homologação",
+                        description: "Conta Teste QA",
                       })}
                       className="text-xs font-bold text-green-600 hover:text-green-700 hover:underline"
                     >
@@ -331,8 +332,8 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                       <label className="text-[12px] font-semibold text-slate-600">SubProduto Padrão (SubProductId)</label>
                       <input 
                         type="text" 
-                        placeholder="Ex: ERS 24, D+1, CTT 24H, etc."
-                        value={credentials.default_subproduct || "ERS24"}
+                        placeholder="Ex: EMSF056.01 (Premium D+1), EMSF057.01 (Standard D+2)"
+                        value={credentials.default_subproduct || "EMSF056.01"}
                         onChange={(e) => setCredentials({ ...credentials, default_subproduct: e.target.value })}
                         className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-green-500 focus:outline-none" 
                       />
@@ -461,7 +462,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                           <td className="px-4 py-2">
                             <input 
                               type="text" 
-                              defaultValue={srv === "CTT 48H" ? "ERS48" : "ERS24"} 
+                              defaultValue={srv === "CTT 48H" ? "EMSF057.01" : "EMSF056.01"} 
                               className="w-full border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-green-500 focus:outline-none" 
                             />
                           </td>
@@ -472,7 +473,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                           <td className="px-4 py-2">
                             <input 
                               type="text" 
-                              defaultValue="D+2" 
+                              defaultValue={srv === "CTT 48H" ? "EMSF038.02" : "EMSF021.02"} 
                               className="w-full border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-green-500 focus:outline-none" 
                             />
                           </td>

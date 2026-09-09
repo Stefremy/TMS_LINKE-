@@ -11,6 +11,7 @@ import {
   CTTAddressData,
   CTTShipmentData
 } from "@/lib/services/ctt"
+import { convertZplToPdfBase64 } from "@/lib/label-utils"
 
 const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -37,7 +38,7 @@ export async function getCttCredentials(): Promise<CTTConnectionCredentials> {
         user_id: conn.user_id || undefined,
         distribution_channel: conn.distribution_channel || 99,
         environment: (conn.environment as "qa" | "production") || "production",
-        default_subproduct: conn.default_subproduct || "ERS24",
+        default_subproduct: conn.default_subproduct || "EMSF056.01",
       }
     }
   } catch {
@@ -62,7 +63,7 @@ export async function getCttCredentials(): Promise<CTTConnectionCredentials> {
         user_id: d.user_id || undefined,
         distribution_channel: d.distribution_channel || 99,
         environment: (d.environment as "qa" | "production") || "production",
-        default_subproduct: d.default_subproduct || "ERS24",
+        default_subproduct: d.default_subproduct || "EMSF056.01",
       }
     }
   } catch {}
@@ -75,7 +76,7 @@ export async function getCttCredentials(): Promise<CTTConnectionCredentials> {
     user_id: "cea67efe-b547-4be6-87a7-09d287ccf0f6",
     distribution_channel: 99,
     environment: "production",
-    default_subproduct: "ERS24",
+    default_subproduct: "EMSF056.01",
   }
 }
 
@@ -103,7 +104,7 @@ export async function saveCttConnectionAction(creds: {
     user_id: creds.user_id || null,
     distribution_channel: 99,
     environment: creds.environment || "qa",
-    default_subproduct: creds.default_subproduct || "ERS24",
+    default_subproduct: creds.default_subproduct || "EMSF056.01",
     supplier_id: creds.supplier_id || "ctt_portugal",
     is_active: true,
     updated_at: new Date().toISOString(),
@@ -191,7 +192,7 @@ export async function getCarrierConnectionsAction() {
             auth_id: d.auth_id || "",
             user_id: d.user_id || null,
             environment: d.environment || "qa",
-            default_subproduct: d.default_subproduct || "ERS24",
+            default_subproduct: d.default_subproduct || "EMSF056.01",
             supplier_id: d.supplier_id || "ctt_portugal",
             is_active: d.is_active ?? true,
             created_at: item.created_at,
@@ -317,7 +318,7 @@ export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
     const shipmentService = new CTTShipmentService()
     
     // Executar teste com pedido mínimo aos CTT
-    const subProdToTest = creds.default_subproduct || "ERS24"
+    const subProdToTest = creds.default_subproduct || "EMSF056.01"
     const result = await shipmentService.createShipment(creds, {
       clientReference: "TEST-CONN-" + Date.now().toString().slice(-6),
       subProduct: subProdToTest,
@@ -328,7 +329,7 @@ export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
         Country: "PT",
         PTZipCode4: "4100",
         PTZipCode3: "001",
-        Phone: "910000000",
+        Phone: "910000001",
         Type: 1
       },
       receiver: {
@@ -338,7 +339,7 @@ export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
         Country: "PT",
         PTZipCode4: "1200",
         PTZipCode3: "001",
-        Phone: "920000000",
+        Phone: "920000002",
         Type: 2
       },
       shipment: {
@@ -454,7 +455,7 @@ export async function emitCttShipmentAction(shipmentInput: {
 
   const payload = {
     clientReference: shipmentData.ClientReference,
-    subProduct: shipmentInput.subProduct || creds.default_subproduct || "ERS24",
+    subProduct: shipmentInput.subProduct || creds.default_subproduct || "EMSF056.01",
     sender: senderData,
     receiver: receiverData,
     shipment: shipmentData,
@@ -470,7 +471,8 @@ export async function emitCttShipmentAction(shipmentInput: {
   if (result.Status === 1 && result.ShipmentData && result.ShipmentData.length > 0) {
     const item = result.ShipmentData[0]
     const trackingNumber = item.FirstObject
-    const labelBase64 = item.LabelList?.[0]?.Label || ""
+    const rawLabel = item.LabelList?.[0]?.Label || ""
+    const labelBase64 = await convertZplToPdfBase64(rawLabel)
 
     // Atualizar base de dados se shipmentId estiver presente
     if (shipmentInput.id) {
@@ -619,4 +621,38 @@ export async function scheduleCttPickupAction(input: {
   }
 
   return result
+}
+
+/**
+ * Consulta a lista oficial de produtos/subprodutos ativados nos CTT via RecolhasWS (GetProdutosRecolha)
+ */
+export async function fetchCttAvailableProductsAction() {
+  try {
+    const creds = await getCttCredentials()
+    const pickupService = new CTTPickupService()
+    const products = await pickupService.getProdutosRecolha(creds)
+    return { success: true, products }
+  } catch (err: any) {
+    return { success: false, error: err?.message, products: [] }
+  }
+}
+
+/**
+ * Valida a cobertura de rota e subproduto entre 2 códigos postais via RecolhasWS (GetAreaInfluencia)
+ */
+export async function validateCttRouteAction(options: {
+  cp4Origem: string
+  cp4Destino: string
+  subproduto: string
+  cdPaisDestino?: string
+  seps?: string[]
+}) {
+  try {
+    const creds = await getCttCredentials()
+    const pickupService = new CTTPickupService()
+    const result = await pickupService.getAreaInfluencia(creds, options)
+    return { success: true, ...result }
+  } catch (err: any) {
+    return { success: false, error: err?.message, valido: false }
+  }
 }

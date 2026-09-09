@@ -66,7 +66,7 @@ export function FerramentasMenu() {
         },
         weightKg: 2.5,
         volumes: 1,
-        subProduct: "ERS24",
+        subProduct: "EMSF056.01",
       })
 
       setModalResult(res)

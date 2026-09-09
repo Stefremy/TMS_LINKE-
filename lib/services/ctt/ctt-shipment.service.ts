@@ -35,6 +35,13 @@ export class CTTShipmentService {
         ? "Receiver" 
         : defaultType
 
+    const rawPhone = (addr.Phone || "").replace(/\s+/g, "").replace(/^(\+351|00351)/, "")
+    const rawMobile = (addr.MobilePhone || "").replace(/\s+/g, "").replace(/^(\+351|00351)/, "")
+    // Se rawMobile não foi passado mas rawPhone começa com 9 (9 dígitos), é telemóvel para a CTT
+    const isPhoneMobile = !rawMobile && rawPhone.length === 9 && /^[9]/.test(rawPhone)
+    const mobileValue = rawMobile || (isPhoneMobile ? rawPhone : "")
+    const phoneValue = rawMobile ? rawPhone : (isPhoneMobile ? "" : rawPhone)
+
     return `
       <mod:${tagName}>
         <mod:Address>${esc(addr.Address)}</mod:Address>
@@ -44,13 +51,13 @@ export class CTTShipmentService {
         ${addr.Door ? `<mod:Door>${esc(addr.Door)}</mod:Door>` : ""}
         ${addr.Email ? `<mod:Email>${esc(addr.Email)}</mod:Email>` : ""}
         ${addr.Floor ? `<mod:Floor>${esc(addr.Floor)}</mod:Floor>` : ""}
-        ${addr.MobilePhone ? `<mod:MobilePhone>${esc(addr.MobilePhone)}</mod:MobilePhone>` : ""}
+        ${mobileValue ? `<mod:MobilePhone>${esc(mobileValue)}</mod:MobilePhone>` : ""}
         <mod:Name>${esc(addr.Name)}</mod:Name>
         ${addr.NonPTZipCode ? `<mod:NonPTZipCode>${esc(addr.NonPTZipCode)}</mod:NonPTZipCode>` : ""}
         ${addr.NonPTZipCodeLocation ? `<mod:NonPTZipCodeLocation>${esc(addr.NonPTZipCodeLocation)}</mod:NonPTZipCodeLocation>` : ""}
         ${addr.PTZipCode3 ? `<mod:PTZipCode3>${esc(addr.PTZipCode3)}</mod:PTZipCode3>` : ""}
         ${addr.PTZipCode4 ? `<mod:PTZipCode4>${esc(addr.PTZipCode4)}</mod:PTZipCode4>` : ""}
-        ${addr.Phone ? `<mod:Phone>${esc(addr.Phone)}</mod:Phone>` : ""}
+        ${phoneValue ? `<mod:Phone>${esc(phoneValue)}</mod:Phone>` : ""}
         <mod:Type>${typeEnum}</mod:Type>
       </mod:${tagName}>
     `
@@ -122,7 +129,7 @@ export class CTTShipmentService {
     }
   ): Promise<CTTCompleteShipmentOutput> {
     const esc = CTTSoapClient.escapeXml
-    const subProduct = input.subProduct || creds.default_subproduct || "ERS24"
+    const subProduct = input.subProduct || creds.default_subproduct || "EMSF056.01"
     const distChannel = creds.distribution_channel || 99
     const requestId = crypto.randomUUID()
 
@@ -180,7 +187,7 @@ export class CTTShipmentService {
     }
   ): Promise<CTTCompleteShipmentOutput> {
     const esc = CTTSoapClient.escapeXml
-    const subProduct = input.subProduct || creds.default_subproduct || "ERS24"
+    const subProduct = input.subProduct || creds.default_subproduct || "EMSF056.01"
     const distChannel = creds.distribution_channel || 99
     const requestId = crypto.randomUUID()
 

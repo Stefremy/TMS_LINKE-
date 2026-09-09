@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
+import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { getClientPortalStatsAction } from "@/app/actions/shipments"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { Cliente, DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
@@ -180,35 +181,11 @@ export function ClientDashboard() {
   }
 
   const printLabel = (base64String: string) => {
-    try {
-      const byteCharacters = atob(base64String)
-      const byteNumbers = new Array(byteCharacters.length)
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i)
-      }
-      const byteArray = new Uint8Array(byteNumbers)
-      const file = new Blob([byteArray], { type: "application/pdf" })
-      const fileURL = URL.createObjectURL(file)
-      const printWindow = window.open(fileURL, "_blank")
-      if (printWindow) {
-        printWindow.onload = () => printWindow.print()
-      }
-    } catch (err) {
-      alert("Não foi possível carregar a etiqueta em PDF.")
-    }
+    printCttLabel(base64String)
   }
 
   const downloadLabel = (base64String: string, ref: string) => {
-    try {
-      const link = document.createElement("a")
-      link.href = `data:application/pdf;base64,${base64String}`
-      link.download = `${ref}_Etiqueta_CTT.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } catch (err) {
-      alert("Erro ao descarregar PDF da etiqueta.")
-    }
+    downloadCttLabel(base64String, `${ref}_Etiqueta_CTT.pdf`)
   }
 
   // Contractual and pricing details from real client record

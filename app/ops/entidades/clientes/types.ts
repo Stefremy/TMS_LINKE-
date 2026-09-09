@@ -115,14 +115,17 @@ export const CLIENT_COLOR_OPTIONS = [
 /**
  * 1. PRODUTOS & SUB-PRODUTOS DE TRANSPORTE CTT (SubProductId)
  * Contrato: 300330941 | Cliente: 100032458
- * Fonte: Documentação oficial CTT Expresso Web Services
- * Códigos domésticos: ERS24, ERS48, D+1, D+2, D+5 (máx 10 chars)
+ * Fonte: CTT RecolhasWS (GetProdutosRecolha & GetAreaInfluencia)
+ * Códigos confirmados e validados em produção:
+ * - EMSF056.01: Premium D+1 (CTT 24H)
+ * - EMSF057.01: Standard D+2 (CTT 48H)
+ * - EMSF058.01: Economy D+5 (CTT 5 Dias)
  */
 export const DEFAULT_CTT_SERVICES_PRICING: ClientServicePrice[] = [
   {
     service_code: "ctt_24h",
-    service_name: "[Nacional] CTT 24H — Entrega Amanhã",
-    subproduct_id: "ERS24",
+    service_name: "[Nacional] CTT 24H — Entrega Amanhã (Premium D+1)",
+    subproduct_id: "EMSF056.01",
     category: "Nacional",
     description: "Entrega expresso no dia útil seguinte em todo o território continental.",
     is_enabled: true,
@@ -136,8 +139,8 @@ export const DEFAULT_CTT_SERVICES_PRICING: ClientServicePrice[] = [
   },
   {
     service_code: "ctt_48h",
-    service_name: "[Nacional] CTT 48H — 2 Dias Úteis",
-    subproduct_id: "ERS48",
+    service_name: "[Nacional] CTT 48H — 2 Dias Úteis (Standard D+2)",
+    subproduct_id: "EMSF057.01",
     category: "Nacional",
     description: "Serviço expresso económico com prazo de entrega em 48 horas úteis.",
     is_enabled: true,
@@ -150,48 +153,18 @@ export const DEFAULT_CTT_SERVICES_PRICING: ClientServicePrice[] = [
     kg_extra: 0.38,
   },
   {
-    service_code: "ctt_d1",
-    service_name: "[Nacional] D+1 — Próximo Dia Útil",
-    subproduct_id: "D+1",
-    category: "Nacional",
-    description: "Entrega no dia útil seguinte — código alternativo ao ERS24.",
-    is_enabled: true,
-    w_0_1: 3.85,
-    w_1_2: 4.25,
-    w_2_5: 4.95,
-    w_5_10: 6.30,
-    w_10_20: 8.95,
-    w_20_30: 12.80,
-    kg_extra: 0.45,
-  },
-  {
-    service_code: "ctt_d2",
-    service_name: "[Nacional] D+2 — Dois Dias Úteis",
-    subproduct_id: "D+2",
-    category: "Nacional",
-    description: "Entrega em 2 dias úteis — código alternativo ao ERS48.",
-    is_enabled: true,
-    w_0_1: 3.35,
-    w_1_2: 3.75,
-    w_2_5: 4.35,
-    w_5_10: 5.50,
-    w_10_20: 7.80,
-    w_20_30: 10.90,
-    kg_extra: 0.38,
-  },
-  {
     service_code: "ctt_d5",
-    service_name: "[Nacional] D+5 — Cinco Dias Úteis",
-    subproduct_id: "D+5",
+    service_name: "[Nacional] CTT 5 Dias (Economy D+5)",
+    subproduct_id: "EMSF058.01",
     category: "Nacional",
-    description: "Entrega económica em 5 dias úteis para envios não urgentes.",
+    description: "Serviço económico rodoviário com entrega até 5 dias úteis.",
     is_enabled: true,
     w_0_1: 2.95,
-    w_1_2: 3.25,
+    w_1_2: 3.30,
     w_2_5: 3.85,
-    w_5_10: 4.90,
-    w_10_20: 6.80,
-    w_20_30: 9.20,
+    w_5_10: 4.75,
+    w_10_20: 6.50,
+    w_20_30: 8.90,
     kg_extra: 0.30,
   },
 ]

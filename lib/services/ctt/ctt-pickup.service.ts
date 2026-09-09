@@ -1,8 +1,8 @@
 import { CTTSoapClient } from "./ctt-soap-client"
 import { CTTConnectionCredentials, CTTPickupRequestInput, CTTPickupRequestOutput } from "./ctt-types"
 
-const CTT_QA_PICKUP_ENDPOINT = "http://logistica.cttexpresso.pt:8082/CTTExpressoWSQ/RecolhasWS.svc"
-const CTT_PROD_PICKUP_ENDPOINT = "https://logistica.cttexpresso.pt/CTTExpressoWS/RecolhasWS.svc"
+const CTT_QA_PICKUP_ENDPOINT = "http://cttexpressows.qa.ctt.pt/CTTEWSPool/RecolhasWS.svc"
+const CTT_PROD_PICKUP_ENDPOINT = "http://cttexpressows.ctt.pt/CTTEWSPool/RecolhasWS.svc"
 
 export class CTTPickupService {
   private client: CTTSoapClient
@@ -88,25 +88,81 @@ export class CTTPickupService {
   }
 
   /**
-   * Valida código postal e área de influência
+   * Consulta os produtos de recolha ativos nos CTT (GetProdutosRecolha)
    */
-  async getAreaInfluencia(creds: CTTConnectionCredentials, cp4: string, cp3: string) {
-    const esc = CTTSoapClient.escapeXml
+  async getProdutosRecolha(creds: CTTConnectionCredentials): Promise<{ code: string; description: string }[]> {
     const bodyXml = `
-      <tem:GetAreaInfluencia>
-        <tem:cp4>${esc(cp4)}</tem:cp4>
-        <tem:cp3>${esc(cp3)}</tem:cp3>
+      <tem:GetProdutosRecolha/>
+    `
+    try {
+      const response = await this.client.callSoap({
+        endpoint: this.getEndpoint(creds),
+        action: "http://tempuri.org/IRecolhasWS/GetProdutosRecolha",
+        soapBodyXml: bodyXml,
+      })
+
+      const list = response?.GetProdutosRecolhaResponse?.GetProdutosRecolhaResult?.ProdutosBE || []
+      const items = Array.isArray(list) ? list : [list]
+      return items
+        .filter(Boolean)
+        .map((p: any) => ({
+          code: p._CodigoProduto || p.CodigoProduto || "",
+          description: p._DescricaoProduto || p.DescricaoProduto || "",
+        }))
+        .filter((p: any) => Boolean(p.code))
+    } catch (err: any) {
+      console.warn("CTT GetProdutosRecolha error:", err.message)
+      return []
+    }
+  }
+
+  /**
+   * Valida rota e área de influência de um subproduto entre código postal de origem e destino
+   */
+  async getAreaInfluencia(
+    creds: CTTConnectionCredentials,
+    options: {
+      cp4Origem: string
+      cp4Destino: string
+      subproduto: string
+      cdPaisDestino?: string
+      seps?: string[]
+    }
+  ): Promise<{ valido: boolean; descricao?: string }> {
+    const esc = CTTSoapClient.escapeXml
+    const cdPais = options.cdPaisDestino || "PT"
+    const sepsXml = (options.seps || [])
+      .map(s => `<arr:string>${esc(s)}</arr:string>`)
+      .join("")
+
+    const bodyXml = `
+      <tem:GetAreaInfluencia xmlns:arr="http://schemas.microsoft.com/2003/10/Serialization/Arrays">
+        <tem:cp4Origem>${esc(options.cp4Origem)}</tem:cp4Origem>
+        <tem:cp4Destino>${esc(options.cp4Destino)}</tem:cp4Destino>
+        <tem:subproduto>${esc(options.subproduto)}</tem:subproduto>
+        <tem:cdPaisDestino>${esc(cdPais)}</tem:cdPaisDestino>
+        <tem:SEPS>
+          ${sepsXml}
+        </tem:SEPS>
       </tem:GetAreaInfluencia>
     `
+
     try {
       const response = await this.client.callSoap({
         endpoint: this.getEndpoint(creds),
         action: "http://tempuri.org/IRecolhasWS/GetAreaInfluencia",
         soapBodyXml: bodyXml,
       })
-      return response?.GetAreaInfluenciaResponse?.GetAreaInfluenciaResult
-    } catch {
-      return { Valido: true }
+
+      const res = response?.GetAreaInfluenciaResponse?.GetAreaInfluenciaResult
+      const valido = res?.Valido === true || res?.Valido === "true"
+      return {
+        valido,
+        descricao: res?.Descricao || "",
+      }
+    } catch (err: any) {
+      console.warn("CTT GetAreaInfluencia error:", err.message)
+      return { valido: true }
     }
   }
 }

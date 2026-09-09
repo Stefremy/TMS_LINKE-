@@ -10,6 +10,7 @@ import { getClientPortalStatsAction } from "@/app/actions/shipments"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { Cliente } from "@/app/ops/entidades/clientes/types"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
+import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 
 export function ClientShipmentsHistory() {
   const searchParams = useSearchParams()
@@ -27,16 +28,7 @@ export function ClientShipmentsHistory() {
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
 
   const downloadLabel = (base64String: string, ref: string) => {
-    try {
-      const link = document.createElement("a")
-      link.href = `data:application/pdf;base64,${base64String}`
-      link.download = `${ref}_Etiqueta_CTT.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } catch (err) {
-      alert("Erro ao descarregar PDF da etiqueta.")
-    }
+    downloadCttLabel(base64String, `${ref}_Etiqueta_CTT.pdf`)
   }
 
   React.useEffect(() => {
@@ -331,18 +323,7 @@ export function ClientShipmentsHistory() {
                             <>
                               <button 
                                 onClick={() => {
-                                  const byteCharacters = atob(envio.ctt_label_base64);
-                                  const byteNumbers = new Array(byteCharacters.length);
-                                  for (let i = 0; i < byteCharacters.length; i++) {
-                                    byteNumbers[i] = byteCharacters.charCodeAt(i);
-                                  }
-                                  const byteArray = new Uint8Array(byteNumbers);
-                                  const file = new Blob([byteArray], { type: 'application/pdf' });
-                                  const fileURL = URL.createObjectURL(file);
-                                  const printWindow = window.open(fileURL, '_blank');
-                                  if (printWindow) {
-                                    printWindow.onload = () => printWindow.print();
-                                  }
+                                  printCttLabel(envio.ctt_label_base64);
                                   setOpenDropdownId(null);
                                 }}
                                 className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"

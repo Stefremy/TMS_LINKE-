@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { regenerateCttLabelAction } from "@/app/actions/shipments"
+import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 
 interface ClientShipmentDetailModalProps {
   shipment: any
@@ -32,14 +33,18 @@ export function ClientShipmentDetailModal({
   onClose,
   onUpdateShipment 
 }: ClientShipmentDetailModalProps) {
-  if (!shipment) return null
-
+  // ALL hooks must be called unconditionally before any early return (Rules of Hooks)
   const [currentShipment, setCurrentShipment] = React.useState(shipment)
   const [isRegenerating, setIsRegenerating] = React.useState(false)
 
   React.useEffect(() => {
-    setCurrentShipment(shipment)
+    if (shipment) {
+      setCurrentShipment(shipment)
+    }
   }, [shipment])
+
+  // Null guard AFTER all hooks
+  if (!shipment || !currentShipment) return null
 
   const tracking = currentShipment.tracking_number || currentShipment.id || "N/A"
   const dateFormatted = currentShipment.created_at
@@ -55,37 +60,13 @@ export function ClientShipmentDetailModal({
   // 1. Imprimir Etiqueta CTT
   const printLabel = () => {
     if (!currentShipment.ctt_label_base64) return
-    try {
-      const byteCharacters = atob(currentShipment.ctt_label_base64)
-      const byteNumbers = new Array(byteCharacters.length)
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i)
-      }
-      const byteArray = new Uint8Array(byteNumbers)
-      const file = new Blob([byteArray], { type: "application/pdf" })
-      const fileURL = URL.createObjectURL(file)
-      const printWindow = window.open(fileURL, "_blank")
-      if (printWindow) {
-        printWindow.onload = () => printWindow.print()
-      }
-    } catch (err) {
-      alert("Não foi possível carregar a etiqueta em PDF para impressão.")
-    }
+    printCttLabel(currentShipment.ctt_label_base64)
   }
 
   // 2. Descarregar Etiqueta PDF
   const downloadLabel = () => {
     if (!currentShipment.ctt_label_base64) return
-    try {
-      const link = document.createElement("a")
-      link.href = `data:application/pdf;base64,${currentShipment.ctt_label_base64}`
-      link.download = `${tracking}_Etiqueta_CTT.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } catch (err) {
-      alert("Erro ao descarregar PDF da etiqueta.")
-    }
+    downloadCttLabel(currentShipment.ctt_label_base64, `${tracking}_Etiqueta_CTT.pdf`)
   }
 
   // 3. Solicitar / Reemitir Etiqueta aos CTT
