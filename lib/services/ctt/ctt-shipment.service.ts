@@ -265,28 +265,43 @@ export class CTTShipmentService {
     return this.parseCloseShipmentResult(closeResult || response)
   }
 
+  /**
+   * Extrai o valor string de um nó XML que pode ser:
+   * - string pura: "EW0052"
+   * - número (quando parseTagValue estava activo): 52
+   * - objecto fast-xml-parser com #text: { "#text": "EW0052", "@_..." }
+   * - null / undefined
+   */
+  private getText(val: any): string {
+    if (val === null || val === undefined) return ""
+    if (typeof val === "string") return val
+    if (typeof val === "number" || typeof val === "boolean") return String(val)
+    if (typeof val === "object" && val["#text"] !== undefined) return String(val["#text"])
+    return ""
+  }
+
   private parseCloseShipmentResult(res: any): CTTCloseShipmentOutput {
-    const status = res?.Status === "Success" || res?.Status === 1 || res?.Status === "1" ? 1 : 0
+    const status = this.getText(res?.Status) === "Success" || res?.Status === 1 || res?.Status === "1" ? 1 : 0
     const errorsList: any[] = []
     if (res?.ErrorsList?.ErrorData) {
       const errors = Array.isArray(res.ErrorsList.ErrorData) ? res.ErrorsList.ErrorData : [res.ErrorsList.ErrorData]
       for (const e of errors) {
-        errorsList.push({ Code: e.Code || 0, Message: e.Message || "" })
+        errorsList.push({ Code: e.Code || 0, Message: this.getText(e.Message) })
       }
     }
 
     return {
       Status: status,
-      DeliveryNoteId: typeof res?.DeliveryNoteId === "string" ? res.DeliveryNoteId : "",
+      DeliveryNoteId: this.getText(res?.DeliveryNoteId),
       ErrorsList: errorsList,
       DocumentsList: this.extractDocuments(res?.DocumentsList),
     }
   }
 
   private parseCompleteShipmentResult(res: any): CTTCompleteShipmentOutput {
-    const isSuccess = res?.Status === "Success" || res?.Status === 1 || res?.Status === "1"
+    const isSuccess = this.getText(res?.Status) === "Success" || res?.Status === 1 || res?.Status === "1"
     const status = isSuccess ? 1 : 0
-    const deliveryNoteId = typeof res?.DeliveryNoteId === "string" ? res.DeliveryNoteId : ""
+    const deliveryNoteId = this.getText(res?.DeliveryNoteId)
     
     // Processar erros se houver
     const errorsList: any[] = []
@@ -294,9 +309,9 @@ export class CTTShipmentService {
       const errors = Array.isArray(res.ErrorsList.ErrorData) ? res.ErrorsList.ErrorData : [res.ErrorsList.ErrorData]
       for (const e of errors) {
         errorsList.push({ 
-          Code: e.Code || 0, 
-          ErrorCode: e.ErrorCode || "", 
-          Message: e.Message || "" 
+          Code: Number(this.getText(e.Code)) || 0, 
+          ErrorCode: this.getText(e.ErrorCode), 
+          Message: this.getText(e.Message) 
         })
       }
     }
@@ -310,10 +325,10 @@ export class CTTShipmentService {
       
       for (const s of shipments) {
         shipmentData.push({
-          ClientReference: s.ClientReference,
-          FirstObject: s.FirstObject,
-          LastObject: s.LastObject || s.FirstObject,
-          OriginalObjectID: s.OriginalObjectID,
+          ClientReference: this.getText(s.ClientReference),
+          FirstObject: this.getText(s.FirstObject),
+          LastObject: this.getText(s.LastObject) || this.getText(s.FirstObject),
+          OriginalObjectID: this.getText(s.OriginalObjectID),
           LabelList: this.extractLabels(s.LabelList),
           DocumentsList: this.extractDocuments(s.DocumentsList),
         })

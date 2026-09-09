@@ -144,8 +144,9 @@ export async function createShipmentAction(formData: FormData) {
   const sender_zip = formData.get("sender_zip") as string
   const sender_city = formData.get("sender_city") as string
   
-  const sender_zip3 = sender_zip?.split("-")[0] || sender_zip || ""
-  const sender_zip4 = sender_zip?.split("-")[1] || ""
+  // Portuguese postal code: "4610-001" → zip4="4610" (4-digit prefix), zip3="001" (3-digit extension)
+  const sender_zip4 = sender_zip?.split("-")[0] || sender_zip || ""
+  const sender_zip3 = sender_zip?.split("-")[1] || ""
 
   // Recipient
   const recipient_name = (formData.get("recipient_name") as string) || "Destinatário"
@@ -153,8 +154,9 @@ export async function createShipmentAction(formData: FormData) {
   const recipient_zip = formData.get("recipient_zip") as string
   const recipient_city = formData.get("recipient_city") as string
   
-  const recipient_zip3 = recipient_zip?.split("-")[0] || recipient_zip || ""
-  const recipient_zip4 = recipient_zip?.split("-")[1] || ""
+  // Portuguese postal code: "4610-001" → zip4="4610" (4-digit prefix), zip3="001" (3-digit extension)
+  const recipient_zip4 = recipient_zip?.split("-")[0] || recipient_zip || ""
+  const recipient_zip3 = recipient_zip?.split("-")[1] || ""
 
   const client_id = await ensureTenantAndClient(supabase, rawClientId, sender_name)
   const shipmentId = crypto.randomUUID()
@@ -378,11 +380,12 @@ export async function emitClientGuiaAction(data: {
   const shipmentId = crypto.randomUUID()
   const now = new Date().toISOString()
 
-  const senderZip3 = data.senderPostal?.split("-")[0] || ""
-  const senderZip4 = data.senderPostal?.split("-")[1] || ""
+  // Portuguese postal code: "4610-001" → zip4="4610" (4-digit prefix), zip3="001" (3-digit extension)
+  const senderZip4 = data.senderPostal?.split("-")[0] || ""
+  const senderZip3 = data.senderPostal?.split("-")[1] || ""
 
-  const recipientZip3 = data.recipientPostal?.split("-")[0] || ""
-  const recipientZip4 = data.recipientPostal?.split("-")[1] || ""
+  const recipientZip4 = data.recipientPostal?.split("-")[0] || ""
+  const recipientZip3 = data.recipientPostal?.split("-")[1] || ""
 
   // Ensure DB foreign keys are valid
   const validatedClientId = await ensureTenantAndClient(supabase, data.clientId, data.clientName)
