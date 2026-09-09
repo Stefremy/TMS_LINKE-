@@ -7,6 +7,7 @@ import { Search, Package, PlusCircle, Building2, Filter } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getClientPortalStatsAction } from "@/app/actions/shipments"
+import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { Cliente } from "@/app/ops/entidades/clientes/types"
 
 export function ClientShipmentsHistory() {
@@ -19,6 +20,8 @@ export function ClientShipmentsHistory() {
   const [searchTerm, setSearchTerm] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("todos")
   const [loading, setLoading] = React.useState(true)
+  const [closingBatch, setClosingBatch] = React.useState(false)
+  const [manifestData, setManifestData] = React.useState<{ fileName: string, base64: string } | null>(null)
 
   React.useEffect(() => {
     getClientesAction().then((clients) => {
@@ -65,6 +68,40 @@ export function ClientShipmentsHistory() {
     })
   }, [shipments, searchTerm, statusFilter])
 
+  const pendingShipments = React.useMemo(() => {
+    return shipments.filter(s => s.status === "pendente")
+  }, [shipments])
+
+  const handleCloseBatch = async () => {
+    if (pendingShipments.length === 0) return
+    const idsToClose = pendingShipments.map(s => s.tracking_number || s.id).filter(Boolean)
+    if (idsToClose.length === 0) return
+
+    setClosingBatch(true)
+    try {
+      const res = await closeCttShipmentsAction(idsToClose)
+      if (res.success && res.documents && res.documents.length > 0) {
+        setManifestData({
+          fileName: res.documents[0].FileName || "Manifesto_CTT.pdf",
+          base64: res.documents[0].File
+        })
+        // update local state
+        setShipments(prev => prev.map(s => {
+          if (idsToClose.includes(s.tracking_number) || idsToClose.includes(s.id)) {
+            return { ...s, status: "em_transito" }
+          }
+          return s
+        }))
+      } else {
+        alert("Erro ao fechar lote de envios CTT.")
+      }
+    } catch (e: any) {
+      alert("Erro ao fechar lote: " + e.message)
+    } finally {
+      setClosingBatch(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto font-sans">
       
@@ -82,14 +119,63 @@ export function ClientShipmentsHistory() {
           </p>
         </div>
 
-        <Link
-          href={`/app/criar-guia${querySuffix}`}
-          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Novo Envio</span>
-        </Link>
+        <div className="flex gap-2">
+          {pendingShipments.length > 0 && (
+            <button
+              onClick={handleCloseBatch}
+              disabled={closingBatch}
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 active:scale-[0.99] disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
+            >
+              {closingBatch ? "A Fechar..." : `Fechar ${pendingShipments.length} Envios`}
+            </button>
+          )}
+          <Link
+            href={`/app/criar-guia${querySuffix}`}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Novo Envio</span>
+          </Link>
+        </div>
       </div>
+
+      {manifestData && (
+        <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in shadow-xs">
+          <div className="flex items-center gap-3.5">
+            <div>
+              <div className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+                <span>Lote Fechado com Sucesso!</span>
+              </div>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                O manifesto (Certificado de Aceitação) foi gerado.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                const link = document.createElement("a")
+                link.href = `data:application/pdf;base64,${manifestData.base64}`
+                link.download = manifestData.fileName
+                document.body.appendChild(link)
+                link.click()
+                document.body.removeChild(link)
+              }}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all"
+            >
+              Descarregar Manifesto
+            </button>
+            <button
+              type="button"
+              onClick={() => setManifestData(null)}
+              className="text-emerald-700 hover:text-emerald-950 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">

@@ -46,6 +46,7 @@ export function ClientCreateGuia() {
   const [recipientCity, setRecipientCity] = React.useState("")
   const [recipientPostal, setRecipientPostal] = React.useState("")
   const [recipientPhone, setRecipientPhone] = React.useState("")
+  const [recipientEmail, setRecipientEmail] = React.useState("")
   const [weight, setWeight] = React.useState("1.50")
   const [selectedCarrierCode, setSelectedCarrierCode] = React.useState<string>("ctt_expresso")
   const [selectedServiceCode, setSelectedServiceCode] = React.useState<string>("ctt_24h")
@@ -54,17 +55,14 @@ export function ClientCreateGuia() {
   // Special Services selections
   const [isCOD, setIsCOD] = React.useState(false)
   const [codAmount, setCodAmount] = React.useState("50.00")
-  const [isSaturday, setIsSaturday] = React.useState(false)
-  const [isReturnSigned, setIsReturnSigned] = React.useState(false)
   const [isInsurance, setIsInsurance] = React.useState(false)
   const [insuredValue, setInsuredValue] = React.useState("250.00")
   const [isFragil, setIsFragil] = React.useState(false)
-  const [isTimeWindow, setIsTimeWindow] = React.useState(false)
-  const [timeWindowSlot, setTimeWindowSlot] = React.useState("10h-13h")
   const [isSMSNotification, setIsSMSNotification] = React.useState(true)
 
   // Generation feedback & session history
   const [generatedGuia, setGeneratedGuia] = React.useState<string | null>(null)
+  const [generatedLabelBase64, setGeneratedLabelBase64] = React.useState<string | null>(null)
   const [sessionShipments, setSessionShipments] = React.useState<Array<{
     guia: string
     destinatario: string
@@ -153,23 +151,7 @@ export function ClientCreateGuia() {
       activeSpecialItems.push({ name: "Cobrança / Reembolso", amount: fee })
     }
 
-    // 2. Saturday
-    if (isSaturday) {
-      const feeCfg = specialFeesList.find((f) => f.special_service_code === "saturday")
-      const fee = feeCfg?.fixed_value ?? 8.50
-      specialTotal += fee
-      activeSpecialItems.push({ name: "Entrega Sábado", amount: fee })
-    }
-
-    // 3. Return Document Signed
-    if (isReturnSigned) {
-      const feeCfg = specialFeesList.find((f) => f.special_service_code === "return_signed")
-      const fee = feeCfg?.fixed_value ?? 2.20
-      specialTotal += fee
-      activeSpecialItems.push({ name: "Guia Assinada", amount: fee })
-    }
-
-    // 4. Special Insurance
+    // 2. Special Insurance
     if (isInsurance) {
       const feeCfg = specialFeesList.find((f) => f.special_service_code === "insurance")
       const pct = feeCfg?.percentage_value ?? 1.0
@@ -180,7 +162,7 @@ export function ClientCreateGuia() {
       activeSpecialItems.push({ name: "Seguro Extra", amount: fee })
     }
 
-    // 5. Fragil
+    // 3. Fragil
     if (isFragil) {
       const feeCfg = specialFeesList.find((f) => f.special_service_code === "fragil")
       const fee = feeCfg?.fixed_value ?? 1.50
@@ -188,15 +170,7 @@ export function ClientCreateGuia() {
       activeSpecialItems.push({ name: "Tratamento Frágil", amount: fee })
     }
 
-    // 6. Time Window
-    if (isTimeWindow) {
-      const feeCfg = specialFeesList.find((f) => f.special_service_code === "time_window")
-      const fee = feeCfg?.fixed_value ?? 3.50
-      specialTotal += fee
-      activeSpecialItems.push({ name: `Janela Horária (${timeWindowSlot})`, amount: fee })
-    }
-
-    // 7. SMS
+    // 4. SMS
     if (isSMSNotification) {
       const feeCfg = specialFeesList.find((f) => f.special_service_code === "sms_tracking")
       const fee = feeCfg?.fixed_value ?? 0.15
@@ -227,13 +201,9 @@ export function ClientCreateGuia() {
     specialFeesList,
     isCOD,
     codAmount,
-    isSaturday,
-    isReturnSigned,
     isInsurance,
     insuredValue,
     isFragil,
-    isTimeWindow,
-    timeWindowSlot,
     isSMSNotification,
   ])
 
@@ -258,7 +228,10 @@ export function ClientCreateGuia() {
         recipientAddress,
         recipientCity,
         recipientPostal,
+        recipientPhone,
+        recipientEmail,
         weightKg: parseFloat(weight) || 1.0,
+        volumesCount: parseInt(volumesCount) || 1,
         serviceName: chosenService,
         calculatedPrice: numericVal,
       })
@@ -278,12 +251,15 @@ export function ClientCreateGuia() {
 
       setSessionShipments((prev) => [newShipment, ...prev])
       setGeneratedGuia(newCode)
+      setGeneratedLabelBase64(res.labelBase64 || null)
 
       setRecipientName("")
       setRecipientAddress("")
       setRecipientCity("")
       setRecipientPostal("")
       setRecipientPhone("")
+      setRecipientEmail("")
+      setVolumesCount("1")
     } catch (err: any) {
       alert("Erro ao emitir guia: " + err.message)
     }
@@ -364,15 +340,29 @@ export function ClientCreateGuia() {
             </Link>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => {
+                if (generatedLabelBase64) {
+                  const link = document.createElement("a")
+                  link.href = `data:application/pdf;base64,${generatedLabelBase64}`
+                  link.download = `Guia_${generatedGuia}.pdf`
+                  document.body.appendChild(link)
+                  link.click()
+                  document.body.removeChild(link)
+                } else {
+                  window.print()
+                }
+              }}
               className="bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-950 px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Imprimir</span>
+              <span>{generatedLabelBase64 ? "Descarregar Etiqueta" : "Imprimir Página"}</span>
             </button>
             <button
               type="button"
-              onClick={() => setGeneratedGuia(null)}
+              onClick={() => {
+                setGeneratedGuia(null)
+                setGeneratedLabelBase64(null)
+              }}
               className="text-emerald-700 hover:text-emerald-950 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
             >
               Fechar
@@ -462,6 +452,42 @@ export function ClientCreateGuia() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">Telefone do Destinatário</label>
+              <input 
+                type="text" 
+                placeholder="Ex: 910000000" 
+                value={recipientPhone}
+                onChange={(e) => setRecipientPhone(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+              />
+            </div>
+            
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">Email do Destinatário</label>
+              <input 
+                type="email" 
+                placeholder="email@exemplo.pt" 
+                value={recipientEmail}
+                onChange={(e) => setRecipientEmail(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">Nº de Volumes *</label>
+              <input 
+                type="number" 
+                min="1"
+                step="1"
+                value={volumesCount}
+                onChange={(e) => setVolumesCount(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+              />
+            </div>
+          </div>
+
           {/* SELEÇÃO DO PRODUTO / SUB-PRODUTO CTT */}
           <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
@@ -531,41 +557,7 @@ export function ClientCreateGuia() {
                 )}
               </div>
 
-              {/* 2. Saturday */}
-              <div className={`p-3 rounded-xl border transition-colors ${isSaturday ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="opt_sat"
-                    checked={isSaturday} 
-                    onChange={(e) => setIsSaturday(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
-                  />
-                  <label htmlFor="opt_sat" className="font-bold text-slate-800 cursor-pointer text-xs">
-                    Entrega ao Sábado (10h-14h)
-                  </label>
-                </div>
-                <p className="text-[10px] text-slate-400 pl-6 mt-1">+8.50€ taxa suplementar</p>
-              </div>
-
-              {/* 3. Return Document Signed */}
-              <div className={`p-3 rounded-xl border transition-colors ${isReturnSigned ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="opt_return"
-                    checked={isReturnSigned} 
-                    onChange={(e) => setIsReturnSigned(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
-                  />
-                  <label htmlFor="opt_return" className="font-bold text-slate-800 cursor-pointer text-xs">
-                    Guia Assinada e Carimbada
-                  </label>
-                </div>
-                <p className="text-[10px] text-slate-400 pl-6 mt-1">+2.20€ devolução comprovativo</p>
-              </div>
-
-              {/* 4. Special Insurance */}
+              {/* 2. Special Insurance */}
               <div className={`p-3 rounded-xl border transition-colors ${isInsurance ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
                 <div className="flex items-center gap-2">
                   <input 
@@ -593,7 +585,7 @@ export function ClientCreateGuia() {
                 )}
               </div>
 
-              {/* 5. Fragil */}
+              {/* 3. Fragil */}
               <div className={`p-3 rounded-xl border transition-colors ${isFragil ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
                 <div className="flex items-center gap-2">
                   <input 
@@ -608,36 +600,6 @@ export function ClientCreateGuia() {
                   </label>
                 </div>
                 <p className="text-[10px] text-slate-400 pl-6 mt-1">+1.50€ manuseamento</p>
-              </div>
-
-              {/* 6. Time Window */}
-              <div className={`p-3 rounded-xl border transition-colors ${isTimeWindow ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="opt_time"
-                    checked={isTimeWindow} 
-                    onChange={(e) => setIsTimeWindow(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
-                  />
-                  <label htmlFor="opt_time" className="font-bold text-slate-800 cursor-pointer text-xs">
-                    Janela Horária Agendada
-                  </label>
-                </div>
-                {isTimeWindow && (
-                  <div className="mt-2 pl-6">
-                    <select
-                      value={timeWindowSlot}
-                      onChange={(e) => setTimeWindowSlot(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs font-medium bg-white"
-                    >
-                      <option value="08h-10h">08h00 às 10h00</option>
-                      <option value="10h-13h">10h00 às 13h00</option>
-                      <option value="13h-16h">13h00 às 16h00</option>
-                      <option value="16h-19h">16h00 às 19h00</option>
-                    </select>
-                  </div>
-                )}
               </div>
 
             </div>

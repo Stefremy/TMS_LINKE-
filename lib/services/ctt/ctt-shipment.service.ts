@@ -168,6 +168,73 @@ export class CTTShipmentService {
   }
 
   /**
+   * Cria uma expedição via CreateShipment (gera rótulos mas não fecha o manifesto)
+   * Devolve tracking number (FirstObject) e etiquetas (LabelList)
+   */
+  async createShipment(
+    creds: CTTConnectionCredentials,
+    input: {
+      clientReference: string
+      subProduct?: string
+      sender: CTTAddressData
+      receiver: CTTAddressData
+      shipment: CTTShipmentData
+      specialServices?: CTTSpecialService[]
+    }
+  ): Promise<CTTCompleteShipmentOutput> {
+    const esc = CTTSoapClient.escapeXml
+    const subProduct = input.subProduct || creds.default_subproduct || "ERS 24"
+    const distChannel = creds.distribution_channel || 99
+    const requestId = crypto.randomUUID()
+
+    const bodyXml = `
+      <tem:CreateShipment>
+        <tem:Input>
+          <tem:AuthenticationID>${esc(creds.auth_id)}</tem:AuthenticationID>
+          <tem:RequestID>${requestId}</tem:RequestID>
+          ${creds.user_id ? `<tem:UserId>${esc(creds.user_id)}</tem:UserId>` : ""}
+          <tem:DeliveryNote>
+            <tem:ClientId>${esc(creds.client_number)}</tem:ClientId>
+            <tem:ContractId>${esc(creds.contract_number)}</tem:ContractId>
+            <tem:DistributionChannelId>${distChannel}</tem:DistributionChannelId>
+            <tem:SubProductId>${esc(subProduct)}</tem:SubProductId>
+            <tem:ShipmentCTT>
+              <tem:ShipmentCTT>
+                <tem:HasSenderInformation>true</tem:HasSenderInformation>
+                ${this.buildAddressXml(input.sender, "SenderData")}
+                ${this.buildAddressXml(input.receiver, "ReceiverData")}
+                ${this.buildShipmentDataXml(input.shipment)}
+                ${this.buildSpecialServicesXml(input.specialServices)}
+              </tem:ShipmentCTT>
+            </tem:ShipmentCTT>
+          </tem:DeliveryNote>
+        </tem:Input>
+      </tem:CreateShipment>
+    `
+
+    try {
+      const response = await this.client.callSoap({
+        endpoint: this.getEndpoint(creds),
+        action: "http://tempuri.org/ICTTShipmentProviderWS/CreateShipment",
+        soapBodyXml: bodyXml,
+      })
+
+      const createResult = response?.CreateShipmentResponse?.CreateShipmentResult
+      if (createResult) {
+        return this.parseCompleteShipmentResult(createResult)
+      }
+      return this.parseCompleteShipmentResult(response)
+    } catch (err: any) {
+      console.warn("CTT CreateShipment WS Error:", err.message)
+      // Se estiver em modo de teste ou credenciais mock, devolver resposta de simulação estruturada
+      if (!creds.auth_id || creds.auth_id === "test" || creds.auth_id.includes("00000000")) {
+        return this.generateMockShipmentOutput(input.clientReference, subProduct)
+      }
+      throw err
+    }
+  }
+
+  /**
    * Fecha os envios emitidos e gera o Certificado de Aceitação (Guia oficial CTT)
    */
   async closeShipment(

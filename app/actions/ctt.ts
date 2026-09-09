@@ -338,6 +338,7 @@ export async function emitCttShipmentAction(shipmentInput: {
   volumes?: number
   subProduct?: string
   codValue?: number
+  autoClose?: boolean
 }) {
   const creds = await getCttCredentials()
   const shipmentService = new CTTShipmentService()
@@ -393,14 +394,20 @@ export async function emitCttShipmentAction(shipmentInput: {
     })
   }
 
-  const result = await shipmentService.completeShipment(creds, {
+  const payload = {
     clientReference: shipmentData.ClientReference,
     subProduct: shipmentInput.subProduct || creds.default_subproduct || "ERS 24",
     sender: senderData,
     receiver: receiverData,
     shipment: shipmentData,
     specialServices,
-  })
+  }
+
+  // Se autoClose for false, usamos CreateShipment (envio fica aberto para fechar no fim do dia)
+  // Caso contrário usamos CompleteShipment (cria e fecha imediatamente)
+  const result = shipmentInput.autoClose === false
+    ? await shipmentService.createShipment(creds, payload)
+    : await shipmentService.completeShipment(creds, payload)
 
   if (result.Status === 1 && result.ShipmentData && result.ShipmentData.length > 0) {
     const item = result.ShipmentData[0]

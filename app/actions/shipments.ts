@@ -328,7 +328,10 @@ export async function emitClientGuiaAction(data: {
   recipientAddress: string
   recipientCity?: string
   recipientPostal?: string
+  recipientPhone?: string
+  recipientEmail?: string
   weightKg: number
+  volumesCount?: number
   serviceName: string
   calculatedPrice: number
 }) {
@@ -367,7 +370,7 @@ export async function emitClientGuiaAction(data: {
     updated_at: now,
   }
 
-  // 1. Direct DB Insert
+  // 1. Direct DB Insert (rascunho first)
   try {
     const { error } = await supabase
       .from("shipments")
@@ -400,6 +403,45 @@ export async function emitClientGuiaAction(data: {
     })
   } catch {}
 
+  // 4. Se for CTT, emitir a Guia Real via CTT WS (como rascunho = CreateShipment, para poder fechar em lote)
+  let realGuia = trackingNumber
+  let labelBase64 = null
+  if (data.serviceName?.toLowerCase().includes("ctt") || data.serviceName?.includes("ERS") || data.serviceName?.includes("D+")) {
+    try {
+      const cttRes = await emitCttShipmentAction({
+        id: shipmentId,
+        ref: trackingNumber,
+        sender: {
+          name: shipmentData.sender_name,
+          address: data.senderAddress || "Sede Comercial",
+          city: data.senderCity || "Portugal",
+          zip: data.senderPostal || "1000-001",
+          phone: "910000000" // Remetente usa o telefone da empresa ou um fixo padrão
+        },
+        recipient: {
+          name: data.recipientName,
+          address: data.recipientAddress,
+          city: data.recipientCity || "Portugal",
+          zip: data.recipientPostal || "1000-001",
+          phone: data.recipientPhone || "920000000",
+          email: data.recipientEmail
+        },
+        weightKg: data.weightKg,
+        volumes: data.volumesCount || 1,
+        subProduct: data.serviceName,
+        autoClose: false // Como recomendado no portal do cliente, deixamos em aberto para fechar em lote no final do dia
+      })
+
+      if (cttRes.success) {
+        realGuia = cttRes.trackingNumber || trackingNumber
+        labelBase64 = cttRes.labelBase64
+      }
+    } catch (e: any) {
+      console.error("Failed to generate CTT real shipment:", e.message)
+      // se falhar, continua a mostrar "pendente" para poder tentar de novo a partir do TMS ops
+    }
+  }
+
   try {
     revalidatePath("/app")
     revalidatePath("/app/criar-guia")
@@ -410,7 +452,8 @@ export async function emitClientGuiaAction(data: {
 
   return {
     success: true,
-    guia: trackingNumber,
+    guia: realGuia,
     id: shipmentId,
+    labelBase64
   }
 }
