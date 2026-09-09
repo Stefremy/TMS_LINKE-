@@ -17,7 +17,7 @@ export interface CTTConnectionCredentials {
   default_subproduct?: string // Default: 'ERS 24' or 'D+1'
 }
 
-export type AddressType = 1 | 2 | 3 | 4
+export type AddressType = 1 | 2 | 3 | 4 | "Sender" | "Receiver" | "Return" | "SecondReceiver"
 // 1 = Sender, 2 = Receiver, 3 = Return, 4 = SecondReceiver
 
 export interface CTTAddressData {
@@ -113,6 +113,7 @@ export interface CTTCompleteShipmentInput {
 
 export interface CTTErrorData {
   Code: number
+  ErrorCode?: string
   Message: string
 }
 
@@ -153,9 +154,11 @@ export interface CTTCloseShipmentInput {
 
 export interface CTTCloseShipmentOutput {
   Status: 0 | 1
+  DeliveryNoteId?: string
   ErrorsList?: CTTErrorData[]
   DocumentsList?: CTTDocumentData[] // Certificados de Aceitação
 }
+
 
 export interface CTTPickupRequestInput {
   AuthenticationID: string

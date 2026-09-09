@@ -311,12 +311,56 @@ export async function deleteCarrierConnectionAction(
  */
 export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
   try {
-    const pickupService = new CTTPickupService()
-    // Teste leve de chamada SOAP GetAreaInfluencia com Lisboa (1000-001)
-    await pickupService.getAreaInfluencia(creds, "1000", "001")
+    const shipmentService = new CTTShipmentService()
+    
+    // Executar teste com pedido mínimo aos CTT
+    const result = await shipmentService.createShipment(creds, {
+      clientReference: "TEST-CONN-" + Date.now().toString().slice(-6),
+      sender: {
+        Name: "Linke Logistica",
+        Address: "Avenida da Boavista 1000",
+        City: "Porto",
+        Country: "PT",
+        PTZipCode4: "4100",
+        PTZipCode3: "001",
+        Phone: "910000000",
+        Type: 1
+      },
+      receiver: {
+        Name: "Destinatario Teste",
+        Address: "Rua Garrett 20",
+        City: "Lisboa",
+        Country: "PT",
+        PTZipCode4: "1200",
+        PTZipCode3: "001",
+        Phone: "920000000",
+        Type: 2
+      },
+      shipment: {
+        ClientReference: "TEST-CONN-" + Date.now().toString().slice(-6),
+        Weight: 1000,
+        Quantity: 1
+      }
+    })
+
+    if (result.Status === 1) {
+      return {
+        success: true,
+        message: `Credenciais validadas e autenticadas com sucesso na CTT (${creds.environment === "production" ? "Produção" : "Ambiente QA"})!`,
+      }
+    }
+
+    const cttError = result.ErrorsList?.[0]
+    if (cttError?.ErrorCode === "EW0001" || cttError?.Message?.includes("autenticação")) {
+      return {
+        success: false,
+        message: `Comunicação com o servidor CTT ativa, mas a AuthenticationID (${creds.auth_id}) não foi autorizada pelos CTT: ${cttError.Message}`,
+      }
+    }
+
     return {
-      success: true,
-      message: `Comunicação com CTT (${creds.environment === "production" ? "Produção" : "Ambiente QA/Testes"}) estabelecida com sucesso!`,
+      success: false,
+      message: `Resposta dos CTT: ${cttError?.Message || JSON.stringify(result.ErrorsList)}`,
     }
   } catch (err: any) {
     return {
@@ -448,9 +492,14 @@ export async function emitCttShipmentAction(shipmentInput: {
     }
   }
 
+  const errorMessages = result.ErrorsList && result.ErrorsList.length > 0
+    ? result.ErrorsList.map(e => `${e.ErrorCode ? `[${e.ErrorCode}] ` : ""}${e.Message || "Erro desconhecido"}`).join("; ")
+    : "Falha na criação do envio pelo servidor CTT"
+
   return {
     success: false,
-    errors: result.ErrorsList || [{ Code: 99, Message: "Falha na criação do envio CTT" }],
+    error: errorMessages,
+    errors: result.ErrorsList || [{ Code: 99, Message: errorMessages }],
   }
 }
 

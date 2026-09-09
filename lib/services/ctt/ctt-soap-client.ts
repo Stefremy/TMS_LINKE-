@@ -1,4 +1,6 @@
-import { XMLParser, XMLBuilder } from "fast-xml-parser"
+import { XMLParser } from "fast-xml-parser"
+import http from "http"
+import https from "https"
 
 export interface SOAPRequestOptions {
   endpoint: string
@@ -23,49 +25,84 @@ export class CTTSoapClient {
    * Executa um pedido SOAP POST com envelope XML e SOAPAction
    */
   async callSoap(options: SOAPRequestOptions): Promise<any> {
-    const { endpoint, action, soapBodyXml, timeoutMs = 15000 } = options
+    const { endpoint, action, soapBodyXml, timeoutMs = 20000 } = options
 
     const envelope = `<?xml version="1.0" encoding="utf-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/" xmlns:ctt="http://schemas.datacontract.org/2004/07/CTTExpressoWS.Models">
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/" xmlns:ws="http://schemas.datacontract.org/2004/07/CTTExpressoWS" xmlns:mod="http://schemas.datacontract.org/2004/07/CTTExpressoWS.Models.ShipmentProvider">
   <soapenv:Header/>
   <soapenv:Body>
     ${soapBodyXml}
   </soapenv:Body>
 </soapenv:Envelope>`
 
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+    return new Promise((resolve, reject) => {
+      let url: URL
+      try {
+        url = new URL(endpoint)
+      } catch (err) {
+        return reject(new Error(`Endpoint inválido: ${endpoint}`))
+      }
 
-    try {
-      const response = await fetch(endpoint, {
+      const isHttps = url.protocol === "https:"
+      const client = isHttps ? https : http
+
+      const reqOptions: http.RequestOptions | https.RequestOptions = {
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname + url.search,
         method: "POST",
         headers: {
           "Content-Type": "text/xml; charset=utf-8",
           "SOAPAction": action,
+          "Content-Length": Buffer.byteLength(envelope, "utf8"),
+          "User-Agent": "TMS-Linke-CTT-Client/1.0",
         },
-        body: envelope,
-        signal: controller.signal,
+        timeout: timeoutMs,
+      }
+
+      if (isHttps) {
+        (reqOptions as https.RequestOptions).rejectUnauthorized = false
+      }
+
+      const req = client.request(reqOptions, (res) => {
+        let rawData = ""
+        res.setEncoding("utf8")
+        res.on("data", (chunk) => {
+          rawData += chunk
+        })
+        res.on("end", () => {
+          try {
+            const parsed = this.parser.parse(rawData)
+
+            // Verificar se o SOAP devolveu Fault
+            const fault = parsed?.Envelope?.Body?.Fault
+            if (fault) {
+              const faultString = fault.faultstring || fault.detail?.ExceptionDetail?.Message || fault.detail || "Erro SOAP retornado pelo servidor CTT"
+              return reject(new Error(`[SOAP Fault] ${faultString}`))
+            }
+
+            resolve(parsed?.Envelope?.Body || parsed)
+          } catch (parseErr: any) {
+            if (res.statusCode && res.statusCode >= 400) {
+              return reject(new Error(`Erro HTTP ${res.statusCode} do servidor CTT: ${rawData.slice(0, 300)}`))
+            }
+            reject(new Error(`Falha ao processar resposta XML da CTT: ${parseErr.message}`))
+          }
+        })
       })
 
-      const xmlText = await response.text()
-      const parsed = this.parser.parse(xmlText)
+      req.on("timeout", () => {
+        req.destroy()
+        reject(new Error(`Tempo limite excedido (${timeoutMs}ms) ao contactar CTT Web Service (${url.hostname})`))
+      })
 
-      // Verificar se o SOAP devolveu Fault
-      const fault = parsed?.Envelope?.Body?.Fault
-      if (fault) {
-        const faultString = fault.faultstring || fault.detail || "Erro SOAP retornado pelo servidor CTT"
-        throw new Error(`[SOAP Fault] ${faultString}`)
-      }
+      req.on("error", (err) => {
+        reject(new Error(`Erro de rede ao contactar CTT (${url.hostname}): ${err.message}`))
+      })
 
-      return parsed?.Envelope?.Body || parsed
-    } catch (err: any) {
-      if (err.name === "AbortError") {
-        throw new Error(`Tempo limite excedido (${timeoutMs}ms) ao contactar CTT Web Service`)
-      }
-      throw err
-    } finally {
-      clearTimeout(timeoutId)
-    }
+      req.write(envelope, "utf8")
+      req.end()
+    })
   }
 
   /**
@@ -81,3 +118,4 @@ export class CTTSoapClient {
       .replace(/'/g, "&apos;")
   }
 }
+

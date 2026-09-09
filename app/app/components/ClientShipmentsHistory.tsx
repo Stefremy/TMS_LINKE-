@@ -3,12 +3,13 @@
 import * as React from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Search, Package, PlusCircle, Building2, Filter } from "lucide-react"
+import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getClientPortalStatsAction } from "@/app/actions/shipments"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { Cliente } from "@/app/ops/entidades/clientes/types"
+import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 
 export function ClientShipmentsHistory() {
   const searchParams = useSearchParams()
@@ -22,6 +23,21 @@ export function ClientShipmentsHistory() {
   const [loading, setLoading] = React.useState(true)
   const [closingBatch, setClosingBatch] = React.useState(false)
   const [manifestData, setManifestData] = React.useState<{ fileName: string, base64: string } | null>(null)
+  const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
+  const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
+
+  const downloadLabel = (base64String: string, ref: string) => {
+    try {
+      const link = document.createElement("a")
+      link.href = `data:application/pdf;base64,${base64String}`
+      link.download = `${ref}_Etiqueta_CTT.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (err) {
+      alert("Erro ao descarregar PDF da etiqueta.")
+    }
+  }
 
   React.useEffect(() => {
     getClientesAction().then((clients) => {
@@ -102,8 +118,28 @@ export function ClientShipmentsHistory() {
     }
   }
 
+  // Handle click outside to close dropdown
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!(e.target as Element).closest('.action-dropdown')) {
+        setOpenDropdownId(null)
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [])
+
   return (
-    <div className="flex flex-col gap-6 max-w-6xl mx-auto font-sans">
+    <div className="flex flex-col gap-6 max-w-6xl mx-auto font-sans relative">
+      
+      {/* Detalhes do Envio Modal */}
+      <ClientShipmentDetailModal 
+        shipment={selectedShipment} 
+        onClose={() => setSelectedShipment(null)} 
+        onUpdateShipment={(updated) => {
+          setShipments(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s))
+        }}
+      />
       
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -236,13 +272,21 @@ export function ClientShipmentsHistory() {
                   <th className="pb-3">Serviço CTT</th>
                   <th className="pb-3">Estado</th>
                   <th className="pb-3 text-right">Valor</th>
+                  <th className="pb-3 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredShipments.map((envio) => (
                   <tr key={envio.id} className="hover:bg-slate-50">
-                    <td className="py-3 font-mono font-bold text-slate-900">
-                      {envio.tracking_number || envio.id?.substring(0, 8).toUpperCase()}
+                    <td className="py-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedShipment(envio)}
+                        className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer text-left transition-colors"
+                        title="Clique para ver os detalhes do envio"
+                      >
+                        {envio.tracking_number || envio.id?.substring(0, 8).toUpperCase()}
+                      </button>
                     </td>
                     <td className="py-3 font-semibold text-slate-800">{envio.recipient_name}</td>
                     <td className="py-3 text-slate-500 truncate max-w-[200px]">{envio.recipient_address}</td>
@@ -258,6 +302,78 @@ export function ClientShipmentsHistory() {
                     </td>
                     <td className="py-3 text-right font-mono font-bold text-slate-900">
                       {envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
+                    </td>
+                    <td className="py-3 text-center relative action-dropdown">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenDropdownId(openDropdownId === envio.id ? null : envio.id);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                      
+                      {openDropdownId === envio.id && (
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-10 text-left">
+                          <button 
+                            onClick={() => {
+                              setSelectedShipment(envio);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                          >
+                            <Package className="w-3.5 h-3.5 text-slate-500" />
+                            Ver Detalhes
+                          </button>
+                          
+                          {envio.ctt_label_base64 && (
+                            <>
+                              <button 
+                                onClick={() => {
+                                  const byteCharacters = atob(envio.ctt_label_base64);
+                                  const byteNumbers = new Array(byteCharacters.length);
+                                  for (let i = 0; i < byteCharacters.length; i++) {
+                                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                  }
+                                  const byteArray = new Uint8Array(byteNumbers);
+                                  const file = new Blob([byteArray], { type: 'application/pdf' });
+                                  const fileURL = URL.createObjectURL(file);
+                                  const printWindow = window.open(fileURL, '_blank');
+                                  if (printWindow) {
+                                    printWindow.onload = () => printWindow.print();
+                                  }
+                                  setOpenDropdownId(null);
+                                }}
+                                className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Imprimir Etiqueta CTT</span>
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  downloadLabel(envio.ctt_label_base64, envio.tracking_number || envio.id);
+                                  setOpenDropdownId(null);
+                                }}
+                                className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Descarregar PDF</span>
+                              </button>
+                            </>
+                          )}
+                          <button 
+                            onClick={() => {
+                              alert(`Tracking CTT: ${envio.tracking_number}`);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                          >
+                            <MapPinIcon className="w-3.5 h-3.5 text-indigo-600" />
+                            Rastreio em Tempo Real
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

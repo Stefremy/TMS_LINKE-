@@ -435,6 +435,24 @@ export async function emitClientGuiaAction(data: {
       if (cttRes.success) {
         realGuia = cttRes.trackingNumber || trackingNumber
         labelBase64 = cttRes.labelBase64
+        
+        // Save the label and real tracking number to the database
+        try {
+          await supabase.from("shipments").update({
+            tracking_number: realGuia,
+            ctt_label_base64: labelBase64
+          }).eq("id", shipmentId)
+        } catch (e) { console.warn("Failed to update shipment with label") }
+        
+        try {
+          await supabase.from("audit_log").update({
+            details: {
+              ...shipmentData,
+              tracking_number: realGuia,
+              ctt_label_base64: labelBase64
+            }
+          }).eq("action", "shipment_data").contains("details", { id: shipmentId })
+        } catch (e) { console.warn("Failed to update audit_log with label") }
       }
     } catch (e: any) {
       console.error("Failed to generate CTT real shipment:", e.message)
@@ -457,3 +475,82 @@ export async function emitClientGuiaAction(data: {
     labelBase64
   }
 }
+
+/**
+ * Re-solicita e regenera a etiqueta oficial CTT a partir dos Web Services CTT
+ */
+export async function regenerateCttLabelAction(shipmentId: string) {
+  const supabase = createAdminClient()
+  
+  // Encontrar o envio
+  const all = await getShipmentsAction()
+  const shipment = all.find((s: any) => s.id === shipmentId || s.tracking_number === shipmentId)
+
+  if (!shipment) {
+    throw new Error("Envio não encontrado para reemitir etiqueta.")
+  }
+
+  const senderZip = shipment.sender_zip3 ? `${shipment.sender_zip3}-${shipment.sender_zip4 || "001"}` : "1000-001"
+  const recipientZip = shipment.recipient_zip3 ? `${shipment.recipient_zip3}-${shipment.recipient_zip4 || "001"}` : "1000-001"
+
+  const cttRes = await emitCttShipmentAction({
+    id: shipment.id,
+    ref: shipment.tracking_number || shipment.id.substring(0, 8).toUpperCase(),
+    sender: {
+      name: shipment.sender_name || "Remetente",
+      address: shipment.sender_address || "Sede Comercial",
+      city: shipment.sender_city || "Portugal",
+      zip: senderZip,
+      phone: shipment.sender_phone || "910000000",
+      email: shipment.sender_email
+    },
+    recipient: {
+      name: shipment.recipient_name || "Destinatário",
+      address: shipment.recipient_address || "Morada de Entrega",
+      city: shipment.recipient_city || "Portugal",
+      zip: recipientZip,
+      phone: shipment.recipient_phone || "920000000",
+      email: shipment.recipient_email
+    },
+    weightKg: Number(shipment.weight_kg) || 1,
+    volumes: Number(shipment.volumes_count) || 1,
+    subProduct: shipment.service_type || "ERS 24",
+    autoClose: false
+  })
+
+  if (cttRes.success && cttRes.labelBase64) {
+    const updatedGuia = cttRes.trackingNumber || shipment.tracking_number
+
+    try {
+      await supabase.from("shipments").update({
+        tracking_number: updatedGuia,
+        ctt_label_base64: cttRes.labelBase64
+      }).eq("id", shipment.id)
+    } catch {}
+
+    try {
+      await supabase.from("audit_log").update({
+        details: {
+          ...shipment,
+          tracking_number: updatedGuia,
+          ctt_label_base64: cttRes.labelBase64
+        }
+      }).eq("action", "shipment_data").contains("details", { id: shipment.id })
+    } catch {}
+  }
+
+  try {
+    revalidatePath("/app")
+    revalidatePath("/app/envios")
+    revalidatePath("/ops/envios")
+  } catch {}
+
+  return {
+    success: cttRes.success,
+    error: (cttRes as any).error,
+    labelBase64: cttRes.labelBase64,
+    trackingNumber: cttRes.trackingNumber || shipment.tracking_number
+  }
+}
+
+

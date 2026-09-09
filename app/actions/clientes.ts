@@ -274,8 +274,7 @@ export async function getClienteByIdAction(id: string): Promise<Cliente | null> 
 export async function saveClienteAction(cliente: Partial<Cliente>) {
   const supabase = createAdminClient()
 
-  const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
-  const id = isValidUuid(cliente.id) ? (cliente.id as string) : (cliente.id === "client_linke_store" ? "44444444-4444-4444-4444-444444444444" : crypto.randomUUID())
+  const id = cliente.id && cliente.id.trim().length > 0 ? cliente.id : crypto.randomUUID()
   const fullRecord: Cliente = {
     id,
     code: cliente.code?.trim().toUpperCase() || `CL${Math.floor(100 + Math.random() * 900)}`,

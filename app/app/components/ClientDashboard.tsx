@@ -4,27 +4,29 @@ import * as React from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { 
-  TrendingUp, 
   Package, 
   Receipt, 
-  Truck, 
-  CheckCircle2, 
-  Clock, 
-  PlusCircle, 
   Building2, 
   BarChart3, 
-  PieChart as PieChartIcon, 
   ShieldCheck, 
   MapPin, 
-  FileText, 
-  ArrowRight,
+  PlusCircle,
   Percent,
-  Euro
+  Search,
+  Printer,
+  ChevronLeft,
+  ChevronRight,
+  MoreVertical,
+  Eye,
+  FileText,
+  Download
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getClientPortalStatsAction } from "@/app/actions/shipments"
+import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { Cliente, DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
+import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 
 export function ClientDashboard() {
   const searchParams = useSearchParams()
@@ -41,6 +43,7 @@ export function ClientDashboard() {
     serviceBreakdown: Array<{ name: string; count: string; rawCount: number; share: number; color: string }>
     destinationRegions: Array<{ region: string; count: string; pct: number }>
     recentShipments: any[]
+    allShipments?: any[]
   }>({
     totalCount: 0,
     totalRevenue: 0,
@@ -58,7 +61,19 @@ export function ClientDashboard() {
     serviceBreakdown: [],
     destinationRegions: [],
     recentShipments: [],
+    allShipments: [],
   })
+
+  const [shipments, setShipments] = React.useState<any[]>([])
+  const [searchTerm, setSearchTerm] = React.useState("")
+  const [statusFilter, setStatusFilter] = React.useState("todos")
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
+  const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
+  const [closingBatch, setClosingBatch] = React.useState(false)
+  const [manifestData, setManifestData] = React.useState<{ fileName: string; base64: string } | null>(null)
+
+  const pageSize = 15
 
   // Load client data & real DB stats
   React.useEffect(() => {
@@ -82,15 +97,119 @@ export function ClientDashboard() {
       getClientPortalStatsAction(target?.id, target?.short_name).then((res) => {
         if (res) {
           setStats(res)
+          setShipments(res.allShipments || res.recentShipments || [])
         }
       })
     })
   }, [clientId, clientNameParam])
 
+  // Handle click outside dropdown
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!(e.target as Element).closest(".action-dropdown")) {
+        setOpenDropdownId(null)
+      }
+    }
+    document.addEventListener("click", handleClickOutside)
+    return () => document.removeEventListener("click", handleClickOutside)
+  }, [])
+
   const querySuffix = React.useMemo(() => {
     if (!currentClient) return ""
     return `?clientId=${encodeURIComponent(currentClient.id || "")}&clientName=${encodeURIComponent(currentClient.short_name || "")}`
   }, [currentClient])
+
+  // Filtered shipments
+  const filteredShipments = React.useMemo(() => {
+    return shipments.filter((item) => {
+      const q = searchTerm.toLowerCase().trim()
+      const ref = (item.tracking_number || item.id || "").toLowerCase()
+      const rec = (item.recipient_name || "").toLowerCase()
+      const addr = (item.recipient_address || "").toLowerCase()
+
+      const matchesSearch = !q || ref.includes(q) || rec.includes(q) || addr.includes(q)
+      const matchesStatus = statusFilter === "todos" || item.status === statusFilter
+
+      return matchesSearch && matchesStatus
+    })
+  }, [shipments, searchTerm, statusFilter])
+
+  // Reset page when search or filter changes
+  React.useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter])
+
+  // Paginated slice (15 per page)
+  const totalPages = Math.ceil(filteredShipments.length / pageSize) || 1
+  const paginatedShipments = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    return filteredShipments.slice(startIndex, startIndex + pageSize)
+  }, [filteredShipments, currentPage, pageSize])
+
+  const pendingShipments = React.useMemo(() => {
+    return shipments.filter(s => s.status === "pendente")
+  }, [shipments])
+
+  const handleCloseBatch = async () => {
+    if (pendingShipments.length === 0) return
+    const idsToClose = pendingShipments.map(s => s.tracking_number || s.id).filter(Boolean)
+    if (idsToClose.length === 0) return
+
+    setClosingBatch(true)
+    try {
+      const res = await closeCttShipmentsAction(idsToClose)
+      if (res.success && res.documents && res.documents.length > 0) {
+        setManifestData({
+          fileName: res.documents[0].FileName || "Manifesto_CTT.pdf",
+          base64: res.documents[0].File
+        })
+        setShipments(prev => prev.map(s => {
+          if (idsToClose.includes(s.tracking_number) || idsToClose.includes(s.id)) {
+            return { ...s, status: "em_transito" }
+          }
+          return s
+        }))
+      } else {
+        alert("Erro ao fechar lote de envios CTT.")
+      }
+    } catch (e: any) {
+      alert("Erro ao fechar lote: " + e.message)
+    } finally {
+      setClosingBatch(false)
+    }
+  }
+
+  const printLabel = (base64String: string) => {
+    try {
+      const byteCharacters = atob(base64String)
+      const byteNumbers = new Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i)
+      }
+      const byteArray = new Uint8Array(byteNumbers)
+      const file = new Blob([byteArray], { type: "application/pdf" })
+      const fileURL = URL.createObjectURL(file)
+      const printWindow = window.open(fileURL, "_blank")
+      if (printWindow) {
+        printWindow.onload = () => printWindow.print()
+      }
+    } catch (err) {
+      alert("Não foi possível carregar a etiqueta em PDF.")
+    }
+  }
+
+  const downloadLabel = (base64String: string, ref: string) => {
+    try {
+      const link = document.createElement("a")
+      link.href = `data:application/pdf;base64,${base64String}`
+      link.download = `${ref}_Etiqueta_CTT.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (err) {
+      alert("Erro ao descarregar PDF da etiqueta.")
+    }
+  }
 
   // Contractual and pricing details from real client record
   const discountPct = currentClient?.pricing?.discount_pct ?? 0
@@ -103,7 +222,16 @@ export function ClientDashboard() {
   const usedPlafondPct = creditLimit > 0 ? Math.min((stats.totalRevenue / creditLimit) * 100, 100).toFixed(1) : "0"
 
   return (
-    <div className="flex flex-col gap-6 max-w-7xl mx-auto font-sans">
+    <div className="flex flex-col gap-6 max-w-7xl mx-auto font-sans relative">
+
+      {/* Detalhes do Envio Modal (Read-Only Mirror of Creation Form) */}
+      <ClientShipmentDetailModal 
+        shipment={selectedShipment} 
+        onClose={() => setSelectedShipment(null)} 
+        onUpdateShipment={(updated) => {
+          setShipments(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s))
+        }}
+      />
       
       {/* Top Welcome & Client Header Banner */}
       <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 text-white rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
@@ -121,7 +249,7 @@ export function ClientDashboard() {
             {currentClient?.legal_name || currentClient?.short_name || "Portal de Envios do Cliente"}
           </h1>
           <p className="text-emerald-100 text-xs sm:text-sm max-w-2xl leading-relaxed">
-            Painel operacional e analítico com métricas em tempo real, tabelas de preçário acordadas e serviços CTT contratados.
+            Painel operacional e analítico com métricas em tempo real, tabelas de preçário acordadas e emissão de guias CTT.
           </p>
         </div>
 
@@ -230,11 +358,301 @@ export function ClientDashboard() {
 
       </div>
 
+      {/* MANIFEST ALERT IF CLOSED */}
+      {manifestData && (
+        <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in shadow-xs">
+          <div className="flex items-center gap-3.5">
+            <div>
+              <div className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+                <span>Lote Fechado com Sucesso!</span>
+              </div>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                O manifesto (Certificado de Aceitação CTT) foi gerado.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                const link = document.createElement("a")
+                link.href = `data:application/pdf;base64,${manifestData.base64}`
+                link.download = manifestData.fileName
+                document.body.appendChild(link)
+                link.click()
+                document.body.removeChild(link)
+              }}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              Descarregar Manifesto
+            </button>
+            <button
+              type="button"
+              onClick={() => setManifestData(null)}
+              className="text-emerald-700 hover:text-emerald-950 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* TABELA PRINCIPAL DE ENVIOS (15 POR PÁGINA) */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden flex flex-col">
+        {/* Table Header & Controls */}
+        <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <Package className="w-5 h-5 text-emerald-600" />
+              <h2 className="text-lg font-bold text-slate-900">Envios & Guias de Transporte</h2>
+              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full font-mono">
+                {filteredShipments.length} {filteredShipments.length === 1 ? "envio" : "envios"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Lista dos envios emitidos com rastreamento em tempo real e impressão de etiquetas CTT.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {pendingShipments.length > 0 && (
+              <button
+                onClick={handleCloseBatch}
+                disabled={closingBatch}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 active:scale-[0.99] disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+              >
+                {closingBatch ? "A Fechar..." : `Fechar ${pendingShipments.length} Envios`}
+              </button>
+            )}
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filtrar por estado do envio"
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="todos">Todos os Estados</option>
+              <option value="pendente">Pendentes</option>
+              <option value="em transito">Em Trânsito</option>
+              <option value="entregue">Entregues</option>
+              <option value="cancelado">Cancelados</option>
+            </select>
+
+            {/* Search Box */}
+            <div className="relative min-w-[240px]">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Pesquisar envio, destinatário..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Table Content */}
+        {filteredShipments.length === 0 ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+              <Package className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-800">Nenhum envio encontrado</h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-sm">
+              {searchTerm || statusFilter !== "todos" 
+                ? "Tente ajustar os filtros ou o termo de pesquisa."
+                : "Ainda não existem envios emitidos para esta conta de cliente."}
+            </p>
+            <Link
+              href={`/app/criar-guia${querySuffix}`}
+              className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all"
+            >
+              Criar Novo Envio
+            </Link>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-50/80 text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-100">
+                <tr>
+                  <th className="py-3.5 px-5">Guia / Rastreio</th>
+                  <th className="py-3.5 px-5">Serviço CTT</th>
+                  <th className="py-3.5 px-5">Destinatário & Destino</th>
+                  <th className="py-3.5 px-5">Data Emissão</th>
+                  <th className="py-3.5 px-5">Valor</th>
+                  <th className="py-3.5 px-5">Estado</th>
+                  <th className="py-3.5 px-5 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {paginatedShipments.map((shipment) => {
+                  const dateStr = shipment.created_at ? new Date(shipment.created_at).toLocaleDateString("pt-PT", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  }) : "Hoje"
+
+                  const tracking = shipment.tracking_number || shipment.id
+
+                  return (
+                    <tr key={shipment.id} className="hover:bg-slate-50/70 transition-colors">
+                      {/* Tracking / Guia */}
+                      <td className="py-4 px-5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedShipment(shipment)}
+                          className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline text-xs flex items-center gap-1.5 cursor-pointer text-left transition-colors"
+                          title="Clique para ver os detalhes do envio"
+                        >
+                          {tracking}
+                        </button>
+                      </td>
+
+                      {/* Service Type */}
+                      <td className="py-4 px-5">
+                        <span className="font-semibold text-slate-700">
+                          {shipment.service_type || "CTT Expresso"}
+                        </span>
+                      </td>
+
+                      {/* Destinatário */}
+                      <td className="py-4 px-5 max-w-[260px]">
+                        <div className="font-bold text-slate-900 truncate">{shipment.recipient_name}</div>
+                        <div className="text-[11px] text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3 shrink-0 text-slate-400" />
+                          <span>{shipment.recipient_address || "Portugal"}</span>
+                        </div>
+                      </td>
+
+                      {/* Data */}
+                      <td className="py-4 px-5 text-slate-500 whitespace-nowrap">
+                        {dateStr}
+                      </td>
+
+                      {/* Valor */}
+                      <td className="py-4 px-5 font-mono font-bold text-slate-900">
+                        {shipment.sell_price ? `${Number(shipment.sell_price).toFixed(2)}€` : "—"}
+                      </td>
+
+                      {/* Estado */}
+                      <td className="py-4 px-5">
+                        <Badge variant={
+                          shipment.status === "entregue" ? "success" :
+                          shipment.status === "pendente" ? "warning" : "info"
+                        }>
+                          {shipment.status === "em transito" ? "Em Trânsito" : 
+                            shipment.status.charAt(0).toUpperCase() + shipment.status.slice(1)}
+                        </Badge>
+                      </td>
+
+                      {/* Ações */}
+                      <td className="py-4 px-5 text-right">
+                        <div className="relative inline-block text-left action-dropdown">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setOpenDropdownId(openDropdownId === shipment.id ? null : shipment.id)
+                            }}
+                            className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {openDropdownId === shipment.id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-30 animate-in fade-in-50 zoom-in-95 text-left">
+                              {shipment.ctt_label_base64 && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenDropdownId(null)
+                                      printLabel(shipment.ctt_label_base64)
+                                    }}
+                                    className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors cursor-pointer"
+                                  >
+                                    <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Imprimir Etiqueta</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenDropdownId(null)
+                                      downloadLabel(shipment.ctt_label_base64, tracking)
+                                    }}
+                                    className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors cursor-pointer"
+                                  >
+                                    <Download className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Descarregar PDF</span>
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenDropdownId(null)
+                                  setSelectedShipment(shipment)
+                                }}
+                                className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Ver Detalhes</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pagination Footer (15 per page) */}
+        {filteredShipments.length > 0 && (
+          <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
+            <div>
+              A mostrar <strong>{Math.min((currentPage - 1) * pageSize + 1, filteredShipments.length)}</strong> a <strong>{Math.min(currentPage * pageSize, filteredShipments.length)}</strong> de <strong>{filteredShipments.length}</strong> envios
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Anterior</span>
+              </button>
+
+              <span className="px-2 font-semibold text-slate-700 font-mono">
+                {currentPage} / {totalPages}
+              </span>
+
+              <button
+                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <span>Próxima</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* GRAPHS & ANALYTICS SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Graph 1: Volume Diário Real de Envios */}
-        <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs flex flex-col justify-between">
+        <div className="lg:col-span-3 bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs flex flex-col justify-between">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div>
               <div className="flex items-center gap-2">
@@ -293,155 +711,47 @@ export function ClientDashboard() {
           </div>
         </div>
 
-        {/* Graph 2: Repartição Real por Serviço CTT */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <PieChartIcon className="w-5 h-5 text-teal-600" />
-              <h3 className="text-base font-bold text-slate-900">Mix de Serviços CTT</h3>
-            </div>
-            <p className="text-xs text-slate-500 mb-6">Utilização real por modalidade de entrega</p>
-
-            {stats.serviceBreakdown.length === 0 ? (
-              <div className="py-12 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                <Truck className="w-7 h-7 text-slate-300 mx-auto mb-2" />
-                <p className="text-xs font-bold text-slate-600">Sem serviços utilizados</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Emita uma guia para registar o primeiro serviço.</p>
-              </div>
-            ) : (
-              <>
-                {/* Progress Segment Bar */}
-                <div className="w-full h-3.5 rounded-full overflow-hidden flex gap-1 mb-6 bg-slate-100 p-0.5">
-                  {stats.serviceBreakdown.map((s, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`h-full rounded-full ${s.color}`} 
-                      style={{ width: `${s.share}%` }} 
-                      title={`${s.name}: ${s.share}%`}
-                    />
-                  ))}
-                </div>
-
-                {/* Breakdown Items List */}
-                <div className="space-y-3.5">
-                  {stats.serviceBreakdown.map((s, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-3 h-3 rounded-full ${s.color} shrink-0`} />
-                        <span className="font-semibold text-slate-800">{s.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2 font-mono">
-                        <span className="text-slate-500 text-[11px]">{s.count}</span>
-                        <span className="font-bold text-slate-900">{s.share}%</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-slate-100">
-            <Link
-              href={`/app/criar-guia${querySuffix}`}
-              className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
-            >
-              <span>Novo Envio</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-
       </div>
 
-      {/* LOWER SECTION: REAL DESTINATIONS & QUICK SHORTCUTS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Real Regional Destinations Distribution */}
-        <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-base font-bold text-slate-900">Destinos dos Envios</h3>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">Destinos mais frequentes da mercadoria desta conta</p>
-            </div>
-          </div>
-
-          {stats.destinationRegions.length === 0 ? (
-            <div className="py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-              <MapPin className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
-              <p className="text-xs font-bold text-slate-600">Sem destinos registados</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">As localidades de destino aparecerão aqui após emissão.</p>
-            </div>
-          ) : (
-            <div className="space-y-4 pt-2">
-              {stats.destinationRegions.map((dest, idx) => (
-                <div key={idx} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-800">{dest.region}</span>
-                    <div className="flex items-center gap-2 font-mono">
-                      <span className="text-slate-400 text-[11px]">{dest.count}</span>
-                      <span className="font-bold text-slate-900">{dest.pct}%</span>
-                    </div>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${dest.pct}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Quick Operations Portal Card */}
-        <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+      {/* LOWER SECTION: REAL DESTINATIONS */}
+      <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <span className="bg-emerald-500 text-slate-950 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded tracking-wide">
-              Acesso Rápido
-            </span>
-            <h3 className="text-lg font-bold text-white mt-3">Operações Rápidas</h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Atalhos diretos para emissão rápida de novos envios.
-            </p>
-
-            <div className="space-y-2.5 mt-5">
-              <Link
-                href={`/app/criar-guia${querySuffix}`}
-                className="w-full p-3.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-white flex items-center justify-between transition-colors border border-slate-700"
-              >
-                <div className="flex items-center gap-2.5">
-                  <FileText className="w-4 h-4 text-emerald-400" />
-                  <span>Novo Envio</span>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-400" />
-              </Link>
-
-              <Link
-                href={`/app/envios${querySuffix}`}
-                className="w-full p-3.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-white flex items-center justify-between transition-colors border border-slate-700"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Clock className="w-4 h-4 text-indigo-400" />
-                  <span>Histórico de Envios & Tracking</span>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-400" />
-              </Link>
+            <div className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-base font-bold text-slate-900">Destinos dos Envios</h3>
             </div>
-          </div>
-
-          <div className="pt-4 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-            <span>Integração Webservices CTT</span>
-            <span className="text-emerald-400 font-bold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /> Ativo
-            </span>
+            <p className="text-xs text-slate-500 mt-0.5">Destinos mais frequentes da mercadoria desta conta</p>
           </div>
         </div>
 
+        {stats.destinationRegions.length === 0 ? (
+          <div className="py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+            <MapPin className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
+            <p className="text-xs font-bold text-slate-600">Sem destinos registados</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">As localidades de destino aparecerão aqui após emissão.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 pt-2">
+            {stats.destinationRegions.map((dest, idx) => (
+              <div key={idx} className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-800">{dest.region}</span>
+                  <div className="flex items-center gap-2 font-mono">
+                    <span className="text-slate-400 text-[11px]">{dest.count}</span>
+                    <span className="font-bold text-slate-900">{dest.pct}%</span>
+                  </div>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${dest.pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
     </div>

@@ -17,7 +17,8 @@ import {
   ArrowLeft, 
   AlertCircle,
   Clock,
-  Sparkles
+  Sparkles,
+  Download
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
@@ -342,12 +343,21 @@ export function ClientCreateGuia() {
               type="button"
               onClick={() => {
                 if (generatedLabelBase64) {
-                  const link = document.createElement("a")
-                  link.href = `data:application/pdf;base64,${generatedLabelBase64}`
-                  link.download = `Guia_${generatedGuia}.pdf`
-                  document.body.appendChild(link)
-                  link.click()
-                  document.body.removeChild(link)
+                  // Convert base64 to Blob and open in new tab for printing
+                  const byteCharacters = atob(generatedLabelBase64);
+                  const byteNumbers = new Array(byteCharacters.length);
+                  for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                  }
+                  const byteArray = new Uint8Array(byteNumbers);
+                  const file = new Blob([byteArray], { type: 'application/pdf' });
+                  const fileURL = URL.createObjectURL(file);
+                  const printWindow = window.open(fileURL, '_blank');
+                  if (printWindow) {
+                    printWindow.onload = () => {
+                      printWindow.print();
+                    };
+                  }
                 } else {
                   window.print()
                 }
@@ -355,8 +365,25 @@ export function ClientCreateGuia() {
               className="bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-950 px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>{generatedLabelBase64 ? "Descarregar Etiqueta" : "Imprimir Página"}</span>
+              <span>{generatedLabelBase64 ? "Imprimir Etiqueta" : "Imprimir Página"}</span>
             </button>
+            {generatedLabelBase64 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const link = document.createElement("a");
+                  link.href = `data:application/pdf;base64,${generatedLabelBase64}`;
+                  link.download = `${generatedGuia || "Envio"}_Etiqueta_CTT.pdf`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-950 px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Descarregar PDF</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
