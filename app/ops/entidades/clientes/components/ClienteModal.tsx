@@ -34,9 +34,15 @@ import {
   Anchor,
   HelpCircle,
   Zap,
-  ShieldCheck
+  ShieldCheck,
+  Package,
+  UserCheck,
+  SlidersHorizontal,
+  ArrowRight
 } from "lucide-react"
 import { saveClienteAction } from "@/app/actions/clientes"
+import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
+import { getCarrierLogo } from "@/lib/carrier-logos"
 import { 
   Cliente, 
   DEFAULT_CLIENT_CATEGORIES, 
@@ -53,17 +59,18 @@ import {
 
 interface ClienteModalProps {
   initialData?: Cliente | null
+  servicosLinke?: ServicoLinke[]
   onClose: () => void
   onSaved: (saved: Cliente) => void
 }
 
 type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario" | "webservices"
-type PrecarioSubTab = "produtos" | "suplementares" | "geral"
+type PrecarioSubTab = "servicos_linke" | "produtos" | "suplementares" | "geral"
 
-export function ClienteModal({ initialData, onClose, onSaved }: ClienteModalProps) {
+export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved }: ClienteModalProps) {
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
-  const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("produtos")
+  const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
   const [saveSuccessMsg, setSaveSuccessMsg] = React.useState(false)
 
   // Initialize form data with rich pricing and webservices
@@ -92,6 +99,10 @@ export function ClienteModal({ initialData, onClose, onSaved }: ClienteModalProp
     observations: initialData?.observations || "",
     is_active: initialData?.is_active ?? true,
     created_at: initialData?.created_at || new Date().toISOString(),
+    default_linke_table_id: initialData?.default_linke_table_id || servicosLinke[0]?.id || "",
+    assigned_linke_service_ids: initialData?.assigned_linke_service_ids || servicosLinke.map((s) => s.id),
+    assigned_linke_profile: initialData?.assigned_linke_profile || "Standard / Geral",
+    volume_discount_pct: initialData?.volume_discount_pct ?? 0,
     pricing: initialData?.pricing || DEFAULT_CLIENT_PRICING,
     allowed_webservices: initialData?.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.map((ws, i) => ({
       ...ws,
@@ -128,6 +139,10 @@ export function ClienteModal({ initialData, onClose, onSaved }: ClienteModalProp
         observations: initialData.observations || "",
         is_active: initialData.is_active ?? true,
         created_at: initialData.created_at || new Date().toISOString(),
+        default_linke_table_id: initialData.default_linke_table_id || servicosLinke[0]?.id || "",
+        assigned_linke_service_ids: initialData.assigned_linke_service_ids || servicosLinke.map((s) => s.id),
+        assigned_linke_profile: initialData.assigned_linke_profile || "Standard / Geral",
+        volume_discount_pct: initialData.volume_discount_pct ?? 0,
         pricing: {
           ...DEFAULT_CLIENT_PRICING,
           ...initialData.pricing,
@@ -141,7 +156,7 @@ export function ClienteModal({ initialData, onClose, onSaved }: ClienteModalProp
         })),
       })
     }
-  }, [initialData])
+  }, [initialData, servicosLinke])
 
   // Handlers for Product Services Pricing
   const handleProductPriceChange = (index: number, field: keyof ClientServicePrice, value: any) => {
@@ -792,7 +807,20 @@ export function ClienteModal({ initialData, onClose, onSaved }: ClienteModalProp
               
               {/* Top Sub-Tab Switcher */}
               <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setPrecarioSubTab("servicos_linke")}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                      precarioSubTab === "servicos_linke"
+                        ? "bg-emerald-700 text-white shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <Package className="w-3.5 h-3.5" />
+                    <span>1. Tabelas Linke & Serviços Autorizados ({servicosLinke.length})</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setPrecarioSubTab("produtos")}
@@ -803,7 +831,7 @@ export function ClienteModal({ initialData, onClose, onSaved }: ClienteModalProp
                     }`}
                   >
                     <Truck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>1. Produtos & Sub-Produtos ({servicesList.length})</span>
+                    <span>2. Tarifas por Escalão ({servicesList.length})</span>
                   </button>
 
                   <button
@@ -816,7 +844,7 @@ export function ClienteModal({ initialData, onClose, onSaved }: ClienteModalProp
                     }`}
                   >
                     <Zap className="w-3.5 h-3.5 text-amber-500" />
-                    <span>2. Serviços Especiais & Suplementares ({specialFeesList.length})</span>
+                    <span>3. Taxas Especiais ({specialFeesList.length})</span>
                   </button>
 
                   <button
@@ -829,7 +857,7 @@ export function ClienteModal({ initialData, onClose, onSaved }: ClienteModalProp
                     }`}
                   >
                     <Sliders className="w-3.5 h-3.5 text-slate-500" />
-                    <span>3. Taxa Combustível & Descontos</span>
+                    <span>4. Combustível & Descontos</span>
                   </button>
                 </div>
 
@@ -844,6 +872,186 @@ export function ClienteModal({ initialData, onClose, onSaved }: ClienteModalProp
                   </button>
                 </div>
               </div>
+
+              {/* SUBTAB 0: TABELAS LINKE & SERVIÇOS AUTORIZADOS (CAIXA SELECT) */}
+              {precarioSubTab === "servicos_linke" && (
+                <div className="space-y-4">
+                  {/* Caixa Select de Tabela Linke Principal */}
+                  <div className="bg-gradient-to-r from-emerald-50/80 via-white to-white p-5 rounded-xl border border-emerald-200 shadow-2xs space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4 text-emerald-700" />
+                          <h3 className="font-bold text-sm text-slate-900">
+                            Caixa Select: Tabela de Preço Linke Associada ao Cliente
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Selecione o tarifário base para este cliente. Pode aplicar preços com desconto para clientes de grande volume.
+                        </p>
+                      </div>
+
+                      {/* Select Box */}
+                      <div className="min-w-[280px]">
+                        <select
+                          value={formData.default_linke_table_id || ""}
+                          onChange={(e) => {
+                            const tableId = e.target.value
+                            const table = servicosLinke.find((s) => s.id === tableId)
+                            setFormData((prev) => ({
+                              ...prev,
+                              default_linke_table_id: tableId,
+                              assigned_linke_profile: table?.pricing_profile || "Standard / Geral",
+                              volume_discount_pct: table?.discount_vs_standard_pct || 0,
+                            }))
+                          }}
+                          className="w-full px-3.5 py-2 bg-white border-2 border-emerald-600 rounded-xl text-xs font-bold text-slate-800 shadow-xs focus:ring-2 focus:ring-emerald-500/20"
+                        >
+                          <option value="">-- Selecione a Tabela Linke --</option>
+                          {servicosLinke.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name} ({s.pricing_profile}) - {s.preferred_carrier_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Volume Discount Field */}
+                    <div className="pt-3 border-t border-emerald-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-emerald-700" />
+                        <span className="text-slate-700">
+                          Perfil Selecionado: <strong className="text-emerald-800">{formData.assigned_linke_profile || "Standard / Geral"}</strong>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-600 font-medium">Desconto de Volume Adicional:</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            max="50"
+                            value={formData.volume_discount_pct ?? 0}
+                            onChange={(e) => setFormData({ ...formData, volume_discount_pct: parseFloat(e.target.value) || 0 })}
+                            className="w-16 px-2 py-1 bg-white border border-slate-300 rounded text-center text-xs font-bold text-emerald-700"
+                          />
+                          <span className="font-bold text-slate-700">%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Grid de Serviços Linke Autorizados */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+                    <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                          Serviços Linke Autorizados para este Cliente ({formData.assigned_linke_service_ids?.length || 0} de {servicosLinke.length})
+                        </h4>
+                        <p className="text-[11px] text-slate-500">
+                          Marque os serviços e parceiros que este cliente tem permissão para usar ao criar envios.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, assigned_linke_service_ids: servicosLinke.map((s) => s.id) })}
+                          className="px-2.5 py-1 text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
+                        >
+                          Selecionar Todos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, assigned_linke_service_ids: [] })}
+                          className="px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                          Desmarcar Todos
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {servicosLinke.map((servico) => {
+                        const isAssigned = (formData.assigned_linke_service_ids || []).includes(servico.id)
+                        const carrierLogo = getCarrierLogo(servico.preferred_carrier_name)
+                        const firstZone = servico.zones?.[0]
+                        const tier1 = firstZone?.tiers?.[0]
+                        const tier5 = firstZone?.tiers?.find((t) => t.weight_max === 5) || firstZone?.tiers?.[1]
+
+                        return (
+                          <div
+                            key={servico.id}
+                            onClick={() => {
+                              const current = formData.assigned_linke_service_ids || []
+                              const next = isAssigned
+                                ? current.filter((id) => id !== servico.id)
+                                : [...current, servico.id]
+                              setFormData({ ...formData, assigned_linke_service_ids: next })
+                            }}
+                            className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                              isAssigned
+                                ? "bg-emerald-50/50 border-emerald-500 shadow-2xs ring-1 ring-emerald-500/20"
+                                : "bg-white border-slate-200 hover:border-slate-300 opacity-60 hover:opacity-100"
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <input
+                                type="checkbox"
+                                checked={isAssigned}
+                                onChange={() => {}} // Handled by div onClick
+                                className="mt-1 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                              />
+
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {carrierLogo ? (
+                                    <div className="w-6 h-6 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={carrierLogo} alt={servico.preferred_carrier_name} className="max-w-full max-h-full object-contain" />
+                                    </div>
+                                  ) : null}
+                                  <span className="font-bold text-xs text-slate-900">{servico.name}</span>
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[10px] font-mono text-slate-500">{servico.code}</span>
+                                  <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">
+                                    {servico.pricing_profile}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">Trânsito: {servico.transit_time_label}</span>
+                                </div>
+
+                                {tier1 && (
+                                  <div className="mt-2 text-[11px] text-slate-600 flex items-center gap-2 font-mono">
+                                    <span>Até 1kg: <strong className="text-emerald-700">{tier1.sell_price.toFixed(2)}€</strong></span>
+                                    {tier5 && <span>• Até 5kg: <strong className="text-emerald-700">{tier5.sell_price.toFixed(2)}€</strong></span>}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              isAssigned ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"
+                            }`}>
+                              {isAssigned ? "Autorizado" : "Bloqueado"}
+                            </span>
+                          </div>
+                        )
+                      })}
+
+                      {servicosLinke.length === 0 && (
+                        <div className="col-span-2 p-8 text-center text-slate-400 text-xs">
+                          Nenhum serviço Linke configurado. Configure serviços em Configuração &gt; Serviços Linke.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* SUBTAB 1: PRODUTOS & SUB-PRODUTOS CTT */}
               {precarioSubTab === "produtos" && (

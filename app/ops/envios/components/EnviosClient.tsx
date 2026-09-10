@@ -18,6 +18,7 @@ import { FerramentasMenu } from "./FerramentasMenu"
 import { NovaRecolhaModal } from "./NovaRecolhaModal"
 import { NovoEnvioModal } from "./NovoEnvioModal"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
+import { getCarrierLogo } from "@/lib/carrier-logos"
 
 interface EnviosClientProps {
   envios: any[]
@@ -298,7 +299,19 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                 {/* Serviço Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-1 items-start">
-                    <span className="font-medium text-slate-700 text-[12px]">{envio.service?.code}</span>
+                    <div className="flex items-center gap-1.5">
+                      {getCarrierLogo(envio.service?.name || envio.service?.code || envio.rawShipment?.carrier_name || "ctt") ? (
+                        <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img 
+                            src={getCarrierLogo(envio.service?.name || envio.service?.code || envio.rawShipment?.carrier_name || "ctt")!} 
+                            alt={envio.service?.name || "Transportadora"} 
+                            className="max-w-full max-h-full object-contain" 
+                          />
+                        </div>
+                      ) : null}
+                      <span className="font-medium text-slate-700 text-[12px]">{envio.service?.code}</span>
+                    </div>
                     <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-tight leading-none ${envio.service?.bgColor || 'bg-slate-200'} ${envio.service?.textColor || 'text-slate-800'}`}>
                       {envio.service?.name}
                     </span>

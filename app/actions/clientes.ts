@@ -301,6 +301,10 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     observations: cliente.observations?.trim() || "",
     is_active: cliente.is_active ?? true,
     created_at: cliente.created_at || new Date().toISOString(),
+    default_linke_table_id: cliente.default_linke_table_id || "",
+    assigned_linke_service_ids: cliente.assigned_linke_service_ids || [],
+    assigned_linke_profile: cliente.assigned_linke_profile || "Standard / Geral",
+    volume_discount_pct: cliente.volume_discount_pct ?? 0,
     pricing: cliente.pricing || DEFAULT_CLIENT_PRICING,
     allowed_webservices: cliente.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.slice(0, 3),
   }

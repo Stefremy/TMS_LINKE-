@@ -87,7 +87,11 @@ export interface Cliente {
   is_active: boolean
   created_at: string
 
-  // Preçário & Webservices
+  // Preçário, Serviços Linke & Webservices
+  default_linke_table_id?: string
+  assigned_linke_service_ids?: string[]
+  assigned_linke_profile?: string
+  volume_discount_pct?: number
   pricing?: ClientPricingConfig
   allowed_webservices?: ClientAllowedWebservice[]
 }

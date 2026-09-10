@@ -73,7 +73,7 @@ const navConfig: NavItem[] = [
     subItems: [
       { title: "Geral", href: "/ops/configuracao/geral" },
       { title: "Webservices Globais", href: "/ops/configuracao/webservices" },
-      { title: "Serviços de Transporte", href: "/ops/configuracao/servicos" },
+      { title: "Serviços Linke", href: "/ops/configuracao/servicos" },
       { title: "Taxas Adicionais", href: "/ops/configuracao/taxas" },
       { title: "Tabelas de Preço", href: "/ops/configuracao/precos" },
       { title: "Zonas de Preço", href: "/ops/configuracao/zonas" },

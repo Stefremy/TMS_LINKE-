@@ -34,6 +34,7 @@ import {
   ClientServicePrice,
   ClientSpecialServiceFee
 } from "@/app/ops/entidades/clientes/types"
+import { getCarrierLogo } from "@/lib/carrier-logos"
 
 export function ClientCreateGuia() {
   const searchParams = useSearchParams()
@@ -512,8 +513,19 @@ export function ClientCreateGuia() {
           <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-bold text-slate-900 flex items-center gap-2">
-                <Truck className="w-4 h-4 text-emerald-600" />
-                <span>Produto & Sub-Produto de Transporte CTT (SubProductId)</span>
+                {getCarrierLogo(activeServiceObj?.service_name || selectedCarrierCode || "ctt") ? (
+                  <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img 
+                      src={getCarrierLogo(activeServiceObj?.service_name || selectedCarrierCode || "ctt")!} 
+                      alt="Transportadora" 
+                      className="max-w-full max-h-full object-contain" 
+                    />
+                  </div>
+                ) : (
+                  <Truck className="w-4 h-4 text-emerald-600" />
+                )}
+                <span>Produto & Sub-Produto de Transporte (SubProductId)</span>
               </label>
               <span className="text-[11px] text-emerald-700 font-bold bg-emerald-100/80 px-2.5 py-0.5 rounded-full">
                 {activeServiceObj?.category}
@@ -647,7 +659,7 @@ export function ClientCreateGuia() {
                 <tr className="border-b border-slate-200 text-slate-600 font-bold">
                   <th className="pb-3">Guia</th>
                   <th className="pb-3">Destinatário</th>
-                  <th className="pb-3">Serviço CTT</th>
+                  <th className="pb-3">Serviço</th>
                   <th className="pb-3">Data</th>
                   <th className="pb-3 text-right">Valor</th>
                 </tr>
@@ -657,7 +669,21 @@ export function ClientCreateGuia() {
                   <tr key={idx} className="hover:bg-slate-50">
                     <td className="py-3 font-mono font-bold text-slate-900">{item.guia}</td>
                     <td className="py-3 text-slate-700">{item.destinatario}</td>
-                    <td className="py-3 text-slate-600">{item.servico}</td>
+                    <td className="py-3">
+                      <div className="flex items-center gap-1.5">
+                        {getCarrierLogo(item.servico || item.transportadora || "ctt") ? (
+                          <div className="w-4 h-4 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img 
+                              src={getCarrierLogo(item.servico || item.transportadora || "ctt")!} 
+                              alt="Logo" 
+                              className="max-w-full max-h-full object-contain" 
+                            />
+                          </div>
+                        ) : null}
+                        <span className="text-slate-700 font-medium">{item.servico}</span>
+                      </div>
+                    </td>
                     <td className="py-3 text-slate-500">{item.data}</td>
                     <td className="py-3 text-right font-mono font-bold text-slate-900">{item.valor}</td>
                   </tr>

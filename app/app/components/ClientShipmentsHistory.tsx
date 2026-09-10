@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getClientPortalStatsAction } from "@/app/actions/shipments"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
-import { Cliente } from "@/app/ops/entidades/clientes/types"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
+import { getCarrierLogo } from "@/lib/carrier-logos"
+import { Cliente } from "@/app/ops/entidades/clientes/types"
 
 export function ClientShipmentsHistory() {
   const searchParams = useSearchParams()
@@ -282,7 +283,21 @@ export function ClientShipmentsHistory() {
                     </td>
                     <td className="py-3 font-semibold text-slate-800">{envio.recipient_name}</td>
                     <td className="py-3 text-slate-500 truncate max-w-[200px]">{envio.recipient_address}</td>
-                    <td className="py-3 text-slate-600">{envio.service_type || "CTT Expresso"}</td>
+                    <td className="py-3">
+                      <div className="flex items-center gap-2">
+                        {getCarrierLogo(envio.service_type || envio.carrier || "ctt") ? (
+                          <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img 
+                              src={getCarrierLogo(envio.service_type || envio.carrier || "ctt")!} 
+                              alt={envio.service_type || "Transportadora"} 
+                              className="max-w-full max-h-full object-contain" 
+                            />
+                          </div>
+                        ) : null}
+                        <span className="text-xs font-semibold text-slate-700">{envio.service_type || "CTT Expresso"}</span>
+                      </div>
+                    </td>
                     <td className="py-3">
                       <Badge variant={
                         envio.status === "entregue" ? "success" :

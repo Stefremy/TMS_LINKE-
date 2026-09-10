@@ -28,6 +28,7 @@ import { getClientPortalStatsAction } from "@/app/actions/shipments"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { Cliente, DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
+import { getCarrierLogo } from "@/lib/carrier-logos"
 
 export function ClientDashboard() {
   const searchParams = useSearchParams()
@@ -226,8 +227,23 @@ export function ClientDashboard() {
             {currentClient?.legal_name || currentClient?.short_name || "Portal de Envios do Cliente"}
           </h1>
           <p className="text-emerald-100 text-xs sm:text-sm max-w-2xl leading-relaxed">
-            Painel operacional e analítico com métricas em tempo real, tabelas de preçário acordadas e emissão de guias CTT.
+            Painel operacional e analítico com métricas em tempo real, tabelas de preçário acordadas e emissão multicarrier.
           </p>
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-[11px] text-emerald-200 font-semibold">Operadores Integrados:</span>
+            <div className="flex items-center gap-1.5">
+              {["ctt", "correos", "dpd", "mrw"].map((cCode) => {
+                const logo = getCarrierLogo(cCode)
+                if (!logo) return null
+                return (
+                  <div key={cCode} className="w-6 h-6 rounded-md bg-white p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={logo} alt={cCode} className="max-w-full max-h-full object-contain" />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
@@ -294,9 +310,21 @@ export function ClientDashboard() {
                 Taxa Comb: {fuelPct}%
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1">
-              {activeServices.length} serviços CTT contratados
-            </p>
+            <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1.5">
+              <span>{activeServices.length} serviços autorizados</span>
+              <div className="flex items-center -space-x-1">
+                {["ctt", "correos", "dpd", "mrw"].map((cCode) => {
+                  const logo = getCarrierLogo(cCode)
+                  if (!logo) return null
+                  return (
+                    <div key={cCode} className="w-4 h-4 rounded-full bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={logo} alt={cCode} className="max-w-full max-h-full object-contain" />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -491,9 +519,21 @@ export function ClientDashboard() {
 
                       {/* Service Type */}
                       <td className="py-4 px-5">
-                        <span className="font-semibold text-slate-700">
-                          {shipment.service_type || "CTT Expresso"}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {getCarrierLogo(shipment.service_type || shipment.carrier || "ctt") ? (
+                            <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img 
+                                src={getCarrierLogo(shipment.service_type || shipment.carrier || "ctt")!} 
+                                alt={shipment.service_type || "Transportadora"} 
+                                className="max-w-full max-h-full object-contain" 
+                              />
+                            </div>
+                          ) : null}
+                          <span className="font-semibold text-slate-700 text-xs">
+                            {shipment.service_type || "CTT Expresso"}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Destinatário */}

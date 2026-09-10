@@ -17,18 +17,21 @@ import { Badge } from "@/components/ui/badge"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getClientesAction } from "@/app/actions/clientes"
+import { getCarrierConnectionsAction } from "@/app/actions/ctt"
+import { getCarrierLogo } from "@/lib/carrier-logos"
 
 export default async function OpsDashboardPage() {
   const supabase = createAdminClient()
 
   // Fetch real data from DB & persistent actions
-  const [shipments, recolhasResult, clients] = await Promise.all([
+  const [shipments, recolhasResult, clients, carrierConnections] = await Promise.all([
     getShipmentsAction(),
     supabase
       .from("recolhas")
       .select("*")
       .order("created_at", { ascending: false }),
-    getClientesAction()
+    getClientesAction(),
+    getCarrierConnectionsAction()
   ])
 
   const recolhas = recolhasResult.data || []
@@ -165,17 +168,21 @@ export default async function OpsDashboardPage() {
                           </div>
                         </td>
                         <td className="py-3.5">
-                          {isCtt ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-red-600" />
-                              <span className="font-bold text-slate-700">CTT Expresso</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-blue-600" />
-                              <span className="font-bold text-slate-700">{envio.service_type}</span>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {getCarrierLogo(envio.service_type || "ctt") ? (
+                              <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img 
+                                  src={getCarrierLogo(envio.service_type || "ctt")!} 
+                                  alt={envio.service_type || "Transportadora"} 
+                                  className="max-w-full max-h-full object-contain" 
+                                />
+                              </div>
+                            ) : (
+                              <span className={`w-2 h-2 rounded-full ${isCtt ? 'bg-red-600' : 'bg-blue-600'}`} />
+                            )}
+                            <span className="font-bold text-slate-700">{envio.service_type || "CTT Expresso"}</span>
+                          </div>
                         </td>
                         <td className="py-3.5">
                           <Badge variant={
@@ -220,14 +227,29 @@ export default async function OpsDashboardPage() {
               {latestActiveShipment ? (
                 <div className="space-y-4">
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                    <div className="flex items-center justify-between text-xs mb-1">
+                    <div className="flex items-center justify-between text-xs mb-2">
                       <span className="font-bold text-slate-700">Guia:</span>
-                      <span className="font-mono font-bold text-indigo-600">
-                        {latestActiveShipment.tracking_number || latestActiveShipment.ctt_object_id || latestActiveShipment.id.substring(0, 8).toUpperCase()}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {getCarrierLogo(latestActiveShipment.service_type || "ctt") ? (
+                          <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img 
+                              src={getCarrierLogo(latestActiveShipment.service_type || "ctt")!} 
+                              alt="Logo" 
+                              className="max-w-full max-h-full object-contain" 
+                            />
+                          </div>
+                        ) : null}
+                        <span className="font-mono font-bold text-indigo-600">
+                          {latestActiveShipment.tracking_number || latestActiveShipment.ctt_object_id || latestActiveShipment.id.substring(0, 8).toUpperCase()}
+                        </span>
+                      </div>
                     </div>
                     <div className="text-[11px] text-slate-500">
                       Destino: <strong>{latestActiveShipment.recipient_name || "Destinatário"}</strong>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      Serviço: <span className="font-semibold text-slate-600">{latestActiveShipment.service_type || "CTT Expresso 24H"}</span>
                     </div>
                   </div>
 
@@ -278,6 +300,136 @@ export default async function OpsDashboardPage() {
           </div>
         </div>
         
+      </div>
+
+      {/* PARCEIROS & TRANSPORTADORAS LINKE WIDGET */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <Truck className="w-5 h-5 text-emerald-600" />
+              <h2 className="text-lg font-bold text-slate-900">Transportadoras & Parceiros Integrados</h2>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Estado em tempo real das ligações WebServices e preçários ativos no sistema
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/ops/configuracao/webservices"
+              className="text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5"
+            >
+              <span>Webservices Globais</span>
+            </Link>
+            <Link
+              href="/ops/configuracao/servicos"
+              className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5"
+            >
+              <span>Gerir Serviços Linke</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            {
+              name: "CTT Expresso",
+              code: "ctt",
+              type: "Nacional & Ilhas",
+              leadTime: "24h / 48h",
+              matcher: (c: any) => c.carrier_code?.toLowerCase().includes("ctt") || c.supplier_id?.toLowerCase().includes("ctt")
+            },
+            {
+              name: "Correos Express",
+              code: "correos",
+              type: "Ibérico & Espanha",
+              leadTime: "24h / 48h",
+              matcher: (c: any) => c.carrier_code?.toLowerCase().includes("correos") || c.supplier_id?.toLowerCase().includes("correos")
+            },
+            {
+              name: "DPD Portugal",
+              code: "dpd",
+              type: "Europa & B2C",
+              leadTime: "24h / 72h",
+              matcher: (c: any) => c.carrier_code?.toLowerCase().includes("dpd") || c.supplier_id?.toLowerCase().includes("dpd")
+            },
+            {
+              name: "MRW",
+              code: "mrw",
+              type: "Urgente Ibéria",
+              leadTime: "10h / 24h",
+              matcher: (c: any) => c.carrier_code?.toLowerCase().includes("mrw") || c.supplier_id?.toLowerCase().includes("mrw")
+            }
+          ].map((partner, idx) => {
+            const logo = getCarrierLogo(partner.code)
+            const activeConn = (carrierConnections || []).find((c: any) => partner.matcher(c) && c.is_active !== false)
+            const isConnected = Boolean(activeConn)
+            const envLabel = activeConn?.environment === "production" ? "Produção" : activeConn ? "QA / Testes" : null
+
+            return (
+              <div 
+                key={idx} 
+                className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                  isConnected 
+                    ? "border-emerald-200/80 bg-emerald-50/20 hover:border-emerald-300 hover:shadow-xs" 
+                    : "border-slate-200 bg-slate-50/60 opacity-80 hover:opacity-100 hover:border-slate-300"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-10 rounded-lg bg-white border border-slate-200 p-1.5 flex items-center justify-center shadow-2xs">
+                    {logo ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img 
+                        src={logo} 
+                        alt={partner.name} 
+                        className="max-w-full max-h-full object-contain" 
+                      />
+                    ) : (
+                      <Truck className="w-5 h-5 text-slate-400" />
+                    )}
+                  </div>
+                  
+                  {isConnected ? (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Ativo & Conectado
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                      Não Conectado
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="font-bold text-slate-800 text-xs">{partner.name}</h3>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 mt-0.5">
+                    <span>{partner.type}</span>
+                    <span className="font-mono font-bold text-slate-700">{partner.leadTime}</span>
+                  </div>
+
+                  {isConnected ? (
+                    <div className="text-[10px] text-emerald-700 font-medium mt-2 pt-1.5 border-t border-emerald-100/60 flex items-center justify-between">
+                      <span>Ambiente: <strong>{envLabel}</strong></span>
+                      <span className="font-mono font-bold">{activeConn.contract_number ? `#${activeConn.contract_number}` : ""}</span>
+                    </div>
+                  ) : (
+                    <div className="mt-2 pt-1.5 border-t border-slate-200/60">
+                      <Link 
+                        href="/ops/configuracao/webservices" 
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
+                      >
+                        <span>Configurar Ligação</span>
+                        <ArrowRight className="w-2.5 h-2.5" />
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 import { toggleFornecedorStatusAction, deleteFornecedorAction } from "@/app/actions/fornecedores"
 import { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
+import { getCarrierLogo } from "@/lib/carrier-logos"
 import { FornecedorModal } from "./FornecedorModal"
 
 interface FornecedoresClientProps {
@@ -336,11 +337,22 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
                     {/* Designação Curta */}
                     <td className="py-3 px-3 align-middle">
                       <div className="flex items-center gap-2">
-                        {/* Colored Swatch */}
-                        <div
-                          className="w-3 h-3 rounded-xs shrink-0"
-                          style={{ backgroundColor: forn.color || "#00a3e0" }}
-                        />
+                        {getCarrierLogo(forn.short_name || forn.code) ? (
+                          <div className="w-6 h-6 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img 
+                              src={getCarrierLogo(forn.short_name || forn.code)!} 
+                              alt={forn.short_name} 
+                              className="max-w-full max-h-full object-contain" 
+                            />
+                          </div>
+                        ) : (
+                          /* Colored Swatch */
+                          <div
+                            className="w-3 h-3 rounded-xs shrink-0"
+                            style={{ backgroundColor: forn.color || "#00a3e0" }}
+                          />
+                        )}
                         <span
                           className="font-bold tracking-tight text-[13px] hover:underline"
                           style={{ color: forn.color || "#00a3e0" }}

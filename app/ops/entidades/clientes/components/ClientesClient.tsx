@@ -25,15 +25,18 @@ import {
 } from "lucide-react"
 import { toggleClienteStatusAction, deleteClienteAction } from "@/app/actions/clientes"
 import { Cliente, DEFAULT_CLIENT_CATEGORIES } from "../types"
+import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { ClienteModal } from "./ClienteModal"
 import { ClientAuthModal } from "./ClientAuthModal"
 
 interface ClientesClientProps {
   initialClientes: Cliente[]
+  initialServicosLinke?: ServicoLinke[]
 }
 
-export function ClientesClient({ initialClientes }: ClientesClientProps) {
+export function ClientesClient({ initialClientes, initialServicosLinke = [] }: ClientesClientProps) {
   const [clientes, setClientes] = React.useState<Cliente[]>(initialClientes || [])
+  const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>(initialServicosLinke || [])
   const [searchQuery, setSearchQuery] = React.useState("")
   const [categoryFilter, setCategoryFilter] = React.useState("Todos")
   const [statusFilter, setStatusFilter] = React.useState("Todos")
@@ -519,6 +522,7 @@ export function ClientesClient({ initialClientes }: ClientesClientProps) {
       {isModalOpen && (
         <ClienteModal
           initialData={editingCliente}
+          servicosLinke={servicosLinke}
           onClose={() => setIsModalOpen(false)}
           onSaved={handleSaved}
         />

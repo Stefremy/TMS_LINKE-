@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge"
 import { regenerateCttLabelAction } from "@/app/actions/shipments"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
+import { getCarrierLogo } from "@/lib/carrier-logos"
 
 interface ClientShipmentDetailModalProps {
   shipment: any
@@ -376,12 +377,12 @@ export function ClientShipmentDetailModal({
             </div>
           </div>
 
-          {/* 4. Serviço CTT Expresso */}
+          {/* 4. Serviço Transportadora */}
           <div className="bg-slate-100/80 p-4 rounded-2xl border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-bold text-slate-700 flex items-center gap-2">
                 <Truck className="w-4 h-4 text-emerald-600" />
-                <span>Produto & Serviço de Transporte CTT</span>
+                <span>Produto & Serviço de Transporte</span>
               </label>
               <span className="text-[11px] text-slate-500 font-bold bg-slate-200 px-2.5 py-0.5 rounded-full">
                 Contratado
@@ -389,8 +390,20 @@ export function ClientShipmentDetailModal({
             </div>
 
             <div className="p-3 bg-white/90 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center justify-between">
-              <span>{serviceType}</span>
-              <span className="text-emerald-700 font-mono">
+              <div className="flex items-center gap-2.5">
+                {getCarrierLogo(serviceType || currentShipment.carrier || "ctt") ? (
+                  <div className="w-6 h-6 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img 
+                      src={getCarrierLogo(serviceType || currentShipment.carrier || "ctt")!} 
+                      alt="Transportadora" 
+                      className="max-w-full max-h-full object-contain" 
+                    />
+                  </div>
+                ) : null}
+                <span>{serviceType}</span>
+              </div>
+              <span className="text-emerald-700 font-mono text-sm">
                 {currentShipment.sell_price ? `${Number(currentShipment.sell_price).toFixed(2)}€` : "—"}
               </span>
             </div>
