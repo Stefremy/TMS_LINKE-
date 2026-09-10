@@ -17,7 +17,6 @@ import {
   User, 
   ShieldAlert, 
   ExternalLink, 
-  LayoutDashboard,
   Truck,
   Layers,
   Percent,
@@ -27,7 +26,6 @@ import {
   RotateCcw,
   Sparkles,
   Sliders,
-  Globe,
   Tag,
   Clock,
   Plane,
@@ -38,7 +36,9 @@ import {
   Package,
   UserCheck,
   SlidersHorizontal,
-  ArrowRight
+  ArrowRight,
+  Upload,
+  Image as ImageIcon
 } from "lucide-react"
 import { saveClienteAction } from "@/app/actions/clientes"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
@@ -48,10 +48,8 @@ import {
   DEFAULT_CLIENT_CATEGORIES, 
   CLIENT_COLOR_OPTIONS,
   DEFAULT_CLIENT_PRICING,
-  SYSTEM_AVAILABLE_WEBSERVICES,
   DEFAULT_CTT_SERVICES_PRICING,
   DEFAULT_CTT_SPECIAL_SERVICES_FEES,
-  ClientAllowedWebservice,
   ClientPricingConfig,
   ClientServicePrice,
   ClientSpecialServiceFee
@@ -64,7 +62,7 @@ interface ClienteModalProps {
   onSaved: (saved: Cliente) => void
 }
 
-type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario" | "webservices"
+type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario"
 type PrecarioSubTab = "servicos_linke" | "produtos" | "suplementares" | "geral"
 
 export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved }: ClienteModalProps) {
@@ -79,6 +77,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
     short_name: initialData?.short_name || "",
     legal_name: initialData?.legal_name || "",
     color: initialData?.color || "#10b981",
+    logo_url: initialData?.logo_url || "",
     nif: initialData?.nif || "",
     category: initialData?.category || "Cliente Conta Corrente",
     city: initialData?.city || "",
@@ -104,11 +103,6 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
     assigned_linke_profile: initialData?.assigned_linke_profile || "Standard / Geral",
     volume_discount_pct: initialData?.volume_discount_pct ?? 0,
     pricing: initialData?.pricing || DEFAULT_CLIENT_PRICING,
-    allowed_webservices: initialData?.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.map((ws, i) => ({
-      ...ws,
-      is_enabled: i < 3,
-      is_default: i === 0,
-    })),
   })
 
   React.useEffect(() => {
@@ -119,6 +113,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
         short_name: initialData.short_name || "",
         legal_name: initialData.legal_name || "",
         color: initialData.color || "#10b981",
+        logo_url: initialData.logo_url || "",
         nif: initialData.nif || "",
         category: initialData.category || "Cliente Conta Corrente",
         city: initialData.city || "",
@@ -149,11 +144,6 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
           services_pricing: initialData.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING,
           special_services_fees: initialData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES,
         },
-        allowed_webservices: initialData.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.map((ws, i) => ({
-          ...ws,
-          is_enabled: i < 3,
-          is_default: i === 0,
-        })),
       })
     }
   }, [initialData, servicosLinke])
@@ -239,75 +229,23 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
     }
   }
 
-  // Handlers for Allowed Webservices
-  const handleToggleWebservice = (wsId: string) => {
-    setFormData((prev) => {
-      const list = prev.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES
-      const updated = list.map((ws) => {
-        if (ws.id === wsId) {
-          const nextEnabled = !ws.is_enabled
-          return {
-            ...ws,
-            is_enabled: nextEnabled,
-            is_default: nextEnabled ? ws.is_default : false,
-          }
-        }
-        return ws
-      })
 
-      const hasDefault = updated.some((w) => w.is_enabled && w.is_default)
-      if (!hasDefault) {
-        const firstEnabled = updated.find((w) => w.is_enabled)
-        if (firstEnabled) firstEnabled.is_default = true
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert("A imagem selecionada não deve exceder 2MB.")
+        return
       }
-
-      return { ...prev, allowed_webservices: updated }
-    })
-  }
-
-  const handleSetDefaultWebservice = (wsId: string) => {
-    setFormData((prev) => {
-      const list = prev.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES
-      const updated = list.map((ws) => ({
-        ...ws,
-        is_default: ws.id === wsId,
-        is_enabled: ws.id === wsId ? true : ws.is_enabled,
-      }))
-      return { ...prev, allowed_webservices: updated }
-    })
-  }
-
-  const handleToggleServiceForWs = (wsId: string, serviceName: string) => {
-    setFormData((prev) => {
-      const list = prev.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES
-      const updated = list.map((ws) => {
-        if (ws.id === wsId) {
-          const currentServices = ws.allowed_services || []
-          const nextServices = currentServices.includes(serviceName)
-            ? currentServices.filter((s) => s !== serviceName)
-            : [...currentServices, serviceName]
-          return {
-            ...ws,
-            allowed_services: nextServices,
-          }
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const result = event.target?.result as string
+        if (result) {
+          setFormData((prev) => ({ ...prev, logo_url: result }))
         }
-        return ws
-      })
-      return { ...prev, allowed_webservices: updated }
-    })
-  }
-
-  const handleCustomCodeChange = (wsId: string, customCode: string) => {
-    setFormData((prev) => {
-      const list = prev.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES
-      const updated = list.map((ws) => {
-        if (ws.id === wsId) {
-          return { ...ws, client_custom_code: customCode }
-        }
-        return ws
-      })
-      return { ...prev, allowed_webservices: updated }
-    })
+      }
+      reader.readAsDataURL(file)
+    }
   }
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -341,7 +279,6 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
 
   const servicesList = formData.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING
   const specialFeesList = formData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES
-  const allowedWsList = formData.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES
 
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
@@ -351,10 +288,18 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
         <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between gap-4">
           <div className="flex items-center gap-3.5 min-w-0">
             <div 
-              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-sm shrink-0"
+              className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-sm shrink-0 overflow-hidden relative border border-slate-200"
               style={{ backgroundColor: formData.color || "#10b981" }}
             >
-              {formData.short_name ? formData.short_name.substring(0, 2).toUpperCase() : <Building2 className="w-6 h-6" />}
+              {formData.logo_url ? (
+                <img 
+                  src={formData.logo_url} 
+                  alt={formData.short_name || "Logo"} 
+                  className="w-full h-full object-cover bg-white"
+                />
+              ) : (
+                formData.short_name ? formData.short_name.substring(0, 2).toUpperCase() : <Building2 className="w-6 h-6" />
+              )}
             </div>
 
             <div className="min-w-0">
@@ -418,7 +363,6 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
             { id: "contactos", label: "Contactos", icon: Phone },
             { id: "comercial", label: "Condições & Crédito", icon: Euro },
             { id: "precario", label: "Preçário de Envio (CTT)", icon: Percent, badge: `${servicesList.filter(s => s.is_enabled).length} Produtos` },
-            { id: "webservices", label: "Webservices Autorizados", icon: Globe, badge: `${allowedWsList.filter(w => w.is_enabled).length} Ativos` },
           ].map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -453,34 +397,6 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
           {/* TAB 1: IDENTIDADE & GERAL */}
           {activeTab === "geral" && (
             <div className="space-y-5 bg-white p-6 rounded-xl border border-slate-200 shadow-2xs">
-              
-              {/* Quick Store / Portal Access Banner */}
-              <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <LayoutDashboard className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-emerald-950 flex items-center gap-2">
-                      <span>Loja & Portal de Envios do Cliente</span>
-                      <span className="text-[10px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded">Área de Cliente</span>
-                    </div>
-                    <p className="text-[11px] text-emerald-800 mt-0.5">
-                      Acesso direto à loja/portal deste cliente onde poderá emitir novas guias de transporte, pedir recolhas e gerir envios.
-                    </p>
-                  </div>
-                </div>
-                <a
-                  href={`/app?clientId=${encodeURIComponent(formData.id || "")}&clientName=${encodeURIComponent(formData.short_name || "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-lg text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Entrar na Loja (Criar Envios)</span>
-                </a>
-              </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Código Cliente *</label>
@@ -528,6 +444,75 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     placeholder="514987123"
                   />
+                </div>
+              </div>
+
+              {/* Foto / Logótipo da Marca ou Loja */}
+              <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-4">
+                <label className="block text-xs font-bold text-slate-800 mb-2 flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Foto / Logótipo da Marca ou Loja</span>
+                  <span className="text-[10px] text-slate-400 font-normal">(Permite distinguir visualmente o cliente)</span>
+                </label>
+                <div className="flex flex-wrap items-center gap-4">
+                  <div 
+                    className="w-16 h-16 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-xs shrink-0 overflow-hidden border-2 relative"
+                    style={{ 
+                      borderColor: formData.color || "#10b981",
+                      backgroundColor: formData.color || "#10b981"
+                    }}
+                  >
+                    {formData.logo_url ? (
+                      <img 
+                        src={formData.logo_url} 
+                        alt="Logo da Marca" 
+                        className="w-full h-full object-cover bg-white"
+                      />
+                    ) : (
+                      <span>{formData.short_name ? formData.short_name.substring(0, 2).toUpperCase() : <Building2 className="w-8 h-8" />}</span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-[240px] space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer">
+                        <Upload className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Carregar Foto / Imagem</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {formData.logo_url && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, logo_url: "" })}
+                          className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Remover foto da marca"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remover Foto</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div>
+                      <input
+                        type="url"
+                        value={formData.logo_url || ""}
+                        onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
+                        placeholder="Ou cole o URL direto da imagem (ex: https://.../logo.png)"
+                        className="w-full border border-slate-300 bg-white rounded-lg px-2.5 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <p className="text-[11px] text-slate-400">
+                      Formatos aceites: PNG, JPG, SVG ou WebP. A foto é usada no TMS, nos mapas e no portal deste cliente.
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -1355,137 +1340,6 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
             </div>
           )}
 
-          {/* TAB 6: WEBSERVICES & TRANSPORTADORAS AUTORIZADAS */}
-          {activeTab === "webservices" && (
-            <div className="space-y-4">
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs">
-                <div className="flex items-center gap-2.5 mb-1">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                    <Globe className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-900">Webservices e Transportadoras Autorizadas</h2>
-                    <p className="text-[11px] text-slate-500">
-                      Selecione quais as transportadoras e serviços integrados que este cliente está autorizado a utilizar na sua loja/portal.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cards for each Webservice */}
-              <div className="space-y-3">
-                {allowedWsList.map((ws) => {
-                  const isEnabled = ws.is_enabled
-                  const isDefault = ws.is_default
-
-                  return (
-                    <div
-                      key={ws.id}
-                      className={`p-4 rounded-xl border transition-all ${
-                        isEnabled
-                          ? "bg-white border-slate-300 shadow-2xs"
-                          : "bg-slate-50/80 border-slate-200 opacity-75"
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          {/* Toggle Checkbox */}
-                          <input
-                            type="checkbox"
-                            checked={isEnabled}
-                            onChange={() => handleToggleWebservice(ws.id)}
-                            className="w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                          />
-
-                          <div 
-                            className="w-3.5 h-3.5 rounded-full shrink-0 shadow-2xs"
-                            style={{ backgroundColor: ws.badge_color || "#10b981" }}
-                          />
-
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-sm font-bold ${isEnabled ? "text-slate-900" : "text-slate-500"}`}>
-                                {ws.name}
-                              </span>
-                              
-                              <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
-                                {ws.code}
-                              </span>
-
-                              {isDefault && (
-                                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                                  Padrão / Default
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[11px] text-slate-500">{ws.provider_name}</p>
-                          </div>
-                        </div>
-
-                        {/* Right action controls */}
-                        <div className="flex items-center gap-3">
-                          {isEnabled && !isDefault && (
-                            <button
-                              type="button"
-                              onClick={() => handleSetDefaultWebservice(ws.id)}
-                              className="text-[11px] font-bold text-slate-600 hover:text-emerald-700 bg-slate-100 hover:bg-emerald-50 border border-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                            >
-                              Definir como Padrão
-                            </button>
-                          )}
-
-                          <div className="flex items-center gap-1.5">
-                            <label className="text-[11px] font-medium text-slate-500">Nº Cliente / Sub-Conta:</label>
-                            <input
-                              type="text"
-                              disabled={!isEnabled}
-                              value={ws.client_custom_code || ""}
-                              onChange={(e) => handleCustomCodeChange(ws.id, e.target.value)}
-                              placeholder="Opcional (Ex: CT9981)"
-                              className="border border-slate-300 rounded px-2 py-1 text-xs font-mono text-slate-800 w-36 disabled:bg-slate-100 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Services Chips Selection */}
-                      {isEnabled && (
-                        <div className="mt-3.5 pt-3 border-t border-slate-100">
-                          <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
-                            Serviços Autorizados para este Cliente:
-                          </label>
-                          <div className="flex flex-wrap gap-2">
-                            {ws.available_services.map((srv) => {
-                              const isServiceAllowed = ws.allowed_services?.includes(srv)
-                              return (
-                                <button
-                                  key={srv}
-                                  type="button"
-                                  onClick={() => handleToggleServiceForWs(ws.id, srv)}
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                    isServiceAllowed
-                                      ? "bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs font-bold"
-                                      : "bg-slate-100 text-slate-400 border border-slate-200 line-through"
-                                  }`}
-                                >
-                                  {isServiceAllowed ? (
-                                    <Check className="w-3 h-3 text-emerald-600" />
-                                  ) : (
-                                    <X className="w-3 h-3 text-slate-400" />
-                                  )}
-                                  <span>{srv}</span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
 
         </div>
 

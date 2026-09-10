@@ -341,17 +341,33 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                       </div>
                     </td>
 
-                    {/* Designação Curta / Razão Social */}
+                    {/* Designação Curta / Razão Social com Avatar/Logo da Marca */}
                     <td className="py-3.5 px-3">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-900 hover:text-emerald-700 transition-colors">
-                          {item.short_name}
-                        </span>
-                        {item.legal_name && item.legal_name !== item.short_name && (
-                          <span className="text-[11px] text-slate-500 line-clamp-1">
-                            {item.legal_name}
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-2xs shrink-0 overflow-hidden border border-slate-200"
+                          style={{ backgroundColor: item.color || "#10b981" }}
+                        >
+                          {item.logo_url ? (
+                            <img 
+                              src={item.logo_url} 
+                              alt={item.short_name} 
+                              className="w-full h-full object-cover bg-white"
+                            />
+                          ) : (
+                            <span>{item.short_name ? item.short_name.substring(0, 2).toUpperCase() : <Building2 className="w-4 h-4" />}</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-slate-900 hover:text-emerald-700 transition-colors text-xs truncate">
+                            {item.short_name}
                           </span>
-                        )}
+                          {item.legal_name && item.legal_name !== item.short_name && (
+                            <span className="text-[11px] text-slate-500 line-clamp-1">
+                              {item.legal_name}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
 

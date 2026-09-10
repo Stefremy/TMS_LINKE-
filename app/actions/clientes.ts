@@ -281,6 +281,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     short_name: cliente.short_name?.trim() || cliente.legal_name?.trim() || "Novo Cliente",
     legal_name: cliente.legal_name?.trim() || cliente.short_name?.trim() || "Novo Cliente, Lda",
     color: cliente.color || "#10b981",
+    logo_url: cliente.logo_url || "",
     nif: cliente.nif?.trim() || "",
     category: cliente.category || "Cliente Conta Corrente",
     city: cliente.city?.trim() || "Portugal",

@@ -66,6 +66,7 @@ export interface Cliente {
   short_name: string
   legal_name: string
   color: string
+  logo_url?: string
   nif: string
   category: string
   city: string
