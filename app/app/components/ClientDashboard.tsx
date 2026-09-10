@@ -197,7 +197,7 @@ export function ClientDashboard() {
   const activeServices = (currentClient?.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING).filter(s => s.is_enabled)
 
   // Real credit calculation
-  const usedPlafondPct = creditLimit > 0 ? Math.min((stats.totalRevenue / creditLimit) * 100, 100).toFixed(1) : "0"
+  const usedCreditPct = creditLimit > 0 ? Math.min((stats.totalRevenue / creditLimit) * 100, 100).toFixed(1) : "0"
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto font-sans relative">
@@ -227,21 +227,17 @@ export function ClientDashboard() {
             {currentClient?.legal_name || currentClient?.short_name || "Portal de Envios do Cliente"}
           </h1>
           <p className="text-emerald-100 text-xs sm:text-sm max-w-2xl leading-relaxed">
-            Painel operacional e analítico com métricas em tempo real, tabelas de preçário acordadas e emissão multicarrier.
+            Painel operacional e analítico com métricas em tempo real, tabelas de preçário acordadas e emissão integrada via CTT Expresso API.
           </p>
           <div className="flex items-center gap-2 pt-1">
-            <span className="text-[11px] text-emerald-200 font-semibold">Operadores Integrados:</span>
-            <div className="flex items-center gap-1.5">
-              {["ctt", "correos", "dpd", "mrw"].map((cCode) => {
-                const logo = getCarrierLogo(cCode)
-                if (!logo) return null
-                return (
-                  <div key={cCode} className="w-6 h-6 rounded-md bg-white p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={logo} alt={cCode} className="max-w-full max-h-full object-contain" />
-                  </div>
-                )
-              })}
+            <span className="text-[11px] text-emerald-200 font-semibold">Operador Integrado:</span>
+            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-white/15">
+              <div className="w-5 h-5 rounded bg-white p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={getCarrierLogo("ctt") || ""} alt="CTT Expresso" className="max-w-full max-h-full object-contain" />
+              </div>
+              <span className="text-xs font-bold text-white">CTT Expresso API</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             </div>
           </div>
         </div>
@@ -312,26 +308,21 @@ export function ClientDashboard() {
             </div>
             <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1.5">
               <span>{activeServices.length} serviços autorizados</span>
-              <div className="flex items-center -space-x-1">
-                {["ctt", "correos", "dpd", "mrw"].map((cCode) => {
-                  const logo = getCarrierLogo(cCode)
-                  if (!logo) return null
-                  return (
-                    <div key={cCode} className="w-4 h-4 rounded-full bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={logo} alt={cCode} className="max-w-full max-h-full object-contain" />
-                    </div>
-                  )
-                })}
+              <div className="flex items-center gap-1">
+                <div className="w-4 h-4 rounded-full bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={getCarrierLogo("ctt") || ""} alt="CTT Expresso" className="max-w-full max-h-full object-contain" />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600">CTT Expresso</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* KPI 4: Plafond de Crédito Real */}
+        {/* KPI 4: Limite de Crédito Real */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs flex flex-col justify-between hover:border-emerald-300 transition-colors">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Plafond de Crédito</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Limite de Crédito</span>
             <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
               <ShieldCheck className="w-5 h-5" />
             </div>
@@ -343,10 +334,10 @@ export function ClientDashboard() {
                   <span className="text-xl font-black text-slate-900 font-mono">
                     {creditLimit.toLocaleString("pt-PT")}€
                   </span>
-                  <span className="text-xs font-bold text-emerald-600">{usedPlafondPct}% Utilizado</span>
+                  <span className="text-xs font-bold text-emerald-600">{usedCreditPct}% Utilizado</span>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                  <div className="bg-emerald-500 h-2 rounded-full transition-all duration-500" style={{ width: `${usedPlafondPct}%` }} />
+                  <div className="bg-emerald-500 h-2 rounded-full transition-all duration-500" style={{ width: `${usedCreditPct}%` }} />
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
                   Disponível: {Math.max(creditLimit - stats.totalRevenue, 0).toLocaleString("pt-PT")}€

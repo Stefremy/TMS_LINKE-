@@ -753,7 +753,7 @@ export function ClientStoreShippingPortal() {
 
             <div>
               <div className="flex justify-between items-end mb-1.5">
-                <p className="text-slate-600 font-bold">Plafond de Crédito</p>
+                <p className="text-slate-600 font-bold">Limite de Crédito</p>
                 <p className="font-bold text-emerald-600">
                   {currentClient?.credit_limit && currentClient.credit_limit > 0
                     ? `${Math.min(

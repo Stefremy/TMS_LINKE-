@@ -35,7 +35,7 @@ import {
   RefreshCw,
   Search
 } from "lucide-react"
-import { saveFornecedorAction } from "@/app/actions/fornecedores"
+import { saveFornecedorAction, deleteFornecedorAction } from "@/app/actions/fornecedores"
 import { 
   Fornecedor, 
   DEFAULT_PRICE_FAMILIES, 
@@ -59,6 +59,7 @@ interface FornecedorModalProps {
   onSelectFornecedor?: (forn: Fornecedor) => void
   onClose: () => void
   onSaved: (saved: Fornecedor) => void
+  onDelete?: (id: string) => void
 }
 
 const COLOR_OPTIONS = [
@@ -103,7 +104,8 @@ export function FornecedorModal({
   allFornecedores = [], 
   onSelectFornecedor,
   onClose, 
-  onSaved 
+  onSaved,
+  onDelete
 }: FornecedorModalProps) {
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabKey>("dados_gerais")
@@ -301,6 +303,27 @@ export function FornecedorModal({
   // Price Table Filters
   const [selectedAgencyFilter, setSelectedAgencyFilter] = React.useState("Todas")
   const [selectedClientFilter, setSelectedClientFilter] = React.useState("Geral / Tabela Base")
+
+  const [isDeleting, setIsDeleting] = React.useState(false)
+
+  // Handle Delete
+  const handleDeleteFornecedor = async () => {
+    if (!initialData?.id) return
+    const confirmed = window.confirm(`Tem a certeza de que deseja eliminar o fornecedor "${formData.short_name || initialData.short_name}" (${formData.code || initialData.code}) permanentemente?`)
+    if (!confirmed) return
+
+    setIsDeleting(true)
+    try {
+      await deleteFornecedorAction(initialData.id)
+      if (onDelete) {
+        onDelete(initialData.id)
+      }
+      onClose()
+    } catch (err: any) {
+      alert("Erro ao eliminar fornecedor: " + (err.message || "Tente novamente."))
+      setIsDeleting(false)
+    }
+  }
 
   // Handle Save
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -2365,6 +2388,17 @@ export function FornecedorModal({
         <div className="px-6 py-3.5 border-t border-slate-200 bg-white flex items-center justify-between">
           
           <div className="flex items-center gap-3">
+            {initialData && (
+              <button
+                type="button"
+                onClick={handleDeleteFornecedor}
+                disabled={isDeleting || isSaving}
+                className="px-3.5 py-2 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 text-red-500" />}
+                Eliminar Fornecedor
+              </button>
+            )}
             {saveSuccessMsg && (
               <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-lg flex items-center gap-1.5 animate-in fade-in">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -2380,6 +2414,7 @@ export function FornecedorModal({
             <button
               type="button"
               onClick={onClose}
+              disabled={isDeleting || isSaving}
               className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               Cancelar
@@ -2388,7 +2423,7 @@ export function FornecedorModal({
             <button
               type="button"
               onClick={() => handleSubmit()}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
               className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white px-5 py-2 rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Package, User, MapPin, Loader2, CheckCircle2 } from "lucide-react"
+import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro } from "lucide-react"
 import { createShipmentAction } from "@/app/actions/shipments"
 
 interface NovoEnvioModalProps {
@@ -13,6 +13,20 @@ export function NovoEnvioModal({ onClose, clients }: NovoEnvioModalProps) {
   const [loading, setLoading] = React.useState(false)
   const [success, setSuccess] = React.useState(false)
   const [errorMsg, setErrorMsg] = React.useState("")
+  const [selectedClientId, setSelectedClientId] = React.useState("")
+  const [weightKg, setWeightKg] = React.useState<number>(1)
+  const [recipientCountry, setRecipientCountry] = React.useState("PT")
+
+  // Client-side weight-based estimate (display only; server recalculates using assigned table)
+  const estimatedTier = (() => {
+    if (weightKg <= 1)  return { label: "Até 1 Kg",  sell: 3.56, buy: 2.85 }
+    if (weightKg <= 2)  return { label: "Até 2 Kg",  sell: 3.94, buy: 3.15 }
+    if (weightKg <= 5)  return { label: "Até 5 Kg",  sell: 4.58, buy: 3.75 }
+    if (weightKg <= 10) return { label: "Até 10 Kg", sell: 5.61, buy: 4.60 }
+    if (weightKg <= 20) return { label: "Até 20 Kg", sell: 7.44, buy: 6.20 }
+    if (weightKg <= 30) return { label: "Até 30 Kg", sell: 9.48, buy: 7.90 }
+    return { label: "+30 Kg", sell: +(9.48 + (weightKg - 30) * 0.35).toFixed(2), buy: +(7.90 + (weightKg - 30) * 0.28).toFixed(2) }
+  })()
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -73,13 +87,26 @@ export function NovoEnvioModal({ onClose, clients }: NovoEnvioModalProps) {
                 </div>
               )}
 
+              {/* Price Preview Banner */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-emerald-800">
+                  <Euro className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-semibold">Preço estimado</span>
+                  <span className="text-[11px] text-emerald-600">({estimatedTier.label} · tabela padrão)</span>
+                </div>
+                <div className="flex items-center gap-4 text-xs font-mono">
+                  <span className="text-slate-500">Custo: <span className="font-bold text-slate-700">{estimatedTier.buy.toFixed(2)}€</span></span>
+                  <span className="text-emerald-700 font-extrabold text-sm">{estimatedTier.sell.toFixed(2)}€</span>
+                </div>
+              </div>
+
               {/* Cliente & Serviço */}
               <div>
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
                   <User className="w-4 h-4 text-blue-500" />
                   Detalhes da Expedição
                 </h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-sm font-semibold text-slate-700">Cliente *</label>
                     <select name="client_id" required className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
@@ -91,10 +118,44 @@ export function NovoEnvioModal({ onClose, clients }: NovoEnvioModalProps) {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-sm font-semibold text-slate-700">Serviço/Produto *</label>
-                    <select name="service_type" required className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                      <option value="ctt_expresso">CTT Expresso (13:00 / 24:00)</option>
-                      <option value="ctt_normal">CTT Normal</option>
+                    <select
+                      name="service_type"
+                      required
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="CTT Expresso 24H">CTT Expresso 24H (D+1)</option>
+                      <option value="CTT 48H">CTT 48H Económico (D+2)</option>
+                      <option value="CTT 5 Dias">CTT 5 Dias (Economy D+5)</option>
+                      <option value="CTT Ilhas">CTT Ilhas Expresso</option>
+                      <option value="CTT Espanha">CTT Espanha 24H</option>
                     </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                      <Weight className="w-3.5 h-3.5 text-slate-400" />
+                      Peso (kg) *
+                    </label>
+                    <input
+                      type="number"
+                      name="weight_kg"
+                      min="0.1"
+                      step="0.1"
+                      value={weightKg}
+                      onChange={(e) => setWeightKg(Number(e.target.value) || 1)}
+                      required
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-mono"
+                      placeholder="1.0"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-slate-700">Volumes</label>
+                    <input
+                      type="number"
+                      name="volumes"
+                      min="1"
+                      defaultValue={1}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
                   </div>
                 </div>
               </div>
@@ -152,6 +213,22 @@ export function NovoEnvioModal({ onClose, clients }: NovoEnvioModalProps) {
                         <label className="text-xs font-semibold text-slate-600">Localidade</label>
                         <input type="text" name="recipient_city" required className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
                       </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-600">País</label>
+                      <select 
+                        name="recipient_country" 
+                        value={recipientCountry}
+                        onChange={(e) => setRecipientCountry(e.target.value)}
+                        required 
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      >
+                        <option value="PT">Portugal</option>
+                        <option value="ES">Espanha</option>
+                        <option value="FR">França</option>
+                        <option value="DE">Alemanha</option>
+                        <option value="IT">Itália</option>
+                      </select>
                     </div>
                   </div>
                 </div>

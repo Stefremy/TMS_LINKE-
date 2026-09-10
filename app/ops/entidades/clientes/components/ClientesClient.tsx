@@ -291,7 +291,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
               <th className="py-3 px-3 min-w-[150px]">Localidade & Agência</th>
               <th className="py-3 px-3 min-w-[160px]">Categoria</th>
               <th className="py-3 px-3 w-28">Cond. Pagam.</th>
-              <th className="py-3 px-3 w-24 text-right">Plafond</th>
+              <th className="py-3 px-3 w-24 text-right">Crédito</th>
               <th className="py-3 px-3 w-20 text-center">Estado</th>
               <th className="py-3 px-4 w-16 text-center">Ações</th>
             </tr>
@@ -314,8 +314,12 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                   <tr 
                     key={item.id}
                     onClick={() => handleOpenEditModal(item)}
-                    className={`transition-colors hover:bg-slate-50/80 cursor-pointer ${
-                      isSelected ? "bg-emerald-50/40" : ""
+                    className={`transition-colors cursor-pointer ${
+                      !item.is_active
+                        ? "bg-[#FFE4DC] hover:bg-[#FFD6CA] text-slate-800"
+                        : isSelected 
+                        ? "bg-emerald-50/40 hover:bg-emerald-50/70" 
+                        : "hover:bg-slate-50/80"
                     }`}
                   >
                     {/* Checkbox */}
@@ -414,7 +418,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                       {item.payment_terms}
                     </td>
 
-                    {/* Plafond */}
+                    {/* Crédito */}
                     <td className="py-3.5 px-3 text-right font-mono font-bold text-xs text-slate-800">
                       {item.credit_limit ? `${item.credit_limit.toLocaleString("pt-PT")}€` : "—"}
                     </td>
@@ -424,9 +428,9 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
                         item.is_active 
                           ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
-                          : "bg-slate-100 text-slate-500 border border-slate-200"
+                          : "bg-white/80 text-rose-800 border border-rose-300 shadow-2xs"
                       }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${item.is_active ? "bg-emerald-500" : "bg-slate-400"}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full ${item.is_active ? "bg-emerald-500" : "bg-rose-500"}`} />
                         {item.is_active ? "Ativo" : "Inativo"}
                       </span>
                     </td>

@@ -362,7 +362,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
             { id: "faturacao", label: "Moradas & Faturação", icon: MapPin },
             { id: "contactos", label: "Contactos", icon: Phone },
             { id: "comercial", label: "Condições & Crédito", icon: Euro },
-            { id: "precario", label: "Preçário de Envio (CTT)", icon: Percent, badge: `${servicesList.filter(s => s.is_enabled).length} Produtos` },
+            { id: "precario", label: "Tabelas de Preço & Serviços", icon: Percent, badge: `${(formData.assigned_linke_service_ids || []).length || servicosLinke.length} Tabelas` },
           ].map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -751,7 +751,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Plafond de Crédito (€)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Limite de Crédito (€)</label>
                   <input
                     type="number"
                     value={formData.credit_limit ?? 5000}
@@ -803,7 +803,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                     }`}
                   >
                     <Package className="w-3.5 h-3.5" />
-                    <span>1. Tabelas Linke & Serviços Autorizados ({servicosLinke.length})</span>
+                    <span>1. Atribuição de Tabelas Linke ({servicosLinke.length})</span>
                   </button>
 
                   <button
@@ -858,7 +858,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                 </div>
               </div>
 
-              {/* SUBTAB 0: TABELAS LINKE & SERVIÇOS AUTORIZADOS (CAIXA SELECT) */}
+              {/* SUBTAB 0: TABELAS LINKE & SERVIÇOS AUTORIZADOS */}
               {precarioSubTab === "servicos_linke" && (
                 <div className="space-y-4">
                   {/* Caixa Select de Tabela Linke Principal */}
@@ -868,11 +868,11 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                         <div className="flex items-center gap-2">
                           <Package className="w-4 h-4 text-emerald-700" />
                           <h3 className="font-bold text-sm text-slate-900">
-                            Caixa Select: Tabela de Preço Linke Associada ao Cliente
+                            Tabela de Preço Linke Atribuída ao Cliente
                           </h3>
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Selecione o tarifário base para este cliente. Pode aplicar preços com desconto para clientes de grande volume.
+                          Atribua manualmente a tabela tarifária que este cliente utilizará como base (ex: Standard, VIP, E-Commerce ou Negociada).
                         </p>
                       </div>
 

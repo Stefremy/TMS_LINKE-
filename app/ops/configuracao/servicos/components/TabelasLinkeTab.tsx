@@ -313,7 +313,7 @@ export function TabelasLinkeTab({
                 </div>
 
                 {/* Target Client & Operational Parameters */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-100">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-5 pt-4 border-t border-slate-100">
                   <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs">
                     <span className="text-[11px] font-medium text-slate-400 block">Cliente / Alvo</span>
                     <span className="text-xs font-bold text-slate-800 block mt-0.5 truncate" title={currentServico.target_client_name}>
@@ -334,6 +334,19 @@ export function TabelasLinkeTab({
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                       )}
                       {currentServico.preferred_carrier_name}
+                    </span>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs">
+                    <span className="text-[11px] font-medium text-slate-400 block">Webservice API</span>
+                    <span className="text-xs font-bold text-slate-800 block mt-0.5 truncate">
+                      {currentServico.webservice_connection_id ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          {currentServico.webservice_service_code || "API Conectada"}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">Manual / Offline</span>
+                      )}
                     </span>
                   </div>
                   <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs">

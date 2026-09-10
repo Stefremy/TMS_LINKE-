@@ -13,7 +13,8 @@ import {
   ArrowUpRight,
   RefreshCw,
   Sparkles,
-  Users
+  Users,
+  Globe
 } from "lucide-react"
 
 import type { ServicoLinke } from "../types"
@@ -36,6 +37,7 @@ import { DuplicateServicoModal } from "./DuplicateServicoModal"
 interface ServicosLinkeClientProps {
   initialServicos: ServicoLinke[]
   initialFornecedores: Fornecedor[]
+  initialWebservices?: any[]
 }
 
 type TabType = "tabelas_linke" | "tabelas_fornecedores" | "matriz_rentabilidade" | "simulador"
@@ -43,9 +45,11 @@ type TabType = "tabelas_linke" | "tabelas_fornecedores" | "matriz_rentabilidade"
 export function ServicosLinkeClient({
   initialServicos,
   initialFornecedores,
+  initialWebservices = [],
 }: ServicosLinkeClientProps) {
   const [servicos, setServicos] = React.useState<ServicoLinke[]>(initialServicos)
   const [fornecedores] = React.useState<Fornecedor[]>(initialFornecedores)
+  const [webservices] = React.useState<any[]>(initialWebservices)
   const [activeTab, setActiveTab] = React.useState<TabType>("tabelas_linke")
   
   // Modals state
@@ -134,7 +138,9 @@ export function ServicosLinkeClient({
   // Stats
   const totalServicos = servicos.length
   const servicosAtivos = servicos.filter((s) => s.is_active).length
-  const totalParceiros = fornecedores.filter((f) => f.is_active).length
+  const activeWebservicesCount = (webservices && webservices.length > 0)
+    ? webservices.filter((w) => w.is_active !== false).length
+    : 1
   const vipServicesCount = servicos.filter((s) => s.pricing_profile === "VIP / Alto Volume" || s.pricing_profile === "Tabela Negociada Cliente").length
   const avgMarkup = totalServicos > 0
     ? (servicos.reduce((acc, s) => acc + s.global_markup_pct, 0) / totalServicos).toFixed(1)
@@ -183,72 +189,6 @@ export function ServicosLinkeClient({
         </div>
       </div>
 
-      {/* Top Stat KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Tabelas & Serviços Linke</span>
-            <span className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
-              <Package className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-extrabold text-slate-900">{servicosAtivos}</span>
-            <span className="text-xs text-slate-400">/ {totalServicos} configurados</span>
-          </div>
-          <span className="text-[11px] text-emerald-600 font-medium block mt-1">
-            Criação ilimitada de serviços
-          </span>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Tabelas VIP / Grande Volume</span>
-            <span className="p-1.5 bg-teal-50 text-teal-700 rounded-lg">
-              <Users className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-extrabold text-teal-700">{vipServicesCount}</span>
-            <span className="text-xs text-slate-400">tarifas negociadas</span>
-          </div>
-          <span className="text-[11px] text-teal-600 font-medium block mt-1">
-            Preços reduzidos p/ mais envios
-          </span>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Parceiros Conectados</span>
-            <span className="p-1.5 bg-blue-50 text-blue-700 rounded-lg">
-              <Building2 className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-extrabold text-slate-900">{totalParceiros}</span>
-            <span className="text-xs text-slate-400">transportadores</span>
-          </div>
-          <span className="text-[11px] text-blue-600 font-medium block mt-1">
-            CTT, Correos, DPD, MRW, VASP
-          </span>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Markup Médio Global</span>
-            <span className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
-              <Percent className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-extrabold text-emerald-700">+{avgMarkup}%</span>
-            <span className="text-xs text-slate-400">sobre custo parceiro</span>
-          </div>
-          <span className="text-[11px] text-slate-400 block mt-1">
-            Margem comercial calculada
-          </span>
-        </div>
-      </div>
 
       {/* Navigation Tabs Bar */}
       <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-2 rounded-xl shadow-2xs">
@@ -338,6 +278,74 @@ export function ServicosLinkeClient({
         )}
       </div>
 
+      {/* Bottom Stat KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500">Tabelas & Serviços Linke</span>
+            <span className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
+              <Package className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-2xl font-extrabold text-slate-900">{servicosAtivos}</span>
+            <span className="text-xs text-slate-400">/ {totalServicos} configurados</span>
+          </div>
+          <span className="text-[11px] text-emerald-600 font-medium block mt-1">
+            Criação ilimitada de serviços
+          </span>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500">Tabelas VIP / Grande Volume</span>
+            <span className="p-1.5 bg-teal-50 text-teal-700 rounded-lg">
+              <Users className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-2xl font-extrabold text-teal-700">{vipServicesCount}</span>
+            <span className="text-xs text-slate-400">tarifas negociadas</span>
+          </div>
+          <span className="text-[11px] text-teal-600 font-medium block mt-1">
+            Preços reduzidos p/ mais envios
+          </span>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500">Webservices / APIs Conectadas</span>
+            <span className="p-1.5 bg-blue-50 text-blue-700 rounded-lg">
+              <Globe className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-2xl font-extrabold text-blue-700">{activeWebservicesCount}</span>
+            <span className="text-xs text-slate-400">webservice ativo</span>
+          </div>
+          <span className="text-[11px] text-emerald-700 font-bold block mt-1 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            CTT Expresso API (Ativa)
+          </span>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500">Markup Médio Global</span>
+            <span className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
+              <Percent className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-2xl font-extrabold text-emerald-700">+{avgMarkup}%</span>
+            <span className="text-xs text-slate-400">sobre custo parceiro</span>
+          </div>
+          <span className="text-[11px] text-slate-400 block mt-1">
+            Margem comercial calculada
+          </span>
+        </div>
+      </div>
+
       {/* Modal for Create/Edit Linke Service & Tables */}
       <ServicoModal
         isOpen={isModalOpen}
@@ -348,6 +356,7 @@ export function ServicosLinkeClient({
         onSave={handleSaveServico}
         initialData={selectedServicoForEdit}
         fornecedores={fornecedores}
+        webservices={webservices}
       />
 
       {/* Modal for Duplicate / Clone for VIP / Multi-Client Table */}

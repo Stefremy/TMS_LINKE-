@@ -3,6 +3,9 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { emitCttShipmentAction } from "@/app/actions/ctt"
+import { getClientesAction } from "@/app/actions/clientes"
+import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
+import { calculateShipmentPrice, resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
 
 const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 const DEFAULT_FALLBACK_CLIENT_ID = "44444444-4444-4444-4444-444444444444"
@@ -163,6 +166,24 @@ export async function createShipmentAction(formData: FormData) {
   const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
   const now = new Date().toISOString()
 
+  // Lookup client + all Linke tables to compute the correct price
+  let computedSellPrice = 5.50
+  let computedBuyPrice = 2.85
+  try {
+    const [allClients, allServicos] = await Promise.all([
+      getClientesAction(),
+      getServicosLinkeAction(),
+    ])
+    const matchedClient = allClients.find((c) => c.id === client_id) || {}
+    const weightKg = Number(formData.get("weight_kg")) || 1
+    const recipientCountry = (formData.get("recipient_country") as string) || "PT"
+    const priceResult = calculateShipmentPrice(weightKg, matchedClient, allServicos, recipientCountry, recipient_zip)
+    computedSellPrice = priceResult.sellPrice
+    computedBuyPrice = priceResult.buyPrice
+  } catch (pricingErr: any) {
+    console.warn("Pricing engine fallback:", pricingErr?.message)
+  }
+
   const shipmentData = {
     id: shipmentId,
     tenant_id: LINKE_TENANT_ID,
@@ -178,8 +199,8 @@ export async function createShipmentAction(formData: FormData) {
     recipient_address: `${recipient_address || ""}, ${recipient_city || ""}`.trim(),
     recipient_zip3,
     recipient_zip4,
-    buy_price: 0,
-    sell_price: 5.50,
+    buy_price: computedBuyPrice,
+    sell_price: computedSellPrice,
     created_at: now,
     updated_at: now,
   }
@@ -390,6 +411,31 @@ export async function emitClientGuiaAction(data: {
   // Ensure DB foreign keys are valid
   const validatedClientId = await ensureTenantAndClient(supabase, data.clientId, data.clientName)
 
+  // Server-side price recalculation — never trust the frontend value
+  let computedSellPrice = Number(data.calculatedPrice) || 5.50
+  let computedBuyPrice = 0
+  try {
+    const [allClients, allServicos] = await Promise.all([
+      getClientesAction(),
+      getServicosLinkeAction(),
+    ])
+    const matchedClient = allClients.find(
+      (c) => c.id === data.clientId || c.short_name === data.clientName
+    ) || {}
+    const recipientPostal = data.recipientPostal || ""
+    const priceResult = calculateShipmentPrice(
+      data.weightKg || 1,
+      matchedClient,
+      allServicos,
+      "PT", // recipient country — extend later for international
+      recipientPostal
+    )
+    computedSellPrice = priceResult.sellPrice
+    computedBuyPrice = priceResult.buyPrice
+  } catch (pricingErr: any) {
+    console.warn("Client pricing engine fallback:", pricingErr?.message)
+  }
+
   const shipmentData = {
     id: shipmentId,
     tenant_id: LINKE_TENANT_ID,
@@ -405,8 +451,8 @@ export async function emitClientGuiaAction(data: {
     recipient_address: `${data.recipientAddress}${data.recipientCity ? `, ${data.recipientCity}` : ""}`,
     recipient_zip3: recipientZip3,
     recipient_zip4: recipientZip4,
-    buy_price: 0,
-    sell_price: Number(data.calculatedPrice) || 0,
+    buy_price: computedBuyPrice,
+    sell_price: computedSellPrice,
     created_at: now,
     updated_at: now,
   }

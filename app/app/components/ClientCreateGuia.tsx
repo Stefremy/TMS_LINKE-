@@ -22,6 +22,8 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
+import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
+import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
@@ -42,6 +44,7 @@ export function ClientCreateGuia() {
   const clientNameParam = searchParams.get("clientName")
 
   const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
+  const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>([])
   const [loadingClient, setLoadingClient] = React.useState(true)
 
   // Form states for Guia
@@ -53,7 +56,7 @@ export function ClientCreateGuia() {
   const [recipientEmail, setRecipientEmail] = React.useState("")
   const [weight, setWeight] = React.useState("1.50")
   const [selectedCarrierCode, setSelectedCarrierCode] = React.useState<string>("ctt_expresso")
-  const [selectedServiceCode, setSelectedServiceCode] = React.useState<string>("ctt_24h")
+  const [selectedServiceId, setSelectedServiceId] = React.useState<string>("")
   const [volumesCount, setVolumesCount] = React.useState("1")
 
   // Special Services selections
@@ -76,9 +79,10 @@ export function ClientCreateGuia() {
     numericValue: number
   }>>([])
 
-  // Load client data
+  // Load client data & Linke services
   React.useEffect(() => {
-    getClientesAction().then((clients) => {
+    Promise.all([getClientesAction(), getServicosLinkeAction()]).then(([clients, servicos]) => {
+      setServicosLinke(servicos || [])
       let target: Cliente | undefined
       if (clientId) {
         target = clients.find((c) => c.id === clientId)
@@ -98,44 +102,70 @@ export function ClientCreateGuia() {
         if (defWs) {
           setSelectedCarrierCode(defWs.code)
         }
+
+        // Set initial selected Linke service based on client's assigned table
+        const activeServicos = (servicos || []).filter((s) => s.is_active !== false)
+        if (target.default_linke_table_id) {
+          const match = activeServicos.find((s) => s.id === target.default_linke_table_id)
+          if (match) {
+            setSelectedServiceId(match.id)
+          } else if (activeServicos.length > 0) {
+            setSelectedServiceId(activeServicos[0].id)
+          }
+        } else if (activeServicos.length > 0) {
+          setSelectedServiceId(activeServicos[0].id)
+        }
       }
       setLoadingClient(false)
     })
   }, [clientId, clientNameParam])
 
-  // Available client services pricing
-  const servicesPricingList: ClientServicePrice[] = React.useMemo(() => {
-    return currentClient?.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING
-  }, [currentClient])
+  // Available Linke services
+  const availableServicos = React.useMemo(() => {
+    const active = servicosLinke.filter((s) => s.is_active !== false)
+    if (active.length === 0) return []
+    if (currentClient?.default_linke_table_id) {
+      const match = active.find((s) => s.id === currentClient.default_linke_table_id)
+      if (match) {
+        return [match, ...active.filter((s) => s.id !== match.id)]
+      }
+    }
+    return active
+  }, [servicosLinke, currentClient])
+
+  // Active chosen Linke service
+  const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
 
   // Available special services fees
   const specialFeesList: ClientSpecialServiceFee[] = React.useMemo(() => {
     return currentClient?.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES
   }, [currentClient])
 
-  // Active chosen service
-  const activeServiceObj = servicesPricingList.find((s) => s.service_code === selectedServiceCode) || servicesPricingList[0]
-
-  // Compute live simulated price using exact client CTT products & special services
+  // Compute live simulated price using exact Linke Table tiers & client special services
   const calculatedPrice = React.useMemo(() => {
     const pricing = currentClient?.pricing || DEFAULT_CLIENT_PRICING
-    const srv = activeServiceObj || DEFAULT_CTT_SERVICES_PRICING[0]
-
+    const srv = activeLinkeService
     const w = parseFloat(weight) || 1.0
-    let base = srv.w_0_1
-    if (w <= 1) base = srv.w_0_1
-    else if (w <= 2) base = srv.w_1_2
-    else if (w <= 5) base = srv.w_2_5
-    else if (w <= 10) base = srv.w_5_10
-    else if (w <= 20) base = srv.w_10_20
-    else if (w <= 30) base = srv.w_20_30
-    else {
-      const extraKg = Math.ceil(w - 30)
-      base = srv.w_20_30 + extraKg * srv.kg_extra
+
+    let base = 5.50
+    if (srv && srv.zones && srv.zones.length > 0) {
+      const zone = srv.zones[0]
+      const tiers = (zone.tiers || []).filter((t) => t.enabled !== false).sort((a, b) => a.weight_max - b.weight_max)
+      const matchedTier = tiers.find((t) => w <= t.weight_max) || tiers[tiers.length - 1]
+      if (matchedTier) {
+        if (w > 30 && matchedTier.weight_max >= 999) {
+          const tier30 = tiers.find((t) => t.weight_max === 30)
+          const base30 = tier30 ? tier30.sell_price : matchedTier.sell_price
+          const extraKg = Math.ceil(w - 30)
+          base = base30 + extraKg * matchedTier.sell_price
+        } else {
+          base = matchedTier.sell_price
+        }
+      }
     }
 
     // Fuel Surcharge %
-    const fuelPct = pricing.fuel_surcharge_pct ?? 12.5
+    const fuelPct = srv?.fuel_surcharge_pct ?? pricing.fuel_surcharge_pct ?? 12.5
     const fuelVal = base * (fuelPct / 100)
 
     // Special Services calculations
@@ -153,8 +183,7 @@ export function ClientCreateGuia() {
       activeSpecialItems.push({ name: "Cobrança / Reembolso", amount: fee })
     }
 
-
-    // 3. Fragil
+    // 2. Fragil
     if (isFragil) {
       const feeCfg = specialFeesList.find((f) => f.special_service_code === "fragil")
       const fee = feeCfg?.fixed_value ?? 1.50
@@ -162,7 +191,7 @@ export function ClientCreateGuia() {
       activeSpecialItems.push({ name: "Tratamento Frágil", amount: fee })
     }
 
-    // 4. SMS
+    // 3. SMS
     if (isSMSNotification) {
       const feeCfg = specialFeesList.find((f) => f.special_service_code === "sms_tracking")
       const fee = feeCfg?.fixed_value ?? 0.15
@@ -188,7 +217,7 @@ export function ClientCreateGuia() {
     }
   }, [
     currentClient,
-    activeServiceObj,
+    activeLinkeService,
     weight,
     specialFeesList,
     isCOD,
@@ -205,7 +234,7 @@ export function ClientCreateGuia() {
     }
 
     const numericVal = parseFloat(calculatedPrice.total) || 0
-    const chosenService = activeServiceObj?.service_name || "CTT 24H (Premium D+1)"
+    const chosenService = activeLinkeService?.name || "Linke Expresso 24H"
 
     try {
       const res = await emitClientGuiaAction({
@@ -310,7 +339,7 @@ export function ClientCreateGuia() {
                 </span>
               </div>
               <p className="text-xs text-emerald-800 mt-0.5">
-                O envio foi registado com o produto <strong>{activeServiceObj?.service_name}</strong>.
+                O envio foi registado com o serviço <strong>{activeLinkeService?.name || "Linke Expresso 24H"}</strong>.
               </p>
             </div>
           </div>
@@ -509,44 +538,47 @@ export function ClientCreateGuia() {
             </div>
           </div>
 
-          {/* SELEÇÃO DO PRODUTO / SUB-PRODUTO CTT */}
+          {/* SELEÇÃO DO SERVIÇO LINKE */}
           <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-bold text-slate-900 flex items-center gap-2">
-                {getCarrierLogo(activeServiceObj?.service_name || selectedCarrierCode || "ctt") ? (
-                  <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={getCarrierLogo(activeServiceObj?.service_name || selectedCarrierCode || "ctt")!} 
-                      alt="Transportadora" 
-                      className="max-w-full max-h-full object-contain" 
-                    />
-                  </div>
-                ) : (
-                  <Truck className="w-4 h-4 text-emerald-600" />
-                )}
-                <span>Produto & Sub-Produto de Transporte (SubProductId)</span>
+                <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img 
+                    src={getCarrierLogo(activeLinkeService?.preferred_carrier_name || "ctt") || ""} 
+                    alt="CTT Expresso" 
+                    className="max-w-full max-h-full object-contain" 
+                  />
+                </div>
+                <span>Serviço de Transporte Linke</span>
               </label>
-              <span className="text-[11px] text-emerald-700 font-bold bg-emerald-100/80 px-2.5 py-0.5 rounded-full">
-                {activeServiceObj?.category}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-emerald-700 font-bold bg-emerald-100/80 px-2.5 py-0.5 rounded-full">
+                  {activeLinkeService?.category || "Nacional"}
+                </span>
+                <span className="text-[10px] font-semibold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                  Operador: CTT Expresso API
+                </span>
+              </div>
             </div>
 
             <div className="relative">
               <select 
-                value={selectedServiceCode}
-                onChange={(e) => setSelectedServiceCode(e.target.value)}
+                value={selectedServiceId}
+                onChange={(e) => setSelectedServiceId(e.target.value)}
                 className="w-full pl-3.5 pr-8 py-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
               >
-                {servicesPricingList.filter(s => s.is_enabled).map((service) => (
-                  <option key={service.service_code} value={service.service_code}>
-                    [{service.category}] {service.service_name} — (SubProduto: {service.subproduct_id})
+                {availableServicos.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    [{service.category}] {service.name} — ({service.transit_time_label || "24h"})
                   </option>
                 ))}
               </select>
               <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>
-            <p className="text-[11px] text-slate-500 pl-1">{activeServiceObj?.description}</p>
+            <p className="text-[11px] text-slate-500 pl-1">
+              {activeLinkeService?.description || "Serviço expresso porta-a-porta com emissão integrada CTT Expresso."}
+            </p>
           </div>
 
           {/* SERVIÇOS ESPECIAIS E SUPLEMENTARES */}

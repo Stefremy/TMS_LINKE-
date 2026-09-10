@@ -16,10 +16,81 @@ import {
   Clock,
   ArrowDownRight,
   TrendingDown,
-  Building2
+  Building2,
+  Globe,
+  Link2,
+  Cpu
 } from "lucide-react"
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "../types"
 import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
+
+// Zonas disponíveis por transportador parceiro
+const CARRIER_ZONES: Record<string, { zone_code: string; zone_name: string; flag: string }[]> = {
+  default: [
+    { zone_code: "PT-CONT",  zone_name: "Portugal Continental",      flag: "🇵🇹" },
+    { zone_code: "PT-ILHAS", zone_name: "Açores & Madeira (Ilhas)",   flag: "🏝️" },
+    { zone_code: "ES-PENIN", zone_name: "Espanha Peninsular",          flag: "🇪🇸" },
+    { zone_code: "ES-ILHAS", zone_name: "Espanha — Ilhas Canárias",   flag: "🇪🇸" },
+    { zone_code: "EU-Z1",    zone_name: "Europa Zona 1 (FR/DE/IT/NL)",flag: "🇪🇺" },
+    { zone_code: "EU-Z2",    zone_name: "Europa Zona 2 (PL/CZ/AT/BE)",flag: "🇪🇺" },
+    { zone_code: "EU-Z3",    zone_name: "Europa Zona 3 (Resto Europa)",flag: "🇪🇺" },
+    { zone_code: "INTL",     zone_name: "Internacional (Resto Mundo)",flag: "🌍" },
+  ],
+  ctt: [
+    { zone_code: "PT-CONT",  zone_name: "Portugal Continental",           flag: "🇵🇹" },
+    { zone_code: "PT-ILHAS", zone_name: "Açores & Madeira (Ilhas)",        flag: "🏝️" },
+    { zone_code: "ES-PENIN", zone_name: "Espanha Peninsular (CTT 24H ES)", flag: "🇪🇸" },
+    { zone_code: "EU-Z1",    zone_name: "Europa Clássica (CTT Europa)",    flag: "🇪🇺" },
+    { zone_code: "INTL",     zone_name: "Internacional Express (CTT)",     flag: "🌍" },
+  ],
+  correos: [
+    { zone_code: "PT-CONT",  zone_name: "Portugal Continental",            flag: "🇵🇹" },
+    { zone_code: "ES-PENIN", zone_name: "Espanha Peninsular (Paq Iberia)", flag: "🇪🇸" },
+    { zone_code: "ES-ILHAS", zone_name: "Espanha — Ilhas Canárias",        flag: "🇪🇸" },
+    { zone_code: "PT-ILHAS", zone_name: "Açores & Madeira (Paq Marítimo)", flag: "🏝️" },
+  ],
+  dpd: [
+    { zone_code: "PT-CONT",  zone_name: "Portugal Continental",             flag: "🇵🇹" },
+    { zone_code: "ES-PENIN", zone_name: "Espanha Peninsular (DPD Classic)", flag: "🇪🇸" },
+    { zone_code: "EU-Z1",    zone_name: "Europa Zona 1 (DPD Classic EU)",   flag: "🇪🇺" },
+    { zone_code: "EU-Z2",    zone_name: "Europa Zona 2",                    flag: "🇪🇺" },
+    { zone_code: "EU-Z3",    zone_name: "Europa Zona 3",                    flag: "🇪🇺" },
+  ],
+  gls: [
+    { zone_code: "PT-CONT",  zone_name: "Portugal Continental",              flag: "🇵🇹" },
+    { zone_code: "ES-PENIN", zone_name: "Espanha Peninsular",                flag: "🇪🇸" },
+    { zone_code: "EU-Z1",    zone_name: "Europa Zona 1 (EuroBusinessParcel)",flag: "🇪🇺" },
+    { zone_code: "EU-Z2",    zone_name: "Europa Zona 2",                    flag: "🇪🇺" },
+    { zone_code: "EU-Z3",    zone_name: "Europa Zona 3",                    flag: "🇪🇺" },
+  ],
+  ups: [
+    { zone_code: "PT-CONT",  zone_name: "Portugal Continental",          flag: "🇵🇹" },
+    { zone_code: "ES-PENIN", zone_name: "Espanha Peninsular",             flag: "🇪🇸" },
+    { zone_code: "EU-Z1",    zone_name: "Europa Zona 1 (UPS Standard)",  flag: "🇪🇺" },
+    { zone_code: "EU-Z2",    zone_name: "Europa Zona 2",                 flag: "🇪🇺" },
+    { zone_code: "EU-Z3",    zone_name: "Europa Zona 3",                 flag: "🇪🇺" },
+    { zone_code: "INTL",     zone_name: "Internacional (UPS Worldwide)", flag: "🌍" },
+  ],
+  vasp: [
+    { zone_code: "PT-CONT",  zone_name: "Portugal Continental", flag: "🇵🇹" },
+  ],
+  linke: [
+    { zone_code: "PT-CONT",  zone_name: "Portugal Continental (Frota Linke)",flag: "🇵🇹" },
+    { zone_code: "PT-NORTE", zone_name: "Norte — Porto / Braga / Guimarães", flag: "🇵🇹" },
+  ],
+}
+
+function getCarrierZones(carrierName: string) {
+  const key = carrierName.toLowerCase()
+  if (key.includes("ctt"))     return CARRIER_ZONES.ctt
+  if (key.includes("correos")) return CARRIER_ZONES.correos
+  if (key.includes("dpd"))     return CARRIER_ZONES.dpd
+  if (key.includes("gls"))     return CARRIER_ZONES.gls
+  if (key.includes("ups"))     return CARRIER_ZONES.ups
+  if (key.includes("vasp"))    return CARRIER_ZONES.vasp
+  if (key.includes("linke"))   return CARRIER_ZONES.linke
+  return CARRIER_ZONES.default
+}
 
 interface ServicoModalProps {
   isOpen: boolean
@@ -27,6 +98,7 @@ interface ServicoModalProps {
   onSave: (servico: Partial<ServicoLinke>) => Promise<void>
   initialData?: ServicoLinke | null
   fornecedores: Fornecedor[]
+  webservices?: any[]
 }
 
 const DEFAULT_TIERS_TEMPLATE: PriceTierLinke[] = [
@@ -45,6 +117,7 @@ export function ServicoModal({
   onSave,
   initialData,
   fornecedores,
+  webservices = [],
 }: ServicoModalProps) {
   const [formData, setFormData] = React.useState<Partial<ServicoLinke>>({
     name: "",
@@ -58,6 +131,8 @@ export function ServicoModal({
     discount_vs_standard_pct: 0,
     preferred_carrier_id: fornecedores[0]?.id || "",
     preferred_carrier_name: fornecedores[0]?.short_name || "",
+    webservice_connection_id: webservices[0]?.id || "",
+    webservice_service_code: "EMSF056.01",
     transit_time_label: "24h",
     global_markup_pct: 20.0,
     fuel_surcharge_pct: 12.0,
@@ -74,6 +149,8 @@ export function ServicoModal({
 
   const [saving, setSaving] = React.useState(false)
   const [discountBatchPct, setDiscountBatchPct] = React.useState<number>(10)
+  const [showZonePicker, setShowZonePicker] = React.useState(false)
+  const [selectedZoneCode, setSelectedZoneCode] = React.useState<string>("")
 
   React.useEffect(() => {
     if (initialData) {
@@ -163,27 +240,39 @@ export function ServicoModal({
     })
   }
 
-  // Add a new Zone
-  const handleAddZone = () => {
-    const zoneName = prompt("Nome da nova Zona (ex: Espanha Peninsular, Açores / Madeira, Europa Zona 1):")
-    if (!zoneName) return
-    const zoneCode = zoneName.substring(0, 8).toUpperCase().replace(/\s+/g, "-")
+  // Add a new Zone — uses carrier-aware zone picker (no prompt())
+  const handleConfirmAddZone = () => {
+    const availableZones = getCarrierZones(formData.preferred_carrier_name || "")
+    const picked = availableZones.find((z) => z.zone_code === selectedZoneCode)
+    if (!picked) return
+
+    // Avoid duplicates
+    const alreadyExists = (formData.zones || []).some((z) => z.zone_code === picked.zone_code)
+    if (alreadyExists) {
+      setShowZonePicker(false)
+      return
+    }
 
     setFormData((prev) => ({
       ...prev,
       zones: [
         ...(prev.zones || []),
         {
-          zone_code: zoneCode,
-          zone_name: zoneName,
+          zone_code: picked.zone_code,
+          zone_name: picked.zone_name,
           tiers: [
-            { id: `t_${Date.now()}_1`, label: "Até 1 Kg", weight_max: 1, cost_price: 3.50, margin_pct: prev.global_markup_pct || 20, sell_price: 4.20, delivery_time: prev.transit_time_label || "24h", enabled: true },
-            { id: `t_${Date.now()}_5`, label: "Até 5 Kg", weight_max: 5, cost_price: 5.00, margin_pct: prev.global_markup_pct || 20, sell_price: 6.00, delivery_time: prev.transit_time_label || "24h", enabled: true },
-            { id: `t_${Date.now()}_10`, label: "Até 10 Kg", weight_max: 10, cost_price: 7.50, margin_pct: prev.global_markup_pct || 20, sell_price: 9.00, delivery_time: prev.transit_time_label || "24h", enabled: true },
+            { id: `t_${Date.now()}_1`,  label: "Até 1 Kg",   weight_max: 1,   cost_price: 3.50, margin_pct: prev.global_markup_pct || 20, sell_price: Number((3.50 * (1 + (prev.global_markup_pct || 20) / 100)).toFixed(2)), delivery_time: prev.transit_time_label || "24h", enabled: true },
+            { id: `t_${Date.now()}_2`,  label: "Até 2 Kg",   weight_max: 2,   cost_price: 4.00, margin_pct: prev.global_markup_pct || 20, sell_price: Number((4.00 * (1 + (prev.global_markup_pct || 20) / 100)).toFixed(2)), delivery_time: prev.transit_time_label || "24h", enabled: true },
+            { id: `t_${Date.now()}_5`,  label: "Até 5 Kg",   weight_max: 5,   cost_price: 5.50, margin_pct: prev.global_markup_pct || 20, sell_price: Number((5.50 * (1 + (prev.global_markup_pct || 20) / 100)).toFixed(2)), delivery_time: prev.transit_time_label || "24h", enabled: true },
+            { id: `t_${Date.now()}_10`, label: "Até 10 Kg",  weight_max: 10,  cost_price: 7.50, margin_pct: prev.global_markup_pct || 20, sell_price: Number((7.50 * (1 + (prev.global_markup_pct || 20) / 100)).toFixed(2)), delivery_time: prev.transit_time_label || "24h", enabled: true },
+            { id: `t_${Date.now()}_20`, label: "Até 20 Kg",  weight_max: 20,  cost_price: 10.00, margin_pct: prev.global_markup_pct || 20, sell_price: Number((10.00 * (1 + (prev.global_markup_pct || 20) / 100)).toFixed(2)), delivery_time: prev.transit_time_label || "24h", enabled: true },
+            { id: `t_${Date.now()}_30`, label: "Até 30 Kg",  weight_max: 30,  cost_price: 13.50, margin_pct: prev.global_markup_pct || 20, sell_price: Number((13.50 * (1 + (prev.global_markup_pct || 20) / 100)).toFixed(2)), delivery_time: prev.transit_time_label || "24h", enabled: true },
           ]
         }
       ]
     }))
+    setShowZonePicker(false)
+    setSelectedZoneCode("")
   }
 
   // Remove a Zone
@@ -496,6 +585,84 @@ export function ServicoModal({
             </div>
           </div>
 
+          {/* Section 3.5: Webservice & Automatic Label API Connection */}
+          <div className="bg-gradient-to-r from-emerald-50/70 via-slate-50 to-blue-50/40 p-4 rounded-xl border border-emerald-200/80 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold shadow-2xs">
+                  <Globe className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                    Integração Webservice & Emissão Automática de Guias (API)
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                      Motor de Expedição
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Ao criar envios na Área de Cliente com este serviço, o TMS chamará este Webservice para gerar a etiqueta e o tracking oficial.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Conexão Webservice / Conta de API *
+                </label>
+                <select
+                  value={formData.webservice_connection_id || "ctt_expresso"}
+                  onChange={(e) => setFormData({ ...formData, webservice_connection_id: e.target.value })}
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500/20 shadow-2xs"
+                >
+                  <option value="ctt_expresso">
+                    🟢 CTT Expresso API (Conexão Ativa • Linke Core)
+                  </option>
+                  <option value="">Sem Integração API (Emissão Manual / Offline)</option>
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Atualmente configurado com a API oficial CTT Expresso.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Sub-Produto / Serviço CTT Expresso na API *
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Ex: EMSF056.01"
+                    value={formData.webservice_service_code || "EMSF056.01"}
+                    onChange={(e) => setFormData({ ...formData, webservice_service_code: e.target.value })}
+                    className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500/20 shadow-2xs"
+                  />
+                  <select
+                    value={formData.webservice_service_code || "EMSF056.01"}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setFormData({ ...formData, webservice_service_code: e.target.value })
+                      }
+                    }}
+                    className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-[11px] font-semibold text-slate-700 cursor-pointer transition-colors"
+                  >
+                    <option value="EMSF056.01">CTT Expresso 24H (EMSF056.01)</option>
+                    <option value="EMSF056.02">CTT 48H Económico (EMSF056.02)</option>
+                    <option value="19">CTT 19H Fim do Dia (19)</option>
+                    <option value="13">CTT 13H Manhã (13)</option>
+                    <option value="09">CTT 09H Urgente (09)</option>
+                    <option value="EMSF056.03">CTT Ilhas / Madeira e Açores (EMSF056.03)</option>
+                    <option value="EMSF056.04">CTT Carga / Paletes (EMSF056.04)</option>
+                  </select>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Selecione o sub-produto CTT que corresponderá a este serviço.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Section 4: Zones and Tiers Table */}
           <div className="space-y-4 pt-4 border-t border-slate-100">
             <div className="flex items-center justify-between">
@@ -508,14 +675,53 @@ export function ServicoModal({
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={handleAddZone}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Adicionar Nova Zona
-              </button>
+              {!showZonePicker ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const available = getCarrierZones(formData.preferred_carrier_name || "")
+                    const existing = new Set((formData.zones || []).map((z) => z.zone_code))
+                    const first = available.find((z) => !existing.has(z.zone_code))
+                    setSelectedZoneCode(first?.zone_code || available[0]?.zone_code || "")
+                    setShowZonePicker(true)
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-2xs transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Adicionar Nova Zona
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedZoneCode}
+                    onChange={(e) => setSelectedZoneCode(e.target.value)}
+                    className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  >
+                    {getCarrierZones(formData.preferred_carrier_name || "").map((z) => {
+                      const alreadyAdded = (formData.zones || []).some((existing) => existing.zone_code === z.zone_code)
+                      return (
+                        <option key={z.zone_code} value={z.zone_code} disabled={alreadyAdded}>
+                          {z.flag} {z.zone_name}{alreadyAdded ? " (já adicionada)" : ""}
+                        </option>
+                      )
+                    })}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleConfirmAddZone}
+                    className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition-colors"
+                  >
+                    Confirmar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowZonePicker(false)}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
             </div>
 
             {(formData.zones || []).map((zone, zoneIdx) => (

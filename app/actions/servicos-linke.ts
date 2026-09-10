@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getFornecedoresAction, saveFornecedorAction } from "@/app/actions/fornecedores"
+import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 
-const LINKE_TENANT_ID = "00000000-0000-0000-0000-000000000001"
+const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   {
@@ -300,6 +301,8 @@ export async function saveServicoLinkeAction(
     discount_vs_standard_pct: servico.discount_vs_standard_pct ?? 0,
     preferred_carrier_id: servico.preferred_carrier_id || "forn_lk003",
     preferred_carrier_name: servico.preferred_carrier_name || "CORREOS EXPRESS",
+    webservice_connection_id: servico.webservice_connection_id || undefined,
+    webservice_service_code: servico.webservice_service_code || undefined,
     transit_time_label: servico.transit_time_label || "24h",
     global_markup_pct: servico.global_markup_pct ?? 20.0,
     fuel_surcharge_pct: servico.fuel_surcharge_pct ?? 12.0,
@@ -509,16 +512,18 @@ export async function deleteServicoLinkeAction(id: string) {
 }
 
 /**
- * Obtém os dados consolidados de Fornecedores e Serviços Linke para o Módulo
+ * Obtém os dados consolidados de Fornecedores, Serviços Linke e Webservices para o Módulo
  */
 export async function getServicosDashboardDataAction() {
-  const [servicos, fornecedores] = await Promise.all([
+  const [servicos, fornecedores, webservices] = await Promise.all([
     getServicosLinkeAction(),
     getFornecedoresAction(),
+    getCarrierConnectionsAction(),
   ])
 
   return {
     servicos,
     fornecedores,
+    webservices: webservices || [],
   }
 }

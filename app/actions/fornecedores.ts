@@ -264,7 +264,7 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
   },
 ]
 
-const LINKE_TENANT_ID = "00000000-0000-0000-0000-000000000001"
+const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 /**
  * Obtém todos os fornecedores cadastrados

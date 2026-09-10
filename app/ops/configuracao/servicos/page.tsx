@@ -6,13 +6,14 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export default async function ServicosPage() {
-  const { servicos, fornecedores } = await getServicosDashboardDataAction()
+  const { servicos, fornecedores, webservices } = await getServicosDashboardDataAction()
 
   return (
     <div className="min-h-[calc(100vh-8rem)]">
       <ServicosLinkeClient
         initialServicos={servicos}
         initialFornecedores={fornecedores}
+        initialWebservices={webservices || []}
       />
     </div>
   )

@@ -29,9 +29,13 @@ export interface ServicoLinke {
   target_client_name?: string // Ex: "Cliente Geral", "Grandes Contas (>500 envios/mês)", ou nome de cliente específico
   discount_vs_standard_pct?: number // Desconto concedido por volume vs tabela padrão (%)
   
-  // Parceiro transportador associado
+  // Parceiro transportador associado (informativo)
   preferred_carrier_id: string
   preferred_carrier_name: string
+  
+  // Conexão Webservice para Emissão Automática de Guias / API
+  webservice_connection_id?: string // ID da conexão de Webservice
+  webservice_service_code?: string // Código de subproduto na API (ex: EMSF056.01, 19, 48, etc.)
   
   // Tempos de trânsito médios
   transit_time_label: string

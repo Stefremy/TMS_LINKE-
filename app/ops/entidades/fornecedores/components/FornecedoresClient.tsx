@@ -577,6 +577,12 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
             setEditingFornecedor(null)
           }}
           onSaved={handleSaved}
+          onDelete={(deletedId) => {
+            setFornecedores((prev) => prev.filter((f) => f.id !== deletedId))
+            setSelectedIds((prev) => prev.filter((id) => id !== deletedId))
+            setIsModalOpen(false)
+            setEditingFornecedor(null)
+          }}
         />
       )}
 
