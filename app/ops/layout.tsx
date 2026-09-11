@@ -1,6 +1,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { SidebarNav } from "./components/SidebarNav"
+import { NotificationBell } from "./components/NotificationBell"
 import { 
   Home, 
   Package, 
@@ -69,12 +70,7 @@ export default function OpsLayout({
           </div>
           
           <div className="flex items-center gap-6">
-            <button className="relative p-2 text-slate-600 hover:text-slate-900 transition-colors">
-              <Bell className="w-6 h-6" />
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-green-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-[#f8fafc]">
-                3
-              </span>
-            </button>
+            <NotificationBell />
           </div>
         </header>
 
