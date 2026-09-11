@@ -87,9 +87,14 @@ function formatOrGenerateCttObjectId(s: any): string {
     return s.ctt_object_id.trim().toUpperCase()
   }
 
+  // Se o próprio tracking_number for um código CTT válido
+  if (s?.tracking_number && /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/i.test(s.tracking_number.trim())) {
+    return s.tracking_number.trim().toUpperCase()
+  }
+
   // Envio de referência solicitado pelo operador
   if (s?.tracking_number === "LTK1425602" || s?.id?.includes("27a52042")) {
-    return "DA839201948PT"
+    return "DB290719717PT"
   }
 
   if (s?.ctt_object_id && (s.ctt_object_id.startsWith("DA") || s.ctt_object_id.startsWith("DB") || s.ctt_object_id.startsWith("DD") || s.ctt_object_id.startsWith("EA"))) {
@@ -1010,7 +1015,7 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
       id: demoId,
       tenant_id: LINKE_TENANT_ID,
       tracking_number: "LTK1425602",
-      ctt_object_id: "DA839201948PT",
+      ctt_object_id: "DB290719717PT",
       carrier_name: "ctt",
       service_type: "CTT Expresso 24H",
       status: "em_distribuicao",
