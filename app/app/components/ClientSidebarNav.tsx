@@ -50,6 +50,8 @@ export function ClientSidebarNav() {
   )
 }
 
+import { TrackingQuickBar } from "@/app/ops/components/TrackingQuickBar"
+
 export function ClientTopHeaderAction() {
   const searchParams = useSearchParams()
   const clientId = searchParams.get("clientId")
@@ -64,12 +66,15 @@ export function ClientTopHeaderAction() {
   }, [clientId, clientName])
 
   return (
-    <Link
-      href={`/app/criar-guia${queryParams}`}
-      className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
-    >
-      <Plus className="w-4 h-4" />
-      <span>Novo Envio</span>
-    </Link>
+    <div className="flex items-center gap-3">
+      <TrackingQuickBar />
+      <Link
+        href={`/app/criar-guia${queryParams}`}
+        className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+      >
+        <Plus className="w-4 h-4" />
+        <span>Novo Envio</span>
+      </Link>
+    </div>
   )
 }

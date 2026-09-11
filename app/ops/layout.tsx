@@ -2,6 +2,7 @@ import * as React from "react"
 import Link from "next/link"
 import { SidebarNav } from "./components/SidebarNav"
 import { NotificationBell } from "./components/NotificationBell"
+import { TrackingQuickBar } from "./components/TrackingQuickBar"
 import { 
   Home, 
   Package, 
@@ -69,7 +70,8 @@ export default function OpsLayout({
             </div>
           </div>
           
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
+            <TrackingQuickBar />
             <NotificationBell />
           </div>
         </header>

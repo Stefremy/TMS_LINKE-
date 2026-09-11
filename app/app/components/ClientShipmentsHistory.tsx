@@ -3,14 +3,15 @@
 import * as React from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon } from "lucide-react"
+import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon, Undo2, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
-import { getClientPortalStatsAction } from "@/app/actions/shipments"
+import { getClientPortalStatsAction, createReturnShipmentAction, deleteShipmentAction, regenerateCttLabelAction } from "@/app/actions/shipments"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { getCarrierLogo } from "@/lib/carrier-logos"
+import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { Cliente } from "@/app/ops/entidades/clientes/types"
 
 export function ClientShipmentsHistory() {
@@ -28,8 +29,44 @@ export function ClientShipmentsHistory() {
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
 
-  const downloadLabel = (base64String: string, ref: string) => {
-    downloadCttLabel(base64String, `${ref}_Etiqueta_CTT.pdf`)
+  const printLabel = async (envioItem: any) => {
+    let rawLabel = envioItem?.ctt_label_base64
+    if (!rawLabel && envioItem?.id) {
+      try {
+        const res = await regenerateCttLabelAction(envioItem.id)
+        if (res.success && res.labelBase64) {
+          rawLabel = res.labelBase64
+          setShipments(prev => prev.map(s => s.id === envioItem.id ? { ...s, ctt_label_base64: rawLabel } : s))
+        }
+      } catch (err: any) {
+        console.warn("Could not generate CTT label:", err?.message)
+      }
+    }
+    if (rawLabel) {
+      printCttLabel(rawLabel)
+    } else {
+      setSelectedShipment(envioItem)
+    }
+  }
+
+  const downloadLabel = async (envioItem: any, ref: string) => {
+    let rawLabel = envioItem?.ctt_label_base64
+    if (!rawLabel && envioItem?.id) {
+      try {
+        const res = await regenerateCttLabelAction(envioItem.id)
+        if (res.success && res.labelBase64) {
+          rawLabel = res.labelBase64
+          setShipments(prev => prev.map(s => s.id === envioItem.id ? { ...s, ctt_label_base64: rawLabel } : s))
+        }
+      } catch (err: any) {
+        console.warn("Could not generate CTT label:", err?.message)
+      }
+    }
+    if (rawLabel) {
+      downloadCttLabel(rawLabel, `${ref}_Etiqueta_CTT.pdf`)
+    } else {
+      setSelectedShipment(envioItem)
+    }
   }
 
   React.useEffect(() => {
@@ -67,10 +104,11 @@ export function ClientShipmentsHistory() {
     return shipments.filter((item) => {
       const q = searchTerm.toLowerCase().trim()
       const ref = (item.tracking_number || item.id || "").toLowerCase()
+      const cttRef = (item.ctt_object_id || "").toLowerCase()
       const rec = (item.recipient_name || "").toLowerCase()
       const addr = (item.recipient_address || "").toLowerCase()
 
-      const matchesSearch = !q || ref.includes(q) || rec.includes(q) || addr.includes(q)
+      const matchesSearch = !q || ref.includes(q) || cttRef.includes(q) || rec.includes(q) || addr.includes(q)
       const matchesStatus = statusFilter === "todos" || item.status === statusFilter
 
       return matchesSearch && matchesStatus
@@ -272,14 +310,21 @@ export function ClientShipmentsHistory() {
                 {filteredShipments.map((envio) => (
                   <tr key={envio.id} className="hover:bg-slate-50">
                     <td className="py-3">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedShipment(envio)}
-                        className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer text-left transition-colors"
-                        title="Clique para ver os detalhes do envio"
-                      >
-                        {envio.tracking_number || envio.id?.substring(0, 8).toUpperCase()}
-                      </button>
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedShipment(envio)}
+                          className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer text-left transition-colors text-xs"
+                          title="Clique para ver os detalhes do envio"
+                        >
+                          {envio.tracking_number || envio.id}
+                        </button>
+                        {envio.ctt_object_id && (
+                          <span className="font-mono text-[11px] font-bold text-slate-700 mt-0.5" title="Objeto CTT Expresso">
+                            {envio.ctt_object_id}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 font-semibold text-slate-800">{envio.recipient_name}</td>
                     <td className="py-3 text-slate-500 truncate max-w-[200px]">{envio.recipient_address}</td>
@@ -299,13 +344,15 @@ export function ClientShipmentsHistory() {
                       </div>
                     </td>
                     <td className="py-3">
-                      <Badge variant={
-                        envio.status === "entregue" ? "success" :
-                        envio.status === "pendente" ? "warning" : "info"
-                      }>
-                        {envio.status === "em transito" ? "Em Trânsito" : 
-                         envio.status.charAt(0).toUpperCase() + envio.status.slice(1)}
-                      </Badge>
+                      {(() => {
+                        const cfg = getShipmentStatusConfig(envio.status)
+                        return (
+                          <Badge variant={cfg.badgeVariant}>
+                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${cfg.dotColor} shrink-0`} />
+                            <span>{cfg.label}</span>
+                          </Badge>
+                        )
+                      })()}
                     </td>
                     <td className="py-3 text-right font-mono font-bold text-slate-900">
                       {envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
@@ -334,39 +381,77 @@ export function ClientShipmentsHistory() {
                             Ver Detalhes
                           </button>
                           
-                          {envio.ctt_label_base64 && (
-                            <>
-                              <button 
-                                onClick={() => {
-                                  printCttLabel(envio.ctt_label_base64);
-                                  setOpenDropdownId(null);
-                                }}
-                                className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
-                              >
-                                <Printer className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>Imprimir Etiqueta CTT</span>
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  downloadLabel(envio.ctt_label_base64, envio.tracking_number || envio.id);
-                                  setOpenDropdownId(null);
-                                }}
-                                className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
-                              >
-                                <Download className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>Descarregar PDF</span>
-                              </button>
-                            </>
-                          )}
                           <button 
                             onClick={() => {
-                              alert(`Tracking CTT: ${envio.tracking_number}`);
+                              setOpenDropdownId(null);
+                              printLabel(envio);
+                            }}
+                            className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Imprimir Etiqueta CTT</span>
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setOpenDropdownId(null);
+                              downloadLabel(envio, envio.tracking_number || envio.id);
+                            }}
+                            className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Descarregar PDF</span>
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setSelectedShipment(envio);
                               setOpenDropdownId(null);
                             }}
-                            className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                            className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
                           >
                             <MapPinIcon className="w-3.5 h-3.5 text-indigo-600" />
                             Rastreio em Tempo Real
+                          </button>
+
+                          <div className="h-px bg-slate-100 my-1" />
+
+                          {/* Criar Devolução */}
+                          <button
+                            onClick={async () => {
+                              setOpenDropdownId(null);
+                              const confirmed = window.confirm(`Deseja criar uma guia de DEVOLUÇÃO para o envio ${envio.tracking_number || envio.id}?\n\nO Remetente e Destinatário serão invertidos automaticamente.`);
+                              if (!confirmed) return;
+                              const res = await createReturnShipmentAction(envio.id);
+                              if (res.success) {
+                                alert(`✅ Devolução criada com sucesso!\n\nNovo Tracking: ${res.newTrackingNumber}`);
+                                window.location.reload();
+                              } else {
+                                alert("Erro ao criar devolução: " + (res.error || "Erro desconhecido"));
+                              }
+                            }}
+                            className="w-full px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-50 flex items-center gap-2 transition-colors cursor-pointer"
+                          >
+                            <Undo2 className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Criar Devolução</span>
+                          </button>
+
+                          {/* Eliminar Envio */}
+                          <button
+                            onClick={async () => {
+                              setOpenDropdownId(null);
+                              const confirmed = window.confirm(`⚠️ Tem a certeza que deseja ELIMINAR permanentemente o envio ${envio.tracking_number || envio.id}?`);
+                              if (!confirmed) return;
+                              const res = await deleteShipmentAction(envio.id);
+                              if (res.success) {
+                                alert(`🗑️ Envio ${envio.tracking_number || envio.id} eliminado com sucesso!`);
+                                window.location.reload();
+                              } else {
+                                alert("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"));
+                              }
+                            }}
+                            className="w-full px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Eliminar Envio</span>
                           </button>
                         </div>
                       )}

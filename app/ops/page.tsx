@@ -153,13 +153,19 @@ export default async function OpsDashboardPage() {
                 <tbody className="divide-y divide-slate-50 text-xs">
                   {recentShipments.map((envio: any) => {
                     const clientName = envio.sender_name || (envio.client_id && clientMap.get(envio.client_id)) || "Cliente Direto"
-                    const ref = envio.tracking_number || envio.ctt_object_id || envio.id.substring(0, 8).toUpperCase()
+                    const trk = envio.tracking_number || envio.id
+                    const cttCode = envio.ctt_object_id || null
                     const isCtt = envio.service_type?.includes("ctt") || !envio.service_type
 
                     return (
                       <tr key={envio.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3.5 font-bold font-mono text-slate-800">
-                          {ref}
+                        <td className="py-3.5">
+                          <div className="font-bold font-mono text-slate-800">{trk}</div>
+                          {cttCode && (
+                            <div className="font-mono text-[11px] font-bold text-slate-700 mt-0.5" title="Objeto CTT Expresso">
+                              {cttCode}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3.5">
                           <div className="font-semibold text-slate-800">{clientName}</div>
@@ -241,8 +247,13 @@ export default async function OpsDashboardPage() {
                           </div>
                         ) : null}
                         <span className="font-mono font-bold text-indigo-600">
-                          {latestActiveShipment.tracking_number || latestActiveShipment.ctt_object_id || latestActiveShipment.id.substring(0, 8).toUpperCase()}
+                          {latestActiveShipment.tracking_number || latestActiveShipment.id}
                         </span>
+                        {latestActiveShipment.ctt_object_id && (
+                          <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                            {latestActiveShipment.ctt_object_id}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="text-[11px] text-slate-500">

@@ -19,7 +19,8 @@ import {
   Download,
   X
 } from "lucide-react"
-import { emitCttShipmentAction, closeCttShipmentsAction, syncCttTrackingAction } from "@/app/actions/ctt"
+import { emitCttShipmentAction, closeCttShipmentsAction } from "@/app/actions/ctt"
+import { syncAllActiveShipmentsTrackingAction } from "@/app/actions/shipments"
 
 export function FerramentasMenu() {
   const [isOpen, setIsOpen] = React.useState(false)
@@ -102,8 +103,13 @@ export function FerramentasMenu() {
     setModalResult(null)
 
     try {
-      const res = await syncCttTrackingAction("EA418720658PT")
-      setModalResult(res)
+      const res = await syncAllActiveShipmentsTrackingAction()
+      setModalResult({
+        success: true,
+        count: res.count,
+        latestStatus: "Sincronizado",
+        message: `${res.count} envio(s) ativo(s) sincronizado(s) com as pickagens da CTT API.`
+      })
     } catch (err: any) {
       setModalResult({ success: false, errors: [{ Message: err.message }] })
     } finally {

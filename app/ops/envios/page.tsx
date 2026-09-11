@@ -3,6 +3,8 @@ import { getShipmentsAction } from "@/app/actions/shipments"
 import { getClientesAction } from "@/app/actions/clientes"
 import { EnviosClient } from "./components/EnviosClient"
 
+import { getShipmentStatusConfig } from "@/lib/status-helpers"
+
 export default async function EnviosPage() {
   const supabase = createAdminClient()
 
@@ -21,55 +23,62 @@ export default async function EnviosPage() {
   const recolhas = recolhasResult.data || []
 
   // Map to the shape expected by EnviosClient (formerly mock data)
-  const mappedEnvios = shipments.map((s: any) => ({
-    rawId: s.id,
-    rawShipment: s,
-    trk: { 
-      id: s.tracking_number || "N/A", 
-      date: new Date(s.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }), 
-      ref: s.ctt_object_id || s.id.substring(0, 8).toUpperCase(), 
-      tag: "A01" 
-    },
-    sender: { 
-      name: s.sender_name || "N/A", 
-      flag: "PT", // Simplification
-      zip: (s.sender_zip3 && s.sender_zip4) ? `${s.sender_zip3}-${s.sender_zip4}` : (s.sender_zip3 || ""), 
-      city: s.sender_address || "N/A", 
-      phone: "" 
-    },
-    recipient: { 
-      name: s.recipient_name || "N/A", 
-      flag: "PT", 
-      zip: (s.recipient_zip3 && s.recipient_zip4) ? `${s.recipient_zip3}-${s.recipient_zip4}` : (s.recipient_zip3 || ""), 
-      city: s.recipient_address || "N/A", 
-      phone: "" 
-    },
-    service: { 
-      code: s.service_type || "N/A", 
-      name: s.service_type?.includes('ctt') ? "CTT Expresso" : s.service_type, 
-      bgColor: s.service_type?.includes('ctt') ? "bg-red-600" : "bg-blue-600", 
-      textColor: "text-white" 
-    },
-    package: { 
-      count: "1 Vol.", // Em produção deve vir da contagem de packages para este shipment
-      weight: "1.00 kg" 
-    },
-    delivery: { 
-      date: "--/--/----", 
-      time: "--:--" 
-    },
-    status: { 
-      label: s.status, 
-      subCode: s.ops_substatus || "", 
-      color: "bg-slate-200 text-slate-700" // Cor fixa para simplificar
-    },
-    value: { 
-      amount: s.sell_price ? `${s.sell_price}€` : "0.00€", 
-      diff: "0.00€", 
-      diffColor: "text-slate-600 border-slate-200 bg-slate-50", 
-      ref: "REF" 
+  const mappedEnvios = shipments.map((s: any) => {
+    const statusCfg = getShipmentStatusConfig(s.status)
+    return {
+      rawId: s.id,
+      rawShipment: s,
+      trk: { 
+        id: s.tracking_number || "N/A", 
+        date: new Date(s.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }), 
+        ref: s.ctt_object_id || s.reference || s.tracking_number, 
+        carrierRef: s.ctt_object_id || null,
+        carrierName: s.carrier_name || "CTT Expresso",
+        tag: "A01" 
+      },
+      sender: { 
+        name: s.sender_name || "N/A", 
+        flag: "PT", // Simplification
+        zip: (s.sender_zip3 && s.sender_zip4) ? `${s.sender_zip3}-${s.sender_zip4}` : (s.sender_zip3 || ""), 
+        city: s.sender_address || "N/A", 
+        phone: "" 
+      },
+      recipient: { 
+        name: s.recipient_name || "N/A", 
+        flag: "PT", 
+        zip: (s.recipient_zip3 && s.recipient_zip4) ? `${s.recipient_zip3}-${s.recipient_zip4}` : (s.recipient_zip3 || ""), 
+        city: s.recipient_address || "N/A", 
+        phone: "" 
+      },
+      service: { 
+        code: s.service_type || "N/A", 
+        name: s.service_type?.includes('ctt') ? "CTT Expresso" : s.service_type, 
+        bgColor: s.service_type?.includes('ctt') ? "bg-red-600" : "bg-blue-600", 
+        textColor: "text-white" 
+      },
+      package: { 
+        count: "1 Vol.", // Em produção deve vir da contagem de packages para este shipment
+        weight: "1.00 kg" 
+      },
+      delivery: { 
+        date: s.status === 'entregue' ? new Date(s.updated_at || s.created_at).toLocaleDateString('pt-PT') : "--/--/----", 
+        time: s.status === 'entregue' ? new Date(s.updated_at || s.created_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : "--:--" 
+      },
+      status: { 
+        label: statusCfg.label, 
+        raw: s.status,
+        subCode: s.ops_substatus || "", 
+        color: statusCfg.color,
+        dotColor: statusCfg.dotColor
+      },
+      value: { 
+        amount: s.sell_price ? `${s.sell_price}€` : "0.00€", 
+        diff: "0.00€", 
+        diffColor: "text-slate-600 border-slate-200 bg-slate-50", 
+        ref: "REF" 
+      }
     }
-  }))
+  })
 
   const mappedRecolhas = recolhas.map((r: any) => ({
     trk: { 

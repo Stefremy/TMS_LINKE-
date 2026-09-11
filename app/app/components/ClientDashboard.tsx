@@ -19,16 +19,24 @@ import {
   MoreVertical,
   Eye,
   FileText,
-  Download
+  Download,
+  Undo2,
+  Trash2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
-import { getClientPortalStatsAction } from "@/app/actions/shipments"
+import { 
+  getClientPortalStatsAction, 
+  createReturnShipmentAction, 
+  deleteShipmentAction,
+  regenerateCttLabelAction 
+} from "@/app/actions/shipments"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { Cliente, DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { getCarrierLogo } from "@/lib/carrier-logos"
+import { getShipmentStatusConfig } from "@/lib/status-helpers"
 
 export function ClientDashboard() {
   const searchParams = useSearchParams()
@@ -126,10 +134,11 @@ export function ClientDashboard() {
     return shipments.filter((item) => {
       const q = searchTerm.toLowerCase().trim()
       const ref = (item.tracking_number || item.id || "").toLowerCase()
+      const cttRef = (item.ctt_object_id || "").toLowerCase()
       const rec = (item.recipient_name || "").toLowerCase()
       const addr = (item.recipient_address || "").toLowerCase()
 
-      const matchesSearch = !q || ref.includes(q) || rec.includes(q) || addr.includes(q)
+      const matchesSearch = !q || ref.includes(q) || cttRef.includes(q) || rec.includes(q) || addr.includes(q)
       const matchesStatus = statusFilter === "todos" || item.status === statusFilter
 
       return matchesSearch && matchesStatus
@@ -181,12 +190,44 @@ export function ClientDashboard() {
     }
   }
 
-  const printLabel = (base64String: string) => {
-    printCttLabel(base64String)
+  const printLabel = async (shipmentItem: any) => {
+    let rawLabel = shipmentItem?.ctt_label_base64
+    if (!rawLabel && shipmentItem?.id) {
+      try {
+        const res = await regenerateCttLabelAction(shipmentItem.id)
+        if (res.success && res.labelBase64) {
+          rawLabel = res.labelBase64
+          setShipments(prev => prev.map(s => s.id === shipmentItem.id ? { ...s, ctt_label_base64: rawLabel } : s))
+        }
+      } catch (err: any) {
+        console.warn("Could not generate CTT label:", err?.message)
+      }
+    }
+    if (rawLabel) {
+      printCttLabel(rawLabel)
+    } else {
+      setSelectedShipment(shipmentItem)
+    }
   }
 
-  const downloadLabel = (base64String: string, ref: string) => {
-    downloadCttLabel(base64String, `${ref}_Etiqueta_CTT.pdf`)
+  const downloadLabel = async (shipmentItem: any, ref: string) => {
+    let rawLabel = shipmentItem?.ctt_label_base64
+    if (!rawLabel && shipmentItem?.id) {
+      try {
+        const res = await regenerateCttLabelAction(shipmentItem.id)
+        if (res.success && res.labelBase64) {
+          rawLabel = res.labelBase64
+          setShipments(prev => prev.map(s => s.id === shipmentItem.id ? { ...s, ctt_label_base64: rawLabel } : s))
+        }
+      } catch (err: any) {
+        console.warn("Could not generate CTT label:", err?.message)
+      }
+    }
+    if (rawLabel) {
+      downloadCttLabel(rawLabel, `${ref}_Etiqueta_CTT.pdf`)
+    } else {
+      setSelectedShipment(shipmentItem)
+    }
   }
 
   // Contractual and pricing details from real client record
@@ -498,14 +539,21 @@ export function ClientDashboard() {
                     <tr key={shipment.id} className="hover:bg-slate-50/70 transition-colors">
                       {/* Tracking / Guia */}
                       <td className="py-4 px-5">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedShipment(shipment)}
-                          className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline text-xs flex items-center gap-1.5 cursor-pointer text-left transition-colors"
-                          title="Clique para ver os detalhes do envio"
-                        >
-                          {tracking}
-                        </button>
+                        <div className="flex flex-col gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedShipment(shipment)}
+                            className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline text-xs flex items-center gap-1.5 cursor-pointer text-left transition-colors"
+                            title="Clique para ver os detalhes do envio"
+                          >
+                            {tracking}
+                          </button>
+                          {shipment.ctt_object_id && (
+                            <span className="font-mono text-[11px] font-bold text-slate-700 mt-0.5" title="Objeto CTT Expresso">
+                              {shipment.ctt_object_id}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Service Type */}
@@ -548,13 +596,15 @@ export function ClientDashboard() {
 
                       {/* Estado */}
                       <td className="py-4 px-5">
-                        <Badge variant={
-                          shipment.status === "entregue" ? "success" :
-                          shipment.status === "pendente" ? "warning" : "info"
-                        }>
-                          {shipment.status === "em transito" ? "Em Trânsito" : 
-                            shipment.status.charAt(0).toUpperCase() + shipment.status.slice(1)}
-                        </Badge>
+                        {(() => {
+                          const cfg = getShipmentStatusConfig(shipment.status)
+                          return (
+                            <Badge variant={cfg.badgeVariant}>
+                              <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${cfg.dotColor} shrink-0`} />
+                              <span>{cfg.label}</span>
+                            </Badge>
+                          )
+                        })()}
                       </td>
 
                       {/* Ações */}
@@ -573,32 +623,28 @@ export function ClientDashboard() {
 
                           {openDropdownId === shipment.id && (
                             <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-30 animate-in fade-in-50 zoom-in-95 text-left">
-                              {shipment.ctt_label_base64 && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setOpenDropdownId(null)
-                                      printLabel(shipment.ctt_label_base64)
-                                    }}
-                                    className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors cursor-pointer"
-                                  >
-                                    <Printer className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Imprimir Etiqueta</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setOpenDropdownId(null)
-                                      downloadLabel(shipment.ctt_label_base64, tracking)
-                                    }}
-                                    className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors cursor-pointer"
-                                  >
-                                    <Download className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>Descarregar PDF</span>
-                                  </button>
-                                </>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenDropdownId(null)
+                                  printLabel(shipment)
+                                }}
+                                className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Imprimir Etiqueta CTT</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenDropdownId(null)
+                                  downloadLabel(shipment, tracking)
+                                }}
+                                className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Descarregar PDF</span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -609,6 +655,50 @@ export function ClientDashboard() {
                               >
                                 <Eye className="w-3.5 h-3.5 text-slate-400" />
                                 <span>Ver Detalhes</span>
+                              </button>
+
+                              <div className="h-px bg-slate-100 my-1" />
+
+                              {/* Criar Devolução */}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenDropdownId(null)
+                                  const confirmed = window.confirm(`Deseja criar uma guia de DEVOLUÇÃO para o envio ${tracking}?\n\nO Remetente e Destinatário serão invertidos automaticamente.`)
+                                  if (!confirmed) return
+                                  const res = await createReturnShipmentAction(shipment.id)
+                                  if (res.success) {
+                                    alert(`✅ Devolução criada com sucesso!\n\nNovo Tracking: ${res.newTrackingNumber}`)
+                                    window.location.reload()
+                                  } else {
+                                    alert("Erro ao criar devolução: " + (res.error || "Erro desconhecido"))
+                                  }
+                                }}
+                                className="w-full px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50 flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <Undo2 className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Criar Devolução</span>
+                              </button>
+
+                              {/* Eliminar Envio */}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setOpenDropdownId(null)
+                                  const confirmed = window.confirm(`⚠️ Tem a certeza que deseja ELIMINAR permanentemente o envio ${tracking}?`)
+                                  if (!confirmed) return
+                                  const res = await deleteShipmentAction(shipment.id)
+                                  if (res.success) {
+                                    alert(`🗑️ Envio ${tracking} eliminado com sucesso!`)
+                                    window.location.reload()
+                                  } else {
+                                    alert("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"))
+                                  }
+                                }}
+                                className="w-full px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                <span>Eliminar Envio</span>
                               </button>
                             </div>
                           )}
