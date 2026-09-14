@@ -4,18 +4,7 @@ import { SidebarNav } from "./components/SidebarNav"
 import { NotificationBell } from "./components/NotificationBell"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
 import { 
-  Home, 
-  Package, 
-  Truck, 
   Search, 
-  Receipt, 
-  Settings, 
-  Bell,
-  Plus,
-  Building2,
-  ChevronDown,
-  Users,
-  Plug
 } from "lucide-react"
 
 export default function OpsLayout({
@@ -37,22 +26,6 @@ export default function OpsLayout({
         
         {/* Navigation */}
         <SidebarNav />
-        
-        {/* Footer actions */}
-        <div className="p-4">
-          <button className="flex items-center justify-between w-full p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-600">
-                <Building2 className="w-5 h-5" />
-              </div>
-              <div className="flex flex-col items-start">
-                <span className="text-sm font-bold text-slate-800">Linke Logistics, Lda.</span>
-                <span className="text-xs text-slate-500 font-medium">Mudar cliente</span>
-              </div>
-            </div>
-            <ChevronDown className="w-4 h-4 text-slate-400" />
-          </button>
-        </div>
       </aside>
 
       {/* Main Content Area */}

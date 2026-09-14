@@ -33,7 +33,7 @@ const navConfig: NavItem[] = [
       { title: "Clientes", href: "/ops/entidades/clientes" },
       { title: "Destinatários", href: "/ops/entidades/destinatarios" },
       { title: "Pontos Pickup", href: "/ops/entidades/pontos-pickup" },
-      { title: "Fornecedores", href: "/ops/entidades/fornecedores" },
+      { title: "Transportadoras", href: "/ops/entidades/fornecedores" },
       { title: "Colaboradores", href: "/ops/entidades/colaboradores" },
     ]
   },

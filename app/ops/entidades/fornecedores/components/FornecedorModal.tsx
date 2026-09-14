@@ -309,7 +309,7 @@ export function FornecedorModal({
   // Handle Delete
   const handleDeleteFornecedor = async () => {
     if (!initialData?.id) return
-    const confirmed = window.confirm(`Tem a certeza de que deseja eliminar o fornecedor "${formData.short_name || initialData.short_name}" (${formData.code || initialData.code}) permanentemente?`)
+    const confirmed = window.confirm(`Tem a certeza de que deseja eliminar a transportadora "${formData.short_name || initialData.short_name}" (${formData.code || initialData.code}) permanentemente?`)
     if (!confirmed) return
 
     setIsDeleting(true)
@@ -320,7 +320,7 @@ export function FornecedorModal({
       }
       onClose()
     } catch (err: any) {
-      alert("Erro ao eliminar fornecedor: " + (err.message || "Tente novamente."))
+      alert("Erro ao eliminar transportadora: " + (err.message || "Tente novamente."))
       setIsDeleting(false)
     }
   }
@@ -329,7 +329,7 @@ export function FornecedorModal({
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     if (!formData.short_name?.trim()) {
-      alert("Por favor preencha a Designação Curta do fornecedor.")
+      alert("Por favor preencha a Designação Curta da transportadora.")
       setActiveTab("dados_gerais")
       return
     }
@@ -345,7 +345,7 @@ export function FornecedorModal({
         }, 2000)
       }
     } catch (err: any) {
-      alert("Erro ao gravar fornecedor: " + (err.message || "Tente novamente."))
+      alert("Erro ao gravar transportadora: " + (err.message || "Tente novamente."))
     } finally {
       setIsSaving(false)
     }
@@ -699,7 +699,7 @@ export function FornecedorModal({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-                  {formData.short_name || (initialData ? "Editar Fornecedor" : "Novo Fornecedor")}
+                  {formData.short_name || (initialData ? "Editar Transportadora" : "Nova Transportadora")}
                 </h1>
                 
                 {/* Code badge */}
@@ -752,7 +752,7 @@ export function FornecedorModal({
                 type="button"
                 onClick={handlePrev}
                 disabled={!hasPrev}
-                title="Fornecedor Anterior"
+                title="Transportadora Anterior"
                 className="p-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed border-r border-slate-200 transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -761,7 +761,7 @@ export function FornecedorModal({
                 type="button"
                 onClick={handleNext}
                 disabled={!hasNext}
-                title="Próximo Fornecedor"
+                title="Próxima Transportadora"
                 className="p-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -2396,7 +2396,7 @@ export function FornecedorModal({
                 className="px-3.5 py-2 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
               >
                 {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 text-red-500" />}
-                Eliminar Fornecedor
+                Eliminar Transportadora
               </button>
             )}
             {saveSuccessMsg && (
@@ -2406,7 +2406,7 @@ export function FornecedorModal({
               </span>
             )}
             <span className="text-xs text-slate-400 hidden sm:inline">
-              Linke TMS Core • Entidade Fornecedor: <strong>{formData.code}</strong>
+              Linke TMS Core • Entidade Transportadora: <strong>{formData.code}</strong>
             </span>
           </div>
 
@@ -2427,7 +2427,7 @@ export function FornecedorModal({
               className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white px-5 py-2 rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {initialData ? "Atualizar Fornecedor" : "Gravar Novo Fornecedor"}
+              {initialData ? "Atualizar Transportadora" : "Gravar Nova Transportadora"}
             </button>
           </div>
 

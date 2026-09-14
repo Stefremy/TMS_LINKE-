@@ -723,3 +723,63 @@ export async function convertZplToPdfAction(
   }
 }
 
+let cachedDeliveryPoints: { timestamp: number; data: CTTPontoEntrega[] } | null = null
+const CACHE_TTL_MS = 1000 * 60 * 30 // 30 minutos
+
+/**
+ * Obtém todos os pontos de pickup / entrega da CTT Expresso e parceiros
+ */
+export async function getPontosPickupCttAction(forceRefresh = false): Promise<{
+  success: boolean
+  points: CTTPontoEntrega[]
+  cachedAt?: string
+  total: number
+  error?: string
+}> {
+  try {
+    const now = Date.now()
+    if (!forceRefresh && cachedDeliveryPoints && (now - cachedDeliveryPoints.timestamp < CACHE_TTL_MS)) {
+      return {
+        success: true,
+        points: cachedDeliveryPoints.data,
+        cachedAt: new Date(cachedDeliveryPoints.timestamp).toISOString(),
+        total: cachedDeliveryPoints.data.length,
+      }
+    }
+
+    const creds = await getCttCredentials()
+    const referencesService = new CTTReferencesService()
+    const points = await referencesService.getAllDeliveryPoints(creds)
+
+    cachedDeliveryPoints = {
+      timestamp: now,
+      data: points,
+    }
+
+    return {
+      success: true,
+      points,
+      cachedAt: new Date(now).toISOString(),
+      total: points.length,
+    }
+  } catch (error: any) {
+    console.error("[getPontosPickupCttAction] Erro ao carregar pontos CTT:", error)
+    if (cachedDeliveryPoints) {
+      return {
+        success: true,
+        points: cachedDeliveryPoints.data,
+        cachedAt: new Date(cachedDeliveryPoints.timestamp).toISOString(),
+        total: cachedDeliveryPoints.data.length,
+        error: `Aviso: Atualização em tempo real falhou (${error.message}). A apresentar dados em cache.`,
+      }
+    }
+    return {
+      success: false,
+      points: [],
+      total: 0,
+      error: error?.message || "Erro ao contactar o webservice da CTT Expresso",
+    }
+  }
+}
+
+

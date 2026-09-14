@@ -1,10 +1,19 @@
-import * as React from "react"
+import { getDestinatariosAction } from "@/app/actions/destinatarios"
+import { getClientesAction } from "@/app/actions/clientes"
+import { DestinatariosClient } from "./components/DestinatariosClient"
 
-export default function DestinatariosPage() {
+export const dynamic = "force-dynamic"
+
+export default async function DestinatariosPage() {
+  const [destinatarios, clientes] = await Promise.all([
+    getDestinatariosAction(),
+    getClientesAction(),
+  ])
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 h-[calc(100vh-8rem)]">
-      <h1 className="text-2xl font-bold text-slate-800 mb-2">Destinatarios</h1>
-      <p className="text-slate-500">Este módulo está em desenvolvimento.</p>
-    </div>
+    <DestinatariosClient
+      initialDestinatarios={destinatarios || []}
+      clients={clientes || []}
+    />
   )
 }

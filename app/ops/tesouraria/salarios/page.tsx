@@ -1,10 +1,18 @@
 import * as React from "react"
+import { getSalariosAction } from "@/app/actions/salarios"
+import { SalariosClient } from "./components/SalariosClient"
 
-export default function SalariosPage() {
+export const metadata = {
+  title: "Salários & Vencimentos | Linke Logistics TMS",
+  description: "Gestão e controlo de folha salarial, recibos de vencimento e retenções fiscais da equipa Linke Logistics.",
+}
+
+export default async function SalariosPage() {
+  const salarios = await getSalariosAction()
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 h-[calc(100vh-8rem)]">
-      <h1 className="text-2xl font-bold text-slate-800 mb-2">Salarios</h1>
-      <p className="text-slate-500">Este módulo está em desenvolvimento.</p>
+    <div className="max-w-7xl mx-auto pb-12">
+      <SalariosClient initialSalarios={salarios || []} />
     </div>
   )
 }

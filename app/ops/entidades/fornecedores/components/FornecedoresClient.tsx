@@ -117,7 +117,7 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
 
   const handleDelete = async (forn: Fornecedor, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
-    const confirmed = window.confirm(`Tem a certeza de que deseja eliminar o fornecedor "${forn.short_name}"?`)
+    const confirmed = window.confirm(`Tem a certeza de que deseja eliminar a transportadora "${forn.short_name}"?`)
     if (!confirmed) return
 
     setFornecedores((prev) => prev.filter((f) => f.id !== forn.id))
@@ -151,13 +151,13 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
       
       {/* Top Header */}
       <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Fornecedores</h1>
+        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Transportadoras</h1>
         <div className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
           <span>Painel de Resumo</span>
           <span>&gt;</span>
           <span>Entidades</span>
           <span>&gt;</span>
-          <span className="text-slate-600 font-semibold">Fornecedores</span>
+          <span className="text-slate-600 font-semibold">Transportadoras</span>
         </div>
       </div>
 
@@ -296,7 +296,7 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
             {paginated.length === 0 ? (
               <tr>
                 <td colSpan={10} className="py-12 text-center text-slate-500">
-                  Nenhum fornecedor encontrado com os critérios selecionados.
+                  Nenhuma transportadora encontrada com os critérios selecionados.
                 </td>
               </tr>
             ) : (

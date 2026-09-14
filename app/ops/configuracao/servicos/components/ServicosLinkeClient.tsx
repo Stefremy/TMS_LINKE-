@@ -213,7 +213,7 @@ export function ServicosLinkeClient({
           }`}
         >
           <Building2 className="w-4 h-4" />
-          Tabelas Fornecedores (Custos dos Parceiros)
+          Tabelas Transportadoras (Custos dos Parceiros)
         </button>
 
         <button
