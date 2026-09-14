@@ -170,8 +170,8 @@ export function ClientDashboard() {
       const res = await closeCttShipmentsAction(idsToClose)
       if (res.success && res.documents && res.documents.length > 0) {
         setManifestData({
-          fileName: res.documents[0].FileName || "Manifesto_CTT.pdf",
-          base64: res.documents[0].File
+          fileName: "Manifesto_CTT.pdf",
+          base64: res.documents[0].DocumentData
         })
         setShipments(prev => prev.map(s => {
           if (idsToClose.includes(s.tracking_number) || idsToClose.includes(s.id)) {

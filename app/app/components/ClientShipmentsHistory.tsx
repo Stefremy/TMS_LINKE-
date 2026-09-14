@@ -107,8 +107,8 @@ export function ClientShipmentsHistory() {
       const res = await closeCttShipmentsAction(idsToClose)
       if (res.success && res.documents && res.documents.length > 0) {
         setManifestData({
-          fileName: res.documents[0].FileName || "Manifesto_CTT.pdf",
-          base64: res.documents[0].File
+          fileName: "Manifesto_CTT.pdf",
+          base64: res.documents[0].DocumentData
         })
         // update local state
         setShipments(prev => prev.map(s => {

@@ -86,7 +86,7 @@ export function FerramentasMenu() {
     setModalResult(null)
 
     try {
-      const res = await closeCttShipmentsAction(["EA418720658PT", "EA418720659PT"])
+      const res = await closeCttShipmentsAction()
       setModalResult(res)
     } catch (err: any) {
       setModalResult({ success: false, errors: [{ Message: err.message }] })
@@ -355,16 +355,30 @@ export function FerramentasMenu() {
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-sm font-bold text-emerald-800">Lote Fechado com Sucesso!</h4>
-                      <p className="text-xs text-emerald-700 mt-1">O Certificado de Aceitação está pronto para assinatura pelo estafeta CTT na recolha.</p>
+                      <p className="text-xs text-emerald-700 mt-1">
+                        Manifesto: <strong>{modalResult?.deliveryNoteId || "N/A"}</strong> ({modalResult?.count || 0} envio(s) fechado(s)).
+                      </p>
+                      <p className="text-xs text-emerald-600 mt-0.5">
+                        O Certificado de Aceitação está pronto para assinatura pelo motorista CTT na recolha.
+                      </p>
                     </div>
                   </div>
 
                   <button 
                     onClick={() => {
-                      alert("Download do Certificado de Aceitação CTT concluído!")
+                      if (modalResult?.manifestPdfBase64) {
+                        const link = document.createElement("a")
+                        link.href = `data:application/pdf;base64,${modalResult.manifestPdfBase64}`
+                        link.download = `Guia_Transporte_CTT_${modalResult.deliveryNoteId || "fecho"}.pdf`
+                        document.body.appendChild(link)
+                        link.click()
+                        document.body.removeChild(link)
+                      } else {
+                        alert("Certificado de Aceitação gerado com sucesso!")
+                      }
                       setActiveModal("none")
                     }}
-                    className="w-full bg-slate-900 hover:bg-black text-white font-bold py-2 rounded text-sm shadow transition-colors flex items-center justify-center gap-2"
+                    className="w-full bg-slate-900 hover:bg-black text-white font-bold py-2.5 rounded-lg text-sm shadow transition-colors flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
                     Descarregar Certificado de Aceitação (PDF)

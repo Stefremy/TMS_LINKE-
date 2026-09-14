@@ -10,15 +10,22 @@ import {
   Search,
   Truck,
   ChevronDown,
-  Edit2
+  Edit2,
+  FileText,
+  RefreshCw,
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react"
 
 import { ActionMenu } from "./ActionMenu"
 import { FerramentasMenu } from "./FerramentasMenu"
 import { NovaRecolhaModal } from "./NovaRecolhaModal"
+import { ManifestModal } from "./ManifestModal"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
+import { closeCttShipmentsAction, syncCttTrackingAction } from "@/app/actions/ctt"
 
 interface EnviosClientProps {
   envios: any[]
@@ -32,6 +39,57 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
   const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
   const [showRecolhaModal, setShowRecolhaModal] = React.useState(false)
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([])
+  const [manifestData, setManifestData] = React.useState<any | null>(null)
+  const [isClosingManifest, setIsClosingManifest] = React.useState(false)
+  const [isSyncingSelected, setIsSyncingSelected] = React.useState(false)
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const allIds = filteredEnvios.map(e => e.rawId || e.rawShipment?.id || e.trk?.id).filter(Boolean)
+      setSelectedIds(allIds)
+    } else {
+      setSelectedIds([])
+    }
+  }
+
+  const handleToggleRow = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const handleCloseSelected = async () => {
+    if (selectedIds.length === 0) return
+    setIsClosingManifest(true)
+    try {
+      const res = await closeCttShipmentsAction(selectedIds)
+      if (res.success) {
+        setManifestData(res)
+        setSelectedIds([])
+      } else {
+        alert(res.error || "Erro ao fechar expedição.")
+      }
+    } catch (err: any) {
+      alert("Erro ao fechar expedição: " + err.message)
+    } finally {
+      setIsClosingManifest(false)
+    }
+  }
+
+  const handleSyncSelected = async () => {
+    if (selectedIds.length === 0) return
+    setIsSyncingSelected(true)
+    try {
+      for (const id of selectedIds) {
+        await syncCttTrackingAction("", id)
+      }
+      alert(`Sincronização concluída com sucesso para ${selectedIds.length} envio(s).`)
+      setSelectedIds([])
+    } catch (err: any) {
+      alert("Erro na sincronização: " + err.message)
+    } finally {
+      setIsSyncingSelected(false)
+    }
+  }
 
   const dataSource = viewMode === "envios" ? envios : recolhas
 
@@ -219,13 +277,64 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
         </div>
       )}
 
+      {/* Bulk Action Bar (appears when 1 or more shipments are selected) */}
+      {selectedIds.length > 0 && (
+        <div className="bg-slate-900 text-white px-6 py-2.5 flex items-center justify-between shadow-md shrink-0 border-y border-slate-800 transition-all animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              {selectedIds.length} envio(s) selecionado(s)
+            </span>
+            <span className="text-xs text-slate-300 hidden md:inline">
+              Operações em lote para expedição e sincronização
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCloseSelected}
+              disabled={isClosingManifest}
+              className="bg-green-600 hover:bg-green-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              {isClosingManifest ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
+              <span>Fechar Expedição / Manifesto CTT</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSyncSelected}
+              disabled={isSyncingSelected}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              {isSyncingSelected ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              <span>Sincronizar Tracking</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="text-xs text-slate-400 hover:text-white px-2.5 py-1.5 transition-colors cursor-pointer"
+            >
+              Desmarcar Todos
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table Area */}
       <div className="flex-1 overflow-auto">
         <table className="w-full text-left text-[13px] whitespace-nowrap pb-32">
           <thead className="bg-white sticky top-0 z-10 shadow-sm">
             <tr className="border-b border-slate-200">
               <th className="px-4 py-3 w-10">
-                <input type="checkbox" className="rounded border-slate-300 text-green-600 focus:ring-green-500" />
+                <input 
+                  type="checkbox" 
+                  checked={filteredEnvios.length > 0 && selectedIds.length === filteredEnvios.length}
+                  onChange={handleSelectAll}
+                  className="rounded border-slate-300 text-green-600 focus:ring-green-500 cursor-pointer" 
+                  title="Selecionar Todos"
+                />
               </th>
               <th className="px-3 py-3 font-bold text-slate-700">TRK</th>
               <th className="px-3 py-3 font-bold text-slate-700">Remetente</th>
@@ -245,10 +354,19 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                   Nenhum envio encontrado com a pesquisa atual.
                 </td>
               </tr>
-            ) : filteredEnvios.map((envio, idx) => (
-              <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
+            ) : filteredEnvios.map((envio, idx) => {
+              const rowId = envio.rawId || envio.rawShipment?.id || envio.trk?.id
+              const isSelected = selectedIds.includes(rowId)
+
+              return (
+              <tr key={idx} className={`hover:bg-slate-50/50 transition-colors group ${isSelected ? 'bg-green-50/30' : ''}`}>
                 <td className="px-4 py-4 align-top">
-                  <input type="checkbox" className="rounded border-slate-300 text-green-600 focus:ring-green-500 mt-1" />
+                  <input 
+                    type="checkbox" 
+                    checked={isSelected}
+                    onChange={() => handleToggleRow(rowId)}
+                    className="rounded border-slate-300 text-green-600 focus:ring-green-500 mt-1 cursor-pointer" 
+                  />
                 </td>
                 
                 {/* TRK Column */}
@@ -398,7 +516,8 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                   />
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -416,6 +535,16 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
           onUpdateShipment={(updated) => {
             setSelectedShipment(updated)
           }}
+        />
+      )}
+
+      {manifestData && (
+        <ManifestModal 
+          isOpen={Boolean(manifestData)} 
+          onClose={() => setManifestData(null)}
+          deliveryNoteId={manifestData.deliveryNoteId}
+          shipmentsCount={manifestData.count}
+          manifestPdfBase64={manifestData.manifestPdfBase64}
         />
       )}
     </div>
