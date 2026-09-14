@@ -16,7 +16,6 @@ import {
 import { ActionMenu } from "./ActionMenu"
 import { FerramentasMenu } from "./FerramentasMenu"
 import { NovaRecolhaModal } from "./NovaRecolhaModal"
-import { NovoEnvioModal } from "./NovoEnvioModal"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
@@ -32,7 +31,6 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
   const [showFilters, setShowFilters] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
   const [showRecolhaModal, setShowRecolhaModal] = React.useState(false)
-  const [showNovoEnvioModal, setShowNovoEnvioModal] = React.useState(false)
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
 
   const dataSource = viewMode === "envios" ? envios : recolhas
@@ -82,19 +80,19 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
       <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
         
         <div className="flex items-center gap-2">
-          <button 
-            onClick={() => {
+          <a
+            href={viewMode === "recolhas" ? "#" : "/ops/envios/novo"}
+            onClick={(e) => {
               if (viewMode === "recolhas") {
+                e.preventDefault()
                 setShowRecolhaModal(true)
-              } else {
-                setShowNovoEnvioModal(true)
               }
             }}
             className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-bold shadow-sm transition-colors flex items-center gap-1.5"
           >
             <Plus className="w-4 h-4" strokeWidth={3} />
             Novo
-          </button>
+          </a>
           
           <button 
             onClick={() => setViewMode(viewMode === "envios" ? "recolhas" : "envios")}
@@ -404,9 +402,7 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
         <NovaRecolhaModal onClose={() => setShowRecolhaModal(false)} />
       )}
       
-      {showNovoEnvioModal && (
-        <NovoEnvioModal clients={clients} onClose={() => setShowNovoEnvioModal(false)} />
-      )}
+
 
       {selectedShipment && (
         <ClientShipmentDetailModal 

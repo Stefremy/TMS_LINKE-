@@ -122,7 +122,10 @@ export function ClientCreateGuia() {
 
   // Available Linke services
   const availableServicos = React.useMemo(() => {
-    const active = servicosLinke.filter((s) => s.is_active !== false)
+    let active = servicosLinke.filter((s) => s.is_active !== false)
+    if (currentClient?.assigned_linke_service_ids && currentClient.assigned_linke_service_ids.length > 0) {
+      active = active.filter(s => currentClient.assigned_linke_service_ids!.includes(s.id))
+    }
     if (active.length === 0) return []
     if (currentClient?.default_linke_table_id) {
       const match = active.find((s) => s.id === currentClient.default_linke_table_id)
@@ -252,6 +255,7 @@ export function ClientCreateGuia() {
         weightKg: parseFloat(weight) || 1.0,
         volumesCount: parseInt(volumesCount) || 1,
         serviceName: chosenService,
+        subProductId: activeLinkeService?.webservice_service_code,
         calculatedPrice: numericVal,
       })
 

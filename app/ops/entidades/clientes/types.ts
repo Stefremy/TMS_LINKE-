@@ -120,57 +120,58 @@ export const CLIENT_COLOR_OPTIONS = [
 /**
  * 1. PRODUTOS & SUB-PRODUTOS DE TRANSPORTE CTT (SubProductId)
  * Contrato: 300330941 | Cliente: 100032458
- * Fonte: CTT RecolhasWS (GetProdutosRecolha & GetAreaInfluencia)
- * Códigos confirmados e validados em produção:
- * - EMSF056.01: Premium D+1 (CTT 24H)
- * - EMSF057.01: Standard D+2 (CTT 48H)
- * - EMSF058.01: Economy D+5 (CTT 5 Dias)
+ * Fonte: CTT RecolhasWS (GetProdutosRecolha) + teste real à API de produção
+ * Códigos validados e confirmados (geram guia real):
+ * - EMSF056.01: Para Amanhã (24H) — Guia DD
+ * - EMSF057.01: Em 2 Dias (48H) — Guia DB
+ * - ENCF008.01: Económico / 48 (Continente) — Guia EQ  ← código real (não EMSF058.01)
+ * - EMSF010.01: 19 Múltiplo (10+ volumes) — Guia EG
  */
 export const DEFAULT_CTT_SERVICES_PRICING: ClientServicePrice[] = [
   {
-    service_code: "ctt_24h",
-    service_name: "[Nacional] CTT 24H — Entrega Amanhã (Premium D+1)",
+    service_code: "ctt_dd",
+    service_name: "[Nacional] CTT Para Amanhã (24H) — Guia DD",
     subproduct_id: "EMSF056.01",
     category: "Nacional",
-    description: "Entrega expresso no dia útil seguinte em todo o território continental.",
+    description: "Entrega expresso no dia útil seguinte em todo o território continental. Emissão de Guia DD.",
     is_enabled: true,
     w_0_1: 3.85,
     w_1_2: 4.25,
-    w_2_5: 4.95,
-    w_5_10: 6.30,
-    w_10_20: 8.95,
-    w_20_30: 12.80,
-    kg_extra: 0.45,
+    w_2_5: 4.25,
+    w_5_10: 5.10,
+    w_10_20: 6.55,
+    w_20_30: 9.35,
+    kg_extra: 0.32,
   },
   {
-    service_code: "ctt_48h",
-    service_name: "[Nacional] CTT 48H — 2 Dias Úteis (Standard D+2)",
+    service_code: "ctt_db",
+    service_name: "[Nacional] CTT Em 2 Dias (48H) — Guia DB",
     subproduct_id: "EMSF057.01",
     category: "Nacional",
-    description: "Serviço expresso económico com prazo de entrega em 48 horas úteis.",
+    description: "Serviço expresso económico com prazo de entrega em 2 dias úteis. Emissão de Guia DB.",
     is_enabled: true,
-    w_0_1: 3.35,
-    w_1_2: 3.75,
-    w_2_5: 4.35,
-    w_5_10: 5.50,
-    w_10_20: 7.80,
-    w_20_30: 10.90,
-    kg_extra: 0.38,
+    w_0_1: 3.50,
+    w_1_2: 3.85,
+    w_2_5: 3.85,
+    w_5_10: 4.60,
+    w_10_20: 6.05,
+    w_20_30: 8.30,
+    kg_extra: 0.28,
   },
   {
-    service_code: "ctt_d5",
-    service_name: "[Nacional] CTT 5 Dias (Economy D+5)",
-    subproduct_id: "EMSF058.01",
+    service_code: "ctt_eq",
+    service_name: "[Nacional] CTT Económico / 48 (Continente) — Guia EQ",
+    subproduct_id: "ENCF008.01",
     category: "Nacional",
-    description: "Serviço económico rodoviário com entrega até 5 dias úteis.",
+    description: "Serviço económico rodoviário com entrega em 48H no continente. Emissão de Guia EQ.",
     is_enabled: true,
-    w_0_1: 2.95,
-    w_1_2: 3.30,
-    w_2_5: 3.85,
-    w_5_10: 4.75,
-    w_10_20: 6.50,
-    w_20_30: 8.90,
-    kg_extra: 0.30,
+    w_0_1: 3.30,
+    w_1_2: 3.60,
+    w_2_5: 3.60,
+    w_5_10: 4.25,
+    w_10_20: 5.70,
+    w_20_30: 7.70,
+    kg_extra: 0.25,
   },
 ]
 

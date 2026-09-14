@@ -193,7 +193,7 @@ export function TabelasFornecedoresTab({ fornecedores }: TabelasFornecedoresTabP
                 <div className="text-right">
                   <span className="text-[11px] text-slate-400 block font-medium">Margem Base Negociada</span>
                   <span className="text-sm font-bold text-emerald-700">
-                    +{currentCarrier.global_markup_pct || 15}% Markup Médio
+                    +{currentCarrier.global_markup_pct || 15}% Margem Ref.
                   </span>
                 </div>
               </div>
@@ -246,7 +246,7 @@ export function TabelasFornecedoresTab({ fornecedores }: TabelasFornecedoresTabP
                             <th className="py-3 px-4">Escalão de Peso</th>
                             <th className="py-3 px-4">Zona de Destino</th>
                             <th className="py-3 px-4 text-right font-bold text-blue-900 bg-blue-50/50">Custo Fornecedor (€)</th>
-                            <th className="py-3 px-4 text-center">Markup Ref.</th>
+                            <th className="py-3 px-4 text-center">Margem Ref.</th>
                             <th className="py-3 px-4 text-right font-semibold text-emerald-800">PVP Sugerido (€)</th>
                             <th className="py-3 px-4 text-center">Prazo</th>
                           </tr>

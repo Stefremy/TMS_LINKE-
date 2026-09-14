@@ -22,6 +22,7 @@ import type { ServicoLinke } from "../types"
 import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 
 interface TabelasLinkeTabProps {
+  mode?: "base" | "custom" | "linke_services"
   servicos: ServicoLinke[]
   fornecedores: Fornecedor[]
   onEditServico: (servico: ServicoLinke) => void
@@ -33,6 +34,7 @@ interface TabelasLinkeTabProps {
 }
 
 export function TabelasLinkeTab({
+  mode = "base",
   servicos,
   fornecedores,
   onEditServico,
@@ -42,6 +44,7 @@ export function TabelasLinkeTab({
   onToggleStatus,
   onQuickMarkupChange,
 }: TabelasLinkeTabProps) {
+  const isLinkeServicesMode = mode === "linke_services" || mode === "custom"
   const [searchTerm, setSearchTerm] = React.useState("")
   const [selectedCategory, setSelectedCategory] = React.useState<string>("Todas")
   const [selectedProfile, setSelectedProfile] = React.useState<string>("Todos os Perfis")
@@ -53,11 +56,19 @@ export function TabelasLinkeTab({
   const profiles = ["Todos os Perfis", "Standard / Geral", "VIP / Alto Volume", "E-Commerce PME", "Tabela Negociada Cliente"]
 
   const filteredServicos = servicos.filter((s) => {
+    // Mode filtering:
+    // In "base" mode, show the baseline standard carrier subproducts
+    // In "linke_services" mode, show all Linke commercial services created for clients
+    if (!isLinkeServicesMode && s.pricing_profile === "Tabela Negociada Cliente") {
+      return false
+    }
+
     const matchesSearch = 
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.preferred_carrier_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.target_client_name && s.target_client_name.toLowerCase().includes(searchTerm.toLowerCase()))
+      (s.target_client_name && s.target_client_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (s.webservice_service_code && s.webservice_service_code.toLowerCase().includes(searchTerm.toLowerCase()))
     
     const matchesCategory = selectedCategory === "Todas" || s.category === selectedCategory
     const matchesProfile = selectedProfile === "Todos os Perfis" || s.pricing_profile === selectedProfile
@@ -69,6 +80,29 @@ export function TabelasLinkeTab({
 
   return (
     <div className="space-y-6">
+      {/* Informative Architecture Banner */}
+      <div className={`p-4 rounded-xl border flex items-start gap-3 text-xs ${
+        isLinkeServicesMode
+          ? "bg-indigo-50/80 border-indigo-200 text-indigo-900"
+          : "bg-emerald-50/80 border-emerald-200 text-emerald-900"
+      }`}>
+        {isLinkeServicesMode ? (
+          <Users className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+        ) : (
+          <Package className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+        )}
+        <div>
+          <h4 className="font-bold text-sm">
+            {isLinkeServicesMode ? "Serviços Linke (Comerciais & Clientes)" : "Subprodutos por Transportadora (Contratos Base)"}
+          </h4>
+          <p className="mt-0.5 opacity-90 leading-relaxed">
+            {isLinkeServicesMode
+              ? "Estes são os serviços comerciais que os seus clientes utilizam para criar guias na Área de Cliente. Cada Serviço Linke liga-se a um Subproduto de transportador, define a margem de venda (PVP) e pode ser associado a Todos os Clientes ou a um Cliente Específico."
+              : "Subprodutos oficiais contratados com as transportadoras. Conta CTT validada: EMSF056.01 (DD/24H), EMSF057.01 (DB/48H), ENCF008.01 (EQ/48H Econ.), EMSF010.01 (EG/Múltiplo). Servem de referência de custo e base técnica."}
+          </p>
+        </div>
+      </div>
+
       {/* Top Filter Bar */}
       <div className="flex flex-col gap-4 bg-slate-50/90 p-4 rounded-xl border border-slate-200">
         <div className="flex flex-col md:flex-row gap-3 items-center justify-between w-full">
@@ -77,7 +111,7 @@ export function TabelasLinkeTab({
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Pesquisar serviço, código, cliente alvo ou transportador..."
+              placeholder="Pesquisar serviço, subproduto (ex: EMSF...), cliente ou transportador..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
@@ -86,7 +120,7 @@ export function TabelasLinkeTab({
 
           {/* Profile Filter Selector */}
           <div className="flex items-center gap-2 w-full md:w-auto">
-            <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Perfil Cliente:</span>
+            <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Perfil / Segmento:</span>
             <select
               value={selectedProfile}
               onChange={(e) => setSelectedProfile(e.target.value)}
@@ -103,10 +137,14 @@ export function TabelasLinkeTab({
           {/* New Service Button */}
           <button
             onClick={onNewServico}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-sm transition-all whitespace-nowrap"
+            className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-xs font-bold shadow-sm transition-all whitespace-nowrap ${
+              isLinkeServicesMode
+                ? "bg-indigo-700 hover:bg-indigo-800 shadow-indigo-700/20"
+                : "bg-emerald-700 hover:bg-emerald-800 shadow-emerald-700/20"
+            }`}
           >
             <Plus className="w-4 h-4" />
-            Novo Serviço / Tabela Linke
+            {isLinkeServicesMode ? "Novo Serviço Linke" : "Novo Subproduto Base"}
           </button>
         </div>
 
@@ -119,7 +157,9 @@ export function TabelasLinkeTab({
               onClick={() => setSelectedCategory(cat)}
               className={`px-3 py-1 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors ${
                 selectedCategory === cat
-                  ? "bg-emerald-700 text-white shadow-2xs"
+                  ? isLinkeServicesMode
+                    ? "bg-indigo-700 text-white shadow-2xs"
+                    : "bg-emerald-700 text-white shadow-2xs"
                   : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
               }`}
             >
@@ -136,10 +176,10 @@ export function TabelasLinkeTab({
         <div className="lg:col-span-4 space-y-3">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Tabelas & Serviços Linke ({filteredServicos.length})
+              {isLinkeServicesMode ? "Serviços Linke" : "Subprodutos por Transportadora"} ({filteredServicos.length})
             </h3>
-            <span className="text-[11px] text-emerald-700 font-semibold">
-              Ilimitados
+            <span className={`text-[11px] font-semibold ${isLinkeServicesMode ? "text-indigo-700" : "text-emerald-700"}`}>
+              {isLinkeServicesMode ? "Atribuíveis a Clientes" : "Base Técnica"}
             </span>
           </div>
 
@@ -184,7 +224,7 @@ export function TabelasLinkeTab({
                     </span>
                   </div>
 
-                  {/* Target Client Badge */}
+                  {/* Target Client & Subproduct Badges */}
                   <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
                       isVip
@@ -197,8 +237,15 @@ export function TabelasLinkeTab({
                       {servico.pricing_profile}
                     </span>
 
+                    {servico.webservice_service_code && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200" title="Código Subproduto Transportador">
+                        <Tag className="w-2.5 h-2.5 text-amber-600" />
+                        {servico.webservice_service_code}
+                      </span>
+                    )}
+
                     {servico.target_client_name && (
-                      <span className="text-[10px] text-slate-500 font-medium truncate max-w-[170px]" title={servico.target_client_name}>
+                      <span className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]" title={servico.target_client_name}>
                         • {servico.target_client_name}
                       </span>
                     )}
@@ -218,8 +265,8 @@ export function TabelasLinkeTab({
                       )}
                       <span className="truncate max-w-[120px] font-medium text-slate-700">{servico.preferred_carrier_name}</span>
                     </div>
-                    <div className="flex items-center gap-1 font-bold text-emerald-700">
-                      <span>+{servico.global_markup_pct}% Markup</span>
+                    <div className="flex items-center gap-1 font-semibold text-slate-600">
+                      <span>{servico.transit_time_label || "24h"}</span>
                     </div>
                   </div>
                 </div>
@@ -313,7 +360,7 @@ export function TabelasLinkeTab({
                 </div>
 
                 {/* Target Client & Operational Parameters */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-5 pt-4 border-t border-slate-100">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-100">
                   <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs">
                     <span className="text-[11px] font-medium text-slate-400 block">Cliente / Alvo</span>
                     <span className="text-xs font-bold text-slate-800 block mt-0.5 truncate" title={currentServico.target_client_name}>
@@ -350,12 +397,6 @@ export function TabelasLinkeTab({
                     </span>
                   </div>
                   <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs">
-                    <span className="text-[11px] font-medium text-slate-400 block">Markup Médio</span>
-                    <span className="text-xs font-bold text-emerald-700 block mt-0.5">
-                      +{currentServico.global_markup_pct}% sobre custo
-                    </span>
-                  </div>
-                  <div className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-2xs">
                     <span className="text-[11px] font-medium text-slate-400 block">Prazo de Entrega</span>
                     <span className="text-xs font-bold text-slate-800 block mt-0.5">
                       {currentServico.transit_time_label}
@@ -389,7 +430,6 @@ export function TabelasLinkeTab({
                           <tr>
                             <th className="py-3 px-4">Escalão / Peso</th>
                             <th className="py-3 px-4 text-right">Custo Parceiro (€)</th>
-                            <th className="py-3 px-4 text-center">Markup (%)</th>
                             <th className="py-3 px-4 text-right font-bold text-emerald-800 bg-emerald-50/50">PVP Linke (€)</th>
                             <th className="py-3 px-4 text-right text-slate-700">Lucro Bruto (€)</th>
                             <th className="py-3 px-4 text-center">Prazo</th>
@@ -410,11 +450,6 @@ export function TabelasLinkeTab({
                                 </td>
                                 <td className="py-3 px-4 text-right font-mono text-slate-600">
                                   {cost.toFixed(2)}€
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700">
-                                    +{tier.margin_pct}%
-                                  </span>
                                 </td>
                                 <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700 text-sm bg-emerald-50/30">
                                   {sell.toFixed(2)}€

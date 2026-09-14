@@ -9,7 +9,8 @@ import {
   CTTReferencesService,
   CTTConnectionCredentials,
   CTTAddressData,
-  CTTShipmentData
+  CTTShipmentData,
+  CTTPontoEntrega
 } from "@/lib/services/ctt"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
 

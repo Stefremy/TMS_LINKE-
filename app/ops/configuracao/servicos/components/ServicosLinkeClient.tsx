@@ -4,7 +4,6 @@ import * as React from "react"
 import { 
   Package, 
   Building2, 
-  TrendingUp, 
   Calculator, 
   Plus, 
   Layers, 
@@ -28,8 +27,6 @@ import {
 } from "@/app/actions/servicos-linke"
 
 import { TabelasLinkeTab } from "./TabelasLinkeTab"
-import { TabelasFornecedoresTab } from "./TabelasFornecedoresTab"
-import { MatrizRentabilidadeTab } from "./MatrizRentabilidadeTab"
 import { SimuladorCotacaoTab } from "./SimuladorCotacaoTab"
 import { ServicoModal } from "./ServicoModal"
 import { DuplicateServicoModal } from "./DuplicateServicoModal"
@@ -40,7 +37,7 @@ interface ServicosLinkeClientProps {
   initialWebservices?: any[]
 }
 
-type TabType = "tabelas_linke" | "tabelas_fornecedores" | "matriz_rentabilidade" | "simulador"
+type TabType = "subprodutos_base" | "servicos_linke" | "simulador"
 
 export function ServicosLinkeClient({
   initialServicos,
@@ -50,7 +47,7 @@ export function ServicosLinkeClient({
   const [servicos, setServicos] = React.useState<ServicoLinke[]>(initialServicos)
   const [fornecedores] = React.useState<Fornecedor[]>(initialFornecedores)
   const [webservices] = React.useState<any[]>(initialWebservices)
-  const [activeTab, setActiveTab] = React.useState<TabType>("tabelas_linke")
+  const [activeTab, setActiveTab] = React.useState<TabType>("servicos_linke")
   
   // Modals state
   const [isModalOpen, setIsModalOpen] = React.useState(false)
@@ -191,41 +188,29 @@ export function ServicosLinkeClient({
 
 
       {/* Navigation Tabs Bar */}
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-2 rounded-xl shadow-2xs">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2 rounded-xl shadow-2xs">
         <button
-          onClick={() => setActiveTab("tabelas_linke")}
+          onClick={() => setActiveTab("subprodutos_base")}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
-            activeTab === "tabelas_linke"
+            activeTab === "subprodutos_base"
               ? "bg-emerald-700 text-white shadow-sm"
               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           }`}
         >
           <Package className="w-4 h-4" />
-          Tabelas Linke (Preços de Venda / PVP)
+          Subprodutos por Transportadora
         </button>
 
         <button
-          onClick={() => setActiveTab("tabelas_fornecedores")}
+          onClick={() => setActiveTab("servicos_linke")}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
-            activeTab === "tabelas_fornecedores"
-              ? "bg-blue-700 text-white shadow-sm"
+            activeTab === "servicos_linke"
+              ? "bg-indigo-700 text-white shadow-sm"
               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           }`}
         >
-          <Building2 className="w-4 h-4" />
-          Tabelas Transportadoras (Custos dos Parceiros)
-        </button>
-
-        <button
-          onClick={() => setActiveTab("matriz_rentabilidade")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
-            activeTab === "matriz_rentabilidade"
-              ? "bg-slate-900 text-white shadow-sm"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" />
-          Matriz de Rentabilidade (Custo vs PVP)
+          <Layers className="w-4 h-4" />
+          Serviços Linke
         </button>
 
         <button
@@ -243,8 +228,9 @@ export function ServicosLinkeClient({
 
       {/* Active Tab Body */}
       <div>
-        {activeTab === "tabelas_linke" && (
+        {activeTab === "subprodutos_base" && (
           <TabelasLinkeTab
+            mode="base"
             servicos={servicos}
             fornecedores={fornecedores}
             onEditServico={(servico) => {
@@ -265,12 +251,27 @@ export function ServicosLinkeClient({
           />
         )}
 
-        {activeTab === "tabelas_fornecedores" && (
-          <TabelasFornecedoresTab fornecedores={fornecedores} />
-        )}
-
-        {activeTab === "matriz_rentabilidade" && (
-          <MatrizRentabilidadeTab servicos={servicos} fornecedores={fornecedores} />
+        {activeTab === "servicos_linke" && (
+          <TabelasLinkeTab
+            mode="linke_services"
+            servicos={servicos}
+            fornecedores={fornecedores}
+            onEditServico={(servico) => {
+              setSelectedServicoForEdit(servico)
+              setIsModalOpen(true)
+            }}
+            onNewServico={() => {
+              setSelectedServicoForEdit(null)
+              setIsModalOpen(true)
+            }}
+            onDuplicateServico={(servico) => {
+              setSelectedServicoForDuplicate(servico)
+              setIsDuplicateModalOpen(true)
+            }}
+            onDeleteServico={handleDeleteServico}
+            onToggleStatus={handleToggleStatus}
+            onQuickMarkupChange={handleQuickMarkupChange}
+          />
         )}
 
         {activeTab === "simulador" && (
@@ -331,17 +332,17 @@ export function ServicosLinkeClient({
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Markup Médio Global</span>
+            <span className="text-xs font-semibold text-slate-500">Transportadores Parceiros</span>
             <span className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
-              <Percent className="w-4 h-4" />
+              <Building2 className="w-4 h-4" />
             </span>
           </div>
           <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-extrabold text-emerald-700">+{avgMarkup}%</span>
-            <span className="text-xs text-slate-400">sobre custo parceiro</span>
+            <span className="text-2xl font-extrabold text-slate-900">{fornecedores.length}</span>
+            <span className="text-xs text-slate-400">parceiros registados</span>
           </div>
-          <span className="text-[11px] text-slate-400 block mt-1">
-            Margem comercial calculada
+          <span className="text-[11px] text-emerald-700 font-semibold block mt-1">
+            Rede Integrada & Contratos
           </span>
         </div>
       </div>

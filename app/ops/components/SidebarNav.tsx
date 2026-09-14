@@ -45,7 +45,7 @@ const navConfig: NavItem[] = [
       { title: "Criar Envio", href: "/ops/envios/novo" },
       { title: "Pedidos de Recolha", href: "/ops/envios/recolhas" },
       { title: "Rastreabilidade", href: "/ops/envios/rastreabilidade" },
-      { title: "Gestão Operacional", href: "/ops/envios/operacional" },
+      { title: "Subproduts e tabelas Linke", href: "/ops/envios/operacional" },
     ]
   },
   {
@@ -60,8 +60,6 @@ const navConfig: NavItem[] = [
     title: "Faturação",
     icon: Receipt,
     subItems: [
-      { title: "Vendas", href: "/ops/faturacao/vendas" },
-      { title: "Compras", href: "/ops/faturacao/compras" },
       { title: "Contas Corrente", href: "/ops/faturacao/contas-corrente" },
       { title: "Faturação Clientes", href: "/ops/faturacao/clientes" },
       { title: "Análise Estatística", href: "/ops/faturacao/estatistica" },

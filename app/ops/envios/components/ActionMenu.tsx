@@ -77,25 +77,8 @@ export function ActionMenu({
 
   const getOrFetchLabel = async (): Promise<string | null> => {
     let rawLabel = shipment?.ctt_label_base64
-    if (!rawLabel && effectiveId) {
-      try {
-        const res = await regenerateCttLabelAction(effectiveId)
-        if (res.success && res.labelBase64) {
-          rawLabel = res.labelBase64
-          if (onUpdateShipment) {
-            onUpdateShipment({ ...shipment, ctt_label_base64: rawLabel })
-          }
-        } else {
-          alert("Não foi possível gerar a etiqueta CTT: " + (res.error || "Verifique credenciais CTT em /ops/configuracao/webservices"))
-          return null
-        }
-      } catch (err: any) {
-        alert("Erro ao obter etiqueta CTT: " + (err?.message || err))
-        return null
-      }
-    }
     if (!rawLabel) {
-      alert("Nenhuma etiqueta CTT disponível para este envio.")
+      alert("Nenhuma etiqueta CTT disponível para este envio. A etiqueta só é gerada na criação do envio.")
       return null
     }
     return resolveLabel(rawLabel)

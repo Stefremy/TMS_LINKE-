@@ -1,10 +1,15 @@
 import * as React from "react"
+import { getClientesAction } from "@/app/actions/clientes"
+import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
+import { NovoEnvioPageClient } from "./NovoEnvioPageClient"
 
-export default function NovoPage() {
+export default async function NovoPage() {
+  const clients = await getClientesAction()
+  const servicosLinke = await getServicosLinkeAction()
+  
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 h-[calc(100vh-8rem)]">
-      <h1 className="text-2xl font-bold text-slate-800 mb-2">Novo</h1>
-      <p className="text-slate-500">Este módulo está em desenvolvimento.</p>
+    <div className="bg-slate-100 min-h-[calc(100vh-4rem)]">
+      <NovoEnvioPageClient clients={clients} servicosLinke={servicosLinke} />
     </div>
   )
 }

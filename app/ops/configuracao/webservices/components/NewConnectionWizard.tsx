@@ -328,16 +328,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                       />
                     </div>
 
-                    <div className="col-span-2 flex flex-col gap-1">
-                      <label className="text-[12px] font-semibold text-slate-600">SubProduto Padrão (SubProductId)</label>
-                      <input 
-                        type="text" 
-                        placeholder="Ex: EMSF056.01 (Premium D+1), EMSF057.01 (Standard D+2)"
-                        value={credentials.default_subproduct || "EMSF056.01"}
-                        onChange={(e) => setCredentials({ ...credentials, default_subproduct: e.target.value })}
-                        className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm font-medium focus:ring-2 focus:ring-green-500 focus:outline-none" 
-                      />
-                    </div>
+
                   </div>
 
                   {/* Test Connection Button & Result Box */}

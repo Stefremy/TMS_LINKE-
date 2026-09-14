@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation"
 import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon, Undo2, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
-import { getClientPortalStatsAction, createReturnShipmentAction, deleteShipmentAction, regenerateCttLabelAction } from "@/app/actions/shipments"
+import { getClientPortalStatsAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
@@ -31,42 +31,20 @@ export function ClientShipmentsHistory() {
 
   const printLabel = async (envioItem: any) => {
     let rawLabel = envioItem?.ctt_label_base64
-    if (!rawLabel && envioItem?.id) {
-      try {
-        const res = await regenerateCttLabelAction(envioItem.id)
-        if (res.success && res.labelBase64) {
-          rawLabel = res.labelBase64
-          setShipments(prev => prev.map(s => s.id === envioItem.id ? { ...s, ctt_label_base64: rawLabel } : s))
-        }
-      } catch (err: any) {
-        console.warn("Could not generate CTT label:", err?.message)
-      }
+    if (!rawLabel) {
+      alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
+      return
     }
-    if (rawLabel) {
-      printCttLabel(rawLabel)
-    } else {
-      setSelectedShipment(envioItem)
-    }
+    printCttLabel(rawLabel)
   }
 
   const downloadLabel = async (envioItem: any, ref: string) => {
     let rawLabel = envioItem?.ctt_label_base64
-    if (!rawLabel && envioItem?.id) {
-      try {
-        const res = await regenerateCttLabelAction(envioItem.id)
-        if (res.success && res.labelBase64) {
-          rawLabel = res.labelBase64
-          setShipments(prev => prev.map(s => s.id === envioItem.id ? { ...s, ctt_label_base64: rawLabel } : s))
-        }
-      } catch (err: any) {
-        console.warn("Could not generate CTT label:", err?.message)
-      }
+    if (!rawLabel) {
+      alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
+      return
     }
-    if (rawLabel) {
-      downloadCttLabel(rawLabel, `${ref}_Etiqueta_CTT.pdf`)
-    } else {
-      setSelectedShipment(envioItem)
-    }
+    downloadCttLabel(rawLabel, `${ref}_Etiqueta_CTT.pdf`)
   }
 
   React.useEffect(() => {

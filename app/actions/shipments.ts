@@ -14,38 +14,6 @@ const isValidUuid = (val?: string): boolean => {
   return Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 }
 
-/**
- * Converte nomes de serviço legíveis para códigos SubProduto CTT válidos (máx 10 chars).
- * Códigos reais validados via RecolhasWS (GetProdutosRecolha & GetAreaInfluencia):
- * - EMSF056.01: Premium D+1 (CTT 24H)
- * - EMSF057.01: Standard D+2 (CTT 48H)
- * - EMSF058.01: Economy D+5 (5 Dias)
- * - EMSF001.02: EMS Internacional
- * - ENCF008.02: Quick Internacional
- */
-function mapServiceNameToSubProduct(serviceName?: string | null): string {
-  if (!serviceName) return "EMSF056.01"
-  const trimmed = serviceName.trim()
-  // Se já for um código oficial de subproduto (ex: EMSF056.01), usar diretamente
-  if (/^(EMSF|ENCF|CORF)[0-9]{3}\.[0-9]{2}$/i.test(trimmed)) {
-    return trimmed.toUpperCase()
-  }
-  const lower = trimmed.toLowerCase()
-  // Internacional
-  if (lower.includes("internacional") || lower.includes("ems internacional")) return "EMSF001.02"
-  if (lower.includes("quick")) return "ENCF008.02"
-  // 5 dias / D+5
-  if (lower.includes("d+5") || lower.includes("5 dias") || lower.includes("economy")) return "EMSF058.01"
-  // 48h / D+2 / 2 dias / standard / ers48
-  if (lower.includes("48h") || lower.includes("2 dias") || lower.includes("d+2") || lower.includes("standard") || lower.includes("ers48") || lower.includes("ers 48")) return "EMSF057.01"
-  // 24h / D+1 / amanhã / premium / ers24
-  if (lower.includes("24h") || lower.includes("amanhã") || lower.includes("amanha") || lower.includes("d+1") || lower.includes("premium") || lower.includes("ers24") || lower.includes("ers 24")) return "EMSF056.01"
-  // Se for código curto genérico (≤ 10 chars) que não seja os inválidos ERS24/ERS48/D+
-  if (trimmed.length <= 10 && !lower.startsWith("ers") && !lower.startsWith("d+")) return trimmed
-  // Fallback padrão: CTT 24H (Premium D+1)
-  return "EMSF056.01"
-}
-
 
 /**
  * Ensures that the tenant and the client exist in their respective database tables
@@ -434,6 +402,7 @@ export async function emitClientGuiaAction(data: {
   weightKg: number
   volumesCount?: number
   serviceName: string
+  subProductId?: string
   calculatedPrice: number
 }) {
   const supabase = createAdminClient()
@@ -555,7 +524,7 @@ export async function emitClientGuiaAction(data: {
         },
         weightKg: data.weightKg,
         volumes: data.volumesCount || 1,
-        subProduct: mapServiceNameToSubProduct(data.serviceName),
+        subProduct: data.subProductId || "EMSF056.01",
         autoClose: false // Como recomendado no portal do cliente, deixamos em aberto para fechar em lote no final do dia
       })
 
@@ -651,7 +620,7 @@ export async function regenerateCttLabelAction(shipmentId: string) {
     },
     weightKg: Number(shipment.weight_kg) || 1,
     volumes: Number(shipment.volumes_count) || 1,
-    subProduct: mapServiceNameToSubProduct(shipment.service_type),
+    subProduct: shipment.service_type || "EMSF056.01",
     autoClose: false
   })
 

@@ -29,8 +29,7 @@ import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { 
   getClientPortalStatsAction, 
   createReturnShipmentAction, 
-  deleteShipmentAction,
-  regenerateCttLabelAction 
+  deleteShipmentAction
 } from "@/app/actions/shipments"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { Cliente, DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
@@ -192,42 +191,20 @@ export function ClientDashboard() {
 
   const printLabel = async (shipmentItem: any) => {
     let rawLabel = shipmentItem?.ctt_label_base64
-    if (!rawLabel && shipmentItem?.id) {
-      try {
-        const res = await regenerateCttLabelAction(shipmentItem.id)
-        if (res.success && res.labelBase64) {
-          rawLabel = res.labelBase64
-          setShipments(prev => prev.map(s => s.id === shipmentItem.id ? { ...s, ctt_label_base64: rawLabel } : s))
-        }
-      } catch (err: any) {
-        console.warn("Could not generate CTT label:", err?.message)
-      }
+    if (!rawLabel) {
+      alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
+      return
     }
-    if (rawLabel) {
-      printCttLabel(rawLabel)
-    } else {
-      setSelectedShipment(shipmentItem)
-    }
+    printCttLabel(rawLabel)
   }
 
   const downloadLabel = async (shipmentItem: any, ref: string) => {
     let rawLabel = shipmentItem?.ctt_label_base64
-    if (!rawLabel && shipmentItem?.id) {
-      try {
-        const res = await regenerateCttLabelAction(shipmentItem.id)
-        if (res.success && res.labelBase64) {
-          rawLabel = res.labelBase64
-          setShipments(prev => prev.map(s => s.id === shipmentItem.id ? { ...s, ctt_label_base64: rawLabel } : s))
-        }
-      } catch (err: any) {
-        console.warn("Could not generate CTT label:", err?.message)
-      }
+    if (!rawLabel) {
+      alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
+      return
     }
-    if (rawLabel) {
-      downloadCttLabel(rawLabel, `${ref}_Etiqueta_CTT.pdf`)
-    } else {
-      setSelectedShipment(shipmentItem)
-    }
+    downloadCttLabel(rawLabel, `${ref}_Etiqueta_CTT.pdf`)
   }
 
   // Contractual and pricing details from real client record

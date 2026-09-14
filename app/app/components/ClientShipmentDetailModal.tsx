@@ -30,7 +30,6 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { 
-  regenerateCttLabelAction, 
   getShipmentTrackingTimelineAction,
   deleteShipmentAction,
   createReturnShipmentAction
@@ -98,8 +97,12 @@ export function ClientShipmentDetailModal({
     : "Recentemente"
 
   // Resolve a etiqueta: se for ZPL cru, converte server-side via Labelary
+  // Resolve a etiqueta: se for ZPL cru, converte server-side via Labelary
   const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
-    if (!rawLabel) return null
+    if (!rawLabel) {
+      alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
+      return null
+    }
     if (rawLabel.trimStart().startsWith("^XA")) {
       const res = await convertZplToPdfAction(rawLabel)
       if (res.success && res.base64) return res.base64
@@ -121,31 +124,6 @@ export function ClientShipmentDetailModal({
     const label = await resolveLabel(currentShipment.ctt_label_base64)
     if (!label) return
     downloadCttLabel(label, `${tracking}_Etiqueta_CTT.pdf`)
-  }
-
-  // 3. Solicitar / Reemitir Etiqueta aos CTT
-  const handleReRequestLabel = async () => {
-    setIsRegenerating(true)
-    try {
-      const res = await regenerateCttLabelAction(currentShipment.id || currentShipment.tracking_number)
-      if (res.success && res.labelBase64) {
-        const updated = {
-          ...currentShipment,
-          ctt_label_base64: res.labelBase64,
-          tracking_number: res.trackingNumber || currentShipment.tracking_number
-        }
-        setCurrentShipment(updated)
-        if (onUpdateShipment) {
-          onUpdateShipment(updated)
-        }
-      } else {
-        alert("Resposta dos CTT: " + (res.error || "Não foi possível obter etiqueta. Verifique as credenciais CTT em /ops/configuracao/webservices."))
-      }
-    } catch (e: any) {
-      alert("Erro de comunicação CTT: " + (e?.message || e))
-    } finally {
-      setIsRegenerating(false)
-    }
   }
 
   // Sincronizar com CTT Track & Trace API
@@ -322,26 +300,7 @@ export function ClientShipmentDetailModal({
                   <span>Descarregar PDF</span>
                 </button>
               </>
-            ) : (
-              <button
-                type="button"
-                onClick={handleReRequestLabel}
-                disabled={isRegenerating}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
-              >
-                {isRegenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>A Obter Etiqueta CTT...</span>
-                  </>
-                ) : (
-                  <>
-                    <RotateCcw className="w-4 h-4" />
-                    <span>Solicitar Etiqueta CTT</span>
-                  </>
-                )}
-              </button>
-            )}
+            ) : null}
 
             {/* Criar Devolução */}
             <button
@@ -617,22 +576,12 @@ export function ClientShipmentDetailModal({
               
               {/* Missing label warning if not available */}
               {!hasLabel && (
-                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>
-                      Este envio não tem etiqueta associada em cache. Pode obtê-la diretamente dos Web Services CTT.
-                    </span>
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 flex items-start gap-2.5 text-xs">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold">Este envio ainda não tem a etiqueta CTT associada no sistema.</p>
+                    <p className="text-amber-700">A etiqueta é gerada exclusivamente no momento da criação do envio.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleReRequestLabel}
-                    disabled={isRegenerating}
-                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    {isRegenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                    <span>Obter Etiqueta Agora</span>
-                  </button>
                 </div>
               )}
 
@@ -834,17 +783,7 @@ export function ClientShipmentDetailModal({
                   <span>Descarregar PDF</span>
                 </button>
               </>
-            ) : (
-              <button
-                type="button"
-                onClick={handleReRequestLabel}
-                disabled={isRegenerating}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                {isRegenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                <span>Solicitar Etiqueta CTT</span>
-              </button>
-            )}
+            ) : null}
 
             <button
               type="button"
