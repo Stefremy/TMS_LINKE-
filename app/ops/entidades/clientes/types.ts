@@ -60,6 +60,12 @@ export interface ClientAllowedWebservice {
   allowed_services: string[]
 }
 
+
+export interface CustomTierOverride {
+  tier_index: number
+  sell_price: number
+}
+
 export interface Cliente {
   id: string
   code: string
@@ -95,6 +101,10 @@ export interface Cliente {
   volume_discount_pct?: number
   pricing?: ClientPricingConfig
   allowed_webservices?: ClientAllowedWebservice[]
+
+  // Preços customizados por serviço Linke (por cliente)
+  // Chave: ServicoLinke.id, Valor: array de sell_price por tier index
+  custom_tier_overrides?: Record<string, number[]>
 }
 
 export const DEFAULT_CLIENT_CATEGORIES = [

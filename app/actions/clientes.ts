@@ -308,6 +308,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     volume_discount_pct: cliente.volume_discount_pct ?? 0,
     pricing: cliente.pricing || DEFAULT_CLIENT_PRICING,
     allowed_webservices: cliente.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.slice(0, 3),
+    custom_tier_overrides: cliente.custom_tier_overrides || {},
   }
 
   // Se o cliente estava marcado como eliminado, remover o tombstone

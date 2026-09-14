@@ -38,10 +38,13 @@ import {
   SlidersHorizontal,
   ArrowRight,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Edit3,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import { saveClienteAction } from "@/app/actions/clientes"
-import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
+import type { ServicoLinke, PriceTierLinke } from "@/app/ops/configuracao/servicos/types"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { 
   Cliente, 
@@ -103,7 +106,10 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
     assigned_linke_profile: initialData?.assigned_linke_profile || "Standard / Geral",
     volume_discount_pct: initialData?.volume_discount_pct ?? 0,
     pricing: initialData?.pricing || DEFAULT_CLIENT_PRICING,
+    custom_tier_overrides: initialData?.custom_tier_overrides || {},
   })
+
+  const [expandedPriceServico, setExpandedPriceServico] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (initialData) {
@@ -138,6 +144,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
         assigned_linke_service_ids: initialData.assigned_linke_service_ids || servicosLinke.map((s) => s.id),
         assigned_linke_profile: initialData.assigned_linke_profile || "Standard / Geral",
         volume_discount_pct: initialData.volume_discount_pct ?? 0,
+        custom_tier_overrides: initialData.custom_tier_overrides || {},
         pricing: {
           ...DEFAULT_CLIENT_PRICING,
           ...initialData.pricing,
@@ -220,11 +227,50 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
     })
   }
 
+  const handleTierPriceChange = (
+    servicoId: string,
+    tierIndex: number,
+    newSellPrice: number,
+    baseTiers: PriceTierLinke[]
+  ) => {
+    setFormData((prev) => {
+      const currentOverrides = prev.custom_tier_overrides?.[servicoId]
+        ? [...prev.custom_tier_overrides[servicoId]]
+        : baseTiers.map((t) => t.sell_price)
+
+      while (currentOverrides.length < baseTiers.length) {
+        currentOverrides.push(baseTiers[currentOverrides.length].sell_price)
+      }
+
+      currentOverrides[tierIndex] = newSellPrice
+
+      return {
+        ...prev,
+        custom_tier_overrides: {
+          ...(prev.custom_tier_overrides || {}),
+          [servicoId]: currentOverrides,
+        },
+      }
+    })
+  }
+
+  const handleResetServiceTiers = (servicoId: string) => {
+    setFormData((prev) => {
+      const nextOverrides = { ...(prev.custom_tier_overrides || {}) }
+      delete nextOverrides[servicoId]
+      return {
+        ...prev,
+        custom_tier_overrides: nextOverrides,
+      }
+    })
+  }
+
   const handleResetPricing = () => {
-    if (confirm("Deseja repor todos os preços de produtos CTT e serviços especiais para os valores padrão oficiais?")) {
+    if (confirm("Deseja repor todos os preços de produtos CTT, serviços especiais e tabelas personalizadas para os valores padrão oficiais?")) {
       setFormData((prev) => ({
         ...prev,
         pricing: DEFAULT_CLIENT_PRICING,
+        custom_tier_overrides: {},
       }))
     }
   }
@@ -942,6 +988,20 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {Object.keys(formData.custom_tier_overrides || {}).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm("Deseja repor todas as tabelas e escalões personalizados deste cliente para os valores originais dos Serviços Linke?")) {
+                                setFormData((prev) => ({ ...prev, custom_tier_overrides: {} }))
+                              }
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            Repor Todos Escalões Linke
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setFormData({ ...formData, assigned_linke_service_ids: servicosLinke.map((s) => s.id) })}
@@ -964,66 +1024,254 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                         const isAssigned = (formData.assigned_linke_service_ids || []).includes(servico.id)
                         const carrierLogo = getCarrierLogo(servico.preferred_carrier_name)
                         const firstZone = servico.zones?.[0]
-                        const tier1 = firstZone?.tiers?.[0]
-                        const tier5 = firstZone?.tiers?.find((t) => t.weight_max === 5) || firstZone?.tiers?.[1]
+                        const tiers: PriceTierLinke[] = firstZone?.tiers || []
+                        const tier1 = tiers[0]
+                        const tier5 = tiers.find((t) => t.weight_max === 5) || tiers[1]
+                        const isExpanded = expandedPriceServico === servico.id
+                        const overrides = formData.custom_tier_overrides?.[servico.id]
+                        const hasCustomPrices = !!(overrides && overrides.some((val, idx) => val !== undefined && tiers[idx] && Math.abs(val - tiers[idx].sell_price) > 0.001))
 
                         return (
                           <div
                             key={servico.id}
-                            onClick={() => {
-                              const current = formData.assigned_linke_service_ids || []
-                              const next = isAssigned
-                                ? current.filter((id) => id !== servico.id)
-                                : [...current, servico.id]
-                              setFormData({ ...formData, assigned_linke_service_ids: next })
-                            }}
-                            className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                            className={`rounded-xl border transition-all ${
+                              isExpanded ? "col-span-1 md:col-span-2 shadow-md ring-2 ring-emerald-500/30" : "col-span-1 shadow-2xs"
+                            } ${
                               isAssigned
-                                ? "bg-emerald-50/50 border-emerald-500 shadow-2xs ring-1 ring-emerald-500/20"
-                                : "bg-white border-slate-200 hover:border-slate-300 opacity-60 hover:opacity-100"
+                                ? hasCustomPrices
+                                  ? "bg-amber-50/20 border-amber-400"
+                                  : "bg-emerald-50/40 border-emerald-500 ring-1 ring-emerald-500/20"
+                                : "bg-white border-slate-200 opacity-60 hover:opacity-100"
                             }`}
                           >
-                            <div className="flex items-start gap-3">
-                              <input
-                                type="checkbox"
-                                checked={isAssigned}
-                                onChange={() => {}} // Handled by div onClick
-                                className="mt-1 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                              />
+                            <div
+                              onClick={() => {
+                                const current = formData.assigned_linke_service_ids || []
+                                const next = isAssigned
+                                  ? current.filter((id) => id !== servico.id)
+                                  : [...current, servico.id]
+                                setFormData({ ...formData, assigned_linke_service_ids: next })
+                              }}
+                              className="p-3.5 flex items-start justify-between gap-3 cursor-pointer select-none"
+                            >
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isAssigned}
+                                  onChange={() => {}} // Handled by div onClick
+                                  className="mt-1 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                />
 
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {carrierLogo ? (
-                                    <div className="w-6 h-6 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={carrierLogo} alt={servico.preferred_carrier_name} className="max-w-full max-h-full object-contain" />
-                                    </div>
-                                  ) : null}
-                                  <span className="font-bold text-xs text-slate-900">{servico.name}</span>
-                                </div>
-
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-[10px] font-mono text-slate-500">{servico.code}</span>
-                                  <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">
-                                    {servico.pricing_profile}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400">Trânsito: {servico.transit_time_label}</span>
-                                </div>
-
-                                {tier1 && (
-                                  <div className="mt-2 text-[11px] text-slate-600 flex items-center gap-2 font-mono">
-                                    <span>Até 1kg: <strong className="text-emerald-700">{tier1.sell_price.toFixed(2)}€</strong></span>
-                                    {tier5 && <span>• Até 5kg: <strong className="text-emerald-700">{tier5.sell_price.toFixed(2)}€</strong></span>}
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {carrierLogo ? (
+                                      <div className="w-6 h-6 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={carrierLogo} alt={servico.preferred_carrier_name} className="max-w-full max-h-full object-contain" />
+                                      </div>
+                                    ) : null}
+                                    <span className="font-bold text-xs text-slate-900">{servico.name}</span>
+                                    {hasCustomPrices && (
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                                        <Edit3 className="w-2.5 h-2.5" />
+                                        Preços Custom
+                                      </span>
+                                    )}
                                   </div>
+
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[10px] font-mono text-slate-500">{servico.code}</span>
+                                    <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">
+                                      {servico.pricing_profile}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">Trânsito: {servico.transit_time_label}</span>
+                                  </div>
+
+                                  {tier1 && !isExpanded && (
+                                    <div className="mt-2 text-[11px] text-slate-600 flex items-center gap-2 font-mono flex-wrap">
+                                      {(() => {
+                                        const price1 = overrides?.[0] ?? tier1.sell_price
+                                        const is1Custom = overrides?.[0] !== undefined && Math.abs(overrides[0] - tier1.sell_price) > 0.001
+                                        const price5 = tier5 ? (overrides?.[tiers.indexOf(tier5)] ?? tier5.sell_price) : null
+                                        return (
+                                          <>
+                                            <span>
+                                              Até 1kg:{" "}
+                                              <strong className={is1Custom ? "text-amber-800 font-bold" : "text-emerald-700"}>
+                                                {price1.toFixed(2)}€
+                                              </strong>
+                                              {is1Custom && (
+                                                <span className="text-[9px] text-slate-400 line-through ml-1">
+                                                  {tier1.sell_price.toFixed(2)}€
+                                                </span>
+                                              )}
+                                            </span>
+                                            {tier5 && price5 !== null && (
+                                              <span>
+                                                • Até 5kg:{" "}
+                                                <strong className="text-emerald-700">
+                                                  {price5.toFixed(2)}€
+                                                </strong>
+                                              </span>
+                                            )}
+                                          </>
+                                        )
+                                      })()}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                {isAssigned && tiers.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setExpandedPriceServico(isExpanded ? null : servico.id)
+                                    }}
+                                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all flex items-center gap-1.5 shadow-2xs ${
+                                      isExpanded
+                                        ? "bg-slate-900 text-white border-slate-900"
+                                        : hasCustomPrices
+                                        ? "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200"
+                                        : "bg-white text-slate-700 border-slate-300 hover:bg-slate-100 hover:border-slate-400"
+                                    }`}
+                                    title="Editar ou personalizar preços dos escalões deste serviço para este cliente"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                    <span>{isExpanded ? "Fechar Tabela" : hasCustomPrices ? "Ajustar Preços ✎" : "Ajustar Preços"}</span>
+                                    {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                  </button>
                                 )}
+
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  isAssigned ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"
+                                }`}>
+                                  {isAssigned ? "Autorizado" : "Bloqueado"}
+                                </span>
                               </div>
                             </div>
 
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              isAssigned ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"
-                            }`}>
-                              {isAssigned ? "Autorizado" : "Bloqueado"}
-                            </span>
+                            {/* Expanded Price Override Table */}
+                            {isExpanded && isAssigned && (
+                              <div
+                                className="p-4 bg-white border-t border-slate-200 rounded-b-xl space-y-3"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1 rounded bg-emerald-100 text-emerald-700">
+                                      <Tag className="w-3.5 h-3.5" />
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-bold text-slate-900">
+                                        Personalização dos Escalões de Peso: {servico.name}
+                                      </span>
+                                      <p className="text-[11px] text-slate-500">
+                                        Altere diretamente o PVP Cliente (€) em cada escalão. Se deixar o valor padrão, a tarifa segue a tabela Linke.
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    {hasCustomPrices && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleResetServiceTiers(servico.id)}
+                                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 px-2.5 py-1 rounded-lg transition-colors shadow-2xs"
+                                      >
+                                        <RotateCcw className="w-3 h-3" />
+                                        Repor Padrão Linke
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                                  <table className="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                                        <th className="py-2 px-3">Escalão</th>
+                                        <th className="py-2 px-3 text-center">Peso Máx</th>
+                                        <th className="py-2 px-3 text-right">Custo Parceiro</th>
+                                        <th className="py-2 px-3 text-right">PVP Standard Linke</th>
+                                        <th className="py-2 px-3 text-right bg-emerald-50/80 text-emerald-900 border-x border-emerald-200">
+                                          PVP Cliente (€) <span className="text-emerald-700 font-normal">(Editável)</span>
+                                        </th>
+                                        <th className="py-2 px-3 text-right">Margem Bruta</th>
+                                        <th className="py-2 px-3 text-center">Estado</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {tiers.map((tier, tIdx) => {
+                                        const currentVal = overrides?.[tIdx] !== undefined ? overrides[tIdx] : tier.sell_price
+                                        const isOverridden = overrides?.[tIdx] !== undefined && Math.abs(overrides[tIdx] - tier.sell_price) > 0.001
+                                        const marginEur = currentVal - tier.cost_price
+                                        const marginPct = currentVal > 0 ? (marginEur / currentVal) * 100 : 0
+
+                                        return (
+                                          <tr key={tier.id || tIdx} className={`hover:bg-slate-50/60 transition-colors ${isOverridden ? "bg-amber-50/40" : ""}`}>
+                                            <td className="py-2 px-3 font-semibold text-slate-800">
+                                              {tier.label || `Escalão ${tIdx + 1}`}
+                                            </td>
+                                            <td className="py-2 px-3 text-center font-mono text-slate-600">
+                                              ≤ {tier.weight_max} kg
+                                            </td>
+                                            <td className="py-2 px-3 text-right font-mono text-slate-400">
+                                              {tier.cost_price.toFixed(2)}€
+                                            </td>
+                                            <td className="py-2 px-3 text-right font-mono text-slate-500">
+                                              {tier.sell_price.toFixed(2)}€
+                                            </td>
+                                            <td className="py-1.5 px-3 text-right bg-emerald-50/40 border-x border-emerald-200">
+                                              <div className="flex items-center justify-end gap-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  min="0"
+                                                  value={currentVal}
+                                                  onChange={(e) => {
+                                                    const val = parseFloat(e.target.value) || 0
+                                                    handleTierPriceChange(servico.id, tIdx, val, tiers)
+                                                  }}
+                                                  className={`w-24 text-right font-mono font-bold text-xs px-2 py-1 rounded-md border shadow-2xs focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all ${
+                                                    isOverridden
+                                                      ? "border-amber-400 bg-amber-50/90 text-amber-950 ring-1 ring-amber-400/40"
+                                                      : "border-slate-300 bg-white text-slate-900 focus:border-emerald-500"
+                                                  }`}
+                                                />
+                                                <span className="text-xs font-semibold text-slate-500">€</span>
+                                              </div>
+                                            </td>
+                                            <td className="py-2 px-3 text-right font-mono">
+                                              <span className={marginEur >= 0 ? "text-emerald-700 font-semibold" : "text-rose-600 font-bold"}>
+                                                {marginEur >= 0 ? "+" : ""}{marginEur.toFixed(2)}€
+                                              </span>
+                                              <span className="text-[10px] text-slate-400 block">
+                                                ({marginPct.toFixed(1)}%)
+                                              </span>
+                                            </td>
+                                            <td className="py-2 px-3 text-center">
+                                              {isOverridden ? (
+                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                                  <Edit3 className="w-2.5 h-2.5" />
+                                                  Custom
+                                                </span>
+                                              ) : (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
+                                                  Standard
+                                                </span>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )
                       })}

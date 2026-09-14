@@ -37,6 +37,22 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
   // Client-side weight-based estimate (display only; server recalculates using assigned table)
   const estimatedTier = (() => {
+    if (activeLinkeService?.zones?.[0]?.tiers?.length) {
+      const origTiers = activeLinkeService.zones[0].tiers || []
+      const tiers = origTiers.filter(t => t.enabled !== false).sort((a, b) => a.weight_max - b.weight_max)
+      const tierIndex = tiers.findIndex(t => weightKg <= t.weight_max)
+      const matchedTier = tierIndex !== -1 ? tiers[tierIndex] : tiers[tiers.length - 1]
+      if (matchedTier) {
+        const origIndex = origTiers.indexOf(matchedTier)
+        const customPrice = currentClient?.custom_tier_overrides?.[activeLinkeService.id]?.[origIndex]
+        const effectiveSell = customPrice !== undefined ? customPrice : matchedTier.sell_price
+        return {
+          label: matchedTier.label || `Até ${matchedTier.weight_max} Kg`,
+          sell: effectiveSell,
+          buy: matchedTier.cost_price,
+        }
+      }
+    }
     if (weightKg <= 1)  return { label: "Até 1 Kg",  sell: 3.56, buy: 2.85 }
     if (weightKg <= 2)  return { label: "Até 2 Kg",  sell: 3.94, buy: 3.15 }
     if (weightKg <= 5)  return { label: "Até 5 Kg",  sell: 4.58, buy: 3.75 }

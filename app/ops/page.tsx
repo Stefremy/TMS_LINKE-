@@ -153,17 +153,31 @@ export default async function OpsDashboardPage() {
                 <tbody className="divide-y divide-slate-50 text-xs">
                   {recentShipments.map((envio: any) => {
                     const clientName = envio.sender_name || (envio.client_id && clientMap.get(envio.client_id)) || "Cliente Direto"
-                    const trk = envio.tracking_number || envio.id
-                    const cttCode = envio.ctt_object_id || null
+                    const isRealCtt = (val?: string) => val && /^(DA|DB|DD|EA|EQ|EG)/i.test(val.trim())
+                    
+                    const cttCode = isRealCtt(envio.ctt_object_id) 
+                      ? envio.ctt_object_id 
+                      : isRealCtt(envio.tracking_number) 
+                      ? envio.tracking_number 
+                      : envio.ctt_object_id
+
+                    const linkeRef = (envio.reference?.startsWith("LTK") ? envio.reference : null)
+                      || (envio.tracking_number?.startsWith("LTK") ? envio.tracking_number : null)
+                      || (envio.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1])
+                      || envio.reference
+                      || null
+
+                    const displayRef = linkeRef || envio.tracking_number || envio.id
+                    const secondaryCode = cttCode && cttCode !== displayRef ? cttCode : null
                     const isCtt = envio.service_type?.includes("ctt") || !envio.service_type
 
                     return (
                       <tr key={envio.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="py-3.5">
-                          <div className="font-bold font-mono text-slate-800">{trk}</div>
-                          {cttCode && (
+                          <div className="font-bold font-mono text-slate-800">{displayRef}</div>
+                          {secondaryCode && (
                             <div className="font-mono text-[11px] font-bold text-slate-700 mt-0.5" title="Objeto CTT Expresso">
-                              {cttCode}
+                              {secondaryCode}
                             </div>
                           )}
                         </td>
@@ -230,7 +244,24 @@ export default async function OpsDashboardPage() {
                 </Link>
               </div>
 
-              {latestActiveShipment ? (
+              {latestActiveShipment ? (() => {
+                const latestLinkeRef = (latestActiveShipment.reference?.startsWith("LTK") ? latestActiveShipment.reference : null)
+                  || (latestActiveShipment.tracking_number?.startsWith("LTK") ? latestActiveShipment.tracking_number : null)
+                  || (latestActiveShipment.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1])
+                  || latestActiveShipment.reference
+                  || latestActiveShipment.tracking_number
+                  || latestActiveShipment.id
+
+                const isRealCtt = (val?: string) => val && /^(DA|DB|DD|EA|EQ|EG)/i.test(val.trim())
+                const cttCandidate = isRealCtt(latestActiveShipment.ctt_object_id) 
+                  ? latestActiveShipment.ctt_object_id 
+                  : isRealCtt(latestActiveShipment.tracking_number) 
+                  ? latestActiveShipment.tracking_number 
+                  : latestActiveShipment.ctt_object_id
+
+                const latestCttCode = cttCandidate && cttCandidate !== latestLinkeRef ? cttCandidate : null
+
+                return (
                 <div className="space-y-4">
                   <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                     <div className="flex items-center justify-between text-xs mb-2">
@@ -247,11 +278,11 @@ export default async function OpsDashboardPage() {
                           </div>
                         ) : null}
                         <span className="font-mono font-bold text-indigo-600">
-                          {latestActiveShipment.tracking_number || latestActiveShipment.id}
+                          {latestLinkeRef}
                         </span>
-                        {latestActiveShipment.ctt_object_id && (
-                          <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                            {latestActiveShipment.ctt_object_id}
+                        {latestCttCode && (
+                          <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title="Objeto CTT Expresso">
+                            {latestCttCode}
                           </span>
                         )}
                       </div>
@@ -288,7 +319,8 @@ export default async function OpsDashboardPage() {
                     </div>
                   </div>
                 </div>
-              ) : (
+                )
+              })() : (
                 <div className="py-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 my-auto">
                   <Truck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                   <p className="text-xs font-bold text-slate-600">Sem envios ativos</p>

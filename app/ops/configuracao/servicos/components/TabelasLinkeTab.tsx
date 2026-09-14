@@ -201,12 +201,23 @@ export function TabelasLinkeTab({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5">
-                      <div 
-                        className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs text-white shadow-sm flex-shrink-0"
-                        style={{ backgroundColor: servico.color || "#059669" }}
-                      >
-                        {servico.code.substring(0, 3)}
-                      </div>
+                      {getCarrierLogo(servico.preferred_carrier_id || servico.preferred_carrier_name) ? (
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-white border border-slate-200 shadow-sm flex-shrink-0 p-1">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={getCarrierLogo(servico.preferred_carrier_id || servico.preferred_carrier_name)!}
+                            alt={servico.preferred_carrier_name}
+                            className="w-full h-full object-contain"
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs text-white shadow-sm flex-shrink-0"
+                          style={{ backgroundColor: servico.color || "#059669" }}
+                        >
+                          {servico.code.substring(0, 3)}
+                        </div>
+                      )}
                       <div className="overflow-hidden">
                         <h4 className="font-semibold text-xs text-slate-800 leading-tight truncate">
                           {servico.name}
@@ -430,8 +441,6 @@ export function TabelasLinkeTab({
                           <tr>
                             <th className="py-3 px-4">Escalão / Peso</th>
                             <th className="py-3 px-4 text-right">Custo Parceiro (€)</th>
-                            <th className="py-3 px-4 text-right font-bold text-emerald-800 bg-emerald-50/50">PVP Linke (€)</th>
-                            <th className="py-3 px-4 text-right text-slate-700">Lucro Bruto (€)</th>
                             <th className="py-3 px-4 text-center">Prazo</th>
                           </tr>
                         </thead>
@@ -450,12 +459,6 @@ export function TabelasLinkeTab({
                                 </td>
                                 <td className="py-3 px-4 text-right font-mono text-slate-600">
                                   {cost.toFixed(2)}€
-                                </td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700 text-sm bg-emerald-50/30">
-                                  {sell.toFixed(2)}€
-                                </td>
-                                <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-800">
-                                  +{profit.toFixed(2)}€ <span className="text-[10px] text-slate-400 font-normal">({marginPct}%)</span>
                                 </td>
                                 <td className="py-3 px-4 text-center text-slate-500 font-medium">
                                   {tier.delivery_time}

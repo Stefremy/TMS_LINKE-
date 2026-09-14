@@ -478,25 +478,53 @@ export async function emitCttShipmentAction(shipmentInput: {
     // Atualizar base de dados se shipmentId estiver presente
     if (shipmentInput.id) {
       const supabase = createAdminClient()
-      await supabase
-        .from("shipments")
-        .update({
-          tracking_number: trackingNumber,
-          ctt_object_id: trackingNumber,
-          ctt_delivery_note_id: result.DeliveryNoteId,
-          ctt_label_base64: labelBase64,
-          status: "em_transito",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", shipmentInput.id)
+      try {
+        await supabase
+          .from("shipments")
+          .update({
+            tracking_number: trackingNumber,
+            status: "em_transito",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", shipmentInput.id)
+      } catch (e: any) {
+        console.warn("Could not update shipments table:", e?.message)
+      }
+
+      // Atualizar audit_log com metadados ricos CTT
+      try {
+        const { data: existingLogs } = await supabase
+          .from("audit_log")
+          .select("id, details")
+          .eq("action", "shipment_data")
+        
+        const targetLog = existingLogs?.find((l: any) => l.details?.id === shipmentInput.id)
+        if (targetLog) {
+          await supabase.from("audit_log").update({
+            details: {
+              ...targetLog.details,
+              tracking_number: trackingNumber,
+              ctt_object_id: trackingNumber,
+              ctt_delivery_note_id: result.DeliveryNoteId,
+              ctt_label_base64: labelBase64,
+              status: "em_transito",
+              updated_at: new Date().toISOString(),
+            }
+          }).eq("id", targetLog.id)
+        }
+      } catch (e: any) {
+        console.warn("Could not update audit_log with CTT details:", e?.message)
+      }
 
       // Registar evento de tracking inicial
-      await supabase.from("tracking_events").insert({
-        tenant_id: LINKE_TENANT_ID,
-        shipment_id: shipmentInput.id,
-        event_code: "EMA",
-        description: "Aceitação CTT Expresso - Rótulo Criado",
-      })
+      try {
+        await supabase.from("tracking_events").insert({
+          tenant_id: LINKE_TENANT_ID,
+          shipment_id: shipmentInput.id,
+          event_code: "EMA",
+          description: "Aceitação CTT Expresso - Rótulo Criado",
+        })
+      } catch {}
     }
 
     revalidatePath("/ops/envios")

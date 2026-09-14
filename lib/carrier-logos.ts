@@ -14,14 +14,14 @@ export const CARRIER_LOGOS: Record<string, string> = {
   "ctt 48h": "/logo_transportadoras/ctt_express_logo.svg",
   linke: "/logo_transportadoras/ctt_express_logo.svg",
   forn_2: "/logo_transportadoras/ctt_express_logo.svg",
+  lk003: "/logo_transportadoras/ctt_express_logo.svg",
+  forn_lk003: "/logo_transportadoras/ctt_express_logo.svg",
 
   // Correos Express
   correos: "/logo_transportadoras/correos_logo.jpeg",
   "correos express": "/logo_transportadoras/correos_logo.jpeg",
   "correos.express": "/logo_transportadoras/correos_logo.jpeg",
   "cep ii": "/logo_transportadoras/correos_logo.jpeg",
-  lk003: "/logo_transportadoras/correos_logo.jpeg",
-  forn_lk003: "/logo_transportadoras/correos_logo.jpeg",
 
   // CTT Correios (Postal)
   correios: "/logo_transportadoras/ctt_correios_logo.png",

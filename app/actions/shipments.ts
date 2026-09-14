@@ -47,15 +47,15 @@ async function ensureTenantAndClient(supabase: any, clientId?: string, clientNam
 }
 
 /**
- * Garante e formata um número de objeto CTT Expresso realista e determinístico (ex: DA839201948PT, DB838...PT, DD838...PT)
+ * Garante e formata um número de objeto CTT Expresso realista e determinístico (ex: EQ418..., DD464..., DB290..., DA839...)
  */
 function formatOrGenerateCttObjectId(s: any): string {
-  // Se já for um código CTT válido (ex: DA839201948PT, DB838...PT, DD838...PT)
+  // Se já for um código de envio internacional/nacional UPU S10 (2 letras + 9 dígitos + 2 letras, ex: EQ418725876PT, DD464650336PT)
   if (s?.ctt_object_id && /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/i.test(s.ctt_object_id.trim())) {
     return s.ctt_object_id.trim().toUpperCase()
   }
 
-  // Se o próprio tracking_number for um código CTT válido
+  // Se o próprio tracking_number for um código CTT válido (ex: EQ418725876PT)
   if (s?.tracking_number && /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/i.test(s.tracking_number.trim())) {
     return s.tracking_number.trim().toUpperCase()
   }
@@ -65,14 +65,29 @@ function formatOrGenerateCttObjectId(s: any): string {
     return "DB290719717PT"
   }
 
-  if (s?.ctt_object_id && (s.ctt_object_id.startsWith("DA") || s.ctt_object_id.startsWith("DB") || s.ctt_object_id.startsWith("DD") || s.ctt_object_id.startsWith("EA"))) {
-    return s.ctt_object_id.toUpperCase()
+  if (s?.ctt_object_id && /^(DA|DB|DD|EA|EQ|EG)/i.test(s.ctt_object_id.trim())) {
+    return s.ctt_object_id.trim().toUpperCase()
   }
 
-  // Gerar código CTT realista determinístico baseado no número de tracking / id
+  if (s?.tracking_number && /^(DA|DB|DD|EA|EQ|EG)/i.test(s.tracking_number.trim())) {
+    return s.tracking_number.trim().toUpperCase()
+  }
+
+  // Gerar código CTT realista determinístico baseado no serviço / tracking / id
   const rawSeed = (s?.tracking_number || s?.id || "").replace(/\D/g, "") || "838291042"
   const digits = (rawSeed + "838291042571").slice(0, 9)
-  const prefix = (s?.tracking_number && parseInt(s.tracking_number.slice(-1) || "0", 10) % 2 === 0) ? "DB" : "DD"
+  
+  let prefix = "DD"
+  const srv = (s?.service_type || s?.serviceName || "").toLowerCase()
+  if (srv.includes("eq") || srv.includes("económico") || srv.includes("48")) {
+    prefix = "EQ"
+  } else if (srv.includes("db") || srv.includes("2 dias") || srv.includes("d+2")) {
+    prefix = "DB"
+  } else if (srv.includes("eg") || srv.includes("múltiplo")) {
+    prefix = "EG"
+  } else if (s?.tracking_number && parseInt(s.tracking_number.slice(-1) || "0", 10) % 2 === 0) {
+    prefix = "DB"
+  }
   
   return `${prefix}838${digits.slice(3, 9)}PT`
 }
@@ -96,8 +111,10 @@ export async function getShipmentsAction(): Promise<any[]> {
         const key = s.id || s.tracking_number
         if (key) {
           const cttCode = formatOrGenerateCttObjectId(s)
+          const linkeRef = s.tracking_number?.startsWith("LTK") ? s.tracking_number : s.reference || null
           shipmentsMap.set(key, {
             ...s,
+            reference: linkeRef,
             ctt_object_id: cttCode,
           })
         }
@@ -107,7 +124,7 @@ export async function getShipmentsAction(): Promise<any[]> {
     console.warn("Could not query shipments table:", err?.message)
   }
 
-  // 2. Fetch from audit_log for shipment_data
+  // 2. Fetch from audit_log for shipment_data (merge rich metadata: real CTT tracking, labels, etc.)
   try {
     const { data: logs, error: logError } = await supabase
       .from("audit_log")
@@ -120,13 +137,43 @@ export async function getShipmentsAction(): Promise<any[]> {
         const s = log.details
         if (s) {
           const key = s.id || s.tracking_number
-          if (key && !shipmentsMap.has(key)) {
-            const cttCode = formatOrGenerateCttObjectId(s)
-            shipmentsMap.set(key, {
-              ...s,
-              ctt_object_id: cttCode,
-              created_at: s.created_at || log.created_at || new Date().toISOString()
-            })
+          if (key) {
+            const existing = shipmentsMap.get(key)
+            const isRealTracking = (val?: string) => val && /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim())
+            
+            const linkeRef = s.reference 
+              || (existing?.tracking_number?.startsWith("LTK") ? existing.tracking_number : null)
+              || (s.tracking_number?.startsWith("LTK") ? s.tracking_number : null)
+              || (s.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1])
+              || existing?.reference
+              || null
+
+            if (existing) {
+              const effectiveTracking = isRealTracking(s.tracking_number)
+                ? s.tracking_number
+                : isRealTracking(existing.tracking_number)
+                ? existing.tracking_number
+                : isRealTracking(s.ctt_object_id)
+                ? s.ctt_object_id
+                : existing.tracking_number || s.tracking_number
+
+              shipmentsMap.set(key, {
+                ...existing,
+                ...s,
+                reference: linkeRef,
+                tracking_number: effectiveTracking,
+                ctt_label_base64: s.ctt_label_base64 || existing.ctt_label_base64,
+                ctt_object_id: formatOrGenerateCttObjectId({ ...existing, ...s, tracking_number: effectiveTracking }),
+              })
+            } else {
+              const cttCode = formatOrGenerateCttObjectId(s)
+              shipmentsMap.set(key, {
+                ...s,
+                reference: linkeRef,
+                ctt_object_id: cttCode,
+                created_at: s.created_at || log.created_at || new Date().toISOString()
+              })
+            }
           }
         }
       })
@@ -462,6 +509,7 @@ export async function emitClientGuiaAction(data: {
     recipient_zip4: recipientZip4,
     buy_price: computedBuyPrice,
     sell_price: computedSellPrice,
+    reference: trackingNumber,
     created_at: now,
     updated_at: now,
   }
@@ -532,23 +580,37 @@ export async function emitClientGuiaAction(data: {
         realGuia = cttRes.trackingNumber || trackingNumber
         labelBase64 = cttRes.labelBase64
         
-        // Guardar etiqueta e tracking real na BD
+        // Guardar tracking real na BD (apenas colunas existentes na tabela shipments)
         try {
           await supabase.from("shipments").update({
             tracking_number: realGuia,
-            ctt_label_base64: labelBase64
+            status: "em_transito",
+            updated_at: new Date().toISOString(),
           }).eq("id", shipmentId)
-        } catch (e) { console.warn("Failed to update shipment with label") }
+        } catch (e: any) { console.warn("Failed to update shipment with tracking:", e?.message) }
         
+        // Atualizar audit_log com metadados ricos (incluindo etiqueta)
         try {
-          await supabase.from("audit_log").update({
-            details: {
-              ...shipmentData,
-              tracking_number: realGuia,
-              ctt_label_base64: labelBase64
-            }
-          }).eq("action", "shipment_data").contains("details", { id: shipmentId })
-        } catch (e) { console.warn("Failed to update audit_log with label") }
+          const { data: existingLogs } = await supabase
+            .from("audit_log")
+            .select("id, details")
+            .eq("action", "shipment_data")
+          
+          const targetLog = existingLogs?.find((l: any) => l.details?.id === shipmentId)
+          if (targetLog) {
+            await supabase.from("audit_log").update({
+              details: {
+                ...targetLog.details,
+                reference: trackingNumber,
+                tracking_number: realGuia,
+                ctt_object_id: realGuia,
+                ctt_label_base64: labelBase64,
+                status: "em_transito",
+                updated_at: new Date().toISOString(),
+              }
+            }).eq("id", targetLog.id)
+          }
+        } catch (e: any) { console.warn("Failed to update audit_log with label:", e?.message) }
       }
     } catch (e: any) {
       console.error("Failed to generate CTT real shipment:", e.message)
@@ -630,18 +692,30 @@ export async function regenerateCttLabelAction(shipmentId: string) {
     try {
       await supabase.from("shipments").update({
         tracking_number: updatedGuia,
-        ctt_label_base64: cttRes.labelBase64
+        status: "em_transito",
+        updated_at: new Date().toISOString(),
       }).eq("id", shipment.id)
     } catch {}
 
     try {
-      await supabase.from("audit_log").update({
-        details: {
-          ...shipment,
-          tracking_number: updatedGuia,
-          ctt_label_base64: cttRes.labelBase64
-        }
-      }).eq("action", "shipment_data").contains("details", { id: shipment.id })
+      const { data: existingLogs } = await supabase
+        .from("audit_log")
+        .select("id, details")
+        .eq("action", "shipment_data")
+      
+      const targetLog = existingLogs?.find((l: any) => l.details?.id === shipment.id)
+      if (targetLog) {
+        await supabase.from("audit_log").update({
+          details: {
+            ...targetLog.details,
+            tracking_number: updatedGuia,
+            ctt_object_id: updatedGuia,
+            ctt_label_base64: cttRes.labelBase64,
+            status: "em_transito",
+            updated_at: new Date().toISOString(),
+          }
+        }).eq("id", targetLog.id)
+      }
     } catch {}
   }
 

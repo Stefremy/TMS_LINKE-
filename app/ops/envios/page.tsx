@@ -25,14 +25,27 @@ export default async function EnviosPage() {
   // Map to the shape expected by EnviosClient (formerly mock data)
   const mappedEnvios = shipments.map((s: any) => {
     const statusCfg = getShipmentStatusConfig(s.status)
+    const isRealCarrierTracking = (val?: string) => val && /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim())
+    const carrierCode = isRealCarrierTracking(s.tracking_number)
+      ? s.tracking_number
+      : isRealCarrierTracking(s.ctt_object_id)
+      ? s.ctt_object_id
+      : s.tracking_number || s.ctt_object_id || "N/A"
+    const internalRef = (s.reference?.startsWith("LTK") ? s.reference : null)
+      || (s.tracking_number?.startsWith("LTK") ? s.tracking_number : null)
+      || (s.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1])
+      || s.reference
+      || (s.tracking_number?.startsWith("LTK") ? s.tracking_number : null)
+      || null
+
     return {
       rawId: s.id,
       rawShipment: s,
       trk: { 
-        id: s.tracking_number || "N/A", 
+        id: carrierCode, 
         date: new Date(s.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }), 
-        ref: s.ctt_object_id || s.reference || s.tracking_number, 
-        carrierRef: s.ctt_object_id || null,
+        ref: internalRef, 
+        carrierRef: carrierCode,
         carrierName: s.carrier_name || "CTT Expresso",
         tag: "A01" 
       },

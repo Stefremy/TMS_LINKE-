@@ -153,16 +153,24 @@ export function ClientCreateGuia() {
     let base = 5.50
     if (srv && srv.zones && srv.zones.length > 0) {
       const zone = srv.zones[0]
-      const tiers = (zone.tiers || []).filter((t) => t.enabled !== false).sort((a, b) => a.weight_max - b.weight_max)
-      const matchedTier = tiers.find((t) => w <= t.weight_max) || tiers[tiers.length - 1]
+      const origTiers = zone.tiers || []
+      const tiers = origTiers.filter((t) => t.enabled !== false).sort((a, b) => a.weight_max - b.weight_max)
+      const matchedTierIndex = tiers.findIndex((t) => w <= t.weight_max)
+      const matchedTier = matchedTierIndex !== -1 ? tiers[matchedTierIndex] : tiers[tiers.length - 1]
       if (matchedTier) {
+        const origIndex = origTiers.indexOf(matchedTier)
+        const customOverride = currentClient?.custom_tier_overrides?.[srv.id]?.[origIndex]
+        const effectiveSellPrice = customOverride !== undefined ? customOverride : matchedTier.sell_price
+
         if (w > 30 && matchedTier.weight_max >= 999) {
           const tier30 = tiers.find((t) => t.weight_max === 30)
-          const base30 = tier30 ? tier30.sell_price : matchedTier.sell_price
+          const origIndex30 = tier30 ? origTiers.indexOf(tier30) : -1
+          const custom30 = origIndex30 !== -1 ? currentClient?.custom_tier_overrides?.[srv.id]?.[origIndex30] : undefined
+          const base30 = custom30 !== undefined ? custom30 : (tier30 ? tier30.sell_price : effectiveSellPrice)
           const extraKg = Math.ceil(w - 30)
-          base = base30 + extraKg * matchedTier.sell_price
+          base = base30 + extraKg * effectiveSellPrice
         } else {
-          base = matchedTier.sell_price
+          base = effectiveSellPrice
         }
       }
     }

@@ -264,9 +264,14 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                       <span className="text-[12px] text-slate-400">📋</span>
                     </button>
                     <span className="text-slate-400 text-[11px]">{envio.trk?.date}</span>
-                    {(envio.trk?.carrierRef || envio.rawShipment?.ctt_object_id || envio.trk?.ref) && (
+                    {envio.trk?.ref && envio.trk.ref !== envio.trk.id && (
+                      <span className="font-mono text-[11px] font-semibold text-slate-500 mt-0.5" title="Referência Interna Linke">
+                        Ref: {envio.trk.ref}
+                      </span>
+                    )}
+                    {envio.trk?.carrierRef && envio.trk.carrierRef !== envio.trk.id && (
                       <span className="font-mono text-[11px] font-bold text-slate-700 mt-0.5" title="Objeto / Rastreio CTT Expresso">
-                        {envio.trk?.carrierRef || envio.rawShipment?.ctt_object_id || envio.trk?.ref}
+                        {envio.trk.carrierRef}
                       </span>
                     )}
                     <span className="inline-block mt-1 px-1.5 py-0.5 bg-green-500 text-white text-[9px] font-bold rounded-sm w-fit leading-none">
