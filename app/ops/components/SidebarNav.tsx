@@ -45,7 +45,6 @@ const navConfig: NavItem[] = [
       { title: "Criar Envio", href: "/ops/envios/novo" },
       { title: "Pedidos de Recolha", href: "/ops/envios/recolhas" },
       { title: "Rastreabilidade", href: "/ops/envios/rastreabilidade" },
-      { title: "Subproduts e tabelas Linke", href: "/ops/envios/operacional" },
     ]
   },
   {
