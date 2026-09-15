@@ -69,7 +69,12 @@ export function ClientShipmentDetailModal({
   const [selectedReason, setSelectedReason] = React.useState("11")
   const [selectedSituation, setSelectedSituation] = React.useState("D")
 
-  const tracking = currentShipment?.tracking_number || currentShipment?.id || "N/A"
+  const internalRef = currentShipment?.tracking_number?.startsWith("LTK") || currentShipment?.tracking_number?.startsWith("LKT")
+    ? currentShipment.tracking_number
+    : `LTK${(currentShipment?.id || "00000000").substring(0, 8).toUpperCase()}`
+
+  const carrierTracking = currentShipment?.ctt_object_id || (currentShipment?.tracking_number !== internalRef ? currentShipment?.tracking_number : null)
+  const tracking = internalRef
   const currentStatus = currentShipment?.status || "pendente"
 
   // Load timeline events
@@ -299,11 +304,11 @@ export function ClientShipmentDetailModal({
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-lg font-black text-slate-900 tracking-tight">Detalhes do Envio</h3>
                 <span className="font-mono text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-lg font-bold">
-                  {tracking}
+                  {internalRef}
                 </span>
-                {currentShipment.ctt_object_id && (
+                {carrierTracking && (
                   <span className="font-mono text-xs bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 rounded-lg font-bold" title="Referência CTT Expresso">
-                    CTT: {currentShipment.ctt_object_id}
+                    CTT: {carrierTracking}
                   </span>
                 )}
               </div>
@@ -583,63 +588,6 @@ export function ClientShipmentDetailModal({
                 </div>
               )}
 
-              {/* Injeção de Eventos de Teste (Admin/Ops) */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-emerald-600" />
-                    <span>Injetar Evento de Teste (Simulador CTT)</span>
-                  </h4>
-                </div>
-                <div className="flex flex-col sm:flex-row items-end gap-3">
-                  <div className="flex-1 w-full space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Evento</label>
-                    <select 
-                      value={selectedEvent} 
-                      onChange={e => setSelectedEvent(e.target.value)}
-                      className="w-full text-xs p-2 border border-slate-200 rounded-lg outline-hidden focus:ring-2 focus:ring-emerald-500"
-                    >
-                      {Object.keys(CTT_TRACKING_EVENTS).map(code => (
-                        <option key={code} value={code}>{code} - {CTT_TRACKING_EVENTS[code].description}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex-1 w-full space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Razão (Opcional)</label>
-                    <select 
-                      value={selectedReason} 
-                      onChange={e => setSelectedReason(e.target.value)}
-                      className="w-full text-xs p-2 border border-slate-200 rounded-lg outline-hidden focus:ring-2 focus:ring-emerald-500"
-                    >
-                      <option value="">(Sem Razão)</option>
-                      {Object.keys(CTT_NON_DELIVERY_REASONS).map(code => (
-                        <option key={code} value={code}>{code} - {CTT_NON_DELIVERY_REASONS[code]}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex-1 w-full space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase">Situação (Opcional)</label>
-                    <select 
-                      value={selectedSituation} 
-                      onChange={e => setSelectedSituation(e.target.value)}
-                      className="w-full text-xs p-2 border border-slate-200 rounded-lg outline-hidden focus:ring-2 focus:ring-emerald-500"
-                    >
-                      <option value="">(Sem Situação)</option>
-                      {Object.keys(CTT_SITUATIONS).map(code => (
-                        <option key={code} value={code}>{code} - {CTT_SITUATIONS[code]}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleInjectEvent}
-                    disabled={isInjectingEvent}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-bold text-xs shadow-xs transition-colors whitespace-nowrap h-[34px] flex items-center justify-center min-w-[120px]"
-                  >
-                    {isInjectingEvent ? <Loader2 className="w-4 h-4 animate-spin" /> : "Injetar Evento"}
-                  </button>
-                </div>
-              </div>
 
               {/* Linha Temporal Cronológica de Pickagens */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
