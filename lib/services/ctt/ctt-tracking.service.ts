@@ -66,53 +66,71 @@ export class CTTTrackingService {
   }
 
   /**
-   * Consulta a API de Track & Trace real dos CTT para um objeto específico
+   * Consulta a API de Track & Trace real dos CTT via SOAP (SGEE V1.8)
+   * Endpoint: CTTShipmentProviderWS.svc - método GetObjectInfo
    */
-  static async fetchRealTrackingEvents(trackingNumber: string, credentials: { client_number: string, auth_id: string }): Promise<ParsedTrackingEvent[]> {
-    const baseUrl = process.env.CTT_WS_BASE_URL || "https://appserver.ctt.pt"
+  static async fetchRealTrackingEvents(
+    trackingNumber: string, 
+    credentials: { client_number: string, auth_id: string, contract_number?: string, environment?: string }
+  ): Promise<ParsedTrackingEvent[]> {
     const clientId = credentials.client_number
     const authId = credentials.auth_id
+    const contractId = credentials.contract_number || ""
+    const isProd = (credentials.environment || "production") === "production"
 
-    // Se as credenciais não estiverem configuradas, não podemos fazer a chamada real.
-    // Lança um erro controlado que será apanhado e mostrado ao utilizador.
-    if (!baseUrl || !clientId || !authId) {
-      throw new Error("As credenciais da API dos CTT (Base URL, Client ID, Auth ID) não estão configuradas corretamente na base de dados.")
+    if (!clientId || !authId) {
+      throw new Error("As credenciais CTT (Client ID, Auth ID) não estão configuradas na base de dados.")
     }
 
+    // Endpoint SOAP do serviço de tracking CTT (mesmo domínio que o de expedição)
+    const endpoint = isProd
+      ? "http://cttexpressows.ctt.pt/CTTEWSPool/CTTShipmentProviderWS.svc"
+      : "http://cttexpressows.qa.ctt.pt/CTTEWSPool/CTTShipmentProviderWS.svc"
+
+    const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+
+    const soapBody = `
+      <tem:GetObjectInfo>
+        <tem:AuthorizationData>
+          <ws:AuthenticationId>${esc(authId)}</ws:AuthenticationId>
+          <ws:ClientId>${esc(clientId)}</ws:ClientId>
+          <ws:ContractId>${esc(contractId)}</ws:ContractId>
+        </tem:AuthorizationData>
+        <tem:ObjectId>${esc(trackingNumber)}</tem:ObjectId>
+      </tem:GetObjectInfo>`
+
     try {
-      // Exemplo de integração REST comum (a ser ajustado conforme o endpoint final exato fornecido pela CTT)
-      const response = await fetch(`${baseUrl}/TrackTrace/v1/objects/${encodeURIComponent(trackingNumber)}/events`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "client_id": clientId,
-          "authentication_id": authId
-        },
+      const { CTTSoapClient } = await import("./ctt-soap-client")
+      const soapClient = new CTTSoapClient()
+      const result = await soapClient.callSoap({
+        endpoint,
+        action: "http://tempuri.org/ICTTShipmentProviderWS/GetObjectInfo",
+        soapBodyXml: soapBody,
+        timeoutMs: 15000,
       })
 
-      if (!response.ok) {
-        throw new Error(`Falha na API dos CTT: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      // Navegar pela resposta SOAP para encontrar os eventos
+      const response = result?.GetObjectInfoResponse || result?.Body?.GetObjectInfoResponse
+      const objectInfo = response?.GetObjectInfoResult
       
-      // Assumindo que a resposta traz um array de eventos no formato genérico:
-      // { events: [ { eventCode: "EMA", eventDate: "...", location: "..." }, ... ] }
-      const eventsList = data.events || data || []
-
-      if (!Array.isArray(eventsList)) {
-        throw new Error("Formato de resposta da API de Track & Trace inválido.")
+      if (!objectInfo) {
+        // Sem info = encomenda ainda não registada na rede CTT
+        return []
       }
 
-      return eventsList.map((evt: any) => this.parseEvent(
-        evt.eventCode || evt.code,
-        evt.reasonCode,
-        evt.situationCode,
-        evt.location || evt.local,
-        evt.eventDate || evt.timestamp || evt.date
+      // Extrair eventos da estrutura de resposta
+      const eventsList = objectInfo?.Events?.ObjectEvent || objectInfo?.Events || []
+      const events = Array.isArray(eventsList) ? eventsList : [eventsList]
+
+      return events.filter(Boolean).map((evt: any) => this.parseEvent(
+        evt.EventCode || evt.Code || evt.eventCode,
+        evt.ReasonCode || evt.reasonCode,
+        evt.SituationCode || evt.situationCode,
+        evt.Location || evt.local || evt.Facility,
+        evt.EventDate || evt.Date || evt.eventDate
       ))
     } catch (error: any) {
-      throw new Error(`Erro de comunicação com Track & Trace CTT: ${error.message}`)
+      throw new Error(`Erro SOAP CTT Track & Trace: ${error.message}`)
     }
   }
 }

@@ -181,6 +181,10 @@ export async function getShipmentsAction(): Promise<any[]> {
               shipmentsMap.set(key, {
                 ...existing,
                 ...s,
+                // Status vem SEMPRE da tabela shipments (mais atualizado), nunca do audit_log
+                status: existing.status || s.status,
+                // carrier_tracking_number vem da tabela shipments
+                carrier_tracking_number: existing.carrier_tracking_number || s.carrier_tracking_number,
                 reference: linkeRef,
                 tracking_number: effectiveTracking,
                 ctt_label_base64: s.ctt_label_base64 || existing.ctt_label_base64,

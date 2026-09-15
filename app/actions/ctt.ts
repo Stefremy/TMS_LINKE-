@@ -484,7 +484,9 @@ export async function emitCttShipmentAction(shipmentInput: {
           .from("shipments")
           .update({
             tracking_number: trackingNumber,
-            status: "em_transito",
+            carrier_tracking_number: trackingNumber,
+            carrier_code: "ctt_expresso",
+            status: "pendente",
             updated_at: new Date().toISOString(),
           })
           .eq("id", shipmentInput.id)
@@ -508,7 +510,7 @@ export async function emitCttShipmentAction(shipmentInput: {
               ctt_object_id: trackingNumber,
               ctt_delivery_note_id: result.DeliveryNoteId,
               ctt_label_base64: labelBase64,
-              status: "em_transito",
+              status: "pendente",
               updated_at: new Date().toISOString(),
             }
           }).eq("id", targetLog.id)
@@ -710,8 +712,14 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
     const { data } = await supabase.from("shipments").select("*").eq("id", shipmentId).single()
     targetShipment = data
   } else if (trackingNumber) {
-    const { data } = await supabase.from("shipments").select("*").eq("tracking_number", trackingNumber).single()
-    targetShipment = data
+    // Pesquisar pelo numero interno Linke OU pelo numero de transportadora (CTT)
+    const { data: d1 } = await supabase.from("shipments").select("*").eq("tracking_number", trackingNumber).single()
+    if (d1) {
+      targetShipment = d1
+    } else {
+      const { data: d2 } = await supabase.from("shipments").select("*").eq("carrier_tracking_number", trackingNumber).single()
+      targetShipment = d2
+    }
   }
 
   const effectiveId = targetShipment?.id || shipmentId
@@ -719,11 +727,17 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
   const hoursElapsed = (Date.now() - createdAt.getTime()) / (1000 * 3600)
 
   // 2. Chamar a API real dos CTT com credenciais da BD
+  // Usar o numero de tracking do transportador (carrier_tracking_number) se existir
   let parsedEvents: any[] = []
   try {
     const credentials = await getCttCredentials()
-    const carrierTrackingNumber = targetShipment?.ctt_object_id || trackingNumber
-    parsedEvents = await CTTTrackingService.fetchRealTrackingEvents(carrierTrackingNumber, credentials)
+    const carrierTrackingNumber = targetShipment?.carrier_tracking_number || targetShipment?.tracking_number || trackingNumber
+    parsedEvents = await CTTTrackingService.fetchRealTrackingEvents(carrierTrackingNumber, {
+      client_number: credentials.client_number,
+      auth_id: credentials.auth_id,
+      contract_number: credentials.contract_number,
+      environment: credentials.environment,
+    })
   } catch (error: any) {
     console.error("Erro ao chamar API real de tracking CTT:", error)
     return { success: false, error: error.message }
