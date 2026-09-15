@@ -97,6 +97,8 @@ export function ClientShipmentDetailModal({
     }
   }, [shipment, loadTimeline])
 
+  const [copiedLink, setCopiedLink] = React.useState(false)
+
   // Null guard AFTER all hooks
   if (!shipment || !currentShipment) return null
 
@@ -181,7 +183,6 @@ export function ClientShipmentDetailModal({
     }
   }
 
-  const [copiedLink, setCopiedLink] = React.useState(false)
 
   const handleCopyTrackingLink = () => {
     if (typeof window === "undefined") return

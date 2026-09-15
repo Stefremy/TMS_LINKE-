@@ -254,6 +254,7 @@ export function ClientCreateGuia() {
         senderAddress: currentClient?.address || "Sede Comercial",
         senderCity: currentClient?.city || "Portugal",
         senderPostal: currentClient?.postal_code || "",
+        senderPhone: currentClient?.phone || currentClient?.mobile_phone || "910000000",
         recipientName,
         recipientAddress,
         recipientCity,

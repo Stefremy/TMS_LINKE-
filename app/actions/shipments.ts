@@ -465,6 +465,7 @@ export async function emitClientGuiaAction(data: {
   senderAddress?: string
   senderCity?: string
   senderPostal?: string
+  senderPhone?: string
   recipientName: string
   recipientAddress: string
   recipientCity?: string
@@ -585,7 +586,7 @@ export async function emitClientGuiaAction(data: {
           address: data.senderAddress || "Sede Comercial",
           city: data.senderCity || "Portugal",
           zip: data.senderPostal || "1000-001",
-          phone: "910000000" // Remetente usa o telefone da empresa ou um fixo padrão
+          phone: data.senderPhone || "910000000"
         },
         recipient: {
           name: data.recipientName,
