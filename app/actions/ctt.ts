@@ -718,30 +718,28 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
   const createdAt = targetShipment?.created_at ? new Date(targetShipment.created_at) : new Date()
   const hoursElapsed = (Date.now() - createdAt.getTime()) / (1000 * 3600)
 
-  // 2. Determinar evento e estado correspondente à cronologia do envio
-  let eventCode = "EMA"
-  let eventName = "Aceitação CTT Expresso"
-  let eventLoc = "Centro Operacional Lisboa"
-  let newStatus: "pendente" | "em_transito" | "em_distribuicao" | "entregue" = "em_transito"
-
-  if (hoursElapsed >= 24) {
-    eventCode = "ENT"
-    eventName = "Entregue ao Destinatário"
-    eventLoc = targetShipment?.recipient_address || "Morada de Destino"
-    newStatus = "entregue"
-  } else if (hoursElapsed >= 16) {
-    eventCode = "EMD"
-    eventName = "Em Distribuição / Saiu para Entrega"
-    eventLoc = "Centro de Distribuição Destino"
-    newStatus = "em_distribuicao"
-  } else if (hoursElapsed >= 3) {
-    eventCode = "EMF"
-    eventName = "Expedição Nacional / Em Trânsito"
-    eventLoc = "Plataforma Logística CTT"
-    newStatus = "em_transito"
+  // 2. Chamar a API real dos CTT com credenciais da BD
+  let parsedEvents: any[] = []
+  try {
+    const credentials = await getCttCredentials()
+    const carrierTrackingNumber = targetShipment?.ctt_object_id || trackingNumber
+    parsedEvents = await CTTTrackingService.fetchRealTrackingEvents(carrierTrackingNumber, credentials)
+  } catch (error: any) {
+    console.error("Erro ao chamar API real de tracking CTT:", error)
+    return { success: false, error: error.message }
   }
 
-  const parsedEvent = CTTTrackingService.parseEvent(eventCode, undefined, undefined, eventLoc)
+  if (!parsedEvents || parsedEvents.length === 0) {
+    return { success: true, count: 0, statusUpdated: false }
+  }
+
+  // 3. Obter o último evento (mais recente) para atualizar o status geral
+  const lastEvent = parsedEvents[parsedEvents.length - 1]
+  const newStatus = lastEvent.tmsStatus
+  const eventCode = lastEvent.eventCode
+  const eventName = lastEvent.eventName
+  const eventLoc = lastEvent.location || "Rede CTT Expresso"
+
 
   // 3. Atualizar estado do envio na base de dados
   if (effectiveId) {
@@ -758,26 +756,33 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
       console.warn("Aviso ao atualizar status do envio:", e?.message)
     }
 
-    // 4. Evitar duplicar o mesmo evento de tracking
-    try {
-      const { data: existingEvents } = await supabase
-        .from("tracking_events")
-        .select("event_code")
-        .eq("shipment_id", effectiveId)
+      // 4. Inserir eventos na cronologia que ainda não existam
+      let insertedCount = 0
+      try {
+        const { data: existingEvents } = await supabase
+          .from("tracking_events")
+          .select("event_code, timestamp")
+          .eq("shipment_id", effectiveId)
 
-      const alreadyHasEvent = existingEvents?.some((e: any) => e.event_code === eventCode)
-      if (!alreadyHasEvent) {
-        await supabase.from("tracking_events").insert({
-          tenant_id: LINKE_TENANT_ID,
-          shipment_id: effectiveId,
-          event_code: eventCode,
-          description: `${eventName} (${eventLoc})`,
-          created_at: new Date().toISOString(),
-        })
+        for (const evt of parsedEvents) {
+          // Simplificação: Assume-se que um evento é igual se tiver o mesmo código e mesma data aproximada, 
+          // ou se a API enviar um ID único, usar esse ID. Aqui usamos event_code.
+          const alreadyHasEvent = existingEvents?.some((e: any) => e.event_code === evt.eventCode)
+          if (!alreadyHasEvent) {
+            await supabase.from("tracking_events").insert({
+              tenant_id: LINKE_TENANT_ID,
+              shipment_id: effectiveId,
+              event_code: evt.eventCode,
+              description: `${evt.eventName} (${evt.location || "Rede CTT"})${evt.reasonText ? ` | Razão: ${evt.reasonText}` : ''}${evt.situationText ? ` | Situação: ${evt.situationText}` : ''}`,
+              timestamp: evt.timestamp || new Date().toISOString(),
+              created_at: new Date().toISOString(),
+            })
+            insertedCount++
+          }
+        }
+      } catch (e: any) {
+        console.warn("Aviso ao inserir tracking events:", e?.message)
       }
-    } catch (e: any) {
-      console.warn("Aviso ao inserir tracking event:", e?.message)
-    }
 
     // 5. Atualizar audit_log se existir
     try {
@@ -805,7 +810,7 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
   return {
     success: true,
     latestStatus: newStatus,
-    event: parsedEvent,
+    event: lastEvent,
   }
 }
 

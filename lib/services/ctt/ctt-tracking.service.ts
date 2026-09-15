@@ -64,4 +64,55 @@ export class CTTTrackingService {
       this.parseEvent("EMZ", undefined, "A", "Centro de Distribuição Destino", d3),
     ]
   }
+
+  /**
+   * Consulta a API de Track & Trace real dos CTT para um objeto específico
+   */
+  static async fetchRealTrackingEvents(trackingNumber: string, credentials: { client_number: string, auth_id: string }): Promise<ParsedTrackingEvent[]> {
+    const baseUrl = process.env.CTT_WS_BASE_URL || "https://appserver.ctt.pt"
+    const clientId = credentials.client_number
+    const authId = credentials.auth_id
+
+    // Se as credenciais não estiverem configuradas, não podemos fazer a chamada real.
+    // Lança um erro controlado que será apanhado e mostrado ao utilizador.
+    if (!baseUrl || !clientId || !authId) {
+      throw new Error("As credenciais da API dos CTT (Base URL, Client ID, Auth ID) não estão configuradas corretamente na base de dados.")
+    }
+
+    try {
+      // Exemplo de integração REST comum (a ser ajustado conforme o endpoint final exato fornecido pela CTT)
+      const response = await fetch(`${baseUrl}/TrackTrace/v1/objects/${encodeURIComponent(trackingNumber)}/events`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "client_id": clientId,
+          "authentication_id": authId
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Falha na API dos CTT: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      
+      // Assumindo que a resposta traz um array de eventos no formato genérico:
+      // { events: [ { eventCode: "EMA", eventDate: "...", location: "..." }, ... ] }
+      const eventsList = data.events || data || []
+
+      if (!Array.isArray(eventsList)) {
+        throw new Error("Formato de resposta da API de Track & Trace inválido.")
+      }
+
+      return eventsList.map((evt: any) => this.parseEvent(
+        evt.eventCode || evt.code,
+        evt.reasonCode,
+        evt.situationCode,
+        evt.location || evt.local,
+        evt.eventDate || evt.timestamp || evt.date
+      ))
+    } catch (error: any) {
+      throw new Error(`Erro de comunicação com Track & Trace CTT: ${error.message}`)
+    }
+  }
 }
