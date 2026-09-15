@@ -315,6 +315,35 @@ function PublicTrackingContent() {
                 </div>
               </div>
 
+              {/* Incidência Banner (Se houver tentativa não conseguida) */}
+              {(shipment.status === "incidencia" || timeline.some((e: any) => e.isIncidencia || e.eventCode === "EMH")) && (
+                <div className="bg-rose-50 border-2 border-rose-200 rounded-3xl p-5 sm:p-6 text-rose-900 shadow-xs flex items-start gap-4 animate-in fade-in">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm font-black text-rose-900 tracking-tight">
+                        Tentativa de Entrega Não Conseguida (Incidência CTT)
+                      </h4>
+                      <span className="font-mono text-[10px] font-bold bg-rose-200 text-rose-800 px-2 py-0.5 rounded-md">
+                        Código EMH
+                      </span>
+                    </div>
+                    <p className="text-xs text-rose-700 leading-relaxed">
+                      {timeline.find((e: any) => e.isIncidencia || e.eventCode === "EMH")?.description || 
+                       "O estafeta esteve no local mas não foi possível concluir a entrega. O envio encontra-se sob gestão da equipa de distribuição CTT."}
+                    </p>
+                    <div className="pt-2 flex flex-wrap items-center gap-3 text-xs text-rose-800 font-semibold">
+                      <span className="flex items-center gap-1.5 bg-white/80 border border-rose-200 px-2.5 py-1 rounded-xl">
+                        <Clock className="w-3.5 h-3.5 text-rose-500" />
+                        <span>Próximo passo: Nova tentativa agendada para o próximo dia útil</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Share & Action Bar */}
               <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
                 <div className="text-xs text-slate-500 font-medium">
@@ -366,10 +395,10 @@ function PublicTrackingContent() {
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-emerald-600" />
-                  <span>Histórico de Leituras Óticas CTT Expresso</span>
+                  <span>Histórico de Leituras & Eventos CTT Expresso</span>
                 </h3>
-                <span className="text-xs text-slate-400">
-                  {timeline.length} leitura(s) registadas
+                <span className="text-xs text-slate-400 font-medium">
+                  {timeline.length} evento(s) registados
                 </span>
               </div>
 
@@ -387,6 +416,11 @@ function PublicTrackingContent() {
                 <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200 pt-2">
                   {timeline.map((ev: any, idx: number) => {
                     const isLatest = idx === timeline.length - 1
+                    const isIncidencia = ev.isIncidencia || ev.eventCode === "EMH"
+                    const isEntregue = ev.eventCode === "EMI"
+                    const isDistribuicao = ev.eventCode === "EMZ"
+                    const isDevolvido = ev.eventCode === "EMV"
+
                     const dateStr = ev.timestamp
                       ? new Date(ev.timestamp).toLocaleDateString("pt-PT", {
                           day: "2-digit",
@@ -400,26 +434,60 @@ function PublicTrackingContent() {
                     return (
                       <div key={ev.id || idx} className="relative group">
                         {/* Indicator Dot */}
-                        <div className={`absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-2xs ${
-                          isLatest ? "bg-emerald-500 ring-4 ring-emerald-100" : "bg-slate-400"
+                        <div className={`absolute -left-6 top-2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-2xs ${
+                          isIncidencia 
+                            ? "bg-rose-500 ring-4 ring-rose-100" 
+                            : isEntregue
+                            ? "bg-emerald-600 ring-4 ring-emerald-100"
+                            : isLatest 
+                            ? "bg-emerald-500 ring-4 ring-emerald-100" 
+                            : "bg-slate-400"
                         }`} />
 
-                        <div className="bg-slate-50 hover:bg-slate-100/80 transition-colors p-4 rounded-2xl border border-slate-200/80">
+                        <div className={`transition-all p-4 rounded-2xl border ${
+                          isIncidencia
+                            ? "bg-rose-50/70 border-rose-200 text-rose-950 shadow-2xs"
+                            : isEntregue
+                            ? "bg-emerald-50/50 border-emerald-200 shadow-2xs"
+                            : isDistribuicao
+                            ? "bg-sky-50/50 border-sky-200"
+                            : isDevolvido
+                            ? "bg-amber-50/60 border-amber-200"
+                            : "bg-slate-50 hover:bg-slate-100/80 border-slate-200/80"
+                        }`}>
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-[10px] font-black bg-slate-800 text-white px-1.5 py-0.5 rounded">
+                              <span className={`font-mono text-[10px] font-black px-2 py-0.5 rounded-md ${
+                                isIncidencia
+                                  ? "bg-rose-600 text-white"
+                                  : isEntregue
+                                  ? "bg-emerald-700 text-white"
+                                  : isDistribuicao
+                                  ? "bg-sky-700 text-white"
+                                  : "bg-slate-800 text-white"
+                              }`}>
                                 {ev.eventCode}
                               </span>
-                              <span className="text-xs font-bold text-slate-900">
+                              <span className={`text-xs font-bold ${
+                                isIncidencia ? "text-rose-900" : isEntregue ? "text-emerald-900" : "text-slate-900"
+                              }`}>
                                 {ev.eventName}
                               </span>
+                              {isIncidencia && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-200/80 text-rose-800 px-2 py-0.5 rounded-full">
+                                  <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                  <span>Incidência</span>
+                                </span>
+                              )}
                             </div>
                             <span className="text-[11px] font-mono text-slate-400 font-medium">
                               {dateStr}
                             </span>
                           </div>
 
-                          <p className="text-xs text-slate-600 mt-1">
+                          <p className={`text-xs mt-1 leading-relaxed ${
+                            isIncidencia ? "text-rose-800 font-medium" : "text-slate-600"
+                          }`}>
                             {ev.description}
                           </p>
 

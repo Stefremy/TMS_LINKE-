@@ -26,7 +26,11 @@ import {
   RefreshCw,
   AlertTriangle,
   Trash2,
-  Undo2
+  Undo2,
+  Copy,
+  MessageCircle,
+  Share2,
+  ExternalLink
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { 
@@ -158,8 +162,8 @@ export function ClientShipmentDetailModal({
         // Re-sincroniza
         await loadTimeline(currentShipment.id, tracking)
         // Obtém estado atualizado
-        const { status } = CTT_TRACKING_EVENTS[selectedEvent]
-        const updated = { ...currentShipment, status: CTT_TRACKING_EVENTS[selectedEvent]?.tms_status || currentShipment.status }
+        const newStatus = CTT_TRACKING_EVENTS[selectedEvent]?.tms_status || currentShipment.status
+        const updated = { ...currentShipment, status: newStatus }
         setCurrentShipment(updated)
         if (onUpdateShipment) onUpdateShipment(updated)
       } else {
@@ -170,6 +174,23 @@ export function ClientShipmentDetailModal({
     } finally {
       setIsInjectingEvent(false)
     }
+  }
+
+  const [copiedLink, setCopiedLink] = React.useState(false)
+
+  const handleCopyTrackingLink = () => {
+    if (typeof window === "undefined") return
+    const url = `${window.location.origin}/tracking?trk=${encodeURIComponent(tracking)}`
+    navigator.clipboard.writeText(url)
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2500)
+  }
+
+  const handleShareTrackingWhatsApp = () => {
+    if (typeof window === "undefined") return
+    const url = `${window.location.origin}/tracking?trk=${encodeURIComponent(tracking)}`
+    const text = `📦 Siga o rastreio da sua encomenda (${tracking}):\n${url}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank")
   }
 
   const handleCreateReturn = async () => {
@@ -492,16 +513,62 @@ export function ClientShipmentDetailModal({
                 </div>
               </div>
 
+              {/* Partilhar Rastreio com o Cliente Final */}
+              <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                    <Share2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-800">Partilhar Rastreio com o Cliente</h5>
+                    <p className="text-[11px] text-slate-500">Link público direto para o destinatário acompanhar a entrega em tempo real</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyTrackingLink}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+                    <span>{copiedLink ? "Link Copiado!" : "Copiar Link"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleShareTrackingWhatsApp}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>WhatsApp</span>
+                  </button>
+                  <a
+                    href={`/tracking?trk=${encodeURIComponent(tracking)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all"
+                    title="Abrir portal de rastreio em novo separador"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+
               {/* Incidência Banner (Se aplicável) */}
-              {currentStatus === "incidencia" && (
+              {(currentStatus === "incidencia" || timelineEvents.some((e: any) => e.isIncidencia || e.eventCode === "EMH")) && (
                 <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-900 flex items-start gap-3 shadow-2xs">
                   <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <strong className="text-sm font-black text-rose-800">Alerta de Incidência CTT (Código EMH)</strong>
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <strong className="text-sm font-black text-rose-800">Alerta de Incidência CTT (Código EMH)</strong>
+                      <span className="font-mono text-[10px] font-bold bg-rose-200 text-rose-800 px-2 py-0.5 rounded">
+                        Entrega Não Conseguida
+                      </span>
+                    </div>
                     <p className="text-xs text-rose-700">
-                      O estafeta registou uma tentativa de entrega não conseguida. Razão CTT: <strong>Destinatário ausente / empresa encerrada (Código 11)</strong>.
+                      {timelineEvents.slice().reverse().find((e: any) => e.isIncidencia || e.eventCode === "EMH")?.description ||
+                       "O estafeta registou uma tentativa de entrega não conseguida na morada do destinatário."}
                     </p>
-                    <div className="pt-1 flex items-center gap-2">
+                    <div className="pt-1.5 flex items-center gap-2">
                       <button
                         type="button"
                         onClick={handleSyncTracking}
@@ -615,29 +682,68 @@ export function ClientShipmentDetailModal({
                           })
                         : "—"
 
+                      const isIncidencia = ev.isIncidencia || ev.eventCode === "EMH"
+                      const isEntregue = ev.eventCode === "EMI"
+                      const isDistribuicao = ev.eventCode === "EMZ"
+                      const isDevolvido = ev.eventCode === "EMV"
+
                       return (
                         <div key={ev.id || idx} className="relative group">
                           {/* Dot */}
                           <div className={`absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-2xs ${
-                            isLatest ? "bg-emerald-500 ring-4 ring-emerald-100" : "bg-slate-400"
+                            isIncidencia
+                              ? "bg-rose-500 ring-4 ring-rose-100"
+                              : isEntregue
+                              ? "bg-emerald-600 ring-4 ring-emerald-100"
+                              : isLatest
+                              ? "bg-emerald-500 ring-4 ring-emerald-100"
+                              : "bg-slate-400"
                           }`} />
 
-                          <div className="bg-slate-50 hover:bg-slate-100/80 transition-colors p-3.5 rounded-xl border border-slate-200/80">
+                          <div className={`transition-colors p-3.5 rounded-xl border ${
+                            isIncidencia
+                              ? "bg-rose-50/70 border-rose-200 text-rose-950 shadow-2xs"
+                              : isEntregue
+                              ? "bg-emerald-50/50 border-emerald-200"
+                              : isDistribuicao
+                              ? "bg-sky-50/50 border-sky-200"
+                              : isDevolvido
+                              ? "bg-amber-50/60 border-amber-200"
+                              : "bg-slate-50 hover:bg-slate-100/80 border-slate-200/80"
+                          }`}>
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-[10px] font-black bg-slate-800 text-white px-1.5 py-0.5 rounded">
+                                <span className={`font-mono text-[10px] font-black px-1.5 py-0.5 rounded ${
+                                  isIncidencia
+                                    ? "bg-rose-600 text-white"
+                                    : isEntregue
+                                    ? "bg-emerald-700 text-white"
+                                    : isDistribuicao
+                                    ? "bg-sky-700 text-white"
+                                    : "bg-slate-800 text-white"
+                                }`}>
                                   {ev.eventCode}
                                 </span>
-                                <span className="text-xs font-bold text-slate-900">
+                                <span className={`text-xs font-bold ${
+                                  isIncidencia ? "text-rose-900" : isEntregue ? "text-emerald-900" : "text-slate-900"
+                                }`}>
                                   {ev.eventName}
                                 </span>
+                                {isIncidencia && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-200/80 text-rose-800 px-2 py-0.5 rounded-full">
+                                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                    <span>Incidência</span>
+                                  </span>
+                                )}
                               </div>
                               <span className="text-[11px] font-mono text-slate-400 font-medium">
                                 {dateStr}
                               </span>
                             </div>
 
-                            <p className="text-xs text-slate-600 mt-0.5">
+                            <p className={`text-xs mt-0.5 ${
+                              isIncidencia ? "text-rose-800 font-medium leading-relaxed" : "text-slate-600"
+                            }`}>
                               {ev.description}
                             </p>
 

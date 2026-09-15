@@ -6,6 +6,7 @@ import { emitCttShipmentAction, syncCttTrackingAction } from "@/app/actions/ctt"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { calculateShipmentPrice, resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
+import { CTT_TRACKING_EVENTS } from "@/lib/services/ctt/ctt-types"
 
 const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 const DEFAULT_FALLBACK_CLIENT_ID = "44444444-4444-4444-4444-444444444444"
@@ -867,10 +868,12 @@ export async function getShipmentTrackingTimelineAction(
 
     if (!error && dbEvents && dbEvents.length > 0) {
       dbEvents.forEach((ev: any) => {
+        const cttInfo = CTT_TRACKING_EVENTS[ev.event_code]
+        const isIncidencia = ev.event_code === "EMH" || ev.description?.includes("Incidência") || ev.description?.includes("Razão:")
         events.push({
           id: ev.id,
           eventCode: ev.event_code || "EMA",
-          eventName: ev.event_name || (
+          eventName: cttInfo?.description || ev.event_name || (
             ev.event_code === "EMI" ? "Entrega Conseguida" :
             ev.event_code === "EMZ" ? "Em Distribuição (Com o Estafeta)" :
             ev.event_code === "EMH" ? "Entrega Não Conseguida (Incidência)" :
@@ -878,16 +881,53 @@ export async function getShipmentTrackingTimelineAction(
           ),
           description: ev.description || "Evento registado na rede CTT",
           location: ev.location || "Rede CTT Expresso",
-          timestamp: ev.created_at,
-          tmsStatus: ev.event_code === "EMI" ? "entregue" :
+          timestamp: ev.timestamp || ev.created_at,
+          tmsStatus: cttInfo?.tms_status || (
+                     ev.event_code === "EMI" ? "entregue" :
                      ev.event_code === "EMZ" ? "em_distribuicao" :
-                     ev.event_code === "EMH" ? "incidencia" : "em_transito",
-          isTerminal: ev.event_code === "EMI" || ev.event_code === "EMM",
+                     ev.event_code === "EMH" ? "incidencia" : "em_transito"),
+          isTerminal: cttInfo?.is_terminal ?? (ev.event_code === "EMI" || ev.event_code === "EMM"),
+          isIncidencia,
         })
       })
     }
   } catch (err: any) {
     console.warn("Could not load tracking_events from table:", err?.message)
+  }
+
+  // 2. Se ainda não existirem eventos na tabela tracking_events, verificar no audit_log
+  if (events.length === 0) {
+    try {
+      const { data: auditEvents } = await supabase
+        .from("audit_log")
+        .select("*")
+        .eq("entity_id", shipmentId)
+        .order("created_at", { ascending: true })
+
+      if (auditEvents && auditEvents.length > 0) {
+        auditEvents.forEach((log: any) => {
+          const d = log.details || {}
+          if (d.eventCode || d.status) {
+            const code = d.eventCode || (d.status === "entregue" ? "EMI" : d.status === "em_distribuicao" ? "EMZ" : "EMA")
+            const cttInfo = CTT_TRACKING_EVENTS[code]
+            const isIncidencia = code === "EMH" || d.reasonCode || d.reasonDesc
+            events.push({
+              id: log.id,
+              eventCode: code,
+              eventName: cttInfo?.description || d.eventName || (isIncidencia ? "Incidência de Entrega" : "Atualização de Estado"),
+              description: d.description || (d.reasonDesc ? `Razão: ${d.reasonDesc}` : "Evento registado"),
+              location: d.location || "Rede CTT Expresso",
+              timestamp: d.timestamp || log.created_at,
+              tmsStatus: cttInfo?.tms_status || d.status || "em_transito",
+              isTerminal: cttInfo?.is_terminal || false,
+              isIncidencia: Boolean(isIncidencia),
+            })
+          }
+        })
+      }
+    } catch (auditErr: any) {
+      console.warn("Could not load audit_log fallback:", auditErr?.message)
+    }
   }
 
   return events

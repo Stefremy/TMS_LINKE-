@@ -1066,9 +1066,8 @@ export async function injectTrackingEventAction(
       tenant_id: "11111111-1111-1111-1111-111111111111", // LINKE_TENANT_ID
       shipment_id: shipmentId,
       event_code: eventCode,
-      event_name: cttEvent.description,
       description: `${description}${reasonDesc ? ` | Razão: ${reasonDesc}` : ''}${situationDesc ? ` | Situação: ${situationDesc}` : ''}`,
-      location: "Centro de Testes CTT",
+      timestamp: new Date().toISOString(),
       created_at: new Date().toISOString()
     })
 

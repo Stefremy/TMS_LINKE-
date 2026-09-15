@@ -78,9 +78,8 @@ export async function POST(req: Request) {
           tenant_id: "11111111-1111-1111-1111-111111111111", // LINKE_TENANT_ID
           shipment_id: shipment.id,
           event_code: evt.eventCode,
-          event_name: cttEvent.description,
           description: `${description}${reasonDesc ? ` | Razão: ${reasonDesc}` : ''}${situationDesc ? ` | Situação: ${situationDesc}` : ''}`,
-          location: evt.location || "Rede CTT Expresso",
+          timestamp: evt.eventDate || new Date().toISOString(),
           created_at: evt.eventDate || new Date().toISOString()
         })
 
