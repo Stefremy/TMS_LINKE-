@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { 
   Plus, 
   Package, 
@@ -15,7 +16,8 @@ import {
   RefreshCw,
   Loader2,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from "lucide-react"
 
 import { ActionMenu } from "./ActionMenu"
@@ -26,6 +28,7 @@ import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDe
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { closeCttShipmentsAction, syncCttTrackingAction } from "@/app/actions/ctt"
+import { deleteShipmentsBulkAction } from "@/app/actions/shipments"
 
 interface EnviosClientProps {
   envios: any[]
@@ -34,6 +37,7 @@ interface EnviosClientProps {
 }
 
 export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = React.useState("")
   const [showFilters, setShowFilters] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
@@ -43,6 +47,7 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
   const [manifestData, setManifestData] = React.useState<any | null>(null)
   const [isClosingManifest, setIsClosingManifest] = React.useState(false)
   const [isSyncingSelected, setIsSyncingSelected] = React.useState(false)
+  const [isDeletingSelected, setIsDeletingSelected] = React.useState(false)
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -65,6 +70,7 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
       if (res.success) {
         setManifestData(res)
         setSelectedIds([])
+        router.refresh()
       } else {
         alert(res.error || "Erro ao fechar expedição.")
       }
@@ -84,10 +90,31 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
       }
       alert(`Sincronização concluída com sucesso para ${selectedIds.length} envio(s).`)
       setSelectedIds([])
+      router.refresh()
     } catch (err: any) {
       alert("Erro na sincronização: " + err.message)
     } finally {
       setIsSyncingSelected(false)
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return
+    if (!window.confirm(`Tem a certeza que deseja eliminar ${selectedIds.length} envio(s)? Esta ação é irreversível.`)) return
+    
+    setIsDeletingSelected(true)
+    try {
+      const res = await deleteShipmentsBulkAction(selectedIds)
+      if (res.success) {
+        setSelectedIds([])
+        router.refresh()
+      } else {
+        alert(res.error || "Erro ao eliminar envios.")
+      }
+    } catch (err: any) {
+      alert("Erro ao eliminar envios: " + err.message)
+    } finally {
+      setIsDeletingSelected(false)
     }
   }
 
@@ -303,6 +330,16 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
 
             <button
               type="button"
+              onClick={handleDeleteSelected}
+              disabled={isDeletingSelected}
+              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-red-700 shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              {isDeletingSelected ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              <span>Eliminar</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleSyncSelected}
               disabled={isSyncingSelected}
               className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
@@ -359,8 +396,15 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
               const isSelected = selectedIds.includes(rowId)
 
               return (
-              <tr key={idx} className={`hover:bg-slate-50/50 transition-colors group ${isSelected ? 'bg-green-50/30' : ''}`}>
-                <td className="px-4 py-4 align-top">
+              <tr 
+                key={idx} 
+                className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${isSelected ? 'bg-green-50/30' : ''}`}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) return;
+                  handleToggleRow(rowId)
+                }}
+              >
+                <td className="px-4 py-4 align-top" onClick={(e) => e.stopPropagation()}>
                   <input 
                     type="checkbox" 
                     checked={isSelected}

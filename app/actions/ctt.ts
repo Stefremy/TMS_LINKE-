@@ -1024,3 +1024,74 @@ export async function getPontosPickupCttAction(forceRefresh = false): Promise<{
 }
 
 
+import { CTT_TRACKING_EVENTS, CTT_NON_DELIVERY_REASONS, CTT_SITUATIONS } from "@/lib/services/ctt/ctt-types"
+
+/**
+ * Injeta um evento de Tracking manual no envio para testes / simulação
+ */
+export async function injectTrackingEventAction(
+  shipmentId: string,
+  trackingNumber: string,
+  eventCode: string,
+  reasonCode?: string,
+  situationCode?: string
+) {
+  const supabase = createAdminClient()
+
+  const cttEvent = CTT_TRACKING_EVENTS[eventCode]
+  if (!cttEvent) {
+    return { success: false, error: `Código de evento desconhecido: ${eventCode}` }
+  }
+
+  const description = CTTTrackingService.parseEvent(eventCode)
+  const reasonDesc = reasonCode ? CTT_NON_DELIVERY_REASONS[reasonCode] : undefined
+  const situationDesc = situationCode ? CTT_SITUATIONS[situationCode] : undefined
+
+  const details = {
+    tracking_number: trackingNumber,
+    eventCode,
+    description,
+    reasonCode,
+    reasonDesc,
+    situationCode,
+    situationDesc,
+    location: "Centro de Testes CTT",
+    timestamp: new Date().toISOString()
+  }
+
+  // 1. Inserir no tracking_events
+  const { error: logError } = await supabase
+    .from("tracking_events")
+    .insert({
+      tenant_id: "11111111-1111-1111-1111-111111111111", // LINKE_TENANT_ID
+      shipment_id: shipmentId,
+      event_code: eventCode,
+      event_name: cttEvent.description,
+      description: `${description}${reasonDesc ? ` | Razão: ${reasonDesc}` : ''}${situationDesc ? ` | Situação: ${situationDesc}` : ''}`,
+      location: "Centro de Testes CTT",
+      created_at: new Date().toISOString()
+    })
+
+  if (logError) {
+    console.error("Error inserting manual event:", logError)
+    return { success: false, error: "Erro ao gravar evento na cronologia." }
+  }
+
+  // 2. Atualizar o estado principal do envio
+  const { error: updateError } = await supabase
+    .from("shipments")
+    .update({
+      status: cttEvent.tms_status,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", shipmentId)
+
+  if (updateError) {
+    console.error("Error updating shipment status:", updateError)
+    return { success: false, error: "Erro ao atualizar estado principal." }
+  }
+
+  revalidatePath(`/ops/envios`)
+  
+  return { success: true }
+}

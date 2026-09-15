@@ -98,6 +98,26 @@ function formatOrGenerateCttObjectId(s: any): string {
 export async function getShipmentsAction(): Promise<any[]> {
   const supabase = createAdminClient()
   const shipmentsMap = new Map<string, any>()
+  const deletedIds = new Set<string>()
+
+  // 0. Fetch deleted IDs to prevent them from resurrecting
+  try {
+    const { data: deletedLogs } = await supabase
+      .from("audit_log")
+      .select("details")
+      .in("action", ["shipment_deleted", "shipments_bulk_deleted"])
+    
+    if (deletedLogs) {
+      deletedLogs.forEach((log: any) => {
+        if (log.details?.deletedShipmentId) deletedIds.add(log.details.deletedShipmentId)
+        if (log.details?.deletedShipmentIds) {
+          log.details.deletedShipmentIds.forEach((id: string) => deletedIds.add(id))
+        }
+      })
+    }
+  } catch (err: any) {
+    console.warn("Could not query audit_log for deleted shipments:", err?.message)
+  }
 
   // 1. Fetch from shipments table
   try {
@@ -109,7 +129,7 @@ export async function getShipmentsAction(): Promise<any[]> {
     if (!error && dbShipments) {
       dbShipments.forEach((s: any) => {
         const key = s.id || s.tracking_number
-        if (key) {
+        if (key && !deletedIds.has(key) && !deletedIds.has(s.id)) {
           const cttCode = formatOrGenerateCttObjectId(s)
           const linkeRef = s.tracking_number?.startsWith("LTK") ? s.tracking_number : s.reference || null
           shipmentsMap.set(key, {
@@ -137,7 +157,7 @@ export async function getShipmentsAction(): Promise<any[]> {
         const s = log.details
         if (s) {
           const key = s.id || s.tracking_number
-          if (key) {
+          if (key && !deletedIds.has(key) && !deletedIds.has(s.id)) {
             const existing = shipmentsMap.get(key)
             const isRealTracking = (val?: string) => val && /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim())
             
@@ -1157,3 +1177,42 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
 
 
 
+
+/**
+ * Elimina vários envios em massa
+ */
+export async function deleteShipmentsBulkAction(shipmentIds: string[]) {
+  const supabase = createAdminClient()
+  try {
+    if (!shipmentIds || shipmentIds.length === 0) return { success: true }
+    
+    // 1. Apagar volumes associados
+    await supabase.from("packages").delete().in("shipment_id", shipmentIds)
+
+    // 2. Apagar eventos de rastreio
+    await supabase.from("tracking_events").delete().in("shipment_id", shipmentIds)
+
+    // 3. Apagar os envios
+    const { error } = await supabase.from("shipments").delete().in("id", shipmentIds)
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    // 4. Registar na auditoria
+    await supabase.from("audit_log").insert({
+      tenant_id: LINKE_TENANT_ID,
+      action: "shipments_bulk_deleted",
+      details: { deletedShipmentIds: shipmentIds, count: shipmentIds.length, deletedAt: new Date().toISOString() }
+    })
+
+    revalidatePath("/ops/envios")
+    revalidatePath("/app/envios")
+    revalidatePath("/ops")
+    revalidatePath("/app")
+
+    return { success: true, count: shipmentIds.length }
+  } catch (err: any) {
+    console.error("Erro ao eliminar envios em massa:", err)
+    return { success: false, error: err?.message || "Erro desconhecido ao eliminar envios" }
+  }
+}

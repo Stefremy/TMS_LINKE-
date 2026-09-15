@@ -34,10 +34,11 @@ import {
   deleteShipmentAction,
   createReturnShipmentAction
 } from "@/app/actions/shipments"
-import { convertZplToPdfAction, syncCttTrackingAction } from "@/app/actions/ctt"
+import { convertZplToPdfAction, syncCttTrackingAction, injectTrackingEventAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
+import { CTT_TRACKING_EVENTS, CTT_NON_DELIVERY_REASONS, CTT_SITUATIONS } from "@/lib/services/ctt/ctt-types"
 
 interface ClientShipmentDetailModalProps {
   shipment: any
@@ -59,6 +60,10 @@ export function ClientShipmentDetailModal({
   const [isCreatingReturn, setIsCreatingReturn] = React.useState(false)
   const [timelineEvents, setTimelineEvents] = React.useState<any[]>([])
   const [loadingTimeline, setLoadingTimeline] = React.useState(true)
+  const [isInjectingEvent, setIsInjectingEvent] = React.useState(false)
+  const [selectedEvent, setSelectedEvent] = React.useState("EMH")
+  const [selectedReason, setSelectedReason] = React.useState("11")
+  const [selectedSituation, setSelectedSituation] = React.useState("D")
 
   const tracking = currentShipment?.tracking_number || currentShipment?.id || "N/A"
   const currentStatus = currentShipment?.status || "pendente"
@@ -141,6 +146,29 @@ export function ClientShipmentDetailModal({
       alert("Erro ao sincronizar com CTT: " + e.message)
     } finally {
       setIsSyncing(false)
+    }
+  }
+
+  const handleInjectEvent = async () => {
+    setIsInjectingEvent(true)
+    try {
+      const res = await injectTrackingEventAction(currentShipment.id, tracking, selectedEvent, selectedReason, selectedSituation)
+      if (res.success) {
+        alert(`🎉 Evento ${selectedEvent} injetado com sucesso!`)
+        // Re-sincroniza
+        await loadTimeline(currentShipment.id, tracking)
+        // Obtém estado atualizado
+        const { status } = CTT_TRACKING_EVENTS[selectedEvent]
+        const updated = { ...currentShipment, status: CTT_TRACKING_EVENTS[selectedEvent]?.tms_status || currentShipment.status }
+        setCurrentShipment(updated)
+        if (onUpdateShipment) onUpdateShipment(updated)
+      } else {
+        alert("Erro ao injetar evento: " + res.error)
+      }
+    } catch (e: any) {
+      alert("Erro ao injetar evento: " + e.message)
+    } finally {
+      setIsInjectingEvent(false)
     }
   }
 
@@ -487,6 +515,64 @@ export function ClientShipmentDetailModal({
                   </div>
                 </div>
               )}
+
+              {/* Injeção de Eventos de Teste (Admin/Ops) */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-emerald-600" />
+                    <span>Injetar Evento de Teste (Simulador CTT)</span>
+                  </h4>
+                </div>
+                <div className="flex flex-col sm:flex-row items-end gap-3">
+                  <div className="flex-1 w-full space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Evento</label>
+                    <select 
+                      value={selectedEvent} 
+                      onChange={e => setSelectedEvent(e.target.value)}
+                      className="w-full text-xs p-2 border border-slate-200 rounded-lg outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    >
+                      {Object.keys(CTT_TRACKING_EVENTS).map(code => (
+                        <option key={code} value={code}>{code} - {CTT_TRACKING_EVENTS[code].description}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1 w-full space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Razão (Opcional)</label>
+                    <select 
+                      value={selectedReason} 
+                      onChange={e => setSelectedReason(e.target.value)}
+                      className="w-full text-xs p-2 border border-slate-200 rounded-lg outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="">(Sem Razão)</option>
+                      {Object.keys(CTT_NON_DELIVERY_REASONS).map(code => (
+                        <option key={code} value={code}>{code} - {CTT_NON_DELIVERY_REASONS[code]}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1 w-full space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Situação (Opcional)</label>
+                    <select 
+                      value={selectedSituation} 
+                      onChange={e => setSelectedSituation(e.target.value)}
+                      className="w-full text-xs p-2 border border-slate-200 rounded-lg outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="">(Sem Situação)</option>
+                      {Object.keys(CTT_SITUATIONS).map(code => (
+                        <option key={code} value={code}>{code} - {CTT_SITUATIONS[code]}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleInjectEvent}
+                    disabled={isInjectingEvent}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-bold text-xs shadow-xs transition-colors whitespace-nowrap h-[34px] flex items-center justify-center min-w-[120px]"
+                  >
+                    {isInjectingEvent ? <Loader2 className="w-4 h-4 animate-spin" /> : "Injetar Evento"}
+                  </button>
+                </div>
+              </div>
 
               {/* Linha Temporal Cronológica de Pickagens */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
