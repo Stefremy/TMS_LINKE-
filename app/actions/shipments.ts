@@ -6,7 +6,7 @@ import { emitCttShipmentAction, syncCttTrackingAction } from "@/app/actions/ctt"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { calculateShipmentPrice, resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
-import { CTT_TRACKING_EVENTS } from "@/lib/services/ctt/ctt-types"
+import { CTT_TRACKING_EVENTS, CTT_INCIDENT_CODES } from "@/lib/services/ctt/ctt-types"
 
 const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 const DEFAULT_FALLBACK_CLIENT_ID = "44444444-4444-4444-4444-444444444444"
@@ -477,6 +477,7 @@ export async function emitClientGuiaAction(data: {
   serviceName: string
   subProductId?: string
   calculatedPrice: number
+  isReturn?: boolean
 }) {
   const supabase = createAdminClient()
   const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
@@ -599,7 +600,8 @@ export async function emitClientGuiaAction(data: {
         weightKg: data.weightKg,
         volumes: data.volumesCount || 1,
         subProduct: data.subProductId || "EMSF056.01",
-        autoClose: false // Como recomendado no portal do cliente, deixamos em aberto para fechar em lote no final do dia
+        autoClose: false, // Como recomendado no portal do cliente, deixamos em aberto para fechar em lote no final do dia
+        isReturn: data.isReturn
       })
 
       if (cttRes.success) {
@@ -641,6 +643,27 @@ export async function emitClientGuiaAction(data: {
     } catch (e: any) {
       console.error("Failed to generate CTT real shipment:", e.message)
       // se falhar, continua a mostrar "pendente" para poder tentar de novo a partir do TMS ops
+    }
+  }
+
+  // 5. Deduct shipment cost from client's prepaid credit balance
+  if (validatedClientId && computedSellPrice > 0) {
+    try {
+      const { data: clientData } = await supabase
+        .from("clientes")
+        .select("credit_limit")
+        .eq("id", validatedClientId)
+        .single()
+        
+      if (clientData && typeof clientData.credit_limit === "number") {
+        const newCredit = Math.max(0, clientData.credit_limit - computedSellPrice)
+        await supabase
+          .from("clientes")
+          .update({ credit_limit: newCredit })
+          .eq("id", validatedClientId)
+      }
+    } catch (e: any) {
+      console.warn("Failed to decrement client credit:", e.message)
     }
   }
 
@@ -863,18 +886,18 @@ export async function getShipmentTrackingTimelineAction(
   const supabase = createAdminClient()
   const events: any[] = []
 
-  // 1. Query Supabase tracking_events table (populated by CTT WebService sync or real creation)
+  // 1. Query Supabase tracking_events table by shipment_id
   try {
     const { data: dbEvents, error } = await supabase
       .from("tracking_events")
       .select("*")
-      .or(`shipment_id.eq.${shipmentId}${trackingNumber ? `,shipment_id.eq.${trackingNumber}` : ""}`)
+      .eq("shipment_id", shipmentId)
       .order("created_at", { ascending: true })
 
     if (!error && dbEvents && dbEvents.length > 0) {
       dbEvents.forEach((ev: any) => {
         const cttInfo = CTT_TRACKING_EVENTS[ev.event_code]
-        const isIncidencia = ev.event_code === "EMH" || ev.description?.includes("Incidência") || ev.description?.includes("Razão:")
+        const isIncidencia = CTT_INCIDENT_CODES.has(ev.event_code)
         events.push({
           id: ev.id,
           eventCode: ev.event_code || "EMA",
@@ -900,6 +923,55 @@ export async function getShipmentTrackingTimelineAction(
     console.warn("Could not load tracking_events from table:", err?.message)
   }
 
+  // 1b. Se não encontrou eventos pelo shipment_id, tenta pelo carrier_tracking_number (EQ...)
+  //     Útil quando o envio no audit_log tem um ID diferente do que está na tabela shipments.
+  if (events.length === 0 && trackingNumber) {
+    try {
+      // Encontrar o shipment real pelo carrier_tracking_number
+      const { data: linkedShipments } = await supabase
+        .from("shipments")
+        .select("id")
+        .eq("carrier_tracking_number", trackingNumber)
+
+      if (linkedShipments && linkedShipments.length > 0) {
+        const linkedId = linkedShipments[0].id
+        const { data: linkedEvents, error: evtErr } = await supabase
+          .from("tracking_events")
+          .select("*")
+          .eq("shipment_id", linkedId)
+          .order("created_at", { ascending: true })
+
+        if (!evtErr && linkedEvents && linkedEvents.length > 0) {
+          linkedEvents.forEach((ev: any) => {
+            const cttInfo = CTT_TRACKING_EVENTS[ev.event_code]
+            const isIncidencia = CTT_INCIDENT_CODES.has(ev.event_code)
+            events.push({
+              id: ev.id,
+              eventCode: ev.event_code || "EMA",
+              eventName: cttInfo?.description || ev.event_name || (
+                ev.event_code === "EMI" ? "Entrega Conseguida" :
+                ev.event_code === "EMZ" ? "Em Distribuição (Com o Estafeta)" :
+                ev.event_code === "EMH" ? "Entrega Não Conseguida (Incidência)" :
+                ev.event_code === "EMF" ? "Expedição Nacional" : "Aceitação CTT"
+              ),
+              description: ev.description || "Evento registado na rede CTT",
+              location: ev.location || "Rede CTT Expresso",
+              timestamp: ev.timestamp || ev.created_at,
+              tmsStatus: cttInfo?.tms_status || (
+                         ev.event_code === "EMI" ? "entregue" :
+                         ev.event_code === "EMZ" ? "em_distribuicao" :
+                         ev.event_code === "EMH" ? "incidencia" : "em_transito"),
+              isTerminal: cttInfo?.is_terminal ?? (ev.event_code === "EMI" || ev.event_code === "EMM"),
+              isIncidencia,
+            })
+          })
+        }
+      }
+    } catch (err: any) {
+      console.warn("Could not load tracking_events by carrier_tracking_number:", err?.message)
+    }
+  }
+
   // 2. Se ainda não existirem eventos na tabela tracking_events, verificar no audit_log
   if (events.length === 0) {
     try {
@@ -915,7 +987,7 @@ export async function getShipmentTrackingTimelineAction(
           if (d.eventCode || d.status) {
             const code = d.eventCode || (d.status === "entregue" ? "EMI" : d.status === "em_distribuicao" ? "EMZ" : "EMA")
             const cttInfo = CTT_TRACKING_EVENTS[code]
-            const isIncidencia = code === "EMH" || d.reasonCode || d.reasonDesc
+            const isIncidencia = CTT_INCIDENT_CODES.has(code)
             events.push({
               id: log.id,
               eventCode: code,
@@ -1108,8 +1180,32 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
     (s) => (s.tracking_number && s.tracking_number.toUpperCase() === query) ||
            (s.id && s.id.toUpperCase() === query) ||
            (s.ctt_object_id && s.ctt_object_id.toUpperCase() === query) ||
-           (s.reference && s.reference.toUpperCase() === query)
+           (s.reference && s.reference.toUpperCase() === query) ||
+           (s.carrier_tracking_number && s.carrier_tracking_number.toUpperCase() === query)
   )
+
+  // Se não encontrou e é um código LTK, tentar resolver pelo prefixo do ID
+  // (ex: LTK7D7B1884 -> id começa com 7d7b1884)
+  if (!shipment && query.startsWith("LTK")) {
+    const idPrefix = query.replace(/^LTK/i, "").toLowerCase()
+    shipment = allShipments.find(
+      (s) => s.id && s.id.toLowerCase().startsWith(idPrefix)
+    )
+  }
+
+  // Último fallback: pesquisar diretamente na tabela shipments por carrier_tracking_number
+  // (cobre casos em que o shipment foi sincronizado com um carrier code EQ/DD/DB/etc.)
+  if (!shipment) {
+    try {
+      const { data: directMatch } = await supabase
+        .from("shipments")
+        .select("*")
+        .or(`tracking_number.ilike.%${query}%,carrier_tracking_number.ilike.%${query}%`)
+        .limit(1)
+        .single()
+      if (directMatch) shipment = directMatch
+    } catch { /* not found */ }
+  }
 
   // Se o utilizador pesquisar pelo tracking de referência LTK1425602 e ainda não existir na BD, inicializar automaticamente
   if (!shipment && query === "LTK1425602") {
@@ -1176,8 +1272,9 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
     return { success: false, error: `Nenhum envio encontrado para a referência "${query}". Verifique o código e tente novamente.` }
   }
 
-  // Obter eventos de rastreio reais
-  const events = await getShipmentTrackingTimelineAction(shipment.id, shipment.tracking_number)
+  // Obter eventos de rastreio reais — passa o carrier_tracking_number (EQ...) para o fallback
+  const carrierTrkForLookup = shipment.carrier_tracking_number || shipment.ctt_object_id || shipment.tracking_number
+  const events = await getShipmentTrackingTimelineAction(shipment.id, carrierTrkForLookup)
 
   // Identificar dados do operador / carrier provider (ex: CTT Expresso)
   const carrierCode = shipment.carrier_name || "ctt"

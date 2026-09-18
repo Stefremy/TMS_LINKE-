@@ -85,8 +85,7 @@ export class CTTSoapClient {
             // Verificar se o SOAP devolveu Fault
             const fault = parsed?.Envelope?.Body?.Fault
             if (fault) {
-              const faultString = fault.faultstring || fault.detail?.ExceptionDetail?.Message || fault.detail || "Erro SOAP retornado pelo servidor CTT"
-              return reject(new Error(`[SOAP Fault] ${faultString}`))
+              return reject(new Error(`[SOAP Fault] ${JSON.stringify(fault)}`))
             }
 
             resolve(parsed?.Envelope?.Body || parsed)

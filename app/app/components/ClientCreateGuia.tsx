@@ -38,7 +38,7 @@ import {
 } from "@/app/ops/entidades/clientes/types"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 
-export function ClientCreateGuia() {
+export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
   const searchParams = useSearchParams()
   const clientId = searchParams.get("clientId")
   const clientNameParam = searchParams.get("clientName")
@@ -64,6 +64,7 @@ export function ClientCreateGuia() {
   const [codAmount, setCodAmount] = React.useState("50.00")
   const [isFragil, setIsFragil] = React.useState(false)
   const [isSMSNotification, setIsSMSNotification] = React.useState(true)
+  const [isReturn, setIsReturn] = React.useState(false)
 
   // Generation feedback & session history
   const [generatedGuia, setGeneratedGuia] = React.useState<string | null>(null)
@@ -90,6 +91,10 @@ export function ClientCreateGuia() {
       if (!target && clientNameParam) {
         const decoded = decodeURIComponent(clientNameParam).toLowerCase()
         target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
+      }
+      if (!target && userEmail) {
+        const emailLower = userEmail.toLowerCase()
+        target = clients.find((c) => c.email?.toLowerCase() === emailLower || c.billing_email?.toLowerCase() === emailLower)
       }
       if (!target && clients.length > 0) {
         target = clients[0]
@@ -210,6 +215,14 @@ export function ClientCreateGuia() {
       activeSpecialItems.push({ name: "Alerta SMS & Tracking", amount: fee })
     }
 
+    // 4. Logística Inversa (Return)
+    if (isReturn) {
+      const feeCfg = specialFeesList.find((f) => f.special_service_code === "auth_return")
+      const fee = feeCfg?.fixed_value ?? 3.85
+      specialTotal += fee
+      activeSpecialItems.push({ name: "Logística Inversa (Retorno)", amount: fee })
+    }
+
     // Subtotal and Discount
     const subtotal = base + fuelVal + specialTotal
     const discPct = pricing.discount_pct || 0
@@ -235,6 +248,7 @@ export function ClientCreateGuia() {
     codAmount,
     isFragil,
     isSMSNotification,
+    isReturn,
   ])
 
   const handleCreateShipment = async (e: React.FormEvent) => {
@@ -266,6 +280,7 @@ export function ClientCreateGuia() {
         serviceName: chosenService,
         subProductId: activeLinkeService?.webservice_service_code,
         calculatedPrice: numericVal,
+        isReturn,
       })
 
       const newCode = res.guia
@@ -650,6 +665,23 @@ export function ClientCreateGuia() {
                   </label>
                 </div>
                 <p className="text-[10px] text-slate-400 pl-6 mt-1">+1.50€ manuseamento</p>
+              </div>
+
+              {/* 4. Logística Inversa */}
+              <div className={`p-3 rounded-xl border transition-colors ${isReturn ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="opt_return"
+                    checked={isReturn} 
+                    onChange={(e) => setIsReturn(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
+                  />
+                  <label htmlFor="opt_return" className="font-bold text-slate-800 cursor-pointer text-xs">
+                    Logística Inversa (Retorno)
+                  </label>
+                </div>
+                <p className="text-[10px] text-slate-400 pl-6 mt-1">+3.85€ autorização</p>
               </div>
 
             </div>

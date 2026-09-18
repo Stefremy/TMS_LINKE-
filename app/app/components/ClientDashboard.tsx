@@ -37,7 +37,7 @@ import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDe
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 
-export function ClientDashboard() {
+export function ClientDashboard({ userEmail }: { userEmail?: string }) {
   const searchParams = useSearchParams()
   const clientId = searchParams.get("clientId")
   const clientNameParam = searchParams.get("clientName")
@@ -95,22 +95,28 @@ export function ClientDashboard() {
         const decoded = decodeURIComponent(clientNameParam).toLowerCase()
         target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
       }
+      if (!target && userEmail) {
+        const emailLower = userEmail.toLowerCase()
+        target = clients.find((c) => c.email?.toLowerCase() === emailLower || c.billing_email?.toLowerCase() === emailLower)
+      }
       if (!target && clients.length > 0) {
-        target = clients[0]
+        target = clients[0] // Fallback (maybe remove this later when auth is strict)
       }
       if (target) {
         setCurrentClient(target)
       }
 
       // Fetch 100% real stats for this client
-      getClientPortalStatsAction(target?.id, target?.short_name).then((res) => {
-        if (res) {
-          setStats(res)
-          setShipments(res.allShipments || res.recentShipments || [])
-        }
-      })
+      if (target) {
+        getClientPortalStatsAction(target.id, target.short_name).then((res) => {
+          if (res) {
+            setStats(res)
+            setShipments(res.allShipments || res.recentShipments || [])
+          }
+        })
+      }
     })
-  }, [clientId, clientNameParam])
+  }, [clientId, clientNameParam, userEmail])
 
   // Handle click outside dropdown
   React.useEffect(() => {
@@ -337,10 +343,10 @@ export function ClientDashboard() {
           </div>
         </div>
 
-        {/* KPI 4: Limite de Crédito Real */}
+        {/* KPI 4: Crédito (Saldo) */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs flex flex-col justify-between hover:border-emerald-300 transition-colors">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Limite de Crédito</span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Crédito (Saldo)</span>
             <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
               <ShieldCheck className="w-5 h-5" />
             </div>

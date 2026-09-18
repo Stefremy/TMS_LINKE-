@@ -14,7 +14,7 @@ import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { Cliente } from "@/app/ops/entidades/clientes/types"
 
-export function ClientShipmentsHistory() {
+export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
   const searchParams = useSearchParams()
   const clientId = searchParams.get("clientId")
   const clientNameParam = searchParams.get("clientName")
@@ -56,6 +56,10 @@ export function ClientShipmentsHistory() {
       if (!target && clientNameParam) {
         const decoded = decodeURIComponent(clientNameParam).toLowerCase()
         target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
+      }
+      if (!target && userEmail) {
+        const emailLower = userEmail.toLowerCase()
+        target = clients.find((c) => c.email?.toLowerCase() === emailLower || c.billing_email?.toLowerCase() === emailLower)
       }
       if (!target && clients.length > 0) {
         target = clients[0]

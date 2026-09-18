@@ -2,8 +2,12 @@ import * as React from "react"
 import { Suspense } from "react"
 import { ClientDashboard } from "./components/ClientDashboard"
 import { Loader2 } from "lucide-react"
+import { createClient } from "@/lib/supabase/server"
 
-export default function ClientStorePage() {
+export default async function ClientStorePage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
   return (
     <Suspense
       fallback={
@@ -13,7 +17,8 @@ export default function ClientStorePage() {
         </div>
       }
     >
-      <ClientDashboard />
+      <ClientDashboard userEmail={user?.email} />
     </Suspense>
   )
 }
+

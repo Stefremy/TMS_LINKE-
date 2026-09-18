@@ -1,4 +1,5 @@
 import { CTT_TRACKING_EVENTS, CTT_NON_DELIVERY_REASONS, CTT_SITUATIONS, CTTTrackingEvent } from "./ctt-types"
+import { CTTSoapClient } from "./ctt-soap-client"
 
 export interface ParsedTrackingEvent {
   eventCode: string
@@ -86,99 +87,76 @@ export class CTTTrackingService {
   }
 
   /**
-   * Consulta a página pública de Track & Trace dos CTT usando Web Scraping
-   * (Substituto da API oficial enquanto não existirem credenciais REST)
+   * Consulta o endpoint EventosWS Oficial dos CTT para ler o histórico de rastreio.
    */
   static async fetchRealTrackingEvents(
     trackingNumber: string, 
     credentials: { client_number: string, auth_id: string, contract_number?: string, environment?: string }
   ): Promise<ParsedTrackingEvent[]> {
     try {
-      const cheerio = await import("cheerio")
-      const url = `https://www.ctt.pt/feapl_2/app/open/objectSearch/objectSearch.jspx?objects=${trackingNumber}`
-      
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7"
-        },
-        signal: AbortSignal.timeout(15000)
+      const client = new CTTSoapClient()
+      const isProd = credentials.environment === "production"
+      const endpoint = isProd 
+         ? "http://cttexpressows.ctt.pt/CTTEWSPool/EventosWS.svc"
+         : "http://cttexpressows.qa.ctt.pt/CTTEWSPool/EventosWS.svc"
+
+      const bodyXml = `
+        <tem:GetEventosObjectos_V3 xmlns:tem="http://tempuri.org/">
+          <tem:ID>${CTTSoapClient.escapeXml(credentials.auth_id)}</tem:ID>
+          <tem:NObjectos xmlns:arr="http://schemas.microsoft.com/2003/10/Serialization/Arrays">
+             <arr:string>${CTTSoapClient.escapeXml(trackingNumber)}</arr:string>
+          </tem:NObjectos>
+        </tem:GetEventosObjectos_V3>
+      `
+
+      const response = await client.callSoap({
+        endpoint,
+        action: "http://tempuri.org/IEventosWS/GetEventosObjectos_V3",
+        soapBodyXml: bodyXml
       })
 
-      if (!res.ok) {
-        throw new Error(`Falha HTTP ao contactar CTT: ${res.status}`)
+      const result = response?.GetEventosObjectos_V3Response?.GetEventosObjectos_V3Result
+
+      // Verificar se houve erros ao nível do WCF
+      if (result?._erros?.string) {
+         const errs = Array.isArray(result._erros.string) ? result._erros.string : [result._erros.string]
+         if (errs.length > 0) {
+            console.warn("EventosWS retornou erros:", errs)
+            // Se o objecto for inválido, devolvemos vazio
+            return []
+         }
       }
 
-      const html = await res.text()
-      const $ = cheerio.load(html)
+      const objectsData = result?._Objectos?.DadosObjectos_V3BE
+      if (!objectsData) return []
 
-      // Verificar se dá erro de não encontrado
-      const notFoundText = html.toLowerCase()
-      if (notFoundText.includes("não foi encontrado") || notFoundText.includes("não devolveu")) {
-        return []
-      }
+      const objList = Array.isArray(objectsData) ? objectsData : [objectsData]
+      const objInfo = objList.find((o: any) => o._NObjecto === trackingNumber || o._NRelable === trackingNumber)
+      if (!objInfo || !objInfo._Eventos?.DadosEventos_V3BE) return []
 
-      const events: any[] = []
+      const evtData = objInfo._Eventos.DadosEventos_V3BE
+      const evts = Array.isArray(evtData) ? evtData : [evtData]
 
-      // Heurística 1: Tabela de Detalhes Clássica (caso exista)
-      $("table tr").each((i, el) => {
-        const cols = $(el).find("td")
-        if (cols.length >= 3) {
-          const rawDate = $(cols[0]).text().trim()
-          const rawStatus = $(cols[1]).text().trim()
-          const rawLocal = $(cols[2]).text().trim()
-          
-          if (rawDate.match(/\d{4}/) || rawDate.match(/\d{2}\/\d{2}/)) {
-             events.push({
-                eventCode: rawStatus, // Usamos o texto literal se não tivermos código
-                eventDate: rawDate,
-                location: rawLocal,
-                reasonCode: "",
-                situationCode: ""
-             })
-          }
-        }
+      return evts.map((evt: any) => {
+         const code = evt._CodigoEvento || ""
+         const reason = evt._CodigoMotivo || undefined
+         const sit = evt._CodigoSituacao || undefined
+         let date = undefined
+         if (evt._DataEvento) {
+           const parts = evt._DataEvento.split(' ')
+           if (parts.length === 2) {
+             const [d, t] = parts
+             const [day, month, year] = d.split('-')
+             date = `${year}-${month}-${day}T${t}`
+           }
+         }
+         const loc = evt._DescricaoNoEvento || "Rede CTT"
+         return this.parseEvent(code, reason, sit, loc, date)
       })
 
-      // Heurística 2: Nova estrutura de painéis da Timeline CTT (2023+)
-      if (events.length === 0) {
-        $(".timeline-item, .panel, .evento-linha").each((i, el) => {
-          const text = $(el).text().replace(/\s+/g, " ").trim()
-          // Extrair data se possível usando Regex (YYYY/MM/DD hh:mm ou DD/MM/YYYY hh:mm)
-          const dateMatch = text.match(/(\d{2,4}[-\/]\d{2}[-\/]\d{2,4}\s+\d{2}:\d{2})/)
-          const dateStr = dateMatch ? dateMatch[1] : ""
-          
-          // O status costuma ser o próprio texto limpo da data
-          const statusStr = text.replace(dateStr, "").trim()
-
-          if (dateStr || statusStr) {
-            events.push({
-              eventCode: statusStr.substring(0, 50),
-              eventDate: dateStr,
-              location: "Rede CTT",
-              reasonCode: "",
-              situationCode: ""
-            })
-          }
-        })
-      }
-
-      if (events.length === 0 && !notFoundText.includes("não foi encontrado")) {
-         // Existe a página, não é 404, mas ainda não tem timeline estruturada
-         return []
-      }
-
-      return events.map((evt) => this.parseEvent(
-        evt.eventCode,
-        evt.reasonCode,
-        evt.situationCode,
-        evt.location,
-        evt.eventDate
-      ))
     } catch (error: any) {
-      console.warn("Erro ao fazer scraping do Track & Trace CTT:", error.message)
-      throw new Error(`Erro ao contactar portal CTT: ${error.message}`)
+      console.warn("Erro ao ler API EventosWS:", error.message)
+      throw new Error(`Erro ao contactar EventosWS CTT: ${error.message}`)
     }
   }
 }

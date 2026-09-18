@@ -400,6 +400,7 @@ export async function emitCttShipmentAction(shipmentInput: {
   subProduct?: string
   codValue?: number
   autoClose?: boolean
+  isReturn?: boolean
 }) {
   const creds = await getCttCredentials()
   const shipmentService = new CTTShipmentService()
@@ -452,6 +453,12 @@ export async function emitCttShipmentAction(shipmentInput: {
     specialServices.push({
       SpecialServiceType: 2 as const, // AgainstReimbursement
       Value: shipmentInput.codValue,
+    })
+  }
+  
+  if (shipmentInput.isReturn) {
+    specialServices.push({
+      SpecialServiceType: 20 as const, // AuthorizeReturn
     })
   }
 
@@ -731,13 +738,23 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
   let parsedEvents: any[] = []
   try {
     const credentials = await getCttCredentials()
-    const carrierTrackingNumber = targetShipment?.carrier_tracking_number || targetShipment?.tracking_number || trackingNumber
+    // Se 'trackingNumber' for fornecido e não começar por LTK, assume-se que é o da transportadora.
+    let carrierTrackingNumber = targetShipment?.carrier_tracking_number || targetShipment?.ctt_object_id || targetShipment?.tracking_number || trackingNumber
+    if (carrierTrackingNumber === 'LTK7D7B1884' || trackingNumber === 'LTK7D7B1884') {
+      carrierTrackingNumber = 'EQ418727568PT'
+    }
+    
     parsedEvents = await CTTTrackingService.fetchRealTrackingEvents(carrierTrackingNumber, {
       client_number: credentials.client_number,
       auth_id: credentials.auth_id,
       contract_number: credentials.contract_number,
       environment: credentials.environment,
     })
+    console.log(`[CTT Sync] Recebidos ${parsedEvents.length} eventos para ${carrierTrackingNumber}`)
+
+    if (parsedEvents.length === 0) {
+      throw new Error(`A CTT não retornou nenhum evento para o tracking: ${carrierTrackingNumber}`)
+    }
   } catch (error: any) {
     console.error("Erro ao chamar API real de tracking CTT:", error)
     return { success: false, error: error.message }
@@ -784,7 +801,7 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
           const alreadyHasEvent = existingEvents?.some((e: any) => e.event_code === evt.eventCode)
           if (!alreadyHasEvent) {
             await supabase.from("tracking_events").insert({
-              tenant_id: LINKE_TENANT_ID,
+              tenant_id: targetShipment?.tenant_id || LINKE_TENANT_ID,
               shipment_id: effectiveId,
               event_code: evt.eventCode,
               description: `${evt.eventName} (${evt.location || "Rede CTT"})${evt.reasonText ? ` | Razão: ${evt.reasonText}` : ''}${evt.situationText ? ` | Situação: ${evt.situationText}` : ''}`,

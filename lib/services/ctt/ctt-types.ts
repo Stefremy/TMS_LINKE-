@@ -199,11 +199,13 @@ export interface CTTTrackingEvent {
   is_terminal: boolean
 }
 
+// Códigos de evento que representam verdadeiras incidências de entrega
+export const CTT_INCIDENT_CODES = new Set(["EMH", "EMN", "EDF"])
+
 export const CTT_TRACKING_EVENTS: Record<string, CTTTrackingEvent> = {
   EMA: { code: "EMA", description: "Aceitação CTT", tms_status: "em_transito", is_terminal: false },
+  EMP: { code: "EMP", description: "Recolha Efetuada", tms_status: "em_transito", is_terminal: false },
   EMB: { code: "EMB", description: "Recepção Nacional", tms_status: "em_transito", is_terminal: false },
-  EMD: { code: "EMD", description: "Recepção Internacional", tms_status: "em_transito", is_terminal: false },
-  EMC: { code: "EMC", description: "Expedição Internacional", tms_status: "em_transito", is_terminal: false },
   EMF: { code: "EMF", description: "Expedição Nacional", tms_status: "em_transito", is_terminal: false },
   EMG: { code: "EMG", description: "Recepção no Centro de Distribuição Destino", tms_status: "em_transito", is_terminal: false },
   EMJ: { code: "EMJ", description: "Chegada à Estação de Trânsito", tms_status: "em_transito", is_terminal: false },
@@ -212,8 +214,8 @@ export const CTT_TRACKING_EVENTS: Record<string, CTTTrackingEvent> = {
   EMY: { code: "EMY", description: "Expedição do Local Responsável pela Aceitação", tms_status: "em_transito", is_terminal: false },
   EMW: { code: "EMW", description: "Chegada à Estação de Depósito", tms_status: "em_transito", is_terminal: false },
   EMZ: { code: "EMZ", description: "Em Distribuição (Com estafeta)", tms_status: "em_distribuicao", is_terminal: false },
+  EMO: { code: "EMO", description: "Chegada ao Nó Cliente", tms_status: "em_transito", is_terminal: false },
   EMT: { code: "EMT", description: "Envio", tms_status: "em_transito", is_terminal: false },
-  EMP: { code: "EMP", description: "Recolha Efetuada", tms_status: "em_transito", is_terminal: false },
   EMI: { code: "EMI", description: "Entrega Conseguida", tms_status: "entregue", is_terminal: true },
   EMH: { code: "EMH", description: "Entrega Não Conseguida (Incidência)", tms_status: "incidencia", is_terminal: false },
   EMN: { code: "EMN", description: "Erro de Encaminhamento", tms_status: "incidencia", is_terminal: false },
@@ -223,6 +225,12 @@ export const CTT_TRACKING_EVENTS: Record<string, CTTTrackingEvent> = {
   EMV: { code: "EMV", description: "Devolução em Curso", tms_status: "incidencia", is_terminal: false },
   EMM: { code: "EMM", description: "Entregue ao Remetente (Devolvido)", tms_status: "devolvido", is_terminal: true },
   EMR: { code: "EMR", description: "Reimpressão de Rótulo", tms_status: "em_transito", is_terminal: false },
+  EMD: { code: "EMD", description: "Recepção Internacional", tms_status: "em_transito", is_terminal: false },
+  EMC: { code: "EMC", description: "Expedição Internacional", tms_status: "em_transito", is_terminal: false },
+  // Eventos de transferência interna CTT (não são incidências)
+  TRA: { code: "TRA", description: "Transferência entre Centros Operacionais", tms_status: "em_transito", is_terminal: false },
+  TLF: { code: "TLF", description: "Tentativa de Entrega Falhada", tms_status: "em_transito", is_terminal: false },
+  TRS: { code: "TRS", description: "Transferência de Envio", tms_status: "em_transito", is_terminal: false },
 }
 
 export const CTT_NON_DELIVERY_REASONS: Record<string, string> = {

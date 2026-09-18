@@ -110,6 +110,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
   })
 
   const [expandedPriceServico, setExpandedPriceServico] = React.useState<string | null>(null)
+  const [isEditingCredit, setIsEditingCredit] = React.useState(false)
 
   React.useEffect(() => {
     if (initialData) {
@@ -797,14 +798,31 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Limite de Crédito (€)</label>
-                  <input
-                    type="number"
-                    value={formData.credit_limit ?? 5000}
-                    onChange={(e) => setFormData({ ...formData, credit_limit: Number(e.target.value) })}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                    placeholder="5000"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">Crédito (€)</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsEditingCredit(!isEditingCredit)}
+                      className="text-[10px] text-blue-600 font-semibold hover:underline"
+                    >
+                      {isEditingCredit ? "Bloquear edição" : "Editar manualmente"}
+                    </button>
+                  </div>
+                  
+                  {isEditingCredit ? (
+                    <input
+                      type="number"
+                      value={formData.credit_limit ?? 5000}
+                      onChange={(e) => setFormData({ ...formData, credit_limit: Number(e.target.value) })}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      placeholder="5000"
+                    />
+                  ) : (
+                    <div className="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-600 flex items-center justify-between">
+                      <span>{Number(formData.credit_limit || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+                      <span className="text-[10px] text-slate-400 font-normal">Saldo (Pre-Pago)</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>

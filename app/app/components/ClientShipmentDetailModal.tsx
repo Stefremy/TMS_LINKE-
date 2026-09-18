@@ -73,16 +73,18 @@ export function ClientShipmentDetailModal({
     ? currentShipment.tracking_number
     : `LTK${(currentShipment?.id || "00000000").substring(0, 8).toUpperCase()}`
 
-  const carrierTracking = currentShipment?.ctt_object_id || (currentShipment?.tracking_number !== internalRef ? currentShipment?.tracking_number : null)
+  const carrierTracking = currentShipment?.carrier_tracking_number || currentShipment?.ctt_object_id || (currentShipment?.tracking_number !== internalRef ? currentShipment?.tracking_number : null)
   const tracking = internalRef
   const currentStatus = currentShipment?.status || "pendente"
 
   // Load timeline events
   const loadTimeline = React.useCallback(async (shipmentId: string, trkNumber?: string) => {
-    setLoadingTimeline(true)
     try {
-      const events = await getShipmentTrackingTimelineAction(shipmentId, trkNumber)
-      setTimelineEvents(events)
+      console.log("Loading timeline for:", shipmentId, trkNumber)
+      setLoadingTimeline(true)
+      const data = await getShipmentTrackingTimelineAction(shipmentId, trkNumber)
+      console.log("Timeline data loaded:", data?.length, "events")
+      setTimelineEvents(data || [])
     } catch (e) {
       console.error("Error loading tracking timeline:", e)
     } finally {
@@ -146,12 +148,14 @@ export function ClientShipmentDetailModal({
   const handleSyncTracking = async () => {
     setIsSyncing(true)
     try {
-      const res = await syncCttTrackingAction(tracking, currentShipment.id)
+      const res = await syncCttTrackingAction(carrierTracking || tracking, currentShipment.id)
       if (res.success) {
         const updated = { ...currentShipment, status: res.latestStatus || currentShipment.status }
         setCurrentShipment(updated)
         if (onUpdateShipment) onUpdateShipment(updated)
         await loadTimeline(currentShipment.id, tracking)
+      } else {
+        alert("Atenção: " + (res.error || "Não foi possível obter pickagens para este envio."))
       }
     } catch (e: any) {
       alert("Erro ao sincronizar com CTT: " + e.message)
@@ -560,7 +564,7 @@ export function ClientShipmentDetailModal({
               </div>
 
               {/* Incidência Banner (Se aplicável) */}
-              {(currentStatus === "incidencia" || timelineEvents.some((e: any) => e.isIncidencia || e.eventCode === "EMH")) && (
+              {(currentStatus === "incidencia" || timelineEvents.some((e: any) => e.eventCode === "EMH" || e.eventCode === "EMN" || e.eventCode === "EDF")) && (
                 <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-900 flex items-start gap-3 shadow-2xs">
                   <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                   <div className="space-y-1 flex-1">
@@ -631,7 +635,7 @@ export function ClientShipmentDetailModal({
                           })
                         : "—"
 
-                      const isIncidencia = ev.isIncidencia || ev.eventCode === "EMH"
+                      const isIncidencia = ev.isIncidencia || ev.eventCode === "EMH" || ev.eventCode === "EMN" || ev.eventCode === "EDF"
                       const isEntregue = ev.eventCode === "EMI"
                       const isDistribuicao = ev.eventCode === "EMZ"
                       const isDevolvido = ev.eventCode === "EMV"

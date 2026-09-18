@@ -21,8 +21,9 @@ export function ClientSidebarNav() {
 
   const navItems = [
     { href: "/app", label: "Painel Principal", icon: Home },
-    { href: "/app/criar-guia", label: "Novo Envio", icon: FileText },
+    { href: "/app/criar-guia", label: "Novo Envio", icon: Plus },
     { href: "/app/envios", label: "Histórico & Envios", icon: Search },
+    { href: "/app/faturas", label: "Faturas e Extratos", icon: FileText },
   ]
 
   return (

@@ -47,8 +47,56 @@ export default async function OpsDashboardPage() {
   const totalShipments = shipments.length
   const pendingRecolhas = recolhas.filter((r: any) => r.status === "pendente" || r.status === "rascunho").length
   const totalRevenue = shipments.reduce((acc: number, s: any) => acc + (Number(s.sell_price) || 0), 0)
-  const deliveredCount = shipments.filter((s: any) => s.status === "entregue").length
+  
+  const deliveredShipments = shipments.filter((s: any) => s.status === "entregue")
+  const deliveredCount = deliveredShipments.length
   const deliveryRate = totalShipments > 0 ? Math.round((deliveredCount / totalShipments) * 100) : 0
+
+  // Calculate Avg Transit Time (days)
+  let totalTransitDays = 0
+  deliveredShipments.forEach((s: any) => {
+    const created = new Date(s.created_at)
+    const updated = new Date(s.updated_at || s.created_at)
+    const diffTime = Math.abs(updated.getTime() - created.getTime())
+    const diffDays = diffTime / (1000 * 60 * 60 * 24)
+    totalTransitDays += diffDays
+  })
+  const avgTransitTime = deliveredCount > 0 ? (totalTransitDays / deliveredCount).toFixed(1) : "0"
+
+  // Check for incidents in delivered shipments to calculate 1st attempt rate
+  const deliveredIds = deliveredShipments.map((s: any) => s.id)
+  let deliveredWithIncidents = 0
+  if (deliveredIds.length > 0) {
+    const { data: incidentEvents } = await supabase
+      .from("tracking_events")
+      .select("shipment_id")
+      .in("shipment_id", deliveredIds)
+      .in("event_code", ["EMH", "EMN", "EDF"])
+    
+    if (incidentEvents) {
+      const incidentShipmentIds = new Set(incidentEvents.map((e: any) => e.shipment_id))
+      deliveredWithIncidents = incidentShipmentIds.size
+    }
+  }
+  const firstAttemptCount = deliveredCount - deliveredWithIncidents
+  const firstAttemptRate = deliveredCount > 0 ? Math.round((firstAttemptCount / deliveredCount) * 100) : 0
+
+  // Breakdown by status
+  const statusCounts = {
+    pendente: 0,
+    em_transito: 0,
+    em_distribuicao: 0,
+    incidencia: 0,
+    entregue: deliveredCount,
+    devolvido: 0
+  }
+  shipments.forEach((s: any) => {
+    if (s.status === "pendente" || s.status === "rascunho") statusCounts.pendente++
+    else if (s.status === "em transito" || s.status === "em_transito") statusCounts.em_transito++
+    else if (s.status === "em_distribuicao") statusCounts.em_distribuicao++
+    else if (s.status === "incidencia") statusCounts.incidencia++
+    else if (s.status === "devolvido") statusCounts.devolvido++
+  })
 
   const stats = [
     { 
@@ -58,16 +106,16 @@ export default async function OpsDashboardPage() {
       subtext: `${deliveredCount} entregues` 
     },
     { 
-      label: "Recolhas Pendentes", 
-      value: pendingRecolhas.toString(), 
-      icon: ClipboardList, 
-      subtext: `${recolhas.length} total agendadas` 
+      label: "Entregas à 1ª", 
+      value: `${firstAttemptRate}%`, 
+      icon: CheckCircle2, 
+      subtext: `${firstAttemptCount} envios sem incidência` 
     },
     { 
-      label: "Faturação Total", 
-      value: `€${totalRevenue.toFixed(2)}`, 
-      icon: ReceiptEuro, 
-      subtext: "Valor acumulado de envios" 
+      label: "Tempo Médio", 
+      value: `${avgTransitTime}d`, 
+      icon: Clock, 
+      subtext: "Tempo médio de trânsito" 
     },
     { 
       label: "Taxa de Entrega", 
@@ -78,7 +126,7 @@ export default async function OpsDashboardPage() {
   ]
 
   const recentShipments = shipments.slice(0, 5)
-  const latestActiveShipment = shipments[0] || null
+  const latestActiveShipment = shipments.find((s: any) => s.status !== "entregue" && s.status !== "devolvido") || shipments[0] || null
 
   return (
     <div className="flex flex-col gap-8 font-sans">
@@ -101,6 +149,22 @@ export default async function OpsDashboardPage() {
                 <span className="text-[11px] font-medium text-slate-400">{stat.subtext}</span>
               </div>
             </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Breakdown Row */}
+      <div className="grid grid-cols-5 gap-4">
+        {[
+          { label: "Pendentes", value: statusCounts.pendente, color: "bg-slate-100 text-slate-700" },
+          { label: "Em Trânsito", value: statusCounts.em_transito, color: "bg-blue-100 text-blue-700" },
+          { label: "Em Distrib.", value: statusCounts.em_distribuicao, color: "bg-indigo-100 text-indigo-700" },
+          { label: "Incidências", value: statusCounts.incidencia, color: "bg-rose-100 text-rose-700" },
+          { label: "Entregues", value: statusCounts.entregue, color: "bg-emerald-100 text-emerald-700" }
+        ].map((s, i) => (
+          <div key={i} className={`rounded-xl p-4 flex flex-col items-center justify-center text-center ${s.color}`}>
+            <span className="text-2xl font-black font-mono">{s.value}</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider mt-1 opacity-80">{s.label}</span>
           </div>
         ))}
       </div>
