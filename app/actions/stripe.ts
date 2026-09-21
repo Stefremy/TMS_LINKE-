@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import Stripe from "stripe"
 import { headers } from "next/headers"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_dummy", {
   apiVersion: "2026-08-26.dahlia" as any,
 })
 
