@@ -347,3 +347,171 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
     return { success: false, error: err.message || "Erro ao ligar ao Moloni." }
   }
 }
+
+/**
+ * Emite a fatura oficial no Moloni para um extrato previamente criado
+ */
+export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string) {
+  try {
+    const supabase = createAdminClient()
+    
+    // 1. Obter Extrato do audit_log
+    const { data: logs, error } = await supabase
+      .from('audit_log')
+      .select('*')
+      .eq('action', 'billing_statement')
+      .order('created_at', { ascending: false })
+
+    if (error || !logs) throw new Error("Extrato não encontrado.")
+
+    const match = logs.find((l: any) => 
+      l.id === statementIdOrNumber || 
+      l.details?.id === statementIdOrNumber ||
+      l.details?.statement_number === statementIdOrNumber
+    )
+
+    if (!match || !match.details) {
+      throw new Error("Extrato não encontrado.")
+    }
+
+    const stmt = match.details
+
+    // Se já tiver fatura emitida no Moloni, devolver o link existente
+    if (stmt.moloni_document_pdf) {
+      return {
+        success: true,
+        moloniDocumentId: stmt.moloni_document_id,
+        moloniDocumentPdf: stmt.moloni_document_pdf,
+        alreadyEmitted: true
+      }
+    }
+
+    // 2. Verificar se o Moloni está configurado
+    let moloniConfig: any = null
+    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
+      moloniConfig = {
+        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
+        companyId: process.env.MOLONI_COMPANY_ID,
+      }
+    } else {
+      const { data: mLogs } = await supabase
+        .from("audit_log")
+        .select("details")
+        .eq("action", "moloni_connection_config")
+        .order("created_at", { ascending: false })
+        .limit(1)
+      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
+        moloniConfig = {
+          refreshToken: mLogs[0].details.refresh_token,
+          companyId: mLogs[0].details.company_id,
+        }
+      }
+    }
+
+    if (!moloniConfig) {
+      throw new Error("Moloni ainda não está conectado. Clique em 'Ligar Moloni' no topo da página para autenticar.")
+    }
+
+    const moloni = new MoloniClient(moloniConfig)
+
+    // 3. Obter dados do cliente
+    const allClients = await getClientesAction()
+    const client: any = allClients.find((c: any) => c.id === stmt.client_id) || {
+      legal_name: stmt.client_name,
+      short_name: stmt.client_name,
+      nif: "999999990",
+      email: "",
+      phone: ""
+    }
+
+    // 4. Verificar ou Criar cliente no Moloni
+    let moloniCustomerId = null
+    if (client.nif && client.nif !== "999999990") {
+      const moloniCust = await moloni.getCustomerByVat(client.nif)
+      if (moloniCust) {
+        moloniCustomerId = moloniCust.customer_id
+      }
+    }
+
+    if (!moloniCustomerId) {
+      moloniCustomerId = await moloni.createCustomer({
+        vat: client.nif || "999999990",
+        number: `C${Date.now()}`,
+        name: client.legal_name || client.short_name || stmt.client_name || "Cliente TMS",
+        address: (client as any).address || "Desconhecida",
+        zipCode: (client as any).postal_code || "0000-000",
+        city: (client as any).city || "Desconhecida",
+        email: client.email || (client as any).billing_email || "",
+        phone: client.phone || ""
+      })
+    }
+
+    // 5. Obter artigos, taxas e série
+    const taxId = await moloni.getTaxId(23)
+    const documentSetId = await moloni.getDocumentSet()
+    const productId = await moloni.getGenericProductId(taxId)
+
+    // 6. Preparar linhas dos envios
+    const shipments = stmt.shipments || []
+    const products = shipments.map((s: any) => ({
+      productId: productId,
+      name: `Envio TMS - ${s.tracking_number || s.reference || 'Objeto'}`,
+      summary: s.recipient_name ? `Destino: ${s.recipient_name} (${s.recipient_city || 'PT'})` : "",
+      qty: 1,
+      price: Number(s.sell_price || 0),
+      taxes: [{ tax_id: taxId, value: 23 }]
+    }))
+
+    const validProducts = products.filter((p: any) => p.price > 0)
+    if (validProducts.length === 0) {
+      validProducts.push({
+        productId: productId,
+        name: `Extrato TMS ${stmt.statement_number} (${stmt.shipments_count || 1} envios)`,
+        summary: `Faturação de conta corrente`,
+        qty: 1,
+        price: Number(stmt.total_value || 1),
+        taxes: [{ tax_id: taxId, value: 23 }]
+      })
+    }
+
+    const dateNow = new Date().toISOString().split("T")[0]
+    const expirationDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+
+    // 7. Criar fatura no Moloni
+    const invoiceRes = await moloni.createInvoice({
+      customerId: moloniCustomerId,
+      date: dateNow,
+      expirationDate: expirationDate,
+      documentSetId: documentSetId,
+      products: validProducts
+    })
+
+    const moloniDocId = invoiceRes.document_id
+    const moloniDocPdf = await moloni.getDocumentPDFLink(moloniDocId)
+
+    // 8. Atualizar no audit_log
+    const updatedDetails = {
+      ...stmt,
+      moloni_document_id: moloniDocId,
+      moloni_document_pdf: moloniDocPdf,
+      moloni_invoiced_at: new Date().toISOString()
+    }
+
+    await supabase
+      .from('audit_log')
+      .update({ details: updatedDetails })
+      .eq('id', match.id)
+
+    revalidatePath("/ops/faturacao/contas-corrente")
+    revalidatePath("/app/faturas")
+
+    return {
+      success: true,
+      moloniDocumentId: moloniDocId,
+      moloniDocumentPdf: moloniDocPdf
+    }
+  } catch (err: any) {
+    console.error("emitMoloniInvoiceForStatementAction error:", err)
+    return { success: false, error: err.message || "Erro ao emitir fatura no Moloni" }
+  }
+}

@@ -349,7 +349,7 @@ export default function ContasCorrenteClient({
                       Extrato PDF
                     </a>
 
-                    {stmt.moloni_document_pdf && (
+                    {stmt.moloni_document_pdf ? (
                       <a 
                         href={stmt.moloni_document_pdf}
                         target="_blank"
@@ -360,6 +360,32 @@ export default function ContasCorrenteClient({
                         <Download className="w-3.5 h-3.5" />
                         Fatura Moloni
                       </a>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          if (!moloniConfig?.isConnected) {
+                            setIsMoloniModalOpen(true)
+                            return
+                          }
+                          const ok = confirm(`Deseja comunicar e emitir a fatura oficial no Moloni para o extrato ${stmt.statement_number}?`)
+                          if (!ok) return
+                          
+                          const { emitMoloniInvoiceForStatementAction } = await import("@/app/actions/moloni")
+                          const res = await emitMoloniInvoiceForStatementAction(stmt.statement_number || stmt.id)
+                          if (res.success && res.moloniDocumentPdf) {
+                            alert("Fatura emitida com sucesso no Moloni!")
+                            window.open(res.moloniDocumentPdf, "_blank")
+                            router.refresh()
+                          } else {
+                            alert(`Erro: ${res.error || "Não foi possível emitir no Moloni"}`)
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300/60 rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
+                        title="Emitir Fatura Oficial Certificada no Moloni"
+                      >
+                        <Cloud className="w-3.5 h-3.5 text-indigo-500" />
+                        Emitir no Moloni
+                      </button>
                     )}
                   </div>
                 </div>
