@@ -8,6 +8,17 @@ export default async function ClientStorePage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  if (!user) {
+    const { redirect } = await import("next/navigation")
+    redirect("/login")
+  }
+
+  const { data: clientUser } = await supabase
+    .from('client_users')
+    .select('client_id')
+    .eq('user_id', user?.id)
+    .single()
+
   return (
     <Suspense
       fallback={
@@ -17,7 +28,7 @@ export default async function ClientStorePage() {
         </div>
       }
     >
-      <ClientDashboard userEmail={user?.email} />
+      <ClientDashboard userEmail={user?.email} passedClientId={clientUser?.client_id} />
     </Suspense>
   )
 }

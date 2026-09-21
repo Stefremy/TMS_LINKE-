@@ -39,9 +39,9 @@ import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CreditCard } from "lucide-react"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 
-export function ClientDashboard({ userEmail }: { userEmail?: string }) {
+export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: string, passedClientId?: string }) {
   const searchParams = useSearchParams()
-  const clientId = searchParams.get("clientId")
+  const clientId = searchParams.get("clientId") || passedClientId
   const clientNameParam = searchParams.get("clientName")
 
   const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)

@@ -12,6 +12,8 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
   try {
     const supabase = createAdminClient()
 
+    console.log("[Stripe Action] Received clientId:", clientId, "Amount:", amountEuro)
+
     // 1. Validate Client
     const { data: client, error: clientErr } = await supabase
       .from('clientes')
@@ -20,6 +22,7 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
       .single()
 
     if (clientErr || !client) {
+      console.error("[Stripe Action] Error fetching client:", clientErr, "for ID:", clientId)
       throw new Error("Cliente não encontrado.")
     }
 
