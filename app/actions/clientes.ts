@@ -284,6 +284,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     logo_url: cliente.logo_url || "",
     nif: cliente.nif?.trim() || "",
     category: cliente.category || "Cliente Conta Corrente",
+    billing_type: cliente.billing_type || "conta_corrente",
     city: cliente.city?.trim() || "Portugal",
     address: cliente.address?.trim() || "",
     postal_code: cliente.postal_code?.trim() || "",

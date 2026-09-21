@@ -5,7 +5,7 @@ import { MoloniClient } from "@/lib/moloni/moloni-client"
 import { revalidatePath } from "next/cache"
 
 /**
- * Criação da Fatura/Recibo no Moloni e registo do Extrato Detalhado no TMS.
+ * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
 export async function emitInvoiceAction(clientId: string, shipmentIds: string[]) {
   try {
@@ -35,7 +35,6 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
     // Calcular Totais
     const totalValue = shipments.reduce((acc: number, s: any) => acc + Number(s.sell_price || 0), 0)
 
-    // Se as credenciais do Moloni estiverem configuradas, tentamos comunicar
     let moloniDocumentId = null
     let moloniDocumentUrl = null
     
@@ -54,51 +53,60 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
       if (!moloniCustomerId) {
         moloniCustomerId = await moloni.createCustomer({
           vat: client.nif || "999999990",
-          number: client.nif || Date.now().toString(),
-          name: client.legal_name || client.short_name,
-          address: client.address,
-          zipCode: client.zip_code,
-          city: client.city,
+          number: `C${Date.now()}`,
+          name: client.nome || client.nome_curto || "Cliente Desconhecido",
+          address: client.morada || "Desconhecida",
+          zipCode: client.codigo_postal || "0000-000",
+          city: client.cidade || "Desconhecida",
           email: client.email,
-          phone: client.phone
+          phone: client.telefone
         })
       }
 
-      // B. Emitir Fatura-Recibo
-      // Série documental, date, etc. deverão estar parametrizados. 
-      // Por agora usamos a data atual e a document_set_id padrao se tivermos.
-      // O document_set_id precisa de ser configurado. Colocando um dummy ou o da API.
-      // Vamos tentar gerar, mas como não temos IDs exactos para series ou produtos,
-      // Isto pode falhar num ambiente real até estar perfeitamente mapeado.
+      // B. Obter dados base do Moloni (Série, Taxa, Artigo Genérico)
+      const taxId = await moloni.getTaxId(23)
+      const documentSetId = await moloni.getDocumentSet()
+      const productId = await moloni.getGenericProductId(taxId)
+
+      // C. Preparar Linhas da Fatura (Uma linha por envio para ser transparente)
+      const products = shipments.map((s: any) => {
+        return {
+          productId: productId,
+          name: `Envio TMS - ${s.tracking_number || s.reference}`,
+          summary: `De: ${s.sender_zip4 || ''}-${s.sender_zip3 || ''} Para: ${s.recipient_zip4 || ''}-${s.recipient_zip3 || ''}`,
+          qty: 1,
+          price: Number(s.sell_price || 0), // Preço s/ IVA
+          taxes: [{ tax_id: taxId, value: 23 }]
+        }
+      })
+
+      const validProducts = products.filter((p: any) => p.price > 0)
       
-      // const invoiceRes = await moloni.createInvoice({
-      //   customerId: moloniCustomerId,
-      //   date: new Date().toISOString().split('T')[0],
-      //   expirationDate: new Date().toISOString().split('T')[0],
-      //   documentSetId: Number(process.env.MOLONI_DEFAULT_SET_ID) || 1, 
-      //   products: [{
-      //     name: "Serviços de Transporte / Logística",
-      //     summary: `Ref: Envios no TMS Linke (${shipments.length} envios)`,
-      //     qty: 1,
-      //     price: totalValue,
-      //     exemptionReason: "M01" // Se applies
-      //   }]
-      // })
+      if (validProducts.length === 0) {
+         throw new Error("Todos os envios selecionados têm valor nulo (0€).")
+      }
+
+      const dateNow = new Date().toISOString().split("T")[0]
+      const expirationDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+
+      // D. Emitir Fatura
+      const invoiceRes = await moloni.createInvoice({
+        customerId: moloniCustomerId,
+        date: dateNow,
+        expirationDate: expirationDate,
+        documentSetId: documentSetId,
+        products: validProducts
+      })
       
-      // moloniDocumentId = invoiceRes.document_id
-      // moloniDocumentUrl = await moloni.getDocumentPDFLink(moloniDocumentId)
-      
-      // NOTA: Comentado acima para evitar falhar enquanto as credenciais reais não existem.
-      // Simulando a resposta:
-      moloniDocumentId = "simulated_moloni_id"
-      moloniDocumentUrl = "https://moloni.pt/simulated_invoice.pdf"
+      moloniDocumentId = invoiceRes.document_id
+      moloniDocumentUrl = await moloni.getDocumentPDFLink(moloniDocumentId)
     }
 
+    // Se Moloni estiver desligado/falhar, criamos na mesma o Extrato Interno mas sem PDFs.
+    
     // 3. Criar Registo "Billing Statement" no TMS
-    // Assumimos que o utilizador já correu a migration
     const statementNumber = `EXT-${new Date().getFullYear()}/${new Date().getMonth()+1}-${Math.floor(Math.random() * 1000)}`
     
-    // Tentar criar billing_statement (vai falhar se a tabela nao existir ainda)
     const { data: statement, error: statementErr } = await supabase
       .from('billing_statements')
       .insert({
@@ -118,7 +126,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
       throw new Error("Erro na BD ao criar o extrato. A migração foi executada?")
     }
 
-    // 4. Marcar Envios como faturados
+    // 4. Marcar Envios como faturados (associar ao Extrato)
     const { error: updateErr } = await supabase
       .from('shipments')
       .update({ billing_statement_id: statement.id })

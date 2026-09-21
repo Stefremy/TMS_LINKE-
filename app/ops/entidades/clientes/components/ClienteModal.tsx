@@ -83,6 +83,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
     logo_url: initialData?.logo_url || "",
     nif: initialData?.nif || "",
     category: initialData?.category || "Cliente Conta Corrente",
+    billing_type: initialData?.billing_type || "conta_corrente",
     city: initialData?.city || "",
     address: initialData?.address || "",
     postal_code: initialData?.postal_code || "",
@@ -123,6 +124,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
         logo_url: initialData.logo_url || "",
         nif: initialData.nif || "",
         category: initialData.category || "Cliente Conta Corrente",
+        billing_type: initialData.billing_type || "conta_corrente",
         city: initialData.city || "",
         address: initialData.address || "",
         postal_code: initialData.postal_code || "",
@@ -779,6 +781,82 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                 <Euro className="w-4 h-4 text-emerald-600" />
                 Condições Comerciais & Crédito
               </h2>
+
+              {/* Tipo de Cliente / Modelo de Faturação */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  Modelo de Faturação / Tipo de Cliente
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Conta Corrente */}
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, billing_type: "conta_corrente", category: "Cliente Conta Corrente" })}
+                    className={`relative p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      (formData.billing_type || "conta_corrente") === "conta_corrente"
+                        ? "border-emerald-500 bg-emerald-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        (formData.billing_type || "conta_corrente") === "conta_corrente"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-slate-100 text-slate-500"
+                      }`}>
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className={`text-xs font-bold ${
+                          (formData.billing_type || "conta_corrente") === "conta_corrente" ? "text-emerald-800" : "text-slate-800"
+                        }`}>
+                          Conta Corrente
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                          Faturação periódica (quinzenal ou mensal) com todos os envios. O cliente paga a prázo com base em extrato.
+                        </p>
+                      </div>
+                      {(formData.billing_type || "conta_corrente") === "conta_corrente" && (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 ml-auto" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Pay as You Go */}
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, billing_type: "pay_as_you_go", category: "Cliente Pré-Pagamento" })}
+                    className={`relative p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      formData.billing_type === "pay_as_you_go"
+                        ? "border-blue-500 bg-blue-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        formData.billing_type === "pay_as_you_go"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-slate-100 text-slate-500"
+                      }`}>
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className={`text-xs font-bold ${
+                          formData.billing_type === "pay_as_you_go" ? "text-blue-800" : "text-slate-800"
+                        }`}>
+                          Pay as You Go (Wallet)
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                          O cliente carrega saldo antecipadamente via Stripe. Os envios são debitados automaticamente do saldo disponível.
+                        </p>
+                      </div>
+                      {formData.billing_type === "pay_as_you_go" && (
+                        <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 ml-auto" />
+                      )}
+                    </div>
+                  </button>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>

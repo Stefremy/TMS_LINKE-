@@ -75,6 +75,12 @@ export interface Cliente {
   logo_url?: string
   nif: string
   category: string
+  /**
+   * billing_type controla como o cliente paga pelos serviços:
+   * - "conta_corrente": Faturação mensal/quinzenal em lote (Moloni batch invoice)
+   * - "pay_as_you_go": Pré-pagamento via Wallet/Stripe (saldo carregado antecipadamente)
+   */
+  billing_type?: "conta_corrente" | "pay_as_you_go"
   city: string
   address: string
   postal_code: string
