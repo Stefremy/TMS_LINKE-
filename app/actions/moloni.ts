@@ -11,14 +11,15 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
   try {
     const supabase = createAdminClient()
     
-    // 1. Obter Cliente do TMS
-    const { data: client, error: clientErr } = await supabase
-      .from('clientes')
-      .select('*')
-      .eq('id', clientId)
-      .single()
+    // 1. Obter Cliente do TMS (guardado em audit_log com action = "client_data")
+    const { data: clientLogs } = await supabase
+      .from('audit_log')
+      .select('details')
+      .eq('action', 'client_data')
+
+    const client = clientLogs?.map((l: any) => l.details).find((d: any) => d?.id === clientId)
       
-    if (clientErr || !client) {
+    if (!client) {
       throw new Error("Cliente não encontrado.")
     }
 
@@ -54,12 +55,12 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
         moloniCustomerId = await moloni.createCustomer({
           vat: client.nif || "999999990",
           number: `C${Date.now()}`,
-          name: client.nome || client.nome_curto || "Cliente Desconhecido",
-          address: client.morada || "Desconhecida",
-          zipCode: client.codigo_postal || "0000-000",
-          city: client.cidade || "Desconhecida",
+          name: client.legal_name || client.short_name || "Cliente Desconhecido",
+          address: client.address || "Desconhecida",
+          zipCode: client.postal_code || "0000-000",
+          city: client.city || "Desconhecida",
           email: client.email,
-          phone: client.telefone
+          phone: client.phone
         })
       }
 
