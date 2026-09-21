@@ -867,6 +867,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   >
                     <option value="Pronto Pagamento">Pronto Pagamento</option>
+                    <option value="A 7 dias">A 7 dias (Semanal)</option>
                     <option value="A 15 dias">A 15 dias</option>
                     <option value="A 30 dias">A 30 dias</option>
                     <option value="A 45 dias">A 45 dias</option>
