@@ -16,13 +16,6 @@ export default async function RecolhasPage() {
     console.error("Error fetching recolhas:", recolhasResult.error)
   }
 
-  // Only expose CTT connections
-  const cttConnections = (carrierConnections || []).filter(
-    (c: any) =>
-      c.carrier_code?.toLowerCase().includes("ctt") ||
-      c.supplier_id?.toLowerCase().includes("ctt")
-  )
-
   const mappedClients = (clients || []).map((c: any) => ({
     id: c.id,
     code: c.code || "",
@@ -33,19 +26,27 @@ export default async function RecolhasPage() {
     phone: c.mobile_phone || c.phone || "",
   }))
 
-  const mappedConnections = cttConnections.map((c: any) => ({
-    id: c.id,
-    label: c.description || `CTT Expresso — ${c.environment === "production" ? "Produção" : "QA"}`,
-    contract_number: c.contract_number || "",
-    client_number: c.client_id || "",
-    environment: c.environment || "production",
-  }))
+  const mappedConnections = (carrierConnections || []).map((c: any) => {
+    // Determine a friendly name based on carrier code if description is missing
+    let friendlyName = c.carrier_code || "Operadora"
+    if (friendlyName === "ctt_expresso") friendlyName = "CTT Expresso"
+    else if (friendlyName === "correos_express") friendlyName = "Correos Express"
+
+    return {
+      id: c.id,
+      label: c.description || `${friendlyName} — ${c.environment === "production" ? "Produção" : "QA"}`,
+      contract_number: c.contract_number || "",
+      client_number: c.client_id || "",
+      environment: c.environment || "production",
+      carrier_code: c.carrier_code || "",
+    }
+  })
 
   return (
     <RecolhasClient
       recolhas={recolhasResult.data || []}
       clients={mappedClients}
-      cttConnections={mappedConnections}
+      carrierConnections={mappedConnections}
     />
   )
 }

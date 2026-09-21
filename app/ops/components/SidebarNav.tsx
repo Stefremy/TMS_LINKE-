@@ -75,6 +75,7 @@ const navConfig: NavItem[] = [
       { title: "Tabelas de Preço", href: "/ops/configuracao/precos" },
       { title: "Zonas de Preço", href: "/ops/configuracao/zonas" },
       { title: "Estados de Envio", href: "/ops/configuracao/estados" },
+      { title: "Email e Notificações", href: "/ops/configuracao/notificacoes" },
     ]
   }
 ]

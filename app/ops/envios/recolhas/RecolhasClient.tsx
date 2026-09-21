@@ -34,12 +34,13 @@ interface MappedClient {
   phone: string
 }
 
-interface CttConnection {
+interface CarrierConnection {
   id: string
   label: string
   contract_number: string
   client_number: string
   environment: string
+  carrier_code?: string
 }
 
 interface Recolha {
@@ -60,7 +61,7 @@ interface Recolha {
 interface RecolhasClientProps {
   recolhas: Recolha[]
   clients: MappedClient[]
-  cttConnections: CttConnection[]
+  carrierConnections: CarrierConnection[]
 }
 
 const STATUS_CFG: Record<string, { label: string; color: string; dot: string }> = {
@@ -81,14 +82,14 @@ function tomorrowDate() {
   return d.toISOString().split("T")[0]
 }
 
-export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasClientProps) {
+export function RecolhasClient({ recolhas, clients, carrierConnections }: RecolhasClientProps) {
   const [view, setView] = React.useState<"list" | "form">("list")
   const [loading, setLoading] = React.useState(false)
   const [result, setResult] = React.useState<any>(null)
 
-  // Client & CTT account
+  // Client & Carrier account
   const [selectedClientId, setSelectedClientId] = React.useState("")
-  const [selectedCttId, setSelectedCttId] = React.useState(cttConnections[0]?.id || "")
+  const [selectedCarrierId, setSelectedCarrierId] = React.useState(carrierConnections[0]?.id || "")
 
   // Form fields
   const [date, setDate] = React.useState(tomorrowDate())
@@ -128,7 +129,7 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
     }
   }
 
-  const selectedCtt = cttConnections.find(c => c.id === selectedCttId)
+  const selectedCarrier = carrierConnections.find(c => c.id === selectedCarrierId)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -146,6 +147,7 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
       const [startHour, endHour] = period.split("-")
 
       const res = await scheduleCttPickupAction({
+        connection_id: selectedCarrierId,
         date,
         startHour,
         endHour,
@@ -402,26 +404,26 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
                       )}
                     </div>
 
-                    {/* CTT Account selector */}
+                    {/* Carrier Account selector */}
                     <div>
                       <label className="block text-xs font-semibold text-indigo-700 mb-1">
-                        Conta CTT Expresso
+                        Conta de Transporte / Operadora
                       </label>
-                      {cttConnections.length === 0 ? (
+                      {carrierConnections.length === 0 ? (
                         <div className="flex items-center gap-2 px-3 py-2 border border-amber-200 bg-amber-50 rounded-lg text-xs text-amber-700 font-medium">
                           <AlertCircle className="w-4 h-4 shrink-0" />
-                          Nenhuma conta CTT configurada.
+                          Nenhuma conta de transporte configurada.
                           <a href="/ops/configuracao/webservices" className="underline ml-1">Configurar</a>
                         </div>
                       ) : (
                         <div className="relative">
                           <Wifi className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                           <select
-                            value={selectedCttId}
-                            onChange={e => setSelectedCttId(e.target.value)}
+                            value={selectedCarrierId}
+                            onChange={e => setSelectedCarrierId(e.target.value)}
                             className="w-full pl-9 pr-8 border border-slate-300 rounded-lg py-2 text-sm text-slate-800 bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           >
-                            {cttConnections.map(c => (
+                            {carrierConnections.map(c => (
                               <option key={c.id} value={c.id}>
                                 {c.label}
                               </option>
@@ -430,14 +432,14 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
                           <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         </div>
                       )}
-                      {selectedCtt && (
-                        <p className="text-[11px] text-slate-500 mt-1.5 font-mono">
-                          Contrato {selectedCtt.contract_number}
-                          {" · "}
-                          <span className={selectedCtt.environment === "production" ? "text-emerald-600 font-bold" : "text-amber-600 font-bold"}>
-                            {selectedCtt.environment === "production" ? "● Produção" : "● QA"}
+                      {selectedCarrier && (
+                        <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-500 font-medium">
+                          <span className="flex items-center gap-1"><Hash className="w-3 h-3" /> Contrato {selectedCarrier.contract_number}</span>
+                          <span>•</span>
+                          <span className={selectedCarrier.environment === "production" ? "text-emerald-600 font-bold" : "text-amber-600 font-bold"}>
+                            {selectedCarrier.environment === "production" ? "● Produção" : "● QA"}
                           </span>
-                        </p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -733,7 +735,7 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
                   </button>
                   <button
                     type="submit"
-                    disabled={loading || cttConnections.length === 0}
+                    disabled={loading || carrierConnections.length === 0}
                     className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-sm transition-colors text-sm"
                   >
                     {loading ? (

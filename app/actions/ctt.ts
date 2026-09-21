@@ -849,6 +849,7 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
  * Agenda uma recolha junto dos CTT
  */
 export async function scheduleCttPickupAction(input: {
+  connection_id?: string
   date: string
   startHour: string
   endHour: string
