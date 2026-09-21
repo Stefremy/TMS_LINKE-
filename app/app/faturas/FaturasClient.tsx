@@ -62,32 +62,33 @@ export default function FaturasClient({ statements }: { statements: any[] }) {
                 </div>
                 
                 <div className="col-span-3 flex items-center justify-end gap-2">
-                  <a 
-                    href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
-                    download={`Fatura_${stmt.statement_number || stmt.id}.pdf`}
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
-                    onClick={(e) => e.stopPropagation()}
-                    title="Descarregar Fatura / Extrato Detalhado em PDF"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Descarregar Fatura
-                  </a>
-
-                  {stmt.moloni_document_pdf && (
+                  {(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
                     <a 
-                      href={stmt.moloni_document_pdf} 
+                      href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`} 
+                      download={`Fatura_Oficial_AT_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
                       target="_blank" 
                       rel="noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
                       onClick={(e) => e.stopPropagation()}
-                      title="Fatura Oficial Moloni"
+                      title="Descarregar Fatura Oficial Certificada Moloni com QR Code AT"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      Fatura Oficial
+                      Fatura Oficial AT (PDF)
                     </a>
                   )}
+
+                  <a 
+                    href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
+                    download={`Extrato_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Descarregar Extrato Detalhado TMS em PDF"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Extrato TMS
+                  </a>
                   
                   <div className="text-slate-400 p-1">
                     {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}

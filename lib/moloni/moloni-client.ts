@@ -405,6 +405,11 @@ export class MoloniClient {
    */
   async getDocumentPDFLink(documentId: number) {
     const result = await this.request("documents/getPDFLink", { document_id: documentId });
-    return result.url;
+    if (!result?.url) return null;
+    const url = result.url;
+    if (url.includes("/downloads/?h=")) {
+      return url.replace("/downloads/?h=", "/downloads/index.php?action=getDownload&h=") + `&d=${documentId}&e=&i=1`;
+    }
+    return url;
   }
 }

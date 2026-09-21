@@ -24,19 +24,9 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
       throw new Error("Cliente não encontrado.")
     }
 
-    // 2. Obter Envios do TMS
-    let shipments: any[] = []
-    const { data: dbShipments, error: shipmentsErr } = await supabase
-      .from('shipments')
-      .select('*')
-      .in('id', shipmentIds)
-      
-    if (!shipmentsErr && dbShipments && dbShipments.length > 0) {
-      shipments = dbShipments
-    } else {
-      const allShipments = await getShipmentsAction()
-      shipments = allShipments.filter((s: any) => shipmentIds.includes(s.id))
-    }
+    // 2. Obter Envios do TMS (Garantir que apanhamos todos os envios, mesmo os que só estão no audit_log)
+    const allShipments = await getShipmentsAction()
+    const shipments = allShipments.filter((s: any) => shipmentIds.includes(s.id))
 
     if (!shipments || shipments.length === 0) {
       throw new Error("Envios não encontrados.")
@@ -103,14 +93,24 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
         const documentSetId = await moloni.getDocumentSet()
         const productId = await moloni.getGenericProductId(taxId)
 
-        // C. Preparar Linhas da Fatura (Uma linha por envio para ser transparente)
-        const products = shipments.map((s: any) => {
+        // C. Preparar Linhas da Fatura (Agrupadas por serviço para evitar faturas com muitas páginas)
+        const groupedShipments: Record<string, { qty: number, price: number }> = {}
+        for (const s of shipments) {
+          const serviceName = s.service_type || "Transporte / Logística"
+          if (!groupedShipments[serviceName]) {
+            groupedShipments[serviceName] = { qty: 0, price: 0 }
+          }
+          groupedShipments[serviceName].qty += 1
+          groupedShipments[serviceName].price += Number(s.sell_price || 0)
+        }
+
+        const products = Object.entries(groupedShipments).map(([serviceName, data]) => {
           return {
             productId: productId,
-            name: `Envio TMS - ${s.tracking_number || s.reference}`,
-            summary: `De: ${s.sender_zip4 || ''}-${s.sender_zip3 || ''} Para: ${s.recipient_zip4 || ''}-${s.recipient_zip3 || ''}`,
-            qty: 1,
-            price: Number(s.sell_price || 0), // Preço s/ IVA
+            name: `Serviço ${serviceName} (${data.qty} envios)`,
+            summary: `Faturação de envios no período.`,
+            qty: 1, // Qty 1 previne problemas de arredondamento de preço unitário
+            price: data.price, // Preço s/ IVA total
             taxes: [{ tax_id: taxId, value: 23 }]
           }
         })
@@ -168,6 +168,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
           id: s.id,
           tracking_number: s.tracking_number,
           reference: s.reference,
+          service_type: s.service_type,
           sell_price: Number(s.sell_price || 0),
           created_at: s.created_at,
           recipient_name: s.recipient_name,
@@ -196,13 +197,13 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
     revalidatePath("/app/faturas")
     revalidatePath("/app")
     
-    const statementPdfUrl = moloniDocumentUrl || `/api/statements/${encodeURIComponent(statementNumber)}/pdf`
+    const localMoloniPdfUrl = `/api/statements/${encodeURIComponent(statementNumber)}/moloni-pdf`
     
     return { 
       success: true, 
       statementNumber, 
-      url: statementPdfUrl,
-      moloniDocumentPdf: moloniDocumentUrl || null,
+      url: `/api/statements/${encodeURIComponent(statementNumber)}/pdf`,
+      moloniDocumentPdf: moloniDocumentUrl ? localMoloniPdfUrl : null,
       moloniError: moloniEmissionError
     }
 
@@ -459,14 +460,25 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     const documentSetId = await moloni.getDocumentSet()
     const productId = await moloni.getGenericProductId(taxId)
 
-    // 6. Preparar linhas dos envios
+    // 6. Preparar linhas dos envios (Agrupadas por serviço)
     const shipments = stmt.shipments || []
-    const products = shipments.map((s: any) => ({
+    const groupedShipments: Record<string, { qty: number, price: number }> = {}
+    
+    for (const s of shipments) {
+      const serviceName = s.service_type || "Transporte / Logística"
+      if (!groupedShipments[serviceName]) {
+        groupedShipments[serviceName] = { qty: 0, price: 0 }
+      }
+      groupedShipments[serviceName].qty += 1
+      groupedShipments[serviceName].price += Number(s.sell_price || 0)
+    }
+
+    const products = Object.entries(groupedShipments).map(([serviceName, data]) => ({
       productId: productId,
-      name: `Envio TMS - ${s.tracking_number || s.reference || 'Objeto'}`,
-      summary: s.recipient_name ? `Destino: ${s.recipient_name} (${s.recipient_city || 'PT'})` : "",
+      name: `Serviço ${serviceName} (${data.qty} envios)`,
+      summary: `Faturação de envios no período.`,
       qty: 1,
-      price: Number(s.sell_price || 0),
+      price: data.price,
       taxes: [{ tax_id: taxId, value: 23 }]
     }))
 
@@ -516,7 +528,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     return {
       success: true,
       moloniDocumentId: moloniDocId,
-      moloniDocumentPdf: moloniDocPdf
+      moloniDocumentPdf: `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`
     }
   } catch (err: any) {
     console.error("emitMoloniInvoiceForStatementAction error:", err)

@@ -49,6 +49,26 @@ export async function GET(
     const clients = await getClientesAction()
     const client = clients.find((c: any) => c.id === details.client_id)
 
+    // Tentar obter o service_type da DB se estiver em falta no log
+    let enrichedShipments = details.shipments || []
+    const shipmentIds = enrichedShipments.map((s: any) => s.id).filter(Boolean)
+    if (shipmentIds.length > 0) {
+      const { data: dbShipments } = await supabase
+        .from("shipments")
+        .select("id, service_type")
+        .in("id", shipmentIds)
+        
+      if (dbShipments && dbShipments.length > 0) {
+        enrichedShipments = enrichedShipments.map((s: any) => {
+          const dbS = dbShipments.find(d => d.id === s.id)
+          return {
+            ...s,
+            service_type: s.service_type || dbS?.service_type
+          }
+        })
+      }
+    }
+
     const pdfBuffer = generateStatementPdfBuffer({
       statementNumber: details.statement_number || "EXT-0000/00-0000",
       clientName: client?.legal_name || client?.short_name || details.client_name || "Cliente TMS",
@@ -58,7 +78,7 @@ export async function GET(
       clientEmail: client?.billing_email || client?.email || "",
       dateStr: details.created_at ? new Date(details.created_at).toLocaleDateString("pt-PT") : new Date().toLocaleDateString("pt-PT"),
       totalValue: Number(details.total_value || 0),
-      shipments: details.shipments || []
+      shipments: enrichedShipments
     })
 
     const safeFilename = (details.statement_number || "extrato").replace(/[\/\\]/g, "_")

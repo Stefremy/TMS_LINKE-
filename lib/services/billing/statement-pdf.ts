@@ -13,6 +13,7 @@ export interface BillingStatementPdfShipment {
   recipient_city?: string
   created_at?: string
   sell_price?: number
+  service_type?: string
 }
 
 export interface BillingStatementPdfData {
@@ -69,7 +70,8 @@ export function generateStatementPdfBuffer(data: BillingStatementPdfData): Buffe
       : `1 1 1 rg 25 ${currentY - 3} 545.28 ${rowHeight} re f 0 0 0 rg\n`
 
     const itemDate = item.created_at ? new Date(item.created_at).toLocaleDateString("pt-PT") : dateStr
-    const tracking = item.tracking_number || item.reference || `ENV-${item.id.slice(0, 8).toUpperCase()}`
+    const trackingBase = item.tracking_number || item.reference || `ENV-${item.id.slice(0, 8).toUpperCase()}`
+    const tracking = item.service_type ? `[${item.service_type.slice(0, 15)}] ${trackingBase}` : trackingBase
     const destName = (item.recipient_name || "Destinatario").slice(0, 22)
     const destCity = item.recipient_city ? ` (${item.recipient_city.slice(0, 14)})` : ""
     const destFull = `${destName}${destCity}`

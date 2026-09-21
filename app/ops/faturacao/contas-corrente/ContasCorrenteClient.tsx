@@ -233,10 +233,19 @@ export default function ContasCorrenteClient({
                           setIsLoading(false);
                           if (res?.success && res.statementNumber) {
                             const stmtNum = res.statementNumber
+                            const officialPdfUrl = `/api/statements/${encodeURIComponent(stmtNum)}/moloni-pdf`
+                            const fallbackUrl = `/api/statements/${encodeURIComponent(stmtNum)}/pdf`
+                            const hasOfficialMoloni = !!res.moloniDocumentPdf
+
+                            const downloadTarget = hasOfficialMoloni ? officialPdfUrl : fallbackUrl
+                            const downloadFilename = hasOfficialMoloni 
+                              ? `Fatura_Oficial_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
+                              : `Extrato_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
+
                             try {
                               const link = document.createElement("a")
-                              link.href = res.url || ""
-                              link.setAttribute("download", `Fatura_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`)
+                              link.href = downloadTarget
+                              link.setAttribute("download", downloadFilename)
                               link.target = "_blank"
                               document.body.appendChild(link)
                               link.click()
@@ -247,10 +256,10 @@ export default function ContasCorrenteClient({
 
                             setIssuedStatement({
                               statementNumber: stmtNum,
-                              url: res.url || `/api/statements/${encodeURIComponent(stmtNum)}/pdf`,
+                              url: fallbackUrl,
                               clientName: client.legal_name || client.short_name,
                               totalValue: totalValue,
-                              moloniPdf: (res as any).moloniDocumentPdf || null
+                              moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
                             })
                             router.refresh()
                           } else {
@@ -382,28 +391,17 @@ export default function ContasCorrenteClient({
                       {Number(stmt.total_value || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                     </span>
 
-                    <a 
-                      href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
-                      download={`Fatura_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
-                      title="Descarregar Fatura / Extrato Detalhado TMS em PDF"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Descarregar Fatura
-                    </a>
-
-                    {stmt.moloni_document_pdf ? (
+                    {(stmt.moloni_document_pdf || stmt.moloni_document_id) ? (
                       <a 
-                        href={stmt.moloni_document_pdf}
+                        href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`}
+                        download={`Fatura_Oficial_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
-                        title="Fatura Oficial Certificada Moloni (com QR Code AT)"
+                        title="Descarregar Fatura Oficial Certificada Moloni (com QR Code AT)"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        Fatura Oficial Moloni
+                        📥 Fatura Oficial AT (PDF)
                       </a>
                     ) : (
                       <button
@@ -417,9 +415,24 @@ export default function ContasCorrenteClient({
                           
                           const { emitMoloniInvoiceForStatementAction } = await import("@/app/actions/moloni")
                           const res = await emitMoloniInvoiceForStatementAction(stmt.statement_number || stmt.id)
-                          if (res.success && res.moloniDocumentPdf) {
-                            alert("Fatura emitida com sucesso no Moloni!")
-                            window.open(res.moloniDocumentPdf, "_blank")
+                          if (res.success) {
+                            const dlUrl = `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`
+                            try {
+                              const link = document.createElement("a")
+                              link.href = dlUrl
+                              link.setAttribute("download", `Fatura_Oficial_${stmt.statement_number.replace(/[\/\\]/g, "_")}.pdf`)
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                            } catch {}
+
+                            setIssuedStatement({
+                              statementNumber: stmt.statement_number,
+                              url: `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`,
+                              clientName: stmt.client_name,
+                              totalValue: Number(stmt.total_value || 0),
+                              moloniPdf: dlUrl
+                            })
                             router.refresh()
                           } else {
                             alert(`Erro: ${res.error || "Não foi possível emitir no Moloni"}`)
@@ -432,6 +445,18 @@ export default function ContasCorrenteClient({
                         Emitir no Moloni
                       </button>
                     )}
+
+                    <a 
+                      href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
+                      download={`Extrato_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs"
+                      title="Descarregar Extrato Detalhado TMS em PDF"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Extrato TMS
+                    </a>
                   </div>
                 </div>
               ))}
@@ -474,34 +499,37 @@ export default function ContasCorrenteClient({
                 </div>
               </div>
 
-              {/* Botão de Download Principal */}
+              {/* Botões de Download */}
               <div className="space-y-3">
-                <a
-                  href={issuedStatement.url}
-                  download={`Fatura_${issuedStatement.statementNumber.replace(/[\/\\]/g, "_")}.pdf`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
-                >
-                  <Download className="w-5 h-5" />
-                  Descarregar Fatura / Extrato (PDF)
-                </a>
-
-                {issuedStatement.moloniPdf ? (
+                {issuedStatement.moloniPdf && (
                   <a
                     href={issuedStatement.moloniPdf}
+                    download={`Fatura_Oficial_${issuedStatement.statementNumber.replace(/[\/\\]/g, "_")}.pdf`}
                     target="_blank"
                     rel="noreferrer"
-                    className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+                    className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
                   >
-                    <Download className="w-4 h-4" />
-                    Descarregar Fatura Oficial Moloni (AT)
+                    <Download className="w-5 h-5" />
+                    📥 Descarregar Fatura Oficial AT (PDF)
                   </a>
-                ) : (
+                )}
+
+                <a
+                  href={issuedStatement.url}
+                  download={`Extrato_${issuedStatement.statementNumber.replace(/[\/\\]/g, "_")}.pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`w-full ${issuedStatement.moloniPdf ? "py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-200" : "py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md hover:shadow-lg"} rounded-xl transition-all flex items-center justify-center gap-2`}
+                >
+                  <Download className="w-4 h-4" />
+                  Descarregar Extrato Detalhado TMS (PDF)
+                </a>
+
+                {!issuedStatement.moloniPdf && (
                   <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200/60 text-[11px] text-amber-800 flex items-start gap-2.5">
                     <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold">O download do PDF foi iniciado automaticamente.</p>
+                      <p className="font-semibold">O download do extrato foi iniciado automaticamente.</p>
                       <p className="mt-0.5 text-amber-700 leading-relaxed">
                         Este documento detalha todos os envios faturados. Se desejar emitir também a <strong>Fatura Oficial Certificada</strong> pela Autoridade Tributária, ligue a conta Moloni no topo.
                       </p>
