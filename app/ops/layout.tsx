@@ -1,5 +1,6 @@
 import * as React from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { SidebarNav } from "./components/SidebarNav"
 import { NotificationBell } from "./components/NotificationBell"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
@@ -19,9 +20,9 @@ export default function OpsLayout({
         
         {/* Logo Area */}
         <div className="pt-8 pb-8 px-6">
-          <div className="flex flex-col">
-            <span className="text-green-600 text-[2.5rem] font-extrabold tracking-tight leading-none">linke</span>
-          </div>
+          <Link href="/ops" className="flex flex-col">
+            <Image src="/Linke-logo.png" alt="Linke" width={140} height={40} className="object-contain" priority />
+          </Link>
         </div>
         
         {/* Navigation */}

@@ -4,7 +4,8 @@ import { CTTTrackingService } from "@/lib/services/ctt/ctt-tracking.service"
 import {
   CTT_NON_DELIVERY_REASONS,
   CTT_SITUATIONS,
-  CTT_TRACKING_EVENTS
+  CTT_TRACKING_EVENTS,
+  CTT_INCIDENT_CODES
 } from "@/lib/services/ctt/ctt-types"
 
 const supabase = createClient(
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
         continue
       }
 
-      const description = CTTTrackingService.parseEvent(evt.eventCode)
+      const description = CTTTrackingService.parseEvent(evt.eventCode).eventName
       const reasonDesc = evt.reasonCode ? CTT_NON_DELIVERY_REASONS[evt.reasonCode] : undefined
       const situationDesc = evt.situationCode ? CTT_SITUATIONS[evt.situationCode] : undefined
 
@@ -100,6 +101,18 @@ export async function POST(req: Request) {
       if (updateError) {
         results.push({ tracking_number: evt.tracking_number, error: "Failed to update shipment status" })
         continue
+      }
+
+      // 3. Trigger Email Notifications
+      try {
+        const { sendTrackingEmailNotification } = await import("@/lib/email/tracking-notifications")
+        if (evt.eventCode === "EMZ") {
+          sendTrackingEmailNotification(shipment.id, "in_transit")
+        } else if (CTT_INCIDENT_CODES?.has(evt.eventCode) || evt.eventCode === "EMH") {
+          sendTrackingEmailNotification(shipment.id, "incident", { reason: reasonDesc || description })
+        }
+      } catch (err) {
+        console.warn("Failed to trigger tracking email in webhook", err)
       }
 
       results.push({ tracking_number: evt.tracking_number, status: "updated", tms_status: cttEvent.tms_status })

@@ -1,5 +1,6 @@
 import * as React from "react"
-import { Mail, Settings, CheckCircle2, AlertCircle } from "lucide-react"
+import { Settings, CheckCircle2, AlertCircle } from "lucide-react"
+import { TemplatesClient } from "./TemplatesClient"
 
 export default function NotificacoesPage() {
   const resendKey = process.env.RESEND_API_KEY
@@ -69,73 +70,7 @@ export default function NotificacoesPage() {
         </div>
       </div>
 
-      <div className="mt-8 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-600">
-              <Mail className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-slate-800">Templates de Notificação</h2>
-              <p className="text-sm text-slate-500">Gerir mensagens automáticas enviadas para os clientes.</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="p-6">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg">
-              <div>
-                <h3 className="font-semibold text-slate-800">Aviso de Recolha Agendada</h3>
-                <p className="text-sm text-slate-500">Enviado quando uma recolha CTT/Correos é confirmada.</p>
-              </div>
-              <button className="px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" disabled>
-                Editar Template
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg">
-              <div>
-                <h3 className="font-semibold text-slate-800">Alerta de Saldo Baixo</h3>
-                <p className="text-sm text-slate-500">Enviado quando o saldo pré-pago do cliente atinge o limite.</p>
-              </div>
-              <button className="px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" disabled>
-                Editar Template
-              </button>
-            </div>
-            
-            <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg">
-              <div>
-                <h3 className="font-semibold text-slate-800">Em Transporte</h3>
-                <p className="text-sm text-slate-500">Enviado quando a encomenda é recolhida e entra em distribuição.</p>
-              </div>
-              <button className="px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" disabled>
-                Editar Template
-              </button>
-            </div>
-            
-            <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg">
-              <div>
-                <h3 className="font-semibold text-slate-800">Guia de Transporte (Tracking)</h3>
-                <p className="text-sm text-slate-500">Enviado para o destinatário final com o link de tracking.</p>
-              </div>
-              <button className="px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" disabled>
-                Editar Template
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg">
-              <div>
-                <h3 className="font-semibold text-slate-800">Incidências / Problemas na Entrega</h3>
-                <p className="text-sm text-slate-500">Enviado quando há uma falha na entrega (ausência, morada incorreta, etc).</p>
-              </div>
-              <button className="px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors" disabled>
-                Editar Template
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <TemplatesClient />
     </div>
   )
 }

@@ -896,6 +896,27 @@ export async function scheduleCttPickupAction(input: {
       ctt_pickup_id: result.PickUpID,
     })
 
+    // Trigger Notification Email to Sender
+    if (input.sender.email) {
+      const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
+      const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
+      
+      const html = compileTemplate(emailTemplates.pickup_scheduled, {
+        date: input.date,
+        time_period: `${input.startHour}h - ${input.endHour}h`,
+        address: `${input.sender.address}, ${input.sender.zip} ${input.sender.city}`,
+        volumes: input.volumes,
+        tracking_url: "https://tms.linke.pt/ops/envios/recolhas"
+      })
+
+      // Send asynchronously without blocking the request
+      sendEmail({
+        to: input.sender.email,
+        subject: "Linke | Recolha Agendada com Sucesso",
+        html,
+      }).catch(err => console.error("Error sending pickup email:", err))
+    }
+
     revalidatePath("/ops/envios")
   }
 

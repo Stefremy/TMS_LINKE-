@@ -143,13 +143,13 @@ function PublicTrackingContent() {
       <header className="w-full bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 shadow-2xs">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black shadow-xs">
-              <Package className="w-5 h-5" />
-            </div>
+            <img 
+              src="/Linke-logo.png" 
+              alt="Linke" 
+              className="h-8 object-contain brightness-0" 
+            />
             <div className="flex flex-col">
-              <span className="text-xl font-extrabold tracking-tight text-slate-900 leading-none">
-                linke <span className="text-emerald-600 font-bold text-sm">tracking</span>
-              </span>
+              <span className="text-emerald-600 font-bold text-sm leading-tight">tracking</span>
               <span className="text-[10px] text-slate-400 font-medium tracking-wide">
                 Portal Público de Rastreio em Tempo Real
               </span>

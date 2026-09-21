@@ -663,7 +663,7 @@ export async function emitClientGuiaAction(data: {
     try {
       const { data: clientData } = await supabase
         .from("clientes")
-        .select("credit_limit")
+        .select("credit_limit, email")
         .eq("id", validatedClientId)
         .single()
         
@@ -673,6 +673,27 @@ export async function emitClientGuiaAction(data: {
           .from("clientes")
           .update({ credit_limit: newCredit })
           .eq("id", validatedClientId)
+
+        // Trigger Low Balance Alert if the balance drops below 15€
+        if (clientData.credit_limit >= 15 && newCredit < 15 && clientData.email) {
+          try {
+            const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
+            const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
+            
+            const html = compileTemplate(emailTemplates.low_balance, {
+              current_balance: newCredit.toFixed(2),
+              topup_url: "https://tms.linke.pt/app"
+            })
+      
+            sendEmail({
+              to: clientData.email,
+              subject: "Linke | Aviso de Saldo Baixo",
+              html,
+            }).catch(err => console.error("Error sending low balance email:", err))
+          } catch (e) {
+            console.error("Failed to dispatch low balance email:", e)
+          }
+        }
       }
     } catch (e: any) {
       console.warn("Failed to decrement client credit:", e.message)
