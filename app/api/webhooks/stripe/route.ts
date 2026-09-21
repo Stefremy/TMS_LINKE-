@@ -46,7 +46,7 @@ export async function POST(req: Request) {
           const amountEuro = (session.amount_total || 0) / 100
 
           const { data: client, error: clientErr } = await supabase
-            .from("clientes")
+            .from("clients")
             .select("credit_limit")
             .eq("id", clientId)
             .single()
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
             const newBalance = Number(client.credit_limit || 0) + amountEuro
             
             await supabase
-              .from("clientes")
+              .from("clients")
               .update({ credit_limit: newBalance })
               .eq("id", clientId)
               

@@ -110,16 +110,17 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
         target = clients.find((c) => c.id === clientId)
       }
       if (!target && clientNameParam) {
-        const decoded = decodeURIComponent(clientNameParam).toLowerCase()
-        target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
+        target = clients.find((c) => c.short_name.toLowerCase() === clientNameParam.toLowerCase())
       }
       if (!target && userEmail) {
-        const emailLower = userEmail.toLowerCase()
-        target = clients.find((c) => c.email?.toLowerCase() === emailLower || c.billing_email?.toLowerCase() === emailLower)
+        target = clients.find(c => c.email?.toLowerCase().trim() === userEmail.toLowerCase().trim())
       }
+      
+      // Fallback para administradores a testar o portal sem parâmetros
       if (!target && clients.length > 0) {
-        target = clients[0] // Fallback (maybe remove this later when auth is strict)
+        target = clients[0]
       }
+
       if (target) {
         setCurrentClient(target)
       }

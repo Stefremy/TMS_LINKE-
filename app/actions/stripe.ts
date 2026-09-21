@@ -16,18 +16,18 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
 
     // 1. Validate Client
     const { data: client, error: clientErr } = await supabase
-      .from('clientes')
+      .from('clients')
       .select('*')
       .eq('id', clientId)
       .single()
 
     if (clientErr || !client) {
       console.error("[Stripe Action] Error fetching client:", clientErr, "for ID:", clientId)
-      throw new Error("Cliente não encontrado.")
+      throw new Error("Cliente não encontrado. ID recebido: " + (clientId || "Vazio"))
     }
 
-    if (amountEuro < 5) {
-      throw new Error("O montante mínimo de carregamento é 5€.")
+    if (amountEuro < 1) {
+      throw new Error("O montante mínimo de carregamento é 1€.")
     }
 
     // 2. Create Transaction Record
@@ -52,13 +52,8 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
     const origin = headersList.get("origin") || "http://localhost:3000"
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'], 
-      // Stripe MB WAY is not a default checkout method in some older setups, but is supported. 
-      // Usually you pass ['card', 'mbway']. If 'mbway' is enabled in the dashboard, it will work.
-      // We will leave it as payment_method_types: undefined (so it relies on dashboard defaults) 
-      // OR explicitly set them. Let's explicitly set if possible, but some Stripe accounts restrict it.
-      // The safest for generic setup is letting Stripe decide based on the Dashboard settings:
-      // payment_method_types: ['mbway', 'card'],
+      payment_method_types: ['card', 'mb_way', 'multibanco'],
+      // payment_method_types: ['mb_way', 'card'],
       
       // We will force mbway and card if needed, but actually the dashboard manages this now via `automatic_payment_methods`
       // So we will use automatic_payment_methods: { enabled: true } instead.
