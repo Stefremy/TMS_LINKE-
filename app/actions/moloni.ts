@@ -3,6 +3,11 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { MoloniClient } from "@/lib/moloni/moloni-client"
 import { revalidatePath } from "next/cache"
+import { getClientesAction } from "@/app/actions/clientes"
+import { getShipmentsAction } from "@/app/actions/shipments"
+
+const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
+const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 
 /**
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
@@ -11,25 +16,29 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
   try {
     const supabase = createAdminClient()
     
-    // 1. Obter Cliente do TMS (guardado em audit_log com action = "client_data")
-    const { data: clientLogs } = await supabase
-      .from('audit_log')
-      .select('details')
-      .eq('action', 'client_data')
-
-    const client = clientLogs?.map((l: any) => l.details).find((d: any) => d?.id === clientId)
+    // 1. Obter Cliente do TMS (com fallback garantido)
+    const allClients = await getClientesAction()
+    const client = allClients.find((c: any) => c.id === clientId)
       
     if (!client) {
       throw new Error("Cliente não encontrado.")
     }
 
     // 2. Obter Envios do TMS
-    const { data: shipments, error: shipmentsErr } = await supabase
+    let shipments: any[] = []
+    const { data: dbShipments, error: shipmentsErr } = await supabase
       .from('shipments')
       .select('*')
       .in('id', shipmentIds)
       
-    if (shipmentsErr || !shipments || shipments.length === 0) {
+    if (!shipmentsErr && dbShipments && dbShipments.length > 0) {
+      shipments = dbShipments
+    } else {
+      const allShipments = await getShipmentsAction()
+      shipments = allShipments.filter((s: any) => shipmentIds.includes(s.id))
+    }
+
+    if (!shipments || shipments.length === 0) {
       throw new Error("Envios não encontrados.")
     }
 
@@ -108,9 +117,10 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
     // 3. Criar Registo de Extrato no audit_log (sem necessidade de tabela separada)
     const statementNumber = `EXT-${new Date().getFullYear()}/${String(new Date().getMonth()+1).padStart(2,'0')}-${Math.floor(Math.random() * 9000 + 1000)}`
     const statementId = crypto.randomUUID()
+    const tenantId = isValidUuid((client as any).tenant_id) ? (client as any).tenant_id : LINKE_TENANT_ID
 
     const { error: statementErr } = await supabase.from('audit_log').insert({
-      tenant_id: client.tenant_id || "linke",
+      tenant_id: tenantId,
       action: "billing_statement",
       details: {
         id: statementId,
@@ -122,28 +132,37 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
         total_value: totalValue,
         shipments_count: shipments.length,
         shipment_ids: shipmentIds,
+        shipments: shipments.map((s: any) => ({
+          id: s.id,
+          tracking_number: s.tracking_number,
+          reference: s.reference,
+          sell_price: Number(s.sell_price || 0),
+          created_at: s.created_at,
+          recipient_name: s.recipient_name,
+          recipient_city: s.recipient_city
+        })),
         created_at: new Date().toISOString(),
       }
     })
 
     if (statementErr) {
       console.error("Erro ao registar extrato no audit_log:", statementErr)
-      throw new Error("Erro ao criar registo de extrato.")
+      throw new Error(`Erro ao criar registo de extrato: ${statementErr.message || JSON.stringify(statementErr)}`)
     }
 
     // 4. Marcar Envios como faturados (guardar referência ao extrato)
-    // Tentar atualizar a coluna billing_statement_id se existir, senão apenas logar
     try {
       await supabase
         .from('shipments')
         .update({ billing_statement_id: statementId } as any)
         .in('id', shipmentIds)
     } catch {
-      // Se a coluna não existir, ainda assim o extrato ficou registado no audit_log
       console.warn("billing_statement_id column may not exist yet - extrato registado no audit_log")
     }
 
     revalidatePath("/ops/faturacao/contas-corrente")
+    revalidatePath("/app/faturas")
+    revalidatePath("/app")
     
     return { 
       success: true, 
@@ -154,5 +173,36 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
   } catch (error: any) {
     console.error("emitInvoiceAction error:", error)
     return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Consulta histórico de extratos emitidos guardados em audit_log
+ */
+export async function getBillingStatementsAction(clientId?: string) {
+  const supabase = createAdminClient()
+  try {
+    const { data, error } = await supabase
+      .from('audit_log')
+      .select('details, created_at')
+      .eq('action', 'billing_statement')
+      .order('created_at', { ascending: false })
+
+    if (error || !data) return []
+
+    let statements = data.map((d: any) => ({
+      id: d.details?.id,
+      ...d.details,
+      created_at: d.details?.created_at || d.created_at
+    }))
+
+    if (clientId) {
+      statements = statements.filter((s: any) => s.client_id === clientId)
+    }
+
+    return statements
+  } catch (err) {
+    console.error("getBillingStatementsAction error:", err)
+    return []
   }
 }
