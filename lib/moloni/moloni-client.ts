@@ -9,12 +9,86 @@ export class MoloniClient {
   // This could be fetched from DB or ENV, for now ENV
   private refreshTokenVal: string;
 
-  constructor() {
-    this.companyId = process.env.MOLONI_COMPANY_ID || "";
-    this.developerId = process.env.MOLONI_DEVELOPER_ID || "";
-    this.clientId = process.env.MOLONI_CLIENT_ID || "";
-    this.clientSecret = process.env.MOLONI_CLIENT_SECRET || "";
-    this.refreshTokenVal = process.env.MOLONI_REFRESH_TOKEN || "";
+  constructor(config?: { companyId?: string; refreshToken?: string }) {
+    this.companyId = config?.companyId || process.env.MOLONI_COMPANY_ID || "";
+    this.developerId = process.env.MOLONI_DEVELOPER_ID || process.env.MOLONI_CLIENT_ID || "518600300";
+    this.clientId = process.env.MOLONI_CLIENT_ID || "518600300";
+    this.clientSecret = process.env.MOLONI_CLIENT_SECRET || "0b78b0aef4abfc92960a0c9d97dbe9b7abd8b325";
+    this.refreshTokenVal = config?.refreshToken || process.env.MOLONI_REFRESH_TOKEN || "";
+  }
+
+  /**
+   * Autenticação via utilizador e password da conta Moloni (grant_type=password)
+   */
+  static async loginWithPassword(username: string, password: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+    companies: Array<{ company_id: number; name: string; vat: string }>;
+  }> {
+    const clientId = process.env.MOLONI_CLIENT_ID || "518600300";
+    const clientSecret = process.env.MOLONI_CLIENT_SECRET || "0b78b0aef4abfc92960a0c9d97dbe9b7abd8b325";
+    
+    const params = new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      username,
+      password,
+    });
+    
+    const res = await fetch(`https://api.moloni.pt/v1/grant/?grant_type=password&${params.toString()}`);
+    const data = await res.json();
+    
+    if (data.error) {
+      throw new Error(`Erro Moloni: ${data.error_description || data.error}`);
+    }
+    
+    const compRes = await fetch(`https://api.moloni.pt/v1/companies/getAll/?access_token=${data.access_token}`);
+    const companies = await compRes.json();
+    
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresIn: data.expires_in,
+      companies: Array.isArray(companies) ? companies : [],
+    };
+  }
+
+  /**
+   * Troca de código de autorização OAuth por tokens (grant_type=authorization_code)
+   */
+  static async exchangeAuthCode(code: string, redirectUri: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+    companies: Array<{ company_id: number; name: string; vat: string }>;
+  }> {
+    const clientId = process.env.MOLONI_CLIENT_ID || "518600300";
+    const clientSecret = process.env.MOLONI_CLIENT_SECRET || "0b78b0aef4abfc92960a0c9d97dbe9b7abd8b325";
+    
+    const params = new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: redirectUri,
+    });
+    
+    const res = await fetch(`https://api.moloni.pt/v1/grant/?grant_type=authorization_code&${params.toString()}`);
+    const data = await res.json();
+    
+    if (data.error) {
+      throw new Error(`Erro Moloni OAuth: ${data.error_description || data.error}`);
+    }
+    
+    const compRes = await fetch(`https://api.moloni.pt/v1/companies/getAll/?access_token=${data.access_token}`);
+    const companies = await compRes.json();
+    
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      expiresIn: data.expires_in,
+      companies: Array.isArray(companies) ? companies : [],
+    };
   }
 
   /**
@@ -25,8 +99,12 @@ export class MoloniClient {
       return this.accessToken;
     }
 
-    if (!this.developerId || !this.clientId || !this.clientSecret) {
-      throw new Error("Missing Moloni credentials in environment variables.");
+    if (!this.clientId || !this.clientSecret) {
+      throw new Error("Credenciais do Moloni (Client ID / Client Secret) não configuradas.");
+    }
+
+    if (!this.refreshTokenVal) {
+      throw new Error("Conta Moloni ainda não conectada (falta Refresh Token). Use a opção 'Ligar Moloni' para autorizar.");
     }
 
     const url = "https://api.moloni.pt/v1/grant/?grant_type=refresh_token";
@@ -44,8 +122,8 @@ export class MoloniClient {
     }
 
     this.accessToken = data.access_token;
-    this.refreshTokenVal = data.refresh_token; // Should save this securely se mudar!
-    this.tokenExpiresAt = Date.now() + (data.expires_in * 1000) - 60000; // 1 min buffer
+    this.refreshTokenVal = data.refresh_token;
+    this.tokenExpiresAt = Date.now() + (data.expires_in * 1000) - 60000;
 
     return this.accessToken!;
   }

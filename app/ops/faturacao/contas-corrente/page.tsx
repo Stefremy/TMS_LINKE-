@@ -1,16 +1,17 @@
 import * as React from "react"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getShipmentsAction } from "@/app/actions/shipments"
-import { getBillingStatementsAction } from "@/app/actions/moloni"
+import { getBillingStatementsAction, getMoloniConfigAction } from "@/app/actions/moloni"
 import ContasCorrenteClient from "./ContasCorrenteClient"
 
 export const dynamic = "force-dynamic"
 
 export default async function ContasCorrentePage() {
-  const [clients, shipments, statements] = await Promise.all([
+  const [clients, shipments, statements, moloniConfig] = await Promise.all([
     getClientesAction(),
     getShipmentsAction(),
-    getBillingStatementsAction()
+    getBillingStatementsAction(),
+    getMoloniConfigAction()
   ])
 
   // Filtrar envios já faturados em extratos emitidos
@@ -30,6 +31,7 @@ export default async function ContasCorrentePage() {
         clients={clients} 
         shipments={pendingShipments} 
         statements={statements}
+        moloniConfig={moloniConfig}
       />
     </div>
   )

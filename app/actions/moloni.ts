@@ -48,68 +48,94 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
     let moloniDocumentId = null
     let moloniDocumentUrl = null
     
-    if (process.env.MOLONI_CLIENT_ID) {
-      const moloni = new MoloniClient()
-      
-      // A. Verificar/Criar Cliente no Moloni
-      let moloniCustomerId = null
-      if (client.nif) {
-        const moloniCust = await moloni.getCustomerByVat(client.nif)
-        if (moloniCust) {
-          moloniCustomerId = moloniCust.customer_id
+    // Verificar credenciais Moloni (no ambiente ou em audit_log)
+    let moloniConfig: any = null
+    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
+      moloniConfig = {
+        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
+        companyId: process.env.MOLONI_COMPANY_ID,
+      }
+    } else {
+      const { data: mLogs } = await supabase
+        .from("audit_log")
+        .select("details")
+        .eq("action", "moloni_connection_config")
+        .order("created_at", { ascending: false })
+        .limit(1)
+      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
+        moloniConfig = {
+          refreshToken: mLogs[0].details.refresh_token,
+          companyId: mLogs[0].details.company_id,
         }
       }
-      
-      if (!moloniCustomerId) {
-        moloniCustomerId = await moloni.createCustomer({
-          vat: client.nif || "999999990",
-          number: `C${Date.now()}`,
-          name: client.legal_name || client.short_name || "Cliente Desconhecido",
-          address: client.address || "Desconhecida",
-          zipCode: client.postal_code || "0000-000",
-          city: client.city || "Desconhecida",
-          email: client.email,
-          phone: client.phone
+    }
+
+    if (moloniConfig) {
+      try {
+        const moloni = new MoloniClient(moloniConfig)
+        
+        // A. Verificar/Criar Cliente no Moloni
+        let moloniCustomerId = null
+        if (client.nif) {
+          const moloniCust = await moloni.getCustomerByVat(client.nif)
+          if (moloniCust) {
+            moloniCustomerId = moloniCust.customer_id
+          }
+        }
+        
+        if (!moloniCustomerId) {
+          moloniCustomerId = await moloni.createCustomer({
+            vat: client.nif || "999999990",
+            number: `C${Date.now()}`,
+            name: client.legal_name || client.short_name || "Cliente Desconhecido",
+            address: client.address || "Desconhecida",
+            zipCode: client.postal_code || "0000-000",
+            city: client.city || "Desconhecida",
+            email: client.email,
+            phone: client.phone
+          })
+        }
+
+        // B. Obter dados base do Moloni (Série, Taxa, Artigo Genérico)
+        const taxId = await moloni.getTaxId(23)
+        const documentSetId = await moloni.getDocumentSet()
+        const productId = await moloni.getGenericProductId(taxId)
+
+        // C. Preparar Linhas da Fatura (Uma linha por envio para ser transparente)
+        const products = shipments.map((s: any) => {
+          return {
+            productId: productId,
+            name: `Envio TMS - ${s.tracking_number || s.reference}`,
+            summary: `De: ${s.sender_zip4 || ''}-${s.sender_zip3 || ''} Para: ${s.recipient_zip4 || ''}-${s.recipient_zip3 || ''}`,
+            qty: 1,
+            price: Number(s.sell_price || 0), // Preço s/ IVA
+            taxes: [{ tax_id: taxId, value: 23 }]
+          }
         })
-      }
 
-      // B. Obter dados base do Moloni (Série, Taxa, Artigo Genérico)
-      const taxId = await moloni.getTaxId(23)
-      const documentSetId = await moloni.getDocumentSet()
-      const productId = await moloni.getGenericProductId(taxId)
-
-      // C. Preparar Linhas da Fatura (Uma linha por envio para ser transparente)
-      const products = shipments.map((s: any) => {
-        return {
-          productId: productId,
-          name: `Envio TMS - ${s.tracking_number || s.reference}`,
-          summary: `De: ${s.sender_zip4 || ''}-${s.sender_zip3 || ''} Para: ${s.recipient_zip4 || ''}-${s.recipient_zip3 || ''}`,
-          qty: 1,
-          price: Number(s.sell_price || 0), // Preço s/ IVA
-          taxes: [{ tax_id: taxId, value: 23 }]
+        const validProducts = products.filter((p: any) => p.price > 0)
+        
+        if (validProducts.length === 0) {
+           throw new Error("Todos os envios selecionados têm valor nulo (0€).")
         }
-      })
 
-      const validProducts = products.filter((p: any) => p.price > 0)
-      
-      if (validProducts.length === 0) {
-         throw new Error("Todos os envios selecionados têm valor nulo (0€).")
+        const dateNow = new Date().toISOString().split("T")[0]
+        const expirationDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+
+        // D. Emitir Fatura
+        const invoiceRes = await moloni.createInvoice({
+          customerId: moloniCustomerId,
+          date: dateNow,
+          expirationDate: expirationDate,
+          documentSetId: documentSetId,
+          products: validProducts
+        })
+        
+        moloniDocumentId = invoiceRes.document_id
+        moloniDocumentUrl = await moloni.getDocumentPDFLink(moloniDocumentId)
+      } catch (moloniErr: any) {
+        console.warn("Moloni Invoice Emission Warning (continuing with TMS statement):", moloniErr?.message)
       }
-
-      const dateNow = new Date().toISOString().split("T")[0]
-      const expirationDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-
-      // D. Emitir Fatura
-      const invoiceRes = await moloni.createInvoice({
-        customerId: moloniCustomerId,
-        date: dateNow,
-        expirationDate: expirationDate,
-        documentSetId: documentSetId,
-        products: validProducts
-      })
-      
-      moloniDocumentId = invoiceRes.document_id
-      moloniDocumentUrl = await moloni.getDocumentPDFLink(moloniDocumentId)
     }
 
     // Se Moloni estiver desligado/falhar, criamos na mesma o Extrato Interno mas sem PDFs.
@@ -206,5 +232,118 @@ export async function getBillingStatementsAction(clientId?: string) {
   } catch (err) {
     console.error("getBillingStatementsAction error:", err)
     return []
+  }
+}
+
+/**
+ * Obtém o estado da ligação ao Moloni
+ */
+export async function getMoloniConfigAction() {
+  const supabase = createAdminClient()
+  try {
+    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
+      return {
+        isConnected: true,
+        companyId: process.env.MOLONI_COMPANY_ID,
+        clientId: process.env.MOLONI_CLIENT_ID || "518600300"
+      }
+    }
+
+    const { data: logs } = await supabase
+      .from("audit_log")
+      .select("details")
+      .eq("action", "moloni_connection_config")
+      .order("created_at", { ascending: false })
+      .limit(1)
+
+    if (logs && logs[0]?.details?.refresh_token) {
+      return {
+        isConnected: true,
+        companyId: logs[0].details.company_id,
+        companyName: logs[0].details.company_name,
+        clientId: process.env.MOLONI_CLIENT_ID || "518600300"
+      }
+    }
+
+    return {
+      isConnected: false,
+      clientId: process.env.MOLONI_CLIENT_ID || "518600300"
+    }
+  } catch {
+    return { isConnected: false }
+  }
+}
+
+/**
+ * Conecta ao Moloni através de Utilizador e Password (grant_type=password)
+ */
+export async function connectMoloniWithPasswordAction(formData: FormData) {
+  try {
+    const username = (formData.get("username") as string || "").trim()
+    const password = (formData.get("password") as string || "").trim()
+
+    if (!username || !password) {
+      return { success: false, error: "Introduza o utilizador/email e password da sua conta Moloni." }
+    }
+
+    const { refreshToken, companies } = await MoloniClient.loginWithPassword(username, password)
+    
+    if (!companies || companies.length === 0) {
+      return { success: false, error: "Nenhuma empresa associada encontrada nesta conta Moloni." }
+    }
+
+    const selectedCompany = companies[0]
+    const companyId = String(selectedCompany.company_id)
+
+    // 1. Guardar em audit_log
+    const supabase = createAdminClient()
+    await supabase.from("audit_log").insert({
+      tenant_id: LINKE_TENANT_ID,
+      action: "moloni_connection_config",
+      details: {
+        company_id: companyId,
+        company_name: selectedCompany.name,
+        company_vat: (selectedCompany as any).vat,
+        refresh_token: refreshToken,
+        connected_at: new Date().toISOString(),
+      },
+    })
+
+    // 2. Tentar atualizar .env.local
+    try {
+      const fs = await import("fs")
+      const path = await import("path")
+      const envPath = path.join(process.cwd(), ".env.local")
+      if (fs.existsSync(envPath)) {
+        let envContent = fs.readFileSync(envPath, "utf8")
+        
+        if (envContent.includes("MOLONI_REFRESH_TOKEN=")) {
+          envContent = envContent.replace(/MOLONI_REFRESH_TOKEN=.*(\r?\n|$)/, `MOLONI_REFRESH_TOKEN=${refreshToken}\n`)
+        } else {
+          envContent += `\nMOLONI_REFRESH_TOKEN=${refreshToken}\n`
+        }
+
+        if (envContent.includes("MOLONI_COMPANY_ID=")) {
+          envContent = envContent.replace(/MOLONI_COMPANY_ID=.*(\r?\n|$)/, `MOLONI_COMPANY_ID=${companyId}\n`)
+        } else {
+          envContent += `MOLONI_COMPANY_ID=${companyId}\n`
+        }
+
+        fs.writeFileSync(envPath, envContent, "utf8")
+      }
+    } catch (e: any) {
+      console.warn("Could not write to .env.local:", e?.message)
+    }
+
+    revalidatePath("/ops/faturacao/contas-corrente")
+
+    return {
+      success: true,
+      companyName: selectedCompany.name,
+      companyId: companyId,
+    }
+  } catch (err: any) {
+    console.error("connectMoloniWithPasswordAction error:", err)
+    return { success: false, error: err.message || "Erro ao ligar ao Moloni." }
   }
 }

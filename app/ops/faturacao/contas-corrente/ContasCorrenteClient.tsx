@@ -3,19 +3,23 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { Building, FileText, ChevronDown, ChevronRight, Euro, Cloud, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2 } from "lucide-react"
+import { MoloniConnectModal } from "./MoloniConnectModal"
 
 export default function ContasCorrenteClient({ 
   clients, 
   shipments, 
-  statements = [] 
+  statements = [],
+  moloniConfig
 }: { 
   clients: any[]
   shipments: any[]
-  statements?: any[] 
+  statements?: any[]
+  moloniConfig?: any
 }) {
   const router = useRouter()
   const [expandedClient, setExpandedClient] = React.useState<string | null>(null)
   const [showHistory, setShowHistory] = React.useState<boolean>(true)
+  const [isMoloniModalOpen, setIsMoloniModalOpen] = React.useState<boolean>(false)
   
   // Filtros
   const [startDate, setStartDate] = React.useState<string>("")
@@ -87,9 +91,21 @@ export default function ContasCorrenteClient({
         </div>
         
         <div className="mt-4 sm:mt-0 flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:bg-slate-50 transition-colors shadow-2xs">
-            <Cloud className="w-4 h-4 text-slate-400" />
-            Ligar Moloni (Brevemente)
+          <button 
+            onClick={() => setIsMoloniModalOpen(true)}
+            className={`flex items-center gap-2 px-4 py-2.5 bg-white border ${moloniConfig?.isConnected ? "border-emerald-300 text-emerald-700 bg-emerald-50/40" : "border-slate-200 text-slate-700"} font-bold text-sm rounded-xl hover:bg-slate-50 transition-colors shadow-2xs`}
+          >
+            {moloniConfig?.isConnected ? (
+              <>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Moloni Ligado ({moloniConfig.companyName || moloniConfig.companyId})</span>
+              </>
+            ) : (
+              <>
+                <Cloud className="w-4 h-4 text-indigo-600" />
+                <span>Ligar Moloni</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -352,6 +368,12 @@ export default function ContasCorrenteClient({
           )}
         </div>
       )}
+
+      <MoloniConnectModal 
+        isOpen={isMoloniModalOpen}
+        onClose={() => setIsMoloniModalOpen(false)}
+        config={moloniConfig}
+      />
     </div>
   )
 }
