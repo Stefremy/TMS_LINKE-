@@ -375,6 +375,19 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
 export async function toggleClienteStatusAction(id: string, is_active: boolean) {
   const supabase = createAdminClient()
 
+  // Guard: Conta GO Linke (CL001) nunca pode ser desativada
+  try {
+    const { data: logs } = await supabase
+      .from("audit_log")
+      .select("details")
+      .eq("action", "client_data")
+    
+    const target = logs?.find((l: any) => l.details?.id === id)
+    if (target?.details?.code === "CL001") {
+      return { success: false, error: "A conta CL001 (Conta GO Linke) é protegida e não pode ser desativada." }
+    }
+  } catch {}
+
   try {
     const { data: logs } = await supabase
       .from("audit_log")
@@ -405,6 +418,19 @@ export async function toggleClienteStatusAction(id: string, is_active: boolean) 
  */
 export async function deleteClienteAction(id: string) {
   const supabase = createAdminClient()
+
+  // Guard: Conta GO Linke (CL001) nunca pode ser eliminada
+  try {
+    const { data: logs } = await supabase
+      .from("audit_log")
+      .select("details")
+      .eq("action", "client_data")
+    
+    const target = logs?.find((l: any) => l.details?.id === id)
+    if (target?.details?.code === "CL001") {
+      return { success: false, error: "A conta CL001 (Conta GO Linke) é protegida e não pode ser eliminada." }
+    }
+  } catch {}
 
   // 1. Apagar da tabela clients
   try {

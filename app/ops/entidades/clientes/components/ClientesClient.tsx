@@ -110,6 +110,10 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
 
   const handleToggleStatus = async (client: Cliente, e: React.MouseEvent) => {
     e.stopPropagation()
+    if (client.code === "CL001") {
+      alert("A Conta GO Linke (CL001) é protegida e não pode ser desativada.")
+      return
+    }
     const newStatus = !client.is_active
     setClientes((prev) =>
       prev.map((c) => (c.id === client.id ? { ...c, is_active: newStatus } : c))
@@ -125,6 +129,10 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
 
   const handleDelete = async (client: Cliente, e: React.MouseEvent) => {
     e.stopPropagation()
+    if (client.code === "CL001") {
+      alert("A Conta GO Linke (CL001) é protegida e não pode ser eliminada.")
+      return
+    }
     const confirmed = window.confirm(
       `Tem a certeza que deseja eliminar o cliente "${client.short_name}" (${client.code})?`
     )

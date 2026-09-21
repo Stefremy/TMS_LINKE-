@@ -618,10 +618,14 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                   id="client_active"
                   checked={formData.is_active ?? true}
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  disabled={formData.code === "CL001"}
+                  title={formData.code === "CL001" ? "A Conta GO Linke (CL001) é protegida e não pode ser desativada." : undefined}
+                  className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
-                <label htmlFor="client_active" className="text-xs font-bold text-slate-800 cursor-pointer">
-                  Cliente Ativo (Pode emitir guias e realizar envios)
+                <label htmlFor="client_active" className={`text-xs font-bold cursor-pointer ${formData.code === "CL001" ? "text-slate-400" : "text-slate-800"}`}>
+                  {formData.code === "CL001"
+                    ? "🔒 Conta GO Linke — Protegida (não pode ser desativada)"
+                    : "Cliente Ativo (Pode emitir guias e realizar envios)"}
                 </label>
               </div>
             </div>
