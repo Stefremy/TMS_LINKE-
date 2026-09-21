@@ -46,8 +46,11 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
   }
 
   const clientId = config?.clientId || "518600300"
-  const redirectUri = typeof window !== "undefined" ? `${window.location.origin}/api/auth/moloni/callback` : "http://localhost:3000/api/auth/moloni/callback"
-  const oauthAuthUrl = `https://api.moloni.pt/v1/auth/?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`
+  const currentOrigin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
+  // Moloni developer portal registered callback:
+  const registeredCallbackUri = "https://linke-store-ten.vercel.app/api/moloni/callback"
+  // linke-store-ten bounces back to `${state}/api/moloni/callback?code=...`
+  const oauthAuthUrl = `https://api.moloni.pt/v1/auth/?client_id=${clientId}&redirect_uri=${encodeURIComponent(registeredCallbackUri)}&response_type=code&state=${encodeURIComponent(currentOrigin)}`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">

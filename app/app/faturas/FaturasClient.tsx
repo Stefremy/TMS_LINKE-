@@ -64,14 +64,15 @@ export default function FaturasClient({ statements }: { statements: any[] }) {
                 <div className="col-span-3 flex items-center justify-end gap-2">
                   <a 
                     href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
+                    download={`Fatura_${stmt.statement_number || stmt.id}.pdf`}
                     target="_blank" 
                     rel="noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
                     onClick={(e) => e.stopPropagation()}
-                    title="Descarregar Extrato Detalhado TMS em PDF"
+                    title="Descarregar Fatura / Extrato Detalhado em PDF"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    Extrato PDF
+                    Descarregar Fatura
                   </a>
 
                   {stmt.moloni_document_pdf && (
@@ -79,12 +80,12 @@ export default function FaturasClient({ statements }: { statements: any[] }) {
                       href={stmt.moloni_document_pdf} 
                       target="_blank" 
                       rel="noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
                       onClick={(e) => e.stopPropagation()}
                       title="Fatura Oficial Moloni"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      Fatura Moloni
+                      Fatura Oficial
                     </a>
                   )}
                   

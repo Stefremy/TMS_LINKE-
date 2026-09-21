@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Building, FileText, ChevronDown, ChevronRight, Euro, Cloud, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2 } from "lucide-react"
+import { Building, FileText, ChevronDown, ChevronRight, Euro, Cloud, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X } from "lucide-react"
 import { MoloniConnectModal } from "./MoloniConnectModal"
 
 export default function ContasCorrenteClient({ 
@@ -20,6 +20,13 @@ export default function ContasCorrenteClient({
   const [expandedClient, setExpandedClient] = React.useState<string | null>(null)
   const [showHistory, setShowHistory] = React.useState<boolean>(true)
   const [isMoloniModalOpen, setIsMoloniModalOpen] = React.useState<boolean>(false)
+  const [issuedStatement, setIssuedStatement] = React.useState<{
+    statementNumber: string
+    url: string
+    clientName: string
+    totalValue: number
+    moloniPdf?: string | null
+  } | null>(null)
   
   // Filtros
   const [startDate, setStartDate] = React.useState<string>("")
@@ -202,12 +209,27 @@ export default function ContasCorrenteClient({
                           
                           const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id));
                           setIsLoading(false);
-                              if (res?.success) {
-                            if (res.url && confirm(`Extrato gerado com sucesso: ${res.statementNumber}!\n\nDeseja abrir o PDF do documento agora?`)) {
-                              window.open(res.url, "_blank")
-                            } else {
-                              alert(`Fatura / Extrato gerado com sucesso: ${res.statementNumber}`)
+                          if (res?.success && res.statementNumber) {
+                            const stmtNum = res.statementNumber
+                            try {
+                              const link = document.createElement("a")
+                              link.href = res.url || ""
+                              link.setAttribute("download", `Fatura_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`)
+                              link.target = "_blank"
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                            } catch (err) {
+                              console.error("Auto download failed", err)
                             }
+
+                            setIssuedStatement({
+                              statementNumber: stmtNum,
+                              url: res.url || `/api/statements/${encodeURIComponent(stmtNum)}/pdf`,
+                              clientName: client.legal_name || client.short_name,
+                              totalValue: totalValue,
+                              moloniPdf: (res as any).moloniDocumentPdf || null
+                            })
                             router.refresh()
                           } else {
                             alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
@@ -340,13 +362,14 @@ export default function ContasCorrenteClient({
 
                     <a 
                       href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
+                      download={`Fatura_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 rounded-lg text-xs font-bold transition-colors shadow-2xs"
-                      title="Descarregar Extrato Detalhado TMS em PDF"
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                      title="Descarregar Fatura / Extrato Detalhado TMS em PDF"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      Extrato PDF
+                      Descarregar Fatura
                     </a>
 
                     {stmt.moloni_document_pdf ? (
@@ -354,11 +377,11 @@ export default function ContasCorrenteClient({
                         href={stmt.moloni_document_pdf}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 rounded-lg text-xs font-bold transition-colors shadow-2xs"
-                        title="Fatura Oficial Certificada Moloni"
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                        title="Fatura Oficial Certificada Moloni (com QR Code AT)"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        Fatura Moloni
+                        Fatura Oficial Moloni
                       </a>
                     ) : (
                       <button
@@ -392,6 +415,89 @@ export default function ContasCorrenteClient({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal de Sucesso com Botão Direto de Download */}
+      {issuedStatement && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-emerald-600 p-6 text-white text-center relative">
+              <button 
+                onClick={() => setIssuedStatement(null)}
+                className="absolute top-4 right-4 text-emerald-100 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md mx-auto flex items-center justify-center mb-3">
+                <CheckCircle2 className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-xl font-black">Fatura / Extrato Emitido!</h3>
+              <p className="text-emerald-100 text-xs font-mono mt-1 font-semibold">
+                {issuedStatement.statementNumber}
+              </p>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium">Cliente</p>
+                  <p className="text-sm font-bold text-slate-800">{issuedStatement.clientName}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] text-slate-400 font-medium">Valor Total</p>
+                  <p className="text-base font-black text-slate-900 font-mono">
+                    {issuedStatement.totalValue.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                  </p>
+                </div>
+              </div>
+
+              {/* Botão de Download Principal */}
+              <div className="space-y-3">
+                <a
+                  href={issuedStatement.url}
+                  download={`Fatura_${issuedStatement.statementNumber.replace(/[\/\\]/g, "_")}.pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Download className="w-5 h-5" />
+                  Descarregar Fatura / Extrato (PDF)
+                </a>
+
+                {issuedStatement.moloniPdf ? (
+                  <a
+                    href={issuedStatement.moloniPdf}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Descarregar Fatura Oficial Moloni (AT)
+                  </a>
+                ) : (
+                  <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200/60 text-[11px] text-amber-800 flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold">O download do PDF foi iniciado automaticamente.</p>
+                      <p className="mt-0.5 text-amber-700 leading-relaxed">
+                        Este documento detalha todos os envios faturados. Se desejar emitir também a <strong>Fatura Oficial Certificada</strong> pela Autoridade Tributária, ligue a conta Moloni no topo.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-1">
+                <button
+                  onClick={() => setIssuedStatement(null)}
+                  className="w-full py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

@@ -195,7 +195,8 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
     return { 
       success: true, 
       statementNumber, 
-      url: statementPdfUrl 
+      url: statementPdfUrl,
+      moloniDocumentPdf: moloniDocumentUrl || null
     }
 
   } catch (error: any) {
