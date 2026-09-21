@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { refreshToken, companies } = tokenData
-    const selectedCompany = companies[0] || { company_id: 393993, name: "Linke" }
+    const selectedCompany = (companies || []).find((c: any) => !c.name?.toLowerCase().includes("demonstração")) || companies?.[0] || { company_id: 393993, name: "Linke" }
     const companyId = String(selectedCompany.company_id || 393993)
 
     // 1. Guardar no audit_log da Supabase
