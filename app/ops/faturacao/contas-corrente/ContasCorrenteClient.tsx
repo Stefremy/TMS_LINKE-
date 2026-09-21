@@ -186,9 +186,12 @@ export default function ContasCorrenteClient({
                           
                           const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id));
                           setIsLoading(false);
-                          
-                          if (res?.success) {
-                            alert(`Fatura / Extrato gerado com sucesso: ${res.statementNumber}`)
+                              if (res?.success) {
+                            if (res.url && confirm(`Extrato gerado com sucesso: ${res.statementNumber}!\n\nDeseja abrir o PDF do documento agora?`)) {
+                              window.open(res.url, "_blank")
+                            } else {
+                              alert(`Fatura / Extrato gerado com sucesso: ${res.statementNumber}`)
+                            }
                             router.refresh()
                           } else {
                             alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
@@ -226,9 +229,9 @@ export default function ContasCorrenteClient({
                               >
                                 <div className="flex items-center gap-3">
                                   <input 
-                                    type="checkbox" 
+                                    type="checkbox"
                                     checked={!isExcluded}
-                                    onChange={() => {}}
+                                    onChange={() => {}} 
                                     className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 pointer-events-none"
                                   />
                                   <div>
@@ -314,22 +317,33 @@ export default function ContasCorrenteClient({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 self-end sm:self-center">
-                    <span className="text-sm font-black text-slate-900 font-mono">
+                  <div className="flex items-center gap-3 self-end sm:self-center">
+                    <span className="text-sm font-black text-slate-900 font-mono mr-1">
                       {Number(stmt.total_value || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                     </span>
-                    {stmt.moloni_document_pdf ? (
+
+                    <a 
+                      href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                      title="Descarregar Extrato Detalhado TMS em PDF"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Extrato PDF
+                    </a>
+
+                    {stmt.moloni_document_pdf && (
                       <a 
                         href={stmt.moloni_document_pdf}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                        title="Fatura Oficial Certificada Moloni"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        PDF Moloni
+                        Fatura Moloni
                       </a>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-1 rounded font-medium">Extrato Interno</span>
                     )}
                   </div>
                 </div>

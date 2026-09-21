@@ -61,20 +61,31 @@ export default function FaturasClient({ statements }: { statements: any[] }) {
                   </p>
                 </div>
                 
-                <div className="col-span-3 flex items-center justify-end gap-3">
-                  {stmt.moloni_document_pdf ? (
+                <div className="col-span-3 flex items-center justify-end gap-2">
+                  <a 
+                    href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Descarregar Extrato Detalhado TMS em PDF"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Extrato PDF
+                  </a>
+
+                  {stmt.moloni_document_pdf && (
                     <a 
                       href={stmt.moloni_document_pdf} 
                       target="_blank" 
                       rel="noreferrer"
-                      className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 rounded-lg text-xs font-bold transition-colors shadow-2xs"
                       onClick={(e) => e.stopPropagation()}
+                      title="Fatura Oficial Moloni"
                     >
-                      <Download className="w-4 h-4" />
-                      Fatura Oficial
+                      <Download className="w-3.5 h-3.5" />
+                      Fatura Moloni
                     </a>
-                  ) : (
-                    <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded font-medium">Sem PDF</span>
                   )}
                   
                   <div className="text-slate-400 p-1">

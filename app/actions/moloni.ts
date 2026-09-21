@@ -164,10 +164,12 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
     revalidatePath("/app/faturas")
     revalidatePath("/app")
     
+    const statementPdfUrl = moloniDocumentUrl || `/api/statements/${encodeURIComponent(statementNumber)}/pdf`
+    
     return { 
       success: true, 
       statementNumber, 
-      url: moloniDocumentUrl 
+      url: statementPdfUrl 
     }
 
   } catch (error: any) {
