@@ -494,6 +494,18 @@ export async function emitClientGuiaAction(data: {
   // Ensure DB foreign keys are valid
   const validatedClientId = await ensureTenantAndClient(supabase, data.clientId, data.clientName)
 
+  if (validatedClientId) {
+    const { data: clientCheck } = await supabase
+      .from('clientes')
+      .select('credit_limit')
+      .eq('id', validatedClientId)
+      .single()
+      
+    if (clientCheck && clientCheck.credit_limit <= 0) {
+      throw new Error("Conta bloqueada. O seu saldo atual é igual ou inferior a 0.00€. Por favor, efetue um carregamento.")
+    }
+  }
+
   // Server-side price recalculation — never trust the frontend value
   let computedSellPrice = Number(data.calculatedPrice) || 5.50
   let computedBuyPrice = 0

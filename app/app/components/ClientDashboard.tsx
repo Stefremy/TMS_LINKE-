@@ -36,6 +36,8 @@ import { Cliente, DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clien
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
+import { CreditCard } from "lucide-react"
+import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 
 export function ClientDashboard({ userEmail }: { userEmail?: string }) {
   const searchParams = useSearchParams()
@@ -81,8 +83,24 @@ export function ClientDashboard({ userEmail }: { userEmail?: string }) {
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
   const [closingBatch, setClosingBatch] = React.useState(false)
   const [manifestData, setManifestData] = React.useState<{ fileName: string; base64: string } | null>(null)
+  const [isTopUpOpen, setIsTopUpOpen] = React.useState(false)
 
   const pageSize = 15
+
+  // Use URL params for top-up status feedback
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href)
+      const topup = url.searchParams.get("topup")
+      if (topup === "success") {
+        alert("O carregamento de saldo foi finalizado! O valor será creditado assim que o pagamento for confirmado.")
+        window.history.replaceState({}, '', window.location.pathname + window.location.search.replace(/&?topup=success/, ''))
+      } else if (topup === "cancelled") {
+        alert("O carregamento foi cancelado.")
+        window.history.replaceState({}, '', window.location.pathname + window.location.search.replace(/&?topup=cancelled/, ''))
+      }
+    }
+  }, [])
 
   // Load client data & real DB stats
   React.useEffect(() => {
@@ -267,15 +285,44 @@ export function ClientDashboard({ userEmail }: { userEmail?: string }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
-          <Link
-            href={`/app/criar-guia${querySuffix}`}
-            className="px-6 py-3.5 bg-white text-emerald-900 hover:bg-emerald-50 active:scale-[0.99] rounded-2xl text-xs sm:text-sm font-extrabold shadow-md transition-all flex items-center gap-2"
+          <button
+            type="button"
+            onClick={() => setIsTopUpOpen(true)}
+            className="px-5 py-3.5 bg-emerald-800/80 hover:bg-emerald-800 text-white active:scale-[0.99] rounded-2xl text-xs sm:text-sm font-extrabold shadow-md transition-all flex items-center gap-2 backdrop-blur-xs border border-white/20 cursor-pointer"
           >
-            <PlusCircle className="w-4 h-4 text-emerald-600" />
-            <span>Novo Envio</span>
-          </Link>
+            <CreditCard className="w-4 h-4 text-emerald-200" />
+            <span>Carregar Saldo</span>
+          </button>
+          
+          {currentClient && (currentClient.credit_limit ?? 0) <= 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                alert("Conta bloqueada. O teu saldo é 0.00€ ou negativo. Efetua um carregamento para voltares a criar envios.")
+                setIsTopUpOpen(true)
+              }}
+              className="px-6 py-3.5 bg-red-100 text-red-700 active:scale-[0.99] rounded-2xl text-xs sm:text-sm font-extrabold shadow-md transition-all flex items-center gap-2"
+            >
+              <PlusCircle className="w-4 h-4 text-red-500" />
+              <span>Novo Envio (Bloqueado)</span>
+            </button>
+          ) : (
+            <Link
+              href={`/app/criar-guia${querySuffix}`}
+              className="px-6 py-3.5 bg-white text-emerald-900 hover:bg-emerald-50 active:scale-[0.99] rounded-2xl text-xs sm:text-sm font-extrabold shadow-md transition-all flex items-center gap-2"
+            >
+              <PlusCircle className="w-4 h-4 text-emerald-600" />
+              <span>Novo Envio</span>
+            </Link>
+          )}
         </div>
       </div>
+
+      <ClientTopUpModal 
+        isOpen={isTopUpOpen} 
+        onClose={() => setIsTopUpOpen(false)} 
+        clientId={currentClient?.id || ""} 
+      />
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

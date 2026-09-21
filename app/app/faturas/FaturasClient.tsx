@@ -108,8 +108,8 @@ export default function FaturasClient({ statements }: { statements: any[] }) {
                           <div className="col-span-3 font-medium text-slate-700">
                             {s.tracking_number || s.reference || "N/A"}
                           </div>
-                          <div className="col-span-4 text-slate-500 truncate" title={\`\${s.recipient_name} (\${s.recipient_city})\`}>
-                            {s.recipient_name} ({s.recipient_city})
+                          <div className="col-span-4 text-slate-500 truncate" title={`${s.recipient_name} (${s.recipient_city})`}>
+                            {s.recipient_name} <span className="text-slate-400">({s.recipient_city})</span>
                           </div>
                           <div className="col-span-2 text-right font-mono font-bold text-slate-800">
                             {Number(s.sell_price || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€

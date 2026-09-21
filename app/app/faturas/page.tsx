@@ -4,7 +4,7 @@ import * as React from "react"
 import FaturasClient from "./FaturasClient"
 
 export default async function FaturasPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
@@ -23,10 +23,10 @@ export default async function FaturasPage() {
   // Obter faturas/extratos do cliente
   const { data: statements } = await supabase
     .from('billing_statements')
-    .select(\`
+    .select(`
       *,
       shipments:shipments(id, tracking_number, reference, sell_price, created_at, recipient_name, recipient_city)
-    \`)
+    `)
     .eq('client_id', clientUser.client_id)
     .order('created_at', { ascending: false })
 

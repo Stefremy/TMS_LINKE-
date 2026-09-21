@@ -33,7 +33,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
     }
 
     // Calcular Totais
-    const totalValue = shipments.reduce((acc, s) => acc + Number(s.sell_price || 0), 0)
+    const totalValue = shipments.reduce((acc: number, s: any) => acc + Number(s.sell_price || 0), 0)
 
     // Se as credenciais do Moloni estiverem configuradas, tentamos comunicar
     let moloniDocumentId = null
@@ -78,7 +78,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
       //   documentSetId: Number(process.env.MOLONI_DEFAULT_SET_ID) || 1, 
       //   products: [{
       //     name: "Serviços de Transporte / Logística",
-      //     summary: \`Ref: Envios no TMS Linke (\${shipments.length} envios)\`,
+      //     summary: `Ref: Envios no TMS Linke (${shipments.length} envios)`,
       //     qty: 1,
       //     price: totalValue,
       //     exemptionReason: "M01" // Se applies
@@ -96,7 +96,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
 
     // 3. Criar Registo "Billing Statement" no TMS
     // Assumimos que o utilizador já correu a migration
-    const statementNumber = \`EXT-\${new Date().getFullYear()}/\${new Date().getMonth()+1}-\${Math.floor(Math.random() * 1000)}\`
+    const statementNumber = `EXT-${new Date().getFullYear()}/${new Date().getMonth()+1}-${Math.floor(Math.random() * 1000)}`
     
     // Tentar criar billing_statement (vai falhar se a tabela nao existir ainda)
     const { data: statement, error: statementErr } = await supabase
