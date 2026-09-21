@@ -92,15 +92,25 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
 
   // Form fields
   const [date, setDate] = React.useState(tomorrowDate())
-  const [startHour, setStartHour] = React.useState("09:00")
-  const [endHour, setEndHour] = React.useState("18:00")
+  const [period, setPeriod] = React.useState("09:00-19:00")
   const [volumes, setVolumes] = React.useState(1)
-  const [weightKg, setWeightKg] = React.useState(5)
+  const [weightKg, setWeightKg] = React.useState(1)
+  const [heaviestWeight, setHeaviestWeight] = React.useState("")
+  const [dimLength, setDimLength] = React.useState("")
+  const [dimWidth, setDimWidth] = React.useState("")
+  const [dimHeight, setDimHeight] = React.useState("")
+  const [destination, setDestination] = React.useState("PT")
+  const [guideStatus, setGuideStatus] = React.useState("Disponível no local")
+
   const [senderName, setSenderName] = React.useState("Armazém Principal")
+  const [senderContact, setSenderContact] = React.useState("")
+  const [senderEmail, setSenderEmail] = React.useState("")
+  const [senderCountry, setSenderCountry] = React.useState("PT")
   const [senderAddress, setSenderAddress] = React.useState("Rua do Ouro, 100")
   const [senderZip, setSenderZip] = React.useState("4000-001")
   const [senderCity, setSenderCity] = React.useState("Porto")
   const [senderPhone, setSenderPhone] = React.useState("910000000")
+  const [senderMobile, setSenderMobile] = React.useState("")
   const [observations, setObservations] = React.useState("")
 
   // When client is selected, auto-fill address fields
@@ -109,6 +119,8 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
     const client = clients.find(c => c.id === clientId)
     if (client) {
       setSenderName(client.name)
+      setSenderContact(client.name)
+      setSenderEmail((client as any).email || "")
       setSenderAddress(client.address || senderAddress)
       setSenderZip(client.postal_code || senderZip)
       setSenderCity(client.city || senderCity)
@@ -123,6 +135,16 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
     setLoading(true)
     setResult(null)
     try {
+      const baseObs = observations
+      const guideObs = guideStatus === "Necessário levar" ? " | Necessário levar guia de transporte" : ""
+      const heavyObs = heaviestWeight ? ` | Objeto mais pesado: ${heaviestWeight}kg` : ""
+      const dimObs = (dimLength || dimWidth || dimHeight) ? ` | Dimensões(cm): ${dimLength || 0}x${dimWidth || 0}x${dimHeight || 0}` : ""
+      const destObs = destination !== "PT" ? ` | Destino: ${destination}` : ""
+      const finalObs = `${baseObs}${guideObs}${heavyObs}${dimObs}${destObs}`
+      const finalPhone = senderMobile ? `${senderPhone} / ${senderMobile}` : senderPhone
+
+      const [startHour, endHour] = period.split("-")
+
       const res = await scheduleCttPickupAction({
         date,
         startHour,
@@ -131,12 +153,15 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
         weightKg,
         sender: {
           name: senderName,
+          contact: senderContact,
+          country: senderCountry,
+          email: senderEmail,
           address: senderAddress,
           zip: senderZip,
           city: senderCity,
-          phone: senderPhone,
+          phone: finalPhone,
         },
-        observations: observations || undefined,
+        observations: finalObs || undefined,
       })
       setResult(res)
       if (res.Success) {
@@ -310,7 +335,7 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-slate-100">
                     <span className="text-sm text-slate-500 flex items-center gap-2"><Clock className="w-4 h-4" /> Janela</span>
-                    <span className="font-semibold text-slate-800">{startHour} – {endHour}</span>
+                    <span className="font-semibold text-slate-800">{period}</span>
                   </div>
                   <div className="flex items-center justify-between py-2">
                     <span className="text-sm text-slate-500 flex items-center gap-2"><MapPin className="w-4 h-4" /> Morada</span>
@@ -424,9 +449,9 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
                     <Calendar className="w-4 h-4 text-blue-600" />
                     Quando — Data e Horário
                   </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Data de Recolha *</label>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Data *</label>
                       <input
                         required
                         type="date"
@@ -437,24 +462,16 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Hora de Início *</label>
-                      <input
-                        required
-                        type="time"
-                        value={startHour}
-                        onChange={e => setStartHour(e.target.value)}
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Período pretendido de Recolha *</label>
+                      <select
+                        value={period}
+                        onChange={e => setPeriod(e.target.value)}
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Hora de Fim *</label>
-                      <input
-                        required
-                        type="time"
-                        value={endHour}
-                        onChange={e => setEndHour(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      />
+                      >
+                        <option value="09:00-19:00">09h00-19h00</option>
+                        <option value="09:00-13:00">09h00-13h00</option>
+                        <option value="14:00-19:00">14h00-19h00</option>
+                      </select>
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-400 mt-3 flex items-center gap-1">
@@ -486,20 +503,29 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Telefone *</label>
-                        <div className="relative">
-                          <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                          <input
-                            required
-                            type="tel"
-                            value={senderPhone}
-                            onChange={e => setSenderPhone(e.target.value)}
-                            placeholder="9XXXXXXXX"
-                            className="w-full pl-9 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                          />
-                        </div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Nome de Contacto</label>
+                        <input
+                          type="text"
+                          value={senderContact}
+                          onChange={e => setSenderContact(e.target.value)}
+                          placeholder="Pessoa a contactar"
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
                       </div>
                     </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">País</label>
+                      <select
+                        value={senderCountry}
+                        onChange={e => setSenderCountry(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      >
+                        <option value="PT">PORTUGAL</option>
+                        <option value="ES">ESPANHA</option>
+                      </select>
+                    </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Morada (Rua, Nº) *</label>
                       <input
@@ -511,6 +537,7 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
                         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                       />
                     </div>
+                    
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Código Postal *</label>
@@ -535,16 +562,54 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
                         />
                       </div>
                     </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+                        <input
+                          type="email"
+                          value={senderEmail}
+                          onChange={e => setSenderEmail(e.target.value)}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Telefone *</label>
+                        <div className="relative">
+                          <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            required
+                            type="tel"
+                            value={senderPhone}
+                            onChange={e => setSenderPhone(e.target.value)}
+                            className="w-full pl-9 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Telemóvel</label>
+                        <div className="relative">
+                          <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            type="tel"
+                            value={senderMobile}
+                            onChange={e => setSenderMobile(e.target.value)}
+                            className="w-full pl-9 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* ── Section 3: Volumes ── */}
+                {/* ── Section 3: Volumes e Dimensões ── */}
                 <div className="bg-slate-50 rounded-xl border border-slate-200 p-5">
                   <h2 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
                     <Weight className="w-4 h-4 text-blue-600" />
-                    O Quê — Volumes e Peso
+                    O Quê — Dados de Recolha
                   </h2>
-                  <div className="grid grid-cols-2 gap-4">
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Nº de Volumes *</label>
                       <div className="flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
@@ -583,6 +648,65 @@ export function RecolhasClient({ recolhas, clients, cttConnections }: RecolhasCl
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">kg</span>
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Peso + Pesado (kg)</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={0.1}
+                          step={0.1}
+                          value={heaviestWeight}
+                          onChange={e => setHeaviestWeight(e.target.value)}
+                          placeholder="(Opcional)"
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Guia de transporte:</label>
+                      <select
+                        value={guideStatus}
+                        onChange={e => setGuideStatus(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      >
+                        <option value="Disponível no local">Guia de transporte disponível no local de Recolha</option>
+                        <option value="Necessário levar">Necessário levar guia de transporte</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">Dimensões do Objeto Maior (cm)</label>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 w-1/3">
+                          <span className="text-xs text-slate-500">Comp:</span>
+                          <input type="number" value={dimLength} onChange={e => setDimLength(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                        </div>
+                        <div className="flex items-center gap-1 w-1/3">
+                          <span className="text-xs text-slate-500">Larg:</span>
+                          <input type="number" value={dimWidth} onChange={e => setDimWidth(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                        </div>
+                        <div className="flex items-center gap-1 w-1/3">
+                          <span className="text-xs text-slate-500">Alt:</span>
+                          <input type="number" value={dimHeight} onChange={e => setDimHeight(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="w-1/2 pr-2">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Destino</label>
+                    <select
+                      value={destination}
+                      onChange={e => setDestination(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="PT">Portugal</option>
+                      <option value="ES">Espanha</option>
+                      <option value="ROW">Resto do Mundo</option>
+                    </select>
                   </div>
                 </div>
 

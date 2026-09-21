@@ -854,7 +854,7 @@ export async function scheduleCttPickupAction(input: {
   endHour: string
   volumes: number
   weightKg: number
-  sender: { name: string; address: string; zip: string; city: string; phone: string; email?: string }
+  sender: { name: string; contact?: string; address: string; country?: string; zip: string; city: string; phone: string; email?: string }
   observations?: string
 }) {
   const creds = await getCttCredentials()
@@ -873,6 +873,7 @@ export async function scheduleCttPickupAction(input: {
     HoraFim: input.endHour,
     Expedidor: {
       Nome: input.sender.name,
+      Contacto: input.sender.contact,
       Morada: input.sender.address,
       CP4: cp4,
       CP3: cp3,

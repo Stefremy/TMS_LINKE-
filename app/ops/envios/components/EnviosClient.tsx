@@ -33,7 +33,7 @@ import { deleteShipmentsBulkAction } from "@/app/actions/shipments"
 interface EnviosClientProps {
   envios: any[]
   recolhas: any[]
-  clients: { id: string, name: string }[]
+  clients: any[]
 }
 
 export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
@@ -567,7 +567,7 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
       </div>
       
       {showRecolhaModal && (
-        <NovaRecolhaModal onClose={() => setShowRecolhaModal(false)} />
+        <NovaRecolhaModal onClose={() => setShowRecolhaModal(false)} clients={clients} />
       )}
       
 
