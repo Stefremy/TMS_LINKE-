@@ -117,6 +117,28 @@ export default function ContasCorrenteClient({
         </div>
       </div>
 
+      {/* Aviso de Moloni Desconectado */}
+      {!moloniConfig?.isConnected && (
+        <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-300 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-bold text-amber-950">Moloni (Fatura Oficial AT) ainda não está ligado</p>
+              <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                Para emitir a <strong>Fatura Oficial Certificada com QR Code da Autoridade Tributária</strong> e não apenas o extrato interno, ligue a sua conta Moloni em 1 clique.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsMoloniModalOpen(true)}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex-shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Cloud className="w-4 h-4" />
+            Ligar Moloni Agora
+          </button>
+        </div>
+      )}
+
       {/* Barra de Filtros */}
       <div className="mb-6 flex items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
         <div className="flex items-center gap-2 text-slate-500">

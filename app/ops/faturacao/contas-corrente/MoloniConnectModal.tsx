@@ -49,8 +49,8 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
   const currentOrigin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
   // Moloni developer portal registered callback:
   const registeredCallbackUri = "https://linke-store-ten.vercel.app/api/moloni/callback"
-  // linke-store-ten bounces back to `${state}/api/moloni/callback?code=...`
-  const oauthAuthUrl = `https://api.moloni.pt/v1/auth/?client_id=${clientId}&redirect_uri=${encodeURIComponent(registeredCallbackUri)}&response_type=code&state=${encodeURIComponent(currentOrigin)}`
+  // Correct Moloni OAuth authorization endpoint
+  const oauthAuthUrl = `https://www.moloni.pt/ac/root/oauth/?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(registeredCallbackUri)}&state=${encodeURIComponent(currentOrigin)}`
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
@@ -119,6 +119,34 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
             </div>
           )}
 
+          {/* Opção 1: Ligar com 1 Clique (Recomendado) */}
+          <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-center space-y-3">
+            <div>
+              <p className="text-xs font-black text-indigo-950">Ligar Conta Moloni com 1 Clique</p>
+              <p className="text-[11px] text-indigo-700 mt-0.5">
+                Inicie sessão diretamente no site do Moloni para autorizar a emissão das faturas oficiais da AT.
+              </p>
+            </div>
+
+            <a 
+              href={oauthAuthUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 hover:shadow-md cursor-pointer"
+            >
+              <Cloud className="w-4 h-4" />
+              <span>Autorizar no Portal Moloni.pt</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+
+          {/* Separador */}
+          <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-slate-200"></div>
+            <span className="flex-shrink mx-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">ou introduzir credenciais</span>
+            <div className="flex-grow border-t border-slate-200"></div>
+          </div>
+
           {/* Formulário de Login Direto Moloni */}
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
             <div>
@@ -156,7 +184,7 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               {loading ? (
                 <>
@@ -166,34 +194,11 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
               ) : (
                 <>
                   <Building className="w-4 h-4" />
-                  {config?.isConnected ? "Atualizar Ligação Moloni" : "Ligar Conta Moloni"}
+                  {config?.isConnected ? "Atualizar Ligação Moloni" : "Ligar com Password"}
                 </>
               )}
             </button>
           </form>
-
-          {/* Separador */}
-          <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-slate-200"></div>
-            <span className="flex-shrink mx-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">ou via OAuth</span>
-            <div className="flex-grow border-t border-slate-200"></div>
-          </div>
-
-          {/* Botão OAuth Alternativo */}
-          <div className="text-center">
-            <a 
-              href={oauthAuthUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center gap-2 text-xs text-slate-600 hover:text-indigo-600 font-bold transition-colors"
-            >
-              <span>Autorizar no portal Moloni.pt</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              Requer configurar Redirect URI no Developer portal: <code>/api/auth/moloni/callback</code>
-            </p>
-          </div>
         </div>
       </div>
     </div>

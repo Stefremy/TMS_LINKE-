@@ -70,6 +70,8 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
       }
     }
 
+    let moloniEmissionError: string | null = null
+
     if (moloniConfig) {
       try {
         const moloni = new MoloniClient(moloniConfig)
@@ -134,8 +136,11 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
         moloniDocumentId = invoiceRes.document_id
         moloniDocumentUrl = await moloni.getDocumentPDFLink(moloniDocumentId)
       } catch (moloniErr: any) {
-        console.warn("Moloni Invoice Emission Warning (continuing with TMS statement):", moloniErr?.message)
+        moloniEmissionError = moloniErr?.message || "Erro desconhecido ao comunicar com Moloni"
+        console.warn("Moloni Invoice Emission Warning (continuing with TMS statement):", moloniEmissionError)
       }
+    } else {
+      moloniEmissionError = "Conta Moloni ainda não está ligada."
     }
 
     // Se Moloni estiver desligado/falhar, criamos na mesma o Extrato Interno mas sem PDFs.
@@ -155,6 +160,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
         statement_number: statementNumber,
         moloni_document_id: moloniDocumentId,
         moloni_document_pdf: moloniDocumentUrl,
+        moloni_error: moloniEmissionError,
         total_value: totalValue,
         shipments_count: shipments.length,
         shipment_ids: shipmentIds,
@@ -196,7 +202,8 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
       success: true, 
       statementNumber, 
       url: statementPdfUrl,
-      moloniDocumentPdf: moloniDocumentUrl || null
+      moloniDocumentPdf: moloniDocumentUrl || null,
+      moloniError: moloniEmissionError
     }
 
   } catch (error: any) {
