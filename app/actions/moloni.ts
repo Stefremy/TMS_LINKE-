@@ -110,41 +110,107 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
         
         if (groupShipments) {
           // Simplificada: Agrupadas por serviço para evitar faturas com muitas páginas
-          const groupedShipments: Record<string, { qty: number, price: number }> = {}
+          const groupedShipments: Record<string, { qty: number, basePrice: number, fuelTax: number, specialFees: number }> = {}
           for (const s of shipments) {
             const serviceName = s.service_type || "Transporte / Logística"
             if (!groupedShipments[serviceName]) {
-              groupedShipments[serviceName] = { qty: 0, price: 0 }
+              groupedShipments[serviceName] = { qty: 0, basePrice: 0, fuelTax: 0, specialFees: 0 }
             }
             groupedShipments[serviceName].qty += 1
-            groupedShipments[serviceName].price += Number(s.sell_price || 0)
+            
+            const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
+            if (hasFuelTax) {
+              groupedShipments[serviceName].basePrice += Number(s.base_price || 0)
+              groupedShipments[serviceName].fuelTax += Number(s.fuel_tax_amount || 0)
+            } else {
+              groupedShipments[serviceName].basePrice += Number(s.sell_price || 0) - Number(s.special_fees_amount || 0)
+            }
+            groupedShipments[serviceName].specialFees += Number(s.special_fees_amount || 0)
           }
 
-          products = Object.entries(groupedShipments).map(([serviceName, data]) => {
-            return {
-              productId: productId,
-              name: `Serviço ${serviceName} (${data.qty} envios)`,
-              summary: `Faturação de envios no período.`,
-              qty: 1, // Qty 1 previne problemas de arredondamento
-              price: data.price,
-              taxes: [{ tax_id: taxId, value: 23 }]
+          for (const [serviceName, data] of Object.entries(groupedShipments)) {
+            if (data.basePrice > 0) {
+              products.push({
+                productId: productId,
+                name: `Serviço ${serviceName} (${data.qty} envios)`,
+                summary: `Faturação de envios no período.`,
+                qty: 1, 
+                price: data.basePrice,
+                taxes: [{ tax_id: taxId, value: 23 }]
+              })
             }
-          })
+            if (data.fuelTax > 0) {
+              products.push({
+                productId: productId,
+                name: `Taxa de Combustível (${data.qty} envios)`,
+                summary: `Taxa suplementar aplicável ao serviço.`,
+                qty: 1,
+                price: data.fuelTax,
+                taxes: [{ tax_id: taxId, value: 23 }]
+              })
+            }
+            if (data.specialFees > 0) {
+              products.push({
+                productId: productId,
+                name: `Serviços Suplementares (${data.qty} envios)`,
+                summary: `Taxas especiais selecionadas aplicadas ao serviço.`,
+                qty: 1,
+                price: data.specialFees,
+                taxes: [{ tax_id: taxId, value: 23 }]
+              })
+            }
+          }
         } else {
           // Completa: Listadas uma a uma
-          products = shipments.map((s: any) => {
+          for (const s of shipments) {
             const serviceName = s.service_type || "Transporte / Logística"
             const trackingBase = s.tracking_number || s.reference || `ENV-${(s.id || "").slice(0, 8).toUpperCase()}`
-            
-            return {
-              productId: productId,
-              name: `Envio ${trackingBase} - ${serviceName}`,
-              summary: s.recipient_name ? `Destino: ${s.recipient_name} ${s.recipient_city ? `(${s.recipient_city})` : ''}` : `Faturação de envio.`,
-              qty: 1,
-              price: Number(s.sell_price || 0),
-              taxes: [{ tax_id: taxId, value: 23 }]
+            const weightStr = s.weight_kg ? ` (Peso: ${s.weight_kg}kg)` : ""
+            const summaryText = s.recipient_name ? `Destino: ${s.recipient_name} ${s.recipient_city ? `(${s.recipient_city})` : ''}` : `Faturação de envio.`
+            const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
+
+            const specialFees = Number(s.special_fees_amount || 0)
+
+            if (hasFuelTax) {
+              products.push({
+                productId: productId,
+                name: `Envio ${trackingBase} - ${serviceName}${weightStr}`,
+                summary: summaryText,
+                qty: 1,
+                price: Number(s.base_price || 0),
+                taxes: [{ tax_id: taxId, value: 23 }]
+              })
+              products.push({
+                productId: productId,
+                name: `Taxa de Combustível - Envio ${trackingBase}`,
+                summary: ``,
+                qty: 1,
+                price: Number(s.fuel_tax_amount || 0),
+                taxes: [{ tax_id: taxId, value: 23 }]
+              })
+            } else {
+              products.push({
+                productId: productId,
+                name: `Envio ${trackingBase} - ${serviceName}${weightStr}`,
+                summary: summaryText,
+                qty: 1,
+                price: Number(s.sell_price || 0) - specialFees,
+                taxes: [{ tax_id: taxId, value: 23 }]
+              })
             }
-          })
+
+            if (specialFees > 0) {
+              const desc = s.special_fees_description || "Serviços Especiais"
+              products.push({
+                productId: productId,
+                name: `Taxa Especial (${desc}) - Envio ${trackingBase}`,
+                summary: ``,
+                qty: 1,
+                price: specialFees,
+                taxes: [{ tax_id: taxId, value: 23 }]
+              })
+            }
+          }
         }
 
         const validProducts = products.filter((p: any) => p.price > 0)
@@ -510,40 +576,109 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     
     if (groupShipments) {
       // Simplificada: Agrupadas por serviço
-      const groupedShipments: Record<string, { qty: number, price: number }> = {}
+      const groupedShipments: Record<string, { qty: number, basePrice: number, fuelTax: number, specialFees: number }> = {}
       
       for (const s of shipments) {
         const serviceName = s.service_type || "Transporte / Logística"
         if (!groupedShipments[serviceName]) {
-          groupedShipments[serviceName] = { qty: 0, price: 0 }
+          groupedShipments[serviceName] = { qty: 0, basePrice: 0, fuelTax: 0, specialFees: 0 }
         }
         groupedShipments[serviceName].qty += 1
-        groupedShipments[serviceName].price += Number(s.sell_price || 0)
+        
+        const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
+        if (hasFuelTax) {
+          groupedShipments[serviceName].basePrice += Number(s.base_price || 0)
+          groupedShipments[serviceName].fuelTax += Number(s.fuel_tax_amount || 0)
+        } else {
+          groupedShipments[serviceName].basePrice += Number(s.sell_price || 0) - Number(s.special_fees_amount || 0)
+        }
+
+        groupedShipments[serviceName].specialFees += Number(s.special_fees_amount || 0)
       }
 
-      products = Object.entries(groupedShipments).map(([serviceName, data]) => ({
-        productId: productId,
-        name: `Serviço ${serviceName} (${data.qty} envios)`,
-        summary: `Faturação de envios no período.`,
-        qty: 1,
-        price: data.price,
-        taxes: [{ tax_id: taxId, value: 23 }]
-      }))
+      for (const [serviceName, data] of Object.entries(groupedShipments)) {
+        if (data.basePrice > 0) {
+          products.push({
+            productId: productId,
+            name: `Serviço ${serviceName} (${data.qty} envios)`,
+            summary: `Faturação de envios no período.`,
+            qty: 1, 
+            price: data.basePrice,
+            taxes: [{ tax_id: taxId, value: 23 }]
+          })
+        }
+        if (data.fuelTax > 0) {
+          products.push({
+            productId: productId,
+            name: `Taxa de Combustível (${data.qty} envios)`,
+            summary: `Taxa suplementar aplicável ao serviço.`,
+            qty: 1,
+            price: data.fuelTax,
+            taxes: [{ tax_id: taxId, value: 23 }]
+          })
+        }
+        if (data.specialFees > 0) {
+          products.push({
+            productId: productId,
+            name: `Serviços Suplementares (${data.qty} envios)`,
+            summary: `Taxas especiais selecionadas aplicadas ao serviço.`,
+            qty: 1,
+            price: data.specialFees,
+            taxes: [{ tax_id: taxId, value: 23 }]
+          })
+        }
+      }
     } else {
       // Completa: Listadas uma a uma
-      products = shipments.map((s: any) => {
+      for (const s of shipments) {
         const serviceName = s.service_type || "Transporte / Logística"
         const trackingBase = s.tracking_number || s.reference || `ENV-${(s.id || "").slice(0, 8).toUpperCase()}`
-            
-        return {
-          productId: productId,
-          name: `Envio ${trackingBase} - ${serviceName}`,
-          summary: s.recipient_name ? `Destino: ${s.recipient_name} ${s.recipient_city ? `(${s.recipient_city})` : ''}` : `Faturação de envio.`,
-          qty: 1,
-          price: Number(s.sell_price || 0),
-          taxes: [{ tax_id: taxId, value: 23 }]
+        const weightStr = s.weight_kg ? ` (Peso: ${s.weight_kg}kg)` : ""
+        const summaryText = s.recipient_name ? `Destino: ${s.recipient_name} ${s.recipient_city ? `(${s.recipient_city})` : ''}` : `Faturação de envio.`
+        const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
+
+        const specialFees = Number(s.special_fees_amount || 0)
+
+        if (hasFuelTax) {
+          products.push({
+            productId: productId,
+            name: `Envio ${trackingBase} - ${serviceName}${weightStr}`,
+            summary: summaryText,
+            qty: 1,
+            price: Number(s.base_price || 0),
+            taxes: [{ tax_id: taxId, value: 23 }]
+          })
+          products.push({
+            productId: productId,
+            name: `Taxa de Combustível - Envio ${trackingBase}`,
+            summary: ``,
+            qty: 1,
+            price: Number(s.fuel_tax_amount || 0),
+            taxes: [{ tax_id: taxId, value: 23 }]
+          })
+        } else {
+          products.push({
+            productId: productId,
+            name: `Envio ${trackingBase} - ${serviceName}${weightStr}`,
+            summary: summaryText,
+            qty: 1,
+            price: Number(s.sell_price || 0) - specialFees,
+            taxes: [{ tax_id: taxId, value: 23 }]
+          })
         }
-      })
+
+        if (specialFees > 0) {
+          const desc = s.special_fees_description || "Serviços Especiais"
+          products.push({
+            productId: productId,
+            name: `Taxa Especial (${desc}) - Envio ${trackingBase}`,
+            summary: ``,
+            qty: 1,
+            price: specialFees,
+            taxes: [{ tax_id: taxId, value: 23 }]
+          })
+        }
+      }
     }
 
     const validProducts = products.filter((p: any) => p.price > 0)

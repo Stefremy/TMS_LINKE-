@@ -11,6 +11,11 @@ export interface BillingStatementPdfShipment {
   created_at?: string
   sell_price?: number
   service_type?: string
+  weight_kg?: number
+  base_price?: number
+  fuel_tax_amount?: number
+  special_fees_amount?: number
+  special_fees_description?: string
 }
 
 export interface BillingStatementPdfData {
@@ -48,11 +53,48 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
     return val.toFixed(2).replace(".", ",") + " EUR"
   }
 
+  const expandedRows: any[] = []
+  shipments.forEach(s => {
+    const specialFees = Number(s.special_fees_amount || 0)
+    const baseDisplay = `[Base] ${s.tracking_number || s.reference || s.id.slice(0,8)} ${s.weight_kg ? `(${s.weight_kg}kg)` : ''}`
+    
+    if (s.fuel_tax_amount && Number(s.fuel_tax_amount) > 0) {
+      expandedRows.push({
+        ...s,
+        isBase: true,
+        sell_price: Number(s.base_price || 0),
+        display_tracking: baseDisplay
+      })
+      expandedRows.push({
+        ...s,
+        isFuel: true,
+        sell_price: Number(s.fuel_tax_amount),
+        display_tracking: `[Taxa Combustível] ${s.tracking_number || s.reference || s.id.slice(0,8)}`
+      })
+    } else {
+      expandedRows.push({
+        ...s,
+        sell_price: Number(s.sell_price || 0) - specialFees,
+        display_tracking: s.tracking_number || s.reference || `ENV-${s.id.slice(0, 8).toUpperCase()}`
+      })
+    }
+
+    if (specialFees > 0) {
+      const desc = s.special_fees_description || "Serviços Especiais"
+      expandedRows.push({
+        ...s,
+        isSpecial: true,
+        sell_price: specialFees,
+        display_tracking: `[Taxa Especial: ${desc}] ${s.tracking_number || s.reference || s.id.slice(0,8)}`
+      })
+    }
+  })
+
   // Calculate dynamic height
   const baseHeight = 841.89
   const rowHeight = 22
   const maxRowsBase = 16
-  const extraHeight = Math.max(0, (shipments.length - maxRowsBase) * rowHeight)
+  const extraHeight = Math.max(0, (expandedRows.length - maxRowsBase) * rowHeight)
   const height = baseHeight + extraHeight
   const width = 595.28
 
@@ -103,7 +145,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
 
   // Table Rows
   let currentY = y(575)
-  shipments.forEach((item, index) => {
+  expandedRows.forEach((item, index) => {
     const isEven = index % 2 === 0
     page.drawRectangle({
       x: 25, y: currentY - 3, width: 545.28, height: rowHeight,
@@ -113,10 +155,9 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
     })
 
     const itemDate = item.created_at ? new Date(item.created_at).toLocaleDateString("pt-PT") : dateStr
-    const trackingBase = item.tracking_number || item.reference || `ENV-${item.id.slice(0, 8).toUpperCase()}`
-    const tracking = item.service_type ? `[${item.service_type.slice(0, 15)}] ${trackingBase}` : trackingBase
-    const destName = (item.recipient_name || "Destinatario").slice(0, 22)
-    const destCity = item.recipient_city ? ` (${item.recipient_city.slice(0, 14)})` : ""
+    const tracking = item.service_type && !item.isFuel && !item.isSpecial ? `[${item.service_type.slice(0, 15)}] ${item.display_tracking}` : item.display_tracking
+    const destName = item.isFuel || item.isSpecial ? "" : (item.recipient_name || "Destinatario").slice(0, 22)
+    const destCity = item.isFuel || item.isSpecial ? "" : (item.recipient_city ? ` (${item.recipient_city.slice(0, 14)})` : "")
     const destFull = `${destName}${destCity}`
     
     const priceWithIva = Number(item.sell_price || 0) * 1.23
@@ -124,8 +165,10 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
 
     const trY = currentY + 4
     page.drawText(String(index + 1), { x: 32, y: trY, size: 8, font: fontBold, color: c(0,0,0) })
-    page.drawText(itemDate, { x: 52, y: trY, size: 8, font: fontNormal, color: c(0,0,0) })
-    page.drawText(tracking, { x: 115, y: trY, size: 8, font: fontBold, color: c(0,0,0) })
+    if (!item.isFuel && !item.isSpecial) {
+      page.drawText(itemDate, { x: 52, y: trY, size: 8, font: fontNormal, color: c(0,0,0) })
+    }
+    page.drawText(tracking, { x: 115, y: trY, size: (item.isFuel || item.isSpecial) ? 7 : 8, font: (item.isFuel || item.isSpecial) ? fontNormal : fontBold, color: c(0,0,0) })
     page.drawText(destFull, { x: 245, y: trY, size: 8, font: fontNormal, color: c(0,0,0) })
     page.drawText(priceStr, { x: 505, y: trY, size: 8, font: fontBold, color: c(0,0,0) })
     

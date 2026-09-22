@@ -15,6 +15,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   const [selectedServiceId, setSelectedServiceId] = React.useState("")
   const [weightKg, setWeightKg] = React.useState<number>(1)
   const [recipientCountry, setRecipientCountry] = React.useState("PT")
+  const [selectedSpecialServices, setSelectedSpecialServices] = React.useState<string[]>([])
+  const [codValue, setCodValue] = React.useState<number>(0)
 
   const currentClient = clients.find(c => c.id === selectedClientId)
 
@@ -34,6 +36,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   }, [servicosLinke, currentClient])
 
   const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
+
+  const specialServicesAvailable = currentClient?.pricing?.special_services_fees?.filter(f => f.is_enabled) || []
 
   // Client-side weight-based estimate (display only; server recalculates using assigned table)
   const estimatedTier = (() => {
@@ -83,7 +87,9 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         volumesCount: Number(formData.get("volumes")) || 1,
         serviceName: activeLinkeService?.name || "Linke Expresso 24H",
         subProductId: activeLinkeService?.webservice_service_code,
-        calculatedPrice: estimatedTier.sell
+        calculatedPrice: estimatedTier.sell,
+        selectedSpecialServices: selectedSpecialServices,
+        codValue: selectedSpecialServices.includes("cod") ? codValue : undefined
       })
       
       if (!res.success) {
@@ -286,6 +292,50 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
               </div>
 
             </div>
+
+            {specialServicesAvailable.length > 0 && (
+              <div className="px-6 pb-6">
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Package className="w-4 h-4 text-blue-500" />
+                  Opções Especiais de Entrega
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {specialServicesAvailable.map(service => {
+                    const isSelected = selectedSpecialServices.includes(service.special_service_code);
+                    return (
+                      <div key={service.special_service_code} className={`border rounded-lg p-3 cursor-pointer transition-colors ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-blue-300 bg-white'}`} onClick={() => {
+                        if (isSelected) {
+                          setSelectedSpecialServices(prev => prev.filter(s => s !== service.special_service_code));
+                        } else {
+                          setSelectedSpecialServices(prev => [...prev, service.special_service_code]);
+                        }
+                      }}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <input type="checkbox" checked={isSelected} readOnly className="rounded text-blue-600 focus:ring-blue-500" />
+                          <span className="text-sm font-bold text-slate-700">{service.special_service_name.split(" ")[0]}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 pl-6 leading-tight">{service.description}</p>
+                        
+                        {isSelected && service.special_service_code === "cod" && (
+                          <div className="mt-2 pl-6" onClick={e => e.stopPropagation()}>
+                            <label className="text-[10px] font-semibold text-slate-600 block mb-1">Valor a Cobrar (€)</label>
+                            <input 
+                              type="number" 
+                              step="0.01" 
+                              min="0"
+                              value={codValue}
+                              onChange={(e) => setCodValue(Number(e.target.value))}
+                              className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:ring-1 focus:ring-blue-500"
+                              required
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
               <button 

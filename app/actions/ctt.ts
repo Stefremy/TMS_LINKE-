@@ -401,6 +401,7 @@ export async function emitCttShipmentAction(shipmentInput: {
   codValue?: number
   autoClose?: boolean
   isReturn?: boolean
+  selectedSpecialServices?: string[]
 }) {
   const creds = await getCttCredentials()
   const shipmentService = new CTTShipmentService()
@@ -447,18 +448,39 @@ export async function emitCttShipmentAction(shipmentInput: {
     Quantity: shipmentInput.volumes || 1,
   }
 
-  // Serviços especiais (Cobrança se houver codValue)
+  // Serviços especiais
   const specialServices = []
-  if (shipmentInput.codValue && shipmentInput.codValue > 0) {
+  if (shipmentInput.codValue && shipmentInput.codValue > 0 && (!shipmentInput.selectedSpecialServices || shipmentInput.selectedSpecialServices.includes("cod"))) {
     specialServices.push({
       SpecialServiceType: 2 as const, // AgainstReimbursement
       Value: shipmentInput.codValue,
     })
   }
   
-  if (shipmentInput.isReturn) {
+  if (shipmentInput.isReturn || (shipmentInput.selectedSpecialServices && shipmentInput.selectedSpecialServices.includes("auth_return"))) {
     specialServices.push({
       SpecialServiceType: 20 as const, // AuthorizeReturn
+    })
+  }
+
+  // Handle other special services
+  if (shipmentInput.selectedSpecialServices) {
+    const codeToApiType: Record<string, number> = {
+      "saturday": 4,
+      "return_signed": 5,
+      "insurance": 6,
+      "fragil": 7,
+      "second_delivery": 12,
+      "sms_tracking": 14,
+      "delivery_point": 18,
+      "time_window": 22
+    }
+    shipmentInput.selectedSpecialServices.forEach(code => {
+      if (code !== "cod" && code !== "auth_return" && codeToApiType[code]) {
+        specialServices.push({
+          SpecialServiceType: codeToApiType[code] as any
+        })
+      }
     })
   }
 

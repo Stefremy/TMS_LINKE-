@@ -249,17 +249,24 @@ export async function createShipmentAction(formData: FormData) {
   // Lookup client + all Linke tables to compute the correct price
   let computedSellPrice = 5.50
   let computedBuyPrice = 2.85
+  let computedFuelAmount = 0
+  let computedBasePrice = computedSellPrice
+  let computedTierLabel = "Standard"
+  const weightKg = Number(formData.get("weight_kg")) || 1
+
   try {
     const [allClients, allServicos] = await Promise.all([
       getClientesAction(),
       getServicosLinkeAction(),
     ])
     const matchedClient = allClients.find((c) => c.id === client_id) || {}
-    const weightKg = Number(formData.get("weight_kg")) || 1
     const recipientCountry = (formData.get("recipient_country") as string) || "PT"
     const priceResult = calculateShipmentPrice(weightKg, matchedClient, allServicos, recipientCountry, recipient_zip)
     computedSellPrice = priceResult.sellPrice
     computedBuyPrice = priceResult.buyPrice
+    computedFuelAmount = priceResult.fuelSurchargeAmount || 0
+    computedBasePrice = Number((computedSellPrice - computedFuelAmount).toFixed(2))
+    computedTierLabel = priceResult.tierLabel || "Standard"
   } catch (pricingErr: any) {
     console.warn("Pricing engine fallback:", pricingErr?.message)
   }
@@ -281,6 +288,10 @@ export async function createShipmentAction(formData: FormData) {
     recipient_zip4,
     buy_price: computedBuyPrice,
     sell_price: computedSellPrice,
+    weight_kg: weightKg,
+    base_price: computedBasePrice,
+    fuel_tax_amount: computedFuelAmount,
+    tier_label: computedTierLabel,
     created_at: now,
     updated_at: now,
   }
@@ -478,6 +489,8 @@ export async function emitClientGuiaAction(data: {
   subProductId?: string
   calculatedPrice: number
   isReturn?: boolean
+  selectedSpecialServices?: string[]
+  codValue?: number
 }) {
   const supabase = createAdminClient()
   const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
@@ -509,6 +522,8 @@ export async function emitClientGuiaAction(data: {
   // Server-side price recalculation — never trust the frontend value
   let computedSellPrice = Number(data.calculatedPrice) || 5.50
   let computedBuyPrice = 0
+  let computedSpecialAmount = 0
+  let computedSpecialDesc: string | null = null
   try {
     const [allClients, allServicos] = await Promise.all([
       getClientesAction(),
@@ -516,7 +531,7 @@ export async function emitClientGuiaAction(data: {
     ])
     const matchedClient = allClients.find(
       (c) => c.id === data.clientId || c.short_name === data.clientName
-    ) || {}
+    ) || {} as any
     const recipientPostal = data.recipientPostal || ""
     const priceResult = calculateShipmentPrice(
       data.weightKg || 1,
@@ -527,6 +542,37 @@ export async function emitClientGuiaAction(data: {
     )
     computedSellPrice = priceResult.sellPrice
     computedBuyPrice = priceResult.buyPrice
+
+    // Calculate Special Services
+    let specialFeesTotal = 0
+    let specialFeesDesc: string[] = []
+    if (data.selectedSpecialServices && data.selectedSpecialServices.length > 0 && matchedClient.pricing?.special_services_fees) {
+      data.selectedSpecialServices.forEach(code => {
+        const feeConfig = matchedClient.pricing!.special_services_fees.find((f: any) => f.special_service_code === code && f.is_enabled)
+        if (feeConfig) {
+          let feeAmt = 0
+          if (feeConfig.fee_type === "fixed") {
+            feeAmt = feeConfig.fixed_value || 0
+          } else if (feeConfig.fee_type === "percentage") {
+            // Apply percentage on base sell price
+            feeAmt = computedSellPrice * ((feeConfig.percentage_value || 0) / 100)
+            if (feeConfig.min_value && feeAmt < feeConfig.min_value) {
+              feeAmt = feeConfig.min_value
+            }
+          }
+          specialFeesTotal += feeAmt
+          specialFeesDesc.push(feeConfig.special_service_name.split(" ")[0])
+        }
+      })
+    }
+    
+    // Add Special Services to final DB price
+    computedSellPrice += specialFeesTotal
+
+    // Define data to pass into DB
+    computedSpecialAmount = specialFeesTotal
+    computedSpecialDesc = specialFeesDesc.length > 0 ? specialFeesDesc.join(", ") : null
+
   } catch (pricingErr: any) {
     console.warn("Client pricing engine fallback:", pricingErr?.message)
   }
@@ -549,6 +595,9 @@ export async function emitClientGuiaAction(data: {
     buy_price: computedBuyPrice,
     sell_price: computedSellPrice,
     reference: trackingNumber,
+    special_fees_amount: computedSpecialAmount || 0,
+    special_fees_description: computedSpecialDesc,
+    cod_value: data.codValue || 0,
     created_at: now,
     updated_at: now,
   }
@@ -613,7 +662,9 @@ export async function emitClientGuiaAction(data: {
         volumes: data.volumesCount || 1,
         subProduct: data.subProductId || "EMSF056.01",
         autoClose: false, // Como recomendado no portal do cliente, deixamos em aberto para fechar em lote no final do dia
-        isReturn: data.isReturn
+        isReturn: data.isReturn,
+        codValue: data.codValue,
+        selectedSpecialServices: data.selectedSpecialServices
       })
 
       if (cttRes.success) {
