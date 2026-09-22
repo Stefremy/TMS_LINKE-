@@ -60,7 +60,7 @@ export async function GET(
         
       if (dbShipments && dbShipments.length > 0) {
         enrichedShipments = enrichedShipments.map((s: any) => {
-          const dbS = dbShipments.find(d => d.id === s.id)
+          const dbS = dbShipments.find((d: any) => d.id === s.id)
           return {
             ...s,
             service_type: s.service_type || dbS?.service_type

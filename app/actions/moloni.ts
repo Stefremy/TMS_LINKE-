@@ -72,6 +72,18 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
           const moloniCust = await moloni.getCustomerByVat(client.nif)
           if (moloniCust) {
             moloniCustomerId = moloniCust.customer_id
+            
+            // Sync TMS client data to Moloni to ensure address and postal code are correct
+            await moloni.updateCustomer(moloniCustomerId, {
+              vat: client.nif || "999999990",
+              number: moloniCust.number,
+              name: client.legal_name || client.short_name || "Cliente Desconhecido",
+              address: client.address || "Desconhecida",
+              zipCode: client.postal_code || "0000-000",
+              city: client.city || "Desconhecida",
+              email: client.email,
+              phone: client.phone
+            }).catch(e => console.warn("Erro ao atualizar cliente Moloni:", e))
           }
         }
         
@@ -439,6 +451,18 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       const moloniCust = await moloni.getCustomerByVat(client.nif)
       if (moloniCust) {
         moloniCustomerId = moloniCust.customer_id
+
+        // Sync TMS client data to Moloni
+        await moloni.updateCustomer(moloniCustomerId, {
+          vat: client.nif,
+          number: moloniCust.number,
+          name: client.legal_name || client.short_name || stmt.client_name || "Cliente TMS",
+          address: (client as any).address || "Desconhecida",
+          zipCode: (client as any).postal_code || "0000-000",
+          city: (client as any).city || "Desconhecida",
+          email: client.email || (client as any).billing_email || "",
+          phone: client.phone || ""
+        }).catch(e => console.warn("Erro ao atualizar cliente Moloni:", e))
       }
     }
 

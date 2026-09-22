@@ -342,6 +342,53 @@ export class MoloniClient {
   }
 
   /**
+   * Atualiza um cliente no Moloni
+   */
+  async updateCustomer(customerId: number, customerData: {
+    vat: string;
+    number?: string;
+    name: string;
+    address: string;
+    zipCode: string;
+    city: string;
+    country_id?: number;
+    email?: string;
+    phone?: string;
+  }) {
+    const maturityDateId = await this.getMaturityDateId();
+    const paymentMethodId = await this.getPaymentMethodId();
+
+    const payload = {
+      customer_id: customerId,
+      vat: customerData.vat || "999999990",
+      number: customerData.number,
+      name: customerData.name || "Consumidor Final",
+      language_id: 1,
+      address: customerData.address || "Desconhecida",
+      zip_code: customerData.zipCode || "1000-001",
+      city: customerData.city || "Desconhecida",
+      country_id: customerData.country_id || 1, // 1 is PT
+      email: customerData.email || "",
+      phone: customerData.phone || "",
+      maturity_date_id: maturityDateId,
+      payment_method_id: paymentMethodId,
+      salesman_id: 0,
+      payment_day: 0,
+      discount: 0,
+      credit_limit: 0,
+      delivery_method_id: 0,
+    };
+    
+    // Removido "number" se não fornecido para não forçar alteração
+    if (!payload.number) {
+      delete payload.number;
+    }
+
+    const result = await this.request("customers/update", payload);
+    return result.customer_id;
+  }
+
+  /**
    * Cria uma Fatura (ou documento equivalente)
    * ID típicos do Moloni: 
    * 1 = Fatura
