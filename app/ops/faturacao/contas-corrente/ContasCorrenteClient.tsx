@@ -273,13 +273,13 @@ export default function ContasCorrenteClient({
                         disabled={activeCount === 0 || isLoading}
                         onClick={async (e) => { 
                           e.stopPropagation(); 
-                          if (!confirm(`Emitir Fatura Oficial Moloni e Extrato para ${activeCount} envios no total de ${totalValue.toLocaleString('pt-PT')}€?`)) return;
+                          if (!confirm(`Emitir Fatura Oficial Moloni e Extrato para ${activeCount} envios no total de ${totalValue.toLocaleString('pt-PT')}€ (Listados um a um)?`)) return;
                           
                           setIsLoading(true);
                           const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
                           const { emitInvoiceAction } = await import("@/app/actions/moloni")
                           
-                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false);
+                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, false);
                           setIsLoading(false);
                           if (res?.success && res.statementNumber) {
                             const stmtNum = res.statementNumber
@@ -317,7 +317,58 @@ export default function ContasCorrenteClient({
                           }
                         }}
                       >
-                        {isLoading ? "..." : "Fatura AT-T"}
+                        {isLoading ? "..." : "Fatura Completa"}
+                      </button>
+                      <button 
+                        className="flex items-center justify-center px-3 py-1.5 bg-indigo-100 text-indigo-700 font-bold text-xs rounded-lg hover:bg-indigo-200 border border-indigo-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                        disabled={activeCount === 0 || isLoading}
+                        onClick={async (e) => { 
+                          e.stopPropagation(); 
+                          if (!confirm(`Emitir Fatura Oficial Moloni e Extrato para ${activeCount} envios no total de ${totalValue.toLocaleString('pt-PT')}€ (Agrupados por serviço)?`)) return;
+                          
+                          setIsLoading(true);
+                          const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
+                          const { emitInvoiceAction } = await import("@/app/actions/moloni")
+                          
+                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, true);
+                          setIsLoading(false);
+                          if (res?.success && res.statementNumber) {
+                            const stmtNum = res.statementNumber
+                            const officialPdfUrl = `/api/statements/${encodeURIComponent(stmtNum)}/moloni-pdf`
+                            const fallbackUrl = `/api/statements/${encodeURIComponent(stmtNum)}/pdf`
+                            const hasOfficialMoloni = !!res.moloniDocumentPdf
+
+                            const downloadTarget = hasOfficialMoloni ? officialPdfUrl : fallbackUrl
+                            const downloadFilename = hasOfficialMoloni 
+                              ? `Fatura_Oficial_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
+                              : `Extrato_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
+
+                            try {
+                              const link = document.createElement("a")
+                              link.href = downloadTarget
+                              link.setAttribute("download", downloadFilename)
+                              link.target = "_blank"
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                            } catch (err) {
+                              console.error("Auto download failed", err)
+                            }
+
+                            setIssuedStatement({
+                              statementNumber: stmtNum,
+                              url: fallbackUrl,
+                              clientName: client.legal_name || client.short_name,
+                              totalValue: totalValue,
+                              moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
+                            })
+                            router.refresh()
+                          } else {
+                            alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
+                          }
+                        }}
+                      >
+                        {isLoading ? "..." : "Fatura Simplificada"}
                       </button>
                       <div className="text-slate-400 p-1">
                         {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}

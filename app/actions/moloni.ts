@@ -12,7 +12,7 @@ const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[
 /**
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
-export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false) {
+export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = false) {
   try {
     const supabase = createAdminClient()
     
@@ -105,27 +105,47 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
         const documentSetId = await moloni.getDocumentSet()
         const productId = await moloni.getGenericProductId(taxId)
 
-        // C. Preparar Linhas da Fatura (Agrupadas por serviço para evitar faturas com muitas páginas)
-        const groupedShipments: Record<string, { qty: number, price: number }> = {}
-        for (const s of shipments) {
-          const serviceName = s.service_type || "Transporte / Logística"
-          if (!groupedShipments[serviceName]) {
-            groupedShipments[serviceName] = { qty: 0, price: 0 }
+        // C. Preparar Linhas da Fatura
+        let products: any[] = []
+        
+        if (groupShipments) {
+          // Simplificada: Agrupadas por serviço para evitar faturas com muitas páginas
+          const groupedShipments: Record<string, { qty: number, price: number }> = {}
+          for (const s of shipments) {
+            const serviceName = s.service_type || "Transporte / Logística"
+            if (!groupedShipments[serviceName]) {
+              groupedShipments[serviceName] = { qty: 0, price: 0 }
+            }
+            groupedShipments[serviceName].qty += 1
+            groupedShipments[serviceName].price += Number(s.sell_price || 0)
           }
-          groupedShipments[serviceName].qty += 1
-          groupedShipments[serviceName].price += Number(s.sell_price || 0)
-        }
 
-        const products = Object.entries(groupedShipments).map(([serviceName, data]) => {
-          return {
-            productId: productId,
-            name: `Serviço ${serviceName} (${data.qty} envios)`,
-            summary: `Faturação de envios no período.`,
-            qty: 1, // Qty 1 previne problemas de arredondamento de preço unitário
-            price: data.price, // Preço s/ IVA total
-            taxes: [{ tax_id: taxId, value: 23 }]
-          }
-        })
+          products = Object.entries(groupedShipments).map(([serviceName, data]) => {
+            return {
+              productId: productId,
+              name: `Serviço ${serviceName} (${data.qty} envios)`,
+              summary: `Faturação de envios no período.`,
+              qty: 1, // Qty 1 previne problemas de arredondamento
+              price: data.price,
+              taxes: [{ tax_id: taxId, value: 23 }]
+            }
+          })
+        } else {
+          // Completa: Listadas uma a uma
+          products = shipments.map((s: any) => {
+            const serviceName = s.service_type || "Transporte / Logística"
+            const trackingBase = s.tracking_number || s.reference || `ENV-${(s.id || "").slice(0, 8).toUpperCase()}`
+            
+            return {
+              productId: productId,
+              name: `Envio ${trackingBase} - ${serviceName}`,
+              summary: s.recipient_name ? `Destino: ${s.recipient_name} ${s.recipient_city ? `(${s.recipient_city})` : ''}` : `Faturação de envio.`,
+              qty: 1,
+              price: Number(s.sell_price || 0),
+              taxes: [{ tax_id: taxId, value: 23 }]
+            }
+          })
+        }
 
         const validProducts = products.filter((p: any) => p.price > 0)
         
@@ -372,7 +392,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
 /**
  * Emite a fatura oficial no Moloni para um extrato previamente criado
  */
-export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string) {
+export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string, groupShipments: boolean = false) {
   try {
     const supabase = createAdminClient()
     
@@ -484,27 +504,47 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     const documentSetId = await moloni.getDocumentSet()
     const productId = await moloni.getGenericProductId(taxId)
 
-    // 6. Preparar linhas dos envios (Agrupadas por serviço)
+    // 6. Preparar linhas dos envios
     const shipments = stmt.shipments || []
-    const groupedShipments: Record<string, { qty: number, price: number }> = {}
+    let products: any[] = []
     
-    for (const s of shipments) {
-      const serviceName = s.service_type || "Transporte / Logística"
-      if (!groupedShipments[serviceName]) {
-        groupedShipments[serviceName] = { qty: 0, price: 0 }
+    if (groupShipments) {
+      // Simplificada: Agrupadas por serviço
+      const groupedShipments: Record<string, { qty: number, price: number }> = {}
+      
+      for (const s of shipments) {
+        const serviceName = s.service_type || "Transporte / Logística"
+        if (!groupedShipments[serviceName]) {
+          groupedShipments[serviceName] = { qty: 0, price: 0 }
+        }
+        groupedShipments[serviceName].qty += 1
+        groupedShipments[serviceName].price += Number(s.sell_price || 0)
       }
-      groupedShipments[serviceName].qty += 1
-      groupedShipments[serviceName].price += Number(s.sell_price || 0)
-    }
 
-    const products = Object.entries(groupedShipments).map(([serviceName, data]) => ({
-      productId: productId,
-      name: `Serviço ${serviceName} (${data.qty} envios)`,
-      summary: `Faturação de envios no período.`,
-      qty: 1,
-      price: data.price,
-      taxes: [{ tax_id: taxId, value: 23 }]
-    }))
+      products = Object.entries(groupedShipments).map(([serviceName, data]) => ({
+        productId: productId,
+        name: `Serviço ${serviceName} (${data.qty} envios)`,
+        summary: `Faturação de envios no período.`,
+        qty: 1,
+        price: data.price,
+        taxes: [{ tax_id: taxId, value: 23 }]
+      }))
+    } else {
+      // Completa: Listadas uma a uma
+      products = shipments.map((s: any) => {
+        const serviceName = s.service_type || "Transporte / Logística"
+        const trackingBase = s.tracking_number || s.reference || `ENV-${(s.id || "").slice(0, 8).toUpperCase()}`
+            
+        return {
+          productId: productId,
+          name: `Envio ${trackingBase} - ${serviceName}`,
+          summary: s.recipient_name ? `Destino: ${s.recipient_name} ${s.recipient_city ? `(${s.recipient_city})` : ''}` : `Faturação de envio.`,
+          qty: 1,
+          price: Number(s.sell_price || 0),
+          taxes: [{ tax_id: taxId, value: 23 }]
+        }
+      })
+    }
 
     const validProducts = products.filter((p: any) => p.price > 0)
     if (validProducts.length === 0) {
