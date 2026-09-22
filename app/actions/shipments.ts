@@ -491,6 +491,9 @@ export async function emitClientGuiaAction(data: {
   isReturn?: boolean
   selectedSpecialServices?: string[]
   codValue?: number
+  lengthCm?: number
+  widthCm?: number
+  heightCm?: number
 }) {
   const supabase = createAdminClient()
   const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
@@ -598,6 +601,9 @@ export async function emitClientGuiaAction(data: {
     special_fees_amount: computedSpecialAmount || 0,
     special_fees_description: computedSpecialDesc,
     cod_value: data.codValue || 0,
+    length_cm: data.lengthCm || 0,
+    width_cm: data.widthCm || 0,
+    height_cm: data.heightCm || 0,
     created_at: now,
     updated_at: now,
   }

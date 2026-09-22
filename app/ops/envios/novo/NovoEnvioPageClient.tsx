@@ -85,6 +85,9 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         recipientPostal: formData.get("recipient_zip") as string,
         weightKg: Number(formData.get("weight_kg")) || 1,
         volumesCount: Number(formData.get("volumes")) || 1,
+        lengthCm: Number(formData.get("length_cm")) || 0,
+        widthCm: Number(formData.get("width_cm")) || 0,
+        heightCm: Number(formData.get("height_cm")) || 0,
         serviceName: activeLinkeService?.name || "Linke Expresso 24H",
         subProductId: activeLinkeService?.webservice_service_code,
         calculatedPrice: estimatedTier.sell,
@@ -211,6 +214,39 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       name="volumes"
                       min="1"
                       defaultValue={1}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-slate-700">Comp. (cm)</label>
+                    <input
+                      type="number"
+                      name="length_cm"
+                      min="0"
+                      step="1"
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-slate-700">Largura (cm)</label>
+                    <input
+                      type="number"
+                      name="width_cm"
+                      min="0"
+                      step="1"
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-slate-700">Altura (cm)</label>
+                    <input
+                      type="number"
+                      name="height_cm"
+                      min="0"
+                      step="1"
+                      placeholder="0"
                       className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 font-mono"
                     />
                   </div>

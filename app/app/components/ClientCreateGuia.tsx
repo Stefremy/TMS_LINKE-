@@ -58,6 +58,9 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
   const [selectedCarrierCode, setSelectedCarrierCode] = React.useState<string>("ctt_expresso")
   const [selectedServiceId, setSelectedServiceId] = React.useState<string>("")
   const [volumesCount, setVolumesCount] = React.useState("1")
+  const [lengthCm, setLengthCm] = React.useState("")
+  const [widthCm, setWidthCm] = React.useState("")
+  const [heightCm, setHeightCm] = React.useState("")
 
   // Special Services selections
   const [isCOD, setIsCOD] = React.useState(false)
@@ -277,6 +280,9 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
         recipientEmail,
         weightKg: parseFloat(weight) || 1.0,
         volumesCount: parseInt(volumesCount) || 1,
+        lengthCm: parseInt(lengthCm) || 0,
+        widthCm: parseInt(widthCm) || 0,
+        heightCm: parseInt(heightCm) || 0,
         serviceName: chosenService,
         subProductId: activeLinkeService?.webservice_service_code,
         calculatedPrice: numericVal,
@@ -562,6 +568,47 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
                 value={volumesCount}
                 onChange={(e) => setVolumesCount(e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">Comp. (cm)</label>
+              <input 
+                type="number" 
+                min="0"
+                step="1"
+                placeholder="Ex: 10"
+                value={lengthCm}
+                onChange={(e) => setLengthCm(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+              />
+            </div>
+            
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">Largura (cm)</label>
+              <input 
+                type="number" 
+                min="0"
+                step="1"
+                placeholder="Ex: 10"
+                value={widthCm}
+                onChange={(e) => setWidthCm(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">Altura (cm)</label>
+              <input 
+                type="number" 
+                min="0"
+                step="1"
+                placeholder="Ex: 10"
+                value={heightCm}
+                onChange={(e) => setHeightCm(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
               />
             </div>
           </div>
