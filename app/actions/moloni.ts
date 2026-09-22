@@ -734,3 +734,298 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     return { success: false, error: err.message || "Erro ao emitir fatura no Moloni" }
   }
 }
+
+export interface CustomInvoiceItemInput {
+  title: string
+  description?: string
+  qty: number
+  unitPrice: number
+  taxRate: number // 23, 13, 6, 0
+  discountPct?: number
+}
+
+export interface CustomInvoicePayload {
+  clientId?: string
+  clientName: string
+  clientVat?: string
+  clientAddress?: string
+  clientZip?: string
+  clientCity?: string
+  clientEmail?: string
+  clientPhone?: string
+  invoiceDate: string
+  dueDate: string
+  paymentTerms?: string
+  paymentMethod?: string
+  notes?: string
+  items: CustomInvoiceItemInput[]
+}
+
+/**
+ * Cria uma fatura personalizada no Moloni (para serviços extras como website, lojas online, consultoria, etc.)
+ * e guarda o registo no TMS audit_log.
+ */
+export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
+  try {
+    const supabase = createAdminClient()
+
+    if (!payload.clientName || payload.clientName.trim().length === 0) {
+      throw new Error("O nome do cliente é obrigatório.")
+    }
+
+    if (!payload.items || payload.items.length === 0) {
+      throw new Error("Adicione pelo menos um serviço ou produto à fatura.")
+    }
+
+    const validItems = payload.items.filter(it => Number(it.unitPrice || 0) > 0 && Number(it.qty || 0) > 0)
+    if (validItems.length === 0) {
+      throw new Error("Pelo menos um serviço deve ter preço superior a 0,00€.")
+    }
+
+    // Cálculos financeiros
+    let subtotal = 0
+    let totalDiscount = 0
+    const taxBreakdown: Record<number, { base: number; tax: number }> = {}
+
+    const calculatedItems = validItems.map(it => {
+      const qty = Number(it.qty || 1)
+      const unitPrice = Number(it.unitPrice || 0)
+      const discountPct = Number(it.discountPct || 0)
+      const gross = qty * unitPrice
+      const discVal = gross * (discountPct / 100)
+      const net = gross - discVal
+      const taxRate = Number(it.taxRate !== undefined ? it.taxRate : 23)
+      const taxVal = net * (taxRate / 100)
+
+      subtotal += gross
+      totalDiscount += discVal
+
+      if (!taxBreakdown[taxRate]) {
+        taxBreakdown[taxRate] = { base: 0, tax: 0 }
+      }
+      taxBreakdown[taxRate].base += net
+      taxBreakdown[taxRate].tax += taxVal
+
+      return {
+        ...it,
+        qty,
+        unitPrice,
+        discountPct,
+        net,
+        taxRate,
+        taxVal,
+        total: net + taxVal
+      }
+    })
+
+    const totalNet = subtotal - totalDiscount
+    let totalTax = 0
+    Object.values(taxBreakdown).forEach(t => {
+      totalTax += t.tax
+    })
+    const grandTotal = totalNet + totalTax
+
+    // Gerar número de fatura interno
+    const invoiceNumber = `FAT-P-${new Date().getFullYear()}/${String(new Date().getMonth()+1).padStart(2,'0')}-${Math.floor(1000 + Math.random() * 9000)}`
+    const invoiceId = crypto.randomUUID()
+
+    let moloniDocumentId: number | null = null
+    let moloniDocumentPdf: string | null = null
+    let moloniEmissionError: string | null = null
+
+    // Verificar se Moloni está conectado
+    let moloniClientConfig: any = null
+    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
+      moloniClientConfig = {
+        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
+        companyId: process.env.MOLONI_COMPANY_ID,
+      }
+    } else {
+      const { data: mLogs } = await supabase
+        .from("audit_log")
+        .select("details")
+        .eq("action", "moloni_connection_config")
+        .order("created_at", { ascending: false })
+        .limit(1)
+      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
+        moloniClientConfig = {
+          refreshToken: mLogs[0].details.refresh_token,
+          companyId: mLogs[0].details.company_id,
+        }
+      }
+    }
+
+    if (moloniClientConfig) {
+      try {
+        const moloni = new MoloniClient({
+          companyId: moloniClientConfig.companyId,
+          refreshToken: moloniClientConfig.refreshToken
+        })
+
+        // 1. Obter ou Criar Cliente no Moloni
+        let moloniCustomerId: number | null = null
+        const vatToSearch = (payload.clientVat || "").trim()
+
+        if (vatToSearch && vatToSearch !== "999999990") {
+          const existingCust = await moloni.getCustomerByVat(vatToSearch)
+          if (existingCust?.customer_id) {
+            moloniCustomerId = existingCust.customer_id
+          }
+        }
+
+        if (!moloniCustomerId) {
+          moloniCustomerId = await moloni.createCustomer({
+            vat: vatToSearch || "999999990",
+            number: `CP${Date.now()}`,
+            name: payload.clientName,
+            address: payload.clientAddress || "Desconhecida",
+            zipCode: payload.clientZip || "1000-001",
+            city: payload.clientCity || "Portugal",
+            email: payload.clientEmail,
+            phone: payload.clientPhone
+          })
+        }
+
+        if (!moloniCustomerId) {
+          throw new Error("Não foi possível registar o cliente no Moloni.")
+        }
+
+        // 2. Preparar Produtos para o Moloni
+        const documentSetId = await moloni.getDocumentSet()
+        const defaultTaxId = await moloni.getTaxId(23)
+        const genericProductId = await moloni.getGenericProductId(defaultTaxId)
+
+        const moloniProducts = []
+        for (const item of calculatedItems) {
+          const itemTaxId = await moloni.getTaxId(item.taxRate)
+          moloniProducts.push({
+            productId: genericProductId,
+            name: item.title,
+            summary: item.description || "",
+            qty: item.qty,
+            price: item.unitPrice * (1 - (item.discountPct || 0) / 100),
+            taxes: itemTaxId ? [{ tax_id: itemTaxId, value: item.taxRate }] : []
+          })
+        }
+
+        // 3. Emitir Fatura no Moloni
+        const invoiceRes = await moloni.createInvoice({
+          customerId: moloniCustomerId,
+          date: payload.invoiceDate || new Date().toISOString().split("T")[0],
+          expirationDate: payload.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          documentSetId: documentSetId,
+          products: moloniProducts
+        })
+
+        moloniDocumentId = invoiceRes.document_id
+        if (moloniDocumentId) {
+          moloniDocumentPdf = await moloni.getDocumentPDFLink(moloniDocumentId)
+        }
+      } catch (mErr: any) {
+        moloniEmissionError = mErr?.message || "Erro de comunicação com Moloni"
+        console.warn("Moloni Custom Invoice Emission Warning:", moloniEmissionError)
+      }
+    } else {
+      moloniEmissionError = "Conta Moloni ainda não está ligada."
+    }
+
+    // 4. Guardar no audit_log do Supabase
+    const invoiceDetails = {
+      id: invoiceId,
+      invoice_number: invoiceNumber,
+      client_id: payload.clientId || null,
+      client_name: payload.clientName,
+      client_vat: payload.clientVat || "Consumidor Final",
+      client_address: payload.clientAddress || "",
+      client_zip: payload.clientZip || "",
+      client_city: payload.clientCity || "Portugal",
+      client_email: payload.clientEmail || "",
+      client_phone: payload.clientPhone || "",
+      invoice_date: payload.invoiceDate,
+      due_date: payload.dueDate,
+      payment_terms: payload.paymentTerms || "Pronto Pagamento",
+      payment_method: payload.paymentMethod || "Transferência Bancária",
+      notes: payload.notes || "",
+      items: calculatedItems,
+      subtotal,
+      total_discount: totalDiscount,
+      total_net: totalNet,
+      tax_breakdown: taxBreakdown,
+      total_tax: totalTax,
+      total_value: grandTotal,
+      moloni_document_id: moloniDocumentId,
+      moloni_document_pdf: moloniDocumentPdf,
+      moloni_error: moloniEmissionError,
+      created_at: new Date().toISOString()
+    }
+
+    const { error: dbErr } = await supabase.from('audit_log').insert({
+      tenant_id: LINKE_TENANT_ID,
+      action: "custom_invoice",
+      details: invoiceDetails
+    })
+
+    if (dbErr) {
+      console.error("Error saving custom invoice to audit_log:", dbErr)
+    }
+
+    revalidatePath("/ops/faturacao/personalizada")
+    revalidatePath("/ops/faturacao/contas-corrente")
+
+    return {
+      success: true,
+      id: invoiceId,
+      invoiceNumber,
+      totalValue: grandTotal,
+      moloniDocumentId,
+      moloniDocumentPdf,
+      pdfUrl: `/api/custom-invoices/${encodeURIComponent(invoiceNumber)}/pdf`,
+      moloniError: moloniEmissionError
+    }
+  } catch (err: any) {
+    console.error("emitCustomInvoiceAction error:", err)
+    return {
+      success: false,
+      error: err.message || "Erro ao emitir fatura personalizada"
+    }
+  }
+}
+
+/**
+ * Obtém a lista de faturas personalizadas emitidas anteriormente
+ */
+export async function getCustomInvoicesAction() {
+  try {
+    const supabase = createAdminClient()
+    const { data: logs, error } = await supabase
+      .from('audit_log')
+      .select('id, created_at, details')
+      .eq('action', 'custom_invoice')
+      .order('created_at', { ascending: false })
+
+    if (error || !logs) {
+      return []
+    }
+
+    return logs.map((log: any) => ({
+      id: log.details?.id || log.id,
+      invoice_number: log.details?.invoice_number || `FAT-${log.id.slice(0, 8)}`,
+      client_name: log.details?.client_name || "Cliente Desconhecido",
+      client_vat: log.details?.client_vat || "",
+      invoice_date: log.details?.invoice_date || log.created_at?.split("T")[0],
+      due_date: log.details?.due_date,
+      payment_terms: log.details?.payment_terms,
+      total_value: Number(log.details?.total_value || 0),
+      items_count: Array.isArray(log.details?.items) ? log.details.items.length : 1,
+      items: log.details?.items || [],
+      moloni_document_id: log.details?.moloni_document_id || null,
+      moloni_document_pdf: log.details?.moloni_document_pdf || null,
+      pdf_url: `/api/custom-invoices/${encodeURIComponent(log.details?.invoice_number || log.details?.id || log.id)}/pdf`,
+      created_at: log.created_at
+    }))
+  } catch (err: any) {
+    console.warn("getCustomInvoicesAction error:", err)
+    return []
+  }
+}
+

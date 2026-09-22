@@ -82,12 +82,14 @@ export async function GET(
     })
 
     const safeFilename = (details.statement_number || "extrato").replace(/[\/\\]/g, "_")
+    const isInline = request.nextUrl.searchParams.get("inline") === "1" || request.nextUrl.searchParams.get("inline") === "true"
+    const disposition = isInline ? "inline" : "attachment"
 
     return new Response(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="Extrato_${safeFilename}.pdf"`,
+        "Content-Disposition": `${disposition}; filename="Extrato_${safeFilename}.pdf"`,
         "Cache-Control": "public, max-age=3600",
       },
     })

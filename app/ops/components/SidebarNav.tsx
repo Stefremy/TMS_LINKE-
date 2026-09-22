@@ -60,6 +60,7 @@ const navConfig: NavItem[] = [
     icon: Receipt,
     subItems: [
       { title: "Contas Corrente", href: "/ops/faturacao/contas-corrente" },
+      { title: "Fatura Personalizada", href: "/ops/faturacao/personalizada" },
       { title: "Faturação Clientes", href: "/ops/faturacao/clientes" },
       { title: "Análise Estatística", href: "/ops/faturacao/estatistica" },
     ]
