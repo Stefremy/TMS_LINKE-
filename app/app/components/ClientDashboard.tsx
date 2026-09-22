@@ -25,13 +25,13 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
+import { syncCttTrackingAction, closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { 
   getClientPortalStatsAction, 
   createReturnShipmentAction, 
   deleteShipmentAction
 } from "@/app/actions/shipments"
-import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { Cliente, DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { getCarrierLogo } from "@/lib/carrier-logos"
@@ -144,8 +144,8 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
         setOpenDropdownId(null)
       }
     }
-    document.addEventListener("click", handleClickOutside)
-    return () => document.removeEventListener("click", handleClickOutside)
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
   const querySuffix = React.useMemo(() => {
@@ -214,22 +214,28 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
     }
   }
 
-  const printLabel = async (shipmentItem: any) => {
-    let rawLabel = shipmentItem?.ctt_label_base64
+  const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
     if (!rawLabel) {
       alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
-      return
+      return null
     }
-    printCttLabel(rawLabel)
+    if (rawLabel.trimStart().startsWith("^XA")) {
+      const res = await convertZplToPdfAction(rawLabel)
+      if (res.success && res.base64) return res.base64
+      alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+      return null
+    }
+    return rawLabel
+  }
+
+  const printLabel = async (shipmentItem: any) => {
+    const label = await resolveLabel(shipmentItem?.ctt_label_base64)
+    if (label) printCttLabel(label)
   }
 
   const downloadLabel = async (shipmentItem: any, ref: string) => {
-    let rawLabel = shipmentItem?.ctt_label_base64
-    if (!rawLabel) {
-      alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
-      return
-    }
-    downloadCttLabel(rawLabel, `${ref}_Etiqueta_CTT.pdf`)
+    const label = await resolveLabel(shipmentItem?.ctt_label_base64)
+    if (label) downloadCttLabel(label, `${ref}_Etiqueta_CTT.pdf`)
   }
 
   // Contractual and pricing details from real client record

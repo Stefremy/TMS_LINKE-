@@ -20,6 +20,7 @@ export default function ContasCorrenteClient({
   const router = useRouter()
   const [expandedClient, setExpandedClient] = React.useState<string | null>(null)
   const [showHistory, setShowHistory] = React.useState<boolean>(true)
+  const [openActionMenuId, setOpenActionMenuId] = React.useState<string | null>(null)
   const [isMoloniModalOpen, setIsMoloniModalOpen] = React.useState<boolean>(false)
   const [issuedStatement, setIssuedStatement] = React.useState<{
     statementNumber: string
@@ -458,9 +459,9 @@ export default function ContasCorrenteClient({
 
       {/* Histórico de Extratos Emitidos */}
       {statements && statements.length > 0 && (
-        <div className="bg-white border border-slate-200 shadow-2xs rounded-2xl overflow-hidden mb-8">
+        <div className="bg-white border border-slate-200 shadow-2xs rounded-2xl mb-48">
           <div 
-            className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between cursor-pointer select-none"
+            className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between cursor-pointer select-none rounded-t-2xl"
             onClick={() => setShowHistory(!showHistory)}
           >
             <div className="flex items-center gap-3">
@@ -479,8 +480,8 @@ export default function ContasCorrenteClient({
 
           {showHistory && (
             <div className="divide-y divide-slate-100">
-              {statements.map((stmt: any) => (
-                <div key={stmt.id} className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+              {statements.map((stmt: any, index: number) => (
+                <div key={stmt.id} className={`px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors ${index === statements.length - 1 ? 'rounded-b-2xl' : ''}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 flex-shrink-0">
                       <FileText className="w-4 h-4" />
@@ -503,77 +504,162 @@ export default function ContasCorrenteClient({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 self-end sm:self-center">
-                    <span className="text-sm font-black text-slate-900 font-mono mr-1">
+                  <div className="flex items-center gap-4 self-end sm:self-center">
+                    {/* Status Badge */}
+                    <div className="flex items-center">
+                      {stmt.moloni_receipt_pdf ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Paga
+                        </span>
+                      ) : (stmt.moloni_document_pdf || stmt.moloni_document_id) ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-wider">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          Pendente
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider">
+                          Por Emitir
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="text-sm font-black text-slate-900 font-mono mr-2">
                       {Number(stmt.total_value || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                     </span>
 
-                    {(stmt.moloni_document_pdf || stmt.moloni_document_id) ? (
-                      <a 
-                        href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`}
-                        download={`Fatura_Oficial_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
-                        title="Descarregar Fatura Oficial Certificada Moloni (com QR Code AT)"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        📥 Fatura Oficial AT (PDF)
-                      </a>
-                    ) : (
+                    {/* Actions Dropdown */}
+                    <div className="relative">
                       <button
-                        onClick={async () => {
-                          if (!moloniConfig?.isConnected) {
-                            setIsMoloniModalOpen(true)
-                            return
-                          }
-                          const ok = confirm(`Deseja comunicar e emitir a fatura oficial no Moloni para o extrato ${stmt.statement_number}?`)
-                          if (!ok) return
-                          
-                          const { emitMoloniInvoiceForStatementAction } = await import("@/app/actions/moloni")
-                          const res = await emitMoloniInvoiceForStatementAction(stmt.statement_number || stmt.id)
-                          if (res.success) {
-                            const dlUrl = `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`
-                            try {
-                              const link = document.createElement("a")
-                              link.href = dlUrl
-                              link.setAttribute("download", `Fatura_Oficial_${stmt.statement_number.replace(/[\/\\]/g, "_")}.pdf`)
-                              document.body.appendChild(link)
-                              link.click()
-                              document.body.removeChild(link)
-                            } catch {}
-
-                            setIssuedStatement({
-                              statementNumber: stmt.statement_number,
-                              url: `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`,
-                              clientName: stmt.client_name,
-                              totalValue: Number(stmt.total_value || 0),
-                              moloniPdf: dlUrl
-                            })
-                            router.refresh()
-                          } else {
-                            alert(`Erro: ${res.error || "Não foi possível emitir no Moloni"}`)
-                          }
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenActionMenuId(openActionMenuId === stmt.id ? null : stmt.id)
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300/60 rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-                        title="Emitir Fatura Oficial Certificada no Moloni"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-colors shadow-2xs cursor-pointer"
                       >
-                        <Cloud className="w-3.5 h-3.5 text-indigo-500" />
-                        Emitir no Moloni
+                        Opções <ChevronDown className="w-3.5 h-3.5" />
                       </button>
-                    )}
 
-                    <a 
-                      href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
-                      download={`Extrato_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs"
-                      title="Descarregar Extrato Detalhado TMS em PDF"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Extrato TMS
-                    </a>
+                      {openActionMenuId === stmt.id && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-10"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setOpenActionMenuId(null)
+                            }}
+                          />
+                          <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-20 animate-in fade-in zoom-in-95 duration-100">
+                            {/* Emitir no Moloni */}
+                            {!(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation()
+                                    setOpenActionMenuId(null)
+                                    if (!moloniConfig?.isConnected) {
+                                      setIsMoloniModalOpen(true)
+                                      return
+                                    }
+                                    const ok = confirm(`Deseja comunicar e emitir a fatura oficial no Moloni para o extrato ${stmt.statement_number}?`)
+                                    if (!ok) return
+                                    
+                                    const { emitMoloniInvoiceForStatementAction } = await import("@/app/actions/moloni")
+                                    const res = await emitMoloniInvoiceForStatementAction(stmt.statement_number || stmt.id)
+                                    if (res.success) {
+                                      const dlUrl = `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`
+                                      try {
+                                        const link = document.createElement("a")
+                                        link.href = dlUrl
+                                        link.setAttribute("download", `Fatura_Oficial_${stmt.statement_number.replace(/[\/\\]/g, "_")}.pdf`)
+                                        document.body.appendChild(link)
+                                        link.click()
+                                        document.body.removeChild(link)
+                                      } catch {}
+
+                                      setIssuedStatement({
+                                        statementNumber: stmt.statement_number,
+                                        url: `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`,
+                                        clientName: stmt.client_name,
+                                        totalValue: Number(stmt.total_value || 0),
+                                        moloniPdf: dlUrl
+                                      })
+                                      router.refresh()
+                                    } else {
+                                      alert(`Erro: ${res.error || "Não foi possível emitir no Moloni"}`)
+                                    }
+                                  }}
+                                  className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-bold text-blue-700 hover:bg-blue-50 transition-colors"
+                                >
+                                  <Cloud className="w-4 h-4 text-blue-500" />
+                                  Emitir Fatura no Moloni
+                                </button>
+                            )}
+
+                            {/* Fatura / Pró-Forma Moloni (If emitted) */}
+                            {(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
+                              <>
+                                {!stmt.is_pro_forma && (
+                                  <a 
+                                    href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`}
+                                    download={`Fatura_Oficial_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                  >
+                                    <Download className="w-4 h-4 text-emerald-500" />
+                                    Descarregar Fatura (AT)
+                                  </a>
+                                )}
+                              </>
+                            )}
+
+                            {/* Recibo */}
+                            {stmt.moloni_receipt_pdf ? (
+                              <a 
+                                href={stmt.moloni_receipt_pdf}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50 transition-colors"
+                              >
+                                <Download className="w-4 h-4 text-indigo-500" />
+                                Descarregar Recibo
+                              </a>
+                            ) : (
+                              <div className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-400 cursor-not-allowed" title="O recibo estará disponível após a fatura ser paga">
+                                <Download className="w-4 h-4" />
+                                Recibo (Pendente)
+                              </div>
+                            )}
+
+                            <div className="h-px bg-slate-100 my-1 mx-2" />
+
+                            {/* Pró-Forma TMS (Always visible) */}
+                            <a 
+                              href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/proforma-pdf`}
+                              download={`ProForma_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
+                            >
+                              <FileText className="w-4 h-4 text-amber-500" />
+                              Gerar Pró-Forma (PDF)
+                            </a>
+
+                            {/* Extrato TMS Interno (Always visible) */}
+                            <a 
+                              href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
+                              download={`Extrato_TMS_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                            >
+                              <FileText className="w-4 h-4 text-slate-400" />
+                              Ver Extrato TMS Interno
+                            </a>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

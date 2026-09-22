@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getClientesAction } from "@/app/actions/clientes"
-import { generateStatementPdfBuffer } from "@/lib/services/billing/statement-pdf"
+import { generateProFormaPdfBuffer } from "@/lib/services/billing/proforma-pdf"
 
 export const dynamic = "force-dynamic"
 
@@ -73,7 +73,7 @@ export async function GET(
       }
     }
 
-    const pdfBuffer = await generateStatementPdfBuffer({
+    const pdfBuffer = await generateProFormaPdfBuffer({
       statementNumber: details.statement_number || "EXT-0000/00-0000",
       clientName: client?.legal_name || client?.short_name || details.client_name || "Cliente TMS",
       clientNif: client?.nif || "",

@@ -61,34 +61,71 @@ export default function FaturasClient({ statements }: { statements: any[] }) {
                   </p>
                 </div>
                 
-                <div className="col-span-3 flex items-center justify-end gap-2">
-                  {(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
+                <div className="col-span-3 flex items-center justify-end gap-2 flex-wrap">
+                  {/* Pró-Forma / Extrato — ALWAYS available */}
+                  <a 
+                    href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
+                    download={`ProForma_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Descarregar Pró-Forma / Extrato"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Pró-Forma
+                  </a>
+
+                  {/* Fatura Oficial AT — active only when emitted */}
+                  {(stmt.moloni_document_pdf || stmt.moloni_document_id) && !stmt.is_pro_forma ? (
                     <a 
                       href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`} 
                       download={`Fatura_Oficial_AT_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
                       target="_blank" 
                       rel="noreferrer"
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
                       onClick={(e) => e.stopPropagation()}
                       title="Descarregar Fatura Oficial Certificada Moloni com QR Code AT"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      Fatura Oficial AT (PDF)
+                      Fatura AT
                     </a>
+                  ) : (
+                    <button 
+                      disabled
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-400 rounded-lg text-xs font-bold shadow-2xs cursor-not-allowed opacity-60"
+                      onClick={(e) => e.stopPropagation()}
+                      title="A fatura oficial será disponibilizada após emissão via Moloni."
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Fatura AT
+                    </button>
                   )}
 
-                  <a 
-                    href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
-                    download={`Extrato_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition-colors shadow-2xs"
-                    onClick={(e) => e.stopPropagation()}
-                    title="Descarregar Extrato Detalhado TMS em PDF"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Extrato TMS
-                  </a>
+                  {/* Recibo — active only when fatura emitted AND paid */}
+                  {stmt.moloni_receipt_pdf ? (
+                    <a 
+                      href={stmt.moloni_receipt_pdf}
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Descarregar Recibo de Pagamento Moloni"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Recibo
+                    </a>
+                  ) : (
+                    <button 
+                      disabled
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-400 rounded-lg text-xs font-bold shadow-2xs cursor-not-allowed opacity-60"
+                      onClick={(e) => e.stopPropagation()}
+                      title="O recibo estará disponível após a fatura ser emitida e dada como paga."
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Recibo
+                    </button>
+                  )}
                   
                   <div className="text-slate-400 p-1">
                     {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}

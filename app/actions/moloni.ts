@@ -12,7 +12,7 @@ const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[
 /**
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
-export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = false) {
+export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = false, isProForma: boolean = false) {
   try {
     const supabase = createAdminClient()
     
@@ -222,14 +222,25 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
         const dateNow = new Date().toISOString().split("T")[0]
         const expirationDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
 
-        // D. Emitir Fatura
-        const invoiceRes = await moloni.createInvoice({
-          customerId: moloniCustomerId,
-          date: dateNow,
-          expirationDate: expirationDate,
-          documentSetId: documentSetId,
-          products: validProducts
-        })
+        // D. Emitir Fatura ou Fatura Pró-Forma
+        let invoiceRes;
+        if (isProForma) {
+          invoiceRes = await moloni.createProFormaInvoice({
+            customerId: moloniCustomerId,
+            date: dateNow,
+            expirationDate: expirationDate,
+            documentSetId: documentSetId,
+            products: validProducts
+          })
+        } else {
+          invoiceRes = await moloni.createInvoice({
+            customerId: moloniCustomerId,
+            date: dateNow,
+            expirationDate: expirationDate,
+            documentSetId: documentSetId,
+            products: validProducts
+          })
+        }
         
         moloniDocumentId = invoiceRes.document_id
         moloniDocumentUrl = await moloni.getDocumentPDFLink(moloniDocumentId)
@@ -259,6 +270,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
         moloni_document_id: moloniDocumentId,
         moloni_document_pdf: moloniDocumentUrl,
         moloni_error: moloniEmissionError,
+        is_pro_forma: isProForma,
         total_value: totalValue,
         shipments_count: shipments.length,
         shipment_ids: shipmentIds,
@@ -458,7 +470,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
 /**
  * Emite a fatura oficial no Moloni para um extrato previamente criado
  */
-export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string, groupShipments: boolean = false) {
+export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string, groupShipments: boolean = false, isProForma: boolean = false) {
   try {
     const supabase = createAdminClient()
     
@@ -483,8 +495,8 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
 
     const stmt = match.details
 
-    // Se já tiver fatura emitida no Moloni, devolver o link existente
-    if (stmt.moloni_document_pdf) {
+    // Se já tiver fatura emitida no Moloni (e NÃO for pró-forma), devolver o link existente
+    if (stmt.moloni_document_pdf && !stmt.is_pro_forma) {
       return {
         success: true,
         moloniDocumentId: stmt.moloni_document_id,
@@ -696,23 +708,49 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     const dateNow = new Date().toISOString().split("T")[0]
     const expirationDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
 
-    // 7. Criar fatura no Moloni
-    const invoiceRes = await moloni.createInvoice({
-      customerId: moloniCustomerId,
-      date: dateNow,
-      expirationDate: expirationDate,
-      documentSetId: documentSetId,
-      products: validProducts
-    })
+    // 7. Criar fatura/pro-forma no Moloni
+    let invoiceRes
+    if (isProForma) {
+      invoiceRes = await moloni.createProFormaInvoice({
+        customerId: moloniCustomerId,
+        date: dateNow,
+        expirationDate: expirationDate,
+        documentSetId: documentSetId,
+        products: validProducts
+      })
+    } else {
+      invoiceRes = await moloni.createInvoice({
+        customerId: moloniCustomerId,
+        date: dateNow,
+        expirationDate: expirationDate,
+        documentSetId: documentSetId,
+        products: validProducts
+      })
+    }
 
     const moloniDocId = invoiceRes.document_id
-    const moloniDocPdf = await moloni.getDocumentPDFLink(moloniDocId)
+
+    if (!moloniDocId) {
+      throw new Error(`Falha ao emitir. Resposta do Moloni: ${JSON.stringify(invoiceRes)}`)
+    }
+
+    let moloniDocPdf = null
+    try {
+      moloniDocPdf = await moloni.getDocumentPDFLink(moloniDocId)
+    } catch (e: any) {
+      if (e.message.includes('{"valid":0}')) {
+        throw new Error(`Documento emitido (ID: ${moloniDocId}), mas o Moloni recusou gerar o PDF. Verifique se a Pró-Forma ficou em Rascunho.`)
+      }
+      throw e
+    }
 
     // 8. Atualizar no audit_log
     const updatedDetails = {
       ...stmt,
       moloni_document_id: moloniDocId,
       moloni_document_pdf: moloniDocPdf,
+      is_pro_forma: isProForma,
+      moloni_proforma_pdf: stmt.is_pro_forma && !isProForma ? stmt.moloni_document_pdf : (isProForma ? moloniDocPdf : stmt.moloni_proforma_pdf),
       moloni_invoiced_at: new Date().toISOString()
     }
 
@@ -1026,6 +1064,94 @@ export async function getCustomInvoicesAction() {
   } catch (err: any) {
     console.warn("getCustomInvoicesAction error:", err)
     return []
+  }
+}
+
+/**
+ * Emite um Recibo no Moloni para uma fatura existente
+ */
+export async function emitReceiptAction(statementId: string, clientId: string, moloniDocumentId: number, totalValue: number) {
+  try {
+    const supabase = createAdminClient()
+    
+    const allClients = await getClientesAction()
+    const client = allClients.find((c: any) => c.id === clientId)
+      
+    if (!client) throw new Error("Cliente não encontrado no TMS.")
+
+    let moloniConfig: any = null
+    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
+      moloniConfig = {
+        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
+        companyId: process.env.MOLONI_COMPANY_ID,
+      }
+    } else {
+      const { data: mLogs } = await supabase
+        .from("audit_log")
+        .select("details")
+        .eq("action", "moloni_connection_config")
+        .order("created_at", { ascending: false })
+        .limit(1)
+      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
+        moloniConfig = {
+          refreshToken: mLogs[0].details.refresh_token,
+          companyId: mLogs[0].details.company_id,
+        }
+      }
+    }
+
+    if (!moloniConfig) {
+      throw new Error("Conta Moloni não está ligada.")
+    }
+
+    const moloni = new MoloniClient(moloniConfig)
+    
+    let moloniCustomerId = null
+    if (client.nif) {
+      const moloniCust = await moloni.getCustomerByVat(client.nif)
+      if (moloniCust) moloniCustomerId = moloniCust.customer_id
+    }
+    
+    if (!moloniCustomerId) {
+      throw new Error("Cliente não encontrado no Moloni para emitir o recibo.")
+    }
+
+    const documentSetId = await moloni.getDocumentSet()
+
+    const dateNow = new Date().toISOString().split("T")[0]
+
+    const receiptRes = await moloni.createReceipt({
+      customerId: moloniCustomerId,
+      documentSetId: documentSetId,
+      date: dateNow,
+      invoiceId: moloniDocumentId,
+      value: totalValue
+    })
+
+    console.log("Moloni receiptRes:", receiptRes);
+
+    if (!receiptRes || !receiptRes.document_id) {
+        throw new Error(`O recibo foi criado ou ocorreu um erro, mas não foi devolvido o ID do documento. Resposta: ${JSON.stringify(receiptRes)}`);
+    }
+
+    const receiptId = receiptRes.document_id
+    const receiptPdfUrl = await moloni.getDocumentPDFLink(receiptId)
+
+    // Save to audit_log
+    const { data: logs } = await supabase.from('audit_log').select('*').eq('id', statementId).single()
+    if (logs && logs.details) {
+      const newDetails = {
+        ...logs.details,
+        moloni_receipt_id: receiptId,
+        moloni_receipt_pdf: receiptPdfUrl
+      }
+      await supabase.from('audit_log').update({ details: newDetails }).eq('id', statementId)
+    }
+
+    return { success: true, receiptId, receiptPdfUrl }
+  } catch (err: any) {
+    console.error("emitReceiptAction error:", err)
+    return { success: false, error: err.message || "Erro desconhecido ao emitir o recibo" }
   }
 }
 

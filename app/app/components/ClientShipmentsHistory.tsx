@@ -7,7 +7,7 @@ import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, 
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getClientPortalStatsAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
-import { closeCttShipmentsAction } from "@/app/actions/ctt"
+import { closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { getCarrierLogo } from "@/lib/carrier-logos"
@@ -29,22 +29,28 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
 
-  const printLabel = async (envioItem: any) => {
-    let rawLabel = envioItem?.ctt_label_base64
+  const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
     if (!rawLabel) {
       alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
-      return
+      return null
     }
-    printCttLabel(rawLabel)
+    if (rawLabel.trimStart().startsWith("^XA")) {
+      const res = await convertZplToPdfAction(rawLabel)
+      if (res.success && res.base64) return res.base64
+      alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+      return null
+    }
+    return rawLabel
+  }
+
+  const printLabel = async (envioItem: any) => {
+    const label = await resolveLabel(envioItem?.ctt_label_base64)
+    if (label) printCttLabel(label)
   }
 
   const downloadLabel = async (envioItem: any, ref: string) => {
-    let rawLabel = envioItem?.ctt_label_base64
-    if (!rawLabel) {
-      alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
-      return
-    }
-    downloadCttLabel(rawLabel, `${ref}_Etiqueta_CTT.pdf`)
+    const label = await resolveLabel(envioItem?.ctt_label_base64)
+    if (label) downloadCttLabel(label, `${ref}_Etiqueta_CTT.pdf`)
   }
 
   React.useEffect(() => {
@@ -138,8 +144,8 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
         setOpenDropdownId(null)
       }
     }
-    document.addEventListener('click', handleClickOutside)
-    return () => document.removeEventListener('click', handleClickOutside)
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   return (

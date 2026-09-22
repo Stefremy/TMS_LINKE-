@@ -448,6 +448,113 @@ export class MoloniClient {
   }
 
   /**
+   * Cria uma Fatura Pró-Forma
+   */
+  async createProFormaInvoice(data: {
+    customerId: number;
+    date: string;
+    expirationDate: string;
+    documentSetId: number;
+    products: Array<{
+      productId?: number;
+      name: string;
+      summary?: string;
+      qty: number;
+      price: number;
+      exemptionReason?: string;
+      taxes?: Array<{ tax_id: number; value: number }>;
+    }>;
+  }) {
+    const formattedProducts = data.products.map((p) => ({
+      product_id: p.productId || 0,
+      name: p.name,
+      summary: p.summary || "",
+      qty: p.qty || 1,
+      price: Number(p.price || 0),
+      discount: 0,
+      exemption_reason: p.exemptionReason || "",
+      taxes: (p.taxes || []).map((t, tIdx) => ({
+        tax_id: t.tax_id,
+        value: Number(t.value || 23),
+        order: tIdx + 1,
+        cumulative: 0,
+      })),
+    }));
+
+    const payload: any = {
+      date: data.date,
+      expiration_date: data.expirationDate,
+      document_set_id: data.documentSetId,
+      customer_id: data.customerId,
+      status: 1, // 1 = Fechado
+      products: formattedProducts,
+    };
+
+    let result;
+    try {
+      result = await this.request("proFormaInvoices/insert", payload);
+    } catch (err1: any) {
+      if (err1?.message?.includes("Invalid endpoint")) {
+         // Fallback to estimates (Orçamentos) if proFormaInvoices fails
+         result = await this.request("estimates/insert", payload);
+      } else {
+         console.warn("Could not insert status 1 proforma:", err1?.message);
+         payload.status = 0;
+         result = await this.request("proFormaInvoices/insert", payload);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Cria um Recibo para Liquidar uma Fatura
+   */
+  async createReceipt(data: {
+    customerId: number;
+    documentSetId: number;
+    date: string;
+    invoiceId: number;
+    value: number;
+  }) {
+    const roundTo2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+    const finalValue = roundTo2(Number(data.value));
+
+    const payload = {
+      date: data.date,
+      document_set_id: data.documentSetId,
+      customer_id: data.customerId,
+      status: 1, // 1 = Fechado
+      value: finalValue,
+      net_value: finalValue,
+      payments: [
+        {
+          payment_method_id: 3, // Transferência Bancária como default
+          date: data.date,
+          value: finalValue,
+        }
+      ],
+      associated_documents: [
+        {
+          associated_id: data.invoiceId,
+          value: finalValue
+        }
+      ]
+    };
+
+    let result;
+    try {
+      result = await this.request("receipts/insert", payload);
+    } catch (err: any) {
+      console.warn("Could not insert status 1 receipt:", err?.message);
+      payload.status = 0;
+      result = await this.request("receipts/insert", payload);
+    }
+    
+    return result;
+  }
+
+  /**
    * Obtém o link PDF de um documento
    */
   async getDocumentPDFLink(documentId: number) {
