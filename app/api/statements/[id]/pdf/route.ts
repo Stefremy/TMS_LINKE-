@@ -69,7 +69,7 @@ export async function GET(
       }
     }
 
-    const pdfBuffer = generateStatementPdfBuffer({
+    const pdfBuffer = await generateStatementPdfBuffer({
       statementNumber: details.statement_number || "EXT-0000/00-0000",
       clientName: client?.legal_name || client?.short_name || details.client_name || "Cliente TMS",
       clientNif: client?.nif || "",

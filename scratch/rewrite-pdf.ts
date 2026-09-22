@@ -65,9 +65,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
   page.drawRectangle({ x: 25, y: y(780), width: 545.28, height: 42, color: c(0.06, 0.09, 0.16) })
   
   // Logo in Banner
-  const desiredLogoHeight = 32
-  const logoScale = desiredLogoHeight / logo.height
-  const logoDims = logo.scale(logoScale)
+  const logoDims = logo.scale(0.12)
   page.drawImage(logo, { x: 35, y: y(780) + (42 - logoDims.height) / 2, width: logoDims.width, height: logoDims.height })
   
   page.drawText("SISTEMA DE GESTAO DE TRANSPORTES | LISTAGEM DE SERVICOS", { x: 190, y: y(796), size: 9, font: fontNormal, color: c(1, 1, 1) })

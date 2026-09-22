@@ -216,20 +216,19 @@ export default function ContasCorrenteClient({
                       </p>
                     </div>
                     
-                    <div className="col-span-2 flex items-center justify-end gap-3">
+                    <div className="col-span-2 flex items-center justify-end gap-2">
                       <button 
-                        className="flex items-center justify-center px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                        className="flex items-center justify-center px-3 py-1.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg hover:bg-slate-200 border border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
                         disabled={activeCount === 0 || isLoading}
                         onClick={async (e) => { 
                           e.stopPropagation(); 
-                          
-                          if (!confirm(`Confirmas a faturação de ${activeCount} envios no total de ${totalValue}€ ?`)) return;
+                          if (!confirm(`Gerar apenas o extrato interno para ${activeCount} envios no total de ${totalValue.toLocaleString('pt-PT')}€?`)) return;
                           
                           setIsLoading(true);
                           const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
                           const { emitInvoiceAction } = await import("@/app/actions/moloni")
                           
-                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id));
+                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), true);
                           setIsLoading(false);
                           if (res?.success && res.statementNumber) {
                             const stmtNum = res.statementNumber
@@ -267,7 +266,58 @@ export default function ContasCorrenteClient({
                           }
                         }}
                       >
-                        {isLoading ? "A processar..." : "Emitir Fatura"}
+                        {isLoading ? "..." : "Extrato"}
+                      </button>
+                      <button 
+                        className="flex items-center justify-center px-3 py-1.5 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                        disabled={activeCount === 0 || isLoading}
+                        onClick={async (e) => { 
+                          e.stopPropagation(); 
+                          if (!confirm(`Emitir Fatura Oficial Moloni e Extrato para ${activeCount} envios no total de ${totalValue.toLocaleString('pt-PT')}€?`)) return;
+                          
+                          setIsLoading(true);
+                          const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
+                          const { emitInvoiceAction } = await import("@/app/actions/moloni")
+                          
+                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false);
+                          setIsLoading(false);
+                          if (res?.success && res.statementNumber) {
+                            const stmtNum = res.statementNumber
+                            const officialPdfUrl = `/api/statements/${encodeURIComponent(stmtNum)}/moloni-pdf`
+                            const fallbackUrl = `/api/statements/${encodeURIComponent(stmtNum)}/pdf`
+                            const hasOfficialMoloni = !!res.moloniDocumentPdf
+
+                            const downloadTarget = hasOfficialMoloni ? officialPdfUrl : fallbackUrl
+                            const downloadFilename = hasOfficialMoloni 
+                              ? `Fatura_Oficial_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
+                              : `Extrato_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
+
+                            try {
+                              const link = document.createElement("a")
+                              link.href = downloadTarget
+                              link.setAttribute("download", downloadFilename)
+                              link.target = "_blank"
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                            } catch (err) {
+                              console.error("Auto download failed", err)
+                            }
+
+                            setIssuedStatement({
+                              statementNumber: stmtNum,
+                              url: fallbackUrl,
+                              clientName: client.legal_name || client.short_name,
+                              totalValue: totalValue,
+                              moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
+                            })
+                            router.refresh()
+                          } else {
+                            alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
+                          }
+                        }}
+                      >
+                        {isLoading ? "..." : "Fatura AT-T"}
                       </button>
                       <div className="text-slate-400 p-1">
                         {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}

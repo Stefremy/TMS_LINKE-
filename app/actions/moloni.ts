@@ -12,7 +12,7 @@ const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[
 /**
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
-export async function emitInvoiceAction(clientId: string, shipmentIds: string[]) {
+export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false) {
   try {
     const supabase = createAdminClient()
     
@@ -62,7 +62,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[])
 
     let moloniEmissionError: string | null = null
 
-    if (moloniConfig) {
+    if (moloniConfig && !skipMoloni) {
       try {
         const moloni = new MoloniClient(moloniConfig)
         
