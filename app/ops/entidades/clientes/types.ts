@@ -94,6 +94,7 @@ export interface Cliente {
   payment_terms: string
   iban?: string
   credit_limit?: number
+  available_credit?: number
   balance?: string
   assigned_seller?: string
   observations?: string

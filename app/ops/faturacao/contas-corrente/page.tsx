@@ -17,8 +17,12 @@ export default async function ContasCorrentePage() {
   // Filtrar envios já faturados em extratos emitidos
   const invoicedShipmentIds = new Set<string>()
   statements.forEach((stmt: any) => {
-    if (Array.isArray(stmt.shipment_ids)) {
-      stmt.shipment_ids.forEach((id: string) => invoicedShipmentIds.add(id))
+    // A Fatura Linke (pro-forma) não tem valor tributário. 
+    // Por isso, os envios não passam imediatamente a faturados, a não ser que já tenham uma fatura oficial Moloni.
+    if (!stmt.is_pro_forma || stmt.moloni_document_id) {
+      if (Array.isArray(stmt.shipment_ids)) {
+        stmt.shipment_ids.forEach((id: string) => invoicedShipmentIds.add(id))
+      }
     }
   })
 

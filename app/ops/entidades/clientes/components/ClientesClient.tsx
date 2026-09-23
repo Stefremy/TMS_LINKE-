@@ -427,8 +427,17 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                     </td>
 
                     {/* Crédito */}
-                    <td className="py-3.5 px-3 text-right font-mono font-bold text-xs text-slate-800">
-                      {item.credit_limit ? `${item.credit_limit.toLocaleString("pt-PT")}€` : "—"}
+                    <td className="py-3.5 px-3 text-right font-mono text-xs text-slate-800">
+                      {item.credit_limit ? (
+                        <div className="flex flex-col items-end">
+                          <span className={`font-bold ${item.available_credit !== undefined && item.available_credit < item.credit_limit * 0.2 ? 'text-rose-600' : ''}`}>
+                            {item.available_credit !== undefined ? item.available_credit.toLocaleString("pt-PT") : item.credit_limit.toLocaleString("pt-PT")}€
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            de {item.credit_limit.toLocaleString("pt-PT")}€
+                          </span>
+                        </div>
+                      ) : "—"}
                     </td>
 
                     {/* Estado */}

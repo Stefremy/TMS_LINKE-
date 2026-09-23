@@ -198,9 +198,9 @@ export async function generateProFormaPdfBuffer(data: BillingStatementPdfData): 
     height: logoDims.height,
   })
 
-  // "FATURA" on right of header
-  page.drawText('FATURA', {
-    x: W - MARGIN - 75,
+  // "FATURA LINKE" on right of header
+  page.drawText('FATURA LINKE', {
+    x: W - MARGIN - 120,
     y: PAGE_H - 50,
     size: 17,
     font: fontB,
@@ -342,7 +342,7 @@ export async function generateProFormaPdfBuffer(data: BillingStatementPdfData): 
 
   const noteY = sumTop - 22
   page.drawText('Nota:', { x: MARGIN, y: noteY, size: 7.5, font: fontB, color: COL.accentDk })
-  page.drawText('Este documento e uma Pro-Forma para referencia de pagamento e nao tem validade fiscal.', {
+  page.drawText('Este documento e uma Fatura Linke para referencia de pagamento e nao tem validade fiscal.', {
     x: MARGIN,
     y: noteY - 14,
     size: 7.5,

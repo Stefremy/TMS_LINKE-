@@ -293,14 +293,16 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
       throw new Error(`Erro ao criar registo de extrato: ${statementErr.message || JSON.stringify(statementErr)}`)
     }
 
-    // 4. Marcar Envios como faturados (guardar referência ao extrato)
-    try {
-      await supabase
-        .from('shipments')
-        .update({ billing_statement_id: statementId } as any)
-        .in('id', shipmentIds)
-    } catch {
-      console.warn("billing_statement_id column may not exist yet - extrato registado no audit_log")
+    // 4. Marcar Envios como faturados (guardar referência ao extrato) - Apenas se não for Pró-Forma
+    if (!isProForma) {
+      try {
+        await supabase
+          .from('shipments')
+          .update({ billing_statement_id: statementId } as any)
+          .in('id', shipmentIds)
+      } catch {
+        console.warn("billing_statement_id column may not exist yet - extrato registado no audit_log")
+      }
     }
 
     revalidatePath("/ops/faturacao/contas-corrente")
@@ -719,7 +721,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
         products: validProducts
       })
     } else {
-      invoiceRes = await moloni.createInvoiceReceipt({
+      invoiceRes = await moloni.createInvoice({
         customerId: moloniCustomerId,
         date: dateNow,
         expirationDate: expirationDate,
@@ -760,6 +762,18 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       .from('audit_log')
       .update({ details: updatedDetails })
       .eq('id', match.id)
+
+    // Se passou de Pró-Forma para Fatura definitiva, marcamos também na tabela de shipments
+    if (stmt.is_pro_forma && stmt.shipment_ids && Array.isArray(stmt.shipment_ids) && stmt.shipment_ids.length > 0) {
+      try {
+        await supabase
+          .from('shipments')
+          .update({ billing_statement_id: match.id } as any)
+          .in('id', stmt.shipment_ids)
+      } catch (e) {
+        console.warn("Could not update shipments billing_statement_id", e)
+      }
+    }
 
     revalidatePath("/ops/faturacao/contas-corrente")
     revalidatePath("/app/faturas")
@@ -1157,3 +1171,139 @@ export async function emitReceiptAction(statementId: string, clientId: string, m
   }
 }
 
+
+export async function emitMoloniReceiptForStatementAction(statementId: string) {
+  try {
+    const supabase = createAdminClient()
+
+    let moloniConfig: any = null
+    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
+      moloniConfig = {
+        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
+        companyId: process.env.MOLONI_COMPANY_ID,
+      }
+    } else {
+      const { data: mLogs } = await supabase
+        .from("audit_log")
+        .select("details")
+        .eq("action", "moloni_connection_config")
+        .order("created_at", { ascending: false })
+        .limit(1)
+      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
+        moloniConfig = {
+          refreshToken: mLogs[0].details.refresh_token,
+          companyId: mLogs[0].details.company_id,
+        }
+      }
+    }
+
+    if (!moloniConfig) {
+      return { success: false, error: "Moloni não está ligado" }
+    }
+    const moloni = new MoloniClient(moloniConfig)
+
+    // Obter Extrato
+    const { data: logs, error } = await supabase
+      .from('audit_log')
+      .select('*')
+      .eq('action', 'billing_statement')
+      .order('created_at', { ascending: false })
+
+    if (error || !logs) throw new Error("Extrato não encontrado.")
+
+    const match = logs.find((l: any) => 
+      l.id === statementId || 
+      l.details?.id === statementId ||
+      l.details?.statement_number === statementId
+    )
+
+    if (!match || !match.details) {
+      throw new Error("Extrato não encontrado.")
+    }
+
+    const stmt = match.details
+
+    if (!stmt.moloni_document_id) {
+      return { success: false, error: "Extrato ainda não foi faturado no Moloni (Fatura em falta)." }
+    }
+    if (stmt.moloni_receipt_pdf) {
+      return { success: false, error: "Este extrato já tem um recibo emitido." }
+    }
+
+    const documentSetId = await moloni.getDocumentSet()
+    
+    // Obter cliente
+    const allClients = await getClientesAction()
+    const client: any = allClients.find((c: any) => c.id === stmt.client_id) || {
+      legal_name: stmt.client_name,
+      short_name: stmt.client_name,
+      nif: "999999990"
+    }
+
+    // Verificar ou Criar cliente no Moloni
+    let moloniCustomerId = null
+    if (client.nif && client.nif !== "999999990") {
+      const moloniCust = await moloni.getCustomerByVat(client.nif)
+      if (moloniCust) {
+        moloniCustomerId = moloniCust.customer_id
+      }
+    }
+
+    if (!moloniCustomerId) {
+      moloniCustomerId = await moloni.createCustomer({
+        vat: client.nif || "999999990",
+        number: `C${Date.now()}`,
+        name: client.legal_name || client.short_name || stmt.client_name || "Cliente TMS",
+        address: (client as any).address || "Desconhecida",
+        zipCode: (client as any).postal_code || "0000-000",
+        city: (client as any).city || "Desconhecida",
+        email: client.email || (client as any).billing_email || "",
+        phone: client.phone || ""
+      })
+    }
+
+    const dateNow = new Date().toISOString().split("T")[0]
+
+    // Criar o recibo
+    const receiptRes = await moloni.createReceipt({
+      customerId: moloniCustomerId,
+      date: dateNow,
+      documentSetId: documentSetId,
+      documentId: stmt.moloni_document_id,
+      value: Number(stmt.total_value || 0)
+    })
+
+    const moloniReceiptId = receiptRes.document_id
+
+    if (!moloniReceiptId) {
+      throw new Error(`Falha ao emitir recibo. Resposta do Moloni: ${JSON.stringify(receiptRes)}`)
+    }
+
+    let moloniReceiptPdf = null
+    try {
+      moloniReceiptPdf = await moloni.getDocumentPDFLink(moloniReceiptId)
+    } catch (e: any) {
+      console.warn("Nao foi possivel obter PDF do recibo", e)
+    }
+
+    stmt.moloni_receipt_id = moloniReceiptId
+    stmt.moloni_receipt_pdf = moloniReceiptPdf || ""
+    stmt.status = "paid"
+
+    const { error: updateErr } = await supabase
+      .from('audit_log')
+      .update({ details: stmt })
+      .eq('id', match.id)
+
+    if (updateErr) {
+      console.warn("Erro ao atualizar o statement no audit_log", updateErr)
+    }
+
+    revalidatePath("/ops/faturacao/contas-corrente")
+
+    return { success: true }
+  } catch (err: any) {
+    console.error("emitMoloniReceiptForStatementAction error:", err)
+    return { success: false, error: err.message || "Erro ao emitir recibo no Moloni" }
+  }
+}

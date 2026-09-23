@@ -245,7 +245,7 @@ export default function ContasCorrenteClient({
                           const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
                           const { emitInvoiceAction } = await import("@/app/actions/moloni")
                           
-                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), true);
+                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), true, false, true);
                           setIsLoading(false);
                           if (res?.success && res.statementNumber) {
                             const stmtNum = res.statementNumber
@@ -277,13 +277,14 @@ export default function ContasCorrenteClient({
                               totalValue: totalValue,
                               moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
                             })
+                            setExpandedClient(null)
                             router.refresh()
                           } else {
                             alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
                           }
                         }}
                       >
-                        {isLoading ? "..." : "Gerar Pró-Forma"}
+                        {isLoading ? "..." : "Gerar Fatura Linke"}
                       </button>
                       <button 
                         className="flex items-center justify-center px-3 py-1.5 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
@@ -328,6 +329,7 @@ export default function ContasCorrenteClient({
                               totalValue: totalValue,
                               moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
                             })
+                            setExpandedClient(null)
                             router.refresh()
                           } else {
                             alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
@@ -336,57 +338,7 @@ export default function ContasCorrenteClient({
                       >
                         {isLoading ? "..." : "Fatura Completa"}
                       </button>
-                      <button 
-                        className="flex items-center justify-center px-3 py-1.5 bg-indigo-100 text-indigo-700 font-bold text-xs rounded-lg hover:bg-indigo-200 border border-indigo-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                        disabled={activeCount === 0 || isLoading}
-                        onClick={async (e) => { 
-                          e.stopPropagation(); 
-                          if (!confirm(`Emitir Fatura Oficial Moloni e Extrato para ${activeCount} envios no total de ${totalValue.toLocaleString('pt-PT')}€ (Agrupados por serviço)?`)) return;
-                          
-                          setIsLoading(true);
-                          const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
-                          const { emitInvoiceAction } = await import("@/app/actions/moloni")
-                          
-                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, true);
-                          setIsLoading(false);
-                          if (res?.success && res.statementNumber) {
-                            const stmtNum = res.statementNumber
-                            const officialPdfUrl = `/api/statements/${encodeURIComponent(stmtNum)}/moloni-pdf`
-                            const fallbackUrl = `/api/statements/${encodeURIComponent(stmtNum)}/pdf`
-                            const hasOfficialMoloni = !!res.moloniDocumentPdf
 
-                            const downloadTarget = hasOfficialMoloni ? officialPdfUrl : fallbackUrl
-                            const downloadFilename = hasOfficialMoloni 
-                              ? `Fatura_Oficial_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
-                              : `Extrato_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
-
-                            try {
-                              const link = document.createElement("a")
-                              link.href = downloadTarget
-                              link.setAttribute("download", downloadFilename)
-                              link.target = "_blank"
-                              document.body.appendChild(link)
-                              link.click()
-                              document.body.removeChild(link)
-                            } catch (err) {
-                              console.error("Auto download failed", err)
-                            }
-
-                            setIssuedStatement({
-                              statementNumber: stmtNum,
-                              url: fallbackUrl,
-                              clientName: client.legal_name || client.short_name,
-                              totalValue: totalValue,
-                              moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
-                            })
-                            router.refresh()
-                          } else {
-                            alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
-                          }
-                        }}
-                      >
-                        {isLoading ? "..." : "Fatura Simplificada"}
-                      </button>
                       <div className="text-slate-400 p-1">
                         {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                       </div>
@@ -595,7 +547,7 @@ export default function ContasCorrenteClient({
                                 </button>
                             )}
 
-                            {/* Fatura / Pró-Forma Moloni (If emitted) */}
+                            {/* Fatura Moloni (If emitted) */}
                             {(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
                               <>
                                 {!stmt.is_pro_forma && (
@@ -613,7 +565,8 @@ export default function ContasCorrenteClient({
                               </>
                             )}
 
-                            {/* Recibo */}
+                            <div className="h-px bg-slate-100 my-1 mx-2" />
+
                             {stmt.moloni_receipt_pdf ? (
                               <a 
                                 href={stmt.moloni_receipt_pdf}
@@ -624,25 +577,49 @@ export default function ContasCorrenteClient({
                                 <Download className="w-4 h-4 text-indigo-500" />
                                 Descarregar Recibo
                               </a>
+                            ) : (stmt.moloni_document_id && !stmt.is_pro_forma) ? (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation()
+                                  setOpenActionMenuId(null)
+                                  if (!moloniConfig?.isConnected) {
+                                    setIsMoloniModalOpen(true)
+                                    return
+                                  }
+                                  const ok = confirm(`Deseja emitir o recibo no Moloni para o extrato ${stmt.statement_number} marcando-o como pago?`)
+                                  if (!ok) return
+                                  
+                                  const { emitMoloniReceiptForStatementAction } = await import("@/app/actions/moloni")
+                                  const res = await emitMoloniReceiptForStatementAction(stmt.statement_number || stmt.id)
+                                  if (res.success) {
+                                    alert("Recibo emitido com sucesso!")
+                                    window.location.reload()
+                                  } else {
+                                    alert(`Erro ao emitir recibo: ${res.error}`)
+                                  }
+                                }}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-left text-xs font-bold text-indigo-700 hover:bg-indigo-50 transition-colors"
+                              >
+                                <Cloud className="w-4 h-4 text-indigo-500" />
+                                Emitir Recibo
+                              </button>
                             ) : (
-                              <div className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-400 cursor-not-allowed" title="O recibo estará disponível após a fatura ser paga">
+                              <div className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-slate-400 cursor-not-allowed" title="O recibo estará disponível após a fatura ser emitida">
                                 <Download className="w-4 h-4" />
                                 Recibo (Pendente)
                               </div>
                             )}
 
-                            <div className="h-px bg-slate-100 my-1 mx-2" />
-
-                            {/* Pró-Forma TMS (Always visible) */}
+                            {/* Fatura Linke TMS (Always visible) */}
                             <a 
                               href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/proforma-pdf`}
-                              download={`ProForma_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
+                              download={`FaturaLinke_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
                               target="_blank"
                               rel="noreferrer"
                               className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 transition-colors"
                             >
                               <FileText className="w-4 h-4 text-amber-500" />
-                              Gerar Pró-Forma (PDF)
+                              Gerar Fatura Linke (PDF)
                             </a>
 
                             {/* Extrato TMS Interno (Always visible) */}
