@@ -526,6 +526,8 @@ export async function emitClientGuiaAction(data: {
   let computedSellPrice = Number(data.calculatedPrice) || 5.50
   let computedBuyPrice = 0
   let computedSpecialAmount = 0
+  let computedFuelAmount = 0
+  let computedBasePrice = computedSellPrice
   let computedSpecialDesc: string | null = null
   try {
     const [allClients, allServicos] = await Promise.all([
@@ -545,26 +547,50 @@ export async function emitClientGuiaAction(data: {
     )
     computedSellPrice = priceResult.sellPrice
     computedBuyPrice = priceResult.buyPrice
+    computedFuelAmount = priceResult.fuelSurchargeAmount
+    computedBasePrice = Number((computedSellPrice - computedFuelAmount).toFixed(2))
 
     // Calculate Special Services
     let specialFeesTotal = 0
-    let specialFeesDesc: string[] = []
-    if (data.selectedSpecialServices && data.selectedSpecialServices.length > 0 && matchedClient.pricing?.special_services_fees) {
+    let specialFeesDetails: Array<{ name: string, amount: number }> = []
+    
+    // Import DEFAULT_CTT_SPECIAL_SERVICES_FEES inside the function or file
+    const defaultSpecials = [
+      { special_service_code: "cod", special_service_name: "Cobrança (COD)", api_type_code: 1, fee_type: "percentage", percentage_value: 2.0, min_value: 1.80, description: "", is_enabled: true },
+      { special_service_code: "fragil", special_service_name: "Tratamento Frágil", api_type_code: 2, fee_type: "fixed", fixed_value: 1.50, description: "", is_enabled: true },
+      { special_service_code: "sms_tracking", special_service_name: "Alerta SMS & Tracking", api_type_code: 3, fee_type: "fixed", fixed_value: 0.15, description: "", is_enabled: true },
+      { special_service_code: "auth_return", special_service_name: "Logística Inversa (Retorno)", api_type_code: 4, fee_type: "fixed", fixed_value: 3.85, description: "", is_enabled: true }
+    ]
+
+    const clientSpecialFees = matchedClient.pricing?.special_services_fees && matchedClient.pricing.special_services_fees.length > 0 
+      ? matchedClient.pricing.special_services_fees 
+      : defaultSpecials
+
+    if (data.selectedSpecialServices && data.selectedSpecialServices.length > 0) {
       data.selectedSpecialServices.forEach(code => {
-        const feeConfig = matchedClient.pricing!.special_services_fees.find((f: any) => f.special_service_code === code && f.is_enabled)
+        const feeConfig = clientSpecialFees.find((f: any) => f.special_service_code === code && f.is_enabled)
         if (feeConfig) {
           let feeAmt = 0
           if (feeConfig.fee_type === "fixed") {
             feeAmt = feeConfig.fixed_value || 0
           } else if (feeConfig.fee_type === "percentage") {
-            // Apply percentage on base sell price
-            feeAmt = computedSellPrice * ((feeConfig.percentage_value || 0) / 100)
+            if (code === "cod" && data.codValue) {
+               // COD percentage is calculated on the COD value!
+               feeAmt = data.codValue * ((feeConfig.percentage_value || 0) / 100)
+            } else {
+               // Apply percentage on base sell price (before special fees, includes fuel)
+               feeAmt = computedSellPrice * ((feeConfig.percentage_value || 0) / 100)
+            }
+            
             if (feeConfig.min_value && feeAmt < feeConfig.min_value) {
               feeAmt = feeConfig.min_value
             }
           }
           specialFeesTotal += feeAmt
-          specialFeesDesc.push(feeConfig.special_service_name.split(" ")[0])
+          specialFeesDetails.push({
+            name: feeConfig.special_service_name,
+            amount: feeAmt
+          })
         }
       })
     }
@@ -572,9 +598,9 @@ export async function emitClientGuiaAction(data: {
     // Add Special Services to final DB price
     computedSellPrice += specialFeesTotal
 
-    // Define data to pass into DB
+    // Define data to pass into DB. Save JSON string for PDF rendering.
     computedSpecialAmount = specialFeesTotal
-    computedSpecialDesc = specialFeesDesc.length > 0 ? specialFeesDesc.join(", ") : null
+    computedSpecialDesc = specialFeesDetails.length > 0 ? JSON.stringify(specialFeesDetails) : null
 
   } catch (pricingErr: any) {
     console.warn("Client pricing engine fallback:", pricingErr?.message)
@@ -595,6 +621,8 @@ export async function emitClientGuiaAction(data: {
     recipient_address: `${data.recipientAddress}${data.recipientCity ? `, ${data.recipientCity}` : ""}`,
     recipient_zip3: recipientZip3,
     recipient_zip4: recipientZip4,
+    base_price: computedBasePrice,
+    fuel_tax_amount: computedFuelAmount,
     buy_price: computedBuyPrice,
     sell_price: computedSellPrice,
     reference: trackingNumber,
@@ -608,46 +636,15 @@ export async function emitClientGuiaAction(data: {
     updated_at: now,
   }
 
-  // 1. Direct DB Insert (rascunho first)
-  try {
-    const { error } = await supabase
-      .from("shipments")
-      .insert(shipmentData)
-
-    if (error) {
-      console.warn("DB shipments insert note:", error.message)
-    }
-  } catch (err: any) {
-    console.warn("Error inserting into shipments table:", err?.message)
-  }
-
-  // 2. Dual-write to audit_log for zero-data-loss guarantee
-  try {
-    await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
-      action: "shipment_data",
-      details: shipmentData,
-    })
-  } catch (err: any) {
-    console.warn("Error logging shipment to audit_log:", err?.message)
-  }
-
-  // 3. Insert package record
-  try {
-    await supabase.from("packages").insert({
-      tenant_id: LINKE_TENANT_ID,
-      shipment_id: shipmentId,
-      weight_g: Math.round((data.weightKg || 1) * 1000)
-    })
-  } catch {}
-
-  // 4. Se for CTT, emitir a Guia Real via CTT WS (como rascunho = CreateShipment, para poder fechar em lote)
+  // ─── STEP 1: Call CTT FIRST — only proceed if CTT accepts ──────────────────
+  // We never write to the DB unless CTT confirms the shipment.
   let realGuia = trackingNumber
-  let labelBase64 = null
-  let cttErrorMsg: string | null = null
+  let labelBase64: string | null = null
+
   if (data.serviceName?.toLowerCase().includes("ctt") || data.serviceName?.includes("ERS") || data.serviceName?.includes("D+")) {
+    let cttRes: any
     try {
-      const cttRes = await emitCttShipmentAction({
+      cttRes = await emitCttShipmentAction({
         id: shipmentId,
         ref: trackingNumber,
         sender: {
@@ -668,58 +665,87 @@ export async function emitClientGuiaAction(data: {
         weightKg: data.weightKg,
         volumes: data.volumesCount || 1,
         subProduct: data.subProductId || "EMSF056.01",
-        autoClose: false, // Como recomendado no portal do cliente, deixamos em aberto para fechar em lote no final do dia
+        autoClose: false,
         isReturn: data.isReturn,
         codValue: data.codValue,
         selectedSpecialServices: data.selectedSpecialServices
       })
-
-      if (cttRes.success) {
-        realGuia = cttRes.trackingNumber || trackingNumber
-        labelBase64 = cttRes.labelBase64
-        
-        // Guardar tracking real na BD (apenas colunas existentes na tabela shipments)
-        try {
-          await supabase.from("shipments").update({
-            tracking_number: realGuia,
-            status: "em_transito",
-            updated_at: new Date().toISOString(),
-          }).eq("id", shipmentId)
-        } catch (e: any) { console.warn("Failed to update shipment with tracking:", e?.message) }
-        
-        // Atualizar audit_log com metadados ricos (incluindo etiqueta)
-        try {
-          const { data: existingLogs } = await supabase
-            .from("audit_log")
-            .select("id, details")
-            .eq("action", "shipment_data")
-          
-          const targetLog = existingLogs?.find((l: any) => l.details?.id === shipmentId)
-          if (targetLog) {
-            await supabase.from("audit_log").update({
-              details: {
-                ...targetLog.details,
-                reference: trackingNumber,
-                tracking_number: realGuia,
-                ctt_object_id: realGuia,
-                ctt_label_base64: labelBase64,
-                status: "em_transito",
-                updated_at: new Date().toISOString(),
-              }
-            }).eq("id", targetLog.id)
-          }
-        } catch (e: any) { console.warn("Failed to update audit_log with label:", e?.message) }
-      } else {
-        cttErrorMsg = cttRes.error || "A API dos CTT rejeitou o pedido (verifique os códigos postais e as moradas)."
-      }
     } catch (e: any) {
-      console.error("Failed to generate CTT real shipment:", e.message)
-      cttErrorMsg = e.message || "Erro de ligação aos CTT."
-      // se falhar, continua a mostrar "pendente" para poder tentar de novo a partir do TMS ops
+      // Network/connection error — bubble up to frontend, no DB write
+      throw new Error("Erro de ligação aos CTT: " + (e?.message || "Tente novamente."))
     }
+
+    if (!cttRes.success) {
+      // CTT rejected — extract a human-readable reason and throw
+      const raw: string = cttRes.error || ""
+      let friendlyMsg = "Os CTT rejeitaram o envio."
+
+      if (raw.includes("Invalid enum value") || raw.includes("DeserializationFailed")) {
+        friendlyMsg = "Serviço especial não suportado para este subproduto CTT. Desmarque o(s) serviço(s) adicional(ais) e tente novamente."
+      } else if (raw.includes("postal") || raw.includes("ZipCode") || raw.includes("cp4") || raw.includes("cp3")) {
+        friendlyMsg = "Código postal inválido. Verifique o código postal do destinatário (formato: XXXX-XXX)."
+      } else if (raw.includes("Name") || raw.includes("name")) {
+        friendlyMsg = "Nome do destinatário inválido. Verifique o campo Nome."
+      } else if (raw.includes("Address") || raw.includes("address")) {
+        friendlyMsg = "Morada do destinatário inválida. Verifique o campo Morada."
+      } else if (raw.includes("Weight") || raw.includes("weight")) {
+        friendlyMsg = "Peso inválido para o serviço selecionado."
+      } else if (raw.length > 0 && raw.length < 300) {
+        friendlyMsg = raw
+      }
+
+      throw new Error(friendlyMsg)
+    }
+
+    realGuia = cttRes.trackingNumber || trackingNumber
+    labelBase64 = cttRes.labelBase64
   }
 
-  // 5. Deduct shipment cost from client's prepaid credit balance
+  // ─── STEP 2: CTT accepted — now write to DB ─────────────────────────────────
+  // Insert into shipments table
+  try {
+    const { error } = await supabase
+      .from("shipments")
+      .insert({
+        ...shipmentData,
+        tracking_number: realGuia,
+        status: "em_transito",
+      })
+
+    if (error) {
+      console.warn("DB shipments insert note:", error.message)
+    }
+  } catch (err: any) {
+    console.warn("Error inserting into shipments table:", err?.message)
+  }
+
+  // Dual-write to audit_log
+  try {
+    await supabase.from("audit_log").insert({
+      tenant_id: LINKE_TENANT_ID,
+      action: "shipment_data",
+      details: {
+        ...shipmentData,
+        tracking_number: realGuia,
+        ctt_object_id: realGuia,
+        ctt_label_base64: labelBase64,
+        status: "em_transito",
+      },
+    })
+  } catch (err: any) {
+    console.warn("Error logging shipment to audit_log:", err?.message)
+  }
+
+  // Insert package record
+  try {
+    await supabase.from("packages").insert({
+      tenant_id: LINKE_TENANT_ID,
+      shipment_id: shipmentId,
+      weight_g: Math.round((data.weightKg || 1) * 1000)
+    })
+  } catch {}
+
+  // ─── STEP 3: Deduct from client credit ──────────────────────────────────────
   if (validatedClientId && computedSellPrice > 0) {
     try {
       const { data: clientData } = await supabase
@@ -735,17 +761,14 @@ export async function emitClientGuiaAction(data: {
           .update({ credit_limit: newCredit })
           .eq("id", validatedClientId)
 
-        // Trigger Low Balance Alert if the balance drops below 15€
         if (clientData.credit_limit >= 15 && newCredit < 15 && clientData.email) {
           try {
             const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
             const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
-            
             const html = compileTemplate(emailTemplates.low_balance, {
               current_balance: newCredit.toFixed(2),
               topup_url: "https://tms.linke.pt/app"
             })
-      
             sendEmail({
               to: clientData.email,
               subject: "Linke | Aviso de Saldo Baixo",
@@ -774,7 +797,7 @@ export async function emitClientGuiaAction(data: {
     guia: realGuia,
     id: shipmentId,
     labelBase64,
-    cttError: cttErrorMsg
+    cttError: null
   }
 }
 

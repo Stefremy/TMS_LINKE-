@@ -10,7 +10,8 @@ import {
   CTTConnectionCredentials,
   CTTAddressData,
   CTTShipmentData,
-  CTTPontoEntrega
+  CTTPontoEntrega,
+  CTTSpecialService
 } from "@/lib/services/ctt"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
 import { generateManifestPdfBase64, ManifestPdfShipment } from "@/lib/services/ctt/manifest-pdf"
@@ -448,41 +449,11 @@ export async function emitCttShipmentAction(shipmentInput: {
     Quantity: shipmentInput.volumes || 1,
   }
 
-  // Serviços especiais
-  const specialServices = []
-  if (shipmentInput.codValue && shipmentInput.codValue > 0 && (!shipmentInput.selectedSpecialServices || shipmentInput.selectedSpecialServices.includes("cod"))) {
-    specialServices.push({
-      SpecialServiceType: 2 as const, // AgainstReimbursement
-      Value: shipmentInput.codValue,
-    })
-  }
-  
-  if (shipmentInput.isReturn || (shipmentInput.selectedSpecialServices && shipmentInput.selectedSpecialServices.includes("auth_return"))) {
-    specialServices.push({
-      SpecialServiceType: 20 as const, // AuthorizeReturn
-    })
-  }
-
-  // Handle other special services
-  if (shipmentInput.selectedSpecialServices) {
-    const codeToApiType: Record<string, number> = {
-      "saturday": 4,
-      "return_signed": 5,
-      "insurance": 6,
-      "fragil": 7,
-      "second_delivery": 12,
-      "sms_tracking": 14,
-      "delivery_point": 18,
-      "time_window": 22
-    }
-    shipmentInput.selectedSpecialServices.forEach(code => {
-      if (code !== "cod" && code !== "auth_return" && codeToApiType[code]) {
-        specialServices.push({
-          SpecialServiceType: codeToApiType[code] as any
-        })
-      }
-    })
-  }
+  // Serviços especiais — NÃO enviados para a API CTT.
+  // O subproduto EMSF056.01 (e equivalentes) rejeita qualquer SpecialServiceType via SOAP.
+  // Os serviços especiais (Frágil, SMS, COD, Retorno) são registados internamente no Linke
+  // para efeitos de faturação e tracking, mas não são transmitidos no payload SOAP.
+  const specialServices: CTTSpecialService[] = []
 
   const payload = {
     clientReference: shipmentData.ClientReference,
@@ -490,7 +461,7 @@ export async function emitCttShipmentAction(shipmentInput: {
     sender: senderData,
     receiver: receiverData,
     shipment: shipmentData,
-    specialServices,
+    specialServices: specialServices as CTTSpecialService[],
   }
 
   // Se autoClose for false, usamos CreateShipment (envio fica aberto para fechar no fim do dia)

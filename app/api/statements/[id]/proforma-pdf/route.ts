@@ -55,18 +55,35 @@ export async function GET(
     if (shipmentIds.length > 0) {
       const { data: dbShipments } = await supabase
         .from("shipments")
-        .select("id, service_type, base_price, fuel_tax_amount, special_fees_amount, special_fees_description")
+        .select("id, service_type, sell_price, base_price, fuel_tax_amount, special_fees_amount, special_fees_description")
         .in("id", shipmentIds)
         
       if (dbShipments && dbShipments.length > 0) {
         enrichedShipments = enrichedShipments.map((s: any) => {
           const dbS = dbShipments.find((d: any) => d.id === s.id)
+          let base = s.base_price ?? dbS?.base_price ?? null
+          let fuel = s.fuel_tax_amount ?? dbS?.fuel_tax_amount ?? null
+          const special = s.special_fees_amount ?? dbS?.special_fees_amount ?? 0
+          const sellPrice = Number(s.sell_price || dbS?.sell_price || 0)
+
+          // Fallback: if base_price/fuel_tax_amount are missing (old records),
+          // reverse-engineer them from sell_price using standard 12.5% fuel rate
+          if ((base === null || base === 0) && sellPrice > 0) {
+            const fuelPct = 0.125 // 12.5%
+            // sell = base * (1 + fuelPct) + special
+            // base = (sell - special) / (1 + fuelPct)
+            const netPrice = sellPrice - Number(special)
+            base = Number((netPrice / (1 + fuelPct)).toFixed(2))
+            fuel = Number((base * fuelPct).toFixed(2))
+          }
+
           return {
             ...s,
             service_type: s.service_type || dbS?.service_type,
-            base_price: s.base_price ?? dbS?.base_price,
-            fuel_tax_amount: s.fuel_tax_amount ?? dbS?.fuel_tax_amount,
-            special_fees_amount: s.special_fees_amount ?? dbS?.special_fees_amount,
+            sell_price: sellPrice,
+            base_price: base,
+            fuel_tax_amount: fuel,
+            special_fees_amount: special,
             special_fees_description: s.special_fees_description ?? dbS?.special_fees_description
           }
         })

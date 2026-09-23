@@ -448,6 +448,61 @@ export class MoloniClient {
   }
 
   /**
+   * Cria uma Fatura-Recibo (Já paga)
+   */
+  async createInvoiceReceipt(data: {
+    customerId: number;
+    date: string;
+    expirationDate: string;
+    documentSetId: number; 
+    products: Array<{
+      productId?: number;
+      name: string;
+      summary?: string;
+      qty: number;
+      price: number;
+      exemptionReason?: string;
+      taxes?: Array<{ tax_id: number; value: number }>;
+    }>;
+  }) {
+    const formattedProducts = data.products.map((p) => ({
+      product_id: p.productId || 0,
+      name: p.name,
+      summary: p.summary || "",
+      qty: p.qty || 1,
+      price: Number(p.price || 0),
+      discount: 0,
+      exemption_reason: p.exemptionReason || "",
+      taxes: (p.taxes || []).map((t, tIdx) => ({
+        tax_id: t.tax_id,
+        value: Number(t.value || 23),
+        order: tIdx + 1,
+        cumulative: 0,
+      })),
+    }));
+
+    const payload: any = {
+      date: data.date,
+      expiration_date: data.expirationDate,
+      document_set_id: data.documentSetId,
+      customer_id: data.customerId,
+      status: 1, // 1 = Fechado / Certificado AT
+      products: formattedProducts,
+    };
+
+    let result;
+    try {
+      result = await this.request("invoiceReceipts/insert", payload);
+    } catch (err1: any) {
+      console.warn("Could not insert status 1 invoice, falling back to status 0:", err1?.message);
+      payload.status = 0;
+      result = await this.request("invoices/insert", payload);
+    }
+
+    return result;
+  }
+
+  /**
    * Cria uma Fatura Pró-Forma
    */
   async createProFormaInvoice(data: {

@@ -719,7 +719,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
         products: validProducts
       })
     } else {
-      invoiceRes = await moloni.createInvoice({
+      invoiceRes = await moloni.createInvoiceReceipt({
         customerId: moloniCustomerId,
         date: dateNow,
         expirationDate: expirationDate,
@@ -749,10 +749,12 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       ...stmt,
       moloni_document_id: moloniDocId,
       moloni_document_pdf: moloniDocPdf,
+      moloni_receipt_pdf: isProForma ? stmt.moloni_receipt_pdf : moloniDocPdf, // If Fatura-Recibo, it is the receipt
       is_pro_forma: isProForma,
       moloni_proforma_pdf: stmt.is_pro_forma && !isProForma ? stmt.moloni_document_pdf : (isProForma ? moloniDocPdf : stmt.moloni_proforma_pdf),
       moloni_invoiced_at: new Date().toISOString()
     }
+
 
     await supabase
       .from('audit_log')

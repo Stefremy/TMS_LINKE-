@@ -71,7 +71,7 @@ export async function generateProFormaPdfBuffer(data: BillingStatementPdfData): 
 
   const fmt = (v: number) => v.toFixed(2).replace('.', ',') + ' \u20AC'
 
-  // Build line items (breakdown per shipment)
+  // Build line items (grouped breakdown)
   type LineItem = {
     description: string
     detail: string
@@ -80,26 +80,89 @@ export async function generateProFormaPdfBuffer(data: BillingStatementPdfData): 
   }
   const lines: LineItem[] = []
 
+  const groupedBase: Record<string, { count: number, amount: number, refs: string[] }> = {}
+  const groupedSpecial: Record<string, { count: number, amount: number }> = {}
+  let totalFuel = 0
+  let fuelCount = 0
+
   shipments.forEach(s => {
     const trackRef = s.tracking_number || s.reference || `ENV-${(s.id || '').slice(0, 8).toUpperCase()}`
-    const service = s.service_type || 'Transporte / Logistica'
-    const dest = [s.recipient_name, s.recipient_city].filter(Boolean).join(' - ') || '-'
+    const service = s.service_type || 'Transporte / Logística'
+    
     const fuelAmt = Number(s.fuel_tax_amount || 0)
     const specialAmt = Number(s.special_fees_amount || 0)
     const baseAmt = Number(s.base_price || 0) || (Number(s.sell_price || 0) - fuelAmt - specialAmt)
 
-    lines.push({ description: trackRef, detail: `${service} - ${dest}`, amount: baseAmt })
+    // Base
+    if (baseAmt > 0) {
+      if (!groupedBase[service]) {
+        groupedBase[service] = { count: 0, amount: 0, refs: [] }
+      }
+      groupedBase[service].count += 1
+      groupedBase[service].amount += baseAmt
+      groupedBase[service].refs.push(trackRef)
+    }
 
+    // Fuel
     if (fuelAmt > 0) {
-      const fuelPct = baseAmt > 0 ? Math.round((fuelAmt / baseAmt) * 100) : 0
-      const pctStr = fuelPct > 0 ? ` (${fuelPct}%)` : ''
-      lines.push({ description: `Taxa de Combustível${pctStr}`, detail: `Sobretaxa aplicada ao envio ${trackRef}`, amount: fuelAmt, tag: 'fuel' })
+      totalFuel += fuelAmt
+      fuelCount += 1
     }
 
+    // Special
     if (specialAmt > 0) {
-      const specDesc = s.special_fees_description || 'Taxa Especial'
-      lines.push({ description: specDesc, detail: `Taxa adicional aplicada ao envio ${trackRef}`, amount: specialAmt, tag: 'special' })
+      let feesAdded = false;
+      if (s.special_fees_description && s.special_fees_description.startsWith('[')) {
+        try {
+          const feesArray = JSON.parse(s.special_fees_description);
+          if (Array.isArray(feesArray) && feesArray.length > 0) {
+            feesArray.forEach((fee: any) => {
+              const name = fee.name || 'Taxa Especial'
+              if (!groupedSpecial[name]) groupedSpecial[name] = { count: 0, amount: 0 }
+              groupedSpecial[name].count += 1
+              groupedSpecial[name].amount += Number(fee.amount)
+            });
+            feesAdded = true;
+          }
+        } catch (e) {
+          // ignore parsing error
+        }
+      }
+
+      if (!feesAdded) {
+        const name = s.special_fees_description || 'Taxa Especial'
+        if (!groupedSpecial[name]) groupedSpecial[name] = { count: 0, amount: 0 }
+        groupedSpecial[name].count += 1
+        groupedSpecial[name].amount += specialAmt
+      }
     }
+  })
+
+  // Convert grouped objects to lines
+  Object.entries(groupedBase).forEach(([service, data]) => {
+    lines.push({ 
+      description: service, 
+      detail: `${data.count} ${data.count === 1 ? 'envio' : 'envios'} (${data.refs.slice(0, 3).join(', ')}${data.refs.length > 3 ? '...' : ''})`,
+      amount: data.amount 
+    })
+  })
+
+  if (totalFuel > 0) {
+    lines.push({
+      description: 'Taxa de Combustível',
+      detail: `Aplicada a ${fuelCount} ${fuelCount === 1 ? 'envio' : 'envios'}`,
+      amount: totalFuel,
+      tag: 'fuel'
+    })
+  }
+
+  Object.entries(groupedSpecial).forEach(([name, data]) => {
+    lines.push({
+      description: name,
+      detail: `Aplicada a ${data.count} ${data.count === 1 ? 'envio' : 'envios'}`,
+      amount: data.amount,
+      tag: 'special'
+    })
   })
 
   // --- Page dimensions ---

@@ -283,7 +283,7 @@ export default function ContasCorrenteClient({
                           }
                         }}
                       >
-                        {isLoading ? "..." : "Extrato"}
+                        {isLoading ? "..." : "Gerar Pró-Forma"}
                       </button>
                       <button 
                         className="flex items-center justify-center px-3 py-1.5 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"

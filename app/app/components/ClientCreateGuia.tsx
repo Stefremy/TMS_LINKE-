@@ -72,6 +72,8 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
   // Generation feedback & session history
   const [generatedGuia, setGeneratedGuia] = React.useState<string | null>(null)
   const [generatedLabelBase64, setGeneratedLabelBase64] = React.useState<string | null>(null)
+  const [submitError, setSubmitError] = React.useState<string | null>(null)
+  const [fieldError, setFieldError] = React.useState<"postal" | "name" | "address" | "weight" | "special" | null>(null)
   const [sessionShipments, setSessionShipments] = React.useState<Array<{
     guia: string
     destinatario: string
@@ -264,7 +266,17 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
     const numericVal = parseFloat(calculatedPrice.total) || 0
     const chosenService = activeLinkeService?.name || "Linke Expresso 24H"
 
+    // Clear previous errors
+    setSubmitError(null)
+    setFieldError(null)
+
     try {
+      const activeSpecial: string[] = []
+      if (isCOD) activeSpecial.push("cod")
+      if (isFragil) activeSpecial.push("fragil")
+      if (isSMSNotification) activeSpecial.push("sms_tracking")
+      if (isReturn) activeSpecial.push("auth_return")
+
       const res = await emitClientGuiaAction({
         clientId: currentClient?.id,
         clientName: currentClient?.short_name || currentClient?.legal_name,
@@ -287,11 +299,9 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
         subProductId: activeLinkeService?.webservice_service_code,
         calculatedPrice: numericVal,
         isReturn,
+        codValue: parseFloat(codAmount) || 0,
+        selectedSpecialServices: activeSpecial,
       })
-
-      if (res.cttError) {
-        alert("Envio guardado, mas os CTT rejeitaram a criação da etiqueta.\n\nMotivo dos CTT: " + res.cttError)
-      }
 
       const newCode = res.guia
 
@@ -300,7 +310,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
         destinatario: `${recipientName}${recipientCity ? `, ${recipientCity}` : ""}`,
         transportadora: "CTT Expresso",
         servico: chosenService,
-        estado: "pendente",
+        estado: "em_transito",
         data: new Date().toLocaleDateString("pt-PT"),
         valor: `${calculatedPrice.total}€`,
         numericValue: numericVal,
@@ -318,7 +328,23 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
       setRecipientEmail("")
       setVolumesCount("1")
     } catch (err: any) {
-      alert("Erro ao emitir guia: " + err.message)
+      const msg: string = err?.message || "Erro desconhecido."
+      setSubmitError(msg)
+      // Highlight the likely offending field
+      if (msg.toLowerCase().includes("postal") || msg.toLowerCase().includes("código postal")) {
+        setFieldError("postal")
+        document.getElementById("field-recipient-postal")?.focus()
+      } else if (msg.toLowerCase().includes("nome") || msg.toLowerCase().includes("name")) {
+        setFieldError("name")
+        document.getElementById("field-recipient-name")?.focus()
+      } else if (msg.toLowerCase().includes("morada") || msg.toLowerCase().includes("address")) {
+        setFieldError("address")
+        document.getElementById("field-recipient-address")?.focus()
+      } else if (msg.toLowerCase().includes("peso") || msg.toLowerCase().includes("weight")) {
+        setFieldError("weight")
+      } else if (msg.toLowerCase().includes("serviço especial") || msg.toLowerCase().includes("subproduto")) {
+        setFieldError("special")
+      }
     }
   }
 
@@ -480,12 +506,17 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
             <div className="space-y-2">
               <label className="block text-xs font-bold text-slate-700">Nome do Destinatário *</label>
               <input 
+                id="field-recipient-name"
                 type="text" 
                 required
                 placeholder="Ex: Comercial Lisboa Lda ou Maria Fernandes" 
                 value={recipientName}
-                onChange={(e) => setRecipientName(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium" 
+                onChange={(e) => { setRecipientName(e.target.value); if (fieldError === "name") setFieldError(null) }}
+                className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 font-medium ${
+                  fieldError === "name" 
+                    ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400" 
+                    : "border-slate-300 focus:ring-emerald-500"
+                }`} 
               />
             </div>
           </div>
@@ -496,12 +527,17 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
               <label className="block text-xs font-bold text-slate-700">Morada de Entrega *</label>
               <div className="relative">
                 <input 
+                  id="field-recipient-address"
                   type="text" 
                   required
                   placeholder="Rua, avenida, número, andar, porta..." 
                   value={recipientAddress}
-                  onChange={(e) => setRecipientAddress(e.target.value)}
-                  className="w-full pl-3.5 pr-8 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                  onChange={(e) => { setRecipientAddress(e.target.value); if (fieldError === "address") setFieldError(null) }}
+                  className={`w-full pl-3.5 pr-8 py-2.5 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
+                    fieldError === "address"
+                      ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
+                      : "border-slate-300 focus:ring-emerald-500"
+                  }`} 
                 />
                 <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               </div>
@@ -511,11 +547,16 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
               <label className="block text-xs font-bold text-slate-700">Código Postal & Cidade</label>
               <div className="flex gap-2">
                 <input 
+                  id="field-recipient-postal"
                   type="text" 
                   placeholder="4000-001" 
                   value={recipientPostal}
-                  onChange={(e) => setRecipientPostal(e.target.value)}
-                  className="w-1/2 px-2.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                  onChange={(e) => { setRecipientPostal(e.target.value); if (fieldError === "postal") setFieldError(null) }}
+                  className={`w-1/2 px-2.5 py-2.5 bg-white border rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 ${
+                    fieldError === "postal"
+                      ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
+                      : "border-slate-300 focus:ring-emerald-500"
+                  }`} 
                 />
                 <input 
                   type="text" 
@@ -767,6 +808,27 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
               <span>Criar Envio</span>
             </button>
           </div>
+
+          {/* Error banner — shown when CTT or validation rejects the shipment */}
+          {submitError && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-300 text-red-800 rounded-2xl px-5 py-4 text-xs font-medium animate-in fade-in slide-in-from-top-2 shadow-sm">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
+              <div className="flex-1">
+                <div className="font-bold text-red-700 mb-0.5">Envio não criado — pedido rejeitado</div>
+                <div className="text-red-700">{submitError}</div>
+                {fieldError === "special" && (
+                  <div className="mt-1.5 text-red-600">
+                    💡 Dica: Desmarque os serviços especiais (Frágil, Retorno, SMS) e tente novamente sem eles.
+                  </div>
+                )}
+              </div>
+              <button 
+                type="button" 
+                onClick={() => { setSubmitError(null); setFieldError(null) }} 
+                className="text-red-400 hover:text-red-700 text-lg leading-none font-bold ml-auto"
+              >×</button>
+            </div>
+          )}
 
         </form>
       </div>

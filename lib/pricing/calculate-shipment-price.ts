@@ -166,16 +166,17 @@ export function calculateShipmentPrice(
         isFallback: true,
       }
     }
-    return calculateFromZone(fallbackZone, weightKg, table, true)
+    return calculateFromZone(fallbackZone, weightKg, table, client, true)
   }
 
-  return calculateFromZone(zone, weightKg, table, false)
+  return calculateFromZone(zone, weightKg, table, client, false)
 }
 
 function calculateFromZone(
   zone: ZonePriceMatrix,
   weightKg: number,
   table: ServicoLinke,
+  client: Partial<Cliente>,
   isFallback: boolean
 ): PriceResult {
   const tier = findTier(zone.tiers, weightKg)
@@ -193,7 +194,7 @@ function calculateFromZone(
   }
 
   const baseSell = Number(tier.sell_price) || Number((tier.cost_price * (1 + (tier.margin_pct || 20) / 100)).toFixed(2))
-  const fuelPct = (table.fuel_surcharge_pct || 0) / 100
+  const fuelPct = (table.fuel_surcharge_pct ?? (client as any).pricing?.fuel_surcharge_pct ?? 12.5) / 100
   const fuelAmount = Number((baseSell * fuelPct).toFixed(2))
   const finalSell = Number((baseSell + fuelAmount).toFixed(2))
   const buyPrice = Number(tier.cost_price) || FALLBACK_BUY_PRICE
