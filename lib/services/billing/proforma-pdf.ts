@@ -91,7 +91,9 @@ export async function generateProFormaPdfBuffer(data: BillingStatementPdfData): 
     lines.push({ description: trackRef, detail: `${service} - ${dest}`, amount: baseAmt })
 
     if (fuelAmt > 0) {
-      lines.push({ description: 'Taxa de Combustivel', detail: `Sobretaxa aplicada ao envio ${trackRef}`, amount: fuelAmt, tag: 'fuel' })
+      const fuelPct = baseAmt > 0 ? Math.round((fuelAmt / baseAmt) * 100) : 0
+      const pctStr = fuelPct > 0 ? ` (${fuelPct}%)` : ''
+      lines.push({ description: `Taxa de Combustível${pctStr}`, detail: `Sobretaxa aplicada ao envio ${trackRef}`, amount: fuelAmt, tag: 'fuel' })
     }
 
     if (specialAmt > 0) {

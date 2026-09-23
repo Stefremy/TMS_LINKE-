@@ -644,6 +644,7 @@ export async function emitClientGuiaAction(data: {
   // 4. Se for CTT, emitir a Guia Real via CTT WS (como rascunho = CreateShipment, para poder fechar em lote)
   let realGuia = trackingNumber
   let labelBase64 = null
+  let cttErrorMsg: string | null = null
   if (data.serviceName?.toLowerCase().includes("ctt") || data.serviceName?.includes("ERS") || data.serviceName?.includes("D+")) {
     try {
       const cttRes = await emitCttShipmentAction({
@@ -708,9 +709,12 @@ export async function emitClientGuiaAction(data: {
             }).eq("id", targetLog.id)
           }
         } catch (e: any) { console.warn("Failed to update audit_log with label:", e?.message) }
+      } else {
+        cttErrorMsg = cttRes.error || "A API dos CTT rejeitou o pedido (verifique os códigos postais e as moradas)."
       }
     } catch (e: any) {
       console.error("Failed to generate CTT real shipment:", e.message)
+      cttErrorMsg = e.message || "Erro de ligação aos CTT."
       // se falhar, continua a mostrar "pendente" para poder tentar de novo a partir do TMS ops
     }
   }
@@ -769,7 +773,8 @@ export async function emitClientGuiaAction(data: {
     success: true,
     guia: realGuia,
     id: shipmentId,
-    labelBase64
+    labelBase64,
+    cttError: cttErrorMsg
   }
 }
 

@@ -289,6 +289,10 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
         isReturn,
       })
 
+      if (res.cttError) {
+        alert("Envio guardado, mas os CTT rejeitaram a criação da etiqueta.\n\nMotivo dos CTT: " + res.cttError)
+      }
+
       const newCode = res.guia
 
       const newShipment = {
