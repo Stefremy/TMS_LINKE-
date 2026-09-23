@@ -47,6 +47,48 @@ export default function ContasCorrenteClient({
     })
   }
 
+  // Define unpaid and paid statements
+  const paidStatements = React.useMemo(() => statements?.filter((s: any) => s.status === 'paid') || [], [statements])
+  const unpaidStatements = React.useMemo(() => statements?.filter((s: any) => s.status !== 'paid') || [], [statements])
+
+  const handleEmitReceipt = async (stmt: any) => {
+    if (!moloniConfig?.isConnected) {
+      setIsMoloniModalOpen(true)
+      return
+    }
+    const ok = confirm(`Deseja emitir o recibo no Moloni para a fatura ${stmt.statement_number}? Ao emitir o recibo, a conta será liquidada e passará para o Histórico de Contas Pagas.`)
+    if (!ok) return
+
+    setIsLoading(true)
+    try {
+      const { emitMoloniReceiptForStatementAction } = await import("@/app/actions/moloni")
+      const res = await emitMoloniReceiptForStatementAction(stmt.statement_number || stmt.id)
+      if (res.success) {
+        if (res.moloniReceiptPdf) {
+          try {
+            const link = document.createElement("a")
+            link.href = res.moloniReceiptPdf
+            link.setAttribute("download", `Recibo_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`)
+            link.target = "_blank"
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+          } catch (err) {
+            console.error("Auto download failed", err)
+          }
+        }
+        alert("Recibo emitido com sucesso! A conta foi liquidada e passou para o Histórico de Contas Pagas.")
+        window.location.reload()
+      } else {
+        alert(`Erro ao emitir recibo: ${res.error}`)
+      }
+    } catch (err: any) {
+      alert(`Erro ao emitir recibo: ${err?.message || err}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Filtrar e agrupar
   const clientDataMap = React.useMemo(() => {
     const map = new Map<string, {
@@ -54,10 +96,25 @@ export default function ContasCorrenteClient({
       shipments: any[]
       activeCount: number
       totalValue: number
+      clientUnpaid: any[]
+      unpaidTotal: number
     }>()
     
     clients.forEach(c => {
-      map.set(c.id, { client: c, shipments: [], activeCount: 0, totalValue: 0 })
+      const clientUnpaid = unpaidStatements.filter((s: any) => 
+        (s.client_id && s.client_id === c.id) || 
+        (s.client_name === c.legal_name || s.client_name === c.short_name)
+      )
+      const unpaidTotal = clientUnpaid.reduce((acc: number, s: any) => acc + Number(s.total_value || 0), 0)
+
+      map.set(c.id, { 
+        client: c, 
+        shipments: [], 
+        activeCount: 0, 
+        totalValue: 0,
+        clientUnpaid,
+        unpaidTotal
+      })
     })
     
     // Convertemos as datas de filtro para timestamp para ser mais rápido
@@ -80,11 +137,11 @@ export default function ContasCorrenteClient({
       }
     })
     
-    // Só mostramos clientes que tenham pelo menos 1 envio após filtro de data
+    // Mostramos clientes que tenham envios após filtro de data OU contas a aguardar recibo
     return Array.from(map.values())
-      .filter(x => x.shipments.length > 0)
-      .sort((a, b) => b.totalValue - a.totalValue)
-  }, [clients, shipments, startDate, endDate, excludedShipmentIds])
+      .filter(x => x.shipments.length > 0 || x.clientUnpaid.length > 0)
+      .sort((a, b) => (b.totalValue + b.unpaidTotal) - (a.totalValue + a.unpaidTotal))
+  }, [clients, shipments, startDate, endDate, excludedShipmentIds, unpaidStatements])
 
   return (
     <div className="bg-slate-50 min-h-[calc(100vh-8rem)]">
@@ -201,7 +258,7 @@ export default function ContasCorrenteClient({
                <p className="text-xs text-slate-400 mt-1">Todos os envios para este período já foram faturados ou não existem envios.</p>
              </div>
           ) : (
-            clientDataMap.map(({ client, shipments, activeCount, totalValue }) => {
+            clientDataMap.map(({ client, shipments, activeCount, totalValue, clientUnpaid, unpaidTotal }) => {
               const isExpanded = expandedClient === client.id
               return (
                 <div key={client.id} className="flex flex-col transition-colors hover:bg-slate-50/50">
@@ -221,123 +278,180 @@ export default function ContasCorrenteClient({
                       </div>
                     </div>
                     
-                    <div className="col-span-3 text-center">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold font-mono">
-                        {activeCount} / {shipments.length} envios
-                      </span>
+                    <div className="col-span-3 text-center flex flex-col items-center justify-center gap-1">
+                      {shipments.length > 0 && (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold font-mono">
+                          {activeCount} / {shipments.length} envios novos
+                        </span>
+                      )}
+                      {clientUnpaid.length > 0 && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold font-mono">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                          {clientUnpaid.length} fatura(s) a aguardar recibo
+                        </span>
+                      )}
                     </div>
                     
                     <div className="col-span-2 text-right">
-                      <p className="font-black text-slate-900 font-mono">
-                        {totalValue.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
-                      </p>
+                      {shipments.length > 0 ? (
+                        <>
+                          <p className="font-black text-slate-900 font-mono">
+                            {totalValue.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                          </p>
+                          {clientUnpaid.length > 0 && (
+                            <p className="text-[10px] text-amber-700 font-bold font-mono mt-0.5">
+                              +{unpaidTotal.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ aguarda recibo
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-black text-amber-700 font-mono text-sm">
+                            {unpaidTotal.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                          </p>
+                          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-wider mt-0.5">
+                            Aguardando Recibo
+                          </p>
+                        </>
+                      )}
                     </div>
                     
                     <div className="col-span-2 flex items-center justify-end gap-2">
-                      <button 
-                        className="flex items-center justify-center px-3 py-1.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg hover:bg-slate-200 border border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                        disabled={activeCount === 0 || isLoading}
-                        onClick={async (e) => { 
-                          e.stopPropagation(); 
-                          if (!confirm(`Gerar apenas o extrato interno para ${activeCount} envios no total de ${totalValue.toLocaleString('pt-PT')}€?`)) return;
-                          
-                          setIsLoading(true);
-                          const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
-                          const { emitInvoiceAction } = await import("@/app/actions/moloni")
-                          
-                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), true, false, true);
-                          setIsLoading(false);
-                          if (res?.success && res.statementNumber) {
-                            const stmtNum = res.statementNumber
-                            const officialPdfUrl = `/api/statements/${encodeURIComponent(stmtNum)}/moloni-pdf`
-                            const fallbackUrl = `/api/statements/${encodeURIComponent(stmtNum)}/pdf`
-                            const hasOfficialMoloni = !!res.moloniDocumentPdf
+                      {shipments.length > 0 ? (
+                        <>
+                          <button 
+                            className="flex items-center justify-center px-3 py-1.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg hover:bg-slate-200 border border-slate-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                            disabled={activeCount === 0 || isLoading}
+                            onClick={async (e) => { 
+                              e.stopPropagation(); 
+                              if (!confirm(`Gerar apenas o extrato interno para ${activeCount} envios no total de ${totalValue.toLocaleString('pt-PT')}€?`)) return;
+                              
+                              setIsLoading(true);
+                              const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
+                              const { emitInvoiceAction } = await import("@/app/actions/moloni")
+                              
+                              const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), true, false, true);
+                              setIsLoading(false);
+                              if (res?.success && res.statementNumber) {
+                                const stmtNum = res.statementNumber
+                                const officialPdfUrl = `/api/statements/${encodeURIComponent(stmtNum)}/moloni-pdf`
+                                const fallbackUrl = `/api/statements/${encodeURIComponent(stmtNum)}/pdf`
+                                const hasOfficialMoloni = !!res.moloniDocumentPdf
 
-                            const downloadTarget = hasOfficialMoloni ? officialPdfUrl : fallbackUrl
-                            const downloadFilename = hasOfficialMoloni 
-                              ? `Fatura_Oficial_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
-                              : `Extrato_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
+                                const downloadTarget = hasOfficialMoloni ? officialPdfUrl : fallbackUrl
+                                const downloadFilename = hasOfficialMoloni 
+                                  ? `Fatura_Oficial_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
+                                  : `Extrato_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
 
-                            try {
-                              const link = document.createElement("a")
-                              link.href = downloadTarget
-                              link.setAttribute("download", downloadFilename)
-                              link.target = "_blank"
-                              document.body.appendChild(link)
-                              link.click()
-                              document.body.removeChild(link)
-                            } catch (err) {
-                              console.error("Auto download failed", err)
-                            }
+                                try {
+                                  const link = document.createElement("a")
+                                  link.href = downloadTarget
+                                  link.setAttribute("download", downloadFilename)
+                                  link.target = "_blank"
+                                  document.body.appendChild(link)
+                                  link.click()
+                                  document.body.removeChild(link)
+                                } catch (err) {
+                                  console.error("Auto download failed", err)
+                                }
 
-                            setIssuedStatement({
-                              statementNumber: stmtNum,
-                              url: fallbackUrl,
-                              clientName: client.legal_name || client.short_name,
-                              totalValue: totalValue,
-                              moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
-                            })
-                            setExpandedClient(null)
-                            router.refresh()
-                          } else {
-                            alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
-                          }
-                        }}
-                      >
-                        {isLoading ? "..." : "Gerar Fatura Linke"}
-                      </button>
-                      <button 
-                        className="flex items-center justify-center px-3 py-1.5 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                        disabled={activeCount === 0 || isLoading}
-                        onClick={async (e) => { 
-                          e.stopPropagation(); 
-                          if (!confirm(`Emitir Fatura Oficial Moloni e Extrato para ${activeCount} envios no total de ${totalValue.toLocaleString('pt-PT')}€ (Listados um a um)?`)) return;
-                          
-                          setIsLoading(true);
-                          const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
-                          const { emitInvoiceAction } = await import("@/app/actions/moloni")
-                          
-                          const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, false);
-                          setIsLoading(false);
-                          if (res?.success && res.statementNumber) {
-                            const stmtNum = res.statementNumber
-                            const officialPdfUrl = `/api/statements/${encodeURIComponent(stmtNum)}/moloni-pdf`
-                            const fallbackUrl = `/api/statements/${encodeURIComponent(stmtNum)}/pdf`
-                            const hasOfficialMoloni = !!res.moloniDocumentPdf
+                                setIssuedStatement({
+                                  statementNumber: stmtNum,
+                                  url: fallbackUrl,
+                                  clientName: client.legal_name || client.short_name,
+                                  totalValue: totalValue,
+                                  moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
+                                })
+                                setExpandedClient(client.id)
+                                router.refresh()
+                              } else {
+                                alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
+                              }
+                            }}
+                          >
+                            {isLoading ? "..." : "Gerar Fatura Linke"}
+                          </button>
+                          <button 
+                            className="flex items-center justify-center px-3 py-1.5 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                            disabled={activeCount === 0 || isLoading}
+                            onClick={async (e) => { 
+                              e.stopPropagation(); 
+                              if (!confirm(`Emitir Fatura Oficial Moloni e Extrato para ${activeCount} envios no total de ${totalValue.toLocaleString('pt-PT')}€ (Listados um a um)?`)) return;
+                              
+                              setIsLoading(true);
+                              const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
+                              const { emitInvoiceAction } = await import("@/app/actions/moloni")
+                              
+                              const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, false);
+                              setIsLoading(false);
+                              if (res?.success && res.statementNumber) {
+                                const stmtNum = res.statementNumber
+                                const officialPdfUrl = `/api/statements/${encodeURIComponent(stmtNum)}/moloni-pdf`
+                                const fallbackUrl = `/api/statements/${encodeURIComponent(stmtNum)}/pdf`
+                                const hasOfficialMoloni = !!res.moloniDocumentPdf
 
-                            const downloadTarget = hasOfficialMoloni ? officialPdfUrl : fallbackUrl
-                            const downloadFilename = hasOfficialMoloni 
-                              ? `Fatura_Oficial_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
-                              : `Extrato_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
+                                const downloadTarget = hasOfficialMoloni ? officialPdfUrl : fallbackUrl
+                                const downloadFilename = hasOfficialMoloni 
+                                  ? `Fatura_Oficial_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
+                                  : `Extrato_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
 
-                            try {
-                              const link = document.createElement("a")
-                              link.href = downloadTarget
-                              link.setAttribute("download", downloadFilename)
-                              link.target = "_blank"
-                              document.body.appendChild(link)
-                              link.click()
-                              document.body.removeChild(link)
-                            } catch (err) {
-                              console.error("Auto download failed", err)
-                            }
+                                try {
+                                  const link = document.createElement("a")
+                                  link.href = downloadTarget
+                                  link.setAttribute("download", downloadFilename)
+                                  link.target = "_blank"
+                                  document.body.appendChild(link)
+                                  link.click()
+                                  document.body.removeChild(link)
+                                } catch (err) {
+                                  console.error("Auto download failed", err)
+                                }
 
-                            setIssuedStatement({
-                              statementNumber: stmtNum,
-                              url: fallbackUrl,
-                              clientName: client.legal_name || client.short_name,
-                              totalValue: totalValue,
-                              moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
-                            })
-                            setExpandedClient(null)
-                            router.refresh()
-                          } else {
-                            alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
-                          }
-                        }}
-                      >
-                        {isLoading ? "..." : "Fatura Completa"}
-                      </button>
+                                setIssuedStatement({
+                                  statementNumber: stmtNum,
+                                  url: fallbackUrl,
+                                  clientName: client.legal_name || client.short_name,
+                                  totalValue: totalValue,
+                                  moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
+                                })
+                                setExpandedClient(client.id)
+                                router.refresh()
+                              } else {
+                                alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
+                              }
+                            }}
+                          >
+                            {isLoading ? "..." : "Fatura Completa"}
+                          </button>
+                        </>
+                      ) : clientUnpaid.length > 0 ? (
+                        <>
+                          {clientUnpaid[0].moloni_document_id && !clientUnpaid[0].is_pro_forma && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEmitReceipt(clientUnpaid[0])
+                              }}
+                              className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors"
+                            >
+                              <Cloud className="w-3.5 h-3.5" />
+                              Emitir Recibo
+                            </button>
+                          )}
+                          {(clientUnpaid[0].moloni_document_pdf || clientUnpaid[0].moloni_document_id) && (
+                            <a 
+                              href={`/api/statements/${encodeURIComponent(clientUnpaid[0].statement_number || clientUnpaid[0].id)}/moloni-pdf`}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 rounded-md transition-colors"
+                              title="Descarregar Fatura Moloni"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                          )}
+                        </>
+                      ) : null}
 
                       <div className="text-slate-400 p-1">
                         {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
@@ -351,7 +465,7 @@ export default function ContasCorrenteClient({
                         <div className="bg-slate-50/50 border-b border-slate-100 px-4 py-2.5 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <FileText className="w-4 h-4 text-slate-400" />
-                            <span className="text-xs font-bold text-slate-600">Detalhe de Envios</span>
+                            <span className="text-xs font-bold text-slate-600">Detalhe de Novos Envios</span>
                           </div>
                           <p className="text-[10px] text-slate-500 font-medium">
                             Desmarca os envios que não pretendes incluir na fatura.
@@ -402,38 +516,108 @@ export default function ContasCorrenteClient({
                       </div>
                     </div>
                   )}
+                    
+                  {/* Unpaid Statements for this client */}
+                  {isExpanded && clientUnpaid.length > 0 && (
+                    <div className="bg-slate-50 px-6 pb-6 pl-16">
+                      <div className="bg-white rounded-xl border border-amber-200 overflow-hidden shadow-2xs">
+                        <div className="bg-amber-50/50 border-b border-amber-100 px-4 py-2.5 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-500" />
+                            <span className="text-xs font-bold text-amber-700">Contas a Receber (Faturas Moloni Emitidas - Aguardando Recibo)</span>
+                          </div>
+                          <span className="text-[10px] text-amber-600 font-semibold">
+                            A conta só passa para o Histórico de Contas Pagas após emitir o Recibo
+                          </span>
+                        </div>
+                        <div className="divide-y divide-slate-100">
+                          {clientUnpaid.map(stmt => (
+                            <div key={stmt.id} className="px-4 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
+                              <div>
+                                <p className="text-sm font-bold text-slate-800 font-mono">{stmt.statement_number}</p>
+                                <p className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
+                                  <span>Emitido a {new Date(stmt.created_at).toLocaleDateString("pt-PT")}</span>
+                                  <span>•</span>
+                                  <span>{stmt.shipments_count || stmt.shipment_ids?.length || 0} envios</span>
+                                  <span>•</span>
+                                  <span className="text-amber-600 font-bold">Aguardando Recibo</span>
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <span className="text-sm font-black text-slate-900 font-mono">
+                                  {Number(stmt.total_value || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                                </span>
+                                {stmt.moloni_document_id && !stmt.is_pro_forma && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleEmitReceipt(stmt)
+                                    }}
+                                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[11px] rounded-lg border border-emerald-200 transition-colors flex items-center gap-1.5"
+                                  >
+                                    <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                                    Emitir Recibo
+                                  </button>
+                                )}
+                                {(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
+                                  <a 
+                                    href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 rounded-md transition-colors"
+                                    title="Descarregar Fatura Moloni"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                  </a>
+                                )}
+                                <a 
+                                  href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/proforma-pdf`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-600 rounded-md transition-colors"
+                                  title="Descarregar Fatura Linke"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </a>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })
-          )}
-        </div>
-      </div>
-
-      {/* Histórico de Extratos Emitidos */}
-      {statements && statements.length > 0 && (
-        <div className="bg-white border border-slate-200 shadow-2xs rounded-2xl mb-48">
-          <div 
-            className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between cursor-pointer select-none rounded-t-2xl"
-            onClick={() => setShowHistory(!showHistory)}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-                <CheckCircle2 className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-slate-800">Extratos / Faturas Emitidas Recentemente</h2>
-                <p className="text-xs text-slate-500">{statements.length} extrato(s) emitido(s)</p>
-              </div>
-            </div>
-            <div className="text-slate-400">
-              {showHistory ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-            </div>
+            )}
           </div>
+        </div>
 
-          {showHistory && (
-            <div className="divide-y divide-slate-100">
-              {statements.map((stmt: any, index: number) => (
-                <div key={stmt.id} className={`px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors ${index === statements.length - 1 ? 'rounded-b-2xl' : ''}`}>
+        {/* Histórico de Extratos Emitidos (Pagos) */}
+        {paidStatements && paidStatements.length > 0 && (
+          <div className="bg-white border border-slate-200 shadow-2xs rounded-2xl mb-48">
+            <div 
+              className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between cursor-pointer select-none rounded-t-2xl"
+              onClick={() => setShowHistory(!showHistory)}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-800">Histórico de Contas Pagas</h2>
+                  <p className="text-xs text-slate-500">{paidStatements.length} extrato(s) pago(s)</p>
+                </div>
+              </div>
+              <div className="text-slate-400">
+                {showHistory ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+              </div>
+            </div>
+
+            {showHistory && (
+              <div className="divide-y divide-slate-100">
+                {paidStatements.map((stmt: any, index: number) => (
+                <div key={stmt.id} className={`px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors ${index === paidStatements.length - 1 ? 'rounded-b-2xl' : ''}`}>
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 flex-shrink-0">
                       <FileText className="w-4 h-4" />
@@ -592,6 +776,17 @@ export default function ContasCorrenteClient({
                                   const { emitMoloniReceiptForStatementAction } = await import("@/app/actions/moloni")
                                   const res = await emitMoloniReceiptForStatementAction(stmt.statement_number || stmt.id)
                                   if (res.success) {
+                                    if (res.moloniReceiptPdf) {
+                                      try {
+                                        const link = document.createElement("a")
+                                        link.href = res.moloniReceiptPdf
+                                        link.setAttribute("download", `Recibo_${(stmt.statement_number || stmt.id).replace(/[\\/\\]/g, "_")}.pdf`)
+                                        link.target = "_blank"
+                                        document.body.appendChild(link)
+                                        link.click()
+                                        document.body.removeChild(link)
+                                      } catch (err) {}
+                                    }
                                     alert("Recibo emitido com sucesso!")
                                     window.location.reload()
                                   } else {

@@ -139,6 +139,8 @@ export class MoloniClient {
             envContent += `\nMOLONI_REFRESH_TOKEN=${data.refresh_token}\n`;
           }
           fs.writeFileSync(envPath, envContent, "utf8");
+          // Update the runtime process.env so subsequent requests in this Node process use the new token
+          process.env.MOLONI_REFRESH_TOKEN = data.refresh_token;
         }
       } catch (e) {
         console.warn("Could not save updated refresh token to .env.local:", e);
@@ -501,47 +503,6 @@ export class MoloniClient {
     return result;
   }
 
-  /**
-   * Cria um Recibo para liquidar uma Fatura
-   */
-  async createReceipt(data: {
-    customerId: number;
-    date: string;
-    documentSetId: number; 
-    documentId: number;
-    value: number;
-  }) {
-    const payload: any = {
-      date: data.date,
-      document_set_id: data.documentSetId,
-      customer_id: data.customerId,
-      status: 1, // Fechado
-      payments: [
-        {
-          payment_method_id: 3, // Transferência Bancária / Outro
-          value: Number(data.value),
-          date: data.date
-        }
-      ],
-      documents: [
-        {
-          document_id: data.documentId,
-          value: Number(data.value)
-        }
-      ]
-    };
-
-    let result;
-    try {
-      result = await this.request("receipts/insert", payload);
-    } catch (err1: any) {
-      console.warn("Could not insert status 1 receipt, falling back to status 0:", err1?.message);
-      payload.status = 0;
-      result = await this.request("receipts/insert", payload);
-    }
-
-    return result;
-  }
 
   /**
    * Cria uma Fatura Pró-Forma

@@ -451,6 +451,10 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
         }
 
         fs.writeFileSync(envPath, envContent, "utf8")
+        
+        // Ensure running Node process gets updated values immediately
+        process.env.MOLONI_REFRESH_TOKEN = refreshToken
+        process.env.MOLONI_COMPANY_ID = companyId
       }
     } catch (e: any) {
       console.warn("Could not write to .env.local:", e?.message)
@@ -1269,7 +1273,7 @@ export async function emitMoloniReceiptForStatementAction(statementId: string) {
       customerId: moloniCustomerId,
       date: dateNow,
       documentSetId: documentSetId,
-      documentId: stmt.moloni_document_id,
+      invoiceId: stmt.moloni_document_id,
       value: Number(stmt.total_value || 0)
     })
 
@@ -1301,7 +1305,7 @@ export async function emitMoloniReceiptForStatementAction(statementId: string) {
 
     revalidatePath("/ops/faturacao/contas-corrente")
 
-    return { success: true }
+    return { success: true, moloniReceiptPdf }
   } catch (err: any) {
     console.error("emitMoloniReceiptForStatementAction error:", err)
     return { success: false, error: err.message || "Erro ao emitir recibo no Moloni" }
