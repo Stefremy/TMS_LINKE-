@@ -464,11 +464,42 @@ export async function emitCttShipmentAction(shipmentInput: {
     Observations: observationsString,
   }
 
-  // Serviços especiais — NÃO enviados para a API CTT.
-  // O subproduto EMSF056.01 (e equivalentes) rejeita qualquer SpecialServiceType via SOAP.
-  // Os serviços especiais (Frágil, SMS, COD, Retorno) são registados internamente no Linke
-  // para efeitos de faturação e tracking, mas não são transmitidos no payload SOAP.
+  // Mapear os códigos internos do Linke para os enumeradores literais aceites pela API dos CTT
+  const CTT_SPECIAL_SERVICES_MAP: Record<string, string> = {
+    "cod": "AgainstReimbursement",
+    "saturday": "Saturday",
+    "return_signed": "ReturnDocumentSigned",
+    "insurance": "SpecialInsurance",
+    "fragil": "Fragil",
+    "delivery_point": "DeliveryPoint",
+    "auth_return": "AuthorizeReturn",
+    "sms_tracking": "SMS",
+    "time_window": "TimeWindow",
+    "second_delivery": "SecondScheduledDelivery",
+    "postal_object": "PostalObject",
+    "nominative_check": "NominativeCheck",
+    "back": "Back",
+    "multiple_home_delivery": "MultipleHomeDelivery",
+    "certain_day": "CertainDay",
+    "phone_contact": "PhoneContact",
+    "live_tracking": "LiveTracking",
+    "contacto_agendamento": "ContactoAgendamento",
+    "delivery_aggregation": "DeliveryAggregation"
+  }
+
   const specialServices: CTTSpecialService[] = []
+  if (shipmentInput.selectedSpecialServices && shipmentInput.selectedSpecialServices.length > 0) {
+    for (const code of shipmentInput.selectedSpecialServices) {
+      const mappedType = CTT_SPECIAL_SERVICES_MAP[code]
+      if (mappedType) {
+        if (code === "cod" && shipmentInput.codValue) {
+          specialServices.push({ SpecialServiceType: mappedType as any, Value: shipmentInput.codValue })
+        } else {
+          specialServices.push({ SpecialServiceType: mappedType as any })
+        }
+      }
+    }
+  }
 
   const payload = {
     clientReference: shipmentData.ClientReference,

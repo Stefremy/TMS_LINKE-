@@ -39,25 +39,25 @@ export interface CTTAddressData {
 }
 
 export type SpecialServiceType =
-  | 1  // PostalObject
-  | 2  // AgainstReimbursement (Cobrança/COD)
-  | 3  // NominativeCheck
-  | 4  // Saturday
-  | 5  // ReturnDocumentSigned (Guia assinada)
-  | 6  // SpecialInsurance (Seguro Extra)
-  | 7  // Fragil
-  | 9  // Back
-  | 12 // SecondScheduledDelivery
-  | 14 // SMS
-  | 18 // DeliveryPoint (Ponto de Entrega / Locker)
-  | 20 // AuthorizeReturn
-  | 21 // MultipleHomeDelivery
-  | 22 // TimeWindow (Janela Horária)
-  | 23 // CertainDay (Dia Certo)
-  | 24 // PhoneContact
-  | 37 // LiveTracking
-  | 38 // ContactoAgendamento
-  | 39 // DeliveryAggregation
+  | "PostalObject"
+  | "AgainstReimbursement" // 2 - Cobrança
+  | "NominativeCheck"
+  | "Saturday"             // 4 - Sábado
+  | "ReturnDocumentSigned" // 5 - Guia assinada
+  | "SpecialInsurance"     // 6 - Seguro Extra
+  | "Fragil"               // 7 - Frágil
+  | "Back"
+  | "SecondScheduledDelivery"
+  | "SMS"                  // 14
+  | "DeliveryPoint"        // 18
+  | "AuthorizeReturn"      // 20
+  | "MultipleHomeDelivery"
+  | "TimeWindow"           // 22
+  | "CertainDay"           // 23
+  | "PhoneContact"         // 24
+  | "LiveTracking"         // 37
+  | "ContactoAgendamento"  // 38
+  | "DeliveryAggregation"  // 39
 
 export interface CTTSpecialService {
   SpecialServiceType: SpecialServiceType
