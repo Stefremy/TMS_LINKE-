@@ -443,10 +443,25 @@ export async function emitCttShipmentAction(shipmentInput: {
     Email: shipmentInput.recipient.email,
   }
 
+  // Preparar observações baseadas nos serviços especiais para imprimir na etiqueta CTT
+  const obsLines: string[] = []
+  if (shipmentInput.selectedSpecialServices?.includes('fragil')) {
+    obsLines.push("CUIDADO: FRÁGIL")
+  }
+  if (shipmentInput.selectedSpecialServices?.includes('cod') && shipmentInput.codValue) {
+    obsLines.push(`COBRANÇA: ${shipmentInput.codValue.toFixed(2)}€`)
+  }
+  if (shipmentInput.selectedSpecialServices?.includes('auth_return')) {
+    obsLines.push("LOGÍSTICA INVERSA")
+  }
+  
+  const observationsString = obsLines.length > 0 ? obsLines.join(" | ").substring(0, 70) : undefined
+
   const shipmentData: CTTShipmentData = {
     ClientReference: shipmentInput.ref || `TRK-${Date.now().toString().slice(-8)}`,
     Weight: Math.round((shipmentInput.weightKg || 1) * 1000), // Gramas
     Quantity: shipmentInput.volumes || 1,
+    Observations: observationsString,
   }
 
   // Serviços especiais — NÃO enviados para a API CTT.

@@ -63,11 +63,8 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
   const [heightCm, setHeightCm] = React.useState("")
 
   // Special Services selections
-  const [isCOD, setIsCOD] = React.useState(false)
+  const [selectedSpecialServices, setSelectedSpecialServices] = React.useState<string[]>([])
   const [codAmount, setCodAmount] = React.useState("50.00")
-  const [isFragil, setIsFragil] = React.useState(false)
-  const [isSMSNotification, setIsSMSNotification] = React.useState(true)
-  const [isReturn, setIsReturn] = React.useState(false)
 
   // Generation feedback & session history
   const [generatedGuia, setGeneratedGuia] = React.useState<string | null>(null)
@@ -193,40 +190,31 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
     let specialTotal = 0
     const activeSpecialItems: { name: string; amount: number }[] = []
 
-    // 1. COD (Cobrança)
-    if (isCOD) {
-      const feeCfg = specialFeesList.find((f) => f.special_service_code === "cod")
-      const pct = feeCfg?.percentage_value ?? 2.0
-      const minVal = feeCfg?.min_value ?? 1.80
-      const codVal = parseFloat(codAmount) || 0
-      const fee = Math.max(codVal * (pct / 100), minVal)
-      specialTotal += fee
-      activeSpecialItems.push({ name: "Cobrança / Reembolso", amount: fee })
-    }
-
-    // 2. Fragil
-    if (isFragil) {
-      const feeCfg = specialFeesList.find((f) => f.special_service_code === "fragil")
-      const fee = feeCfg?.fixed_value ?? 1.50
-      specialTotal += fee
-      activeSpecialItems.push({ name: "Tratamento Frágil", amount: fee })
-    }
-
-    // 3. SMS
-    if (isSMSNotification) {
-      const feeCfg = specialFeesList.find((f) => f.special_service_code === "sms_tracking")
-      const fee = feeCfg?.fixed_value ?? 0.15
-      specialTotal += fee
-      activeSpecialItems.push({ name: "Alerta SMS & Tracking", amount: fee })
-    }
-
-    // 4. Logística Inversa (Return)
-    if (isReturn) {
-      const feeCfg = specialFeesList.find((f) => f.special_service_code === "auth_return")
-      const fee = feeCfg?.fixed_value ?? 3.85
-      specialTotal += fee
-      activeSpecialItems.push({ name: "Logística Inversa (Retorno)", amount: fee })
-    }
+    selectedSpecialServices.forEach(serviceCode => {
+      const feeCfg = specialFeesList.find(f => f.special_service_code === serviceCode)
+      if (feeCfg) {
+        let fee = 0
+        if (feeCfg.fee_type === "percentage") {
+          const pct = feeCfg.percentage_value ?? 0
+          const minVal = feeCfg.min_value ?? 0
+          
+          if (serviceCode === "cod") {
+            const codVal = parseFloat(codAmount) || 0
+            fee = Math.max(codVal * (pct / 100), minVal)
+          } else {
+            // For other percentage fees (e.g. SpecialInsurance), assume it applies to base price unless specified otherwise.
+            // But usually SpecialInsurance also requires a declared value input, which we might need to add later.
+            // For now, if no declared value, just apply min_value.
+            fee = minVal
+          }
+        } else {
+          fee = feeCfg.fixed_value ?? 0
+        }
+        
+        specialTotal += fee
+        activeSpecialItems.push({ name: feeCfg.special_service_name, amount: fee })
+      }
+    })
 
     // Subtotal and Discount
     const subtotal = base + fuelVal + specialTotal
@@ -249,11 +237,8 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
     activeLinkeService,
     weight,
     specialFeesList,
-    isCOD,
+    selectedSpecialServices,
     codAmount,
-    isFragil,
-    isSMSNotification,
-    isReturn,
   ])
 
   const handleCreateShipment = async (e: React.FormEvent) => {
@@ -271,12 +256,6 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
     setFieldError(null)
 
     try {
-      const activeSpecial: string[] = []
-      if (isCOD) activeSpecial.push("cod")
-      if (isFragil) activeSpecial.push("fragil")
-      if (isSMSNotification) activeSpecial.push("sms_tracking")
-      if (isReturn) activeSpecial.push("auth_return")
-
       const res = await emitClientGuiaAction({
         clientId: currentClient?.id,
         clientName: currentClient?.short_name || currentClient?.legal_name,
@@ -298,9 +277,8 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
         serviceName: chosenService,
         subProductId: activeLinkeService?.webservice_service_code,
         calculatedPrice: numericVal,
-        isReturn,
         codValue: parseFloat(codAmount) || 0,
-        selectedSpecialServices: activeSpecial,
+        selectedSpecialServices,
       })
 
       const newCode = res.guia
@@ -712,70 +690,48 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-              
-              {/* 1. Cobrança / AgainstReimbursement */}
-              <div className={`p-3 rounded-xl border transition-colors ${isCOD ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="opt_cod"
-                    checked={isCOD} 
-                    onChange={(e) => setIsCOD(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
-                  />
-                  <label htmlFor="opt_cod" className="font-bold text-slate-800 cursor-pointer text-xs">
-                    Cobrança / Reembolso (COD)
-                  </label>
-                </div>
-                {isCOD && (
-                  <div className="mt-2 pl-6 flex items-center gap-1.5">
-                    <span className="text-[11px] text-slate-500">Valor (€):</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={codAmount}
-                      onChange={(e) => setCodAmount(e.target.value)}
-                      className="w-24 border border-slate-300 rounded-lg px-2 py-0.5 text-xs font-mono font-bold bg-white"
-                    />
+              {specialFeesList.filter(f => f.is_enabled).map(fee => {
+                const isSelected = selectedSpecialServices.includes(fee.special_service_code)
+                return (
+                  <div key={fee.special_service_code} className={`p-3 rounded-xl border transition-colors ${isSelected ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="checkbox" 
+                        id={`opt_${fee.special_service_code}`}
+                        checked={isSelected} 
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSpecialServices(prev => [...prev, fee.special_service_code])
+                          } else {
+                            setSelectedSpecialServices(prev => prev.filter(c => c !== fee.special_service_code))
+                          }
+                        }}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
+                      />
+                      <label htmlFor={`opt_${fee.special_service_code}`} className="font-bold text-slate-800 cursor-pointer text-xs">
+                        {fee.special_service_name}
+                      </label>
+                    </div>
+                    {fee.special_service_code === "cod" && isSelected && (
+                      <div className="mt-2 pl-6 flex items-center gap-1.5">
+                        <span className="text-[11px] text-slate-500">Valor (€):</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={codAmount}
+                          onChange={(e) => setCodAmount(e.target.value)}
+                          className="w-24 border border-slate-300 rounded-lg px-2 py-0.5 text-xs font-mono font-bold bg-white"
+                        />
+                      </div>
+                    )}
+                    {fee.special_service_code !== "cod" && (
+                      <p className="text-[10px] text-slate-400 pl-6 mt-1 line-clamp-2" title={fee.description}>
+                        {fee.fee_type === "fixed" ? `+${fee.fixed_value?.toFixed(2)}€` : `+${fee.percentage_value}% (mín. ${fee.min_value?.toFixed(2)}€)`} {fee.description ? `- ${fee.description}` : ""}
+                      </p>
+                    )}
                   </div>
-                )}
-              </div>
-
-
-              {/* 3. Fragil */}
-              <div className={`p-3 rounded-xl border transition-colors ${isFragil ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="opt_frag"
-                    checked={isFragil} 
-                    onChange={(e) => setIsFragil(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
-                  />
-                  <label htmlFor="opt_frag" className="font-bold text-slate-800 cursor-pointer text-xs">
-                    Mercadoria Frágil
-                  </label>
-                </div>
-                <p className="text-[10px] text-slate-400 pl-6 mt-1">+1.50€ manuseamento</p>
-              </div>
-
-              {/* 4. Logística Inversa */}
-              <div className={`p-3 rounded-xl border transition-colors ${isReturn ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="opt_return"
-                    checked={isReturn} 
-                    onChange={(e) => setIsReturn(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
-                  />
-                  <label htmlFor="opt_return" className="font-bold text-slate-800 cursor-pointer text-xs">
-                    Logística Inversa (Retorno)
-                  </label>
-                </div>
-                <p className="text-[10px] text-slate-400 pl-6 mt-1">+3.85€ autorização</p>
-              </div>
-
+                )
+              })}
             </div>
           </div>
 
