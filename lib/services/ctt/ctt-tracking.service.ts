@@ -14,6 +14,32 @@ export interface ParsedTrackingEvent {
   isTerminal: boolean
 }
 
+/**
+ * Calcula o offset de fuso horário de Portugal continental (Europe/Lisbon) para uma determinada data.
+ * Em horário de verão (WEST) retorna "+01:00", em horário de inverno (WET) retorna "+00:00".
+ */
+export function getLisbonTzOffset(year: number, month: number, day: number): string {
+  try {
+    const probe = new Date(Date.UTC(year, month - 1, day, 12, 0, 0))
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Lisbon",
+      timeZoneName: "shortOffset"
+    })
+    const parts = formatter.formatToParts(probe)
+    const tzPart = parts.find(p => p.type === "timeZoneName")
+    if (tzPart && tzPart.value) {
+      const match = tzPart.value.match(/GMT([+-]\d+)(?::(\d+))?/)
+      if (match) {
+        const sign = match[1].startsWith("-") ? "-" : "+"
+        const h = Math.abs(parseInt(match[1], 10)).toString().padStart(2, "0")
+        const m = (match[2] || "00").padStart(2, "0")
+        return `${sign}${h}:${m}`
+      }
+    }
+  } catch {}
+  return "+01:00"
+}
+
 export class CTTTrackingService {
   /**
    * Mapeia um evento CTT bruto para a representação normalizada do TMS LINKE
@@ -143,11 +169,15 @@ export class CTTTrackingService {
          const sit = evt._CodigoSituacao || undefined
          let date = undefined
          if (evt._DataEvento) {
-           const parts = evt._DataEvento.split(' ')
+           const parts = evt._DataEvento.trim().split(' ')
            if (parts.length === 2) {
              const [d, t] = parts
              const [day, month, year] = d.split('-')
-             date = `${year}-${month}-${day}T${t}`
+             if (year && month && day) {
+               // Obter o offset de fuso horário de Portugal (Europe/Lisbon: +01:00 no verão, +00:00 no inverno)
+               const offset = getLisbonTzOffset(parseInt(year, 10), parseInt(month, 10), parseInt(day, 10))
+               date = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${t}${offset}`
+             }
            }
          }
          const loc = evt._DescricaoNoEvento || "Rede CTT"
