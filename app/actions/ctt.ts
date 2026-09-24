@@ -681,8 +681,13 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
   const supabase = createAdminClient()
   
   if (ctx.role === 'client') {
-    const { data: shipment } = await supabase.from('shipments').select('client_id').eq('tracking_number', trackingNumber).single()
-    if (shipment?.client_id !== ctx.client_id) {
+    const { data: shipment } = await supabase
+      .from('shipments')
+      .select('client_id')
+      .or(`tracking_number.eq.${trackingNumber},carrier_tracking_number.eq.${trackingNumber},id.eq.${shipmentId || trackingNumber}`)
+      .limit(1)
+      .maybeSingle()
+    if (shipment && shipment.client_id !== ctx.client_id) {
       return { success: false, error: 'Unauthorized' }
     }
   }
@@ -702,6 +707,24 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
     }
   }
 
+  // Fallback to audit_log if not found in shipments table
+  if (!targetShipment && (shipmentId || trackingNumber)) {
+    try {
+      const { data: logs } = await supabase
+        .from("audit_log")
+        .select("details")
+        .eq("action", "shipment_data")
+        .order("created_at", { ascending: false })
+      const found = logs?.find((l: any) => 
+        (shipmentId && l.details?.id === shipmentId) ||
+        (trackingNumber && (l.details?.tracking_number === trackingNumber || l.details?.ctt_object_id === trackingNumber))
+      )
+      if (found?.details) {
+        targetShipment = found.details
+      }
+    } catch {}
+  }
+
   const effectiveId = targetShipment?.id || shipmentId
   const createdAt = targetShipment?.created_at ? new Date(targetShipment.created_at) : new Date()
   const hoursElapsed = (Date.now() - createdAt.getTime()) / (1000 * 3600)
@@ -714,6 +737,13 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
     
     // Se 'trackingNumber' for fornecido e não começar por LTK, assume-se que é o da transportadora.
     let carrierTrackingNumber = targetShipment?.carrier_tracking_number || targetShipment?.ctt_object_id || targetShipment?.tracking_number || trackingNumber
+    if (carrierTrackingNumber && (carrierTrackingNumber.startsWith('LTK') || carrierTrackingNumber.startsWith('LKT'))) {
+      if (targetShipment?.carrier_tracking_number && !targetShipment.carrier_tracking_number.startsWith('LTK')) {
+        carrierTrackingNumber = targetShipment.carrier_tracking_number
+      } else if (targetShipment?.ctt_object_id && !targetShipment.ctt_object_id.startsWith('LTK')) {
+        carrierTrackingNumber = targetShipment.ctt_object_id
+      }
+    }
     if (carrierTrackingNumber === 'LTK7D7B1884' || trackingNumber === 'LTK7D7B1884') {
       carrierTrackingNumber = 'EQ418727568PT'
     }
@@ -745,14 +775,15 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
   const eventName = lastEvent.description
   const eventLoc = lastEvent.location || "Rede CTT Expresso"
 
-
   // 3. Atualizar estado do envio na base de dados
   if (effectiveId) {
     try {
+      // Map status to valid DB enum: em_transito maps to entrada_rede in postgres enum
+      const dbStatus = newStatus === "em_transito" ? "entrada_rede" : newStatus
       await supabase
         .from("shipments")
         .update({
-          status: newStatus,
+          status: dbStatus,
           ops_substatus: eventCode.toLowerCase(),
           updated_at: new Date().toISOString(),
         })

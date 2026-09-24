@@ -92,11 +92,12 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
     return shipments.filter((item) => {
       const q = searchTerm.toLowerCase().trim()
       const ref = (item.tracking_number || item.id || "").toLowerCase()
-      const cttRef = (item.ctt_object_id || "").toLowerCase()
+      const internalRef = (item.reference || "").toLowerCase()
+      const cttRef = (item.carrier_tracking_number || item.ctt_object_id || "").toLowerCase()
       const rec = (item.recipient_name || "").toLowerCase()
       const addr = (item.recipient_address || "").toLowerCase()
 
-      const matchesSearch = !q || ref.includes(q) || cttRef.includes(q) || rec.includes(q) || addr.includes(q)
+      const matchesSearch = !q || ref.includes(q) || internalRef.includes(q) || cttRef.includes(q) || rec.includes(q) || addr.includes(q)
       const matchesStatus = statusFilter === "todos" || item.status === statusFilter
 
       return matchesSearch && matchesStatus
@@ -298,21 +299,46 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
                 {filteredShipments.map((envio) => (
                   <tr key={envio.id} className="hover:bg-slate-50">
                     <td className="py-3">
-                      <div className="flex flex-col gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedShipment(envio)}
-                          className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer text-left transition-colors text-xs"
-                          title="Clique para ver os detalhes do envio"
-                        >
-                          {envio.tracking_number || envio.id}
-                        </button>
-                        {envio.ctt_object_id && (
-                          <span className="font-mono text-[11px] font-bold text-slate-700 mt-0.5" title="Objeto CTT Expresso">
-                            {envio.ctt_object_id}
-                          </span>
-                        )}
-                      </div>
+                      {(() => {
+                        const linkeRef =
+                          (envio.reference?.startsWith("LTK") ? envio.reference : null) ||
+                          (envio.tracking_number?.startsWith("LTK") ? envio.tracking_number : null) ||
+                          (envio.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1]) ||
+                          envio.reference ||
+                          null
+
+                        const carrierRef =
+                          envio.carrier_tracking_number ||
+                          envio.ctt_object_id ||
+                          (!envio.tracking_number?.startsWith("LTK") ? envio.tracking_number : null)
+
+                        const primaryDisplay = linkeRef || carrierRef || envio.id
+                        const secondaryDisplay = (linkeRef && carrierRef && carrierRef !== linkeRef) ? carrierRef : null
+
+                        return (
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedShipment(envio)}
+                              className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer text-left transition-colors text-xs flex items-center gap-1.5"
+                              title="Clique para ver os detalhes do envio e rastreio interno"
+                            >
+                              <span>{primaryDisplay}</span>
+                              {linkeRef && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded font-sans font-bold leading-none">
+                                  Ref Linke
+                                </span>
+                              )}
+                            </button>
+                            {secondaryDisplay && (
+                              <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-600 mt-0.5" title="Objeto / Guia CTT Expresso">
+                                <span className="text-slate-400 font-sans text-[10px] uppercase font-bold">CTT:</span>
+                                <span className="font-bold text-slate-800">{secondaryDisplay}</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="py-3 font-semibold text-slate-800">{envio.recipient_name}</td>
                     <td className="py-3 text-slate-500 truncate max-w-[200px]">{envio.recipient_address}</td>

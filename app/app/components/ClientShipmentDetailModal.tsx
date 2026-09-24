@@ -69,11 +69,17 @@ export function ClientShipmentDetailModal({
   const [selectedReason, setSelectedReason] = React.useState("11")
   const [selectedSituation, setSelectedSituation] = React.useState("D")
 
-  const internalRef = currentShipment?.tracking_number?.startsWith("LTK") || currentShipment?.tracking_number?.startsWith("LKT")
-    ? currentShipment.tracking_number
-    : `LTK${(currentShipment?.id || "00000000").substring(0, 8).toUpperCase()}`
+  const internalRef =
+    (currentShipment?.reference?.startsWith("LTK") || currentShipment?.reference?.startsWith("LKT") ? currentShipment.reference : null) ||
+    (currentShipment?.tracking_number?.startsWith("LTK") || currentShipment?.tracking_number?.startsWith("LKT") ? currentShipment.tracking_number : null) ||
+    (currentShipment?.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1]) ||
+    currentShipment?.reference ||
+    `LTK${(currentShipment?.id || "00000000").substring(0, 8).toUpperCase()}`
 
-  const carrierTracking = currentShipment?.carrier_tracking_number || currentShipment?.ctt_object_id || (currentShipment?.tracking_number !== internalRef ? currentShipment?.tracking_number : null)
+  const carrierTracking =
+    currentShipment?.carrier_tracking_number ||
+    currentShipment?.ctt_object_id ||
+    (currentShipment?.tracking_number !== internalRef ? currentShipment?.tracking_number : null)
   const tracking = internalRef
   const currentStatus = currentShipment?.status || "pendente"
 
@@ -95,7 +101,19 @@ export function ClientShipmentDetailModal({
   React.useEffect(() => {
     if (shipment) {
       setCurrentShipment(shipment)
-      loadTimeline(shipment.id, shipment.tracking_number)
+      const carrierTrk = shipment.carrier_tracking_number || shipment.ctt_object_id || (!shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null)
+      loadTimeline(shipment.id, carrierTrk || shipment.tracking_number)
+
+      if (carrierTrk && shipment.status !== "entregue" && shipment.status !== "cancelado") {
+        syncCttTrackingAction(carrierTrk, shipment.id).then((res) => {
+          if (res?.success) {
+            loadTimeline(shipment.id, carrierTrk)
+            if (res.latestStatus) {
+              setCurrentShipment((prev: any) => ({ ...prev, status: res.latestStatus }))
+            }
+          }
+        }).catch(() => {})
+      }
     }
   }, [shipment, loadTimeline])
 

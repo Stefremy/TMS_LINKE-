@@ -288,7 +288,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
         destinatario: `${recipientName}${recipientCity ? `, ${recipientCity}` : ""}`,
         transportadora: "CTT Expresso",
         servico: chosenService,
-        estado: "em_transito",
+        estado: "pendente",
         data: new Date().toLocaleDateString("pt-PT"),
         valor: `${calculatedPrice.total}€`,
         numericValue: numericVal,

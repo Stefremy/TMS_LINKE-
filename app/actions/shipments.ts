@@ -53,6 +53,11 @@ async function ensureTenantAndClient(supabase: any, clientId?: string | null, cl
  * Garante e formata um número de objeto CTT Expresso realista e determinístico (ex: EQ418..., DD464..., DB290..., DA839...)
  */
 function formatOrGenerateCttObjectId(s: any): string {
+  // Se carrier_tracking_number for um código CTT válido (ex: EQ419126922PT)
+  if (s?.carrier_tracking_number && /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/i.test(s.carrier_tracking_number.trim())) {
+    return s.carrier_tracking_number.trim().toUpperCase()
+  }
+
   // Se já for um código de envio internacional/nacional UPU S10 (2 letras + 9 dígitos + 2 letras, ex: EQ418725876PT, DD464650336PT)
   if (s?.ctt_object_id && /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/i.test(s.ctt_object_id.trim())) {
     return s.ctt_object_id.trim().toUpperCase()
@@ -140,8 +145,11 @@ export async function getShipmentsAction(): Promise<any[]> {
         if (key && !deletedIds.has(key) && !deletedIds.has(s.id)) {
           const cttCode = formatOrGenerateCttObjectId(s)
           const linkeRef = s.tracking_number?.startsWith("LTK") ? s.tracking_number : s.reference || null
+          const rawStatus = s.status
+          const normalizedStatus = (rawStatus === "entrada_rede" || rawStatus === "recolhido") ? "em_transito" : rawStatus
           shipmentsMap.set(key, {
             ...s,
+            status: normalizedStatus,
             reference: linkeRef,
             ctt_object_id: cttCode,
           })
@@ -179,25 +187,39 @@ export async function getShipmentsAction(): Promise<any[]> {
               || null
 
             if (existing) {
-              const effectiveTracking = isRealTracking(s.tracking_number)
-                ? s.tracking_number
-                : isRealTracking(existing.tracking_number)
-                ? existing.tracking_number
-                : isRealTracking(s.ctt_object_id)
-                ? s.ctt_object_id
-                : existing.tracking_number || s.tracking_number
+              // LTK internal ref ALWAYS wins for tracking_number (what the client sees)
+              // CTT EQ/DD/DB number goes into carrier_tracking_number and ctt_object_id only
+              const ltkRef =
+                existing.tracking_number?.startsWith("LTK") ? existing.tracking_number
+                : s.tracking_number?.startsWith("LTK") ? s.tracking_number
+                : linkeRef
+
+              const carrierRef =
+                isRealTracking(existing.carrier_tracking_number) ? existing.carrier_tracking_number
+                : isRealTracking(s.carrier_tracking_number) ? s.carrier_tracking_number
+                : isRealTracking(s.tracking_number) ? s.tracking_number
+                : isRealTracking(existing.tracking_number) ? existing.tracking_number
+                : isRealTracking(s.ctt_object_id) ? s.ctt_object_id
+                : existing.carrier_tracking_number || s.carrier_tracking_number
+
+              // Use LTK as the display tracking_number; fall back to carrier ref if no LTK exists
+              const effectiveTracking = ltkRef || carrierRef || existing.tracking_number || s.tracking_number
+
+              const currentStatus = existing.status || s.status
+              const normalizedStatus = (currentStatus === "entrada_rede" || currentStatus === "recolhido") ? "em_transito" : currentStatus
 
               shipmentsMap.set(key, {
                 ...existing,
                 ...s,
                 // Status vem SEMPRE da tabela shipments (mais atualizado), nunca do audit_log
-                status: existing.status || s.status,
-                // carrier_tracking_number vem da tabela shipments
-                carrier_tracking_number: existing.carrier_tracking_number || s.carrier_tracking_number,
-                reference: linkeRef,
+                status: normalizedStatus,
+                // LTK stays as tracking_number; EQ goes to carrier_tracking_number
                 tracking_number: effectiveTracking,
+                carrier_tracking_number: carrierRef,
+                reference: linkeRef,
                 ctt_label_base64: s.ctt_label_base64 || existing.ctt_label_base64,
-                ctt_object_id: formatOrGenerateCttObjectId({ ...existing, ...s, tracking_number: effectiveTracking }),
+                // ctt_object_id is always derived from the CTT EQ/DD carrier number
+                ctt_object_id: formatOrGenerateCttObjectId({ ...existing, ...s, tracking_number: carrierRef || effectiveTracking }),
               })
             } else {
               const cttCode = formatOrGenerateCttObjectId(s)
@@ -729,15 +751,35 @@ export async function emitClientGuiaAction(data: {
   }
 
   // ─── STEP 2: CTT accepted — now write to DB ─────────────────────────────────
-  // Insert into shipments table
+  // Insert into shipments table (only valid table columns to prevent silent schema rejection)
   try {
+    const shipmentRow = {
+      id: shipmentId,
+      tenant_id: shipmentData.tenant_id,
+      client_id: shipmentData.client_id,
+      tracking_number: trackingNumber,
+      carrier_tracking_number: realGuia,
+      carrier_code: "ctt",
+      service_type: shipmentData.service_type,
+      status: "pendente",
+      ops_substatus: null,
+      sender_name: shipmentData.sender_name,
+      sender_address: shipmentData.sender_address,
+      sender_zip3: shipmentData.sender_zip3,
+      sender_zip4: shipmentData.sender_zip4,
+      recipient_name: shipmentData.recipient_name,
+      recipient_address: shipmentData.recipient_address,
+      recipient_zip3: shipmentData.recipient_zip3,
+      recipient_zip4: shipmentData.recipient_zip4,
+      buy_price: shipmentData.buy_price,
+      sell_price: shipmentData.sell_price,
+      created_at: shipmentData.created_at,
+      updated_at: shipmentData.updated_at,
+    }
+
     const { error } = await supabase
       .from("shipments")
-      .insert({
-        ...shipmentData,
-        tracking_number: realGuia,
-        status: "em_transito",
-      })
+      .insert(shipmentRow)
 
     if (error) {
       console.warn("DB shipments insert note:", error.message)
@@ -746,7 +788,7 @@ export async function emitClientGuiaAction(data: {
     console.warn("Error inserting into shipments table:", err?.message)
   }
 
-  // Dual-write to audit_log
+  // Dual-write to audit_log with full rich details
   try {
     await supabase.from("audit_log").insert({
       tenant_id: (await getTenantId()),
@@ -756,7 +798,7 @@ export async function emitClientGuiaAction(data: {
         tracking_number: realGuia,
         ctt_object_id: realGuia,
         ctt_label_base64: labelBase64,
-        status: "em_transito",
+        status: "pendente",
       },
     })
   } catch (err: any) {
@@ -888,8 +930,8 @@ export async function regenerateCttLabelAction(shipmentId: string) {
 
     try {
       await supabase.from("shipments").update({
-        tracking_number: updatedGuia,
-        status: "em_transito",
+        // Keep tracking_number as the internal LTK ref — only update the carrier (CTT EQ) number
+        carrier_tracking_number: updatedGuia,
         updated_at: new Date().toISOString(),
       }).eq("id", shipment.id)
     } catch {}
@@ -907,8 +949,8 @@ export async function regenerateCttLabelAction(shipmentId: string) {
             ...targetLog.details,
             tracking_number: updatedGuia,
             ctt_object_id: updatedGuia,
+            carrier_tracking_number: updatedGuia,
             ctt_label_base64: cttRes.labelBase64,
-            status: "em_transito",
             updated_at: new Date().toISOString(),
           }
         }).eq("id", targetLog.id)
@@ -1078,11 +1120,11 @@ export async function getShipmentTrackingTimelineAction(
   //     Útil quando o envio no audit_log tem um ID diferente do que está na tabela shipments.
   if (events.length === 0 && trackingNumber) {
     try {
-      // Encontrar o shipment real pelo carrier_tracking_number
+      // Encontrar o shipment real pelo carrier_tracking_number OU tracking_number (LTK)
       const { data: linkedShipments } = await supabase
         .from("shipments")
         .select("id")
-        .eq("carrier_tracking_number", trackingNumber)
+        .or(`carrier_tracking_number.eq.${trackingNumber},tracking_number.eq.${trackingNumber}`)
 
       if (linkedShipments && linkedShipments.length > 0) {
         const linkedId = linkedShipments[0].id
@@ -1442,7 +1484,17 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
 
   // Identificar dados do operador / carrier provider (ex: CTT Expresso)
   const carrierCode = shipment.carrier_name || "ctt"
-  const carrierTrackingNumber = shipment.ctt_object_id || shipment.tracking_number
+  const linkeInternalRef = 
+    (shipment.reference?.startsWith("LTK") ? shipment.reference : null) ||
+    (shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null) ||
+    shipment.reference ||
+    shipment.tracking_number
+
+  const carrierTrackingNumber = 
+    shipment.carrier_tracking_number || 
+    shipment.ctt_object_id || 
+    (shipment.tracking_number !== linkeInternalRef ? shipment.tracking_number : null)
+
   const carrierDirectUrl = carrierCode.toLowerCase().includes("ctt") && carrierTrackingNumber
     ? `https://www.ctt.pt/feapl_2/app/open/objectSearch/objectSearch.jspx?objects=${encodeURIComponent(carrierTrackingNumber)}`
     : null
@@ -1460,10 +1512,10 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
     success: true,
     shipment: {
       id: shipment.id,
-      trackingNumber: shipment.tracking_number || shipment.id.substring(0, 8).toUpperCase(),
+      trackingNumber: linkeInternalRef || shipment.id.substring(0, 8).toUpperCase(),
       serviceType: shipment.service_type || "CTT Expresso 24H",
       carrierName: carrierCode.toUpperCase() === "CTT" ? "CTT Expresso" : (shipment.carrier_name || "CTT Expresso"),
-      carrierTrackingNumber: shipment.ctt_object_id || null,
+      carrierTrackingNumber: carrierTrackingNumber || null,
       carrierDirectUrl,
       status: shipment.status || "em_distribuicao",
       createdAt: shipment.created_at,

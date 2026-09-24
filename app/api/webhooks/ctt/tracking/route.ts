@@ -36,11 +36,12 @@ export async function POST(req: Request) {
     const results = []
 
     for (const evt of payload.events) {
-      // Find the shipment
+      // Look up by carrier_tracking_number (EQ…) first; fall back to tracking_number for
+      // legacy records that stored the CTT number there before the LTK/EQ split fix.
       const { data: shipment, error: fetchError } = await supabase
         .from("shipments")
         .select("id, status, tenant_id")
-        .eq("tracking_number", evt.tracking_number)
+        .or(`carrier_tracking_number.eq.${evt.tracking_number},tracking_number.eq.${evt.tracking_number}`)
         .single()
 
       if (fetchError || !shipment) {
