@@ -37,26 +37,63 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
-  // We only want to protect the Client portal (/app)
-  if (!user && pathname.startsWith('/app')) {
-    // Allow Ops impersonation bypass (Ops portal passes clientId in URL)
-    if (request.nextUrl.searchParams.has('clientId')) {
-      return supabaseResponse
-    }
+  const isProtectedApp = pathname.startsWith('/app')
+  const isProtectedOps = pathname.startsWith('/ops')
 
+  // Enforce login for protected routes
+  if (!user && (isProtectedApp || isProtectedOps)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && pathname === '/login') {
-    const url = request.nextUrl.clone()
-    if (user.user_metadata?.role === 'client') {
-      url.pathname = '/app'
-    } else {
-      url.pathname = '/ops'
+  if (user) {
+    const role = user.user_metadata?.role
+
+    // Redirect away from login page if already logged in
+    if (pathname === '/login') {
+      const url = request.nextUrl.clone()
+      url.pathname = role === 'client' ? '/app' : '/ops'
+      return NextResponse.redirect(url)
     }
-    return NextResponse.redirect(url)
+
+    // Secure Impersonation Logic
+    if (role === 'employee' || role === 'admin') {
+      if (request.nextUrl.searchParams.has('clientId')) {
+        const clientId = request.nextUrl.searchParams.get('clientId')
+        const url = request.nextUrl.clone()
+        url.searchParams.delete('clientId') // Remove sensitive param from URL
+        
+        const res = NextResponse.redirect(url)
+        if (clientId) {
+          res.cookies.set('impersonated_client_id', clientId, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/'
+          })
+        }
+        return res
+      }
+
+      // Clear impersonation cookie when returning to ops
+      if (isProtectedOps && request.cookies.has('impersonated_client_id')) {
+        const res = NextResponse.next({
+          request: {
+            headers: request.headers,
+          },
+        })
+        res.cookies.delete('impersonated_client_id')
+        return res
+      }
+    }
+
+    // Restrict clients from accessing the Ops portal
+    if (role === 'client' && isProtectedOps) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/app'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse

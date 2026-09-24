@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       // Find the shipment
       const { data: shipment, error: fetchError } = await supabase
         .from("shipments")
-        .select("id, status")
+        .select("id, status, tenant_id")
         .eq("tracking_number", evt.tracking_number)
         .single()
 
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
       const { error: logError } = await supabase
         .from("tracking_events")
         .insert({
-          tenant_id: "11111111-1111-1111-1111-111111111111", // LINKE_TENANT_ID
+          tenant_id: shipment.tenant_id,
           shipment_id: shipment.id,
           event_code: evt.eventCode,
           description: `${description}${reasonDesc ? ` | Razão: ${reasonDesc}` : ''}${situationDesc ? ` | Situação: ${situationDesc}` : ''}`,

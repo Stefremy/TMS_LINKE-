@@ -21,7 +21,8 @@ export async function setClientPasswordAction(clientId: string, email: string, p
   if (existingUser) {
     // Update the existing user's password and metadata
     const updateData: any = {
-      user_metadata: { role: 'client', client_id: clientId },
+      app_metadata: { ...existingUser.app_metadata, role: 'client', client_id: clientId },
+      user_metadata: { ...existingUser.user_metadata, role: 'client', client_id: clientId }, // Fallback
     }
     if (password) {
       updateData.password = password
@@ -47,6 +48,7 @@ export async function setClientPasswordAction(clientId: string, email: string, p
       email: email,
       password: password,
       email_confirm: true,
+      app_metadata: { role: 'client', client_id: clientId },
       user_metadata: { role: 'client', client_id: clientId }
     })
 
@@ -85,7 +87,15 @@ export async function setColaboradorCredentialsAction(
 
   if (existingUser) {
     const updateData: any = {
+      app_metadata: {
+        ...existingUser.app_metadata,
+        role: "employee",
+        colaborador_id: colaboradorId,
+        access_level: accessLevel,
+        permissions,
+      },
       user_metadata: {
+        ...existingUser.user_metadata,
         role: "employee",
         colaborador_id: colaboradorId,
         access_level: accessLevel,
@@ -113,6 +123,12 @@ export async function setColaboradorCredentialsAction(
       email: email.trim(),
       password: password.trim(),
       email_confirm: true,
+      app_metadata: {
+        role: "employee",
+        colaborador_id: colaboradorId,
+        access_level: accessLevel,
+        permissions,
+      },
       user_metadata: {
         role: "employee",
         colaborador_id: colaboradorId,

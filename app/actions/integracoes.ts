@@ -3,16 +3,14 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-
-const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
-
+import { getTenantId } from "@/lib/auth/context"
 export async function getIntegrations() {
   const supabase = createAdminClient()
   
   const { data: integrations, error } = await supabase
     .from("tenant_integrations")
     .select("*")
-    .eq("tenant_id", LINKE_TENANT_ID)
+    .eq("tenant_id", (await getTenantId()))
 
   if (error) {
     console.error("Error fetching integrations:", error)
@@ -39,7 +37,7 @@ export async function saveIntegration(formData: FormData) {
   const { error } = await supabase
     .from("tenant_integrations")
     .upsert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       provider: provider,
       credentials: credentials,
       is_active: true

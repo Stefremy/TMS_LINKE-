@@ -6,10 +6,9 @@ import { emitCttShipmentAction, syncCttTrackingAction } from "@/app/actions/ctt"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { calculateShipmentPrice, resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
+import { getAuthContext, requireUser, requireEmployee, requireClientAccess, getTenantId } from "@/lib/auth/context"
 import { CTT_TRACKING_EVENTS, CTT_INCIDENT_CODES } from "@/lib/services/ctt/ctt-types"
 
-const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
-const DEFAULT_FALLBACK_CLIENT_ID = "44444444-4444-4444-4444-444444444444"
 
 const isValidUuid = (val?: string): boolean => {
   return Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
@@ -20,13 +19,16 @@ const isValidUuid = (val?: string): boolean => {
  * Ensures that the tenant and the client exist in their respective database tables
  * so that foreign key constraints on the `shipments` table are always satisfied.
  */
-async function ensureTenantAndClient(supabase: any, clientId?: string, clientName?: string): Promise<string> {
-  let targetClientId = isValidUuid(clientId) ? (clientId as string) : (clientId === "client_linke_store" ? DEFAULT_FALLBACK_CLIENT_ID : crypto.randomUUID())
+async function ensureTenantAndClient(supabase: any, clientId?: string | null, clientName?: string): Promise<string> {
+  if (!clientId || !isValidUuid(clientId)) {
+    throw new Error("Client ID is required and must be a valid UUID.")
+  }
+  let targetClientId = clientId as string
 
   try {
     // 1. Ensure tenant exists
     await supabase.from("tenants").upsert({
-      id: LINKE_TENANT_ID,
+      id: (await getTenantId()),
       name: "Linke Logistics"
     }, { onConflict: "id" })
   } catch (e: any) {
@@ -37,7 +39,7 @@ async function ensureTenantAndClient(supabase: any, clientId?: string, clientNam
     // 2. Ensure client exists without overwriting existing client records unnecessarily
     await supabase.from("clients").upsert({
       id: targetClientId,
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       name: clientName || "Cliente"
     }, { onConflict: "id", ignoreDuplicates: true })
   } catch (e: any) {
@@ -97,6 +99,9 @@ function formatOrGenerateCttObjectId(s: any): string {
  * Fetches all shipments combining the DB shipments table and audit log resilience.
  */
 export async function getShipmentsAction(): Promise<any[]> {
+  
+  const ctx = await requireUser()
+
   const supabase = createAdminClient()
   const shipmentsMap = new Map<string, any>()
   const deletedIds = new Set<string>()
@@ -122,10 +127,12 @@ export async function getShipmentsAction(): Promise<any[]> {
 
   // 1. Fetch from shipments table
   try {
-    const { data: dbShipments, error } = await supabase
-      .from("shipments")
-      .select("*")
-      .order("created_at", { ascending: false })
+    let shipmentsQuery = supabase.from("shipments").select("*").order("created_at", { ascending: false })
+    if (ctx.role === "client") {
+      shipmentsQuery = shipmentsQuery.eq("client_id", ctx.client_id)
+    }
+
+    const { data: dbShipments, error } = await shipmentsQuery
 
     if (!error && dbShipments) {
       dbShipments.forEach((s: any) => {
@@ -157,6 +164,8 @@ export async function getShipmentsAction(): Promise<any[]> {
       logs.forEach((log: any) => {
         const s = log.details
         if (s) {
+          if (ctx.role === "client" && s.client_id !== ctx.client_id) return
+
           const key = s.id || s.tracking_number
           if (key && !deletedIds.has(key) && !deletedIds.has(s.id)) {
             const existing = shipmentsMap.get(key)
@@ -216,9 +225,12 @@ export async function getShipmentsAction(): Promise<any[]> {
 }
 
 export async function createShipmentAction(formData: FormData) {
+  
+  const ctx = await requireUser()
+
   const supabase = createAdminClient()
   
-  const rawClientId = formData.get("client_id") as string
+  const rawClientId = ctx.role === "client" ? ctx.client_id! : (formData.get("client_id") as string)
   const service_type = (formData.get("service_type") as string) || "CTT Expresso 24H"
   
   // Sender
@@ -273,7 +285,7 @@ export async function createShipmentAction(formData: FormData) {
 
   const shipmentData = {
     id: shipmentId,
-    tenant_id: LINKE_TENANT_ID,
+    tenant_id: (await getTenantId()),
     client_id,
     tracking_number: trackingNumber,
     service_type,
@@ -306,7 +318,7 @@ export async function createShipmentAction(formData: FormData) {
   // 2. Dual-write to audit_log
   try {
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "shipment_data",
       details: shipmentData,
     })
@@ -317,7 +329,7 @@ export async function createShipmentAction(formData: FormData) {
   // 3. Create package info
   try {
     await supabase.from("packages").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       shipment_id: shipmentId,
       weight_g: 1000
     })
@@ -334,6 +346,9 @@ export async function createShipmentAction(formData: FormData) {
 }
 
 export async function dispatchShipmentAction(shipmentId: string) {
+  
+  await requireEmployee()
+
   const supabase = createAdminClient()
 
   const { data: shipment, error } = await supabase
@@ -380,16 +395,21 @@ export async function dispatchShipmentAction(shipmentId: string) {
 }
 
 export async function getClientPortalStatsAction(clientId?: string, clientName?: string) {
+  
+  const ctx = await requireUser()
+
+  const effectiveClientId = ctx.role === "client" ? ctx.client_id : clientId
+  
   const allShipments = await getShipmentsAction()
 
   let clientShipments = allShipments
 
-  if (clientId || clientName) {
+  if (effectiveClientId || clientName) {
     const cNameLower = (clientName || "").toLowerCase().trim()
-    const cIdLower = (clientId || "").toLowerCase().trim()
+    const cIdLower = (effectiveClientId || "").toLowerCase().trim()
 
     clientShipments = allShipments.filter((s: any) => {
-      if (clientId && s.client_id === clientId) return true
+      if (effectiveClientId && s.client_id === effectiveClientId) return true
       if (cIdLower && s.client_id?.toLowerCase() === cIdLower) return true
       if (cNameLower && s.sender_name?.toLowerCase().includes(cNameLower)) return true
       return false
@@ -495,6 +515,12 @@ export async function emitClientGuiaAction(data: {
   widthCm?: number
   heightCm?: number
 }) {
+  
+  const ctx = await requireUser()
+
+  const finalClientId = ctx.role === "client" ? ctx.client_id! : data.clientId
+  const finalClientName = ctx.role === "client" ? undefined : data.clientName
+
   const supabase = createAdminClient()
   const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
   const shipmentId = crypto.randomUUID()
@@ -508,7 +534,7 @@ export async function emitClientGuiaAction(data: {
   const recipientZip3 = data.recipientPostal?.split("-")[1] || ""
 
   // Ensure DB foreign keys are valid
-  const validatedClientId = await ensureTenantAndClient(supabase, data.clientId, data.clientName)
+  const validatedClientId = await ensureTenantAndClient(supabase, finalClientId, finalClientName)
 
   if (validatedClientId) {
     const { data: clientCheck } = await supabase
@@ -529,13 +555,14 @@ export async function emitClientGuiaAction(data: {
   let computedFuelAmount = 0
   let computedBasePrice = computedSellPrice
   let computedSpecialDesc: string | null = null
+  let matchedClient: any = {}
   try {
     const [allClients, allServicos] = await Promise.all([
       getClientesAction(),
       getServicosLinkeAction(),
     ])
-    const matchedClient = allClients.find(
-      (c) => c.id === data.clientId || c.short_name === data.clientName
+    matchedClient = allClients.find(
+      (c) => c.id === finalClientId || (finalClientName && c.short_name === finalClientName)
     ) || {} as any
     const recipientPostal = data.recipientPostal || ""
     const priceResult = calculateShipmentPrice(
@@ -608,12 +635,12 @@ export async function emitClientGuiaAction(data: {
 
   const shipmentData = {
     id: shipmentId,
-    tenant_id: LINKE_TENANT_ID,
+    tenant_id: (await getTenantId()),
     client_id: validatedClientId,
     tracking_number: trackingNumber,
     service_type: data.serviceName || "CTT Expresso 24H",
     status: "pendente",
-    sender_name: data.clientName || "Empresa Cliente",
+    sender_name: ctx.role === "client" ? matchedClient.short_name || "Empresa Cliente" : (data.clientName || "Empresa Cliente"),
     sender_address: `${data.senderAddress || "Sede Comercial"}${data.senderCity ? `, ${data.senderCity}` : ""}`,
     sender_zip3: senderZip3,
     sender_zip4: senderZip4,
@@ -722,7 +749,7 @@ export async function emitClientGuiaAction(data: {
   // Dual-write to audit_log
   try {
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "shipment_data",
       details: {
         ...shipmentData,
@@ -739,7 +766,7 @@ export async function emitClientGuiaAction(data: {
   // Insert package record
   try {
     await supabase.from("packages").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       shipment_id: shipmentId,
       weight_g: Math.round((data.weightKg || 1) * 1000)
     })
@@ -805,6 +832,9 @@ export async function emitClientGuiaAction(data: {
  * Re-solicita e regenera a etiqueta oficial CTT a partir dos Web Services CTT
  */
 export async function regenerateCttLabelAction(shipmentId: string) {
+  
+  await requireEmployee()
+
   const supabase = createAdminClient()
   
   // Encontrar o envio
@@ -919,6 +949,9 @@ export async function updateShipmentStatusAction(
   reason?: string,
   location?: string
 ) {
+  
+  await requireEmployee()
+
   const supabase = createAdminClient()
   const now = new Date().toISOString()
 
@@ -978,7 +1011,7 @@ export async function updateShipmentStatusAction(
       : `Estado atualizado para ${newStatus}`
 
     await supabase.from("tracking_events").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       shipment_id: shipmentId,
       event_code: eventCode,
       description: eventDesc,
@@ -1132,6 +1165,9 @@ export async function getShipmentTrackingTimelineAction(
  * Sincroniza todos os envios ativos em lote com as pickagens CTT
  */
 export async function syncAllActiveShipmentsTrackingAction() {
+  
+  await requireEmployee()
+
   const allShipments = await getShipmentsAction()
   const active = allShipments.filter((s) => s.status !== "entregue" && s.status !== "cancelado" && s.status !== "devolvido")
   
@@ -1155,6 +1191,9 @@ export async function syncAllActiveShipmentsTrackingAction() {
  * Elimina um envio da base de dados e registos associados
  */
 export async function deleteShipmentAction(shipmentId: string) {
+  
+  await requireEmployee()
+
   const supabase = createAdminClient()
   try {
     // 1. Apagar volumes associados
@@ -1171,7 +1210,7 @@ export async function deleteShipmentAction(shipmentId: string) {
 
     // 4. Registar na auditoria
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "shipment_deleted",
       details: { deletedShipmentId: shipmentId, deletedAt: new Date().toISOString() }
     })
@@ -1192,6 +1231,9 @@ export async function deleteShipmentAction(shipmentId: string) {
  * Cria um envio de devolução (inverte Remetente e Destinatário)
  */
 export async function createReturnShipmentAction(originalShipmentId: string, reason?: string) {
+  
+  const ctx = await requireUser()
+
   const supabase = createAdminClient()
   try {
     // 1. Obter dados do envio original
@@ -1202,6 +1244,10 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
       return { success: false, error: "Envio original não encontrado." }
     }
 
+    if (ctx.role === "client" && original.client_id !== ctx.client_id) {
+      return { success: false, error: "Não autorizado. Envio não pertence à sua conta." }
+    }
+
     const newShipmentId = crypto.randomUUID()
     const newTrackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
     const now = new Date().toISOString()
@@ -1209,8 +1255,8 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
     // Inverter remetente e destinatário
     const returnShipmentData = {
       id: newShipmentId,
-      tenant_id: original.tenant_id || LINKE_TENANT_ID,
-      client_id: original.client_id || DEFAULT_FALLBACK_CLIENT_ID,
+      tenant_id: original.tenant_id || (await getTenantId()),
+      client_id: original.client_id,
       tracking_number: newTrackingNumber,
       service_type: original.service_type || "Linke Expresso 24H",
       status: "pendente",
@@ -1242,7 +1288,7 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
 
     // Guardar no audit_log
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "shipment_data",
       details: {
         ...returnShipmentData,
@@ -1335,7 +1381,7 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
 
     const demoShipment = {
       id: demoId,
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       tracking_number: "LTK1425602",
       ctt_object_id: "DB290719717PT",
       carrier_name: "ctt",
@@ -1442,6 +1488,9 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
  * Elimina vários envios em massa
  */
 export async function deleteShipmentsBulkAction(shipmentIds: string[]) {
+  
+  await requireEmployee()
+
   const supabase = createAdminClient()
   try {
     if (!shipmentIds || shipmentIds.length === 0) return { success: true }
@@ -1460,7 +1509,7 @@ export async function deleteShipmentsBulkAction(shipmentIds: string[]) {
 
     // 4. Registar na auditoria
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "shipments_bulk_deleted",
       details: { deletedShipmentIds: shipmentIds, count: shipmentIds.length, deletedAt: new Date().toISOString() }
     })

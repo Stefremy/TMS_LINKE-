@@ -5,14 +5,15 @@ import { MoloniClient } from "@/lib/moloni/moloni-client"
 import { revalidatePath } from "next/cache"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getShipmentsAction } from "@/app/actions/shipments"
+import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
 
-const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 
 /**
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
 export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = false, isProForma: boolean = false) {
+  await requireEmployee()
   try {
     const supabase = createAdminClient()
     
@@ -257,7 +258,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
     // 3. Criar Registo de Extrato no audit_log (sem necessidade de tabela separada)
     const statementNumber = `EXT-${new Date().getFullYear()}/${String(new Date().getMonth()+1).padStart(2,'0')}-${Math.floor(Math.random() * 9000 + 1000)}`
     const statementId = crypto.randomUUID()
-    const tenantId = isValidUuid((client as any).tenant_id) ? (client as any).tenant_id : LINKE_TENANT_ID
+    const tenantId = isValidUuid((client as any).tenant_id) ? (client as any).tenant_id : (await getTenantId())
 
     const { error: statementErr } = await supabase.from('audit_log').insert({
       tenant_id: tenantId,
@@ -329,7 +330,13 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
  * Consulta histórico de extratos emitidos guardados em audit_log
  */
 export async function getBillingStatementsAction(clientId?: string) {
+  const ctx = await requireUser()
   const supabase = createAdminClient()
+  
+  let targetClientId = clientId
+  if (ctx.role === 'client') {
+    targetClientId = ctx.client_id || undefined
+  }
   try {
     const { data, error } = await supabase
       .from('audit_log')
@@ -345,8 +352,8 @@ export async function getBillingStatementsAction(clientId?: string) {
       created_at: d.details?.created_at || d.created_at
     }))
 
-    if (clientId) {
-      statements = statements.filter((s: any) => s.client_id === clientId)
+    if (targetClientId) {
+      statements = statements.filter((s: any) => s.client_id === targetClientId)
     }
 
     return statements
@@ -360,6 +367,7 @@ export async function getBillingStatementsAction(clientId?: string) {
  * Obtém o estado da ligação ao Moloni
  */
 export async function getMoloniConfigAction() {
+  await requireEmployee()
   const supabase = createAdminClient()
   try {
     if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
@@ -399,6 +407,7 @@ export async function getMoloniConfigAction() {
  * Conecta ao Moloni através de Utilizador e Password (grant_type=password)
  */
 export async function connectMoloniWithPasswordAction(formData: FormData) {
+  await requireEmployee()
   try {
     const username = (formData.get("username") as string || "").trim()
     const password = (formData.get("password") as string || "").trim()
@@ -419,7 +428,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
     // 1. Guardar em audit_log
     const supabase = createAdminClient()
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "moloni_connection_config",
       details: {
         company_id: companyId,
@@ -477,6 +486,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
  * Emite a fatura oficial no Moloni para um extrato previamente criado
  */
 export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string, groupShipments: boolean = false, isProForma: boolean = false) {
+  await requireEmployee()
   try {
     const supabase = createAdminClient()
     
@@ -824,6 +834,7 @@ export interface CustomInvoicePayload {
  * e guarda o registo no TMS audit_log.
  */
 export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
+  await requireEmployee()
   try {
     const supabase = createAdminClient()
 
@@ -1018,7 +1029,7 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
     }
 
     const { error: dbErr } = await supabase.from('audit_log').insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "custom_invoice",
       details: invoiceDetails
     })
@@ -1053,6 +1064,7 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
  * Obtém a lista de faturas personalizadas emitidas anteriormente
  */
 export async function getCustomInvoicesAction() {
+  await requireEmployee()
   try {
     const supabase = createAdminClient()
     const { data: logs, error } = await supabase
@@ -1091,6 +1103,7 @@ export async function getCustomInvoicesAction() {
  * Emite um Recibo no Moloni para uma fatura existente
  */
 export async function emitReceiptAction(statementId: string, clientId: string, moloniDocumentId: number, totalValue: number) {
+  await requireEmployee()
   try {
     const supabase = createAdminClient()
     
@@ -1177,6 +1190,7 @@ export async function emitReceiptAction(statementId: string, clientId: string, m
 
 
 export async function emitMoloniReceiptForStatementAction(statementId: string) {
+  await requireEmployee()
   try {
     const supabase = createAdminClient()
 

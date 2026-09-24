@@ -3,13 +3,16 @@
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
 import { Colaborador, DEFAULT_COLABORADORES } from "@/app/ops/entidades/colaboradores/types"
+import { requireEmployee, getTenantId } from "@/lib/auth/context"
 
-const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 /**
  * Obtém todos os colaboradores registados
  */
 export async function getColaboradoresAction(): Promise<Colaborador[]> {
+  await requireEmployee()
+  await requireEmployee()
+
   const supabase = createAdminClient()
   const colaboradoresMap = new Map<string, Colaborador>()
 
@@ -69,6 +72,9 @@ export async function getColaboradoresAction(): Promise<Colaborador[]> {
  * Cria ou atualiza um colaborador
  */
 export async function saveColaboradorAction(colaboradorData: Partial<Colaborador> & { name: string; role: string; department: string }) {
+  await requireEmployee()
+  await requireEmployee()
+
   const supabase = createAdminClient()
   const now = new Date().toISOString()
   const id = colaboradorData.id || `col-${colaboradorData.name.toLowerCase().replace(/[^a-z0-9]/g, "")}-${Date.now().toString().slice(-4)}`
@@ -100,7 +106,7 @@ export async function saveColaboradorAction(colaboradorData: Partial<Colaborador
   try {
     await supabase.from("colaboradores").upsert({
       id: fullColaborador.id,
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       code: fullColaborador.code,
       name: fullColaborador.name,
       role: fullColaborador.role,
@@ -126,7 +132,7 @@ export async function saveColaboradorAction(colaboradorData: Partial<Colaborador
   // 2. Dual-write to audit_log
   try {
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: colaboradorData.id ? "colaborador_updated" : "colaborador_created",
       details: fullColaborador,
       created_at: now,
@@ -143,6 +149,9 @@ export async function saveColaboradorAction(colaboradorData: Partial<Colaborador
  * Remove um colaborador
  */
 export async function deleteColaboradorAction(id: string) {
+  await requireEmployee()
+  await requireEmployee()
+
   const supabase = createAdminClient()
   const now = new Date().toISOString()
 
@@ -152,7 +161,7 @@ export async function deleteColaboradorAction(id: string) {
 
   try {
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "colaborador_deleted",
       details: { id },
       created_at: now,
@@ -167,6 +176,9 @@ export async function deleteColaboradorAction(id: string) {
  * Altera o estado do colaborador (Ativo / Inativo / Férias)
  */
 export async function toggleColaboradorStatusAction(id: string, status: "Ativo" | "Inativo" | "Férias") {
+  await requireEmployee()
+  await requireEmployee()
+
   const supabase = createAdminClient()
   const now = new Date().toISOString()
 
@@ -176,7 +188,7 @@ export async function toggleColaboradorStatusAction(id: string, status: "Ativo" 
 
   try {
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "colaborador_updated",
       details: { id, status, updated_at: now },
       created_at: now,

@@ -5,8 +5,8 @@ import { redirect } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase/server"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { DEFAULT_CLIENT_PRICING, SYSTEM_AVAILABLE_WEBSERVICES } from "@/app/ops/entidades/clientes/types"
+import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
 
-const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 const DEFAULT_CLIENTES: Cliente[] = [
   {
@@ -147,6 +147,8 @@ const DEFAULT_CLIENTES: Cliente[] = [
  * Obtém todos os clientes para listagem
  */
 export async function getClientesAction(): Promise<Cliente[]> {
+  const ctx = await requireUser()
+
   const supabase = createAdminClient()
 
   let dbClients: any[] = []
@@ -154,7 +156,7 @@ export async function getClientesAction(): Promise<Cliente[]> {
     const { data, error } = await supabase
       .from("clients")
       .select("*")
-      .eq("tenant_id", LINKE_TENANT_ID)
+      .eq("tenant_id", (await getTenantId()))
       .order("created_at", { ascending: false })
 
     if (!error && data) {
@@ -254,9 +256,15 @@ export async function getClientesAction(): Promise<Cliente[]> {
     })
   })
 
-  return Array.from(clientMap.values()).sort((a, b) => {
+  let result = Array.from(clientMap.values()).sort((a, b) => {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
+
+  if (ctx.role === "client") {
+    result = result.filter((c) => c.id === ctx.client_id)
+  }
+
+  return result
 }
 
 /**
@@ -272,6 +280,9 @@ export async function getClienteByIdAction(id: string): Promise<Cliente | null> 
  * Grava ou atualiza um cliente
  */
 export async function saveClienteAction(cliente: Partial<Cliente>) {
+  await requireEmployee()
+  await requireEmployee()
+
   const supabase = createAdminClient()
 
   const id = cliente.id && cliente.id.trim().length > 0 ? cliente.id : crypto.randomUUID()
@@ -332,7 +343,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
   try {
     await supabase.from("clients").upsert({
       id,
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       name: fullRecord.short_name,
     })
   } catch (err: any) {
@@ -355,7 +366,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     }
 
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "client_data",
       details: fullRecord,
     })
@@ -373,6 +384,9 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
  * Alterna estado de cliente (Ativo / Inativo)
  */
 export async function toggleClienteStatusAction(id: string, is_active: boolean) {
+  await requireEmployee()
+  await requireEmployee()
+
   const supabase = createAdminClient()
 
   // Guard: Conta GO Linke (CL001) nunca pode ser desativada
@@ -417,6 +431,9 @@ export async function toggleClienteStatusAction(id: string, is_active: boolean) 
  * Elimina cliente de forma permanente
  */
 export async function deleteClienteAction(id: string) {
+  await requireEmployee()
+  await requireEmployee()
+
   const supabase = createAdminClient()
 
   // Guard: Conta GO Linke (CL001) nunca pode ser eliminada
@@ -460,7 +477,7 @@ export async function deleteClienteAction(id: string) {
   // 3. Registar tombstone para nunca ressurgir de defaults
   try {
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "deleted_client",
       details: { id, deleted_at: new Date().toISOString() },
     })
@@ -482,6 +499,9 @@ export async function getClientes() {
 }
 
 export async function createCliente(formData: FormData) {
+  await requireEmployee()
+  await requireEmployee()
+
   const name = (formData.get("name") as string) || "Novo Cliente"
   await saveClienteAction({
     short_name: name,

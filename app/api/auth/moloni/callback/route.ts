@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import fs from "fs"
 import path from "path"
 
-const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
+import { getTenantId } from "@/lib/auth/context"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     // 1. Guardar em audit_log
     const supabase = createAdminClient()
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "moloni_connection_config",
       details: {
         company_id: companyId,

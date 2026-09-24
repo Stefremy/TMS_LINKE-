@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
-
+import { getTenantId } from "@/lib/auth/context"
 import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 import { 
   DEFAULT_PRICE_FAMILIES, 
@@ -264,7 +264,6 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
   },
 ]
 
-const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 /**
  * Obtém todos os fornecedores cadastrados
@@ -400,7 +399,7 @@ export async function saveFornecedorAction(fornecedor: Partial<Fornecedor>): Pro
     }
 
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "fornecedor_data",
       details: fullRecord,
     })
@@ -476,7 +475,7 @@ export async function deleteFornecedorAction(id: string) {
   // 3. Registar tombstone para nunca ressurgir
   try {
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "deleted_fornecedor",
       details: { id, deleted_at: new Date().toISOString() },
     })

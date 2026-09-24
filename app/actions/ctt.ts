@@ -2,6 +2,8 @@
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
+import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { 
   CTTShipmentService, 
   CTTPickupService, 
@@ -16,12 +18,11 @@ import {
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
 import { generateManifestPdfBase64, ManifestPdfShipment } from "@/lib/services/ctt/manifest-pdf"
 
-const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 /**
  * Obtém credenciais ativas da CTT (de carrier_connections, tenant_integrations ou .env.local)
  */
-export async function getCttCredentials(): Promise<CTTConnectionCredentials> {
+async function getCttCredentials(): Promise<CTTConnectionCredentials> {
   const supabase = createAdminClient()
 
   // 1. Tentar ler de carrier_connections
@@ -29,7 +30,7 @@ export async function getCttCredentials(): Promise<CTTConnectionCredentials> {
     const { data: conn } = await supabase
       .from("carrier_connections")
       .select("*")
-      .eq("tenant_id", LINKE_TENANT_ID)
+      .eq("tenant_id", (await getTenantId()))
       .eq("carrier_code", "ctt_expresso")
       .single()
 
@@ -118,7 +119,7 @@ export async function saveCttConnectionAction(creds: {
     const { error: err1 } = await supabase
       .from("carrier_connections")
       .upsert({
-        tenant_id: LINKE_TENANT_ID,
+        tenant_id: (await getTenantId()),
         ...payload,
       }, { onConflict: "tenant_id,carrier_code" })
 
@@ -139,7 +140,7 @@ export async function saveCttConnectionAction(creds: {
     await supabase
       .from("audit_log")
       .insert({
-        tenant_id: LINKE_TENANT_ID,
+        tenant_id: (await getTenantId()),
         action: "carrier_connection_config",
         details: payload,
       })
@@ -157,6 +158,7 @@ export async function saveCttConnectionAction(creds: {
  * Obtém a lista de conexões configuradas
  */
 export async function getCarrierConnectionsAction() {
+  await requireEmployee()
   const supabase = createAdminClient()
 
   // 1. Tentar carrier_connections
@@ -221,6 +223,7 @@ export async function toggleCarrierConnectionAction(
   is_active: boolean,
   carrier_code: string = "ctt_expresso"
 ) {
+  await requireEmployee()
   const supabase = createAdminClient()
 
   // 1. Atualizar em carrier_connections
@@ -275,6 +278,7 @@ export async function deleteCarrierConnectionAction(
   id: string,
   carrier_code: string = "ctt_expresso"
 ) {
+  await requireEmployee()
   const supabase = createAdminClient()
 
   // 1. Eliminar em carrier_connections
@@ -317,6 +321,7 @@ export async function deleteCarrierConnectionAction(
  * Testa a conexão com os Web Services CTT
  */
 export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
+  await requireEmployee()
   try {
     const shipmentService = new CTTShipmentService()
     
@@ -404,44 +409,10 @@ export async function emitCttShipmentAction(shipmentInput: {
   isReturn?: boolean
   selectedSpecialServices?: string[]
 }) {
+  await requireEmployee()
   const creds = await getCttCredentials()
-  const shipmentService = new CTTShipmentService()
-
-  // Formatar códigos postais (ex: 1750-063 -> cp4: 1750, cp3: 063)
-  const parseZip = (zip: string) => {
-    const clean = (zip || "").replace(/\D/g, "")
-    return {
-      cp4: clean.slice(0, 4) || "1000",
-      cp3: clean.slice(4, 7) || "001",
-    }
-  }
-
-  const senderZip = parseZip(shipmentInput.sender.zip)
-  const recipientZip = parseZip(shipmentInput.recipient.zip)
-
-  const senderData: CTTAddressData = {
-    Type: 1,
-    Name: shipmentInput.sender.name || "Remetente TMS",
-    Address: shipmentInput.sender.address || "Rua Principal",
-    PTZipCode4: senderZip.cp4,
-    PTZipCode3: senderZip.cp3,
-    City: shipmentInput.sender.city || "Lisboa",
-    Country: "PT",
-    Phone: shipmentInput.sender.phone || "910000000",
-    Email: shipmentInput.sender.email,
-  }
-
-  const receiverData: CTTAddressData = {
-    Type: 2,
-    Name: shipmentInput.recipient.name || "Destinatário",
-    Address: shipmentInput.recipient.address || "Morada Destino",
-    PTZipCode4: recipientZip.cp4,
-    PTZipCode3: recipientZip.cp3,
-    City: shipmentInput.recipient.city || "Porto",
-    Country: "PT",
-    Phone: shipmentInput.recipient.phone || "920000000",
-    Email: shipmentInput.recipient.email,
-  }
+  const provider = new CttProvider()
+  await provider.initialize(creds)
 
   // Preparar observações baseadas nos serviços especiais para imprimir na etiqueta CTT
   const obsLines: string[] = []
@@ -457,69 +428,23 @@ export async function emitCttShipmentAction(shipmentInput: {
   
   const observationsString = obsLines.length > 0 ? obsLines.join(" | ").substring(0, 70) : undefined
 
-  const shipmentData: CTTShipmentData = {
-    ClientReference: shipmentInput.ref || `TRK-${Date.now().toString().slice(-8)}`,
-    Weight: Math.round((shipmentInput.weightKg || 1) * 1000), // Gramas
-    Quantity: shipmentInput.volumes || 1,
-    Observations: observationsString,
-  }
+  const result = await provider.createShipment({
+    reference: shipmentInput.ref || `TRK-${Date.now().toString().slice(-8)}`,
+    sender: { ...shipmentInput.sender, country: "PT" },
+    recipient: { ...shipmentInput.recipient, country: "PT" },
+    weightKg: shipmentInput.weightKg || 1,
+    volumes: shipmentInput.volumes || 1,
+    subProduct: shipmentInput.subProduct,
+    codValue: shipmentInput.codValue,
+    isReturn: shipmentInput.isReturn,
+    specialServices: shipmentInput.selectedSpecialServices,
+    observations: observationsString,
+    autoClose: shipmentInput.autoClose
+  })
 
-  // Mapear os códigos internos do Linke para os enumeradores literais aceites pela API dos CTT
-  const CTT_SPECIAL_SERVICES_MAP: Record<string, string> = {
-    "cod": "AgainstReimbursement",
-    "saturday": "Saturday",
-    "return_signed": "ReturnDocumentSigned",
-    "insurance": "SpecialInsurance",
-    "fragil": "Fragil",
-    "delivery_point": "DeliveryPoint",
-    "auth_return": "AuthorizeReturn",
-    "sms_tracking": "SMS",
-    "time_window": "TimeWindow",
-    "second_delivery": "SecondScheduledDelivery",
-    "postal_object": "PostalObject",
-    "nominative_check": "NominativeCheck",
-    "back": "Back",
-    "multiple_home_delivery": "MultipleHomeDelivery",
-    "certain_day": "CertainDay",
-    "phone_contact": "PhoneContact",
-    "live_tracking": "LiveTracking",
-    "contacto_agendamento": "ContactoAgendamento",
-    "delivery_aggregation": "DeliveryAggregation"
-  }
-
-  const specialServices: CTTSpecialService[] = []
-  if (shipmentInput.selectedSpecialServices && shipmentInput.selectedSpecialServices.length > 0) {
-    for (const code of shipmentInput.selectedSpecialServices) {
-      const mappedType = CTT_SPECIAL_SERVICES_MAP[code]
-      if (mappedType) {
-        if (code === "cod" && shipmentInput.codValue) {
-          specialServices.push({ SpecialServiceType: mappedType as any, Value: shipmentInput.codValue })
-        } else {
-          specialServices.push({ SpecialServiceType: mappedType as any })
-        }
-      }
-    }
-  }
-
-  const payload = {
-    clientReference: shipmentData.ClientReference,
-    subProduct: shipmentInput.subProduct || creds.default_subproduct || "EMSF056.01",
-    sender: senderData,
-    receiver: receiverData,
-    shipment: shipmentData,
-    specialServices: specialServices as CTTSpecialService[],
-  }
-
-  // Se autoClose for false, usamos CreateShipment (envio fica aberto para fechar no fim do dia)
-  // Caso contrário usamos CompleteShipment (cria e fecha imediatamente)
-  const result = shipmentInput.autoClose === false
-    ? await shipmentService.createShipment(creds, payload)
-    : await shipmentService.completeShipment(creds, payload)
-
-  if (result.Status === 1 && result.ShipmentData && result.ShipmentData.length > 0) {
-    const item = result.ShipmentData[0]
-    const trackingNumber = item.FirstObject
-    const rawLabel = item.LabelList?.[0]?.Label || ""
+  if (result.success && result.trackingNumber) {
+    const trackingNumber = result.trackingNumber
+    const rawLabel = result.labelBase64 || ""
     const labelBase64 = await convertZplToPdfBase64(rawLabel)
 
     // Atualizar base de dados se shipmentId estiver presente
@@ -554,7 +479,7 @@ export async function emitCttShipmentAction(shipmentInput: {
               ...targetLog.details,
               tracking_number: trackingNumber,
               ctt_object_id: trackingNumber,
-              ctt_delivery_note_id: result.DeliveryNoteId,
+              ctt_delivery_note_id: result.carrierShipmentId,
               ctt_label_base64: labelBase64,
               status: "pendente",
               updated_at: new Date().toISOString(),
@@ -568,7 +493,7 @@ export async function emitCttShipmentAction(shipmentInput: {
       // Registar evento de tracking inicial
       try {
         await supabase.from("tracking_events").insert({
-          tenant_id: LINKE_TENANT_ID,
+          tenant_id: (await getTenantId()),
           shipment_id: shipmentInput.id,
           event_code: "EMA",
           description: "Aceitação CTT Expresso - Rótulo Criado",
@@ -580,20 +505,16 @@ export async function emitCttShipmentAction(shipmentInput: {
     return {
       success: true,
       trackingNumber,
-      deliveryNoteId: result.DeliveryNoteId,
+      deliveryNoteId: result.carrierShipmentId,
       labelBase64,
-      fileName: item.LabelList?.[0]?.FileName || `${trackingNumber}.pdf`,
+      fileName: `${trackingNumber}.pdf`,
     }
   }
 
-  const errorMessages = result.ErrorsList && result.ErrorsList.length > 0
-    ? result.ErrorsList.map(e => `${e.ErrorCode ? `[${e.ErrorCode}] ` : ""}${e.Message || "Erro desconhecido"}`).join("; ")
-    : "Falha na criação do envio pelo servidor CTT"
-
   return {
     success: false,
-    error: errorMessages,
-    errors: result.ErrorsList || [{ Code: 99, Message: errorMessages }],
+    error: result.error || "Falha na criação do envio pelo provedor",
+    errors: [{ Code: 99, Message: result.error || "Erro desconhecido" }],
   }
 }
 
@@ -601,6 +522,7 @@ export async function emitCttShipmentAction(shipmentInput: {
  * Fecha a expedição de envios CTT, atualiza estados e gera a Guia de Transporte / Manifesto de Carga
  */
 export async function closeCttShipmentsAction(shipmentIds?: string[]) {
+  const ctx = await requireUser()
   const supabase = createAdminClient()
   const creds = await getCttCredentials()
   const shipmentService = new CTTShipmentService()
@@ -632,6 +554,10 @@ export async function closeCttShipmentsAction(shipmentIds?: string[]) {
       .order("created_at", { ascending: false })
       .limit(20)
     shipmentsToClose = dbPending || []
+  }
+
+  if (ctx.role === 'client') {
+    shipmentsToClose = shipmentsToClose.filter(s => s.client_id === ctx.client_id)
   }
 
   if (shipmentsToClose.length === 0) {
@@ -705,8 +631,9 @@ export async function closeCttShipmentsAction(shipmentIds?: string[]) {
   // 6. Registar evento de tracking de expedição
   try {
     const now = new Date().toISOString()
+    const tenantId = await getTenantId()
     const eventRows = targetIds.map(id => ({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: tenantId,
       shipment_id: id,
       event_code: "EMF",
       description: `Expedição Fechada - Manifesto ${deliveryNoteId} entregue ao motorista CTT`,
@@ -720,7 +647,7 @@ export async function closeCttShipmentsAction(shipmentIds?: string[]) {
   // 7. Registar no audit_log para arquivo e consulta histórica
   try {
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "manifest_closed",
       details: {
         delivery_note_id: deliveryNoteId,
@@ -750,8 +677,15 @@ export async function closeCttShipmentsAction(shipmentIds?: string[]) {
  * Sincroniza o estado de tracking com os CTT e atualiza o ciclo de vida do envio
  */
 export async function syncCttTrackingAction(trackingNumber: string, shipmentId?: string) {
+  const ctx = await requireUser()
   const supabase = createAdminClient()
   
+  if (ctx.role === 'client') {
+    const { data: shipment } = await supabase.from('shipments').select('client_id').eq('tracking_number', trackingNumber).single()
+    if (shipment?.client_id !== ctx.client_id) {
+      return { success: false, error: 'Unauthorized' }
+    }
+  }
   // 1. Obter dados do envio
   let targetShipment: any = null
   if (shipmentId) {
@@ -777,23 +711,24 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
   let parsedEvents: any[] = []
   try {
     const credentials = await getCttCredentials()
+    
     // Se 'trackingNumber' for fornecido e não começar por LTK, assume-se que é o da transportadora.
     let carrierTrackingNumber = targetShipment?.carrier_tracking_number || targetShipment?.ctt_object_id || targetShipment?.tracking_number || trackingNumber
     if (carrierTrackingNumber === 'LTK7D7B1884' || trackingNumber === 'LTK7D7B1884') {
       carrierTrackingNumber = 'EQ418727568PT'
     }
     
-    parsedEvents = await CTTTrackingService.fetchRealTrackingEvents(carrierTrackingNumber, {
-      client_number: credentials.client_number,
-      auth_id: credentials.auth_id,
-      contract_number: credentials.contract_number,
-      environment: credentials.environment,
-    })
-    console.log(`[CTT Sync] Recebidos ${parsedEvents.length} eventos para ${carrierTrackingNumber}`)
-
-    if (parsedEvents.length === 0) {
-      throw new Error(`A CTT não retornou nenhum evento para o tracking: ${carrierTrackingNumber}`)
+    const provider = new CttProvider()
+    await provider.initialize(credentials)
+    
+    const trackResult = await provider.getTracking(carrierTrackingNumber)
+    
+    if (!trackResult.success || !trackResult.events || trackResult.events.length === 0) {
+      throw new Error(`A CTT não retornou nenhum evento para o tracking: ${carrierTrackingNumber}. ${trackResult.error || ""}`)
     }
+    parsedEvents = trackResult.events
+    
+    console.log(`[CTT Sync] Recebidos ${parsedEvents.length} eventos para ${carrierTrackingNumber}`)
   } catch (error: any) {
     console.error("Erro ao chamar API real de tracking CTT:", error)
     return { success: false, error: error.message }
@@ -805,9 +740,9 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
 
   // 3. Obter o último evento (mais recente) para atualizar o status geral
   const lastEvent = parsedEvents[parsedEvents.length - 1]
-  const newStatus = lastEvent.tmsStatus
-  const eventCode = lastEvent.eventCode
-  const eventName = lastEvent.eventName
+  const newStatus = lastEvent.status
+  const eventCode = lastEvent.code || lastEvent.status
+  const eventName = lastEvent.description
   const eventLoc = lastEvent.location || "Rede CTT Expresso"
 
 
@@ -837,14 +772,15 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
         for (const evt of parsedEvents) {
           // Simplificação: Assume-se que um evento é igual se tiver o mesmo código e mesma data aproximada, 
           // ou se a API enviar um ID único, usar esse ID. Aqui usamos event_code.
-          const alreadyHasEvent = existingEvents?.some((e: any) => e.event_code === evt.eventCode)
+          const evtCode = evt.code || evt.status
+          const alreadyHasEvent = existingEvents?.some((e: any) => e.event_code === evtCode)
           if (!alreadyHasEvent) {
             await supabase.from("tracking_events").insert({
-              tenant_id: targetShipment?.tenant_id || LINKE_TENANT_ID,
+              tenant_id: targetShipment?.tenant_id || (await getTenantId()),
               shipment_id: effectiveId,
-              event_code: evt.eventCode,
-              description: `${evt.eventName} (${evt.location || "Rede CTT"})${evt.reasonText ? ` | Razão: ${evt.reasonText}` : ''}${evt.situationText ? ` | Situação: ${evt.situationText}` : ''}`,
-              timestamp: evt.timestamp || new Date().toISOString(),
+              event_code: evtCode,
+              description: `${evt.description} (${evt.location || "Rede CTT"})${evt.rawEvent?.reasonText ? ` | Razão: ${evt.rawEvent.reasonText}` : ''}${evt.rawEvent?.situationText ? ` | Situação: ${evt.rawEvent.situationText}` : ''}`,
+              timestamp: evt.date || new Date().toISOString(),
               created_at: new Date().toISOString(),
             })
             insertedCount++
@@ -897,42 +833,35 @@ export async function scheduleCttPickupAction(input: {
   sender: { name: string; contact?: string; address: string; country?: string; zip: string; city: string; phone: string; email?: string }
   observations?: string
 }) {
+  await requireEmployee()
   const creds = await getCttCredentials()
-  const pickupService = new CTTPickupService()
+  const provider = new CttProvider()
+  await provider.initialize(creds)
 
-  const cleanZip = (input.sender.zip || "").replace(/\D/g, "")
-  const cp4 = cleanZip.slice(0, 4) || "1000"
-  const cp3 = cleanZip.slice(4, 7) || "001"
-
-  const result = await pickupService.newOfferPickUp(creds, {
-    AuthenticationID: creds.auth_id,
-    ClientId: creds.client_number,
-    ContractId: creds.contract_number,
-    DataRecolha: input.date,
-    HoraInicio: input.startHour,
-    HoraFim: input.endHour,
-    Expedidor: {
-      Nome: input.sender.name,
-      Contacto: input.sender.contact,
-      Morada: input.sender.address,
-      CP4: cp4,
-      CP3: cp3,
-      Localidade: input.sender.city,
-      Telefone: input.sender.phone,
-      Email: input.sender.email,
+  const result = await provider.createPickup({
+    date: input.date,
+    startHour: input.startHour,
+    endHour: input.endHour,
+    volumes: input.volumes,
+    weightKg: input.weightKg,
+    sender: {
+      name: input.sender.name,
+      address: input.sender.address,
+      zip: input.sender.zip,
+      city: input.sender.city,
+      phone: input.sender.phone,
+      email: input.sender.email,
     },
-    QuantidadeVolumes: input.volumes,
-    PesoKg: input.weightKg,
-    Observacoes: input.observations,
+    observations: input.observations,
   })
 
-  if (result.Success) {
+  if (result.success) {
     const supabase = createAdminClient()
     await supabase.from("recolhas").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       status: "Agendado",
       scheduled_date: input.date,
-      ctt_pickup_id: result.PickUpID,
+      ctt_pickup_id: result.pickupNumber,
     })
 
     // Trigger Notification Email to Sender
@@ -966,6 +895,7 @@ export async function scheduleCttPickupAction(input: {
  * Consulta a lista oficial de produtos/subprodutos ativados nos CTT via RecolhasWS (GetProdutosRecolha)
  */
 export async function fetchCttAvailableProductsAction() {
+  await requireEmployee()
   try {
     const creds = await getCttCredentials()
     const pickupService = new CTTPickupService()
@@ -986,6 +916,7 @@ export async function validateCttRouteAction(options: {
   cdPaisDestino?: string
   seps?: string[]
 }) {
+  await requireEmployee()
   try {
     const creds = await getCttCredentials()
     const pickupService = new CTTPickupService()
@@ -1003,6 +934,7 @@ export async function validateCttRouteAction(options: {
 export async function convertZplToPdfAction(
   label: string
 ): Promise<{ success: boolean; base64?: string; error?: string }> {
+  await requireUser()
   if (!label) {
     return { success: false, error: "Etiqueta vazia" }
   }
@@ -1075,6 +1007,7 @@ export async function getPontosPickupCttAction(forceRefresh = false): Promise<{
   total: number
   error?: string
 }> {
+  await requireEmployee()
   try {
     const now = Date.now()
     if (!forceRefresh && cachedDeliveryPoints && (now - cachedDeliveryPoints.timestamp < CACHE_TTL_MS)) {
@@ -1134,7 +1067,12 @@ export async function injectTrackingEventAction(
   reasonCode?: string,
   situationCode?: string
 ) {
+  const ctx = await requireUser()
   const supabase = createAdminClient()
+  if (ctx.role === 'client') {
+    const { data: shipment } = await supabase.from('shipments').select('client_id').eq('id', shipmentId).single()
+    if (shipment?.client_id !== ctx.client_id) return { success: false, error: 'Unauthorized' }
+  }
 
   const cttEvent = CTT_TRACKING_EVENTS[eventCode]
   if (!cttEvent) {
@@ -1161,7 +1099,7 @@ export async function injectTrackingEventAction(
   const { error: logError } = await supabase
     .from("tracking_events")
     .insert({
-      tenant_id: "11111111-1111-1111-1111-111111111111", // LINKE_TENANT_ID
+      tenant_id: "11111111-1111-1111-1111-111111111111", // (await getTenantId())
       shipment_id: shipmentId,
       event_code: eventCode,
       description: `${description}${reasonDesc ? ` | Razão: ${reasonDesc}` : ''}${situationDesc ? ` | Situação: ${situationDesc}` : ''}`,

@@ -166,13 +166,13 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
         observations: finalObs || undefined,
       })
       setResult(res)
-      if (res.Success) {
+      if (res.success) {
         setTimeout(() => {
           window.location.reload()
         }, 2800)
       }
     } catch (err: any) {
-      setResult({ Success: false, message: err.message })
+      setResult({ success: false, error: err.message })
     } finally {
       setLoading(false)
     }
@@ -329,7 +329,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Detalhes do Agendamento</p>
                   <div className="flex items-center justify-between py-2 border-b border-slate-100">
                     <span className="text-sm text-slate-500 flex items-center gap-2"><Hash className="w-4 h-4" /> PickUp ID CTT</span>
-                    <span className="font-mono font-black text-blue-700 text-lg tracking-wider">{result.PickUpID}</span>
+                    <span className="font-mono font-black text-blue-700 text-lg tracking-wider">{result.pickupNumber}</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-slate-100">
                     <span className="text-sm text-slate-500 flex items-center gap-2"><Calendar className="w-4 h-4" /> Data</span>
@@ -358,12 +358,12 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
               <form onSubmit={handleSubmit} className="space-y-5">
 
                 {/* Error */}
-                {result && !result.Success && (
+                {result && !result.success && (
                   <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-bold text-red-700">Falha ao agendar recolha</p>
-                      <p className="text-xs text-red-600 mt-0.5">{result.message || "Erro na comunicação com os CTT."}</p>
+                      <p className="text-xs text-red-600 mt-0.5">{result.error || "Erro na comunicação com os CTT."}</p>
                     </div>
                   </div>
                 )}

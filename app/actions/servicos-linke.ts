@@ -5,8 +5,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { getFornecedoresAction, saveFornecedorAction } from "@/app/actions/fornecedores"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
-
-const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
+import { getTenantId } from "@/lib/auth/context"
 
 const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   // ─────────────────────────────────────────────────────────────────────────
@@ -502,7 +501,7 @@ export async function saveServicoLinkeAction(
     }
 
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "servicos_linke_data",
       details: fullRecord,
     })
@@ -637,7 +636,7 @@ export async function deleteServicoLinkeAction(id: string) {
 
   try {
     await supabase.from("audit_log").insert({
-      tenant_id: LINKE_TENANT_ID,
+      tenant_id: (await getTenantId()),
       action: "deleted_servico_linke",
       details: { id, deleted_at: new Date().toISOString() },
     })

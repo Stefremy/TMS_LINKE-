@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { SalarioRecord, DEFAULT_SALARIOS, calculateSalarioTotals } from "@/app/ops/tesouraria/salarios/types"
 import { getColaboradoresAction } from "@/app/actions/colaboradores"
 import { createClient } from "@/lib/supabase/server"
+import { requireEmployee } from "@/lib/auth/context"
 
 // In-memory / cache fallback
 let memorySalarios: SalarioRecord[] = [...DEFAULT_SALARIOS]
@@ -12,6 +13,7 @@ let memorySalarios: SalarioRecord[] = [...DEFAULT_SALARIOS]
  * Fetch all salary records with optional filter by month & year
  */
 export async function getSalariosAction(month?: number, year?: number): Promise<SalarioRecord[]> {
+  await requireEmployee()
   try {
     const supabase = await createClient()
     let query = supabase.from("salarios").select("*").order("created_at", { ascending: false })
@@ -44,6 +46,7 @@ export async function getSalariosAction(month?: number, year?: number): Promise<
 export async function saveSalarioAction(
   record: Partial<SalarioRecord>
 ): Promise<{ success: boolean; salario?: SalarioRecord; message?: string }> {
+  await requireEmployee()
   try {
     const totals = calculateSalarioTotals(record)
 
@@ -113,6 +116,7 @@ export async function saveSalarioAction(
  * Delete a salary record
  */
 export async function deleteSalarioAction(id: string): Promise<{ success: boolean }> {
+  await requireEmployee()
   try {
     const supabase = await createClient()
     await supabase.from("salarios").delete().eq("id", id)
@@ -134,6 +138,7 @@ export async function markSalarioStatusAction(
   paymentDate?: string,
   paymentMethod?: string
 ): Promise<{ success: boolean; salario?: SalarioRecord }> {
+  await requireEmployee()
   const existing = memorySalarios.find((s) => s.id === id)
   if (!existing) return { success: false }
 
@@ -165,6 +170,7 @@ export async function batchMarkSalariosPaidAction(
   paymentDate?: string,
   paymentMethod?: string
 ): Promise<{ success: boolean; updatedCount: number }> {
+  await requireEmployee()
   const today = paymentDate || new Date().toISOString().slice(0, 10)
   
   memorySalarios = memorySalarios.map((s) => {
@@ -207,6 +213,7 @@ export async function batchGenerateMonthPayrollAction(
   month: number,
   year: number
 ): Promise<{ success: boolean; createdCount: number; message: string }> {
+  await requireEmployee()
   try {
     const colaboradores = await getColaboradoresAction()
     const activeStaff = colaboradores.filter((c) => c.status === "Ativo")
