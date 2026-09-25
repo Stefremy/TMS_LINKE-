@@ -27,7 +27,7 @@ import {
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { getShipmentTrackingTimelineAction, regenerateCttLabelAction } from "@/app/actions/shipments"
-import { syncCttTrackingAction } from "@/app/actions/ctt"
+import { syncCttTrackingAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { Button } from "@/components/ui/button"
 
@@ -167,22 +167,35 @@ export function ShipmentLateralDrawer({
     setTimeout(() => setCopiedKey(null), 2000)
   }
 
-  const handlePrintLabel = async () => {
+  const handleDownloadLabel = async () => {
     setIsPrinting(true)
     try {
-      if (shipment.ctt_label_base64) {
-        printCttLabel(shipment.ctt_label_base64)
-      } else {
+      let labelToDownload = shipment.ctt_label_base64
+      
+      if (!labelToDownload) {
         const idToGen = shipment.rawId || shipment.id
         const res = await regenerateCttLabelAction(idToGen)
         if (res.success && res.labelBase64) {
-          printCttLabel(res.labelBase64)
+          labelToDownload = res.labelBase64
         } else {
           alert("Etiqueta ainda não disponível para este envio.")
+          return
         }
       }
+
+      if (labelToDownload && labelToDownload.trimStart().startsWith("^XA")) {
+        const res = await convertZplToPdfAction(labelToDownload)
+        if (res.success && res.base64) {
+          labelToDownload = res.base64
+        } else {
+          alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+          return
+        }
+      }
+
+      downloadCttLabel(labelToDownload, `etiqueta_${carrierCode}.pdf`)
     } catch (err: any) {
-      alert("Erro ao imprimir etiqueta: " + err.message)
+      alert("Erro ao descarregar etiqueta: " + err.message)
     } finally {
       setIsPrinting(false)
     }
@@ -290,12 +303,12 @@ export function ShipmentLateralDrawer({
         <Button
           variant="outline"
           size="sm"
-          onClick={handlePrintLabel}
+          onClick={handleDownloadLabel}
           disabled={isPrinting}
           className="h-7 px-2.5 text-xs font-semibold bg-[var(--surface-bg)] text-[var(--text-primary)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)] shadow-2xs shrink-0"
         >
-          {isPrinting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Printer className="w-3 h-3 mr-1" />}
-          Etiqueta PDF
+          {isPrinting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Download className="w-3 h-3 mr-1" />}
+          Descarregar PDF
         </Button>
 
         <Button
@@ -305,7 +318,7 @@ export function ShipmentLateralDrawer({
           className="h-7 px-2.5 text-xs font-semibold bg-[var(--surface-bg)] text-[var(--text-primary)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)] shadow-2xs shrink-0"
         >
           {copiedKey === "awb" ? <Check className="w-3 h-3 text-[var(--status-success)] mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
-          Copiar AWB
+          Copiar Tracking
         </Button>
 
         <Button
@@ -519,17 +532,6 @@ export function ShipmentLateralDrawer({
             className="h-8 px-3 text-xs font-semibold bg-white border-[var(--border-strong)] text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
           >
             Ver Completo
-          </Button>
-
-          <Button
-            type="button"
-            size="sm"
-            onClick={handlePrintLabel}
-            disabled={isPrinting}
-            className="h-8 px-3.5 text-xs font-semibold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white shadow-2xs"
-          >
-            {isPrinting && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
-            Gerar Rótulo
           </Button>
         </div>
       </div>
