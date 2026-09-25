@@ -34,10 +34,12 @@ import { deleteColaboradorAction, toggleColaboradorStatusAction, getColaboradore
 
 interface ColaboradoresClientProps {
   initialColaboradores: Colaborador[]
+  isSuperAdmin?: boolean
 }
 
 export function ColaboradoresClient({
   initialColaboradores,
+  isSuperAdmin = true,
 }: ColaboradoresClientProps) {
   const [colaboradores, setColaboradores] = React.useState<Colaborador[]>(initialColaboradores || [])
   const [isRefreshing, setIsRefreshing] = React.useState(false)
@@ -567,13 +569,15 @@ export function ColaboradoresClient({
                 </button>
 
                 <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={(e) => handleOpenAuth(col, e)}
-                    className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="Gerir Acesso & Palavra-passe"
-                  >
-                    <Key className="w-3.5 h-3.5" />
-                  </button>
+                  {isSuperAdmin && (
+                    <button
+                      onClick={(e) => handleOpenAuth(col, e)}
+                      className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Gerir Acesso & Palavra-passe"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <button
                     onClick={() => handleOpenEdit(col)}
                     className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
@@ -679,13 +683,15 @@ export function ColaboradoresClient({
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={(e) => handleOpenAuth(col, e)}
-                          className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Gerir Acesso & Palavra-passe"
-                        >
-                          <Key className="w-4 h-4" />
-                        </button>
+                        {isSuperAdmin && (
+                          <button
+                            onClick={(e) => handleOpenAuth(col, e)}
+                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Gerir Acesso & Palavra-passe"
+                          >
+                            <Key className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleOpenDetails(col)}
                           className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
@@ -729,8 +735,8 @@ export function ColaboradoresClient({
         isOpen={isDetailsModalOpen}
         onClose={() => setIsDetailsModalOpen(false)}
         colaborador={selectedColaborador}
-        onEdit={(col) => handleOpenEdit(col)}
-        onManageAuth={(col) => handleOpenAuth(col)}
+        onEdit={isSuperAdmin ? (col) => handleOpenEdit(col) : undefined}
+        onManageAuth={isSuperAdmin ? (col) => handleOpenAuth(col) : undefined}
       />
 
       {authColaborador && (

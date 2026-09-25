@@ -15,10 +15,79 @@ export async function getColaboradoresAction(): Promise<Colaborador[]> {
   const supabase = createAdminClient()
   const colaboradoresMap = new Map<string, Colaborador>()
 
-  // 1. Carregar valores padrão (Stefano, Nathalia, Gilberto)
-  DEFAULT_COLABORADORES.forEach((col) => {
-    colaboradoresMap.set(col.id, { ...col })
-  })
+  // 1. Obter apenas os utilizadores com conta real no Supabase Auth
+  try {
+    const { data: usersData, error: usersError } = await supabase.auth.admin.listUsers()
+    if (!usersError && usersData?.users) {
+      usersData.users.forEach((u: any, index: number) => {
+        // Ignorar clientes externos do portal
+        if (u.user_metadata?.role === 'client' || u.app_metadata?.role === 'client') {
+          return
+        }
+
+        const email = u.email?.toLowerCase().trim() || ""
+        const isStefano = email === "stefano.remy@gmail.com" || email.includes("stefano")
+
+        const matchedDefault = DEFAULT_COLABORADORES.find(
+          (c) => c.email.toLowerCase() === email
+        )
+
+        const id = u.app_metadata?.colaborador_id || u.user_metadata?.colaborador_id || matchedDefault?.id || `col-${u.id.slice(0, 8)}`
+        const code = matchedDefault?.code || `COL00${index + 1}`
+        const name = isStefano
+          ? "Stefano"
+          : matchedDefault?.name || u.user_metadata?.name || u.user_metadata?.full_name || (email.split("@")[0].toUpperCase())
+
+        const accessLevel = isStefano
+          ? "Administrador"
+          : u.app_metadata?.access_level || u.user_metadata?.access_level || matchedDefault?.access_level || (u.user_metadata?.role === 'admin' ? "Administrador" : "Operacional")
+
+        const permissions = isStefano
+          ? [
+              "Acesso Total (Super-Admin)",
+              "Gestão de Clientes & Contratos",
+              "Emissão e Controlo de Guias CTT",
+              "Pedidos de Recolha & Distribuição",
+              "Faturação & Contas Correntes",
+              "Gestão de Transportadoras & Frotas",
+              "Configurações de Webservices & Integrações"
+            ]
+          : u.app_metadata?.permissions || u.user_metadata?.permissions || matchedDefault?.permissions || ["Acesso Operacional"]
+
+        const colab: Colaborador = {
+          id,
+          code,
+          name,
+          role: isStefano
+            ? "Super-Admin / Gestão Geral & Sistemas"
+            : matchedDefault?.role || u.user_metadata?.role_title || (accessLevel === "Administrador" ? "Administrador de Sistemas" : "Operações & Logística"),
+          department: matchedDefault?.department || (isStefano ? "Direção Executiva" : "Operações & Logística"),
+          email: u.email || "",
+          phone: u.user_metadata?.phone || matchedDefault?.phone || "910000000",
+          mobile_phone: u.user_metadata?.phone || matchedDefault?.mobile_phone || "910000000",
+          nif: matchedDefault?.nif || "",
+          status: "Ativo",
+          access_level: accessLevel,
+          agency_location: matchedDefault?.agency_location || "Sede - Felgueiras / Guimarães",
+          admission_date: matchedDefault?.admission_date || u.created_at?.slice(0, 10) || "2023-01-01",
+          avatar_color: matchedDefault?.avatar_color || (isStefano ? "#16a34a" : "#2563eb"),
+          permissions,
+          emergency_contact: matchedDefault?.emergency_contact || "",
+          notes: isStefano
+            ? "Super-Administrador com acesso total e irrestrito a todos os módulos do TMS."
+            : matchedDefault?.notes || "",
+          created_at: u.created_at || new Date().toISOString(),
+        }
+
+        colaboradoresMap.set(id, colab)
+      })
+    }
+  } catch (err: any) {
+    console.warn("[getColaboradoresAction] Erro ao listar contas do auth:", err?.message)
+    DEFAULT_COLABORADORES.forEach((col) => {
+      colaboradoresMap.set(col.id, { ...col })
+    })
+  }
 
   // 2. Tentar ler da tabela colaboradores do Supabase (se existir)
   try {
@@ -39,18 +108,27 @@ export async function getColaboradoresAction(): Promise<Colaborador[]> {
     // Tabela pode ainda não ter sido criada no schema cache
   }
 
-  // 3. Ler de audit_log para persistência de alterações recentes
+  // 3. Ler de audit_log para persistência de alterações recentes de perfil e credenciais
   try {
     const { data: logs } = await supabase
       .from("audit_log")
       .select("*")
-      .in("action", ["colaborador_created", "colaborador_updated", "colaborador_deleted"])
+      .in("action", ["colaborador_created", "colaborador_updated", "colaborador_deleted", "colaborador_credentials_updated"])
       .order("created_at", { ascending: true })
 
     if (logs && logs.length > 0) {
       logs.forEach((log: any) => {
         if (log.action === "colaborador_deleted" && log.details?.id) {
           colaboradoresMap.delete(log.details.id)
+        } else if (log.action === "colaborador_credentials_updated" && log.details?.colaborador_id) {
+          const prev = colaboradoresMap.get(log.details.colaborador_id)
+          if (prev) {
+            colaboradoresMap.set(log.details.colaborador_id, {
+              ...prev,
+              access_level: prev.email?.toLowerCase().includes("stefano") ? "Administrador" : (log.details.access_level || prev.access_level),
+              permissions: prev.email?.toLowerCase().includes("stefano") ? prev.permissions : (log.details.permissions || prev.permissions),
+            })
+          }
         } else if (log.details?.id) {
           const prev = colaboradoresMap.get(log.details.id) || {}
           colaboradoresMap.set(log.details.id, {
@@ -62,6 +140,23 @@ export async function getColaboradoresAction(): Promise<Colaborador[]> {
     }
   } catch (err: any) {
     console.warn("[getColaboradoresAction] Audit log query warning:", err?.message)
+  }
+
+  // Garantir sempre Stefano como Super-Admin inalterável com acesso total
+  for (const [id, col] of colaboradoresMap.entries()) {
+    if (col.email?.toLowerCase().includes("stefano") || col.name.toLowerCase() === "stefano") {
+      col.access_level = "Administrador"
+      col.permissions = [
+        "Acesso Total (Super-Admin)",
+        "Gestão de Clientes & Contratos",
+        "Emissão e Controlo de Guias CTT",
+        "Pedidos de Recolha & Distribuição",
+        "Faturação & Contas Correntes",
+        "Gestão de Transportadoras & Frotas",
+        "Configurações de Webservices & Integrações"
+      ]
+      colaboradoresMap.set(id, col)
+    }
   }
 
   return Array.from(colaboradoresMap.values()).sort((a, b) => a.code.localeCompare(b.code))

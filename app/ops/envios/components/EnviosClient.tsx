@@ -41,6 +41,7 @@ interface EnviosClientProps {
 export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = React.useState("")
+  const [statusFilter, setStatusFilter] = React.useState("Todos")
   const [showFilters, setShowFilters] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
   const [showRecolhaModal, setShowRecolhaModal] = React.useState(false)
@@ -124,6 +125,15 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
   const dataSource = viewMode === "envios" ? envios : recolhas
 
   const filteredEnvios = dataSource.filter((item) => {
+    // 1. Status Filter
+    const rawStatus = item.status?.label || item.rawShipment?.ctt_estado || "Pendente"
+    const statusCfg = getShipmentStatusConfig(rawStatus)
+    
+    if (statusFilter !== "Todos") {
+      const targetLabel = statusFilter === "Incidências" ? "Incidência" : statusFilter
+      if (statusCfg.label !== targetLabel) return false
+    }
+
     if (!searchQuery) return true
     const q = searchQuery.toLowerCase()
     
@@ -225,10 +235,20 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
           <div className="flex items-center ml-2 border-l border-[var(--border-subtle)] pl-4">
             <span className="text-[11px] font-semibold text-[var(--text-secondary)] mr-2">Estado</span>
             <div className="relative">
-              <select className="appearance-none bg-[var(--surface-bg)] border border-[var(--border-strong)] text-[var(--text-primary)] text-[11px] font-medium rounded-md px-2.5 py-1.5 pr-7 focus:outline-none focus:border-[var(--accent)] shadow-2xs">
-                <option>Todos</option>
-                <option>Pendente</option>
-                <option>Em Trânsito</option>
+              <select 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="appearance-none bg-[var(--surface-bg)] border border-[var(--border-strong)] text-[var(--text-primary)] text-[11px] font-medium rounded-md px-2.5 py-1.5 pr-7 focus:outline-none focus:border-[var(--accent)] shadow-2xs"
+              >
+                <option value="Todos">Todos</option>
+                <option value="Pendente">Pendente</option>
+                <option value="Em Trânsito">Em Trânsito</option>
+                <option value="Em Distribuição">Em Distribuição</option>
+                <option value="Entregue">Entregue</option>
+                <option value="Entregue (PUDO)">Entregue (PUDO)</option>
+                <option value="Incidência">Incidências</option>
+                <option value="Devolvido">Devolvido</option>
+                <option value="Cancelado">Cancelado</option>
               </select>
               <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
             </div>

@@ -1,8 +1,10 @@
 "use server"
 
 import { createAdminClient } from "@/lib/supabase/server"
+import { requireAdmin } from "@/lib/auth/context"
 
 export async function setClientPasswordAction(clientId: string, email: string, password?: string) {
+  await requireAdmin()
   const supabaseAdmin = createAdminClient()
 
   if (!email) {
@@ -70,6 +72,7 @@ export async function setColaboradorCredentialsAction(
   accessLevel: "Administrador" | "Operacional" | "Comercial / Suporte" = "Operacional",
   permissions: string[] = []
 ) {
+  await requireAdmin()
   const supabaseAdmin = createAdminClient()
 
   if (!email || !email.trim()) {
@@ -86,20 +89,27 @@ export async function setColaboradorCredentialsAction(
   const existingUser = usersData.users.find((u: any) => u.email?.toLowerCase() === email.toLowerCase().trim())
 
   if (existingUser) {
+    const isSuperAdmin = email.toLowerCase().trim() === "stefano.remy@gmail.com"
+    const assignedRole = isSuperAdmin || accessLevel === "Administrador" ? "admin" : "employee"
+    const effectiveAccessLevel = isSuperAdmin ? "Administrador" : accessLevel
+    const effectivePermissions = isSuperAdmin
+      ? Array.from(new Set([...permissions, "Acesso Total (Super-Admin)"]))
+      : permissions
+
     const updateData: any = {
       app_metadata: {
         ...existingUser.app_metadata,
-        role: "employee",
+        role: assignedRole,
         colaborador_id: colaboradorId,
-        access_level: accessLevel,
-        permissions,
+        access_level: effectiveAccessLevel,
+        permissions: effectivePermissions,
       },
       user_metadata: {
         ...existingUser.user_metadata,
-        role: "employee",
+        role: assignedRole,
         colaborador_id: colaboradorId,
-        access_level: accessLevel,
-        permissions,
+        access_level: effectiveAccessLevel,
+        permissions: effectivePermissions,
       },
     }
     if (password && password.trim()) {
@@ -119,21 +129,28 @@ export async function setColaboradorCredentialsAction(
       throw new Error("Para criar um novo acesso, é necessário definir uma password inicial.")
     }
 
+    const isSuperAdmin = email.toLowerCase().trim() === "stefano.remy@gmail.com"
+    const assignedRole = isSuperAdmin || accessLevel === "Administrador" ? "admin" : "employee"
+    const effectiveAccessLevel = isSuperAdmin ? "Administrador" : accessLevel
+    const effectivePermissions = isSuperAdmin
+      ? Array.from(new Set([...permissions, "Acesso Total (Super-Admin)"]))
+      : permissions
+
     const { error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: email.trim(),
       password: password.trim(),
       email_confirm: true,
       app_metadata: {
-        role: "employee",
+        role: assignedRole,
         colaborador_id: colaboradorId,
-        access_level: accessLevel,
-        permissions,
+        access_level: effectiveAccessLevel,
+        permissions: effectivePermissions,
       },
       user_metadata: {
-        role: "employee",
+        role: assignedRole,
         colaborador_id: colaboradorId,
-        access_level: accessLevel,
-        permissions,
+        access_level: effectiveAccessLevel,
+        permissions: effectivePermissions,
       },
     })
 

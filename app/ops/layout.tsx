@@ -87,13 +87,20 @@ export default async function OpsLayout({
 
             {/* User Profile */}
             <div className="flex items-center gap-3 pl-1">
-              <div className="flex flex-col items-end cursor-pointer">
-                <span className="text-[12px] font-bold text-[var(--text-primary)] leading-tight capitalize">{userName}</span>
-                <span className="text-[10px] text-[var(--text-secondary)] font-medium">Operador Sénior · Porto</span>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-xs cursor-pointer">
-                <User className="w-4 h-4" />
-              </div>
+              <Link href="/ops/perfil" className="flex items-center gap-3 group hover:bg-[var(--surface-muted)] p-1 -mr-1 -my-1 pr-3 rounded-md transition-colors">
+                <div className="flex flex-col items-end cursor-pointer">
+                  <span className="text-[12px] font-bold text-[var(--text-primary)] leading-tight capitalize">{userName}</span>
+                  <span className="text-[10px] text-[var(--text-secondary)] font-medium group-hover:text-[var(--accent)] transition-colors">Editar Perfil</span>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-xs cursor-pointer group-hover:bg-[var(--accent-hover)] transition-colors overflow-hidden">
+                  {user?.user_metadata?.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={user.user_metadata.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-4 h-4" />
+                  )}
+                </div>
+              </Link>
               <div className="h-6 w-[1px] bg-[var(--border-subtle)] mx-1"></div>
               <form action={signout}>
                 <button 

@@ -91,6 +91,21 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     }
   }
 
+  // Stefano Remy is the permanent Super-Admin with unrestricted full access
+  if (user.email?.toLowerCase().includes("stefano")) {
+    role = "admin"
+    colaborador_id = "col-stefano-001"
+    permissions = [
+      "Acesso Total (Super-Admin)",
+      "Gestão de Clientes & Contratos",
+      "Emissão e Controlo de Guias CTT",
+      "Pedidos de Recolha & Distribuição",
+      "Faturação & Contas Correntes",
+      "Gestão de Transportadoras & Frotas",
+      "Configurações de Webservices & Integrações"
+    ]
+  }
+
   // Check for secure impersonation cookie
   if ((role === 'employee' || role === 'admin')) {
     const impersonatedId = cookieStore.get("impersonated_client_id")?.value
@@ -138,6 +153,18 @@ export async function requirePermission(permission: string): Promise<AuthContext
   const ctx = await requireEmployee()
   if (!ctx.permissions.includes(permission) && ctx.role !== 'admin') {
     throw new Error(`Acesso negado. Permissão necessária: ${permission}.`)
+  }
+  return ctx
+}
+
+/**
+ * Ensures the caller is specifically an Admin / Super-Admin (Stefano). Throws if not.
+ */
+export async function requireAdmin(): Promise<AuthContext> {
+  const ctx = await requireUser()
+  const isStefano = ctx.user?.email?.toLowerCase().includes("stefano")
+  if (ctx.role !== 'admin' && !isStefano) {
+    throw new Error("Acesso restrito. Apenas o administrador Stefano tem permissão para gerir credenciais e níveis de acesso.")
   }
   return ctx
 }

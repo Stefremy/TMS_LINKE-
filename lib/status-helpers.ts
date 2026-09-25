@@ -40,6 +40,14 @@ export function getShipmentStatusConfig(rawStatus: any): StatusConfig {
         dotColor: "bg-emerald-500",
         badgeVariant: "success",
       }
+    case "entregue_pudo":
+    case "entregue_em_pudo":
+      return {
+        label: "Entregue (PUDO)",
+        color: "bg-teal-50 text-teal-800 border border-teal-200/80 font-semibold",
+        dotColor: "bg-teal-500",
+        badgeVariant: "success",
+      }
     case "incidencia":
     case "com_incidencia":
       return {
