@@ -476,10 +476,15 @@ export function ColaboradoresClient({
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div
-                      className="w-14 h-14 rounded-2xl text-white flex items-center justify-center text-xl font-bold shadow-md shrink-0"
+                      className="w-14 h-14 rounded-2xl text-white flex items-center justify-center text-xl font-bold shadow-md shrink-0 overflow-hidden"
                       style={{ backgroundColor: col.avatar_color || "#16a34a" }}
                     >
-                      {col.name.charAt(0).toUpperCase()}
+                      {col.avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={col.avatar} alt={col.name} className="w-full h-full object-cover" />
+                      ) : (
+                        col.name.charAt(0).toUpperCase()
+                      )}
                     </div>
                     <div>
                       <h3 className="text-lg font-bold text-slate-900 group-hover:text-green-700 transition-colors">
@@ -623,10 +628,15 @@ export function ColaboradoresClient({
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-3">
                         <div
-                          className="w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-sm shrink-0"
+                          className="w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-sm shrink-0 overflow-hidden"
                           style={{ backgroundColor: col.avatar_color || "#16a34a" }}
                         >
-                          {col.name.charAt(0).toUpperCase()}
+                          {col.avatar ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={col.avatar} alt={col.name} className="w-full h-full object-cover" />
+                          ) : (
+                            col.name.charAt(0).toUpperCase()
+                          )}
                         </div>
                         <div>
                           <span className="font-semibold text-slate-900 group-hover:text-green-700 transition-colors block">

@@ -71,6 +71,7 @@ export async function getColaboradoresAction(): Promise<Colaborador[]> {
           agency_location: matchedDefault?.agency_location || "Sede - Felgueiras / Guimarães",
           admission_date: matchedDefault?.admission_date || u.created_at?.slice(0, 10) || "2023-01-01",
           avatar_color: matchedDefault?.avatar_color || (isStefano ? "#16a34a" : "#2563eb"),
+          avatar: u.user_metadata?.avatar || u.app_metadata?.avatar || matchedDefault?.avatar || undefined,
           permissions,
           emergency_contact: matchedDefault?.emergency_contact || "",
           notes: isStefano
@@ -130,10 +131,11 @@ export async function getColaboradoresAction(): Promise<Colaborador[]> {
             })
           }
         } else if (log.details?.id) {
-          const prev = colaboradoresMap.get(log.details.id) || {}
+          const prev = (colaboradoresMap.get(log.details.id) || {}) as any
           colaboradoresMap.set(log.details.id, {
             ...prev,
             ...log.details,
+            avatar: log.details.avatar || prev.avatar,
           })
         }
       })
@@ -188,6 +190,7 @@ export async function saveColaboradorAction(colaboradorData: Partial<Colaborador
     agency_location: colaboradorData.agency_location || "Sede - Felgueiras / Guimarães",
     admission_date: colaboradorData.admission_date || now.slice(0, 10),
     avatar_color: colaboradorData.avatar_color || "#16a34a",
+    avatar: colaboradorData.avatar || undefined,
     permissions: colaboradorData.permissions || ["Acesso Operacional"],
     emergency_contact: colaboradorData.emergency_contact || "",
     notes: colaboradorData.notes || "",

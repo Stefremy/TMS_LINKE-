@@ -148,9 +148,19 @@ Link de Acesso: http://localhost:3000/ops`
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/75">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold shadow-sm">
-              <Key className="w-5 h-5" />
-            </div>
+            {colaborador.avatar ? (
+              <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm shrink-0 border border-slate-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={colaborador.avatar} alt={colaborador.name} className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <div
+                className="w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-sm shrink-0"
+                style={{ backgroundColor: colaborador.avatar_color || "#16a34a" }}
+              >
+                {colaborador.name.charAt(0).toUpperCase()}
+              </div>
+            )}
             <div>
               <h2 className="text-base font-bold text-slate-900">
                 Acesso & Credenciais de Login

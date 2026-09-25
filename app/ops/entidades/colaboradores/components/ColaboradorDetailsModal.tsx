@@ -63,10 +63,15 @@ export function ColaboradorDetailsModal({
           <div className="flex items-start gap-4">
             {/* Avatar */}
             <div
-              className="w-16 h-16 rounded-2xl text-white flex items-center justify-center text-2xl font-bold shadow-md shrink-0"
+              className="w-16 h-16 rounded-2xl text-white flex items-center justify-center text-2xl font-bold shadow-md shrink-0 overflow-hidden"
               style={{ backgroundColor: colaborador.avatar_color || "#16a34a" }}
             >
-              {colaborador.name.charAt(0).toUpperCase()}
+              {colaborador.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={colaborador.avatar} alt={colaborador.name} className="w-full h-full object-cover" />
+              ) : (
+                colaborador.name.charAt(0).toUpperCase()
+              )}
             </div>
 
             <div>

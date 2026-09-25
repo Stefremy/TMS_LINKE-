@@ -13,6 +13,7 @@ export interface Colaborador {
   agency_location: string
   admission_date: string
   avatar_color: string
+  avatar?: string
   permissions: string[]
   emergency_contact?: string
   notes?: string
