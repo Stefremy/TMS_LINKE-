@@ -179,17 +179,17 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-8rem)] bg-[var(--surface-bg)] rounded-xl shadow-sm border border-[var(--border-subtle)] overflow-hidden">
 
       {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0 bg-slate-50">
+      <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0 bg-[var(--surface-muted)]">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600">
+          <div className="w-9 h-9 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] border border-[rgba(18,138,71,0.1)]">
             <Truck className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800">Pedidos de Recolha</h1>
-            <p className="text-xs text-slate-500">
+            <h1 className="text-lg font-bold text-[var(--text-primary)]">Pedidos de Recolha</h1>
+            <p className="text-xs text-[var(--text-secondary)]">
               Agendamento direto via CTT Expresso WebServices (RecolhasWS)
             </p>
           </div>
@@ -200,8 +200,8 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
             onClick={() => { setView("list"); setResult(null) }}
             className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${
               view === "list"
-                ? "bg-slate-800 text-white border-slate-800"
-                : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
+                ? "bg-[var(--text-primary)] text-[var(--surface-bg)] border-[var(--text-primary)]"
+                : "bg-[var(--surface-bg)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)]"
             }`}
           >
             Lista
@@ -210,8 +210,8 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
             onClick={() => { setView("form"); setResult(null) }}
             className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors flex items-center gap-1.5 ${
               view === "form"
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-blue-600 border-blue-300 hover:bg-blue-50"
+                ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                : "bg-[var(--surface-bg)] text-[var(--accent)] border-[rgba(18,138,71,0.3)] hover:bg-[var(--accent-soft)]"
             }`}
           >
             <Plus className="w-4 h-4" />
@@ -225,18 +225,18 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
         <div className="flex-1 overflow-auto">
           {recolhas.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 py-16 text-center px-8">
-              <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400">
+              <div className="w-16 h-16 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-strong)] flex items-center justify-center text-[var(--text-tertiary)]">
                 <Package className="w-8 h-8" />
               </div>
               <div>
-                <p className="text-base font-bold text-slate-700">Nenhuma recolha agendada</p>
-                <p className="text-sm text-slate-400 mt-1 max-w-sm">
+                <p className="text-base font-bold text-[var(--text-primary)]">Nenhuma recolha agendada</p>
+                <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-sm">
                   Agende a primeira recolha CTT Expresso diretamente a partir deste painel, sem precisar da App CTT.
                 </p>
               </div>
               <button
                 onClick={() => setView("form")}
-                className="mt-2 flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-sm transition-colors"
+                className="mt-2 flex items-center gap-2 px-5 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-sm font-bold shadow-sm transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Agendar Primeira Recolha
@@ -244,53 +244,53 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
             </div>
           ) : (
             <table className="w-full text-left text-[13px]">
-              <thead className="bg-white sticky top-0 z-10 shadow-[0_1px_0_0_#e2e8f0]">
+              <thead className="bg-[var(--surface-bg)] sticky top-0 z-10 shadow-[0_1px_0_0_var(--border-subtle)]">
                 <tr>
-                  <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wide">PickUp ID</th>
-                  <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wide">Cliente</th>
-                  <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wide">Data / Horário</th>
-                  <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wide">Morada</th>
-                  <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wide">Vol / Peso</th>
-                  <th className="px-5 py-3 font-bold text-slate-600 text-xs uppercase tracking-wide">Estado</th>
+                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">PickUp ID</th>
+                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Cliente</th>
+                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Data / Horário</th>
+                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Morada</th>
+                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Vol / Peso</th>
+                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Estado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-[var(--border-subtle)]">
                 {recolhas.map((r) => {
                   const cfg = getStatusCfg(r.status)
                   const client = clients.find(c => c.id === r.client_id)
                   return (
-                    <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
+                    <tr key={r.id} className="hover:bg-[var(--surface-muted)] transition-colors">
                       <td className="px-5 py-4">
-                        <span className="font-mono font-bold text-blue-700 text-[13px]">
+                        <span className="font-mono font-bold text-[var(--accent)] text-[13px]">
                           {r.ctt_pickup_id || "—"}
                         </span>
-                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                        <div className="text-[11px] text-[var(--text-tertiary)] font-mono mt-0.5">
                           {r.id.slice(0, 8).toUpperCase()}
                         </div>
                       </td>
                       <td className="px-5 py-4">
                         {client ? (
                           <div>
-                            <div className="font-semibold text-slate-800">{client.name}</div>
-                            <div className="text-[11px] text-slate-400">{client.code}</div>
+                            <div className="font-semibold text-[var(--text-primary)]">{client.name}</div>
+                            <div className="text-[11px] text-[var(--text-tertiary)]">{client.code}</div>
                           </div>
                         ) : (
-                          <span className="text-slate-400 text-[12px]">—</span>
+                          <span className="text-[var(--text-tertiary)] text-[12px]">—</span>
                         )}
                       </td>
                       <td className="px-5 py-4">
-                        <div className="flex items-center gap-1.5 font-semibold text-slate-800">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
+                          <Calendar className="w-3.5 h-3.5 text-[var(--text-tertiary)] shrink-0" />
                           {r.scheduled_date || "—"}
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="font-semibold text-slate-800">{r.sender_name || "Armazém Principal"}</div>
-                        <div className="text-[11px] text-slate-400">{r.sender_address || "—"}</div>
+                        <div className="font-semibold text-[var(--text-primary)]">{r.sender_name || "Armazém Principal"}</div>
+                        <div className="text-[11px] text-[var(--text-tertiary)]">{r.sender_address || "—"}</div>
                       </td>
                       <td className="px-5 py-4">
-                        <div className="text-slate-800 font-semibold">{r.volumes ?? "—"} vol.</div>
-                        <div className="text-[11px] text-slate-400">{r.weight_kg ?? "—"} kg</div>
+                        <div className="text-[var(--text-primary)] font-semibold">{r.volumes ?? "—"} vol.</div>
+                        <div className="text-[11px] text-[var(--text-tertiary)]">{r.weight_kg ?? "—"} kg</div>
                       </td>
                       <td className="px-5 py-4">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${cfg.color}`}>
