@@ -5,8 +5,9 @@ export interface StatusConfig {
   badgeVariant: 'default' | 'success' | 'warning' | 'danger' | 'neutral' | 'info' | 'purple'
 }
 
-export function getShipmentStatusConfig(status: string | null | undefined): StatusConfig {
-  const norm = (status || "").toLowerCase().replace(/[\s-]+/g, "_")
+export function getShipmentStatusConfig(rawStatus: any): StatusConfig {
+  const status = typeof rawStatus === 'string' ? rawStatus : String(rawStatus || "")
+  const norm = status.toLowerCase().replace(/[\s-]+/g, "_")
   
   switch (norm) {
     case "pendente":

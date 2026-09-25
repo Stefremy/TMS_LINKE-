@@ -24,6 +24,7 @@ import { ActionMenu } from "./ActionMenu"
 import { FerramentasMenu } from "./FerramentasMenu"
 import { NovaRecolhaModal } from "./NovaRecolhaModal"
 import { ManifestModal } from "./ManifestModal"
+import { ShipmentLateralDrawer } from "./ShipmentLateralDrawer"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
@@ -44,6 +45,7 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
   const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
   const [showRecolhaModal, setShowRecolhaModal] = React.useState(false)
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
+  const [drawerShipment, setDrawerShipment] = React.useState<any | null>(null)
   const [selectedIds, setSelectedIds] = React.useState<string[]>([])
   const [manifestData, setManifestData] = React.useState<any | null>(null)
   const [isClosingManifest, setIsClosingManifest] = React.useState(false)
@@ -402,14 +404,26 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
             ) : filteredEnvios.map((envio, idx) => {
               const rowId = envio.rawId || envio.rawShipment?.id || envio.trk?.id
               const isSelected = selectedIds.includes(rowId)
+              const isDrawerActive = drawerShipment && (
+                (drawerShipment.id && (drawerShipment.id === envio.rawId || drawerShipment.id === envio.rawShipment?.id)) ||
+                (drawerShipment.tracking_number && (drawerShipment.tracking_number === envio.trk?.id || drawerShipment.tracking_number === envio.trk?.carrierRef)) ||
+                (drawerShipment.trk?.id && drawerShipment.trk.id === envio.trk?.id)
+              )
 
               return (
               <tr 
                 key={idx} 
-                className={`hover:bg-[var(--surface-muted)] transition-colors group cursor-pointer ${isSelected ? 'bg-[var(--accent-soft)] hover:bg-[rgba(18,138,71,0.15)]' : ''}`}
+                className={`transition-colors group cursor-pointer ${
+                  isDrawerActive
+                    ? 'bg-[var(--accent-soft)] hover:bg-[rgba(18,138,71,0.15)] ring-1 ring-inset ring-[var(--accent)]/40'
+                    : isSelected 
+                    ? 'bg-[var(--accent-soft)]/50 hover:bg-[rgba(18,138,71,0.15)]' 
+                    : 'hover:bg-[var(--surface-muted)]'
+                }`}
                 onClick={(e) => {
-                  if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) return;
-                  handleToggleRow(rowId)
+                  if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('input')) return;
+                  const target = envio.rawShipment ? { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id } : envio;
+                  setDrawerShipment(target)
                 }}
               >
                 <td className="px-4 py-3 align-top" onClick={(e) => e.stopPropagation()}>
@@ -426,9 +440,13 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                   <div className="flex flex-col gap-0.5">
                     <button 
                       type="button"
-                      onClick={() => setSelectedShipment(envio.rawShipment || envio)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const target = envio.rawShipment ? { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id } : envio;
+                        setDrawerShipment(target)
+                      }}
                       className="font-mono font-semibold text-[var(--status-info)] hover:text-blue-800 hover:underline flex items-center gap-1 text-xs text-left cursor-pointer transition-colors"
-                      title="Clique para ver os detalhes do envio"
+                      title="Clique para ver os detalhes na barra lateral"
                     >
                       {envio.trk?.id || "N/A"}
                     </button>
@@ -583,6 +601,19 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
         <NovaRecolhaModal onClose={() => setShowRecolhaModal(false)} clients={clients} />
       )}
       
+
+      {/* Lateral Drawer Panel */}
+      <ShipmentLateralDrawer 
+        shipment={drawerShipment} 
+        isOpen={Boolean(drawerShipment)} 
+        onClose={() => setDrawerShipment(null)}
+        onOpenFullModal={(s) => {
+          setSelectedShipment(s)
+        }}
+        onUpdateShipment={() => {
+          router.refresh()
+        }}
+      />
 
       {selectedShipment && (
         <ClientShipmentDetailModal 

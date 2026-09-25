@@ -4,19 +4,28 @@ import Image from "next/image"
 import { SidebarNav } from "./components/SidebarNav"
 import { NotificationBell } from "./components/NotificationBell"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
+import { createClient } from "@/lib/supabase/server"
+import { signout } from "@/app/login/actions"
 import { 
   Plus,
   HelpCircle,
   ToggleRight,
   ChevronsLeft,
-  User
+  User,
+  LogOut
 } from "lucide-react"
 
-export default function OpsLayout({
+export default async function OpsLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  // Try to get name from metadata, fallback to email prefix, fallback to "Operador"
+  const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || "Operador"
+
   return (
     <div className="min-h-screen bg-[var(--canvas-bg)] flex flex-col md:flex-row text-[var(--text-primary)]">
       {/* Sidebar */}
@@ -24,16 +33,17 @@ export default function OpsLayout({
         
         {/* Logo Area */}
         <div className="pt-6 pb-2 px-6">
-          <Link href="/ops" className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-[var(--accent)] text-white flex items-center justify-center font-bold text-[14px]">
-              L
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-[15px] text-[var(--text-primary)] tracking-tight">Linke</span>
-              <span className="bg-[var(--accent-soft)] text-[var(--accent)] text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide border border-[rgba(18,138,71,0.1)]">TMS</span>
-            </div>
+          <Link href="/ops" className="block w-full">
+            <Image 
+              src="/Linke-logo.png" 
+              alt="Linke TMS" 
+              width={130} 
+              height={32} 
+              className="object-contain" 
+              priority 
+            />
           </Link>
-          <div className="text-[11px] text-[var(--text-tertiary)] font-medium mt-1">
+          <div className="text-[11px] text-[var(--text-tertiary)] font-medium mt-2">
             v2.8.4 Enterprise
           </div>
         </div>
@@ -76,14 +86,24 @@ export default function OpsLayout({
             </div>
 
             {/* User Profile */}
-            <div className="flex items-center gap-3 pl-1 cursor-pointer">
-              <div className="flex flex-col items-end">
-                <span className="text-[12px] font-bold text-[var(--text-primary)] leading-tight">Carlos Silva</span>
+            <div className="flex items-center gap-3 pl-1">
+              <div className="flex flex-col items-end cursor-pointer">
+                <span className="text-[12px] font-bold text-[var(--text-primary)] leading-tight capitalize">{userName}</span>
                 <span className="text-[10px] text-[var(--text-secondary)] font-medium">Operador Sénior · Porto</span>
               </div>
-              <div className="w-8 h-8 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-xs">
+              <div className="w-8 h-8 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-xs cursor-pointer">
                 <User className="w-4 h-4" />
               </div>
+              <div className="h-6 w-[1px] bg-[var(--border-subtle)] mx-1"></div>
+              <form action={signout}>
+                <button 
+                  type="submit" 
+                  title="Terminar Sessão"
+                  className="p-1.5 text-[var(--text-tertiary)] hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </form>
             </div>
           </div>
         </header>
