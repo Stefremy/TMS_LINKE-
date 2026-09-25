@@ -30,7 +30,7 @@ export default async function ContasCorrentePage() {
   const pendingShipments = shipments.filter((s: any) => !invoicedShipmentIds.has(s.id))
   
   return (
-    <div className="p-6">
+    <div className="space-y-6">
       <ContasCorrenteClient 
         clients={clients} 
         shipments={pendingShipments} 

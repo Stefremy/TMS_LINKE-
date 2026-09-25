@@ -1,1 +1,53 @@
 @import "tailwindcss";
+
+/* ===== Precision Logistics Engine — Design System Tokens ===== */
+:root {
+  /* Canvas & Surfaces */
+  --canvas-bg: #F5F7F5;
+  --surface-bg: #FFFFFF;
+  --surface-muted: #F0F3F0;
+  --surface-dim: #d9dbd5;
+
+  /* Text hierarchy */
+  --text-primary: #141714;
+  --text-secondary: #566057;
+  --text-tertiary: #788279;
+
+  /* Brand / Accent */
+  --accent: #128A47;
+  --accent-hover: #0E6C37;
+  --accent-active: #18A957;
+  --accent-soft: #E8F7EE;
+
+  /* Borders */
+  --border-subtle: rgba(20, 23, 20, 0.08);
+  --border-strong: rgba(20, 23, 20, 0.16);
+
+  /* Status */
+  --status-success: #128A47;
+  --status-success-soft: #E8F7EE;
+  --status-warning: #D97706;
+  --status-warning-soft: #FEF3C7;
+  --status-critical: #DC2626;
+  --status-critical-soft: #FEE2E2;
+  --status-info: #2563EB;
+  --status-info-soft: #EFF6FF;
+
+  /* Elevation */
+  --shadow-layer: 0 1px 2px rgba(20, 23, 20, 0.05), 0 4px 12px rgba(20, 23, 20, 0.08);
+}
+
+/* Global base styles */
+body {
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--text-primary);
+  background: var(--canvas-bg);
+}
+
+/* Selection highlight */
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}

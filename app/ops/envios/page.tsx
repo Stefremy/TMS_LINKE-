@@ -63,83 +63,83 @@ export default async function EnviosPage() {
         city: s.recipient_address || "N/A", 
         phone: "" 
       },
-      service: { 
-        code: s.service_type || "N/A", 
-        name: s.service_type?.includes('ctt') ? "CTT Expresso" : s.service_type, 
-        bgColor: s.service_type?.includes('ctt') ? "bg-red-600" : "bg-blue-600", 
-        textColor: "text-white" 
-      },
-      package: { 
-        count: "1 Vol.", // Em produção deve vir da contagem de packages para este shipment
-        weight: "1.00 kg" 
-      },
-      delivery: { 
-        date: s.status === 'entregue' ? new Date(s.updated_at || s.created_at).toLocaleDateString('pt-PT') : "--/--/----", 
-        time: s.status === 'entregue' ? new Date(s.updated_at || s.created_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : "--:--" 
-      },
-      status: { 
-        label: statusCfg.label, 
-        raw: s.status,
-        subCode: s.ops_substatus || "", 
-        color: statusCfg.color,
-        dotColor: statusCfg.dotColor
-      },
-      value: { 
-        amount: s.sell_price ? `${s.sell_price}€` : "0.00€", 
-        diff: "0.00€", 
-        diffColor: "text-slate-600 border-slate-200 bg-slate-50", 
-        ref: "REF" 
-      }
-    }
-  })
-
-  const mappedRecolhas = recolhas.map((r: any) => ({
-    trk: { 
-      id: r.ctt_pickup_id || r.id.substring(0, 8).toUpperCase(), 
-      date: new Date(r.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }), 
-      ref: r.id.substring(0, 8).toUpperCase(), 
-      tag: "R01" 
-    },
-    sender: { 
-      name: "Armazém Principal", 
-      flag: "PT", 
-      zip: "4000-001", 
-      city: "PORTO, PT", 
-      phone: "" 
-    },
-    recipient: { 
-      name: "CTT Correios", 
-      flag: "PT", 
-      zip: "-", 
-      city: "-", 
-      phone: "" 
-    },
     service: { 
-      code: "REC", 
-      name: "Recolha", 
-      bgColor: "bg-orange-500", 
+      code: s.service_type || "N/A", 
+      name: s.service_type?.includes('ctt') ? "CTT Expresso" : s.service_type, 
+      bgColor: s.service_type?.includes('ctt') ? "bg-[var(--status-critical)]" : "bg-[var(--status-info)]", 
       textColor: "text-white" 
     },
     package: { 
-      count: "- Vol.", 
-      weight: "- kg" 
+      count: "1 Vol.", // Em produção deve vir da contagem de packages para este shipment
+      weight: "1.00 kg" 
     },
     delivery: { 
-      date: r.scheduled_date || "--/--/----", 
-      time: "--:--" 
+      date: s.status === 'entregue' ? new Date(s.updated_at || s.created_at).toLocaleDateString('pt-PT') : "--/--/----", 
+      time: s.status === 'entregue' ? new Date(s.updated_at || s.created_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : "--:--" 
     },
     status: { 
-      label: r.status, 
-      subCode: "", 
-      color: "bg-orange-100 text-orange-700" 
+      label: statusCfg.label, 
+      raw: s.status,
+      subCode: s.ops_substatus || "", 
+      color: statusCfg.color,
+      dotColor: statusCfg.dotColor
     },
     value: { 
-      amount: "0,00€", 
-      diff: "0,00€", 
-      diffColor: "text-slate-600 border-slate-200 bg-slate-50", 
-      ref: "REC" 
+      amount: s.sell_price ? `${s.sell_price}€` : "0.00€", 
+      diff: "0.00€", 
+      diffColor: "text-[var(--text-secondary)] border-[var(--border-subtle)] bg-[var(--surface-muted)]", 
+      ref: "REF" 
     }
-  }))
+  }
+})
+
+const mappedRecolhas = recolhas.map((r: any) => ({
+  trk: { 
+    id: r.ctt_pickup_id || r.id.substring(0, 8).toUpperCase(), 
+    date: new Date(r.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }), 
+    ref: r.id.substring(0, 8).toUpperCase(), 
+    tag: "R01" 
+  },
+  sender: { 
+    name: "Armazém Principal", 
+    flag: "PT", 
+    zip: "4000-001", 
+    city: "PORTO, PT", 
+    phone: "" 
+  },
+  recipient: { 
+    name: "CTT Correios", 
+    flag: "PT", 
+    zip: "-", 
+    city: "-", 
+    phone: "" 
+  },
+  service: { 
+    code: "REC", 
+    name: "Recolha", 
+    bgColor: "bg-[var(--status-warning)]", 
+    textColor: "text-white" 
+  },
+  package: { 
+    count: "- Vol.", 
+    weight: "- kg" 
+  },
+  delivery: { 
+    date: r.scheduled_date || "--/--/----", 
+    time: "--:--" 
+  },
+  status: { 
+    label: r.status, 
+    subCode: "", 
+    color: "bg-[var(--status-warning-soft)] text-[var(--status-warning)]" 
+  },
+  value: { 
+    amount: "0,00€", 
+    diff: "0,00€", 
+    diffColor: "text-[var(--text-secondary)] border-[var(--border-subtle)] bg-[var(--surface-muted)]", 
+    ref: "REC" 
+  }
+}))
 
   return (
     <EnviosClient 

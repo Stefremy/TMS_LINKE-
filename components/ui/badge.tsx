@@ -9,32 +9,32 @@ export function Badge({ className = '', variant = 'default', ...props }: BadgePr
   
   switch (variant) {
     case 'success':
-      variantStyles = 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
+      variantStyles = 'bg-[var(--status-success-soft)] text-[var(--status-success)] border-[rgba(18,138,71,0.2)]'
       break
     case 'warning':
-      variantStyles = 'bg-amber-50 text-amber-700 border-amber-200/80'
+      variantStyles = 'bg-[var(--status-warning-soft)] text-[var(--status-warning)] border-[rgba(217,119,6,0.2)]'
       break
     case 'info':
-      variantStyles = 'bg-blue-50 text-blue-700 border-blue-200/80'
+      variantStyles = 'bg-[var(--status-info-soft)] text-[var(--status-info)] border-[rgba(37,99,235,0.2)]'
       break
     case 'purple':
       variantStyles = 'bg-purple-50 text-purple-700 border-purple-200/80'
       break
     case 'danger':
-      variantStyles = 'bg-rose-50 text-rose-700 border-rose-200/80'
+      variantStyles = 'bg-[var(--status-critical-soft)] text-[var(--status-critical)] border-[rgba(220,38,38,0.2)]'
       break
     case 'neutral':
-      variantStyles = 'bg-slate-100 text-slate-700 border-slate-200'
+      variantStyles = 'bg-[var(--surface-muted)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
       break
     case 'default':
     default:
-      variantStyles = 'bg-slate-100 text-slate-800 border-slate-200'
+      variantStyles = 'bg-[var(--surface-muted)] text-[var(--text-primary)] border-[var(--border-subtle)]'
       break
   }
 
   return (
     <div
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${variantStyles} ${className}`}
+      className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border tracking-wide ${variantStyles} ${className}`}
       {...props}
     />
   )

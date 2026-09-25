@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
 import { createAdminClient } from "@/lib/supabase/server"
+import { DEFAULT_COLABORADORES } from "@/app/ops/entidades/colaboradores/types"
 
 const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -63,16 +64,30 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     colaborador_id = colab.id
     permissions = Array.isArray(colab.permissions) ? colab.permissions : JSON.parse(colab.permissions || '[]')
   } else {
-    // 2. Fall back to app_metadata (secure) or user_metadata (legacy) for clients
+    // 2. Fall back to app_metadata (secure) or user_metadata (legacy)
     const metadata = user.app_metadata?.role ? user.app_metadata : (user.user_metadata || {})
     role = metadata.role || null
-    
+
     if (role === 'client') {
       client_id = metadata.client_id || null
     } else if (role === 'employee' || role === 'admin') {
       // Legacy fallback for employees not yet in `colaboradores` table
       colaborador_id = metadata.colaborador_id || null
       permissions = metadata.permissions || []
+    }
+
+    // 3. Final fallback: check DEFAULT_COLABORADORES by email
+    //    This ensures hardcoded staff (Stefano, Nathalia, Gilberto) always
+    //    resolve correctly even when the DB table is unreachable.
+    if (!role || (role !== 'employee' && role !== 'admin')) {
+      const defaultColab = DEFAULT_COLABORADORES.find(
+        (c) => c.email?.toLowerCase() === user.email?.toLowerCase()
+      )
+      if (defaultColab) {
+        role = defaultColab.access_level === 'Administrador' ? 'admin' : 'employee'
+        colaborador_id = defaultColab.id
+        permissions = defaultColab.permissions || []
+      }
     }
   }
 

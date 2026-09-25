@@ -28,6 +28,7 @@ import { Cliente, DEFAULT_CLIENT_CATEGORIES } from "../types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { ClienteModal } from "./ClienteModal"
 import { ClientAuthModal } from "./ClientAuthModal"
+import { Button } from "@/components/ui/button"
 
 interface ClientesClientProps {
   initialClientes: Cliente[]
@@ -165,61 +166,54 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
   }
 
   return (
-    <div className="flex flex-col bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden" onClick={() => setOpenActionId(null)}>
+    <div className="flex flex-col bg-[var(--surface-bg)] rounded-lg shadow-sm border border-[var(--border-subtle)] overflow-hidden" onClick={() => setOpenActionId(null)}>
       
       {/* Top Header */}
-      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div className="px-5 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-            <Building2 className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-md bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center border border-[rgba(18,138,71,0.1)]">
+            <Building2 className="w-4.5 h-4.5" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Clientes</h1>
-            <p className="text-xs text-slate-500">Gestão de contas cliente, faturação, limites de crédito e expedição</p>
+            <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">Clientes</h1>
+            <p className="text-xs text-[var(--text-secondary)]">Gestão de contas cliente, faturação e expedição</p>
           </div>
         </div>
 
-        <div className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
-          <span>Painel de Resumo</span>
-          <span>&gt;</span>
+        <div className="text-[10px] font-semibold text-[var(--text-tertiary)] flex items-center gap-1.5 uppercase tracking-wide">
           <span>Entidades</span>
-          <span>&gt;</span>
-          <span className="text-slate-600 font-semibold">Clientes</span>
+          <span className="text-[var(--border-strong)]">&gt;</span>
+          <span className="text-[var(--text-secondary)]">Clientes</span>
         </div>
       </div>
 
       {/* Toolbar Area */}
-      <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/60 flex flex-wrap items-center justify-between gap-3 text-[13px]">
+      <div className="px-5 py-3 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)] flex flex-wrap items-center justify-between gap-3 text-xs">
         
         {/* Left Toolbar Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Green Novo Button */}
-          <button
-            type="button"
-            onClick={handleOpenNewModal}
-            className="bg-[#10b981] hover:bg-[#059669] active:scale-[0.99] text-white font-bold px-3.5 py-1.5 rounded text-[13px] shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" strokeWidth={3} />
+          <Button onClick={handleOpenNewModal} size="sm" className="font-semibold px-3 py-1.5 h-auto text-xs shadow-xs">
+            <Plus className="w-3.5 h-3.5 mr-1" />
             Novo
-          </button>
+          </Button>
 
-          {/* Inverter Ordenação */}
-          <button 
-            type="button"
+          <Button 
+            variant="outline" 
+            size="sm" 
             onClick={() => setClientes(prev => [...prev].reverse())}
-            className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-medium px-2.5 py-1.5 rounded text-[12px] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+            className="px-2.5 py-1.5 h-auto text-[11px] font-medium shadow-xs"
           >
-            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+            <ArrowUpDown className="w-3.5 h-3.5 mr-1.5 opacity-70" />
             Ordenar
-          </button>
+          </Button>
 
           {/* Filtro Categoria */}
-          <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded px-2.5 py-1 shadow-2xs">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
+          <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 shadow-2xs">
+            <Filter className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="text-xs font-medium text-slate-700 bg-transparent focus:outline-none cursor-pointer"
+              className="text-[11px] font-medium text-[var(--text-primary)] bg-transparent focus:outline-none cursor-pointer"
             >
               <option value="Todos">Todas as Categorias</option>
               {DEFAULT_CLIENT_CATEGORIES.map((c) => (
@@ -229,11 +223,11 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
           </div>
 
           {/* Filtro Estado */}
-          <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded px-2.5 py-1 shadow-2xs">
+          <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 shadow-2xs">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs font-medium text-slate-700 bg-transparent focus:outline-none cursor-pointer"
+              className="text-[11px] font-medium text-[var(--text-primary)] bg-transparent focus:outline-none cursor-pointer"
             >
               <option value="Todos">Todos os Estados</option>
               <option value="Ativo">Apenas Ativos</option>
@@ -245,21 +239,21 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
         {/* Right Search Area */}
         <div className="flex items-center gap-3">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-[var(--text-tertiary)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input 
               type="text"
-              placeholder="Pesquisar por Código, Nome, NIF, Cidade..."
+              placeholder="Pesquisar por Código, Nome, NIF..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value)
                 setCurrentPage(1)
               }}
-              className="w-72 bg-white border border-slate-300 rounded pl-8 pr-3 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+              className="w-64 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors"
             />
           </div>
 
           {/* Items per page selector */}
-          <div className="flex items-center gap-1 text-xs text-slate-500 font-medium">
+          <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)] font-medium">
             <span>Ver</span>
             <select 
               value={pageSize}
@@ -267,7 +261,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                 setPageSize(Number(e.target.value))
                 setCurrentPage(1)
               }}
-              className="border border-slate-300 rounded bg-white px-1.5 py-0.5 text-xs text-slate-700 focus:outline-none"
+              className="border border-[var(--border-strong)] rounded-md bg-[var(--surface-bg)] px-1.5 py-0.5 text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] shadow-2xs cursor-pointer"
             >
               <option value={10}>10</option>
               <option value={25}>25</option>
@@ -283,34 +277,34 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-100/70 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
-              <th className="py-3 px-4 w-10 text-center">
+            <tr className="border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-secondary)] font-semibold uppercase tracking-wider text-[10px]">
+              <th className="py-2.5 px-4 w-10 text-center">
                 <input 
                   type="checkbox"
                   checked={selectedIds.length > 0 && selectedIds.length === filtered.length}
                   onChange={handleSelectAll}
-                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                  className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-[var(--accent-active)] cursor-pointer"
                 />
               </th>
-              <th className="py-3 px-3 w-28">Código</th>
-              <th className="py-3 px-3 min-w-[240px]">Cliente / Razão Social</th>
-              <th className="py-3 px-3 w-28">NIF</th>
-              <th className="py-3 px-3 min-w-[200px]">Contactos</th>
-              <th className="py-3 px-3 min-w-[150px]">Localidade & Agência</th>
-              <th className="py-3 px-3 min-w-[160px]">Categoria</th>
-              <th className="py-3 px-3 w-28">Cond. Pagam.</th>
-              <th className="py-3 px-3 w-24 text-right">Crédito</th>
-              <th className="py-3 px-3 w-20 text-center">Estado</th>
-              <th className="py-3 px-4 w-16 text-center">Ações</th>
+              <th className="py-2.5 px-3 w-28">Código</th>
+              <th className="py-2.5 px-3 min-w-[240px]">Cliente / Razão Social</th>
+              <th className="py-2.5 px-3 w-28">NIF</th>
+              <th className="py-2.5 px-3 min-w-[200px]">Contactos</th>
+              <th className="py-2.5 px-3 min-w-[150px]">Localidade & Agência</th>
+              <th className="py-2.5 px-3 min-w-[140px]">Categoria</th>
+              <th className="py-2.5 px-3 w-24">Cond. Pagam.</th>
+              <th className="py-2.5 px-3 w-24 text-right">Crédito</th>
+              <th className="py-2.5 px-3 w-20 text-center">Estado</th>
+              <th className="py-2.5 px-4 w-12 text-center"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 text-[13px]">
+          <tbody className="divide-y divide-[var(--border-subtle)] text-[12px] bg-[var(--surface-bg)]">
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={11} className="py-12 text-center text-slate-400">
-                  <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <span className="font-medium text-slate-500">Nenhum cliente encontrado</span>
-                  <p className="text-xs text-slate-400 mt-0.5">Tente ajustar a sua pesquisa ou adicione um novo cliente.</p>
+                <td colSpan={11} className="py-12 text-center text-[var(--text-secondary)]">
+                  <Building2 className="w-8 h-8 text-[var(--text-tertiary)] mx-auto mb-2 opacity-50" />
+                  <span className="font-semibold">Nenhum cliente encontrado</span>
+                  <p className="text-[11px] text-[var(--text-tertiary)] mt-1">Tente ajustar a sua pesquisa ou adicione um novo cliente.</p>
                 </td>
               </tr>
             ) : (
@@ -324,41 +318,41 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                     onClick={() => handleOpenEditModal(item)}
                     className={`transition-colors cursor-pointer ${
                       !item.is_active
-                        ? "bg-[#FFE4DC] hover:bg-[#FFD6CA] text-slate-800"
+                        ? "bg-[var(--status-critical-soft)] hover:bg-[rgba(220,38,38,0.15)] text-[var(--text-primary)]"
                         : isSelected 
-                        ? "bg-emerald-50/40 hover:bg-emerald-50/70" 
-                        : "hover:bg-slate-50/80"
+                        ? "bg-[var(--accent-soft)] hover:bg-[rgba(18,138,71,0.15)]" 
+                        : "hover:bg-[var(--surface-muted)]"
                     }`}
                   >
                     {/* Checkbox */}
-                    <td className="py-3.5 px-4 text-center" onClick={(e) => handleToggleSelectRow(item.id, e)}>
+                    <td className="py-3 px-4 text-center" onClick={(e) => handleToggleSelectRow(item.id, e)}>
                       <input 
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => {}}
-                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-[var(--accent-active)] cursor-pointer"
                       />
                     </td>
 
                     {/* Código com Color Swatch */}
-                    <td className="py-3.5 px-3">
+                    <td className="py-3 px-3">
                       <div className="flex items-center gap-2">
                         <span 
                           className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" 
-                          style={{ backgroundColor: item.color || "#10b981" }} 
+                          style={{ backgroundColor: item.color || "var(--accent)" }} 
                         />
-                        <span className="font-bold text-slate-800 font-mono text-xs">
+                        <span className="font-semibold text-[var(--text-primary)] font-mono text-[11px]">
                           {item.code}
                         </span>
                       </div>
                     </td>
 
                     {/* Designação Curta / Razão Social com Avatar/Logo da Marca */}
-                    <td className="py-3.5 px-3">
+                    <td className="py-3 px-3">
                       <div className="flex items-center gap-3">
                         <div 
-                          className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-2xs shrink-0 overflow-hidden border border-slate-200"
-                          style={{ backgroundColor: item.color || "#10b981" }}
+                          className="w-8 h-8 rounded-md flex items-center justify-center text-white font-bold text-[10px] shadow-2xs shrink-0 overflow-hidden border border-[var(--border-subtle)]"
+                          style={{ backgroundColor: item.color || "var(--accent)" }}
                         >
                           {item.logo_url ? (
                             <img 
@@ -367,15 +361,15 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                               className="w-full h-full object-cover bg-white"
                             />
                           ) : (
-                            <span>{item.short_name ? item.short_name.substring(0, 2).toUpperCase() : <Building2 className="w-4 h-4" />}</span>
+                            <span>{item.short_name ? item.short_name.substring(0, 2).toUpperCase() : <Building2 className="w-3.5 h-3.5" />}</span>
                           )}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="font-bold text-slate-900 hover:text-emerald-700 transition-colors text-xs truncate">
+                          <span className="font-semibold text-[var(--text-primary)] hover:text-[var(--accent-hover)] transition-colors text-xs truncate">
                             {item.short_name}
                           </span>
                           {item.legal_name && item.legal_name !== item.short_name && (
-                            <span className="text-[11px] text-slate-500 line-clamp-1">
+                            <span className="text-[10px] text-[var(--text-tertiary)] line-clamp-1 mt-0.5">
                               {item.legal_name}
                             </span>
                           )}
@@ -384,22 +378,22 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                     </td>
 
                     {/* NIF */}
-                    <td className="py-3.5 px-3 font-mono text-xs text-slate-700 font-medium">
+                    <td className="py-3 px-3 font-mono text-[11px] text-[var(--text-secondary)] font-medium">
                       {item.nif || "—"}
                     </td>
 
                     {/* Contactos */}
-                    <td className="py-3.5 px-3 text-xs text-slate-600">
-                      <div className="flex flex-col gap-0.5">
+                    <td className="py-3 px-3 text-[11px] text-[var(--text-secondary)]">
+                      <div className="flex flex-col gap-1">
                         {item.email && (
-                          <div className="flex items-center gap-1.5 text-slate-700 hover:text-emerald-600 transition-colors">
-                            <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                          <div className="flex items-center gap-1.5 hover:text-[var(--text-primary)] transition-colors">
+                            <Mail className="w-3 h-3 text-[var(--text-tertiary)] shrink-0" />
                             <span className="truncate max-w-[190px]">{item.email}</span>
                           </div>
                         )}
                         {item.phone && (
-                          <div className="flex items-center gap-1.5 text-slate-500 font-mono text-[11px]">
-                            <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                          <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                            <Phone className="w-3 h-3 text-[var(--text-tertiary)] shrink-0" />
                             <span>{item.phone}</span>
                           </div>
                         )}
@@ -407,77 +401,77 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                     </td>
 
                     {/* Localidade & Agência */}
-                    <td className="py-3.5 px-3 text-xs">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-slate-800">{item.city || "—"}</span>
-                        <span className="text-[11px] text-slate-400 truncate max-w-[140px]">{item.billing_agency || "A01"}</span>
+                    <td className="py-3 px-3 text-[11px]">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium text-[var(--text-primary)]">{item.city || "—"}</span>
+                        <span className="text-[10px] text-[var(--text-tertiary)] truncate max-w-[140px]">{item.billing_agency || "A01"}</span>
                       </div>
                     </td>
 
                     {/* Categoria */}
-                    <td className="py-3.5 px-3">
-                      <span className="bg-slate-100 border border-slate-200 text-slate-700 px-2 py-0.5 rounded text-[11px] font-semibold">
+                    <td className="py-3 px-3">
+                      <span className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded text-[10px] font-semibold tracking-wide">
                         {item.category}
                       </span>
                     </td>
 
                     {/* Condições de Pagamento */}
-                    <td className="py-3.5 px-3 text-xs text-slate-700 font-medium">
+                    <td className="py-3 px-3 text-[11px] text-[var(--text-secondary)] font-medium">
                       {item.payment_terms}
                     </td>
 
                     {/* Crédito */}
-                    <td className="py-3.5 px-3 text-right font-mono text-xs text-slate-800">
+                    <td className="py-3 px-3 text-right font-mono text-[11px] text-[var(--text-primary)]">
                       {item.credit_limit ? (
-                        <div className="flex flex-col items-end">
-                          <span className={`font-bold ${item.available_credit !== undefined && item.available_credit < item.credit_limit * 0.2 ? 'text-rose-600' : ''}`}>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className={`font-semibold ${item.available_credit !== undefined && item.available_credit < item.credit_limit * 0.2 ? 'text-[var(--status-critical)]' : ''}`}>
                             {item.available_credit !== undefined ? item.available_credit.toLocaleString("pt-PT") : item.credit_limit.toLocaleString("pt-PT")}€
                           </span>
-                          <span className="text-[10px] text-slate-400">
+                          <span className="text-[9px] text-[var(--text-tertiary)]">
                             de {item.credit_limit.toLocaleString("pt-PT")}€
                           </span>
                         </div>
-                      ) : "—"}
+                      ) : <span className="text-[var(--text-tertiary)]">—</span>}
                     </td>
 
                     {/* Estado */}
-                    <td className="py-3.5 px-3 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                    <td className="py-3 px-3 text-center">
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
                         item.is_active 
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
-                          : "bg-white/80 text-rose-800 border border-rose-300 shadow-2xs"
+                          ? "bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)]" 
+                          : "bg-[var(--surface-bg)] text-[var(--status-critical)] border border-[var(--status-critical-soft)] shadow-2xs"
                       }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${item.is_active ? "bg-emerald-500" : "bg-rose-500"}`} />
+                        <span className={`w-1 h-1 rounded-full ${item.is_active ? "bg-[var(--status-success)]" : "bg-[var(--status-critical)]"}`} />
                         {item.is_active ? "Ativo" : "Inativo"}
                       </span>
                     </td>
 
                     {/* Ações Dropdown */}
-                    <td className="py-3.5 px-4 text-center relative" onClick={(e) => e.stopPropagation()}>
+                    <td className="py-3 px-4 text-center relative" onClick={(e) => e.stopPropagation()}>
                       <div className="relative inline-block text-left">
                         <button
                           type="button"
                           onClick={() => setOpenActionId(isActionOpen ? null : item.id)}
-                          className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 rounded transition-colors cursor-pointer"
+                          className="p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded transition-colors cursor-pointer border border-transparent hover:border-[var(--border-subtle)]"
                         >
                           <ChevronDown className="w-4 h-4" />
                         </button>
 
                         {isActionOpen && (
-                          <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-lg shadow-xl z-30 py-1 text-left animate-in fade-in zoom-in-95 duration-100">
+                          <div className="absolute right-0 top-full mt-1 w-52 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md shadow-[var(--shadow-layer)] z-30 py-1 text-left">
                             <button
                               type="button"
                               onClick={() => {
                                 setOpenActionId(null)
                                 handleOpenEditModal(item)
                               }}
-                              className="w-full px-3 py-2 text-xs text-slate-800 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 font-bold transition-colors"
+                              className="w-full px-3 py-2 text-[11px] text-[var(--text-primary)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent-hover)] flex items-center gap-2 font-semibold transition-colors"
                             >
-                              <Edit className="w-3.5 h-3.5 text-emerald-600" />
+                              <Edit className="w-3.5 h-3.5" />
                               Abrir Detalhes do Cliente
                             </button>
 
-                            <div className="my-1 border-t border-slate-100" />
+                            <div className="my-1 border-t border-[var(--border-subtle)]" />
 
                             <button
                               type="button"
@@ -485,31 +479,31 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                                 setOpenActionId(null)
                                 setAuthModalCliente(item)
                               }}
-                              className="w-full px-3 py-2 text-xs text-slate-800 hover:bg-blue-50 hover:text-blue-800 flex items-center gap-2 font-bold transition-colors"
+                              className="w-full px-3 py-2 text-[11px] text-[var(--text-primary)] hover:bg-[var(--status-info-soft)] hover:text-[var(--status-info)] flex items-center gap-2 font-semibold transition-colors"
                             >
-                              <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                              <UserCheck className="w-3.5 h-3.5" />
                               Definir Acesso Portal
                             </button>
 
-                            <div className="my-1 border-t border-slate-100" />
+                            <div className="my-1 border-t border-[var(--border-subtle)]" />
 
                             <button
                               type="button"
                               onClick={(e) => handleToggleStatus(item, e)}
-                              className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium"
+                              className="w-full px-3 py-1.5 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 font-medium"
                             >
-                              <Power className="w-3.5 h-3.5 text-amber-500" />
+                              <Power className="w-3.5 h-3.5" />
                               {item.is_active ? "Desativar Cliente" : "Ativar Cliente"}
                             </button>
 
-                            <div className="my-1 border-t border-slate-100" />
+                            <div className="my-1 border-t border-[var(--border-subtle)]" />
 
                             <button
                               type="button"
                               onClick={(e) => handleDelete(item, e)}
-                              className="w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 font-medium"
+                              className="w-full px-3 py-1.5 text-[11px] text-[var(--status-critical)] hover:bg-[var(--status-critical-soft)] flex items-center gap-2 font-medium"
                             >
-                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                              <Trash2 className="w-3.5 h-3.5" />
                               Eliminar Cliente
                             </button>
                           </div>
@@ -525,33 +519,35 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
       </div>
 
       {/* Pagination Footer */}
-      <div className="px-6 py-3.5 border-t border-slate-200 bg-slate-50/50 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+      <div className="px-5 py-3 border-t border-[var(--border-subtle)] bg-[var(--surface-bg)] flex flex-wrap items-center justify-between gap-3 text-[11px] text-[var(--text-secondary)]">
         <div>
-          A mostrar <strong className="text-slate-800">{paginated.length}</strong> de <strong className="text-slate-800">{filtered.length}</strong> clientes registados
+          A mostrar <strong className="text-[var(--text-primary)] font-semibold">{paginated.length}</strong> de <strong className="text-[var(--text-primary)] font-semibold">{filtered.length}</strong> clientes registados
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="icon"
             disabled={currentPage <= 1}
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            className="p-1.5 border border-slate-300 rounded bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="w-6 h-6 p-0 rounded"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
+          </Button>
 
-          <span className="px-2 text-xs font-semibold text-slate-700">
+          <span className="px-1.5 text-[11px] font-semibold text-[var(--text-primary)]">
             Página {currentPage} de {totalPages}
           </span>
 
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="icon"
             disabled={currentPage >= totalPages}
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            className="p-1.5 border border-slate-300 rounded bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="w-6 h-6 p-0 rounded"
           >
             <ChevronRight className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
 

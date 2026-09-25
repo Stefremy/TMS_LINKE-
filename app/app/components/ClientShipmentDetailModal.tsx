@@ -312,30 +312,30 @@ export function ClientShipmentDetailModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
-        className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+        className="bg-[var(--surface-bg)] rounded-xl w-full max-w-4xl shadow-2xl border border-[var(--border-strong)] overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4 bg-slate-50/80">
+        <div className="p-5 sm:p-6 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-muted)]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-100/80 text-emerald-700 flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.1)] flex items-center justify-center font-bold shadow-2xs">
               <Package className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-black text-slate-900 tracking-tight">Detalhes do Envio</h3>
-                <span className="font-mono text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 rounded-lg font-bold">
+                <h3 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Detalhes do Envio</h3>
+                <span className="font-mono text-xs bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)] px-2.5 py-0.5 rounded-md font-bold">
                   {internalRef}
                 </span>
                 {carrierTracking && (
-                  <span className="font-mono text-xs bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-0.5 rounded-lg font-bold" title="Referência CTT Expresso">
+                  <span className="font-mono text-xs bg-[var(--surface-dim)] text-[var(--text-secondary)] border border-[var(--border-strong)] px-2.5 py-0.5 rounded-md font-bold shadow-xs" title="Referência CTT Expresso">
                     CTT: {carrierTracking}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
+              <div className="flex items-center gap-3 text-xs text-[var(--text-tertiary)] mt-1 font-medium">
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5" />
                   {dateFormatted}
@@ -360,20 +360,20 @@ export function ClientShipmentDetailModal({
                 <button
                   type="button"
                   onClick={printLabel}
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
                   title="Imprimir etiqueta CTT em nova janela"
                 >
-                  <Printer className="w-4 h-4" />
+                  <Printer className="w-3.5 h-3.5" />
                   <span>Imprimir Etiqueta</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={downloadLabel}
-                  className="px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
                   title="Descarregar etiqueta em PDF"
                 >
-                  <Download className="w-4 h-4 text-emerald-600" />
+                  <Download className="w-3.5 h-3.5" />
                   <span>Descarregar PDF</span>
                 </button>
               </>
@@ -384,15 +384,15 @@ export function ClientShipmentDetailModal({
               type="button"
               onClick={handleCreateReturn}
               disabled={isCreatingReturn}
-              className="px-3 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              className="px-3 py-1.5 bg-[var(--status-warning-soft)] hover:bg-[rgba(217,119,6,0.15)] border border-[rgba(217,119,6,0.2)] text-[var(--status-warning)] rounded-md text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
               title="Criar guia de devolução (inverte remetente/destinatário)"
             >
               {isCreatingReturn ? (
-                <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <Undo2 className="w-4 h-4 text-amber-600" />
+                <Undo2 className="w-3.5 h-3.5" />
               )}
-              <span>Criar Devolução</span>
+              <span>Devolução</span>
             </button>
 
             {/* Eliminar Envio */}
@@ -400,13 +400,13 @@ export function ClientShipmentDetailModal({
               type="button"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="px-3 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              className="px-3 py-1.5 bg-[var(--status-critical-soft)] hover:bg-[rgba(220,38,38,0.15)] border border-[rgba(220,38,38,0.2)] text-[var(--status-critical)] rounded-md text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
               title="Eliminar envio permanentemente"
             >
               {isDeleting ? (
-                <Loader2 className="w-4 h-4 text-rose-600 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <Trash2 className="w-4 h-4 text-rose-600" />
+                <Trash2 className="w-3.5 h-3.5" />
               )}
               <span>Eliminar</span>
             </button>
@@ -414,7 +414,7 @@ export function ClientShipmentDetailModal({
             <button 
               type="button"
               onClick={onClose}
-              className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer ml-1"
+              className="w-8 h-8 rounded-md bg-[var(--surface-bg)] border border-[var(--border-strong)] flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer ml-1 shadow-2xs"
             >
               <X className="w-4 h-4" />
             </button>
@@ -422,20 +422,26 @@ export function ClientShipmentDetailModal({
         </div>
 
         {/* Status Control Bar */}
-        <div className="px-6 py-3 bg-slate-100/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="px-6 py-2.5 bg-[var(--surface-dim)] border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2.5">
-            <span className="font-bold text-slate-700">Estado da Encomenda:</span>
+            <span className="font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Estado da Encomenda:</span>
             {(() => {
               const cfg = getShipmentStatusConfig(currentStatus)
               return (
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold leading-none shadow-2xs ${cfg.color}`}>
-                  <span className={`w-2 h-2 rounded-full ${cfg.dotColor} shrink-0`} />
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider leading-none shadow-2xs border ${
+                  cfg.color.includes('green') ? 'bg-[var(--status-success-soft)] text-[var(--status-success)] border-[rgba(18,138,71,0.2)]' :
+                  cfg.color.includes('yellow') || cfg.color.includes('orange') ? 'bg-[var(--status-warning-soft)] text-[var(--status-warning)] border-[rgba(217,119,6,0.2)]' :
+                  cfg.color.includes('red') ? 'bg-[var(--status-critical-soft)] text-[var(--status-critical)] border-[rgba(220,38,38,0.2)]' :
+                  cfg.color.includes('blue') ? 'bg-[var(--status-info-soft)] text-[var(--status-info)] border-[rgba(37,99,235,0.2)]' :
+                  'bg-[var(--surface-muted)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dotColor.replace('bg-', 'bg-')} shrink-0`} />
                   <span>{cfg.label}</span>
                 </span>
               )
             })()}
-            <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
-              (Alimentado pela API CTT Expresso)
+            <span className="text-[10px] text-[var(--text-tertiary)] font-medium hidden sm:inline ml-1">
+              (Sincronizado com API CTT)
             </span>
           </div>
 
@@ -444,55 +450,55 @@ export function ClientShipmentDetailModal({
               type="button"
               onClick={handleSyncTracking}
               disabled={isSyncing}
-              className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+              className="bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold px-3 py-1 rounded-md flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50 text-[10px] uppercase tracking-wider"
               title="Consultar API dos CTT para obter novas leituras de tracking"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${isSyncing ? "animate-spin" : ""}`} />
-              <span>{isSyncing ? "A Sincronizar..." : "Sincronizar com CTT"}</span>
+              <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin text-[var(--accent)]" : ""}`} />
+              <span>{isSyncing ? "A Sincronizar..." : "Sincronizar"}</span>
             </button>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 px-6 bg-white shrink-0">
+        <div className="flex border-b border-[var(--border-subtle)] px-6 bg-[var(--surface-muted)] shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab("tracking")}
-            className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 transition-colors cursor-pointer ${
+            className={`py-2.5 px-3 text-[11px] font-bold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === "tracking"
-                ? "border-emerald-600 text-emerald-700"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                ? "border-[var(--accent)] text-[var(--accent)]"
+                : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]"
             }`}
           >
-            <History className="w-4 h-4" />
-            <span>Rastreio & Pickagens CTT ({timelineEvents.length})</span>
+            <History className="w-3.5 h-3.5" />
+            <span>Rastreio & Histórico ({timelineEvents.length})</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("dados")}
-            className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 transition-colors cursor-pointer ${
+            className={`py-2.5 px-3 text-[11px] font-bold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === "dados"
-                ? "border-emerald-600 text-emerald-700"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                ? "border-[var(--accent)] text-[var(--accent)]"
+                : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]"
             }`}
           >
-            <Layers className="w-4 h-4" />
-            <span>Ficha do Envio & Moradas</span>
+            <Layers className="w-3.5 h-3.5" />
+            <span>Ficha & Moradas</span>
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 sm:p-8 overflow-y-auto flex-1 space-y-6 bg-slate-50/40">
+        <div className="p-6 overflow-y-auto flex-1 space-y-6 bg-[var(--surface-bg)]">
           
           {/* TAB 1: RASTREIO E TIMELINE */}
           {activeTab === "tracking" && (
             <div className="space-y-6">
               
               {/* Stepper Visual */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-                <h4 className="text-xs font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-emerald-600" />
+              <div className="bg-[var(--surface-bg)] p-5 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
+                <h4 className="text-xs font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-[var(--accent)]" />
                   <span>Progresso do Envio na Rede CTT</span>
                 </h4>
 
@@ -507,10 +513,10 @@ export function ClientShipmentDetailModal({
                       <div 
                         key={step.key}
                         className={`p-3.5 rounded-xl border flex flex-col justify-between transition-all ${
-                          isFailed ? "bg-rose-50 border-rose-200 text-rose-900" :
-                          isCurrent ? "bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-500/20" :
-                          isCompleted ? "bg-emerald-50/30 border-emerald-200 text-emerald-900" :
-                          "bg-slate-50 border-slate-200 opacity-60 text-slate-400"
+                          isFailed ? "bg-[var(--status-critical-soft)] border-[rgba(220,38,38,0.2)] text-[var(--status-critical)]" :
+                          isCurrent ? "bg-[var(--accent-soft)] border-[var(--accent)] ring-2 ring-[rgba(18,138,71,0.2)]" :
+                          isCompleted ? "bg-[var(--status-success-soft)] border-[rgba(18,138,71,0.2)] text-[var(--status-success)]" :
+                          "bg-[var(--surface-muted)] border-[var(--border-subtle)] opacity-60 text-[var(--text-tertiary)]"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
@@ -519,20 +525,20 @@ export function ClientShipmentDetailModal({
                           </span>
                           <span className="w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shadow-2xs">
                             {isCompleted ? (
-                              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                              <CheckCircle2 className="w-5 h-5 text-[var(--status-success)]" />
                             ) : isCurrent ? (
-                              <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
+                              <span className="w-3 h-3 rounded-full bg-[var(--accent)] animate-ping" />
                             ) : isFailed ? (
-                              <AlertTriangle className="w-4 h-4 text-rose-600" />
+                              <AlertTriangle className="w-4 h-4 text-[var(--status-critical)]" />
                             ) : (
-                              <span className="w-2 h-2 rounded-full bg-slate-300" />
+                              <span className="w-2 h-2 rounded-full bg-[var(--border-strong)]" />
                             )}
                           </span>
                         </div>
-                        <div className="text-xs font-bold text-slate-800">
+                        <div className="text-xs font-bold text-[var(--text-primary)]">
                           {step.label}
                         </div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                        <div className="text-[10px] text-[var(--text-tertiary)] font-mono mt-0.5">
                           Pickagem CTT: {step.eventCode}
                         </div>
                       </div>
@@ -542,29 +548,29 @@ export function ClientShipmentDetailModal({
               </div>
 
               {/* Partilhar Rastreio com o Cliente Final */}
-              <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+              <div className="bg-[var(--accent-soft)] border border-[rgba(18,138,71,0.2)] rounded-xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                  <div className="w-8 h-8 rounded-lg bg-[var(--surface-bg)] text-[var(--accent)] border border-[rgba(18,138,71,0.1)] flex items-center justify-center font-bold">
                     <Share2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <h5 className="text-xs font-bold text-slate-800">Partilhar Rastreio com o Cliente</h5>
-                    <p className="text-[11px] text-slate-500">Link público direto para o destinatário acompanhar a entrega em tempo real</p>
+                    <h5 className="text-xs font-bold text-[var(--text-primary)]">Partilhar Rastreio com o Cliente</h5>
+                    <p className="text-[11px] text-[var(--text-secondary)]">Link público direto para o destinatário acompanhar a entrega</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleCopyTrackingLink}
-                    className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    className="px-3 py-1.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-strong)] text-xs font-bold rounded-md shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
                   >
-                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
-                    <span>{copiedLink ? "Link Copiado!" : "Copiar Link"}</span>
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-[var(--status-success)]" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedLink ? "Copiado!" : "Copiar"}</span>
                   </button>
                   <button
                     type="button"
                     onClick={handleShareTrackingWhatsApp}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    className="px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold rounded-md shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
                   >
                     <MessageCircle className="w-3.5 h-3.5" />
                     <span>WhatsApp</span>
@@ -573,7 +579,7 @@ export function ClientShipmentDetailModal({
                     href={`/tracking?trk=${encodeURIComponent(tracking)}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all"
+                    className="p-1.5 bg-[var(--surface-dim)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-md text-xs font-semibold flex items-center gap-1 transition-all"
                     title="Abrir portal de rastreio em novo separador"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -583,16 +589,16 @@ export function ClientShipmentDetailModal({
 
               {/* Incidência Banner (Se aplicável) */}
               {(currentStatus === "incidencia" || timelineEvents.some((e: any) => e.eventCode === "EMH" || e.eventCode === "EMN" || e.eventCode === "EDF")) && (
-                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-900 flex items-start gap-3 shadow-2xs">
-                  <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="bg-[var(--status-critical-soft)] border border-[rgba(220,38,38,0.2)] rounded-xl p-4 text-xs text-[var(--status-critical)] flex items-start gap-3 shadow-2xs">
+                  <AlertTriangle className="w-5 h-5 text-[var(--status-critical)] shrink-0 mt-0.5" />
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <strong className="text-sm font-black text-rose-800">Alerta de Incidência CTT (Código EMH)</strong>
-                      <span className="font-mono text-[10px] font-bold bg-rose-200 text-rose-800 px-2 py-0.5 rounded">
+                      <strong className="text-sm font-bold text-[var(--status-critical)]">Alerta de Incidência CTT (Código EMH)</strong>
+                      <span className="font-mono text-[10px] font-bold bg-[rgba(220,38,38,0.15)] text-[var(--status-critical)] px-2 py-0.5 rounded">
                         Entrega Não Conseguida
                       </span>
                     </div>
-                    <p className="text-xs text-rose-700">
+                    <p className="text-xs text-[var(--status-critical)] opacity-90">
                       {timelineEvents.slice().reverse().find((e: any) => e.isIncidencia || e.eventCode === "EMH")?.description ||
                        "O estafeta registou uma tentativa de entrega não conseguida na morada do destinatário."}
                     </p>
@@ -601,7 +607,7 @@ export function ClientShipmentDetailModal({
                         type="button"
                         onClick={handleSyncTracking}
                         disabled={isSyncing}
-                        className="px-3 py-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                        className="px-3 py-1 bg-[var(--status-critical)] hover:opacity-90 disabled:opacity-50 text-white rounded-md font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
                         <span>Verificar Atualização CTT</span>
@@ -613,34 +619,34 @@ export function ClientShipmentDetailModal({
 
 
               {/* Linha Temporal Cronológica de Pickagens */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-emerald-600" />
-                    <span>Histórico Cronológico de Pickagens CTT (Track & Trace)</span>
+              <div className="bg-[var(--surface-bg)] p-5 rounded-xl border border-[var(--border-subtle)] shadow-2xs space-y-4">
+                <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+                  <h4 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-[var(--accent)]" />
+                    <span>Histórico Cronológico de Pickagens CTT</span>
                   </h4>
-                  <span className="text-[11px] text-slate-400">
-                    {timelineEvents.length} evento(s) registados
+                  <span className="text-[11px] text-[var(--text-tertiary)] uppercase tracking-wider font-semibold">
+                    {timelineEvents.length} evento(s)
                   </span>
                 </div>
 
                 {loadingTimeline ? (
-                  <div className="p-8 text-center text-slate-400 text-xs">
-                    <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-emerald-600" />
+                  <div className="p-8 text-center text-[var(--text-secondary)] text-xs font-semibold">
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-[var(--accent)]" />
                     <span>A carregar histórico de tracking...</span>
                   </div>
                 ) : timelineEvents.length === 0 ? (
-                  <div className="p-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 my-2">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2.5">
+                  <div className="p-8 text-center bg-[var(--surface-dim)] rounded-xl border border-dashed border-[var(--border-strong)] my-2">
+                    <div className="w-10 h-10 rounded-full bg-[var(--surface-muted)] border border-[var(--border-strong)] text-[var(--text-tertiary)] flex items-center justify-center mx-auto mb-2.5">
                       <Clock className="w-5 h-5" />
                     </div>
-                    <p className="text-xs font-bold text-slate-700 mb-1">Aguardar Primeira Leitura / Pickagem CTT</p>
-                    <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                      Ainda não existem leituras óticas registadas na rede CTT para este envio. O histórico será preenchido automaticamente pelas pickagens reais da transportadora.
+                    <p className="text-xs font-bold text-[var(--text-secondary)] mb-1 uppercase tracking-wider">Aguardar Pickagem CTT</p>
+                    <p className="text-[11px] text-[var(--text-tertiary)] max-w-sm mx-auto">
+                      Ainda não existem leituras óticas registadas na rede CTT para este envio. O histórico será preenchido automaticamente.
                     </p>
                   </div>
                 ) : (
-                  <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+                  <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-px before:bg-[var(--border-strong)]">
                     {timelineEvents.map((ev, idx) => {
                       const isLatest = idx === timelineEvents.length - 1
                       const dateStr = ev.timestamp
@@ -661,65 +667,65 @@ export function ClientShipmentDetailModal({
                       return (
                         <div key={ev.id || idx} className="relative group">
                           {/* Dot */}
-                          <div className={`absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-2xs ${
+                          <div className={`absolute -left-6 top-1.5 w-3.5 h-3.5 rounded-full border-2 border-[var(--surface-bg)] shadow-2xs ${
                             isIncidencia
-                              ? "bg-rose-500 ring-4 ring-rose-100"
+                              ? "bg-[var(--status-critical)] ring-4 ring-[rgba(220,38,38,0.1)]"
                               : isEntregue
-                              ? "bg-emerald-600 ring-4 ring-emerald-100"
+                              ? "bg-[var(--status-success)] ring-4 ring-[rgba(18,138,71,0.1)]"
                               : isLatest
-                              ? "bg-emerald-500 ring-4 ring-emerald-100"
-                              : "bg-slate-400"
+                              ? "bg-[var(--accent)] ring-4 ring-[rgba(18,138,71,0.1)]"
+                              : "bg-[var(--text-tertiary)]"
                           }`} />
 
                           <div className={`transition-colors p-3.5 rounded-xl border ${
                             isIncidencia
-                              ? "bg-rose-50/70 border-rose-200 text-rose-950 shadow-2xs"
+                              ? "bg-[var(--status-critical-soft)] border-[rgba(220,38,38,0.2)] text-[var(--status-critical)] shadow-2xs"
                               : isEntregue
-                              ? "bg-emerald-50/50 border-emerald-200"
+                              ? "bg-[var(--status-success-soft)] border-[rgba(18,138,71,0.2)] text-[var(--status-success)]"
                               : isDistribuicao
-                              ? "bg-sky-50/50 border-sky-200"
+                              ? "bg-[var(--status-info-soft)] border-[rgba(37,99,235,0.2)] text-[var(--status-info)]"
                               : isDevolvido
-                              ? "bg-amber-50/60 border-amber-200"
-                              : "bg-slate-50 hover:bg-slate-100/80 border-slate-200/80"
+                              ? "bg-[var(--status-warning-soft)] border-[rgba(217,119,6,0.2)] text-[var(--status-warning)]"
+                              : "bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] border-[var(--border-subtle)]"
                           }`}>
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                               <div className="flex items-center gap-2">
-                                <span className={`font-mono text-[10px] font-black px-1.5 py-0.5 rounded ${
+                                <span className={`font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
                                   isIncidencia
-                                    ? "bg-rose-600 text-white"
+                                    ? "bg-[var(--status-critical)] text-white"
                                     : isEntregue
-                                    ? "bg-emerald-700 text-white"
+                                    ? "bg-[var(--status-success)] text-white"
                                     : isDistribuicao
-                                    ? "bg-sky-700 text-white"
-                                    : "bg-slate-800 text-white"
+                                    ? "bg-[var(--status-info)] text-white"
+                                    : "bg-[var(--surface-dim)] border border-[var(--border-strong)] text-[var(--text-primary)]"
                                 }`}>
                                   {ev.eventCode}
                                 </span>
                                 <span className={`text-xs font-bold ${
-                                  isIncidencia ? "text-rose-900" : isEntregue ? "text-emerald-900" : "text-slate-900"
+                                  isIncidencia ? "text-[var(--status-critical)]" : isEntregue ? "text-[var(--status-success)]" : "text-[var(--text-primary)]"
                                 }`}>
                                   {ev.eventName}
                                 </span>
                                 {isIncidencia && (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-200/80 text-rose-800 px-2 py-0.5 rounded-full">
-                                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider bg-[rgba(220,38,38,0.15)] text-[var(--status-critical)] px-2 py-0.5 rounded-full">
+                                    <AlertTriangle className="w-3 h-3" />
                                     <span>Incidência</span>
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[11px] font-mono text-slate-400 font-medium">
+                              <span className="text-[11px] font-mono text-[var(--text-tertiary)] font-semibold">
                                 {dateStr}
                               </span>
                             </div>
 
-                            <p className={`text-xs mt-0.5 ${
-                              isIncidencia ? "text-rose-800 font-medium leading-relaxed" : "text-slate-600"
+                            <p className={`text-xs mt-1 ${
+                              isIncidencia ? "font-medium" : "text-[var(--text-secondary)]"
                             }`}>
                               {ev.description}
                             </p>
 
-                            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-2 font-medium">
-                              <MapPin className="w-3 h-3 text-slate-400" />
+                            <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-tertiary)] mt-2 font-medium uppercase tracking-wider text-[9px]">
+                              <MapPin className="w-3 h-3 text-[var(--text-tertiary)]" />
                               <span>{ev.location || "Rede CTT Expresso"}</span>
                             </div>
                           </div>
@@ -739,11 +745,11 @@ export function ClientShipmentDetailModal({
               
               {/* Missing label warning if not available */}
               {!hasLabel && (
-                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 flex items-start gap-2.5 text-xs">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="bg-[var(--status-warning-soft)] border border-[rgba(217,119,6,0.2)] text-[var(--status-warning)] rounded-xl p-4 flex items-start gap-2.5 text-xs shadow-2xs">
+                  <AlertCircle className="w-4 h-4 text-[var(--status-warning)] shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-bold">Este envio ainda não tem a etiqueta CTT associada no sistema.</p>
-                    <p className="text-amber-700">A etiqueta é gerada exclusivamente no momento da criação do envio.</p>
+                    <p className="opacity-90">A etiqueta é gerada exclusivamente no momento da criação do envio.</p>
                   </div>
                 </div>
               )}
@@ -752,13 +758,13 @@ export function ClientShipmentDetailModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 
                 {/* Remetente Card */}
-                <div className="space-y-2 bg-slate-100/80 p-4 rounded-2xl border border-slate-200">
+                <div className="space-y-2 bg-[var(--surface-muted)] p-4 rounded-xl border border-[var(--border-subtle)]">
                   <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold text-slate-600">Remetente (Empresa)</label>
-                    <span className="text-[10px] text-slate-500 font-bold bg-slate-200/80 px-2 py-0.5 rounded-full">Conta Cliente</span>
+                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Remetente (Empresa)</label>
+                    <span className="text-[9px] text-[var(--text-secondary)] font-bold bg-[var(--surface-dim)] border border-[var(--border-strong)] px-2 py-0.5 rounded-sm uppercase tracking-wider">Conta Cliente</span>
                   </div>
-                  <div className="text-xs text-slate-800 font-bold">{currentShipment.sender_name || "Empresa Cliente"}</div>
-                  <div className="text-[11px] text-slate-500 leading-relaxed">
+                  <div className="text-xs text-[var(--text-primary)] font-bold">{currentShipment.sender_name || "Empresa Cliente"}</div>
+                  <div className="text-[11px] text-[var(--text-tertiary)] font-medium">
                     {currentShipment.sender_address || "Sede Comercial"}
                     {currentShipment.sender_zip3 ? ` (${currentShipment.sender_zip3}-${currentShipment.sender_zip4})` : ""}
                   </div>
@@ -766,12 +772,12 @@ export function ClientShipmentDetailModal({
 
                 {/* Destinatário Name */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-600">Nome do Destinatário</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Nome do Destinatário</label>
                   <input 
                     type="text" 
                     disabled
                     value={recipientName}
-                    className="w-full px-3.5 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl text-xs text-slate-700 font-bold cursor-not-allowed select-none" 
+                    className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs text-[var(--text-primary)] font-bold cursor-not-allowed select-none" 
                   />
                 </div>
               </div>
@@ -779,43 +785,43 @@ export function ClientShipmentDetailModal({
               {/* 2. Morada, CP, Cidade e Peso */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-2 space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-600">Morada de Entrega</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Morada de Entrega</label>
                   <div className="relative">
                     <input 
                       type="text" 
                       disabled
                       value={recipientAddress}
-                      className="w-full pl-3.5 pr-8 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium cursor-not-allowed select-none" 
+                      className="w-full pl-3.5 pr-8 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs text-[var(--text-primary)] font-medium cursor-not-allowed select-none" 
                     />
-                    <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-600">Código Postal & Cidade</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">CP & Cidade</label>
                   <div className="flex gap-2">
                     <input 
                       type="text" 
                       disabled
                       value={recipientZip || "—"}
-                      className="w-1/2 px-2.5 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none" 
+                      className="w-1/2 px-2.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-mono font-bold text-[var(--text-primary)] cursor-not-allowed select-none" 
                     />
                     <input 
                       type="text" 
                       disabled
                       value={recipientCity || "Portugal"}
-                      className="w-1/2 px-2.5 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 cursor-not-allowed select-none" 
+                      className="w-1/2 px-2.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-medium text-[var(--text-primary)] cursor-not-allowed select-none" 
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-600">Peso Total (kg)</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Peso Total</label>
                   <input 
                     type="text" 
                     disabled
                     value={`${weightKg} kg`}
-                    className="w-full px-3 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none" 
+                    className="w-full px-3 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-mono font-bold text-[var(--text-primary)] cursor-not-allowed select-none" 
                   />
                 </div>
               </div>
@@ -823,48 +829,48 @@ export function ClientShipmentDetailModal({
               {/* 3. Telefone, Email e Volumes */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-600">Telefone do Destinatário</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Telemóvel Dest.</label>
                   <div className="relative">
                     <input 
                       type="text" 
                       disabled
                       value={recipientPhone}
-                      className="w-full pl-3.5 pr-8 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium cursor-not-allowed select-none" 
+                      className="w-full pl-3.5 pr-8 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs text-[var(--text-primary)] font-medium cursor-not-allowed select-none" 
                     />
-                    <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-600">Email do Destinatário</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Email Dest.</label>
                   <div className="relative">
                     <input 
                       type="text" 
                       disabled
                       value={recipientEmail}
-                      className="w-full pl-3.5 pr-8 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl text-xs text-slate-700 font-medium cursor-not-allowed select-none" 
+                      className="w-full pl-3.5 pr-8 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs text-[var(--text-primary)] font-medium cursor-not-allowed select-none" 
                     />
-                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-tertiary)]" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-600">Nº de Volumes</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Nº Volumes</label>
                   <input 
                     type="text" 
                     disabled
                     value={`${volumes} volume(s)`}
-                    className="w-full px-3 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none" 
+                    className="w-full px-3 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-mono font-bold text-[var(--text-primary)] cursor-not-allowed select-none" 
                   />
                 </div>
               </div>
 
               {/* 4. Serviço Escolhido */}
-              <div className="bg-slate-100/80 p-4 rounded-2xl border border-slate-200 space-y-2">
-                <label className="block text-xs font-bold text-slate-600">Serviço de Transporte Linke</label>
+              <div className="bg-[var(--surface-muted)] p-4 rounded-xl border border-[var(--border-subtle)] space-y-2">
+                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Serviço de Transporte Linke</label>
                 <div className="flex items-center gap-3">
                   {getCarrierLogo(serviceType || "ctt") ? (
-                    <div className="w-6 h-6 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                    <div className="w-8 h-8 rounded-md bg-[var(--surface-bg)] border border-[var(--border-strong)] p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img 
                         src={getCarrierLogo(serviceType || "ctt")!} 
@@ -873,41 +879,41 @@ export function ClientShipmentDetailModal({
                       />
                     </div>
                   ) : (
-                    <Truck className="w-5 h-5 text-emerald-600" />
+                    <Truck className="w-5 h-5 text-[var(--accent)]" />
                   )}
                   <div className="flex flex-col">
-                    <span className="font-bold text-xs text-slate-800">{serviceType}</span>
-                    <span className="text-[10px] text-slate-500">Expedição integrada CTT Expresso API</span>
+                    <span className="font-bold text-xs text-[var(--text-primary)] uppercase tracking-wide">{serviceType}</span>
+                    <span className="text-[10px] text-[var(--text-tertiary)] font-semibold">Expedição integrada CTT Expresso API</span>
                   </div>
                 </div>
               </div>
 
               {/* 5. Serviços Especiais */}
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-600">Serviços Especiais & Suplementares</label>
+                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Serviços Especiais & Suplementares</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   
                   {/* Cobrança */}
-                  <div className={`p-3 rounded-xl border ${isCOD ? "bg-emerald-50 border-emerald-300" : "bg-slate-100/70 border-slate-200 opacity-60"}`}>
+                  <div className={`p-3 rounded-md border ${isCOD ? "bg-[var(--accent-soft)] border-[var(--accent)] shadow-2xs" : "bg-[var(--surface-muted)] border-[var(--border-subtle)] opacity-70"}`}>
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-800 text-[11px]">Cobrança / COD</span>
-                      {isCOD && <span className="font-mono font-bold text-emerald-700 text-xs">{codAmount}</span>}
+                      <span className={`font-bold text-[11px] uppercase tracking-wider ${isCOD ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"}`}>Cobrança / COD</span>
+                      {isCOD && <span className="font-mono font-bold text-[var(--status-success)] text-xs">{codAmount}</span>}
                     </div>
                   </div>
 
                   {/* Frágil */}
-                  <div className={`p-3 rounded-xl border ${isFragil ? "bg-emerald-50 border-emerald-300" : "bg-slate-100/70 border-slate-200 opacity-60"}`}>
+                  <div className={`p-3 rounded-md border ${isFragil ? "bg-[var(--accent-soft)] border-[var(--accent)] shadow-2xs" : "bg-[var(--surface-muted)] border-[var(--border-subtle)] opacity-70"}`}>
                     <div className="flex items-center gap-2">
-                      <input type="checkbox" checked={isFragil} disabled className="w-3.5 h-3.5 rounded text-emerald-600 cursor-not-allowed" />
-                      <span className="font-bold text-slate-800 text-[11px]">Mercadoria Frágil</span>
+                      <input type="checkbox" checked={isFragil} disabled className="w-3.5 h-3.5 rounded text-[var(--accent)] cursor-not-allowed border-[var(--border-strong)]" />
+                      <span className={`font-bold text-[11px] uppercase tracking-wider ${isFragil ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"}`}>Mercadoria Frágil</span>
                     </div>
                   </div>
 
                   {/* SMS Notification */}
-                  <div className={`p-3 rounded-xl border ${isSMS ? "bg-emerald-50 border-emerald-300" : "bg-slate-100/70 border-slate-200 opacity-60"}`}>
+                  <div className={`p-3 rounded-md border ${isSMS ? "bg-[var(--accent-soft)] border-[var(--accent)] shadow-2xs" : "bg-[var(--surface-muted)] border-[var(--border-subtle)] opacity-70"}`}>
                     <div className="flex items-center gap-2">
-                      <input type="checkbox" checked={isSMS} disabled className="w-3.5 h-3.5 rounded text-emerald-600 cursor-not-allowed" />
-                      <span className="font-bold text-slate-800 text-[11px]">Alerta SMS Tracking</span>
+                      <input type="checkbox" checked={isSMS} disabled className="w-3.5 h-3.5 rounded text-[var(--accent)] cursor-not-allowed border-[var(--border-strong)]" />
+                      <span className={`font-bold text-[11px] uppercase tracking-wider ${isSMS ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"}`}>Alerta SMS Tracking</span>
                     </div>
                   </div>
 
@@ -920,9 +926,9 @@ export function ClientShipmentDetailModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50/80 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs text-slate-500">
-            Total Faturado: <strong className="text-slate-900 font-mono text-sm">{currentShipment.sell_price ? `${Number(currentShipment.sell_price).toFixed(2)}€` : "0.00€"}</strong>
+        <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[11px] text-[var(--text-secondary)] font-bold uppercase tracking-wider">
+            Total Faturado: <strong className="text-[var(--text-primary)] font-mono text-sm ml-1">{currentShipment.sell_price ? `${Number(currentShipment.sell_price).toFixed(2)}€` : "0.00€"}</strong>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -931,7 +937,7 @@ export function ClientShipmentDetailModal({
                 <button
                   type="button"
                   onClick={printLabel}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Imprimir Etiqueta</span>
@@ -940,9 +946,9 @@ export function ClientShipmentDetailModal({
                 <button
                   type="button"
                   onClick={downloadLabel}
-                  className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="px-4 py-2 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
-                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                  <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
                   <span>Descarregar PDF</span>
                 </button>
               </>
@@ -951,7 +957,7 @@ export function ClientShipmentDetailModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2 bg-slate-800 hover:bg-slate-900 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer"
+              className="px-5 py-2 bg-[var(--surface-dim)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold transition-colors cursor-pointer shadow-2xs"
             >
               Fechar
             </button>

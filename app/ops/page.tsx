@@ -129,24 +129,24 @@ export default async function OpsDashboardPage() {
   const latestActiveShipment = shipments.find((s: any) => s.status !== "entregue" && s.status !== "devolvido") || shipments[0] || null
 
   return (
-    <div className="flex flex-col gap-8 font-sans">
+    <div className="flex flex-col gap-6">
       
       {/* Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, idx) => (
-          <div key={idx} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col relative overflow-hidden">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
-                <stat.icon className="w-6 h-6" strokeWidth={2} />
+          <div key={idx} className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 flex flex-col relative overflow-hidden shadow-2xs">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-md bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] border border-[rgba(18,138,71,0.1)]">
+                <stat.icon className="w-4.5 h-4.5" strokeWidth={2} />
               </div>
-              <span className="text-sm font-semibold text-slate-800">{stat.label}</span>
+              <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{stat.label}</span>
             </div>
             
             <div className="flex items-end justify-between mt-auto">
-              <span className="text-3xl font-black text-slate-900 font-mono">{stat.value}</span>
+              <span className="text-3xl font-bold text-[var(--text-primary)]">{stat.value}</span>
               
               <div className="flex flex-col items-end gap-1">
-                <span className="text-[11px] font-medium text-slate-400">{stat.subtext}</span>
+                <span className="text-[11px] font-medium text-[var(--text-tertiary)]">{stat.subtext}</span>
               </div>
             </div>
           </div>
@@ -154,49 +154,49 @@ export default async function OpsDashboardPage() {
       </div>
 
       {/* Breakdown Row */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-5 gap-3">
         {[
-          { label: "Pendentes", value: statusCounts.pendente, color: "bg-slate-100 text-slate-700" },
-          { label: "Em Trânsito", value: statusCounts.em_transito, color: "bg-blue-100 text-blue-700" },
-          { label: "Em Distrib.", value: statusCounts.em_distribuicao, color: "bg-indigo-100 text-indigo-700" },
-          { label: "Incidências", value: statusCounts.incidencia, color: "bg-rose-100 text-rose-700" },
-          { label: "Entregues", value: statusCounts.entregue, color: "bg-emerald-100 text-emerald-700" }
+          { label: "Pendentes", value: statusCounts.pendente, color: "bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)]" },
+          { label: "Em Trânsito", value: statusCounts.em_transito, color: "bg-[var(--status-info-soft)] text-[var(--status-info)] border border-[rgba(37,99,235,0.15)]" },
+          { label: "Em Distrib.", value: statusCounts.em_distribuicao, color: "bg-purple-50 text-purple-700 border border-purple-200/60" },
+          { label: "Incidências", value: statusCounts.incidencia, color: "bg-[var(--status-critical-soft)] text-[var(--status-critical)] border border-[rgba(220,38,38,0.15)]" },
+          { label: "Entregues", value: statusCounts.entregue, color: "bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.15)]" }
         ].map((s, i) => (
-          <div key={i} className={`rounded-xl p-4 flex flex-col items-center justify-center text-center ${s.color}`}>
-            <span className="text-2xl font-black font-mono">{s.value}</span>
-            <span className="text-[11px] font-bold uppercase tracking-wider mt-1 opacity-80">{s.label}</span>
+          <div key={i} className={`rounded-lg p-3 flex flex-col items-center justify-center text-center ${s.color}`}>
+            <span className="text-lg font-bold">{s.value}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider mt-0.5 opacity-90">{s.label}</span>
           </div>
         ))}
       </div>
 
       {/* Table & Widgets Grid */}
-      <div className="flex flex-col xl:flex-row gap-6">
+      <div className="flex flex-col xl:flex-row gap-5">
         
         {/* Envios Recentes Table */}
-        <div className="flex-[2] bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="flex-[2] bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs">
+          <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Envios Recentes</h2>
-              <p className="text-xs text-slate-500">Últimos transportes registados no sistema</p>
+              <h2 className="text-sm font-bold text-[var(--text-primary)]">Envios Recentes</h2>
+              <p className="text-[11px] text-[var(--text-tertiary)]">Últimos transportes registados no sistema</p>
             </div>
             <Link 
               href="/ops/envios" 
-              className="text-xs font-bold text-green-700 hover:text-green-800 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+              className="text-xs font-semibold text-[var(--accent)] hover:text-[var(--accent-hover)] bg-[var(--accent-soft)] hover:bg-[rgba(18,138,71,0.15)] px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 border border-[rgba(18,138,71,0.08)]"
             >
               Ver todos ({totalShipments}) <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
           {recentShipments.length === 0 ? (
-            <div className="py-12 px-4 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-              <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-sm font-bold text-slate-700">Nenhum envio registado ainda</p>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+            <div className="py-12 px-4 text-center bg-[var(--surface-muted)] rounded-lg border border-dashed border-[var(--border-strong)]">
+              <Package className="w-10 h-10 text-[var(--text-tertiary)] mx-auto mb-3 opacity-50" />
+              <p className="text-sm font-semibold text-[var(--text-secondary)]">Nenhum envio registado ainda</p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-1 max-w-sm mx-auto">
                 Crie novos envios através do módulo de operações ou através da Área de Cliente.
               </p>
               <Link 
                 href="/ops/envios" 
-                className="mt-4 inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-xs transition-colors"
+                className="mt-4 inline-flex items-center gap-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-4 py-2 rounded-md text-xs font-semibold transition-colors"
               >
                 <PlusCircle className="w-4 h-4" />
                 Criar Envio
@@ -206,15 +206,15 @@ export default async function OpsDashboardPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead>
-                  <tr className="border-b border-slate-100 text-xs text-slate-500 font-semibold">
-                    <th className="pb-3">Guia / Ref</th>
-                    <th className="pb-3">Cliente / Destinatário</th>
-                    <th className="pb-3">Transportadora</th>
-                    <th className="pb-3">Estado</th>
-                    <th className="pb-3 text-right">Valor</th>
+                  <tr className="border-b border-[var(--border-subtle)] text-[11px] text-[var(--text-tertiary)] font-semibold uppercase tracking-wider">
+                    <th className="pb-2.5">Guia / Ref</th>
+                    <th className="pb-2.5">Cliente / Destinatário</th>
+                    <th className="pb-2.5">Transportadora</th>
+                    <th className="pb-2.5">Estado</th>
+                    <th className="pb-2.5 text-right">Valor</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50 text-xs">
+                <tbody className="divide-y divide-[var(--border-subtle)] text-xs">
                   {recentShipments.map((envio: any) => {
                     const clientName = envio.sender_name || (envio.client_id && clientMap.get(envio.client_id)) || "Cliente Direto"
                     const isRealCtt = (val?: string) => val && /^(DA|DB|DD|EA|EQ|EG)/i.test(val.trim())
@@ -236,25 +236,25 @@ export default async function OpsDashboardPage() {
                     const isCtt = envio.service_type?.includes("ctt") || !envio.service_type
 
                     return (
-                      <tr key={envio.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3.5">
-                          <div className="font-bold font-mono text-slate-800">{displayRef}</div>
+                      <tr key={envio.id} className="hover:bg-[var(--surface-muted)] transition-colors">
+                        <td className="py-3">
+                          <div className="font-semibold text-[var(--text-primary)]">{displayRef}</div>
                           {secondaryCode && (
-                            <div className="font-mono text-[11px] font-bold text-slate-700 mt-0.5" title="Objeto CTT Expresso">
+                            <div className="text-[10px] font-medium text-[var(--text-tertiary)] mt-0.5" title="Objeto CTT Expresso">
                               {secondaryCode}
                             </div>
                           )}
                         </td>
-                        <td className="py-3.5">
-                          <div className="font-semibold text-slate-800">{clientName}</div>
-                          <div className="text-[11px] text-slate-400 truncate max-w-[180px]">
+                        <td className="py-3">
+                          <div className="font-medium text-[var(--text-primary)]">{clientName}</div>
+                          <div className="text-[11px] text-[var(--text-tertiary)] truncate max-w-[180px] mt-0.5">
                             Para: {envio.recipient_name || "Destinatário"}
                           </div>
                         </td>
-                        <td className="py-3.5">
+                        <td className="py-3">
                           <div className="flex items-center gap-2">
                             {getCarrierLogo(envio.service_type || "ctt") ? (
-                              <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                              <div className="w-5 h-5 rounded bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img 
                                   src={getCarrierLogo(envio.service_type || "ctt")!} 
@@ -263,12 +263,12 @@ export default async function OpsDashboardPage() {
                                 />
                               </div>
                             ) : (
-                              <span className={`w-2 h-2 rounded-full ${isCtt ? 'bg-red-600' : 'bg-blue-600'}`} />
+                              <span className={`w-2 h-2 rounded-full ${isCtt ? 'bg-[var(--status-critical)]' : 'bg-[var(--status-info)]'}`} />
                             )}
-                            <span className="font-bold text-slate-700">{envio.service_type || "CTT Expresso"}</span>
+                            <span className="font-medium text-[var(--text-secondary)]">{envio.service_type || "CTT Expresso"}</span>
                           </div>
                         </td>
-                        <td className="py-3.5">
+                        <td className="py-3">
                           <Badge variant={
                             envio.status === "entregue" ? "success" :
                             envio.status === "pendente" ? "warning" : "info"
@@ -277,7 +277,7 @@ export default async function OpsDashboardPage() {
                              envio.status.charAt(0).toUpperCase() + envio.status.slice(1)}
                           </Badge>
                         </td>
-                        <td className="py-3.5 text-right font-mono font-bold text-slate-800">
+                        <td className="py-3 text-right font-medium text-[var(--text-primary)]">
                           {envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
                         </td>
                       </tr>
@@ -291,19 +291,19 @@ export default async function OpsDashboardPage() {
 
         {/* Right side - Rastreamento Widget */}
         <div className="flex-1 flex flex-col">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex-1 flex flex-col justify-between">
+          <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs flex-1 flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                    <MapPin className="w-5 h-5" />
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-md bg-[var(--status-info-soft)] flex items-center justify-center text-[var(--status-info)] shrink-0 border border-[rgba(37,99,235,0.1)]">
+                    <MapPin className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800 text-sm">Último Rastreamento</h3>
-                    <p className="text-[11px] text-slate-400">Estado em tempo real</p>
+                    <h3 className="font-bold text-[var(--text-primary)] text-sm">Último Rastreamento</h3>
+                    <p className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider font-semibold">Estado em tempo real</p>
                   </div>
                 </div>
-                <Link href="/ops/envios" className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
+                <Link href="/ops/envios" className="text-xs font-semibold text-[var(--status-info)] hover:underline flex items-center gap-1">
                   Ver envios <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
@@ -327,12 +327,12 @@ export default async function OpsDashboardPage() {
 
                 return (
                 <div className="space-y-4">
-                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <span className="font-bold text-slate-700">Guia:</span>
+                  <div className="bg-[var(--surface-muted)] p-3 rounded-lg border border-[var(--border-subtle)]">
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="font-semibold text-[var(--text-secondary)]">Guia:</span>
                       <div className="flex items-center gap-1.5">
                         {getCarrierLogo(latestActiveShipment.service_type || "ctt") ? (
-                          <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                          <div className="w-4 h-4 rounded bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
                               src={getCarrierLogo(latestActiveShipment.service_type || "ctt")!} 
@@ -341,27 +341,27 @@ export default async function OpsDashboardPage() {
                             />
                           </div>
                         ) : null}
-                        <span className="font-mono font-bold text-indigo-600">
+                        <span className="font-semibold text-[var(--status-info)]">
                           {latestLinkeRef}
                         </span>
                         {latestCttCode && (
-                          <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200" title="Objeto CTT Expresso">
+                          <span className="text-[10px] font-medium text-[var(--text-secondary)] bg-[var(--surface-bg)] px-1.5 py-0.5 rounded border border-[var(--border-subtle)]" title="Objeto CTT Expresso">
                             {latestCttCode}
                           </span>
                         )}
                       </div>
                     </div>
-                    <div className="text-[11px] text-slate-500">
-                      Destino: <strong>{latestActiveShipment.recipient_name || "Destinatário"}</strong>
+                    <div className="text-[11px] text-[var(--text-secondary)]">
+                      Destino: <strong className="text-[var(--text-primary)]">{latestActiveShipment.recipient_name || "Destinatário"}</strong>
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      Serviço: <span className="font-semibold text-slate-600">{latestActiveShipment.service_type || "CTT Expresso 24H"}</span>
+                    <div className="text-[10px] text-[var(--text-tertiary)] mt-0.5 font-medium">
+                      Serviço: <span>{latestActiveShipment.service_type || "CTT Expresso 24H"}</span>
                     </div>
                   </div>
 
                   {/* Dynamic Status Progression */}
                   <div className="pt-2">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)] mb-2">
                       <span>Progresso do Envio</span>
                       <Badge variant={
                         latestActiveShipment.status === "entregue" ? "success" :
@@ -371,9 +371,9 @@ export default async function OpsDashboardPage() {
                       </Badge>
                     </div>
 
-                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                    <div className="w-full bg-[var(--surface-muted)] rounded-full h-1.5 overflow-hidden border border-[var(--border-subtle)]">
                       <div 
-                        className="bg-green-600 h-2 rounded-full transition-all duration-500"
+                        className="bg-[var(--accent)] h-1.5 rounded-full transition-all duration-500"
                         style={{
                           width: latestActiveShipment.status === "entregue" ? "100%" :
                                  latestActiveShipment.status === "em transito" ? "65%" :
@@ -385,20 +385,20 @@ export default async function OpsDashboardPage() {
                 </div>
                 )
               })() : (
-                <div className="py-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 my-auto">
-                  <Truck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-slate-600">Sem envios ativos</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                <div className="py-8 text-center bg-[var(--surface-muted)] rounded-lg border border-dashed border-[var(--border-strong)] my-auto">
+                  <Truck className="w-6 h-6 text-[var(--text-tertiary)] mx-auto mb-2 opacity-60" />
+                  <p className="text-xs font-semibold text-[var(--text-secondary)]">Sem envios ativos</p>
+                  <p className="text-[10px] text-[var(--text-tertiary)] mt-0.5">
                     O acompanhamento do último envio ativo aparecerá aqui.
                   </p>
                 </div>
               )}
             </div>
 
-            <div className="pt-6 border-t border-slate-100 mt-6">
+            <div className="pt-4 border-t border-[var(--border-subtle)] mt-4">
               <Link 
                 href="/ops/envios" 
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-2"
+                className="w-full py-2 bg-[var(--text-primary)] hover:bg-[#202420] text-white rounded-md text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-1.5"
               >
                 <span>Aceder à Gestão de Envios</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -410,27 +410,27 @@ export default async function OpsDashboardPage() {
       </div>
 
       {/* PARCEIROS & TRANSPORTADORAS LINKE WIDGET */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
           <div>
             <div className="flex items-center gap-2">
-              <Truck className="w-5 h-5 text-emerald-600" />
-              <h2 className="text-lg font-bold text-slate-900">Transportadoras & Parceiros Integrados</h2>
+              <Truck className="w-4.5 h-4.5 text-[var(--accent)]" />
+              <h2 className="text-sm font-bold text-[var(--text-primary)]">Transportadoras & Parceiros Integrados</h2>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5">
               Estado em tempo real das ligações WebServices e preçários ativos no sistema
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Link
               href="/ops/configuracao/webservices"
-              className="text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5"
+              className="text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] border border-[var(--border-subtle)] px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
             >
               <span>Webservices Globais</span>
             </Link>
             <Link
               href="/ops/configuracao/servicos"
-              className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5"
+              className="text-[11px] font-semibold text-[var(--accent)] hover:text-[var(--accent-hover)] bg-[var(--accent-soft)] hover:bg-[rgba(18,138,71,0.15)] border border-[rgba(18,138,71,0.08)] px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
             >
               <span>Gerir Serviços Linke</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -438,7 +438,7 @@ export default async function OpsDashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             {
               name: "CTT Expresso",
@@ -477,14 +477,14 @@ export default async function OpsDashboardPage() {
             return (
               <div 
                 key={idx} 
-                className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                className={`p-3 rounded-lg border transition-all flex flex-col justify-between gap-3 ${
                   isConnected 
-                    ? "border-emerald-200/80 bg-emerald-50/20 hover:border-emerald-300 hover:shadow-xs" 
-                    : "border-slate-200 bg-slate-50/60 opacity-80 hover:opacity-100 hover:border-slate-300"
+                    ? "border-[rgba(18,138,71,0.2)] bg-[var(--accent-soft)] hover:border-[rgba(18,138,71,0.3)]" 
+                    : "border-[var(--border-subtle)] bg-[var(--surface-muted)] opacity-90 hover:opacity-100"
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-12 h-10 rounded-lg bg-white border border-slate-200 p-1.5 flex items-center justify-center shadow-2xs">
+                  <div className="w-10 h-8 rounded-md bg-white border border-[var(--border-subtle)] p-1 flex items-center justify-center shadow-2xs">
                     {logo ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img 
@@ -493,39 +493,39 @@ export default async function OpsDashboardPage() {
                         className="max-w-full max-h-full object-contain" 
                       />
                     ) : (
-                      <Truck className="w-5 h-5 text-slate-400" />
+                      <Truck className="w-4 h-4 text-[var(--text-tertiary)]" />
                     )}
                   </div>
                   
                   {isConnected ? (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Ativo & Conectado
+                    <span className="text-[9px] font-bold text-[var(--status-success)] bg-[var(--status-success-soft)] border border-[rgba(18,138,71,0.15)] px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-wider">
+                      <span className="w-1 h-1 rounded-full bg-[var(--status-success)] animate-pulse" />
+                      Conectado
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
-                      Não Conectado
+                    <span className="text-[9px] font-bold text-[var(--text-tertiary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] px-1.5 py-0.5 rounded uppercase tracking-wider">
+                      Desligado
                     </span>
                   )}
                 </div>
 
                 <div>
-                  <h3 className="font-bold text-slate-800 text-xs">{partner.name}</h3>
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 mt-0.5">
+                  <h3 className="font-semibold text-[var(--text-primary)] text-xs">{partner.name}</h3>
+                  <div className="flex items-center justify-between text-[10px] text-[var(--text-tertiary)] mt-0.5 font-medium">
                     <span>{partner.type}</span>
-                    <span className="font-mono font-bold text-slate-700">{partner.leadTime}</span>
+                    <span className="text-[var(--text-secondary)]">{partner.leadTime}</span>
                   </div>
 
                   {isConnected ? (
-                    <div className="text-[10px] text-emerald-700 font-medium mt-2 pt-1.5 border-t border-emerald-100/60 flex items-center justify-between">
-                      <span>Ambiente: <strong>{envLabel}</strong></span>
-                      <span className="font-mono font-bold">{activeConn.contract_number ? `#${activeConn.contract_number}` : ""}</span>
+                    <div className="text-[9px] text-[var(--accent)] font-semibold mt-2 pt-1.5 border-t border-[rgba(18,138,71,0.1)] flex items-center justify-between uppercase tracking-wide">
+                      <span>{envLabel}</span>
+                      <span>{activeConn.contract_number ? `#${activeConn.contract_number}` : ""}</span>
                     </div>
                   ) : (
-                    <div className="mt-2 pt-1.5 border-t border-slate-200/60">
+                    <div className="mt-2 pt-1.5 border-t border-[var(--border-subtle)]">
                       <Link 
                         href="/ops/configuracao/webservices" 
-                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
+                        className="text-[10px] font-semibold text-[var(--status-info)] hover:text-blue-800 flex items-center gap-0.5"
                       >
                         <span>Configurar Ligação</span>
                         <ArrowRight className="w-2.5 h-2.5" />

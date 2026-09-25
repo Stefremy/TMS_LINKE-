@@ -336,73 +336,73 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         
         {/* KPI 1: Envios Totais Reais */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs flex flex-col justify-between hover:border-emerald-300 transition-colors">
+        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--accent)] transition-colors">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Volume de Envios</span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+            <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Volume de Envios</span>
+            <div className="w-9 h-9 rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center font-bold">
               <Package className="w-5 h-5" />
             </div>
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900 font-mono">{stats.totalCount}</span>
+              <span className="text-3xl font-black text-[var(--text-primary)] font-mono">{stats.totalCount}</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1">{stats.deliveredCount} entregues no destino</p>
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-1">{stats.deliveredCount} entregues no destino</p>
           </div>
         </div>
 
         {/* KPI 2: Faturação Real */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs flex flex-col justify-between hover:border-emerald-300 transition-colors">
+        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--accent)] transition-colors">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Faturação Acumulada</span>
-            <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-bold">
+            <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Faturação Acumulada</span>
+            <div className="w-9 h-9 rounded-xl bg-[var(--status-info-soft)] text-[var(--status-info)] flex items-center justify-center font-bold">
               <Receipt className="w-5 h-5" />
             </div>
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900 font-mono">
+              <span className="text-3xl font-black text-[var(--text-primary)] font-mono">
                 {stats.totalRevenue.toFixed(2)}€
               </span>
-              <span className="text-[11px] text-slate-400 font-medium">+ IVA</span>
+              <span className="text-[11px] text-[var(--text-tertiary)] font-medium">+ IVA</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1">Condições: <strong>{paymentTerms}</strong></p>
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-1">Condições: <strong>{paymentTerms}</strong></p>
           </div>
         </div>
 
         {/* KPI 3: Desconto Real */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs flex flex-col justify-between hover:border-emerald-300 transition-colors">
+        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--accent)] transition-colors">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Desconto Contratual</span>
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+            <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Desconto Contratual</span>
+            <div className="w-9 h-9 rounded-xl bg-[rgba(99,102,241,0.1)] text-[#4f46e5] flex items-center justify-center font-bold">
               <Percent className="w-5 h-5" />
             </div>
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-indigo-600 font-mono">{discountPct}%</span>
-              <span className="text-[11px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">
+              <span className="text-3xl font-black text-[#4f46e5] font-mono">{discountPct}%</span>
+              <span className="text-[11px] text-[#4f46e5] bg-[rgba(99,102,241,0.1)] px-2 py-0.5 rounded-full font-bold">
                 Taxa Comb: {fuelPct}%
               </span>
             </div>
-            <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1.5">
+            <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)] mt-1.5">
               <span>{activeServices.length} serviços autorizados</span>
               <div className="flex items-center gap-1">
-                <div className="w-4 h-4 rounded-full bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
+                <div className="w-4 h-4 rounded-full bg-[var(--surface-bg)] border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={getCarrierLogo("ctt") || ""} alt="CTT Expresso" className="max-w-full max-h-full object-contain" />
                 </div>
-                <span className="text-[10px] font-bold text-slate-600">CTT Expresso</span>
+                <span className="text-[10px] font-bold text-[var(--text-secondary)]">CTT Expresso</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* KPI 4: Crédito (Saldo) */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs flex flex-col justify-between hover:border-emerald-300 transition-colors">
+        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--accent)] transition-colors">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Crédito (Saldo)</span>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+            <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Crédito (Saldo)</span>
+            <div className="w-9 h-9 rounded-xl bg-[var(--status-warning-soft)] text-[var(--status-warning)] flex items-center justify-center font-bold">
               <ShieldCheck className="w-5 h-5" />
             </div>
           </div>
@@ -410,22 +410,22 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
             {creditLimit > 0 ? (
               <>
                 <div className="flex items-baseline justify-between mb-1.5">
-                  <span className="text-xl font-black text-slate-900 font-mono">
+                  <span className="text-xl font-black text-[var(--text-primary)] font-mono">
                     {creditLimit.toLocaleString("pt-PT")}€
                   </span>
-                  <span className="text-xs font-bold text-emerald-600">{usedCreditPct}% Utilizado</span>
+                  <span className="text-xs font-bold text-[var(--accent)]">{usedCreditPct}% Utilizado</span>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                  <div className="bg-emerald-500 h-2 rounded-full transition-all duration-500" style={{ width: `${usedCreditPct}%` }} />
+                <div className="w-full bg-[var(--surface-muted)] rounded-full h-2 overflow-hidden">
+                  <div className="bg-[var(--accent)] h-2 rounded-full transition-all duration-500" style={{ width: `${usedCreditPct}%` }} />
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">
+                <p className="text-[10px] text-[var(--text-tertiary)] mt-1">
                   Disponível: {Math.max(creditLimit - stats.totalRevenue, 0).toLocaleString("pt-PT")}€
                 </p>
               </>
             ) : (
               <>
-                <span className="text-2xl font-black text-slate-800 font-mono">Sem Limite</span>
-                <p className="text-[11px] text-slate-400 mt-1">Conta sem teto fixado</p>
+                <span className="text-2xl font-black text-[var(--text-primary)] font-mono">Sem Limite</span>
+                <p className="text-[11px] text-[var(--text-tertiary)] mt-1">Conta sem teto fixado</p>
               </>
             )}
           </div>
@@ -435,13 +435,13 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
 
       {/* MANIFEST ALERT IF CLOSED */}
       {manifestData && (
-        <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in shadow-xs">
+        <div className="bg-[var(--status-success-soft)] border border-[var(--status-success)] rounded-xl p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in shadow-xs">
           <div className="flex items-center gap-3.5">
             <div>
-              <div className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+              <div className="text-sm font-bold text-[var(--status-success)] flex items-center gap-2">
                 <span>Lote Fechado com Sucesso!</span>
               </div>
-              <p className="text-xs text-emerald-800 mt-0.5">
+              <p className="text-xs text-[var(--status-success)] opacity-90 mt-0.5">
                 O manifesto (Certificado de Aceitação CTT) foi gerado.
               </p>
             </div>
@@ -457,14 +457,14 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                 link.click()
                 document.body.removeChild(link)
               }}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="bg-[var(--status-success)] hover:opacity-90 text-white px-3.5 py-2.5 rounded-md text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
             >
               Descarregar Manifesto
             </button>
             <button
               type="button"
               onClick={() => setManifestData(null)}
-              className="text-emerald-700 hover:text-emerald-950 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
+              className="text-[var(--status-success)] hover:opacity-70 text-xs font-bold px-2.5 py-2 rounded-md transition-colors cursor-pointer"
             >
               Fechar
             </button>
@@ -473,18 +473,18 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
       )}
 
       {/* TABELA PRINCIPAL DE ENVIOS (15 POR PÁGINA) */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-2xs overflow-hidden flex flex-col">
+      <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-2xs overflow-hidden flex flex-col">
         {/* Table Header & Controls */}
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="p-5 sm:p-6 border-b border-[var(--border-subtle)] flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2.5">
-              <Package className="w-5 h-5 text-emerald-600" />
-              <h2 className="text-lg font-bold text-slate-900">Envios & Guias de Transporte</h2>
-              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full font-mono">
+              <Package className="w-5 h-5 text-[var(--accent)]" />
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">Envios & Guias de Transporte</h2>
+              <span className="text-xs font-bold text-[var(--text-secondary)] bg-[var(--surface-dim)] border border-[var(--border-strong)] px-2.5 py-0.5 rounded-md font-mono">
                 {filteredShipments.length} {filteredShipments.length === 1 ? "envio" : "envios"}
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
               Lista dos envios emitidos com rastreamento em tempo real e impressão de etiquetas CTT.
             </p>
           </div>
@@ -494,7 +494,7 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
               <button
                 onClick={handleCloseBatch}
                 disabled={closingBatch}
-                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 active:scale-[0.99] disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+                className="px-3.5 py-2 bg-[var(--text-primary)] hover:bg-[#202420] active:scale-[0.99] disabled:opacity-50 text-white rounded-md text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
               >
                 {closingBatch ? "A Fechar..." : `Fechar ${pendingShipments.length} Envios`}
               </button>
@@ -505,7 +505,7 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               aria-label="Filtrar por estado do envio"
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="px-3 py-2 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-medium text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             >
               <option value="todos">Todos os Estados</option>
               <option value="pendente">Pendentes</option>
@@ -516,13 +516,13 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
 
             {/* Search Box */}
             <div className="relative min-w-[240px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
               <input 
                 type="text" 
                 placeholder="Pesquisar envio, destinatário..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full pl-9 pr-3 py-2 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
               />
             </div>
           </div>
@@ -531,26 +531,26 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
         {/* Table Content */}
         {filteredShipments.length === 0 ? (
           <div className="p-12 text-center flex flex-col items-center justify-center">
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+            <div className="w-12 h-12 rounded-xl bg-[var(--surface-muted)] flex items-center justify-center text-[var(--text-tertiary)] mb-3 border border-[var(--border-subtle)]">
               <Package className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-bold text-slate-800">Nenhum envio encontrado</h3>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm">
+            <h3 className="text-sm font-bold text-[var(--text-primary)]">Nenhum envio encontrado</h3>
+            <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-sm">
               {searchTerm || statusFilter !== "todos" 
                 ? "Tente ajustar os filtros ou o termo de pesquisa."
                 : "Ainda não existem envios emitidos para esta conta de cliente."}
             </p>
             <Link
               href={`/app/criar-guia${querySuffix}`}
-              className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all"
+              className="mt-4 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold transition-all shadow-xs"
             >
               Criar Novo Envio
             </Link>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50/80 text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-100">
+            <table className="w-full text-left text-xs text-[var(--text-secondary)]">
+              <thead className="bg-[var(--surface-muted)] text-[var(--text-tertiary)] font-bold uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
                 <tr>
                   <th className="py-3.5 px-5">Guia / Rastreio</th>
                   <th className="py-3.5 px-5">Serviço CTT</th>
@@ -561,7 +561,7 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                   <th className="py-3.5 px-5 text-right">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-[var(--border-subtle)]">
                 {paginatedShipments.map((shipment) => {
                   const dateStr = shipment.created_at ? new Date(shipment.created_at).toLocaleDateString("pt-PT", {
                     day: "2-digit",
@@ -574,7 +574,7 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                   const tracking = shipment.tracking_number || shipment.id
 
                   return (
-                    <tr key={shipment.id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr key={shipment.id} className="hover:bg-[var(--surface-muted)] transition-colors">
                       {/* Tracking / Guia */}
                       <td className="py-4 px-5">
                         {(() => {
@@ -598,20 +598,20 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                               <button
                                 type="button"
                                 onClick={() => setSelectedShipment(shipment)}
-                                className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline text-xs flex items-center gap-1.5 cursor-pointer text-left transition-colors"
+                                className="font-mono font-bold text-[var(--accent)] hover:text-[var(--accent-hover)] hover:underline text-xs flex items-center gap-1.5 cursor-pointer text-left transition-colors"
                                 title="Clique para ver os detalhes do envio e rastreio interno"
                               >
                                 <span>{primaryDisplay}</span>
                                 {linkeRef && (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded font-sans font-bold leading-none">
+                                  <span className="text-[9px] px-1.5 py-0.5 bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)] rounded font-sans font-bold leading-none uppercase tracking-wider">
                                     Ref Linke
                                   </span>
                                 )}
                               </button>
                               {secondaryDisplay && (
-                                <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-600 mt-0.5" title="Objeto / Guia CTT Expresso">
-                                  <span className="text-slate-400 font-sans text-[10px] uppercase font-bold">CTT:</span>
-                                  <span className="font-bold text-slate-800">{secondaryDisplay}</span>
+                                <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-[var(--text-secondary)] mt-0.5" title="Objeto / Guia CTT Expresso">
+                                  <span className="text-[var(--text-tertiary)] font-sans text-[10px] uppercase font-bold tracking-wide">CTT:</span>
+                                  <span className="font-bold text-[var(--text-primary)]">{secondaryDisplay}</span>
                                 </div>
                               )}
                             </div>
@@ -623,7 +623,7 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                       <td className="py-4 px-5">
                         <div className="flex items-center gap-2">
                           {getCarrierLogo(shipment.service_type || shipment.carrier || "ctt") ? (
-                            <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                            <div className="w-5 h-5 rounded bg-[var(--surface-bg)] border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img 
                                 src={getCarrierLogo(shipment.service_type || shipment.carrier || "ctt")!} 
@@ -632,7 +632,7 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                               />
                             </div>
                           ) : null}
-                          <span className="font-semibold text-slate-700 text-xs">
+                          <span className="font-semibold text-[var(--text-secondary)] text-xs">
                             {shipment.service_type || "CTT Expresso"}
                           </span>
                         </div>
@@ -640,20 +640,20 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
 
                       {/* Destinatário */}
                       <td className="py-4 px-5 max-w-[260px]">
-                        <div className="font-bold text-slate-900 truncate">{shipment.recipient_name}</div>
-                        <div className="text-[11px] text-slate-400 truncate flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3 shrink-0 text-slate-400" />
+                        <div className="font-bold text-[var(--text-primary)] truncate">{shipment.recipient_name}</div>
+                        <div className="text-[11px] text-[var(--text-tertiary)] truncate flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3 shrink-0 text-[var(--text-tertiary)]" />
                           <span>{shipment.recipient_address || "Portugal"}</span>
                         </div>
                       </td>
 
                       {/* Data */}
-                      <td className="py-4 px-5 text-slate-500 whitespace-nowrap">
+                      <td className="py-4 px-5 text-[var(--text-secondary)] whitespace-nowrap">
                         {dateStr}
                       </td>
 
                       {/* Valor */}
-                      <td className="py-4 px-5 font-mono font-bold text-slate-900">
+                      <td className="py-4 px-5 font-mono font-bold text-[var(--text-primary)]">
                         {shipment.sell_price ? `${Number(shipment.sell_price).toFixed(2)}€` : "—"}
                       </td>
 
@@ -679,22 +679,22 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                               e.stopPropagation()
                               setOpenDropdownId(openDropdownId === shipment.id ? null : shipment.id)
                             }}
-                            className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-md border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] transition-colors cursor-pointer"
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
 
                           {openDropdownId === shipment.id && (
-                            <div className="absolute right-0 mt-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-30 animate-in fade-in-50 zoom-in-95 text-left">
+                            <div className="absolute right-0 mt-1 w-48 bg-[var(--surface-bg)] rounded-md shadow-lg border border-[var(--border-subtle)] py-1.5 z-30 animate-in fade-in-50 zoom-in-95 text-left">
                               <button
                                 type="button"
                                 onClick={() => {
                                   setOpenDropdownId(null)
                                   printLabel(shipment)
                                 }}
-                                className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors cursor-pointer"
+                                className="w-full px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] flex items-center gap-2 transition-colors cursor-pointer"
                               >
-                                <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                                <Printer className="w-3.5 h-3.5 text-[var(--accent)]" />
                                 <span>Imprimir Etiqueta CTT</span>
                               </button>
                               <button
@@ -703,9 +703,9 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                                   setOpenDropdownId(null)
                                   downloadLabel(shipment, tracking)
                                 }}
-                                className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-2 transition-colors cursor-pointer"
+                                className="w-full px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] flex items-center gap-2 transition-colors cursor-pointer"
                               >
-                                <Download className="w-3.5 h-3.5 text-emerald-600" />
+                                <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
                                 <span>Descarregar PDF</span>
                               </button>
                               <button
@@ -714,13 +714,13 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                                   setOpenDropdownId(null)
                                   setSelectedShipment(shipment)
                                 }}
-                                className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                className="w-full px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
                               >
-                                <Eye className="w-3.5 h-3.5 text-slate-400" />
+                                <Eye className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
                                 <span>Ver Detalhes</span>
                               </button>
 
-                              <div className="h-px bg-slate-100 my-1" />
+                              <div className="h-px bg-[var(--border-subtle)] my-1" />
 
                               {/* Criar Devolução */}
                               <button
@@ -737,9 +737,9 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                                     alert("Erro ao criar devolução: " + (res.error || "Erro desconhecido"))
                                   }
                                 }}
-                                className="w-full px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                className="w-full px-3 py-2 text-xs font-semibold text-[var(--status-warning)] hover:bg-[var(--status-warning-soft)] flex items-center gap-2 transition-colors cursor-pointer"
                               >
-                                <Undo2 className="w-3.5 h-3.5 text-amber-600" />
+                                <Undo2 className="w-3.5 h-3.5 text-[var(--status-warning)]" />
                                 <span>Criar Devolução</span>
                               </button>
 
@@ -758,9 +758,9 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                                     alert("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"))
                                   }
                                 }}
-                                className="w-full px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                className="w-full px-3 py-2 text-xs font-semibold text-[var(--status-critical)] hover:bg-[var(--status-critical-soft)] flex items-center gap-2 transition-colors cursor-pointer"
                               >
-                                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                <Trash2 className="w-3.5 h-3.5 text-[var(--status-critical)]" />
                                 <span>Eliminar Envio</span>
                               </button>
                             </div>
@@ -777,29 +777,29 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
 
         {/* Pagination Footer (15 per page) */}
         {filteredShipments.length > 0 && (
-          <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
+          <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-4 text-xs text-[var(--text-secondary)]">
             <div>
-              A mostrar <strong>{Math.min((currentPage - 1) * pageSize + 1, filteredShipments.length)}</strong> a <strong>{Math.min(currentPage * pageSize, filteredShipments.length)}</strong> de <strong>{filteredShipments.length}</strong> envios
+              A mostrar <strong className="text-[var(--text-primary)]">{Math.min((currentPage - 1) * pageSize + 1, filteredShipments.length)}</strong> a <strong className="text-[var(--text-primary)]">{Math.min(currentPage * pageSize, filteredShipments.length)}</strong> de <strong className="text-[var(--text-primary)]">{filteredShipments.length}</strong> envios
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+                className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] disabled:opacity-40 disabled:cursor-not-allowed rounded-md font-bold text-[var(--text-primary)] flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
                 <span>Anterior</span>
               </button>
 
-              <span className="px-2 font-semibold text-slate-700 font-mono">
+              <span className="px-2 font-bold text-[var(--text-primary)] font-mono">
                 {currentPage} / {totalPages}
               </span>
 
               <button
                 onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
                 disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-medium text-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+                className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] disabled:opacity-40 disabled:cursor-not-allowed rounded-md font-bold text-[var(--text-primary)] flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
               >
                 <span>Próxima</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -813,18 +813,18 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Graph 1: Volume Diário Real de Envios */}
-        <div className="lg:col-span-3 bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs flex flex-col justify-between">
+        <div className="lg:col-span-3 bg-[var(--surface-bg)] rounded-xl p-6 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div>
               <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-base font-bold text-slate-900">Volume de Envios por Dia</h3>
+                <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
+                <h3 className="text-base font-bold text-[var(--text-primary)]">Volume de Envios por Dia</h3>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">Distribuição diária de emissão de guias de transporte CTT</p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Distribuição diária de emissão de guias de transporte CTT</p>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl">
+              <span className="text-xs font-bold text-[var(--accent)] bg-[var(--accent-soft)] px-3 py-1 rounded-md">
                 {stats.totalCount} {stats.totalCount === 1 ? "Envio Registado" : "Envios Registados"}
               </span>
             </div>
@@ -832,42 +832,42 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
 
           {/* Visual Bar Graph with REAL data */}
           {stats.totalCount === 0 ? (
-            <div className="h-64 flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-              <Package className="w-8 h-8 text-slate-300 mb-2" />
-              <p className="text-xs font-bold text-slate-700">Sem envios registados</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+            <div className="h-64 flex flex-col items-center justify-center text-center p-6 bg-[var(--surface-muted)] rounded-xl border border-dashed border-[var(--border-strong)]">
+              <Package className="w-8 h-8 text-[var(--text-tertiary)] mb-2" />
+              <p className="text-xs font-bold text-[var(--text-secondary)]">Sem envios registados</p>
+              <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5">
                 Os gráficos de barras serão preenchidos em tempo real à medida que emitir novas guias CTT.
               </p>
             </div>
           ) : (
-            <div className="h-64 flex items-end justify-between gap-3 sm:gap-6 pt-8 pb-2 px-2 border-b border-slate-100">
+            <div className="h-64 flex items-end justify-between gap-3 sm:gap-6 pt-8 pb-2 px-2 border-b border-[var(--border-subtle)]">
               {stats.weeklyVolume.map((item, idx) => (
                 <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                  <div className="text-[11px] font-mono font-bold text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="text-[11px] font-mono font-bold text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity">
                     {item.count}
                   </div>
-                  <div className="w-full max-w-[48px] bg-slate-100 rounded-t-xl overflow-hidden flex items-end h-full">
+                  <div className="w-full max-w-[48px] bg-[var(--surface-muted)] rounded-t-md overflow-hidden flex items-end h-full border border-[var(--border-subtle)] border-b-0">
                     <div 
-                      className="w-full bg-gradient-to-t from-emerald-600 to-teal-400 rounded-t-xl transition-all duration-500"
+                      className="w-full bg-[var(--accent)] rounded-t-md transition-all duration-500"
                       style={{ height: item.height }}
                     />
                   </div>
                   <div className="text-center mt-1">
-                    <span className="block text-xs font-bold text-slate-800">{item.day}</span>
-                    <span className="block text-[10px] text-slate-400 font-mono font-bold">{item.count}</span>
+                    <span className="block text-xs font-bold text-[var(--text-primary)]">{item.day}</span>
+                    <span className="block text-[10px] text-[var(--text-tertiary)] font-mono font-bold">{item.count}</span>
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 text-xs text-slate-500">
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 text-xs text-[var(--text-secondary)]">
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-md bg-emerald-500" />
+              <div className="w-3 h-3 rounded-sm bg-[var(--accent)]" />
               <span>Envios CTT Registados</span>
             </div>
-            <span className="font-semibold text-slate-700">
-              Total Acumulado: <strong>{stats.totalCount} guias</strong>
+            <span className="font-semibold text-[var(--text-secondary)]">
+              Total Acumulado: <strong className="text-[var(--text-primary)]">{stats.totalCount} guias</strong>
             </span>
           </div>
         </div>
@@ -875,37 +875,37 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
       </div>
 
       {/* LOWER SECTION: REAL DESTINATIONS */}
-      <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs">
+      <div className="bg-[var(--surface-bg)] rounded-xl p-6 border border-[var(--border-subtle)] shadow-2xs">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-indigo-600" />
-              <h3 className="text-base font-bold text-slate-900">Destinos dos Envios</h3>
+              <MapPin className="w-5 h-5 text-[var(--status-info)]" />
+              <h3 className="text-base font-bold text-[var(--text-primary)]">Destinos dos Envios</h3>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">Destinos mais frequentes da mercadoria desta conta</p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Destinos mais frequentes da mercadoria desta conta</p>
           </div>
         </div>
 
         {stats.destinationRegions.length === 0 ? (
-          <div className="py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-            <MapPin className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
-            <p className="text-xs font-bold text-slate-600">Sem destinos registados</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">As localidades de destino aparecerão aqui após emissão.</p>
+          <div className="py-8 text-center bg-[var(--surface-muted)] rounded-xl border border-dashed border-[var(--border-strong)]">
+            <MapPin className="w-6 h-6 text-[var(--text-tertiary)] mx-auto mb-1.5" />
+            <p className="text-xs font-bold text-[var(--text-secondary)]">Sem destinos registados</p>
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5">As localidades de destino aparecerão aqui após emissão.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 pt-2">
             {stats.destinationRegions.map((dest, idx) => (
               <div key={idx} className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-800">{dest.region}</span>
+                  <span className="font-semibold text-[var(--text-primary)]">{dest.region}</span>
                   <div className="flex items-center gap-2 font-mono">
-                    <span className="text-slate-400 text-[11px]">{dest.count}</span>
-                    <span className="font-bold text-slate-900">{dest.pct}%</span>
+                    <span className="text-[var(--text-tertiary)] text-[11px]">{dest.count}</span>
+                    <span className="font-bold text-[var(--text-primary)]">{dest.pct}%</span>
                   </div>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-[var(--surface-muted)] rounded-full h-2 overflow-hidden border border-[var(--border-subtle)]">
                   <div 
-                    className="bg-indigo-600 h-2 rounded-full transition-all duration-500"
+                    className="bg-[var(--status-info)] h-2 rounded-full transition-all duration-500"
                     style={{ width: `${dest.pct}%` }}
                   />
                 </div>

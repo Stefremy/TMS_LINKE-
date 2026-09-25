@@ -11,7 +11,6 @@ import { requireEmployee, getTenantId } from "@/lib/auth/context"
  */
 export async function getColaboradoresAction(): Promise<Colaborador[]> {
   await requireEmployee()
-  await requireEmployee()
 
   const supabase = createAdminClient()
   const colaboradoresMap = new Map<string, Colaborador>()
@@ -72,7 +71,6 @@ export async function getColaboradoresAction(): Promise<Colaborador[]> {
  * Cria ou atualiza um colaborador
  */
 export async function saveColaboradorAction(colaboradorData: Partial<Colaborador> & { name: string; role: string; department: string }) {
-  await requireEmployee()
   await requireEmployee()
 
   const supabase = createAdminClient()
@@ -150,7 +148,6 @@ export async function saveColaboradorAction(colaboradorData: Partial<Colaborador
  */
 export async function deleteColaboradorAction(id: string) {
   await requireEmployee()
-  await requireEmployee()
 
   const supabase = createAdminClient()
   const now = new Date().toISOString()
@@ -176,7 +173,6 @@ export async function deleteColaboradorAction(id: string) {
  * Altera o estado do colaborador (Ativo / Inativo / Férias)
  */
 export async function toggleColaboradorStatusAction(id: string, status: "Ativo" | "Inativo" | "Férias") {
-  await requireEmployee()
   await requireEmployee()
 
   const supabase = createAdminClient()

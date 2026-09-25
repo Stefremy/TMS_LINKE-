@@ -1577,3 +1577,107 @@ export async function deleteShipmentsBulkAction(shipmentIds: string[]) {
     return { success: false, error: err?.message || "Erro desconhecido ao eliminar envios" }
   }
 }
+
+/**
+ * Trata uma incidência operacional: reagendamento, correção de morada, devolução ou marcação como resolvida
+ */
+export async function resolveShipmentIncidentAction(params: {
+  shipmentId: string
+  actionType: "reagendar" | "morada" | "devolver" | "resolvido"
+  scheduledDate?: string
+  timeWindow?: string
+  newAddress?: string
+  newZipCode?: string
+  newCity?: string
+  newPhone?: string
+  notes?: string
+}) {
+  await requireEmployee()
+  const supabase = createAdminClient()
+  const now = new Date().toISOString()
+  const { shipmentId, actionType, scheduledDate, timeWindow, newAddress, newZipCode, newCity, newPhone, notes } = params
+
+  try {
+    let newStatus: "em_distribuicao" | "em_transito" | "devolvido" | "entregue" = "em_distribuicao"
+    let statusDescription = ""
+    let eventCode = "EMZ"
+
+    if (actionType === "reagendar") {
+      newStatus = "em_distribuicao"
+      statusDescription = `Reagendamento de entrega para ${scheduledDate || "data a definir"}${timeWindow ? ` (${timeWindow})` : ""}${notes ? `: ${notes}` : ""}`
+      eventCode = "EMZ"
+    } else if (actionType === "morada") {
+      newStatus = "em_distribuicao"
+      statusDescription = `Morada/contacto de entrega retificado${newAddress ? ` (${newAddress})` : ""}${notes ? `: ${notes}` : ""}`
+      eventCode = "EMF"
+    } else if (actionType === "devolver") {
+      newStatus = "devolvido"
+      statusDescription = `Devolução ao remetente autorizada${notes ? `: ${notes}` : ""}`
+      eventCode = "EMM"
+    } else {
+      newStatus = "em_distribuicao"
+      statusDescription = `Incidência resolvida operacionalmente${notes ? `: ${notes}` : ""}`
+      eventCode = "EMF"
+    }
+
+    // 1. Atualizar na tabela shipments
+    const updatePayload: any = {
+      status: newStatus,
+      ops_substatus: `Resolvido: ${actionType.toUpperCase()}`,
+      updated_at: now
+    }
+    if (newAddress) updatePayload.recipient_address = newAddress
+    if (newZipCode) {
+      const parts = newZipCode.split("-")
+      if (parts[0]) updatePayload.recipient_zip3 = parts[0]
+      if (parts[1]) updatePayload.recipient_zip4 = parts[1]
+    }
+    if (newPhone) updatePayload.recipient_phone = newPhone
+
+    await supabase.from("shipments").update(updatePayload).eq("id", shipmentId)
+
+    // 2. Atualizar em audit_log
+    const { data: logs } = await supabase
+      .from("audit_log")
+      .select("id, details")
+      .eq("action", "shipment_data")
+
+    if (logs) {
+      for (const item of logs) {
+        if (item.details?.id === shipmentId || item.details?.tracking_number === shipmentId) {
+          await supabase
+            .from("audit_log")
+            .update({
+              details: {
+                ...item.details,
+                ...updatePayload,
+                status_reason: statusDescription,
+                updated_at: now,
+              },
+            })
+            .eq("id", item.id)
+        }
+      }
+    }
+
+    // 3. Inserir tracking event
+    await supabase.from("tracking_events").insert({
+      tenant_id: (await getTenantId()),
+      shipment_id: shipmentId,
+      event_code: eventCode,
+      description: statusDescription,
+      location: "Hub Central - Linke Ops",
+      created_at: now,
+    })
+
+    revalidatePath("/ops/incidencias")
+    revalidatePath("/ops/envios")
+    revalidatePath("/ops")
+    revalidatePath("/app")
+
+    return { success: true, message: "Incidência tratada com sucesso" }
+  } catch (err: any) {
+    console.error("Erro ao resolver incidência:", err)
+    return { success: false, error: err?.message || "Erro ao processar resolução" }
+  }
+}

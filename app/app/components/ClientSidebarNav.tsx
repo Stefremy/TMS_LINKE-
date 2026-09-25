@@ -27,7 +27,7 @@ export function ClientSidebarNav() {
   ]
 
   return (
-    <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
+    <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
       {navItems.map((item) => {
         const Icon = item.icon
         const isActive = pathname === item.href
@@ -36,13 +36,13 @@ export function ClientSidebarNav() {
           <Link
             key={item.href}
             href={`${item.href}${queryParams}`}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-xs transition-colors ${
+            className={`flex items-center gap-3 px-3 py-2 rounded-md font-medium text-[12px] transition-colors ${
               isActive
-                ? "text-emerald-800 bg-emerald-50 border border-emerald-200/60 shadow-2xs"
-                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                ? "text-[var(--accent)] bg-[var(--accent-soft)] font-semibold border border-[rgba(18,138,71,0.15)]"
+                : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
             }`}
           >
-            <Icon className={`w-4 h-4 ${isActive ? "text-emerald-600" : "text-slate-400"}`} />
+            <Icon className={`w-4 h-4 ${isActive ? "text-[var(--accent)]" : "text-[var(--text-tertiary)]"}`} />
             <span>{item.label}</span>
           </Link>
         )
@@ -67,13 +67,13 @@ export function ClientTopHeaderAction() {
   }, [clientId, clientName])
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       <TrackingQuickBar />
       <Link
         href={`/app/criar-guia${queryParams}`}
-        className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+        className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.99] text-white px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
       >
-        <Plus className="w-4 h-4" />
+        <Plus className="w-3.5 h-3.5" />
         <span>Novo Envio</span>
       </Link>
     </div>

@@ -15,21 +15,21 @@ export function ClientImpersonationBanner() {
   const displayName = clientName ? decodeURIComponent(clientName) : "Cliente Selecionado"
 
   return (
-    <div className="bg-slate-900 text-white px-6 py-2 text-xs flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-slate-800 animate-in fade-in">
-      <div className="flex items-center gap-2.5">
-        <span className="bg-emerald-500 text-slate-950 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded tracking-wide">
+    <div className="bg-[#141714] text-white px-5 py-1.5 text-[11px] flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-[rgba(255,255,255,0.08)]">
+      <div className="flex items-center gap-2">
+        <span className="bg-[var(--accent-active)] text-[#141714] text-[9px] font-bold uppercase px-1.5 py-0.5 rounded tracking-wider">
           Sessão Operador TMS
         </span>
-        <span className="text-slate-300">
-          A visualizar a interface do cliente: <strong className="text-white font-bold">{displayName}</strong>
+        <span className="text-[rgba(255,255,255,0.6)]">
+          A visualizar a interface do cliente: <strong className="text-white font-semibold">{displayName}</strong>
         </span>
       </div>
 
       <Link
         href="/ops/entidades/clientes"
-        className="inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1 rounded-lg text-xs font-bold border border-slate-700 transition-colors"
+        className="inline-flex items-center gap-1.5 bg-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.12)] text-[rgba(255,255,255,0.7)] px-2.5 py-1 rounded-md text-[10px] font-medium border border-[rgba(255,255,255,0.1)] transition-colors"
       >
-        <ArrowLeft className="w-3.5 h-3.5" />
+        <ArrowLeft className="w-3 h-3" />
         Voltar a Entidades Clientes
       </Link>
     </div>
@@ -44,23 +44,23 @@ export function ClientProfileSidebar() {
   const initial = displayName.substring(0, 2).toUpperCase()
 
   return (
-    <div className="px-4 mb-6">
-      <div className="w-full flex items-center justify-between p-2 bg-emerald-50/70 rounded-xl border border-emerald-200 transition-colors">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-emerald-600 text-white rounded-lg flex items-center justify-center font-bold text-xs shadow-2xs">
+    <div className="px-3 mb-4">
+      <div className="w-full flex items-center justify-between p-2 bg-[var(--accent-soft)] rounded-md border border-[rgba(18,138,71,0.12)] transition-colors">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-[var(--accent)] text-white rounded-md flex items-center justify-center font-semibold text-[10px]">
             {initial}
           </div>
           <div className="flex flex-col text-left">
-            <span className="font-bold text-slate-800 text-xs truncate max-w-[130px]">{displayName}</span>
-            <span className="text-[10px] text-emerald-700 font-semibold">Conta Ativa</span>
+            <span className="font-semibold text-[var(--text-primary)] text-[11px] truncate max-w-[120px]">{displayName}</span>
+            <span className="text-[9px] text-[var(--accent)] font-medium">Conta Ativa</span>
           </div>
         </div>
         <Link 
           href="/ops/entidades/clientes" 
-          className="text-slate-400 hover:text-emerald-700 p-1"
+          className="text-[var(--text-tertiary)] hover:text-[var(--accent)] p-1"
           title="Ver no TMS"
         >
-          <Building2 className="w-3.5 h-3.5" />
+          <Building2 className="w-3 h-3" />
         </Link>
       </div>
     </div>

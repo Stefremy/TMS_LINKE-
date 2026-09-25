@@ -29,6 +29,7 @@ import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { closeCttShipmentsAction, syncCttTrackingAction } from "@/app/actions/ctt"
 import { deleteShipmentsBulkAction } from "@/app/actions/shipments"
+import { Button } from "@/components/ui/button"
 
 interface EnviosClientProps {
   envios: any[]
@@ -147,100 +148,108 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
   })
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-8rem)] bg-[var(--surface-bg)] rounded-lg shadow-sm border border-[var(--border-subtle)] overflow-hidden">
       
       {/* Header Area */}
-      <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
-        <h1 className="text-xl font-bold text-slate-800">
+      <div className="px-5 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0">
+        <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
           {viewMode === "envios" ? "Envios e Serviços" : "Pedidos de Recolha"}
         </h1>
-        <div className="text-sm font-medium text-slate-500 flex items-center">
-          Painel de Resumo <span className="mx-1 text-lg leading-none mb-1">&rsaquo;</span> <span className="text-slate-800">
+        <div className="text-[10px] font-semibold text-[var(--text-tertiary)] flex items-center gap-1.5 uppercase tracking-wide">
+          <span>Painel de Resumo</span>
+          <span className="text-[var(--border-strong)]">&gt;</span>
+          <span className="text-[var(--text-secondary)]">
             {viewMode === "envios" ? "Envios e Serviços" : "Recolhas"}
           </span>
         </div>
       </div>
 
       {/* Toolbar Area */}
-      <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
+      <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-bg)] shrink-0 gap-3 text-[11px]">
         
         <div className="flex items-center gap-2">
-          <a
-            href={viewMode === "recolhas" ? "#" : "/ops/envios/novo"}
+          <Button
+            size="sm"
             onClick={(e) => {
               if (viewMode === "recolhas") {
                 e.preventDefault()
                 setShowRecolhaModal(true)
+              } else {
+                router.push('/ops/envios/novo')
               }
             }}
-            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-sm font-bold shadow-sm transition-colors flex items-center gap-1.5"
+            className="font-semibold px-3 py-1.5 h-auto text-xs shadow-xs"
           >
-            <Plus className="w-4 h-4" strokeWidth={3} />
+            <Plus className="w-3.5 h-3.5 mr-1" strokeWidth={3} />
             Novo
-          </a>
+          </Button>
           
-          <button 
+          <Button 
+            variant="outline"
+            size="sm"
             onClick={() => setViewMode(viewMode === "envios" ? "recolhas" : "envios")}
-            className={`border px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 h-auto text-xs font-semibold shadow-xs ${
               viewMode === "recolhas" 
-                ? "bg-slate-200 border-slate-400 text-slate-900" 
-                : "bg-white border-slate-300 hover:bg-slate-50 text-slate-700"
+                ? "bg-[var(--surface-dim)] border-[var(--border-strong)] text-[var(--text-primary)]" 
+                : ""
             }`}
           >
-            <Package className="w-4 h-4" />
+            <Package className="w-3.5 h-3.5 mr-1.5" />
             {viewMode === "envios" ? "Recolhas" : "Envios"}
-          </button>
+          </Button>
           
-          <button className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5">
-            <MapPin className="w-4 h-4" />
+          <Button variant="outline" size="sm" className="px-3 py-1.5 h-auto text-[11px] font-medium shadow-xs">
+            <MapPin className="w-3.5 h-3.5 mr-1.5" />
             Localizar
-          </button>
+          </Button>
 
           <FerramentasMenu />
           
-          <button 
+          <Button 
+            variant="outline"
+            size="sm"
             onClick={() => setShowFilters(!showFilters)}
-            className={`border px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 h-auto text-[11px] font-medium shadow-xs ${
               showFilters 
-                ? "bg-slate-200 border-slate-400 text-slate-900" 
-                : "bg-white border-slate-300 hover:bg-slate-50 text-slate-700"
+                ? "bg-[var(--surface-dim)] border-[var(--border-strong)] text-[var(--text-primary)]" 
+                : ""
             }`}
           >
-            <Filter className="w-4 h-4" />
+            <Filter className="w-3.5 h-3.5 mr-1.5" />
             Filtrar
-            <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${showFilters ? "rotate-180" : ""}`} />
-          </button>
+            <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showFilters ? "rotate-180" : ""}`} />
+          </Button>
 
-          <div className="flex items-center ml-2 border-l border-slate-200 pl-4">
-            <span className="text-sm font-semibold text-slate-700 mr-2">Estado</span>
+          <div className="flex items-center ml-2 border-l border-[var(--border-subtle)] pl-4">
+            <span className="text-[11px] font-semibold text-[var(--text-secondary)] mr-2">Estado</span>
             <div className="relative">
-              <select className="appearance-none bg-white border border-slate-300 text-slate-700 text-sm font-semibold rounded px-3 py-1 pr-8 focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm h-8">
+              <select className="appearance-none bg-[var(--surface-bg)] border border-[var(--border-strong)] text-[var(--text-primary)] text-[11px] font-medium rounded-md px-2.5 py-1.5 pr-7 focus:outline-none focus:border-[var(--accent)] shadow-2xs">
                 <option>Todos</option>
                 <option>Pendente</option>
                 <option>Em Trânsito</option>
               </select>
-              <ChevronDown className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
             <input 
               type="text" 
               placeholder="Q TRK" 
-              className="w-32 pl-8 pr-3 py-1 bg-white border border-slate-300 rounded text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm h-8"
+              className="w-28 pl-8 pr-3 py-1.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-[11px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors"
             />
           </div>
           <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
             <input 
               type="text" 
               placeholder="Pesquisar..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-48 pl-8 pr-3 py-1 bg-white border border-slate-300 rounded text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-green-500 shadow-sm h-8"
+              className="w-56 pl-8 pr-3 py-1.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-[11px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors"
             />
           </div>
         </div>
@@ -249,70 +258,69 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
 
       {/* Expanded Filters Area */}
       {showFilters && (
-        <div className="px-4 py-4 border-b border-slate-200 bg-slate-50 shrink-0 flex flex-col gap-3 text-[11px]">
+        <div className="px-5 py-4 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] shrink-0 flex flex-col gap-3 text-[10px]">
           {/* Row 1 */}
           <div className="flex items-end gap-3 flex-wrap">
             <div className="flex flex-col gap-1 w-32">
-              <label className="font-semibold text-slate-600">Filtrar Data</label>
-              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Filtrar Data</label>
+              <select className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
                 <option>Data Recolha</option>
               </select>
             </div>
             <div className="flex flex-col gap-1 w-56">
-              <label className="font-semibold text-slate-600">Data</label>
+              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Data</label>
               <div className="flex items-center gap-1">
-                <input type="text" placeholder="Início" className="w-full border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
-                <span className="text-slate-400 px-1">até</span>
-                <input type="text" placeholder="Fim" className="w-full border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+                <input type="text" placeholder="Início" className="w-full border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]" />
+                <span className="text-[var(--text-tertiary)] px-1">até</span>
+                <input type="text" placeholder="Fim" className="w-full border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]" />
               </div>
             </div>
             <div className="flex flex-col gap-1 w-32">
-              <label className="font-semibold text-slate-600">Serviço</label>
-              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Serviço</label>
+              <select className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
                 <option>Todos</option>
               </select>
             </div>
             <div className="flex flex-col gap-1 w-40">
-              <label className="font-semibold text-slate-600">Fornecedor</label>
+              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Fornecedor</label>
               <div className="flex">
-                <span className="bg-slate-100 border border-slate-300 border-r-0 rounded-l px-2 py-1.5 text-slate-500 font-bold">=</span>
-                <select className="w-full border border-slate-300 rounded-r px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                <span className="bg-[var(--surface-dim)] border border-[var(--border-strong)] border-r-0 rounded-l-md px-2 py-1.5 text-[var(--text-secondary)] font-bold">=</span>
+                <select className="w-full border border-[var(--border-strong)] rounded-r-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
                   <option>Todos</option>
                 </select>
               </div>
             </div>
             <div className="flex flex-col gap-1 w-28">
-              <label className="font-semibold text-slate-600">Contexto</label>
-              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Contexto</label>
+              <select className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
                 <option>Todos</option>
               </select>
             </div>
             <div className="flex flex-col gap-1 w-28">
-              <label className="font-semibold text-slate-600">Tipo</label>
-              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Tipo</label>
+              <select className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
                 <option>Todos</option>
               </select>
             </div>
             <div className="flex flex-col gap-1 w-32">
-              <div className="flex justify-between items-center"><label className="font-semibold text-slate-600">Motorista</label><span className="text-[9px] text-blue-500 cursor-pointer hover:underline">Todos</span></div>
-              <select className="border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+              <div className="flex justify-between items-center"><label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Motorista</label><span className="text-[9px] text-[var(--status-info)] cursor-pointer hover:underline">Todos</span></div>
+              <select className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
                 <option>Todos</option>
               </select>
             </div>
           </div>
-          {/* Other filter rows simplified for space, the structure is identical to original */}
         </div>
       )}
 
-      {/* Bulk Action Bar (appears when 1 or more shipments are selected) */}
+      {/* Bulk Action Bar */}
       {selectedIds.length > 0 && (
-        <div className="bg-slate-900 text-white px-6 py-2.5 flex items-center justify-between shadow-md shrink-0 border-y border-slate-800 transition-all animate-in slide-in-from-top-2">
+        <div className="bg-[#141714] text-white px-5 py-2.5 flex items-center justify-between shadow-md shrink-0 border-y border-[rgba(255,255,255,0.08)] transition-all">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+            <span className="text-[10px] font-bold bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)] px-2 py-0.5 rounded flex items-center gap-1.5 uppercase tracking-wide">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              {selectedIds.length} envio(s) selecionado(s)
+              {selectedIds.length} selecionado(s)
             </span>
-            <span className="text-xs text-slate-300 hidden md:inline">
+            <span className="text-[11px] text-[rgba(255,255,255,0.6)] hidden md:inline font-medium">
               Operações em lote para expedição e sincronização
             </span>
           </div>
@@ -322,19 +330,19 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
               type="button"
               onClick={handleCloseSelected}
               disabled={isClosingManifest}
-              className="bg-green-600 hover:bg-green-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-md text-[11px] font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
-              {isClosingManifest ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
-              <span>Fechar Expedição / Manifesto CTT</span>
+              {isClosingManifest ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
+              <span>Fechar Expedição / Manifesto</span>
             </button>
 
             <button
               type="button"
               onClick={handleDeleteSelected}
               disabled={isDeletingSelected}
-              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-red-700 shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              className="bg-[var(--status-critical)] hover:bg-red-700 text-white px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
-              {isDeletingSelected ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+              {isDeletingSelected ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
               <span>Eliminar</span>
             </button>
 
@@ -342,18 +350,18 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
               type="button"
               onClick={handleSyncSelected}
               disabled={isSyncingSelected}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              className="bg-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.12)] text-[rgba(255,255,255,0.8)] px-2.5 py-1.5 rounded-md text-[11px] font-bold border border-[rgba(255,255,255,0.1)] transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
-              {isSyncingSelected ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              {isSyncingSelected ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
               <span>Sincronizar Tracking</span>
             </button>
 
             <button
               type="button"
               onClick={() => setSelectedIds([])}
-              className="text-xs text-slate-400 hover:text-white px-2.5 py-1.5 transition-colors cursor-pointer"
+              className="text-[10px] font-semibold text-[rgba(255,255,255,0.5)] hover:text-white px-2 py-1.5 transition-colors cursor-pointer ml-1"
             >
-              Desmarcar Todos
+              Desmarcar
             </button>
           </div>
         </div>
@@ -361,33 +369,33 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
 
       {/* Table Area */}
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-left text-[13px] whitespace-nowrap pb-32">
-          <thead className="bg-white sticky top-0 z-10 shadow-sm">
-            <tr className="border-b border-slate-200">
-              <th className="px-4 py-3 w-10">
+        <table className="w-full text-left text-xs whitespace-nowrap pb-32">
+          <thead className="bg-[var(--surface-muted)] sticky top-0 z-10">
+            <tr className="border-b border-[var(--border-subtle)] text-[10px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">
+              <th className="px-4 py-2.5 w-10">
                 <input 
                   type="checkbox" 
                   checked={filteredEnvios.length > 0 && selectedIds.length === filteredEnvios.length}
                   onChange={handleSelectAll}
-                  className="rounded border-slate-300 text-green-600 focus:ring-green-500 cursor-pointer" 
+                  className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-[var(--accent-active)] cursor-pointer" 
                   title="Selecionar Todos"
                 />
               </th>
-              <th className="px-3 py-3 font-bold text-slate-700">TRK</th>
-              <th className="px-3 py-3 font-bold text-slate-700">Remetente</th>
-              <th className="px-3 py-3 font-bold text-slate-700">Destinatário</th>
-              <th className="px-3 py-3 font-bold text-slate-700">Serviço</th>
-              <th className="px-3 py-3 font-bold text-slate-700">Remessa</th>
-              <th className="px-3 py-3 font-bold text-slate-700">Entrega</th>
-              <th className="px-3 py-3 font-bold text-slate-700">Estado</th>
-              <th className="px-3 py-3 font-bold text-slate-700">Valor</th>
-              <th className="px-4 py-3 font-bold text-slate-700 text-right">Ações</th>
+              <th className="px-3 py-2.5">TRK</th>
+              <th className="px-3 py-2.5">Remetente</th>
+              <th className="px-3 py-2.5">Destinatário</th>
+              <th className="px-3 py-2.5">Serviço</th>
+              <th className="px-3 py-2.5">Remessa</th>
+              <th className="px-3 py-2.5">Entrega</th>
+              <th className="px-3 py-2.5">Estado</th>
+              <th className="px-3 py-2.5">Valor</th>
+              <th className="px-4 py-2.5 text-right">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
+          <tbody className="divide-y divide-[var(--border-subtle)] bg-[var(--surface-bg)] text-[11px]">
             {filteredEnvios.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={10} className="px-4 py-8 text-center text-[var(--text-secondary)]">
                   Nenhum envio encontrado com a pesquisa atual.
                 </td>
               </tr>
@@ -398,18 +406,18 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
               return (
               <tr 
                 key={idx} 
-                className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${isSelected ? 'bg-green-50/30' : ''}`}
+                className={`hover:bg-[var(--surface-muted)] transition-colors group cursor-pointer ${isSelected ? 'bg-[var(--accent-soft)] hover:bg-[rgba(18,138,71,0.15)]' : ''}`}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a')) return;
                   handleToggleRow(rowId)
                 }}
               >
-                <td className="px-4 py-4 align-top" onClick={(e) => e.stopPropagation()}>
+                <td className="px-4 py-3 align-top" onClick={(e) => e.stopPropagation()}>
                   <input 
                     type="checkbox" 
                     checked={isSelected}
                     onChange={() => handleToggleRow(rowId)}
-                    className="rounded border-slate-300 text-green-600 focus:ring-green-500 mt-1 cursor-pointer" 
+                    className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-[var(--accent-active)] mt-1 cursor-pointer" 
                   />
                 </td>
                 
@@ -419,24 +427,23 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                     <button 
                       type="button"
                       onClick={() => setSelectedShipment(envio.rawShipment || envio)}
-                      className="font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 text-[13px] text-left cursor-pointer transition-colors"
+                      className="font-mono font-semibold text-[var(--status-info)] hover:text-blue-800 hover:underline flex items-center gap-1 text-xs text-left cursor-pointer transition-colors"
                       title="Clique para ver os detalhes do envio"
                     >
                       {envio.trk?.id || "N/A"}
-                      <span className="text-[12px] text-slate-400">📋</span>
                     </button>
-                    <span className="text-slate-400 text-[11px]">{envio.trk?.date}</span>
+                    <span className="text-[var(--text-tertiary)] text-[10px]">{envio.trk?.date}</span>
                     {envio.trk?.ref && envio.trk.ref !== envio.trk.id && (
-                      <span className="font-mono text-[11px] font-semibold text-slate-500 mt-0.5" title="Referência Interna Linke">
+                      <span className="font-mono text-[10px] font-medium text-[var(--text-secondary)] mt-0.5" title="Referência Interna Linke">
                         Ref: {envio.trk.ref}
                       </span>
                     )}
                     {envio.trk?.carrierRef && envio.trk.carrierRef !== envio.trk.id && (
-                      <span className="font-mono text-[11px] font-bold text-slate-700 mt-0.5" title="Objeto / Rastreio CTT Expresso">
+                      <span className="font-mono text-[10px] font-semibold text-[var(--text-primary)] mt-0.5" title="Objeto / Rastreio CTT Expresso">
                         {envio.trk.carrierRef}
                       </span>
                     )}
-                    <span className="inline-block mt-1 px-1.5 py-0.5 bg-green-500 text-white text-[9px] font-bold rounded-sm w-fit leading-none">
+                    <span className="inline-block mt-1 px-1.5 py-0.5 bg-[var(--accent)] text-white text-[9px] font-semibold rounded-sm w-fit leading-none uppercase tracking-wide">
                       {envio.trk?.tag || "A01"}
                     </span>
                   </div>
@@ -445,9 +452,9 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                 {/* Remetente Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5 max-w-[180px] whitespace-normal">
-                    <span className="font-semibold text-slate-800 text-[12px] leading-tight mb-1">{envio.sender?.name}</span>
-                    <div className="flex text-slate-500 text-[11px] leading-tight">
-                      <span className="mr-1 mt-0.5 shrink-0 text-[10px]">
+                    <span className="font-medium text-[var(--text-primary)] leading-tight mb-1">{envio.sender?.name}</span>
+                    <div className="flex text-[var(--text-tertiary)] text-[10px] leading-tight font-medium">
+                      <span className="mr-1 mt-0.5 shrink-0 text-[9px]">
                         {envio.sender?.flag === 'PT' ? '🇵🇹' : '🇪🇸'}
                       </span>
                       <span>{envio.sender?.zip} {envio.sender?.city}{envio.sender?.phone ? `, ${envio.sender.phone}` : ''}</span>
@@ -458,9 +465,9 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                 {/* Destinatário Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5 max-w-[180px] whitespace-normal">
-                    <span className="font-semibold text-slate-800 text-[12px] leading-tight mb-1">{envio.recipient?.name}</span>
-                    <div className="flex text-slate-500 text-[11px] leading-tight">
-                      <span className="mr-1 mt-0.5 shrink-0 text-[10px]">
+                    <span className="font-medium text-[var(--text-primary)] leading-tight mb-1">{envio.recipient?.name}</span>
+                    <div className="flex text-[var(--text-tertiary)] text-[10px] leading-tight font-medium">
+                      <span className="mr-1 mt-0.5 shrink-0 text-[9px]">
                         {envio.recipient?.flag === 'PT' ? '🇵🇹' : '🇪🇸'}
                       </span>
                       <span>{envio.recipient?.zip} {envio.recipient?.city}{envio.recipient?.phone ? `, ${envio.recipient.phone}` : ''}</span>
@@ -470,10 +477,10 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
 
                 {/* Serviço Column */}
                 <td className="px-3 py-3 align-top">
-                  <div className="flex flex-col gap-1 items-start">
+                  <div className="flex flex-col gap-1.5 items-start">
                     <div className="flex items-center gap-1.5">
                       {getCarrierLogo(envio.service?.name || envio.service?.code || envio.rawShipment?.carrier_name || "ctt") ? (
-                        <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                        <div className="w-4 h-4 rounded bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img 
                             src={getCarrierLogo(envio.service?.name || envio.service?.code || envio.rawShipment?.carrier_name || "ctt")!} 
@@ -482,9 +489,9 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                           />
                         </div>
                       ) : null}
-                      <span className="font-medium text-slate-700 text-[12px]">{envio.service?.code}</span>
+                      <span className="font-semibold text-[var(--text-secondary)] text-[10px]">{envio.service?.code}</span>
                     </div>
-                    <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-tight leading-none ${envio.service?.bgColor || 'bg-slate-200'} ${envio.service?.textColor || 'text-slate-800'}`}>
+                    <span className={`px-1.5 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider leading-none ${envio.service?.bgColor || 'bg-[var(--surface-dim)]'} ${envio.service?.textColor || 'text-[var(--text-secondary)]'}`}>
                       {envio.service?.name}
                     </span>
                   </div>
@@ -493,24 +500,24 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                 {/* Remessa Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5">
-                    <span className="font-medium text-slate-800 text-[12px]">{envio.package?.count || "1 Caixa"}</span>
-                    <span className="text-slate-500 text-[11px]">{envio.package?.weight || "-"}</span>
+                    <span className="font-semibold text-[var(--text-primary)] text-[11px]">{envio.package?.count || "1 Caixa"}</span>
+                    <span className="text-[var(--text-tertiary)] text-[10px] font-medium">{envio.package?.weight || "-"}</span>
                   </div>
                 </td>
 
                 {/* Entrega Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-1.5 font-semibold text-slate-800 text-[12px]">
-                      <Truck className="w-3.5 h-3.5 text-slate-400" />
+                    <div className="flex items-center gap-1 font-semibold text-[var(--text-primary)] text-[11px]">
+                      <Truck className="w-3 h-3 text-[var(--text-tertiary)]" />
                       <span>{envio.delivery?.date || "--/--/----"}</span>
                     </div>
                     {envio.delivery?.time && envio.delivery.time !== "--:--" ? (
-                      <span className="text-emerald-700 font-mono font-bold text-[11px] ml-5">
+                      <span className="text-[var(--status-success)] font-mono font-bold text-[10px] ml-4">
                         {envio.delivery.time}
                       </span>
                     ) : (
-                      <span className="text-slate-400 text-[10px] ml-5">
+                      <span className="text-[var(--text-tertiary)] text-[9px] ml-4 font-medium uppercase tracking-wide">
                         {envio.status?.raw === 'entregue' ? '--:--' : 'Aguardar entrega'}
                       </span>
                     )}
@@ -524,12 +531,18 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                     const cfg = getShipmentStatusConfig(statusVal)
                     return (
                       <div className="flex flex-col gap-1 items-start">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] leading-none ${cfg.color}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dotColor} shrink-0`} />
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider leading-none border shadow-2xs ${
+                          cfg.color.includes('green') ? 'bg-[var(--status-success-soft)] text-[var(--status-success)] border-[rgba(18,138,71,0.2)]' :
+                          cfg.color.includes('yellow') || cfg.color.includes('orange') ? 'bg-[var(--status-warning-soft)] text-[var(--status-warning)] border-[rgba(217,119,6,0.2)]' :
+                          cfg.color.includes('red') ? 'bg-[var(--status-critical-soft)] text-[var(--status-critical)] border-[rgba(220,38,38,0.2)]' :
+                          cfg.color.includes('blue') ? 'bg-[var(--status-info-soft)] text-[var(--status-info)] border-[rgba(37,99,235,0.2)]' :
+                          'bg-[var(--surface-muted)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
+                        }`}>
+                          <span className={`w-1 h-1 rounded-full ${cfg.dotColor.replace('bg-', 'bg-')} shrink-0`} />
                           <span>{cfg.label}</span>
                         </span>
                         {envio.status?.subCode && (
-                          <span className="text-slate-500 font-medium text-[10px] tracking-wide ml-1">
+                          <span className="text-[var(--text-tertiary)] font-semibold text-[9px] tracking-wider ml-1 uppercase">
                             {envio.status?.subCode}
                           </span>
                         )}
@@ -541,11 +554,11 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                 {/* Valor Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-1 items-start">
-                    <span className="font-medium text-slate-800 text-[12px]">{envio.value?.amount || "0,00€"}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border leading-none ${envio.value?.diffColor || 'text-slate-600 bg-slate-50'}`}>
+                    <span className="font-semibold text-[var(--text-primary)] text-[11px]">{envio.value?.amount || "0,00€"}</span>
+                    <span className={`px-1 py-0.5 rounded text-[9px] font-bold border leading-none tracking-wide ${envio.value?.diffColor ? envio.value.diffColor.replace('bg-green-100', 'bg-[var(--status-success-soft)]').replace('text-green-700', 'text-[var(--status-success)]').replace('border-green-200', 'border-[rgba(18,138,71,0.2)]') : 'text-[var(--text-secondary)] bg-[var(--surface-muted)] border-[var(--border-subtle)]'}`}>
                       {envio.value?.diff || "0,00€"}
                     </span>
-                    <span className="text-slate-400 text-[10px] uppercase font-medium">{envio.value?.ref}</span>
+                    <span className="text-[var(--text-tertiary)] text-[9px] uppercase font-bold tracking-wider">{envio.value?.ref}</span>
                   </div>
                 </td>
 
@@ -570,7 +583,6 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
         <NovaRecolhaModal onClose={() => setShowRecolhaModal(false)} clients={clients} />
       )}
       
-
 
       {selectedShipment && (
         <ClientShipmentDetailModal 

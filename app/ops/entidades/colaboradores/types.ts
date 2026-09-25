@@ -42,7 +42,7 @@ export const DEFAULT_COLABORADORES: Colaborador[] = [
     name: "Stefano",
     role: "Gestão de Operações & Sistemas",
     department: "Operações & Logística",
-    email: "stefano@linkelogistics.pt",
+    email: "stefano.remy@gmail.com",
     phone: "910000001",
     mobile_phone: "910000001",
     nif: "245123987",

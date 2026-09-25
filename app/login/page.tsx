@@ -1,35 +1,36 @@
+import Image from 'next/image'
 import { login } from './actions'
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--canvas-bg)] p-4">
+      <div className="max-w-sm w-full bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] p-8" style={{ boxShadow: 'var(--shadow-layer)' }}>
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">TMS LINKE</h1>
-          <p className="text-gray-600 mt-2">Sign in to your account</p>
+          <Image src="/Linke-logo.png" alt="Linke Logistics" width={120} height={36} className="object-contain mx-auto mb-4" priority />
+          <p className="text-[var(--text-tertiary)] text-sm">Aceda à sua conta</p>
         </div>
 
-        <form className="space-y-6">
+        <form className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">
+            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider" htmlFor="email">
               Email
             </label>
             <input
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-active)] focus:ring-1 focus:ring-[var(--accent-active)] transition-colors"
               id="email"
               name="email"
               type="email"
               required
-              placeholder="you@example.com"
+              placeholder="email@empresa.pt"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="password">
+            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider" htmlFor="password">
               Password
             </label>
             <input
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-active)] focus:ring-1 focus:ring-[var(--accent-active)] transition-colors"
               id="password"
               name="password"
               type="password"
@@ -39,9 +40,9 @@ export default function LoginPage() {
 
           <button
             formAction={login}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="w-full flex justify-center py-2.5 px-4 rounded-md text-sm font-semibold text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-active)] focus:ring-offset-1 transition-colors"
           >
-            Sign in
+            Entrar
           </button>
         </form>
       </div>
