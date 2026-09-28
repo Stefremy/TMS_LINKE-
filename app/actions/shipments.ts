@@ -56,7 +56,7 @@ async function ensureTenantAndClient(supabase: any, clientId?: string | null, cl
 /**
  * Helper to identify Correos Express shipments
  */
-export function isCorreosShipment(s: any): boolean {
+function isCorreosShipment(s: any): boolean {
   if (!s) return false
   if (s.carrier_code === "correos" || s.carrier_code === "correos_express") return true
   const srv = typeof s.service_type === "string" ? s.service_type.toLowerCase() : ""
