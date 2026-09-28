@@ -25,6 +25,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientesAction } from "@/app/actions/clientes"
+import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { syncCttTrackingAction, closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { 
@@ -102,9 +103,13 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
     }
   }, [])
 
+  const [servicosLinke, setServicosLinke] = React.useState<any[]>([])
+
   // Load client data & real DB stats
   React.useEffect(() => {
-    getClientesAction().then((clients) => {
+    Promise.all([getClientesAction(), getServicosLinkeAction()]).then(([clients, servicos]) => {
+      setServicosLinke(servicos)
+
       let target: Cliente | undefined
       if (clientId) {
         target = clients.find((c) => c.id === clientId)
@@ -246,6 +251,28 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
   const paymentTerms = currentClient?.payment_terms || "Pronto Pagamento"
   const activeServices = (currentClient?.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING).filter(s => s.is_enabled)
 
+  const activeWebserviceIds = React.useMemo(() => {
+    const ids = new Set<string>()
+    if (currentClient?.assigned_linke_service_ids && currentClient.assigned_linke_service_ids.length > 0) {
+      currentClient.assigned_linke_service_ids.forEach(id => {
+        const servico = servicosLinke.find(s => s.id === id)
+        if (servico?.webservice_connection_id) {
+          ids.add(servico.webservice_connection_id)
+        } else if (servico?.preferred_carrier_id || servico?.preferred_carrier_name) {
+          const str = (servico.preferred_carrier_id + " " + servico.preferred_carrier_name).toLowerCase()
+          if (str.includes("ctt")) ids.add("ws_ctt")
+          if (str.includes("correos")) ids.add("ws_correos")
+          if (str.includes("dpd")) ids.add("ws_dpd")
+        }
+      })
+    } else {
+      if (activeServices.length > 0) ids.add("ws_ctt")
+    }
+    return ids
+  }, [currentClient, servicosLinke, activeServices])
+
+  const displayWebservices = currentClient?.allowed_webservices?.filter(ws => ws.is_enabled && activeWebserviceIds.has(ws.id)) || []
+
   // Real credit calculation
   const usedCreditPct = creditLimit > 0 ? Math.min((stats.totalRevenue / creditLimit) * 100, 100).toFixed(1) : "0"
 
@@ -277,18 +304,31 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
             {currentClient?.legal_name || currentClient?.short_name || "Portal de Envios do Cliente"}
           </h1>
           <p className="text-emerald-100 text-xs sm:text-sm max-w-2xl leading-relaxed">
-            Painel operacional e analítico com métricas em tempo real, tabelas de preçário acordadas e emissão integrada via CTT Expresso API.
+            Painel operacional e analítico com métricas em tempo real, tabelas de preçário acordadas e emissão integrada de envios.
           </p>
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-2 pt-1">
             <span className="text-[11px] text-emerald-200 font-semibold">Operador Integrado:</span>
-            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-white/15">
-              <div className="w-5 h-5 rounded bg-white p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={getCarrierLogo("ctt") || ""} alt="CTT Expresso" className="max-w-full max-h-full object-contain" />
+            {displayWebservices.length > 0 ? (
+              displayWebservices.map((ws) => (
+                <div key={ws.id} className="flex items-center gap-2 bg-white/10 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-white/15">
+                  <div className="w-5 h-5 rounded bg-white p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={getCarrierLogo(ws.code) || getCarrierLogo("ctt") || ""} alt={ws.name} className="max-w-full max-h-full object-contain" />
+                  </div>
+                  <span className="text-xs font-bold text-white">{ws.name} API</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                </div>
+              ))
+            ) : (
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-white/15">
+                <div className="w-5 h-5 rounded bg-white p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={getCarrierLogo("ctt") || ""} alt="CTT Expresso" className="max-w-full max-h-full object-contain" />
+                </div>
+                <span className="text-xs font-bold text-white">Sem Integração Ativa</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
               </div>
-              <span className="text-xs font-bold text-white">CTT Expresso API</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            </div>
+            )}
           </div>
         </div>
 
