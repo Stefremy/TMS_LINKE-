@@ -54,9 +54,30 @@ async function ensureTenantAndClient(supabase: any, clientId?: string | null, cl
 }
 
 /**
+ * Helper to identify Correos Express shipments
+ */
+export function isCorreosShipment(s: any): boolean {
+  if (!s) return false
+  if (s.carrier_code === "correos" || s.carrier_code === "correos_express") return true
+  const srv = typeof s.service_type === "string" ? s.service_type.toLowerCase() : ""
+  const srvName = typeof s.serviceName === "string" ? s.serviceName.toLowerCase() : ""
+  if (srv.includes("correos") || srvName.includes("correos")) return true
+  const cTrk = typeof s.carrier_tracking_number === "string" ? s.carrier_tracking_number.trim() : ""
+  if (/^\d{16}$/.test(cTrk)) return true
+  const trk = typeof s.tracking_number === "string" ? s.tracking_number.trim() : ""
+  if (/^\d{16}$/.test(trk)) return true
+  return false
+}
+
+/**
  * Garante e formata um número de objeto CTT Expresso realista e determinístico (ex: EQ418..., DD464..., DB290..., DA839...)
  */
 function formatOrGenerateCttObjectId(s: any): string {
+  // Se for Correos Express, NÃO gerar código CTT!
+  if (isCorreosShipment(s)) {
+    return s?.carrier_tracking_number?.trim() || s?.carrier_object_id?.trim() || ""
+  }
+
   // Se carrier_tracking_number for um código CTT válido (ex: EQ419126922PT)
   if (s?.carrier_tracking_number && /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/i.test(s.carrier_tracking_number.trim())) {
     return s.carrier_tracking_number.trim().toUpperCase()
@@ -147,7 +168,8 @@ export async function getShipmentsAction(): Promise<any[]> {
       dbShipments.forEach((s: any) => {
         const key = s.id || s.tracking_number
         if (key && !deletedIds.has(key) && !deletedIds.has(s.id)) {
-          const cttCode = formatOrGenerateCttObjectId(s)
+          const isCorreos = isCorreosShipment(s)
+          const cttCode = isCorreos ? "" : formatOrGenerateCttObjectId(s)
           const linkeRef = s.tracking_number?.startsWith("LTK") ? s.tracking_number : s.reference || null
           const rawStatus = s.status
           const normalizedStatus = (rawStatus === "entrada_rede" || rawStatus === "recolhido") ? "em_transito" : rawStatus
@@ -155,7 +177,10 @@ export async function getShipmentsAction(): Promise<any[]> {
             ...s,
             status: normalizedStatus,
             reference: linkeRef,
-            ctt_object_id: cttCode,
+            carrier_code: isCorreos ? "correos" : (s.carrier_code || "ctt"),
+            carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
+            carrier_tracking_number: s.carrier_tracking_number || (isCorreos ? s.carrier_object_id : null),
+            ctt_object_id: isCorreos ? null : cttCode,
           })
         }
       })
@@ -181,7 +206,11 @@ export async function getShipmentsAction(): Promise<any[]> {
           const key = s.id || s.tracking_number
           if (key && !deletedIds.has(key) && !deletedIds.has(s.id)) {
             const existing = shipmentsMap.get(key)
-            const isRealTracking = (val?: string) => val && /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim())
+            const isCorreos = isCorreosShipment(s) || isCorreosShipment(existing)
+            const isRealTracking = (val?: string) => val && (
+              /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim()) || 
+              /^\d{16}$/.test(val.trim())
+            )
             
             const linkeRef = s.reference 
               || (existing?.tracking_number?.startsWith("LTK") ? existing.tracking_number : null)
@@ -192,7 +221,7 @@ export async function getShipmentsAction(): Promise<any[]> {
 
             if (existing) {
               // LTK internal ref ALWAYS wins for tracking_number (what the client sees)
-              // CTT EQ/DD/DB number goes into carrier_tracking_number and ctt_object_id only
+              // CTT EQ/DD/DB or Correos 16-digit goes into carrier_tracking_number
               const ltkRef =
                 existing.tracking_number?.startsWith("LTK") ? existing.tracking_number
                 : s.tracking_number?.startsWith("LTK") ? s.tracking_number
@@ -203,8 +232,9 @@ export async function getShipmentsAction(): Promise<any[]> {
                 : isRealTracking(s.carrier_tracking_number) ? s.carrier_tracking_number
                 : isRealTracking(s.tracking_number) ? s.tracking_number
                 : isRealTracking(existing.tracking_number) ? existing.tracking_number
-                : isRealTracking(s.ctt_object_id) ? s.ctt_object_id
-                : existing.carrier_tracking_number || s.carrier_tracking_number
+                : isRealTracking(s.carrier_object_id) ? s.carrier_object_id
+                : (!isCorreos && isRealTracking(s.ctt_object_id)) ? s.ctt_object_id
+                : existing.carrier_tracking_number || s.carrier_tracking_number || s.carrier_object_id
 
               // Use LTK as the display tracking_number; fall back to carrier ref if no LTK exists
               const effectiveTracking = ltkRef || carrierRef || existing.tracking_number || s.tracking_number
@@ -217,18 +247,21 @@ export async function getShipmentsAction(): Promise<any[]> {
                 ...s,
                 // Status vem SEMPRE da tabela shipments (mais atualizado), nunca do audit_log
                 status: normalizedStatus,
-                // LTK stays as tracking_number; EQ goes to carrier_tracking_number
                 tracking_number: effectiveTracking,
-                carrier_tracking_number: carrierRef,
+                carrier_code: isCorreos ? "correos" : (existing.carrier_code || s.carrier_code || "ctt"),
+                carrier_name: isCorreos ? "Correos Express" : (existing.carrier_name || s.carrier_name || "CTT Expresso"),
+                carrier_tracking_number: carrierRef || existing.carrier_tracking_number || s.carrier_tracking_number,
                 reference: linkeRef,
-                ctt_label_base64: s.ctt_label_base64 || existing.ctt_label_base64,
-                // ctt_object_id is always derived from the CTT EQ/DD carrier number
-                ctt_object_id: formatOrGenerateCttObjectId({ ...existing, ...s, tracking_number: carrierRef || effectiveTracking }),
+                ctt_label_base64: s.ctt_label_base64 || existing.ctt_label_base64 || s.carrier_label_base64,
+                ctt_object_id: isCorreos ? null : formatOrGenerateCttObjectId({ ...existing, ...s, tracking_number: carrierRef || effectiveTracking }),
               })
             } else {
-              const cttCode = formatOrGenerateCttObjectId(s)
+              const cttCode = isCorreos ? null : formatOrGenerateCttObjectId(s)
               shipmentsMap.set(key, {
                 ...s,
+                carrier_code: isCorreos ? "correos" : (s.carrier_code || "ctt"),
+                carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
+                carrier_tracking_number: s.carrier_tracking_number || s.carrier_object_id || (isRealTracking(s.tracking_number) ? s.tracking_number : null),
                 reference: linkeRef,
                 ctt_object_id: cttCode,
                 created_at: s.created_at || log.created_at || new Date().toISOString()
@@ -242,10 +275,16 @@ export async function getShipmentsAction(): Promise<any[]> {
     console.warn("Could not query audit_log for shipments:", err?.message)
   }
 
-  return Array.from(shipmentsMap.values()).map((s) => ({
-    ...s,
-    ctt_object_id: formatOrGenerateCttObjectId(s)
-  })).sort((a, b) => {
+  return Array.from(shipmentsMap.values()).map((s) => {
+    const isCorreos = isCorreosShipment(s)
+    return {
+      ...s,
+      carrier_code: isCorreos ? "correos" : (s.carrier_code || "ctt"),
+      carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
+      carrier_tracking_number: s.carrier_tracking_number || (isCorreos ? s.carrier_object_id : null),
+      ctt_object_id: isCorreos ? null : (s.ctt_object_id || formatOrGenerateCttObjectId(s))
+    }
+  }).sort((a, b) => {
     return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
   })
 }

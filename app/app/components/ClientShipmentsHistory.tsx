@@ -307,9 +307,14 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
                           envio.reference ||
                           null
 
+                        const isCorreos = envio.carrier_code === "correos" ||
+                          envio.carrier_code === "correos_express" ||
+                          (typeof envio.service_type === "string" && envio.service_type.toLowerCase().includes("correos")) ||
+                          /^\d{16}$/.test(envio.carrier_tracking_number || "")
+
                         const carrierRef =
                           envio.carrier_tracking_number ||
-                          envio.ctt_object_id ||
+                          (!isCorreos ? envio.ctt_object_id : null) ||
                           (!envio.tracking_number?.startsWith("LTK") ? envio.tracking_number : null)
 
                         const primaryDisplay = linkeRef || carrierRef || envio.id
@@ -331,8 +336,8 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
                               )}
                             </button>
                             {secondaryDisplay && (
-                              <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-600 mt-0.5" title="Objeto / Guia CTT Expresso">
-                                <span className="text-slate-400 font-sans text-[10px] uppercase font-bold">CTT:</span>
+                              <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-600 mt-0.5" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Objeto / Guia CTT Expresso"}>
+                                <span className="text-slate-400 font-sans text-[10px] uppercase font-bold">{isCorreos ? "CORREOS:" : "CTT:"}</span>
                                 <span className="font-bold text-slate-800">{secondaryDisplay}</span>
                               </div>
                             )}

@@ -477,7 +477,7 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
                       </span>
                     )}
                     {envio.trk?.carrierRef && envio.trk.carrierRef !== envio.trk.id && (
-                      <span className="font-mono text-[10px] font-semibold text-[var(--text-primary)] mt-0.5" title="Objeto / Rastreio CTT Expresso">
+                      <span className="font-mono text-[10px] font-semibold text-[var(--text-primary)] mt-0.5" title={`Objeto / Rastreio ${envio.trk?.carrierName || "Transportadora"}`}>
                         {envio.trk.carrierRef}
                       </span>
                     )}

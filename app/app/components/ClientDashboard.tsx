@@ -625,9 +625,14 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                             shipment.reference ||
                             null
 
+                          const isCorreos = shipment.carrier_code === "correos" ||
+                            shipment.carrier_code === "correos_express" ||
+                            (typeof shipment.service_type === "string" && shipment.service_type.toLowerCase().includes("correos")) ||
+                            /^\d{16}$/.test(shipment.carrier_tracking_number || "")
+
                           const carrierRef =
                             shipment.carrier_tracking_number ||
-                            shipment.ctt_object_id ||
+                            (!isCorreos ? shipment.ctt_object_id : null) ||
                             (!shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null)
 
                           const primaryDisplay = linkeRef || carrierRef || shipment.id
@@ -649,8 +654,8 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
                                 )}
                               </button>
                               {secondaryDisplay && (
-                                <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-[var(--text-secondary)] mt-0.5" title="Objeto / Guia CTT Expresso">
-                                  <span className="text-[var(--text-tertiary)] font-sans text-[10px] uppercase font-bold tracking-wide">CTT:</span>
+                                <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-[var(--text-secondary)] mt-0.5" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Objeto / Guia CTT Expresso"}>
+                                  <span className="text-[var(--text-tertiary)] font-sans text-[10px] uppercase font-bold tracking-wide">{isCorreos ? "CORREOS:" : "CTT:"}</span>
                                   <span className="font-bold text-[var(--text-primary)]">{secondaryDisplay}</span>
                                 </div>
                               )}

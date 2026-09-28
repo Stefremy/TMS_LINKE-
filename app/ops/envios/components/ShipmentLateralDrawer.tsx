@@ -97,12 +97,26 @@ export function ShipmentLateralDrawer({
   if (!isOpen || !shipment) return null
 
   // Normalizar campos
-  const isRealCarrierTracking = (val?: string) => val && /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim())
-  const carrierCode = isRealCarrierTracking(shipment.tracking_number)
+  const isCorreos = shipment.carrier_code === "correos" || 
+                    shipment.carrier_code === "correos_express" ||
+                    (typeof shipment.service_type === "string" && shipment.service_type.toLowerCase().includes("correos")) ||
+                    (typeof shipment.serviceName === "string" && shipment.serviceName.toLowerCase().includes("correos")) ||
+                    /^\d{16}$/.test(shipment.carrier_tracking_number || "")
+
+  const isRealCarrierTracking = (val?: string) => val && (
+    /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim()) ||
+    /^\d{16}$/.test(val.trim())
+  )
+
+  const carrierCode = isCorreos
+    ? (shipment.carrier_tracking_number || shipment.carrier_object_id || shipment.trk?.id || shipment.tracking_number || "N/A")
+    : isRealCarrierTracking(shipment.carrier_tracking_number)
+    ? shipment.carrier_tracking_number
+    : isRealCarrierTracking(shipment.tracking_number)
     ? shipment.tracking_number
     : isRealCarrierTracking(shipment.ctt_object_id)
     ? shipment.ctt_object_id
-    : shipment.tracking_number || shipment.ctt_object_id || shipment.trk?.id || "N/A"
+    : shipment.carrier_tracking_number || shipment.tracking_number || shipment.ctt_object_id || shipment.trk?.id || "N/A"
 
   const internalRef = (shipment.reference?.startsWith("LTK") ? shipment.reference : null)
     || (shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null)
@@ -115,7 +129,7 @@ export function ShipmentLateralDrawer({
     ? shipment.status 
     : (shipment.status?.raw || shipment.rawShipment?.status || "pendente")
   const statusCfg = getShipmentStatusConfig(rawStatus) || { label: "Pendente", color: "bg-slate-100 text-slate-700" }
-  const carrierName = shipment.carrier_name || shipment.trk?.carrierName || "CTT Expresso Portugal"
+  const carrierName = isCorreos ? "Correos Express" : (shipment.carrier_name || shipment.trk?.carrierName || "CTT Expresso Portugal")
 
   // Safe Date Formatter
   let formattedCreated = "Data não disponível"
@@ -356,8 +370,8 @@ export function ShipmentLateralDrawer({
               <div className="w-7 h-7 rounded bg-white border border-[var(--border-subtle)] flex items-center justify-center p-1 shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img 
-                  src={getCarrierLogo("ctt") || "/logo_transportadoras/ctt_expresso.png"} 
-                  alt="CTT" 
+                  src={getCarrierLogo(isCorreos ? "correos" : "ctt") || (isCorreos ? "/logo_transportadoras/correos_express.png" : "/logo_transportadoras/ctt_expresso.png")} 
+                  alt={isCorreos ? "Correos Express" : "CTT"} 
                   className="max-w-full max-h-full object-contain"
                 />
               </div>

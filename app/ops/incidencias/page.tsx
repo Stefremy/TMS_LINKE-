@@ -18,7 +18,10 @@ export default async function IncidenciasPage() {
   const realIncidents: IncidentShipment[] = (shipments || [])
     .filter((s: any) => s.status === "incidencia" || (s.ops_substatus && s.ops_substatus.toLowerCase().includes("incid")))
     .map((s: any) => {
-      const carrierTracking = s.ctt_object_id || s.tracking_number || "N/A"
+      const isCorreos = s.carrier_code === "correos" || 
+                        (typeof s.service_type === "string" && s.service_type.toLowerCase().includes("correos")) ||
+                        /^\d{16}$/.test(s.carrier_tracking_number || "")
+      const carrierTracking = s.carrier_tracking_number || (!isCorreos ? s.ctt_object_id : null) || s.tracking_number || "N/A"
       const clientObj = clients.find((c: any) => c.id === s.client_id)
       const clientName = clientObj?.short_name || clientObj?.legal_name || s.sender_name || "Cliente Linke"
       

@@ -76,9 +76,15 @@ export function ClientShipmentDetailModal({
     currentShipment?.reference ||
     `LTK${(currentShipment?.id || "00000000").substring(0, 8).toUpperCase()}`
 
+  const isCorreos = currentShipment?.carrier_code === "correos" ||
+    currentShipment?.carrier_code === "correos_express" ||
+    (typeof currentShipment?.service_type === "string" && currentShipment.service_type.toLowerCase().includes("correos")) ||
+    (typeof currentShipment?.serviceName === "string" && currentShipment.serviceName.toLowerCase().includes("correos")) ||
+    /^\d{16}$/.test(currentShipment?.carrier_tracking_number || "")
+
   const carrierTracking =
     currentShipment?.carrier_tracking_number ||
-    currentShipment?.ctt_object_id ||
+    (!isCorreos ? currentShipment?.ctt_object_id : null) ||
     (currentShipment?.tracking_number !== internalRef ? currentShipment?.tracking_number : null)
   const tracking = internalRef
   const currentStatus = currentShipment?.status || "pendente"
@@ -330,8 +336,8 @@ export function ClientShipmentDetailModal({
                   {internalRef}
                 </span>
                 {carrierTracking && (
-                  <span className="font-mono text-xs bg-[var(--surface-dim)] text-[var(--text-secondary)] border border-[var(--border-strong)] px-2.5 py-0.5 rounded-md font-bold shadow-xs" title="Referência CTT Expresso">
-                    CTT: {carrierTracking}
+                  <span className="font-mono text-xs bg-[var(--surface-dim)] text-[var(--text-secondary)] border border-[var(--border-strong)] px-2.5 py-0.5 rounded-md font-bold shadow-xs" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Referência CTT Expresso"}>
+                    {isCorreos ? "Correos: " : "CTT: "}{carrierTracking}
                   </span>
                 )}
               </div>

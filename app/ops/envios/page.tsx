@@ -25,18 +25,34 @@ export default async function EnviosPage() {
   // Map to the shape expected by EnviosClient (formerly mock data)
   const mappedEnvios = shipments.map((s: any) => {
     const statusCfg = getShipmentStatusConfig(s.status)
-    const isRealCarrierTracking = (val?: string) => val && /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim())
-    const carrierCode = isRealCarrierTracking(s.tracking_number)
+    const isCorreos = s.carrier_code === "correos" || 
+                      s.carrier_code === "correos_express" ||
+                      (typeof s.service_type === "string" && s.service_type.toLowerCase().includes("correos")) ||
+                      /^\d{16}$/.test(s.carrier_tracking_number || "")
+
+    const isRealCarrierTracking = (val?: string) => val && (
+      /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim()) ||
+      /^\d{16}$/.test(val.trim())
+    )
+
+    const carrierCode = isCorreos
+      ? (s.carrier_tracking_number || s.carrier_object_id || s.tracking_number || "N/A")
+      : isRealCarrierTracking(s.carrier_tracking_number)
+      ? s.carrier_tracking_number
+      : isRealCarrierTracking(s.tracking_number)
       ? s.tracking_number
       : isRealCarrierTracking(s.ctt_object_id)
       ? s.ctt_object_id
-      : s.tracking_number || s.ctt_object_id || "N/A"
+      : s.carrier_tracking_number || s.tracking_number || s.ctt_object_id || "N/A"
+
     const internalRef = (s.reference?.startsWith("LTK") ? s.reference : null)
       || (s.tracking_number?.startsWith("LTK") ? s.tracking_number : null)
       || (s.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1])
       || s.reference
       || (s.tracking_number?.startsWith("LTK") ? s.tracking_number : null)
       || null
+
+    const carrierName = isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso")
 
     return {
       rawId: s.id,
@@ -46,7 +62,7 @@ export default async function EnviosPage() {
         date: new Date(s.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }), 
         ref: internalRef, 
         carrierRef: carrierCode,
-        carrierName: s.carrier_name || "CTT Expresso",
+        carrierName: carrierName,
         tag: "A01" 
       },
       sender: { 
