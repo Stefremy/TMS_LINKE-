@@ -340,11 +340,24 @@ export function WebservicesClient({ connections: initialConnections, fornecedore
                     />
                   </td>
                   <td className="px-3 py-3">
-                    <div className="font-bold text-[var(--text-primary)] hover:text-[var(--accent)] transition-colors flex items-center gap-1.5">
-                      {conn.description}
-                    </div>
-                    <div className="text-[10px] font-mono font-semibold text-[var(--text-tertiary)] bg-[var(--surface-muted)] inline-block px-1.5 py-0.5 rounded border border-[var(--border-subtle)] mt-0.5">
-                      {conn.carrier_code}
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded bg-white border border-[var(--border-subtle)] shadow-sm flex items-center justify-center overflow-hidden shrink-0 p-1">
+                        {conn.carrier_code === "correos_express" ? (
+                          <img src="/logo_transportadoras/correos_logo.jpeg" alt="Correos" className="w-full h-full object-contain" />
+                        ) : conn.carrier_code?.startsWith("ctt") ? (
+                          <img src="/logo_transportadoras/ctt_correios_logo.png" alt="CTT" className="w-full h-full object-contain" />
+                        ) : (
+                          <Package className="w-4 h-4 text-[var(--text-tertiary)]" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-bold text-[var(--text-primary)] hover:text-[var(--accent)] transition-colors flex items-center gap-1.5">
+                          {conn.description}
+                        </div>
+                        <div className="text-[10px] font-mono font-semibold text-[var(--text-tertiary)] bg-[var(--surface-muted)] inline-block px-1.5 py-0.5 rounded border border-[var(--border-subtle)] mt-0.5">
+                          {conn.carrier_code}
+                        </div>
+                      </div>
                     </div>
                   </td>
                   <td className="px-3 py-3 text-[var(--text-primary)] font-medium">

@@ -4,6 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { X, ChevronRight, ChevronDown, Save, Key, Settings, MapPin, Search, CheckCircle2, AlertCircle, Loader2, Play } from "lucide-react"
 import { testCttConnectionAction, saveCttConnectionAction } from "@/app/actions/ctt"
+import { testCorreosConnectionAction, saveCorreosConnectionAction } from "@/app/actions/correos"
 import { getFornecedoresAction } from "@/app/actions/fornecedores"
 import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 
@@ -16,12 +17,11 @@ interface WizardProps {
 const CONNECTORS = [
   { id: "ctt_expresso", name: "CTT Expresso" },
   { id: "ctt_postal", name: "CTT Postal" },
-  { id: "eno", name: "ENOVO TMS" },
-  { id: "dpd", name: "DPD" },
-  { id: "gls", name: "GLS" },
+  { id: "correos_express", name: "Correos Express" },
 ]
 
-const INTERNAL_SERVICES = ["CTT Múltiplo", "CTT 24H", "CTT 48H"]
+const CTT_INTERNAL_SERVICES = ["CTT Múltiplo", "CTT 24H", "CTT 48H"]
+const CORREOS_INTERNAL_SERVICES = ["Serviço 24H", "E-Paq 24 (E-Commerce)", "Serviço 48H"]
 const INTERNAL_GOODS = ["Caixa", "Palete", "Rolo"]
 
 interface StepItem {
@@ -57,11 +57,21 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
     client_number: initialData?.client_id || initialData?.client_number || "",
     auth_id: initialData?.auth_id || "",
     user_id: initialData?.user_id || "",
-    environment: (initialData?.environment as "qa" | "production") || "qa",
+    environment: (initialData?.environment as "qa" | "test" | "production") || "qa",
     default_subproduct: initialData?.default_subproduct || "EMSF056.01",
     supplier_id: initialData?.supplier_id || "forn_2",
     description: initialData?.description || "Integração CTT Expresso",
   })
+
+  React.useEffect(() => {
+    if (!initialData) {
+      if (selectedConnector === "correos_express") {
+        setCredentials(prev => prev.description === "Integração CTT Expresso" ? { ...prev, description: "Integração Correos Express" } : prev)
+      } else if (selectedConnector === "ctt_expresso") {
+        setCredentials(prev => prev.description === "Integração Correos Express" ? { ...prev, description: "Integração CTT Expresso" } : prev)
+      }
+    }
+  }, [selectedConnector, initialData])
 
   // Test Connection State
   const [testState, setTestState] = React.useState<{
@@ -77,19 +87,37 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
   const handleTestConnection = async () => {
     setTestState({ loading: true, status: "idle" })
     try {
-      const res = await testCttConnectionAction({
-        contract_number: credentials.contract_number || "12345678",
-        client_number: credentials.client_number || "10000001",
-        auth_id: credentials.auth_id || "00000000-0000-0000-0000-000000000000",
-        user_id: credentials.user_id || undefined,
-        environment: credentials.environment,
-        default_subproduct: credentials.default_subproduct || "EMSF056.01",
-      })
+      if (selectedConnector === "ctt_expresso" || selectedConnector === "ctt_postal") {
+        const res = await testCttConnectionAction({
+          contract_number: credentials.contract_number || "12345678",
+          client_number: credentials.client_number || "10000001",
+          auth_id: credentials.auth_id || "00000000-0000-0000-0000-000000000000",
+          user_id: credentials.user_id || undefined,
+          environment: credentials.environment === "test" ? "qa" : credentials.environment as "qa" | "production",
+          default_subproduct: credentials.default_subproduct || "EMSF056.01",
+        })
 
-      if (res.success) {
-        setTestState({ loading: false, status: "success", message: res.message })
+        if (res.success) {
+          setTestState({ loading: false, status: "success", message: res.message })
+        } else {
+          setTestState({ loading: false, status: "error", message: res.message })
+        }
+      } else if (selectedConnector === "correos_express") {
+        const res = await testCorreosConnectionAction({
+          solicitante: credentials.client_number || "1",
+          codRte: credentials.contract_number || "555559999",
+          user: credentials.auth_id || "WS_GoLinke",
+          pass: credentials.user_id || "l3CtF",
+          environment: credentials.environment === "qa" ? "test" : credentials.environment as "test" | "production",
+        })
+
+        if (res.success) {
+          setTestState({ loading: false, status: "success", message: res.message })
+        } else {
+          setTestState({ loading: false, status: "error", message: res.message })
+        }
       } else {
-        setTestState({ loading: false, status: "error", message: res.message })
+        setTestState({ loading: false, status: "error", message: "Conector não suportado ainda." })
       }
     } catch (err: any) {
       setTestState({ loading: false, status: "error", message: err.message || "Falha ao testar ligação." })
@@ -106,10 +134,20 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
           client_number: credentials.client_number,
           auth_id: credentials.auth_id,
           user_id: credentials.user_id,
-          environment: credentials.environment,
+          environment: credentials.environment === "test" ? "qa" : credentials.environment as "qa" | "production",
           default_subproduct: credentials.default_subproduct,
           supplier_id: credentials.supplier_id,
           description: credentials.description,
+        })
+      } else if (selectedConnector === "correos_express") {
+        await saveCorreosConnectionAction({
+          solicitante: credentials.client_number,
+          codRte: credentials.contract_number,
+          user: credentials.auth_id,
+          pass: credentials.user_id,
+          environment: credentials.environment === "qa" ? "test" : credentials.environment as "test" | "production",
+          supplier_id: credentials.supplier_id,
+          description: credentials.description === "Integração CTT Expresso" ? "Integração Correos Express" : credentials.description,
         })
       }
 
@@ -152,9 +190,11 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-slate-800">
-              {initialData ? "Editar Ligação Webservices" : "Nova Ligação Webservices CTT"}
+              {initialData ? "Editar Ligação Webservices" : selectedConnector === "correos_express" ? "Nova Ligação Correos Express" : "Nova Ligação Webservices CTT"}
             </h2>
-            <p className="text-sm text-slate-500 mt-0.5">Configure os parâmetros de comunicação SOAP SGEE V1.8 e RecolhasWS.</p>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {selectedConnector === "correos_express" ? "Configure os parâmetros da API REST da Correos Express." : "Configure os parâmetros de comunicação SOAP SGEE V1.8 e RecolhasWS."}
+            </p>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors">
             <X className="w-5 h-5" />
@@ -215,14 +255,24 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                   </div>
 
                   <div className="flex flex-col gap-1.5 mb-4">
+                    <label className="text-[13px] font-semibold text-slate-700">Descrição Interna</label>
+                    <input 
+                      type="text" 
+                      value={credentials.description}
+                      onChange={(e) => setCredentials({ ...credentials, description: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-green-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 mb-4">
                     <label className="text-[13px] font-semibold text-slate-700">Ambiente de Operação</label>
                     <select 
                       value={credentials.environment}
                       onChange={(e) => setCredentials({ ...credentials, environment: e.target.value as any })}
                       className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-green-500 focus:outline-none"
                     >
-                      <option value="qa">Ambiente Testes (QA CTT)</option>
-                      <option value="production">Ambiente Produção (Live CTT)</option>
+                      <option value="qa">Ambiente Testes / QA</option>
+                      <option value="production">Ambiente Produção / Live</option>
                     </select>
                   </div>
 
@@ -266,16 +316,31 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                     <h3 className="font-bold text-slate-800 text-sm">Credenciais Oficiais ({CONNECTORS.find(c => c.id === selectedConnector)?.name})</h3>
                     <button 
                       type="button"
-                      onClick={() => setCredentials({
-                        contract_number: "12345678",
-                        client_number: "10000001",
-                        auth_id: "e4a7b512-4c28-48b2-b7e6-123456789abc",
-                        user_id: "",
-                        environment: "qa",
-                        default_subproduct: "EMSF056.01",
-                        supplier_id: "ctt_portugal",
-                        description: "Conta Teste QA",
-                      })}
+                      onClick={() => {
+                        if (selectedConnector === "correos_express") {
+                          setCredentials({
+                            ...credentials,
+                            contract_number: "555559999",
+                            client_number: "1",
+                            auth_id: "WS_GoLinke",
+                            user_id: "l3CtF",
+                            environment: "test",
+                            description: "Conta Teste Correos",
+                          })
+                        } else {
+                          setCredentials({
+                            ...credentials,
+                            contract_number: "12345678",
+                            client_number: "10000001",
+                            auth_id: "e4a7b512-4c28-48b2-b7e6-123456789abc",
+                            user_id: "",
+                            environment: "qa",
+                            default_subproduct: "EMSF056.01",
+                            supplier_id: "ctt_portugal",
+                            description: "Conta Teste QA",
+                          })
+                        }
+                      }}
                       className="text-xs font-bold text-green-600 hover:text-green-700 hover:underline"
                     >
                       Preencher Exemplo de Teste
@@ -285,10 +350,12 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                   {/* Form fields */}
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-semibold text-slate-600">Nº Contrato (ContractId) *</label>
+                      <label className="text-[12px] font-semibold text-slate-600">
+                        {selectedConnector === "correos_express" ? "Nº Contrato (codRte) *" : "Nº Contrato (ContractId) *"}
+                      </label>
                       <input 
                         type="text" 
-                        placeholder="Ex: 12345678"
+                        placeholder={selectedConnector === "correos_express" ? "Ex: P49240001 / 555559999" : "Ex: 12345678"}
                         value={credentials.contract_number || ""}
                         onChange={(e) => setCredentials({ ...credentials, contract_number: e.target.value })}
                         className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-green-500 focus:outline-none" 
@@ -296,10 +363,12 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[12px] font-semibold text-slate-600">Nº Cliente (ClientId) *</label>
+                      <label className="text-[12px] font-semibold text-slate-600">
+                        {selectedConnector === "correos_express" ? "Nº Cliente (Solicitante) *" : "Nº Cliente (ClientId) *"}
+                      </label>
                       <input 
                         type="text" 
-                        placeholder="Ex: 10000001"
+                        placeholder={selectedConnector === "correos_express" ? "Ex: IP49240001 / 1" : "Ex: 10000001"}
                         value={credentials.client_number || ""}
                         onChange={(e) => setCredentials({ ...credentials, client_number: e.target.value })}
                         className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-green-500 focus:outline-none" 
@@ -307,10 +376,12 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                     </div>
 
                     <div className="col-span-2 flex flex-col gap-1">
-                      <label className="text-[12px] font-semibold text-slate-600">AuthenticationID (GUID CTT) *</label>
+                      <label className="text-[12px] font-semibold text-slate-600">
+                        {selectedConnector === "correos_express" ? "Utilizador (User) *" : "AuthenticationID (GUID CTT) *"}
+                      </label>
                       <input 
                         type="text" 
-                        placeholder="Ex: 00000000-0000-0000-0000-000000000000"
+                        placeholder={selectedConnector === "correos_express" ? "Ex: WS_GoLinke" : "Ex: 00000000-0000-0000-0000-000000000000"}
                         value={credentials.auth_id || ""}
                         onChange={(e) => setCredentials({ ...credentials, auth_id: e.target.value })}
                         className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:outline-none" 
@@ -318,10 +389,12 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                     </div>
 
                     <div className="col-span-2 flex flex-col gap-1">
-                      <label className="text-[12px] font-semibold text-slate-600">UserId (GUID Opcional)</label>
+                      <label className="text-[12px] font-semibold text-slate-600">
+                        {selectedConnector === "correos_express" ? "Password (Chave) *" : "UserId (GUID Opcional)"}
+                      </label>
                       <input 
-                        type="text" 
-                        placeholder="Identificador opcional de utilizador CTT"
+                        type={selectedConnector === "correos_express" ? "password" : "text"}
+                        placeholder={selectedConnector === "correos_express" ? "Ex: l3CtF" : "Identificador opcional de utilizador CTT"}
                         value={credentials.user_id || ""}
                         onChange={(e) => setCredentials({ ...credentials, user_id: e.target.value })}
                         className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:outline-none" 
@@ -405,7 +478,9 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                   <div className="grid grid-cols-2 gap-3">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" defaultChecked className="rounded border-slate-300 text-green-600 focus:ring-green-500" />
-                      <span className="text-[13px] font-medium text-slate-700">Gerar código de barras CTT (FirstObject)</span>
+                      <span className="text-[13px] font-medium text-slate-700">
+                        {selectedConnector === "correos_express" ? "Gerar código de barras Correos (numEnvio)" : "Gerar código de barras CTT (FirstObject)"}
+                      </span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" defaultChecked className="rounded border-slate-300 text-green-600 focus:ring-green-500" />
@@ -429,8 +504,12 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
                 <div>
-                  <h3 className="font-bold text-slate-800">Matriz de Serviços CTT</h3>
-                  <p className="text-[13px] text-slate-500 mt-0.5">Associe os serviços internos ao código do subproduto CTT correspondente.</p>
+                  <h3 className="font-bold text-slate-800">
+                    {selectedConnector === "correos_express" ? "Matriz de Serviços Correos Express" : "Matriz de Serviços CTT"}
+                  </h3>
+                  <p className="text-[13px] text-slate-500 mt-0.5">
+                    {selectedConnector === "correos_express" ? "Associe os serviços internos ao código do produto Correos correspondente." : "Associe os serviços internos ao código do subproduto CTT correspondente."}
+                  </p>
                 </div>
               </div>
               <div className="p-0">
@@ -440,11 +519,13 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                       <th className="px-4 py-3 font-bold text-slate-700 w-1/4">Serviço Interno</th>
                       <th className="px-4 py-3 font-bold text-slate-700 w-1/4">Zona Destino</th>
                       <th className="px-4 py-3 font-bold text-slate-700 w-1/4">Escalão Peso</th>
-                      <th className="px-4 py-3 font-bold text-slate-700 w-1/4">SubProduto CTT</th>
+                      <th className="px-4 py-3 font-bold text-slate-700 w-1/4">
+                        {selectedConnector === "correos_express" ? "Produto Correos" : "SubProduto CTT"}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {INTERNAL_SERVICES.map((srv, i) => (
+                    {(selectedConnector === "correos_express" ? CORREOS_INTERNAL_SERVICES : CTT_INTERNAL_SERVICES).map((srv, i) => (
                       <React.Fragment key={i}>
                         <tr className="hover:bg-slate-50 transition-colors">
                           <td className="px-4 py-3 font-semibold text-slate-800 align-top" rowSpan={2}>{srv}</td>
@@ -453,7 +534,11 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                           <td className="px-4 py-2">
                             <input 
                               type="text" 
-                              defaultValue={srv === "CTT 48H" ? "EMSF057.01" : "EMSF056.01"} 
+                              defaultValue={
+                                selectedConnector === "correos_express" 
+                                  ? (srv === "Serviço 24H" ? "93" : srv === "E-Paq 24 (E-Commerce)" ? "63" : "62") 
+                                  : (srv === "CTT 48H" ? "EMSF057.01" : "EMSF056.01")
+                              } 
                               className="w-full border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-green-500 focus:outline-none" 
                             />
                           </td>
@@ -464,7 +549,11 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                           <td className="px-4 py-2">
                             <input 
                               type="text" 
-                              defaultValue={srv === "CTT 48H" ? "EMSF038.02" : "EMSF021.02"} 
+                              defaultValue={
+                                selectedConnector === "correos_express"
+                                  ? (srv === "Serviço 24H" ? "93" : srv === "E-Paq 24 (E-Commerce)" ? "63" : "62")
+                                  : (srv === "CTT 48H" ? "EMSF038.02" : "EMSF021.02")
+                              } 
                               className="w-full border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-green-500 focus:outline-none" 
                             />
                           </td>
@@ -481,7 +570,9 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden max-w-3xl mx-auto">
               <div className="p-4 border-b border-slate-200 bg-slate-50">
                 <h3 className="font-bold text-slate-800">Mapeamento de Mercadoria</h3>
-                <p className="text-[13px] text-slate-500 mt-0.5">Indique o código externo utilizado pelos CTT para cada tipo de mercadoria.</p>
+                <p className="text-[13px] text-slate-500 mt-0.5">
+                  {selectedConnector === "correos_express" ? "Indique o código externo utilizado pela Correos Express para cada tipo de mercadoria." : "Indique o código externo utilizado pelos CTT para cada tipo de mercadoria."}
+                </p>
               </div>
               <div className="p-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -490,7 +581,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                       <label className="font-semibold text-sm text-slate-700 w-24 text-right">{g}</label>
                       <input 
                         type="text" 
-                        defaultValue={g === "Palete" ? "PAL" : "CX"} 
+                        defaultValue={g === "Palete" ? "PAL" : g === "Rolo" ? "ROL" : "CX"} 
                         className="flex-1 border border-slate-300 rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-green-500 focus:outline-none" 
                       />
                     </div>
@@ -579,7 +670,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    Gravar Ligação CTT
+                    {selectedConnector === "correos_express" ? "Gravar Ligação Correos" : "Gravar Ligação CTT"}
                   </>
                 )}
               </button>
