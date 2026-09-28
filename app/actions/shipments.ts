@@ -2,12 +2,16 @@
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { emitCttShipmentAction, syncCttTrackingAction } from "@/app/actions/ctt"
+import { syncCttTrackingAction } from "@/app/actions/ctt"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { calculateShipmentPrice, resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
 import { getAuthContext, requireUser, requireEmployee, requireClientAccess, getTenantId } from "@/lib/auth/context"
 import { CTT_TRACKING_EVENTS, CTT_INCIDENT_CODES } from "@/lib/services/ctt/ctt-types"
+import { CttProvider } from "@/lib/services/carriers/ctt-provider"
+import { CorreosShipmentService } from "@/lib/services/correos/correos-shipment.service"
+import { resolveCttCredentials, resolveCorreosCredentials } from "@/lib/services/carriers/credentials"
+import { convertZplToPdfBase64 } from "@/lib/label-utils"
 
 
 const isValidUuid = (val?: string): boolean => {
@@ -385,18 +389,20 @@ export async function dispatchShipmentAction(shipmentId: string) {
 
   // Check if it's a CTT service
   if (shipment.service_type?.includes("ctt") || !shipment.service_type) {
-    return emitCttShipmentAction({
-      id: shipment.id,
-      ref: shipment.tracking_number || shipment.id.substring(0, 8).toUpperCase(),
+    const cttCreds = await resolveCttCredentials()
+    const cttProvider = new CttProvider()
+    await cttProvider.initialize(cttCreds)
+    const cttResult = await cttProvider.createShipment({
+      reference: shipment.tracking_number || shipment.id.substring(0, 8).toUpperCase(),
       sender: {
         name: shipment.sender_name,
         address: shipment.sender_address,
-        // zip4 = 4-digit prefix, zip3 = 3-digit extension → format: "4610-001"
         zip: shipment.sender_zip4
           ? `${shipment.sender_zip4}-${shipment.sender_zip3 || "001"}`
           : "1000-001",
         city: "Localidade",
-        phone: "910000000"
+        phone: "910000000",
+        country: "PT"
       },
       recipient: {
         name: shipment.recipient_name,
@@ -405,12 +411,19 @@ export async function dispatchShipmentAction(shipmentId: string) {
           ? `${shipment.recipient_zip4}-${shipment.recipient_zip3 || "001"}`
           : "1000-001",
         city: "Localidade",
-        phone: "920000000"
+        phone: "920000000",
+        country: "PT"
       },
       weightKg: 1,
       volumes: 1,
       subProduct: "EMSF056.01"
     })
+    return {
+      success: cttResult.success,
+      error: cttResult.error,
+      labelBase64: cttResult.labelBase64 ? await convertZplToPdfBase64(cttResult.labelBase64) : undefined,
+      trackingNumber: cttResult.trackingNumber
+    }
   } else {
     throw new Error("Service not yet integrated: " + shipment.service_type)
   }
@@ -529,6 +542,7 @@ export async function emitClientGuiaAction(data: {
   volumesCount?: number
   serviceName: string
   subProductId?: string
+  webserviceConnectionId?: string
   calculatedPrice: number
   isReturn?: boolean
   selectedSpecialServices?: string[]
@@ -685,23 +699,85 @@ export async function emitClientGuiaAction(data: {
     updated_at: now,
   }
 
-  // ─── STEP 1: Call CTT FIRST — only proceed if CTT accepts ──────────────────
-  // We never write to the DB unless CTT confirms the shipment.
+  // ─── STEP 1: Call carrier API — only write to DB if carrier accepts ──────────
   let realGuia = trackingNumber
   let labelBase64: string | null = null
 
-  if (data.serviceName?.toLowerCase().includes("ctt") || data.serviceName?.includes("ERS") || data.serviceName?.includes("D+")) {
-    let cttRes: any
+  if (data.serviceName?.toLowerCase().includes("correos")) {
+    // ── CORREOS EXPRESS ──────────────────────────────────────────────────────────
     try {
-      cttRes = await emitCttShipmentAction({
-        id: shipmentId,
+      const correosClean = (zip: string) => (zip || "").replace("-", "")
+      const creds = await resolveCorreosCredentials(data.webserviceConnectionId)
+      const correosService = new CorreosShipmentService()
+      const result = await correosService.createShipment(creds, {
         ref: trackingNumber,
+        fecha: new Date().toLocaleDateString("pt-PT").replace(/\//g, ""),
+        remitente: {
+          nombre: shipmentData.sender_name,
+          direccion: data.senderAddress || "Sede Comercial",
+          poblacion: data.senderCity || "Portugal",
+          cpNacional: "",
+          cpInternacional: correosClean(data.senderPostal || "1000001"),
+          paisISO: "PT",
+          contacto: shipmentData.sender_name,
+          telefono: data.senderPhone || "910000000"
+        },
+        destinatario: {
+          nombre: data.recipientName,
+          direccion: data.recipientAddress,
+          poblacion: data.recipientCity || "Portugal",
+          cpNacional: "",
+          cpInternacional: correosClean(data.recipientPostal || "1000001"),
+          paisISO: "PT",
+          contacto: data.recipientName,
+          telefono: data.recipientPhone || "920000000",
+          email: data.recipientEmail
+        },
+        bultos: data.volumesCount || 1,
+        kilos: data.weightKg || 1,
+        producto: data.subProductId || "63",
+        portes: "P",
+        reembolso: data.codValue ? data.codValue.toString() : "",
+        tipoEtiqueta: "1"
+      })
+
+      // codigoRetorno === 0 = success; 404 with datosResultado = created but no label (test env)
+      if (result.codigoRetorno === 0 || (result.codigoRetorno === 404 && result.datosResultado)) {
+        realGuia = result.datosResultado || trackingNumber
+        const rawLabel = result.listaInformacionAdicional?.[0]?.etiquetaPDF || ""
+        // Inject mock label in test environment
+        labelBase64 = rawLabel || (creds.environment === "test"
+          ? "JVBERi0xLjcKCjEgMCBvYmogICUgZW50cnkgcG9pbnQKPDwKICAvVHlwZSAvQ2F0YWxvZwogIC9QYWdlcyAyIDAgUgo+PgplbmRvYmoKCjIgMCBvYmoKPDwKICAvVHlwZSAvUGFnZXMKICAvTWVkaWFCb3ggWyAwIDAgNDAwIDIwMCBdCiAgL0NvdW50IDEKICAvS2lkcyBbIDMgMCBSIF0KPj4KZW5kb2JqCgozIDAgb2JqCjw8CiAgL1R5cGUgL1BhZ2UKICAvUGFyZW50IDIgMCBSCiAgL1Jlc291cmNlcyA8PAogICAgL0ZvbnQgPDwKICAgICAgL0YxIDQgMCBSCiAgICA+PgogID4+CiAgL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iagoKNCAwIG9iago8PAogIC9UeXBlIC9Gb250CiAgL1N1YnR5cGUgL1R5cGUxCiAgL0Jhc2VGb250IC9UaW1lcy1Sb21hbgo+PgplbmRvYmoKCjUgMCBvYmogICUgcGFnZSBjb250ZW50Cjw8CiAgL0xlbmd0aCA4MAo+PgpzdHJlYW0KQlQKNTAgMTAwIFRECi9GMSAyNCBUZgooRXRpcXVldGEgQ29ycmVvcyBUZXN0ZSkgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDEwIDAwMDAwIG4gCjAwMDAwMDAwNzkgMDAwMDAgbiAKMDAwMDAwMDE3MyAwMDAwMCBuIAowMDAwMDAwMzAwIDAwMDAwIG4gCjAwMDAwMDAzODggMDAwMDAgbiAKdHJhaWxlcgo8PAogIC9TaXplIDYKICAvUm9vdCAxIDAgUgo+PgpzdGFydHhyZWYKNTM2CiUlRU9GCg=="
+          : null)
+      } else {
+        throw new Error(`Correos Express: ${result.mensajeRetorno || "Erro desconhecido"} (Código ${result.codigoRetorno})`)
+      }
+    } catch (e: any) {
+      throw new Error("Erro Correos Express: " + (e?.message || "Tente novamente."))
+    }
+
+  } else if (data.serviceName?.toLowerCase().includes("ctt") || data.serviceName?.includes("ERS") || data.serviceName?.includes("D+")) {
+    // ── CTT EXPRESSO ─────────────────────────────────────────────────────────────
+    try {
+      const cttCreds = await resolveCttCredentials(data.webserviceConnectionId)
+      const cttProvider = new CttProvider()
+      await cttProvider.initialize(cttCreds)
+
+      const obsLines: string[] = []
+      if (data.selectedSpecialServices?.includes("fragil")) obsLines.push("CUIDADO: FRÁGIL")
+      if (data.selectedSpecialServices?.includes("cod") && data.codValue) obsLines.push(`COBRANÇA: ${data.codValue.toFixed(2)}€`)
+      if (data.selectedSpecialServices?.includes("auth_return")) obsLines.push("LOGÍSTICA INVERSA")
+      const observations = obsLines.length > 0 ? obsLines.join(" | ").substring(0, 70) : undefined
+
+      const cttResult = await cttProvider.createShipment({
+        reference: trackingNumber,
         sender: {
           name: shipmentData.sender_name,
           address: data.senderAddress || "Sede Comercial",
           city: data.senderCity || "Portugal",
           zip: data.senderPostal || "1000-001",
-          phone: data.senderPhone || "910000000"
+          phone: data.senderPhone || "910000000",
+          country: "PT"
         },
         recipient: {
           name: data.recipientName,
@@ -709,45 +785,34 @@ export async function emitClientGuiaAction(data: {
           city: data.recipientCity || "Portugal",
           zip: data.recipientPostal || "1000-001",
           phone: data.recipientPhone || "920000000",
-          email: data.recipientEmail
+          email: data.recipientEmail,
+          country: "PT"
         },
-        weightKg: data.weightKg,
+        weightKg: data.weightKg || 1,
         volumes: data.volumesCount || 1,
         subProduct: data.subProductId || "EMSF056.01",
-        autoClose: false,
-        isReturn: data.isReturn,
         codValue: data.codValue,
-        selectedSpecialServices: data.selectedSpecialServices
+        isReturn: data.isReturn,
+        observations,
+        autoClose: false
       })
-    } catch (e: any) {
-      // Network/connection error — bubble up to frontend, no DB write
-      throw new Error("Erro de ligação aos CTT: " + (e?.message || "Tente novamente."))
-    }
 
-    if (!cttRes.success) {
-      // CTT rejected — extract a human-readable reason and throw
-      const raw: string = cttRes.error || ""
-      let friendlyMsg = "Os CTT rejeitaram o envio."
-
-      if (raw.includes("Invalid enum value") || raw.includes("DeserializationFailed")) {
-        friendlyMsg = "Serviço especial não suportado para este subproduto CTT. Desmarque o(s) serviço(s) adicional(ais) e tente novamente."
-      } else if (raw.includes("postal") || raw.includes("ZipCode") || raw.includes("cp4") || raw.includes("cp3")) {
-        friendlyMsg = "Código postal inválido. Verifique o código postal do destinatário (formato: XXXX-XXX)."
-      } else if (raw.includes("Name") || raw.includes("name")) {
-        friendlyMsg = "Nome do destinatário inválido. Verifique o campo Nome."
-      } else if (raw.includes("Address") || raw.includes("address")) {
-        friendlyMsg = "Morada do destinatário inválida. Verifique o campo Morada."
-      } else if (raw.includes("Weight") || raw.includes("weight")) {
-        friendlyMsg = "Peso inválido para o serviço selecionado."
-      } else if (raw.length > 0 && raw.length < 300) {
-        friendlyMsg = raw
+      if (!cttResult.success) {
+        const raw = cttResult.error || ""
+        console.error("[CTT] Raw error:", raw)
+        // Show exact CTT error — prefix with [CTT] so it's clear but not hidden
+        throw new Error(raw || "Os CTT não devolveram uma resposta válida. Verifique o terminal do servidor.")
       }
 
-      throw new Error(friendlyMsg)
+      realGuia = cttResult.trackingNumber || trackingNumber
+      const rawZpl = cttResult.labelBase64 || ""
+      labelBase64 = rawZpl ? await convertZplToPdfBase64(rawZpl) : null
+    } catch (e: any) {
+      if (e.message?.includes("rejeitaram") || e.message?.includes("inválido") || e.message?.includes("suportado")) {
+        throw e
+      }
+      throw new Error("Erro de ligação aos CTT: " + (e?.message || "Tente novamente."))
     }
-
-    realGuia = cttRes.trackingNumber || trackingNumber
-    labelBase64 = cttRes.labelBase64
   }
 
   // ─── STEP 2: CTT accepted — now write to DB ─────────────────────────────────
@@ -759,7 +824,7 @@ export async function emitClientGuiaAction(data: {
       client_id: shipmentData.client_id,
       tracking_number: trackingNumber,
       carrier_tracking_number: realGuia,
-      carrier_code: "ctt",
+      carrier_code: data.serviceName?.toLowerCase().includes("correos") ? "correos" : "ctt",
       service_type: shipmentData.service_type,
       status: "pendente",
       ops_substatus: null,
@@ -796,7 +861,9 @@ export async function emitClientGuiaAction(data: {
       details: {
         ...shipmentData,
         tracking_number: realGuia,
+        carrier_object_id: realGuia,
         ctt_object_id: realGuia,
+        carrier_label_base64: labelBase64,
         ctt_label_base64: labelBase64,
         status: "pendente",
       },
@@ -900,16 +967,19 @@ export async function regenerateCttLabelAction(shipmentId: string) {
     ? `${shipment.recipient_zip3}-001`
     : "1000-001"
 
-  const cttRes = await emitCttShipmentAction({
-    id: shipment.id,
-    ref: shipment.tracking_number || shipment.id.substring(0, 8).toUpperCase(),
+  const cttCreds2 = await resolveCttCredentials()
+  const cttProvider2 = new CttProvider()
+  await cttProvider2.initialize(cttCreds2)
+  const cttRes = await cttProvider2.createShipment({
+    reference: shipment.tracking_number || shipment.id.substring(0, 8).toUpperCase(),
     sender: {
       name: shipment.sender_name || "Remetente",
       address: shipment.sender_address || "Sede Comercial",
       city: shipment.sender_city || "Portugal",
       zip: senderZip,
       phone: shipment.sender_phone || "910000000",
-      email: shipment.sender_email
+      email: shipment.sender_email,
+      country: "PT"
     },
     recipient: {
       name: shipment.recipient_name || "Destinatário",
@@ -917,7 +987,8 @@ export async function regenerateCttLabelAction(shipmentId: string) {
       city: shipment.recipient_city || "Portugal",
       zip: recipientZip,
       phone: shipment.recipient_phone || "920000000",
-      email: shipment.recipient_email
+      email: shipment.recipient_email,
+      country: "PT"
     },
     weightKg: Number(shipment.weight_kg) || 1,
     volumes: Number(shipment.volumes_count) || 1,

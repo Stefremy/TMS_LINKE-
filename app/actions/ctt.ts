@@ -56,10 +56,11 @@ async function getCttCredentials(): Promise<CTTConnectionCredentials> {
       .select("*")
       .eq("action", "carrier_connection_config")
       .order("created_at", { ascending: false })
-      .limit(1)
 
-    if (logs && logs[0]?.details) {
-      const d = logs[0].details
+    // CRITICAL: filter by carrier_code — the most recent entry may be Correos or another carrier
+    const cttLog = logs?.find((l: any) => l.details?.carrier_code === "ctt_expresso")
+    if (cttLog?.details) {
+      const d = cttLog.details
       return {
         contract_number: d.contract_number,
         client_number: d.client_id,
@@ -437,7 +438,7 @@ export async function emitCttShipmentAction(shipmentInput: {
     subProduct: shipmentInput.subProduct,
     codValue: shipmentInput.codValue,
     isReturn: shipmentInput.isReturn,
-    specialServices: shipmentInput.selectedSpecialServices,
+    specialServices: [], // CTT rejects SpecialServiceType for EMSF056.01, so we map them as observations
     observations: observationsString,
     autoClose: shipmentInput.autoClose
   })

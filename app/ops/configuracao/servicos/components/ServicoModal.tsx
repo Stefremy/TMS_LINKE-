@@ -612,29 +612,35 @@ export function ServicoModal({
                   Conexão Webservice / Conta de API *
                 </label>
                 <select
-                  value={formData.webservice_connection_id || "ctt_expresso"}
+                  value={formData.webservice_connection_id || (formData.preferred_carrier_name?.toLowerCase().includes("correos") ? "correos_express" : "ctt_expresso")}
                   onChange={(e) => setFormData({ ...formData, webservice_connection_id: e.target.value })}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500/20 shadow-2xs"
                 >
-                  <option value="ctt_expresso">
-                    🟢 CTT Expresso API (Conexão Ativa • Linke Core)
-                  </option>
+                  {formData.preferred_carrier_name?.toLowerCase().includes("correos") ? (
+                    <option value="correos_express">
+                      🟢 Correos Express API (Conexão Ativa • Linke Core)
+                    </option>
+                  ) : (
+                    <option value="ctt_expresso">
+                      🟢 CTT Expresso API (Conexão Ativa • Linke Core)
+                    </option>
+                  )}
                   <option value="">Sem Integração API (Emissão Manual / Offline)</option>
                 </select>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Atualmente configurado com a API oficial CTT Expresso.
+                  Atualmente configurado com a API oficial {formData.preferred_carrier_name?.toLowerCase().includes("correos") ? "Correos Express" : "CTT Expresso"}.
                 </p>
               </div>
 
               <div className="bg-emerald-50/80 p-4 rounded-xl border border-emerald-200/80 shadow-2xs">
                 <label className="block text-xs font-bold text-emerald-800 mb-1 flex items-center gap-1.5">
                   <Cpu className="w-4 h-4" />
-                  Código Subproduto na API (ex: EMSF056.01 para CTT 24H) *
+                  Código Subproduto na API (ex: {formData.preferred_carrier_name?.toLowerCase().includes("correos") ? "63 para E-Paq 24" : "EMSF056.01 para CTT 24H"}) *
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Ex: EMSF056.01"
+                    placeholder={formData.preferred_carrier_name?.toLowerCase().includes("correos") ? "Ex: 63" : "Ex: EMSF056.01"}
                     value={formData.webservice_service_code || ""}
                     onChange={(e) => setFormData({ ...formData, webservice_service_code: e.target.value })}
                     className="flex-1 px-3 py-2 bg-white border border-emerald-300 rounded-lg text-xs font-mono font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500/20 shadow-2xs"
@@ -648,17 +654,28 @@ export function ServicoModal({
                     }}
                     className="px-2.5 py-2 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-lg text-[11px] font-bold text-emerald-900 cursor-pointer transition-colors"
                   >
-                    <option value="">-- Escolher Preset CTT --</option>
-                    <option value="EMSF056.01">CTT Para Amanhã 24H • Guia DD (EMSF056.01) ✅</option>
-                    <option value="EMSF057.01">CTT Em 2 Dias 48H • Guia DB (EMSF057.01) ✅</option>
-                    <option value="ENCF008.01">CTT Económico 48 Continente • Guia EQ (ENCF008.01) ✅</option>
-                    <option value="EMSF010.01">CTT 19 Múltiplo (10+ vol.) • Guia EG (EMSF010.01) ✅</option>
-                    <option value="EMSF021.02">CTT Espanha Peninsular • Guia DD (EMSF021.02)</option>
-                    <option value="EMSF081.01">CTT Internacional Avião Express (EMSF081.01)</option>
+                    {formData.preferred_carrier_name?.toLowerCase().includes("correos") ? (
+                      <>
+                        <option value="">-- Escolher Preset Correos --</option>
+                        <option value="93">Correos Paq 24 (93) ✅</option>
+                        <option value="63">Correos E-Paq 24 / E-Commerce (63) ✅</option>
+                        <option value="62">Correos Paq 48 / Islas (62) ✅</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="">-- Escolher Preset CTT --</option>
+                        <option value="EMSF056.01">CTT Para Amanhã 24H • Guia DD (EMSF056.01) ✅</option>
+                        <option value="EMSF057.01">CTT Em 2 Dias 48H • Guia DB (EMSF057.01) ✅</option>
+                        <option value="ENCF008.01">CTT Económico 48 Continente • Guia EQ (ENCF008.01) ✅</option>
+                        <option value="EMSF010.01">CTT 19 Múltiplo (10+ vol.) • Guia EG (EMSF010.01) ✅</option>
+                        <option value="EMSF021.02">CTT Espanha Peninsular • Guia DD (EMSF021.02)</option>
+                        <option value="EMSF081.01">CTT Internacional Avião Express (EMSF081.01)</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <p className="text-[11px] font-medium text-emerald-700/80 mt-1.5 leading-snug">
-                  Este é o código do Subproduto enviado à API CTT para emitir a etiqueta. Tem de corresponder exatamente ao serviço contratado.
+                  Este é o código do Subproduto enviado à API da {formData.preferred_carrier_name?.toLowerCase().includes("correos") ? "Correos Express" : "CTT"} para emitir a etiqueta. Tem de corresponder exatamente ao serviço contratado.
                 </p>
               </div>
             </div>

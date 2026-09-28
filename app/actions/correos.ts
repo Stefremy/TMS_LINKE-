@@ -176,3 +176,84 @@ export async function testCorreosConnectionAction(creds: CorreosCredentials) {
     }
   }
 }
+
+export async function emitCorreosShipmentAction(shipmentInput: {
+  id?: string
+  ref?: string
+  sender: { name: string; address: string; zip: string; city: string; phone: string; email?: string }
+  recipient: { name: string; address: string; zip: string; city: string; phone: string; email?: string }
+  weightKg?: number
+  volumes?: number
+  subProduct?: string
+  codValue?: number
+  autoClose?: boolean
+  isReturn?: boolean
+  selectedSpecialServices?: string[]
+}) {
+  await requireEmployee()
+  const creds = await getCorreosCredentials()
+  const shipmentService = new CorreosShipmentService()
+
+  try {
+    const result = await shipmentService.createShipment(creds, {
+      ref: shipmentInput.ref || `TRK-${Date.now().toString().slice(-8)}`,
+      fecha: new Date().toLocaleDateString("pt-PT").replace(/\//g, ""),
+      remitente: {
+        nombre: shipmentInput.sender.name,
+        direccion: shipmentInput.sender.address,
+        poblacion: shipmentInput.sender.city,
+        cpNacional: shipmentInput.sender.zip.replace("-", ""),
+        cpInternacional: shipmentInput.sender.zip.replace("-", ""),
+        paisISO: "PT",
+        contacto: shipmentInput.sender.name,
+        telefono: shipmentInput.sender.phone || "910000000",
+        email: shipmentInput.sender.email || ""
+      },
+      destinatario: {
+        nombre: shipmentInput.recipient.name,
+        direccion: shipmentInput.recipient.address,
+        poblacion: shipmentInput.recipient.city,
+        cpNacional: shipmentInput.recipient.zip.replace("-", ""),
+        cpInternacional: shipmentInput.recipient.zip.replace("-", ""),
+        paisISO: "PT", // Simplification: assuming PT for now, should be dynamic if needed
+        contacto: shipmentInput.recipient.name,
+        telefono: shipmentInput.recipient.phone || "910000000",
+        email: shipmentInput.recipient.email || ""
+      },
+      bultos: shipmentInput.volumes || 1,
+      kilos: shipmentInput.weightKg || 1,
+      producto: shipmentInput.subProduct || "63",
+      portes: "P",
+      reembolso: shipmentInput.codValue ? shipmentInput.codValue.toString() : "",
+      tipoEtiqueta: "1" // 1 = PDF, 2 = ZPL (Termica)
+    })
+
+    if (result.codigoRetorno === 0 || (result.codigoRetorno === 404 && result.datosResultado)) {
+      let labelBase64 = ""
+      if (result.listaInformacionAdicional && result.listaInformacionAdicional.length > 0) {
+        labelBase64 = result.listaInformacionAdicional[0].etiquetaPDF || ""
+      }
+      
+      // Inject mock label in test environment so UI testing works!
+      if (!labelBase64 && creds.environment === "test") {
+        labelBase64 = "JVBERi0xLjcKCjEgMCBvYmogICUgZW50cnkgcG9pbnQKPDwKICAvVHlwZSAvQ2F0YWxvZwogIC9QYWdlcyAyIDAgUgo+PgplbmRvYmoKCjIgMCBvYmoKPDwKICAvVHlwZSAvUGFnZXMKICAvTWVkaWFCb3ggWyAwIDAgNDAwIDIwMCBdCiAgL0NvdW50IDEKICAvS2lkcyBbIDMgMCBSIF0KPj4KZW5kb2JqCgozIDAgb2JqCjw8CiAgL1R5cGUgL1BhZ2UKICAvUGFyZW50IDIgMCBSCiAgL1Jlc291cmNlcyA8PAogICAgL0ZvbnQgPDwKICAgICAgL0YxIDQgMCBSCiAgICA+PgogID4+CiAgL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iagoKNCAwIG9iago8PAogIC9UeXBlIC9Gb250CiAgL1N1YnR5cGUgL1R5cGUxCiAgL0Jhc2VGb250IC9UaW1lcy1Sb21hbgo+PgplbmRvYmoKCjUgMCBvYmogICUgcGFnZSBjb250ZW50Cjw8CiAgL0xlbmd0aCA4MAo+PgpzdHJlYW0KQlQKNTAgMTAwIFRECi9GMSAyNCBUZgooRXRpcXVldGEgQ29ycmVvcyBUZXN0ZSkgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDEwIDAwMDAwIG4gCjAwMDAwMDAwNzkgMDAwMDAgbiAKMDAwMDAwMDE3MyAwMDAwMCBuIAowMDAwMDAwMzAwIDAwMDAwIG4gCjAwMDAwMDAzODggMDAwMDAgbiAKdHJhaWxlcgo8PAogIC9TaXplIDYKICAvUm9vdCAxIDAgUgo+PgpzdGFydHhyZWYKNTM2CiUlRU9GCg=="
+      }
+
+      return {
+        success: true,
+        trackingNumber: result.datosResultado || result.envios?.[0]?.numEnvio || shipmentInput.ref,
+        labelBase64: labelBase64
+      }
+    }
+
+    return {
+      success: false,
+      error: `Correos Express: ${result.mensajeRetorno || "Erro desconhecido"} (Código ${result.codigoRetorno})`
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      error: `Erro Correos Express: ${err.message}`
+    }
+  }
+}

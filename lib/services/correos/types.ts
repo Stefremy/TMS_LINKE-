@@ -59,12 +59,20 @@ export interface CorreosShipmentOutput {
   codigoRetorno: number
   mensajeRetorno: string
   datosResultado?: string // The tracking number / numEnvio
+  envios?: Array<{
+    numEnvio?: string
+    ref?: string
+  }>
   listaBultos?: Array<{
     orden: string
     codUnico: string
   }>
   etiqueta?: Array<{
     [key: string]: string // e.g. "etiqueta1": "base64..."
+  }>
+  listaInformacionAdicional?: Array<{
+    tipoEtiqueta?: string
+    etiquetaPDF?: string
   }>
 }
 

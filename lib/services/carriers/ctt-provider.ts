@@ -90,20 +90,10 @@ export class CttProvider implements CarrierProvider {
         "delivery_aggregation": "DeliveryAggregation"
       }
 
-      let specialServices: any[] | undefined = undefined
-      if (input.specialServices && input.specialServices.length > 0) {
-        specialServices = []
-        for (const code of input.specialServices) {
-          const mappedType = CTT_SPECIAL_SERVICES_MAP[code]
-          if (mappedType) {
-            if (code === "cod" && input.codValue) {
-              specialServices.push({ SpecialServiceType: mappedType, Value: input.codValue })
-            } else {
-              specialServices.push({ SpecialServiceType: mappedType })
-            }
-          }
-        }
-      }
+      // NOTE: CTT SOAP rejects SpecialServiceType for most subproducts (EMSF056.01 etc) with DeserializationFailed.
+      // Special services (Frágil, SMS, COD, Retorno) are recorded as Observations on the label instead.
+      // Do NOT map them to SOAP SpecialServices.
+      const specialServices: any[] | undefined = undefined
 
       const payload = {
         clientReference: input.reference || "LNK_GEN",

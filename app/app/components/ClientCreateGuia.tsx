@@ -276,6 +276,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
         heightCm: parseInt(heightCm) || 0,
         serviceName: chosenService,
         subProductId: activeLinkeService?.webservice_service_code,
+        webserviceConnectionId: activeLinkeService?.webservice_connection_id,
         calculatedPrice: numericVal,
         codValue: parseFloat(codAmount) || 0,
         selectedSpecialServices,
@@ -375,7 +376,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
             </div>
             <div>
               <div className="text-sm font-bold text-emerald-950 flex items-center gap-2">
-                <span>Guia CTT Emitida com Sucesso!</span>
+                <span>Guia Emitida com Sucesso!</span>
                 <span className="font-mono text-xs bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-lg font-bold">
                   {generatedGuia}
                 </span>
@@ -425,7 +426,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
                   type="button"
                   onClick={async () => {
                     let label = generatedLabelBase64
-                    const fname = `${generatedGuia || "Envio"}_Etiqueta_CTT.pdf`
+                    const fname = `${generatedGuia || "Envio"}_Etiqueta.pdf`
                     // Se for ZPL cru, converter server-side antes de descarregar
                     if (label?.trimStart().startsWith("^XA")) {
                       const res = await convertZplToPdfAction(label)
@@ -446,7 +447,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
               </>
             ) : (
               <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl font-semibold">
-                Sem etiqueta CTT — usa "Solicitar" no detalhe do envio
+                Sem etiqueta gerada — usa "Solicitar" no detalhe do envio
               </span>
             )}
             <button
