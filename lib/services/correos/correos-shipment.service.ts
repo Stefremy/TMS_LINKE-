@@ -24,9 +24,18 @@ export class CorreosShipmentService {
     const isRemitentePT = input.remitente.paisISO.toUpperCase() === "PT"
     const isDestinatarioPT = input.destinatario.paisISO.toUpperCase() === "PT"
 
-    // For Portugal, Correos Express requires strictly the 4-digit postal code in codPosInt
-    const cpRtePT = (input.remitente.cpInternacional || input.remitente.cpNacional || "").replace(/\D/g, "").slice(0, 4) || "4000"
-    const cpDestPT = (input.destinatario.cpInternacional || input.destinatario.cpNacional || "").replace(/\D/g, "").slice(0, 4) || "1000"
+    // For Portugal, send the full postal code (e.g. 4800-019)
+    const cpRtePT = (input.remitente.cpInternacional || input.remitente.cpNacional || "").trim() || "4000-001"
+    const cpDestPT = (input.destinatario.cpInternacional || input.destinatario.cpNacional || "").trim() || "1000-001"
+
+    // Ensure full postal code is included in poblacion so it is printed completely on the label below routing zone
+    const formattedPobDest = isDestinatarioPT && cpDestPT && !input.destinatario.poblacion.includes(cpDestPT.slice(0, 4))
+      ? `${cpDestPT} ${input.destinatario.poblacion}`.slice(0, 40)
+      : input.destinatario.poblacion.slice(0, 40)
+
+    const formattedPobRte = isRemitentePT && cpRtePT && !input.remitente.poblacion.includes(cpRtePT.slice(0, 4))
+      ? `${cpRtePT} ${input.remitente.poblacion}`.slice(0, 40)
+      : input.remitente.poblacion.slice(0, 40)
 
     const numBultos = Number(input.bultos) || 1
     const totalKilos = Number(input.kilos) || 1
@@ -56,7 +65,7 @@ export class CorreosShipmentService {
       nomRte: input.remitente.nombre,
       nifRte: input.remitente.nif || "",
       dirRte: input.remitente.direccion,
-      pobRte: input.remitente.poblacion,
+      pobRte: formattedPobRte,
       codPosNacRte: isRemitentePT ? "" : (input.remitente.cpNacional || ""),
       paisISORte: input.remitente.paisISO,
       codPosIntRte: isRemitentePT ? cpRtePT : "",
@@ -67,7 +76,7 @@ export class CorreosShipmentService {
       nomDest: input.destinatario.nombre,
       nifDest: input.destinatario.nif || "",
       dirDest: input.destinatario.direccion,
-      pobDest: input.destinatario.poblacion,
+      pobDest: formattedPobDest,
       codPosNacDest: isDestinatarioPT ? "" : (input.destinatario.cpNacional || ""),
       paisISODest: input.destinatario.paisISO,
       codPosIntDest: isDestinatarioPT ? cpDestPT : "",

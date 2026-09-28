@@ -745,7 +745,7 @@ export async function emitClientGuiaAction(data: {
   if (data.serviceName?.toLowerCase().includes("correos")) {
     // ── CORREOS EXPRESS ──────────────────────────────────────────────────────────
     try {
-      const correosClean = (zip: string) => (zip || "").replace(/\D/g, "").slice(0, 4)
+      const cleanPostal = (zip?: string) => (zip || "").trim()
       const creds = await resolveCorreosCredentials(data.webserviceConnectionId)
       const correosService = new CorreosShipmentService()
       const result = await correosService.createShipment(creds, {
@@ -756,7 +756,7 @@ export async function emitClientGuiaAction(data: {
           direccion: data.senderAddress || "Sede Comercial",
           poblacion: data.senderCity || "Portugal",
           cpNacional: "",
-          cpInternacional: correosClean(data.senderPostal || "4000"),
+          cpInternacional: cleanPostal(data.senderPostal || "4000-001"),
           paisISO: "PT",
           contacto: shipmentData.sender_name,
           telefono: data.senderPhone || "910000000"
@@ -766,7 +766,7 @@ export async function emitClientGuiaAction(data: {
           direccion: data.recipientAddress,
           poblacion: data.recipientCity || "Portugal",
           cpNacional: "",
-          cpInternacional: correosClean(data.recipientPostal || "1000"),
+          cpInternacional: cleanPostal(data.recipientPostal || "1000-001"),
           paisISO: "PT",
           contacto: data.recipientName,
           telefono: data.recipientPhone || "920000000",
