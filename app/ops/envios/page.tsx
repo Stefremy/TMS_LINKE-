@@ -52,14 +52,14 @@ export default async function EnviosPage() {
       sender: { 
         name: s.sender_name || "N/A", 
         flag: "PT", // Simplification
-        zip: (s.sender_zip3 && s.sender_zip4) ? `${s.sender_zip3}-${s.sender_zip4}` : (s.sender_zip3 || ""), 
+        zip: (s.sender_zip4 && s.sender_zip3) ? `${s.sender_zip4}-${s.sender_zip3}` : (s.sender_zip4 || s.sender_zip3 || ""), 
         city: s.sender_address || "N/A", 
         phone: "" 
       },
       recipient: { 
         name: s.recipient_name || "N/A", 
         flag: "PT", 
-        zip: (s.recipient_zip3 && s.recipient_zip4) ? `${s.recipient_zip3}-${s.recipient_zip4}` : (s.recipient_zip3 || ""), 
+        zip: (s.recipient_zip4 && s.recipient_zip3) ? `${s.recipient_zip4}-${s.recipient_zip3}` : (s.recipient_zip4 || s.recipient_zip3 || ""), 
         city: s.recipient_address || "N/A", 
         phone: "" 
       },

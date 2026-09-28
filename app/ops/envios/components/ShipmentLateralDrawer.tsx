@@ -447,7 +447,7 @@ export function ShipmentLateralDrawer({
                 {shipment.sender_address || shipment.sender?.city || "Porto, PT"}
               </p>
               <span className="text-[10px] font-mono text-[var(--text-tertiary)] block">
-                {(shipment.sender_zip3 && shipment.sender_zip4) ? `${shipment.sender_zip3}-${shipment.sender_zip4}` : (shipment.sender?.zip || "4470-001 Maia, PT")}
+                {(shipment.sender_zip4 && shipment.sender_zip3) ? `${shipment.sender_zip4}-${shipment.sender_zip3}` : (shipment.sender?.zip || "4470-001 Maia, PT")}
               </span>
             </div>
 
@@ -463,7 +463,7 @@ export function ShipmentLateralDrawer({
                 {shipment.recipient_address || shipment.recipient?.city || "Morada indicada"}
               </p>
               <span className="text-[10px] font-mono text-[var(--text-tertiary)] block">
-                {(shipment.recipient_zip3 && shipment.recipient_zip4) ? `${shipment.recipient_zip3}-${shipment.recipient_zip4}` : (shipment.recipient?.zip || "1990-012 Lisboa, PT")}
+                {(shipment.recipient_zip4 && shipment.recipient_zip3) ? `${shipment.recipient_zip4}-${shipment.recipient_zip3}` : (shipment.recipient?.zip || "1990-012 Lisboa, PT")}
               </span>
             </div>
           </div>

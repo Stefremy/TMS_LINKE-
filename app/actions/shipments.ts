@@ -1708,8 +1708,8 @@ export async function resolveShipmentIncidentAction(params: {
     if (newAddress) updatePayload.recipient_address = newAddress
     if (newZipCode) {
       const parts = newZipCode.split("-")
-      if (parts[0]) updatePayload.recipient_zip3 = parts[0]
-      if (parts[1]) updatePayload.recipient_zip4 = parts[1]
+      if (parts[0]) updatePayload.recipient_zip4 = parts[0]
+      if (parts[1]) updatePayload.recipient_zip3 = parts[1]
     }
     if (newPhone) updatePayload.recipient_phone = newPhone
 

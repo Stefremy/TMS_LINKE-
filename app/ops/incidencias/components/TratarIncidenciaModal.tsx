@@ -52,8 +52,8 @@ export function TratarIncidenciaModal({
   // Morada fields
   const [address, setAddress] = React.useState(shipment.recipient_address || shipment.recipient?.city || "")
   const [zipCode, setZipCode] = React.useState(
-    shipment.recipient_zip3 && shipment.recipient_zip4 
-      ? `${shipment.recipient_zip3}-${shipment.recipient_zip4}` 
+    shipment.recipient_zip4 && shipment.recipient_zip3 
+      ? `${shipment.recipient_zip4}-${shipment.recipient_zip3}` 
       : (shipment.recipient?.zip || "")
   )
   const [phone, setPhone] = React.useState(shipment.recipient_phone || shipment.recipient?.phone || "")

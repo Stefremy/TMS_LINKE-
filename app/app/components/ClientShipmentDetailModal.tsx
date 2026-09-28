@@ -270,9 +270,9 @@ export function ClientShipmentDetailModal({
   // Extract fields with fallbacks
   const recipientName = currentShipment.recipient_name || ""
   const recipientAddress = currentShipment.recipient_address || ""
-  const recipientZip = currentShipment.recipient_zip3 
-    ? `${currentShipment.recipient_zip3}-${currentShipment.recipient_zip4 || "000"}`
-    : ""
+  const recipientZip = (currentShipment.recipient_zip4 && currentShipment.recipient_zip3)
+    ? `${currentShipment.recipient_zip4}-${currentShipment.recipient_zip3}`
+    : currentShipment.recipient_zip4 || currentShipment.recipient_zip3 || ""
   const recipientCity = currentShipment.recipient_city || ""
   const recipientPhone = currentShipment.recipient_phone || "Não especificado"
   const recipientEmail = currentShipment.recipient_email || "Não especificado"
@@ -766,7 +766,7 @@ export function ClientShipmentDetailModal({
                   <div className="text-xs text-[var(--text-primary)] font-bold">{currentShipment.sender_name || "Empresa Cliente"}</div>
                   <div className="text-[11px] text-[var(--text-tertiary)] font-medium">
                     {currentShipment.sender_address || "Sede Comercial"}
-                    {currentShipment.sender_zip3 ? ` (${currentShipment.sender_zip3}-${currentShipment.sender_zip4})` : ""}
+                    {currentShipment.sender_zip4 ? ` (${currentShipment.sender_zip4}${currentShipment.sender_zip3 ? `-${currentShipment.sender_zip3}` : ""})` : ""}
                   </div>
                 </div>
 

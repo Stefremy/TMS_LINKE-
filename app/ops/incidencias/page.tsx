@@ -49,7 +49,7 @@ export default async function IncidenciasPage() {
         recipient_name: s.recipient_name || "Destinatário",
         recipient_phone: s.recipient_phone || "",
         recipient_address: s.recipient_address || "Morada indicada no envio",
-        recipient_zip: (s.recipient_zip3 && s.recipient_zip4) ? `${s.recipient_zip3}-${s.recipient_zip4}` : (s.recipient_zip3 || ""),
+        recipient_zip: (s.recipient_zip4 && s.recipient_zip3) ? `${s.recipient_zip4}-${s.recipient_zip3}` : (s.recipient_zip4 || s.recipient_zip3 || ""),
         recipient_city: s.recipient_address?.split(",")?.pop()?.trim() || "Portugal",
         incident_code: codeMatch,
         incident_reason: reasonLabel,
