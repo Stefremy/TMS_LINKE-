@@ -24,8 +24,28 @@ export class CorreosShipmentService {
     const isRemitentePT = input.remitente.paisISO.toUpperCase() === "PT"
     const isDestinatarioPT = input.destinatario.paisISO.toUpperCase() === "PT"
 
+    // For Portugal, Correos Express requires strictly the 4-digit postal code in codPosInt
+    const cpRtePT = (input.remitente.cpInternacional || input.remitente.cpNacional || "").replace(/\D/g, "").slice(0, 4) || "4000"
+    const cpDestPT = (input.destinatario.cpInternacional || input.destinatario.cpNacional || "").replace(/\D/g, "").slice(0, 4) || "1000"
+
+    const numBultos = Number(input.bultos) || 1
+    const totalKilos = Number(input.kilos) || 1
+    const kilosPerBulto = (totalKilos / numBultos).toFixed(3)
+
+    // Correos Express requires at least one bulto in listaBultos to generate shipping labels!
+    const listaBultos = input.listaBultos && input.listaBultos.length > 0
+      ? input.listaBultos
+      : Array.from({ length: numBultos }, (_, i) => ({
+          orden: (i + 1).toString(),
+          kilos: kilosPerBulto,
+          volumen: "0",
+          alto: "0",
+          largo: "0",
+          ancho: "0"
+        }))
+
     // Construct the payload mapping to Correos Express spec
-    const payload = {
+    const payload: Record<string, any> = {
       solicitante: creds.solicitante,
       codRte: creds.codRte,
       
@@ -39,8 +59,8 @@ export class CorreosShipmentService {
       pobRte: input.remitente.poblacion,
       codPosNacRte: isRemitentePT ? "" : (input.remitente.cpNacional || ""),
       paisISORte: input.remitente.paisISO,
-      codPosIntRte: isRemitentePT ? input.remitente.cpInternacional : "",
-      contacRte: input.remitente.contacto || "",
+      codPosIntRte: isRemitentePT ? cpRtePT : "",
+      contacRte: input.remitente.contacto || input.remitente.nombre || "",
       telefRte: input.remitente.telefono || "",
       emailRte: input.remitente.email || "",
       
@@ -50,15 +70,15 @@ export class CorreosShipmentService {
       pobDest: input.destinatario.poblacion,
       codPosNacDest: isDestinatarioPT ? "" : (input.destinatario.cpNacional || ""),
       paisISODest: input.destinatario.paisISO,
-      codPosIntDest: isDestinatarioPT ? input.destinatario.cpInternacional : "",
-      contacDest: input.destinatario.contacto || "",
+      codPosIntDest: isDestinatarioPT ? cpDestPT : "",
+      contacDest: input.destinatario.contacto || input.destinatario.nombre || "",
       telefDest: input.destinatario.telefono || "",
       emailDest: input.destinatario.email || "",
       
       observac: input.observaciones || "",
-      numBultos: input.bultos.toString(),
-      kilos: input.kilos.toString(),
-      volumen: input.volumen || "",
+      numBultos: numBultos.toString(),
+      kilos: totalKilos.toString(),
+      volumen: input.volumen || "0",
       
       producto: input.producto,
       portes: input.portes,
@@ -66,20 +86,17 @@ export class CorreosShipmentService {
       entrSabado: input.entrSabado || "",
       seguro: input.seguro || "",
       
-      listaBultos: input.listaBultos || [],
+      listaBultos,
     }
 
     if (input.tipoEtiqueta) {
-      Object.assign(payload, {
-        generarEtiqueta: "1",
-        imprimirEtiqueta: "1",
-        listaInformacionAdicional: [
-          {
-            tipoEtiqueta: input.tipoEtiqueta,
-            etiquetaPDF: ""
-          }
-        ]
-      })
+      payload.listaInformacionAdicional = [
+        {
+          tipoEtiqueta: input.tipoEtiqueta,
+          etiquetaPDF: "",
+          codificacionUnicaB64: "1"
+        }
+      ]
     }
 
     return this.client.request<CorreosShipmentOutput>(endpoint, creds, payload)

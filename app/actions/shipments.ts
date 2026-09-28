@@ -706,7 +706,7 @@ export async function emitClientGuiaAction(data: {
   if (data.serviceName?.toLowerCase().includes("correos")) {
     // ── CORREOS EXPRESS ──────────────────────────────────────────────────────────
     try {
-      const correosClean = (zip: string) => (zip || "").replace("-", "")
+      const correosClean = (zip: string) => (zip || "").replace(/\D/g, "").slice(0, 4)
       const creds = await resolveCorreosCredentials(data.webserviceConnectionId)
       const correosService = new CorreosShipmentService()
       const result = await correosService.createShipment(creds, {
@@ -717,7 +717,7 @@ export async function emitClientGuiaAction(data: {
           direccion: data.senderAddress || "Sede Comercial",
           poblacion: data.senderCity || "Portugal",
           cpNacional: "",
-          cpInternacional: correosClean(data.senderPostal || "1000001"),
+          cpInternacional: correosClean(data.senderPostal || "4000"),
           paisISO: "PT",
           contacto: shipmentData.sender_name,
           telefono: data.senderPhone || "910000000"
@@ -727,7 +727,7 @@ export async function emitClientGuiaAction(data: {
           direccion: data.recipientAddress,
           poblacion: data.recipientCity || "Portugal",
           cpNacional: "",
-          cpInternacional: correosClean(data.recipientPostal || "1000001"),
+          cpInternacional: correosClean(data.recipientPostal || "1000"),
           paisISO: "PT",
           contacto: data.recipientName,
           telefono: data.recipientPhone || "920000000",
@@ -741,12 +741,19 @@ export async function emitClientGuiaAction(data: {
         tipoEtiqueta: "1"
       })
 
-      // codigoRetorno === 0 = success; 404 with datosResultado = created but no label (test env)
+      // codigoRetorno === 0 = success; 404 with datosResultado = created but no label (sandbox warning)
       console.log("CORREOS PRODUCTION RESPONSE:", JSON.stringify(result, null, 2))
       if (result.codigoRetorno === 0 || (result.codigoRetorno === 404 && result.datosResultado)) {
         realGuia = result.datosResultado || trackingNumber
-        const rawLabel = result.listaInformacionAdicional?.[0]?.etiquetaPDF || result.etiqueta?.[0]?.etiqueta1 || ""
-        // Inject mock label in test environment
+        let rawLabel = ""
+        if (result.etiqueta && result.etiqueta.length > 0) {
+          const firstEtiqueta = result.etiqueta[0]
+          rawLabel = firstEtiqueta.etiqueta1 || Object.values(firstEtiqueta)[0] || ""
+        }
+        if (!rawLabel && result.listaInformacionAdicional && result.listaInformacionAdicional.length > 0) {
+          rawLabel = result.listaInformacionAdicional[0].etiquetaPDF || ""
+        }
+        // Fallback mock label in test environment if test endpoint returns 404
         labelBase64 = rawLabel || (creds.environment === "test"
           ? "JVBERi0xLjcKCjEgMCBvYmogICUgZW50cnkgcG9pbnQKPDwKICAvVHlwZSAvQ2F0YWxvZwogIC9QYWdlcyAyIDAgUgo+PgplbmRvYmoKCjIgMCBvYmoKPDwKICAvVHlwZSAvUGFnZXMKICAvTWVkaWFCb3ggWyAwIDAgNDAwIDIwMCBdCiAgL0NvdW50IDEKICAvS2lkcyBbIDMgMCBSIF0KPj4KZW5kb2JqCgozIDAgb2JqCjw8CiAgL1R5cGUgL1BhZ2UKICAvUGFyZW50IDIgMCBSCiAgL1Jlc291cmNlcyA8PAogICAgL0ZvbnQgPDwKICAgICAgL0YxIDQgMCBSCiAgICA+PgogID4+CiAgL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iagoKNCAwIG9iago8PAogIC9UeXBlIC9Gb250CiAgL1N1YnR5cGUgL1R5cGUxCiAgL0Jhc2VGb250IC9UaW1lcy1Sb21hbgo+PgplbmRvYmoKCjUgMCBvYmogICUgcGFnZSBjb250ZW50Cjw8CiAgL0xlbmd0aCA4MAo+PgpzdHJlYW0KQlQKNTAgMTAwIFRECi9GMSAyNCBUZgooRXRpcXVldGEgQ29ycmVvcyBUZXN0ZSkgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDEwIDAwMDAwIG4gCjAwMDAwMDAwNzkgMDAwMDAgbiAKMDAwMDAwMDE3MyAwMDAwMCBuIAowMDAwMDAwMzAwIDAwMDAwIG4gCjAwMDAwMDAzODggMDAwMDAgbiAKdHJhaWxlcgo8PAogIC9TaXplIDYKICAvUm9vdCAxIDAgUgo+PgpzdGFydHhyZWYKNTM2CiUlRU9GCg=="
           : null)

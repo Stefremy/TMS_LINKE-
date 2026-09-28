@@ -125,6 +125,16 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         sellPrice: estimatedTier.sell
       })
       setSuccess(true)
+      if ((res as any).labelBase64) {
+        setTimeout(() => {
+          const link = document.createElement("a");
+          link.href = `data:application/pdf;base64,${(res as any).labelBase64}`;
+          link.download = `etiqueta_${(res as any).guia || "envio"}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }, 150);
+      }
     } catch (err: any) {
       setErrorMsg(err.message || "Erro ao criar envio.")
       setLoading(false)

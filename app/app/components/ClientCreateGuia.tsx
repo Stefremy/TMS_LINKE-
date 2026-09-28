@@ -299,6 +299,24 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
       setGeneratedGuia(newCode)
       setGeneratedLabelBase64(res.labelBase64 || null)
 
+      // Auto-download da etiqueta assim que o envio é criado
+      if (res.labelBase64) {
+        const label = res.labelBase64
+        const fname = `${newCode || "Envio"}_Etiqueta.pdf`
+        if (label.trimStart().startsWith("^XA")) {
+          convertZplToPdfAction(label).then((conv) => {
+            if (conv.success && conv.base64) {
+              downloadCttLabel(conv.base64, fname)
+            }
+          })
+        } else {
+          // Timeout ligeiro para garantir que o modal já montou no DOM
+          setTimeout(() => {
+            downloadCttLabel(label, fname)
+          }, 150)
+        }
+      }
+
       setRecipientName("")
       setRecipientAddress("")
       setRecipientCity("")

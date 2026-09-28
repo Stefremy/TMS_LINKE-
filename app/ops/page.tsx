@@ -17,21 +17,19 @@ import { Badge } from "@/components/ui/badge"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getClientesAction } from "@/app/actions/clientes"
-import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 
 export default async function OpsDashboardPage() {
   const supabase = createAdminClient()
 
   // Fetch real data from DB & persistent actions
-  const [shipments, recolhasResult, clients, carrierConnections] = await Promise.all([
+  const [shipments, recolhasResult, clients] = await Promise.all([
     getShipmentsAction(),
     supabase
       .from("recolhas")
       .select("*")
       .order("created_at", { ascending: false }),
-    getClientesAction(),
-    getCarrierConnectionsAction()
+    getClientesAction()
   ])
 
   const recolhas = recolhasResult.data || []
@@ -407,136 +405,6 @@ export default async function OpsDashboardPage() {
           </div>
         </div>
         
-      </div>
-
-      {/* PARCEIROS & TRANSPORTADORAS LINKE WIDGET */}
-      <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
-          <div>
-            <div className="flex items-center gap-2">
-              <Truck className="w-4.5 h-4.5 text-[var(--accent)]" />
-              <h2 className="text-sm font-bold text-[var(--text-primary)]">Transportadoras & Parceiros Integrados</h2>
-            </div>
-            <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5">
-              Estado em tempo real das ligações WebServices e preçários ativos no sistema
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/ops/configuracao/webservices"
-              className="text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] border border-[var(--border-subtle)] px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
-            >
-              <span>Webservices Globais</span>
-            </Link>
-            <Link
-              href="/ops/configuracao/servicos"
-              className="text-[11px] font-semibold text-[var(--accent)] hover:text-[var(--accent-hover)] bg-[var(--accent-soft)] hover:bg-[rgba(18,138,71,0.15)] border border-[rgba(18,138,71,0.08)] px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
-            >
-              <span>Gerir Serviços Linke</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            {
-              name: "CTT Expresso",
-              code: "ctt",
-              type: "Nacional & Ilhas",
-              leadTime: "24h / 48h",
-              matcher: (c: any) => c.carrier_code?.toLowerCase().includes("ctt") || c.supplier_id?.toLowerCase().includes("ctt")
-            },
-            {
-              name: "Correos Express",
-              code: "correos",
-              type: "Ibérico & Espanha",
-              leadTime: "24h / 48h",
-              matcher: (c: any) => c.carrier_code?.toLowerCase().includes("correos") || c.supplier_id?.toLowerCase().includes("correos")
-            },
-            {
-              name: "DPD Portugal",
-              code: "dpd",
-              type: "Europa & B2C",
-              leadTime: "24h / 72h",
-              matcher: (c: any) => c.carrier_code?.toLowerCase().includes("dpd") || c.supplier_id?.toLowerCase().includes("dpd")
-            },
-            {
-              name: "MRW",
-              code: "mrw",
-              type: "Urgente Ibéria",
-              leadTime: "10h / 24h",
-              matcher: (c: any) => c.carrier_code?.toLowerCase().includes("mrw") || c.supplier_id?.toLowerCase().includes("mrw")
-            }
-          ].map((partner, idx) => {
-            const logo = getCarrierLogo(partner.code)
-            const activeConn = (carrierConnections || []).find((c: any) => partner.matcher(c) && c.is_active !== false)
-            const isConnected = Boolean(activeConn)
-            const envLabel = activeConn?.environment === "production" ? "Produção" : activeConn ? "QA / Testes" : null
-
-            return (
-              <div 
-                key={idx} 
-                className={`p-3 rounded-lg border transition-all flex flex-col justify-between gap-3 ${
-                  isConnected 
-                    ? "border-[rgba(18,138,71,0.2)] bg-[var(--accent-soft)] hover:border-[rgba(18,138,71,0.3)]" 
-                    : "border-[var(--border-subtle)] bg-[var(--surface-muted)] opacity-90 hover:opacity-100"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-10 h-8 rounded-md bg-white border border-[var(--border-subtle)] p-1 flex items-center justify-center shadow-2xs">
-                    {logo ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img 
-                        src={logo} 
-                        alt={partner.name} 
-                        className="max-w-full max-h-full object-contain" 
-                      />
-                    ) : (
-                      <Truck className="w-4 h-4 text-[var(--text-tertiary)]" />
-                    )}
-                  </div>
-                  
-                  {isConnected ? (
-                    <span className="text-[9px] font-bold text-[var(--status-success)] bg-[var(--status-success-soft)] border border-[rgba(18,138,71,0.15)] px-1.5 py-0.5 rounded flex items-center gap-1 uppercase tracking-wider">
-                      <span className="w-1 h-1 rounded-full bg-[var(--status-success)] animate-pulse" />
-                      Conectado
-                    </span>
-                  ) : (
-                    <span className="text-[9px] font-bold text-[var(--text-tertiary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] px-1.5 py-0.5 rounded uppercase tracking-wider">
-                      Desligado
-                    </span>
-                  )}
-                </div>
-
-                <div>
-                  <h3 className="font-semibold text-[var(--text-primary)] text-xs">{partner.name}</h3>
-                  <div className="flex items-center justify-between text-[10px] text-[var(--text-tertiary)] mt-0.5 font-medium">
-                    <span>{partner.type}</span>
-                    <span className="text-[var(--text-secondary)]">{partner.leadTime}</span>
-                  </div>
-
-                  {isConnected ? (
-                    <div className="text-[9px] text-[var(--accent)] font-semibold mt-2 pt-1.5 border-t border-[rgba(18,138,71,0.1)] flex items-center justify-between uppercase tracking-wide">
-                      <span>{envLabel}</span>
-                      <span>{activeConn.contract_number ? `#${activeConn.contract_number}` : ""}</span>
-                    </div>
-                  ) : (
-                    <div className="mt-2 pt-1.5 border-t border-[var(--border-subtle)]">
-                      <Link 
-                        href="/ops/configuracao/webservices" 
-                        className="text-[10px] font-semibold text-[var(--status-info)] hover:text-blue-800 flex items-center gap-0.5"
-                      >
-                        <span>Configurar Ligação</span>
-                        <ArrowRight className="w-2.5 h-2.5" />
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
       </div>
     </div>
   )
