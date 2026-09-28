@@ -89,7 +89,6 @@ const navConfig: NavSection[] = [
     label: "SISTEMA",
     items: [
       { title: "Relatórios", href: "/ops/relatorios", icon: BarChart3 },
-      { title: "Integrações", href: "/ops/integracoes", icon: Plug },
       { 
         title: "Configurações", 
         href: "/ops/configuracao/geral", 

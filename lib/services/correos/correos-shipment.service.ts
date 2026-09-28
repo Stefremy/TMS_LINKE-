@@ -71,6 +71,8 @@ export class CorreosShipmentService {
 
     if (input.tipoEtiqueta) {
       Object.assign(payload, {
+        generarEtiqueta: "1",
+        imprimirEtiqueta: "1",
         listaInformacionAdicional: [
           {
             tipoEtiqueta: input.tipoEtiqueta,

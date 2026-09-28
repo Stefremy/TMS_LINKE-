@@ -201,11 +201,11 @@ export function TabelasLinkeTab({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5">
-                      {getCarrierLogo(servico.preferred_carrier_id || servico.preferred_carrier_name) ? (
+                      {getCarrierLogo(servico.preferred_carrier_name) ? (
                         <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-white border border-slate-200 shadow-sm flex-shrink-0 p-1">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={getCarrierLogo(servico.preferred_carrier_id || servico.preferred_carrier_name)!}
+                            src={getCarrierLogo(servico.preferred_carrier_name)!}
                             alt={servico.preferred_carrier_name}
                             className="w-full h-full object-contain"
                           />
@@ -418,16 +418,16 @@ export function TabelasLinkeTab({
 
               {/* Price Tables per Zone */}
               <div className="p-6 space-y-6">
-                {currentServico.zones.map((zone) => (
-                  <div key={zone.zone_code} className="space-y-3">
+                {currentServico.zones.map((zone, idx) => (
+                  <div key={zone.zone_code || (zone as any).id || idx} className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
                         <h3 className="font-bold text-sm text-slate-800">
-                          {zone.zone_name}
+                          {zone.zone_name || (zone as any).name}
                         </h3>
                         <span className="text-xs font-mono text-slate-400">
-                          ({zone.zone_code})
+                          ({zone.zone_code || "N/A"})
                         </span>
                       </div>
                       <span className="text-xs font-semibold text-slate-500">

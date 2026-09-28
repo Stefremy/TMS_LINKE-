@@ -86,6 +86,8 @@ export async function GET() {
       tipoEtiqueta: "1"
     })
 
+    results.correos.rawResult = correosResult // Added this so we can inspect the exact payload!
+
     if (correosResult.codigoRetorno === 0 || (correosResult.codigoRetorno === 404 && correosResult.datosResultado)) {
       results.correos.status = "SUCCESS"
       results.correos.tracking = correosResult.datosResultado

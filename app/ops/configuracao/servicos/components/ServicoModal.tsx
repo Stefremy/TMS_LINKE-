@@ -654,24 +654,20 @@ export function ServicoModal({
                     }}
                     className="px-2.5 py-2 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-lg text-[11px] font-bold text-emerald-900 cursor-pointer transition-colors"
                   >
-                    {formData.preferred_carrier_name?.toLowerCase().includes("correos") ? (
-                      <>
-                        <option value="">-- Escolher Preset Correos --</option>
+                      <option value="">-- Escolher Preset Rápido --</option>
+                      <optgroup label="-- Presets Correos Express --">
                         <option value="93">Correos Paq 24 (93) ✅</option>
                         <option value="63">Correos E-Paq 24 / E-Commerce (63) ✅</option>
                         <option value="62">Correos Paq 48 / Islas (62) ✅</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="">-- Escolher Preset CTT --</option>
+                      </optgroup>
+                      <optgroup label="-- Presets CTT Expresso --">
                         <option value="EMSF056.01">CTT Para Amanhã 24H • Guia DD (EMSF056.01) ✅</option>
                         <option value="EMSF057.01">CTT Em 2 Dias 48H • Guia DB (EMSF057.01) ✅</option>
                         <option value="ENCF008.01">CTT Económico 48 Continente • Guia EQ (ENCF008.01) ✅</option>
                         <option value="EMSF010.01">CTT 19 Múltiplo (10+ vol.) • Guia EG (EMSF010.01) ✅</option>
                         <option value="EMSF021.02">CTT Espanha Peninsular • Guia DD (EMSF021.02)</option>
                         <option value="EMSF081.01">CTT Internacional Avião Express (EMSF081.01)</option>
-                      </>
-                    )}
+                      </optgroup>
                   </select>
                 </div>
                 <p className="text-[11px] font-medium text-emerald-700/80 mt-1.5 leading-snug">

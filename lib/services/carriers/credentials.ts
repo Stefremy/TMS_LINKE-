@@ -98,7 +98,7 @@ export async function resolveCorreosCredentials(connectionId?: string): Promise<
         codRte: conn.contract_number,
         user: conn.auth_id,
         pass: conn.user_id || "",
-        environment: (conn.environment as "test" | "production") || "production",
+        environment: (conn.environment === "qa" ? "test" : conn.environment as "test" | "production") || "production",
       }
     }
   } catch {}
@@ -119,7 +119,7 @@ export async function resolveCorreosCredentials(connectionId?: string): Promise<
         codRte: d.contract_number,
         user: d.auth_id,
         pass: d.user_id || "",
-        environment: (d.environment as "test" | "production") || "production",
+        environment: (d.environment === "qa" ? "test" : d.environment as "test" | "production") || "production",
       }
     }
   } catch {}
