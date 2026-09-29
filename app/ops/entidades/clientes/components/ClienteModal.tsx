@@ -381,10 +381,6 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                 </span>
                 <span>•</span>
                 <span>NIF: <strong className="text-[var(--text-primary)] font-mono">{formData.nif || "—"}</strong></span>
-                <span>•</span>
-                <span className="text-[var(--accent)] font-semibold">
-                  {servicesList.filter(s => s.is_enabled).length} Serviços CTT Ativos
-                </span>
               </div>
             </div>
           </div>
