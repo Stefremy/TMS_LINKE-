@@ -108,7 +108,11 @@ const navConfig: NavSection[] = [
   }
 ]
 
-export function SidebarNav() {
+interface SidebarNavProps {
+  collapsed?: boolean
+}
+
+export function SidebarNav({ collapsed = false }: SidebarNavProps) {
   const pathname = usePathname()
   
   // Track open state of multiple accordions
@@ -142,6 +146,97 @@ export function SidebarNav() {
       ...prev,
       [title]: !prev[title]
     }))
+  }
+
+  if (collapsed) {
+    return (
+      <nav className="flex-1 px-2 space-y-3 overflow-y-auto mt-4 pb-8">
+        {navConfig.map((section, idx) => (
+          <div key={idx} className="flex flex-col">
+            {idx > 0 && <div className="my-2 border-t border-[var(--border-subtle)] mx-1" />}
+            <div className="flex flex-col space-y-1">
+              {section.items.map((item) => {
+                const hasSubItems = item.subItems && item.subItems.length > 0
+                const isActive = item.href === "/ops"
+                  ? pathname === "/ops"
+                  : hasSubItems
+                  ? false
+                  : pathname.startsWith(item.href)
+
+                const isGroupActive = hasSubItems && item.subItems!.some(sub =>
+                  pathname === sub.href ||
+                  (sub.href === "/ops/configuracao/precos" && pathname === "/ops/configuracao/servicos") ||
+                  pathname.startsWith(sub.href + "/")
+                )
+
+                if (hasSubItems) {
+                  return (
+                    <div key={item.title} className="relative group flex justify-center">
+                      <Link
+                        href={item.href}
+                        className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
+                          isGroupActive
+                            ? "bg-[var(--accent-soft)] text-[var(--accent)] font-semibold"
+                            : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
+                        }`}
+                      >
+                        <item.icon className="w-5 h-5" strokeWidth={isGroupActive ? 2.2 : 1.8} />
+                      </Link>
+
+                      {/* Flyout Submenu on Hover */}
+                      <div className="absolute left-full top-0 ml-2 z-50 min-w-[190px] bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-lg shadow-lg p-1.5 hidden group-hover:block">
+                        <div className="px-2.5 py-1 text-[11px] font-bold text-[var(--text-primary)] border-b border-[var(--border-subtle)] mb-1">
+                          {item.title}
+                        </div>
+                        {item.subItems!.map((sub) => {
+                          const isSubActive = pathname === sub.href || (sub.href === "/ops/configuracao/precos" && pathname === "/ops/configuracao/servicos")
+                          return (
+                            <Link
+                              key={sub.title}
+                              href={sub.href}
+                              className={`block py-1.5 px-2 rounded-md text-[12px] transition-colors ${
+                                isSubActive
+                                  ? "text-[var(--accent)] font-bold bg-[var(--accent-soft)]/70"
+                                  : "text-[var(--text-secondary)] font-medium hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
+                              }`}
+                            >
+                              {sub.title}
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div key={item.title} className="relative group flex justify-center">
+                    <Link
+                      href={item.href}
+                      className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
+                        isActive
+                          ? "bg-[var(--accent-soft)] text-[var(--accent)] font-semibold"
+                          : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
+                      }`}
+                    >
+                      <item.icon className="w-5 h-5" strokeWidth={isActive ? 2.2 : 1.8} />
+                      {item.badge && (
+                        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-[var(--surface-bg)]" />
+                      )}
+                    </Link>
+
+                    {/* Tooltip on Hover */}
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 px-2 py-1 bg-[var(--text-primary)] text-[var(--surface-bg)] text-[11px] font-medium rounded shadow-md whitespace-nowrap pointer-events-none hidden group-hover:block">
+                      {item.title}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
+    )
   }
 
   return (

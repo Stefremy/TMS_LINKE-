@@ -1,7 +1,6 @@
 import * as React from "react"
 import Link from "next/link"
-import Image from "next/image"
-import { SidebarNav } from "./components/SidebarNav"
+import { OpsSidebar } from "./components/OpsSidebar"
 import { NotificationBell } from "./components/NotificationBell"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
 import { createClient } from "@/lib/supabase/server"
@@ -10,8 +9,6 @@ import { requireEmployee } from "@/lib/auth/context"
 import { 
   Plus,
   HelpCircle,
-  ToggleRight,
-  ChevronsLeft,
   User,
   LogOut
 } from "lucide-react"
@@ -30,43 +27,8 @@ export default async function OpsLayout({
 
   return (
     <div className="min-h-screen bg-[var(--canvas-bg)] flex flex-col md:flex-row text-[var(--text-primary)]">
-      {/* Sidebar */}
-      <aside className="w-full md:w-[220px] bg-[var(--surface-bg)] border-r border-[var(--border-subtle)] flex flex-col shrink-0">
-        
-        {/* Logo Area */}
-        <div className="pt-6 pb-2 px-6">
-          <Link href="/ops" className="block w-full">
-            <Image 
-              src="/Linke-logo.png" 
-              alt="Linke TMS" 
-              width={130} 
-              height={32} 
-              className="object-contain" 
-              priority 
-            />
-          </Link>
-          <div className="text-[11px] text-[var(--text-tertiary)] font-medium mt-2">
-            v2.8.4 Enterprise
-          </div>
-        </div>
-        
-        {/* Navigation */}
-        <SidebarNav />
-
-        {/* Bottom Sidebar Toggles */}
-        <div className="px-4 pb-4 pt-2">
-          <div className="bg-[var(--surface-muted)] rounded-md border border-[var(--border-subtle)] overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-subtle)]">
-              <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Modo Operações</span>
-              <ToggleRight className="w-4 h-4 text-[var(--accent)]" />
-            </div>
-            <div className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-[rgba(0,0,0,0.02)] transition-colors">
-              <span className="text-[11px] font-medium text-[var(--text-secondary)]">Recolher painel</span>
-              <ChevronsLeft className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
-            </div>
-          </div>
-        </div>
-      </aside>
+      {/* Interactive Collapsible Sidebar */}
+      <OpsSidebar />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
