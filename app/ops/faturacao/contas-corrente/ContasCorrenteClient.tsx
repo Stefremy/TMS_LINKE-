@@ -18,6 +18,18 @@ export default function ContasCorrenteClient({
   moloniConfig?: any
 }) {
   const router = useRouter()
+
+  // Format Moloni document number: "13" → "FT 2026/13" (or pass through if already formatted)
+  const formatFTNumber = (num: string | number | null | undefined): string | null => {
+    if (!num) return null
+    const s = String(num).trim()
+    if (!s) return null
+    // Already has prefix (e.g. "FT 2026/13") — return as-is
+    if (s.includes('/') || s.toUpperCase().startsWith('FT')) return s
+    // Raw sequential number — compose with current year
+    return `FT ${new Date().getFullYear()}/${s}`
+  }
+
   const [expandedClient, setExpandedClient] = React.useState<string | null>(null)
   const [showHistory, setShowHistory] = React.useState<boolean>(true)
   const [openActionMenuId, setOpenActionMenuId] = React.useState<string | null>(null)
@@ -493,10 +505,10 @@ export default function ContasCorrenteClient({
                             <div key={stmt.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-[var(--surface-muted)]/50 transition-colors">
                               <div>
                                 <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
-                                {stmt.moloni_document_number && (
+                                {formatFTNumber(stmt.moloni_document_number) && (
                                   <p className="text-[10px] font-bold text-[var(--accent)] font-mono mt-0.5 flex items-center gap-1">
                                     <Cloud className="w-3 h-3 shrink-0" />
-                                    {stmt.moloni_document_number}
+                                    {formatFTNumber(stmt.moloni_document_number)}
                                   </p>
                                 )}
                                 <p className="text-[10px] text-[var(--text-tertiary)] flex items-center gap-2 mt-0.5">
@@ -588,10 +600,10 @@ export default function ContasCorrenteClient({
                     </div>
                     <div>
                       <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
-                      {stmt.moloni_document_number && (
+                      {formatFTNumber(stmt.moloni_document_number) && (
                         <p className="text-[10px] font-bold text-[var(--accent)] font-mono mt-0.5 flex items-center gap-1">
                           <Cloud className="w-3 h-3 shrink-0" />
-                          {stmt.moloni_document_number}
+                          {formatFTNumber(stmt.moloni_document_number)}
                         </p>
                       )}
                       <p className="text-[11px] text-[var(--text-tertiary)] flex items-center gap-2 mt-0.5">

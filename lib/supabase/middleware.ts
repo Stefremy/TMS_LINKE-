@@ -10,6 +10,12 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: {
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        sameSite: 'lax' as const,
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+      },
       cookies: {
         getAll() {
           return request.cookies.getAll()
@@ -22,6 +28,15 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
+
+          // Clean up stale Supabase auth chunk cookies to prevent 494 header overflow
+          const cookieNamesBeingSet = new Set(cookiesToSet.map(c => c.name))
+          request.cookies.getAll().forEach(({ name }) => {
+            const isChunk = /^sb-[^-]+-auth-token\.\d+$/.test(name)
+            if (isChunk && !cookieNamesBeingSet.has(name)) {
+              supabaseResponse.cookies.delete(name)
+            }
+          })
         },
       },
     }
