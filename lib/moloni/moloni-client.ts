@@ -612,6 +612,18 @@ export class MoloniClient {
   }
 
   /**
+   * Obtém o número legível de um documento Moloni (ex: "FT 2025/1")
+   */
+  async getDocumentNumber(documentId: number): Promise<string | null> {
+    try {
+      const result = await this.request("documents/getOne", { document_id: documentId });
+      return result?.number || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Obtém o link PDF de um documento
    */
   async getDocumentPDFLink(documentId: number) {

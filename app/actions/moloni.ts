@@ -38,6 +38,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
 
     let moloniDocumentId = null
     let moloniDocumentUrl = null
+    let moloniDocumentNumber: string | null = null
     
     // Verificar credenciais Moloni (no ambiente ou em audit_log)
     let moloniConfig: any = null
@@ -245,6 +246,10 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
         
         moloniDocumentId = invoiceRes.document_id
         moloniDocumentUrl = await moloni.getDocumentPDFLink(moloniDocumentId)
+        // Fetch human-readable FT number (e.g. "FT 2025/123")
+        if (moloniDocumentId) {
+          try { moloniDocumentNumber = await moloni.getDocumentNumber(moloniDocumentId) } catch {}
+        }
       } catch (moloniErr: any) {
         moloniEmissionError = moloniErr?.message || "Erro desconhecido ao comunicar com Moloni"
         console.warn("Moloni Invoice Emission Warning (continuing with TMS statement):", moloniEmissionError)
@@ -269,6 +274,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
         client_name: client.short_name || client.legal_name,
         statement_number: statementNumber,
         moloni_document_id: moloniDocumentId,
+        moloni_document_number: moloniDocumentNumber,
         moloni_document_pdf: moloniDocumentUrl,
         moloni_error: moloniEmissionError,
         is_pro_forma: isProForma,
@@ -315,6 +321,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
     return { 
       success: true, 
       statementNumber, 
+      moloniDocumentNumber,
       url: `/api/statements/${encodeURIComponent(statementNumber)}/pdf`,
       moloniDocumentPdf: moloniDocumentUrl ? localMoloniPdfUrl : null,
       moloniError: moloniEmissionError
@@ -760,10 +767,15 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       throw e
     }
 
+    // Fetch human-readable FT number (e.g. "FT 2025/123")
+    let moloniDocNumber: string | null = null
+    try { moloniDocNumber = await moloni.getDocumentNumber(moloniDocId) } catch {}
+
     // 8. Atualizar no audit_log
     const updatedDetails = {
       ...stmt,
       moloni_document_id: moloniDocId,
+      moloni_document_number: moloniDocNumber || stmt.moloni_document_number || null,
       moloni_document_pdf: moloniDocPdf,
       moloni_receipt_pdf: isProForma ? stmt.moloni_receipt_pdf : moloniDocPdf, // If Fatura-Recibo, it is the receipt
       is_pro_forma: isProForma,

@@ -28,6 +28,7 @@ export default function ContasCorrenteClient({
     clientName: string
     totalValue: number
     moloniPdf?: string | null
+    moloniDocumentNumber?: string | null
   } | null>(null)
   
   // Filtros
@@ -368,7 +369,8 @@ export default function ContasCorrenteClient({
                                   url: fallbackUrl,
                                   clientName: client.legal_name || client.short_name,
                                   totalValue: totalValue,
-                                  moloniPdf: hasOfficialMoloni ? officialPdfUrl : null
+                                  moloniPdf: hasOfficialMoloni ? officialPdfUrl : null,
+                                  moloniDocumentNumber: res.moloniDocumentNumber || null
                                 })
                                 setExpandedClient(client.id)
                                 router.refresh()
@@ -491,6 +493,12 @@ export default function ContasCorrenteClient({
                             <div key={stmt.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-[var(--surface-muted)]/50 transition-colors">
                               <div>
                                 <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
+                                {stmt.moloni_document_number && (
+                                  <p className="text-[10px] font-bold text-[var(--accent)] font-mono mt-0.5 flex items-center gap-1">
+                                    <Cloud className="w-3 h-3 shrink-0" />
+                                    {stmt.moloni_document_number}
+                                  </p>
+                                )}
                                 <p className="text-[10px] text-[var(--text-tertiary)] flex items-center gap-2 mt-0.5">
                                   <span>Emitido a {new Date(stmt.created_at).toLocaleDateString("pt-PT")}</span>
                                   <span>•</span>
@@ -580,6 +588,12 @@ export default function ContasCorrenteClient({
                     </div>
                     <div>
                       <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
+                      {stmt.moloni_document_number && (
+                        <p className="text-[10px] font-bold text-[var(--accent)] font-mono mt-0.5 flex items-center gap-1">
+                          <Cloud className="w-3 h-3 shrink-0" />
+                          {stmt.moloni_document_number}
+                        </p>
+                      )}
                       <p className="text-[11px] text-[var(--text-tertiary)] flex items-center gap-2 mt-0.5">
                         <span className="font-semibold text-[var(--text-secondary)]">{stmt.client_name}</span>
                         <span>•</span>
@@ -803,6 +817,11 @@ export default function ContasCorrenteClient({
               <p className="text-white/80 text-xs font-mono mt-0.5 font-semibold">
                 {issuedStatement.statementNumber}
               </p>
+              {issuedStatement.moloniDocumentNumber && (
+                <p className="text-white/90 text-xs font-mono font-bold mt-1 bg-white/15 rounded-md px-2 py-0.5 inline-block">
+                  📄 {issuedStatement.moloniDocumentNumber}
+                </p>
+              )}
             </div>
 
             <div className="p-6 space-y-4">
