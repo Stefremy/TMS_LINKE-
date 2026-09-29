@@ -10,10 +10,29 @@ import { requireEmployee } from "@/lib/auth/context"
 let memorySalarios: SalarioRecord[] = [...DEFAULT_SALARIOS]
 
 /**
+ * Ensures the caller is an authenticated employee with access to the confidential Salários module.
+ * Super-Admin (Stefano / role === 'admin') has unconditional access.
+ * Other employees must have the "Gestão de Salários & Vencimentos" permission.
+ */
+export async function requireSalariosAccess() {
+  const ctx = await requireEmployee()
+  const isSuperAdmin = Boolean(
+    ctx.user?.email?.toLowerCase().includes("stefano") ||
+    ctx.role === "admin" ||
+    ctx.permissions?.includes("Acesso Total (Super-Admin)")
+  )
+  const hasAccess = isSuperAdmin || Boolean(ctx.permissions?.includes("Gestão de Salários & Vencimentos"))
+  if (!hasAccess) {
+    throw new Error("Acesso restrito. Não possui a permissão 'Gestão de Salários & Vencimentos' para aceder a esta área confidencial.")
+  }
+  return { ctx, isSuperAdmin }
+}
+
+/**
  * Fetch all salary records with optional filter by month & year
  */
 export async function getSalariosAction(month?: number, year?: number): Promise<SalarioRecord[]> {
-  await requireEmployee()
+  await requireSalariosAccess()
   try {
     const supabase = await createClient()
     let query = supabase.from("salarios").select("*").order("created_at", { ascending: false })
@@ -46,7 +65,7 @@ export async function getSalariosAction(month?: number, year?: number): Promise<
 export async function saveSalarioAction(
   record: Partial<SalarioRecord>
 ): Promise<{ success: boolean; salario?: SalarioRecord; message?: string }> {
-  await requireEmployee()
+  await requireSalariosAccess()
   try {
     const totals = calculateSalarioTotals(record)
 
@@ -116,7 +135,7 @@ export async function saveSalarioAction(
  * Delete a salary record
  */
 export async function deleteSalarioAction(id: string): Promise<{ success: boolean }> {
-  await requireEmployee()
+  await requireSalariosAccess()
   try {
     const supabase = await createClient()
     await supabase.from("salarios").delete().eq("id", id)
@@ -138,7 +157,7 @@ export async function markSalarioStatusAction(
   paymentDate?: string,
   paymentMethod?: string
 ): Promise<{ success: boolean; salario?: SalarioRecord }> {
-  await requireEmployee()
+  await requireSalariosAccess()
   const existing = memorySalarios.find((s) => s.id === id)
   if (!existing) return { success: false }
 
@@ -170,7 +189,7 @@ export async function batchMarkSalariosPaidAction(
   paymentDate?: string,
   paymentMethod?: string
 ): Promise<{ success: boolean; updatedCount: number }> {
-  await requireEmployee()
+  await requireSalariosAccess()
   const today = paymentDate || new Date().toISOString().slice(0, 10)
   
   memorySalarios = memorySalarios.map((s) => {
@@ -213,7 +232,7 @@ export async function batchGenerateMonthPayrollAction(
   month: number,
   year: number
 ): Promise<{ success: boolean; createdCount: number; message: string }> {
-  await requireEmployee()
+  await requireSalariosAccess()
   try {
     const colaboradores = await getColaboradoresAction()
     const activeStaff = colaboradores.filter((c) => c.status === "Ativo")

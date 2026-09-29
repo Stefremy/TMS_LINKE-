@@ -15,7 +15,7 @@ import {
   Lock,
   UserCheck
 } from "lucide-react"
-import { Colaborador, ACCESS_LEVELS } from "../types"
+import { Colaborador, ACCESS_LEVELS, AVAILABLE_PERMISSIONS } from "../types"
 import { setColaboradorCredentialsAction } from "@/app/actions/auth"
 import { saveColaboradorAction } from "@/app/actions/colaboradores"
 
@@ -25,16 +25,6 @@ interface ColaboradorAuthModalProps {
   colaborador: Colaborador
   onUpdated?: (updated: Colaborador) => void
 }
-
-const AVAILABLE_PERMISSIONS = [
-  "Acesso Total (Super-Admin)",
-  "Gestão de Clientes & Contratos",
-  "Emissão e Controlo de Guias CTT",
-  "Pedidos de Recolha & Distribuição",
-  "Faturação & Contas Correntes",
-  "Gestão de Transportadoras & Frotas",
-  "Configurações de Webservices & Integrações",
-]
 
 export function ColaboradorAuthModal({
   isOpen,
@@ -93,6 +83,7 @@ Colaborador: ${colaborador.name}
 Email de Login: ${email}
 Password: ${password || "[A password atual do colaborador]"}
 Nível de Acesso: ${accessLevel}
+Permissões: ${selectedPermissions.join(", ")}
 Link de Acesso: http://localhost:3000/ops`
 
     navigator.clipboard.writeText(text)
@@ -140,32 +131,32 @@ Link de Acesso: http://localhost:3000/ops`
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-[var(--surface-bg)] rounded-2xl shadow-2xl border border-[var(--border-subtle)] w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/75">
+        <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-muted)]">
           <div className="flex items-center gap-3">
             {colaborador.avatar ? (
-              <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm shrink-0 border border-slate-200">
+              <div className="w-10 h-10 rounded-xl overflow-hidden shadow-2xs shrink-0 border border-[var(--border-subtle)]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={colaborador.avatar} alt={colaborador.name} className="w-full h-full object-cover" />
               </div>
             ) : (
               <div
-                className="w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-sm shrink-0"
+                className="w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-2xs shrink-0"
                 style={{ backgroundColor: colaborador.avatar_color || "#16a34a" }}
               >
                 {colaborador.name.charAt(0).toUpperCase()}
               </div>
             )}
             <div>
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-base font-bold text-[var(--text-primary)]">
                 Acesso & Credenciais de Login
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[var(--text-tertiary)]">
                 {colaborador.name} &bull; <span className="font-mono">{colaborador.code}</span>
               </p>
             </div>
@@ -173,7 +164,7 @@ Link de Acesso: http://localhost:3000/ops`
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-lg transition-colors"
+            className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-dim)] rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -182,21 +173,21 @@ Link de Acesso: http://localhost:3000/ops`
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5">
           {error && (
-            <div className="p-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl font-medium">
+            <div className="p-3 text-xs text-[var(--status-error)] bg-[var(--status-error-soft)] border border-[rgba(220,38,38,0.2)] rounded-xl font-medium">
               {error}
             </div>
           )}
 
           {success && (
-            <div className="p-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl font-medium flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <div className="p-3 text-xs text-[var(--status-success)] bg-[var(--status-success-soft)] border border-[rgba(18,138,71,0.25)] rounded-xl font-medium flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-[var(--accent)]" />
               <span>{success}</span>
             </div>
           )}
 
           {/* Email de Login */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
               Email de Login *
             </label>
             <input
@@ -204,22 +195,22 @@ Link de Acesso: http://localhost:3000/ops`
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none font-medium"
+              className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none font-medium text-[var(--text-primary)]"
               placeholder="colaborador@linkelogistics.pt"
             />
-            <p className="text-[11px] text-slate-400 mt-1">Email utilizado para autenticação no portal TMS Linke.</p>
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-1">Email utilizado para autenticação no portal TMS Linke.</p>
           </div>
 
           {/* Password com Gerador */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-semibold text-slate-700">
+              <label className="text-xs font-semibold text-[var(--text-primary)]">
                 Password / Palavra-passe
               </label>
               <button
                 type="button"
                 onClick={handleGeneratePassword}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 hover:text-green-800"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:underline cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 Gerar Password Segura
@@ -232,12 +223,12 @@ Link de Acesso: http://localhost:3000/ops`
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Introduza uma nova password ou deixe vazio para manter a atual"
-                className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none font-mono"
+                className="w-full pl-3.5 pr-10 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none font-mono text-[var(--text-primary)]"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -246,7 +237,7 @@ Link de Acesso: http://localhost:3000/ops`
 
           {/* Nível de Acesso */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-2">
+            <label className="block text-xs font-semibold text-[var(--text-primary)] mb-2">
               Nível de Acesso (Perfil)
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -258,17 +249,17 @@ Link de Acesso: http://localhost:3000/ops`
                     onClick={() => setAccessLevel(level)}
                     className={`p-3 rounded-xl border cursor-pointer transition-all ${
                       isSelected
-                        ? "bg-blue-50/70 border-blue-500 ring-2 ring-blue-100"
-                        : "bg-slate-50 border-slate-200 hover:bg-slate-100/70"
+                        ? "bg-[var(--accent-soft)] border-[var(--accent)] ring-2 ring-[var(--accent)]/20"
+                        : "bg-[var(--surface-muted)] border-[var(--border-subtle)] hover:bg-[var(--surface-dim)]"
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className={`text-xs font-bold ${isSelected ? "text-blue-900" : "text-slate-700"}`}>
+                      <span className={`text-xs font-bold ${isSelected ? "text-[var(--accent)]" : "text-[var(--text-primary)]"}`}>
                         {level}
                       </span>
-                      {isSelected && <Shield className="w-3.5 h-3.5 text-blue-600" />}
+                      {isSelected && <Shield className="w-3.5 h-3.5 text-[var(--accent)]" />}
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-1 leading-tight">
+                    <p className="text-[11px] text-[var(--text-tertiary)] mt-1 leading-tight">
                       {level === "Administrador"
                         ? "Acesso total à gestão, clientes, finanças e configurações."
                         : level === "Operacional"
@@ -283,24 +274,52 @@ Link de Acesso: http://localhost:3000/ops`
 
           {/* Permissões Granulares */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-2">
-              Módulos e Permissões Granulares
-            </label>
-            <div className="space-y-2 bg-slate-50 border border-slate-200 rounded-xl p-3">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-semibold text-[var(--text-primary)]">
+                Módulos e Permissões Granulares
+              </label>
+              <span className="text-[10px] text-[var(--text-tertiary)]">
+                Selecione as permissões ativas
+              </span>
+            </div>
+            <div className="space-y-2 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl p-3">
               {AVAILABLE_PERMISSIONS.map((perm) => {
                 const isChecked = selectedPermissions.includes(perm)
+                const isSalariosPerm = perm === "Gestão de Salários & Vencimentos"
+                const isSuperAdminPerm = perm === "Acesso Total (Super-Admin)"
+
                 return (
                   <label
                     key={perm}
-                    className="flex items-center gap-2.5 text-xs text-slate-700 cursor-pointer hover:text-slate-900"
+                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
+                      isChecked ? "bg-[var(--surface-bg)] shadow-2xs" : "hover:bg-[var(--surface-dim)]/50"
+                    }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => handleTogglePermission(perm)}
-                      className="w-4 h-4 text-green-600 rounded border-slate-300 focus:ring-green-500"
-                    />
-                    <span className="font-medium">{perm}</span>
+                    <div className="flex items-center gap-2.5 text-xs text-[var(--text-primary)]">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleTogglePermission(perm)}
+                        className="w-4 h-4 rounded cursor-pointer accent-[var(--accent)]"
+                      />
+                      <span className={`text-xs ${isSuperAdminPerm ? "font-bold text-[var(--text-primary)]" : "font-medium"}`}>
+                        {perm}
+                      </span>
+                    </div>
+
+                    {isSalariosPerm && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(217,119,6,0.2)]">
+                        <Lock className="w-2.5 h-2.5" />
+                        Área Restrita (/ops/tesouraria/salarios)
+                      </span>
+                    )}
+
+                    {isSuperAdminPerm && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)]">
+                        <Shield className="w-2.5 h-2.5" />
+                        Acesso Geral
+                      </span>
+                    )}
                   </label>
                 )
               })}
@@ -312,19 +331,19 @@ Link de Acesso: http://localhost:3000/ops`
             <button
               type="button"
               onClick={handleCopyCredentials}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)] hover:text-[var(--accent)] bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] border border-[var(--border-subtle)] px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
             >
-              {copiedCredentials ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedCredentials ? <Check className="w-3.5 h-3.5 text-[var(--accent)]" /> : <Copy className="w-3.5 h-3.5" />}
               {copiedCredentials ? "Credenciais Copiadas!" : "Copiar Dados de Acesso"}
             </button>
           </div>
 
           {/* Actions */}
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+          <div className="pt-4 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+              className="px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
             >
               Cancelar
             </button>
@@ -332,10 +351,10 @@ Link de Acesso: http://localhost:3000/ops`
             <button
               type="submit"
               disabled={isLoading}
-              className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-sm disabled:opacity-60 transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-semibold rounded-xl shadow-sm disabled:opacity-60 transition-colors cursor-pointer"
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-              Gravar Acesso
+              Gravar Acessos & Credenciais
             </button>
           </div>
         </form>

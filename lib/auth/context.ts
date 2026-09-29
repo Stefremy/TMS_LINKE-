@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { cache } from "react"
+import { redirect } from "next/navigation"
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { DEFAULT_COLABORADORES } from "@/app/ops/entidades/colaboradores/types"
@@ -125,23 +126,23 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
 })
 
 /**
- * Ensures the caller is authenticated. Throws if not.
+ * Ensures the caller is authenticated. Redirects to /login if not.
  */
 export async function requireUser(): Promise<AuthContext> {
   const ctx = await getAuthContext()
   if (!ctx || !ctx.role || (ctx.role === 'client' && !ctx.client_id)) {
-    throw new Error("Não autorizado. Faça login para continuar.")
+    redirect("/login")
   }
   return ctx
 }
 
 /**
- * Ensures the caller is an authenticated employee or admin. Throws if not.
+ * Ensures the caller is an authenticated employee or admin. Redirects if not.
  */
 export async function requireEmployee(): Promise<AuthContext> {
   const ctx = await requireUser()
   if (ctx.role !== 'employee' && ctx.role !== 'admin') {
-    throw new Error("Acesso negado. Apenas colaboradores podem aceder a este recurso.")
+    redirect("/login")
   }
   return ctx
 }

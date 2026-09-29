@@ -18,9 +18,8 @@ export default async function OpsLayout({
 }: {
   children: React.ReactNode
 }) {
-  await requireEmployee()
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const authContext = await requireEmployee()
+  const user = authContext.user
   
   // Try to get name from metadata, fallback to email prefix, fallback to "Operador"
   const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || "Operador"

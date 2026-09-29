@@ -35,31 +35,31 @@ export function SalarioReceiptModal({
   const monthLabel = MONTH_NAMES[(salario.month || 1) - 1]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-[var(--surface-bg)] rounded-2xl shadow-2xl border border-[var(--border-subtle)] w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Toolbar */}
-        <div className="px-6 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50 print:hidden">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-            <FileCheck className="w-4 h-4 text-green-600" />
+        <div className="px-6 py-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-muted)] print:hidden">
+          <div className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]">
+            <FileCheck className="w-4 h-4 text-[var(--accent)]" />
             <span>Recibo de Vencimento Oficial</span>
-            <span className="text-slate-400 font-normal">&bull;</span>
-            <span className="font-mono text-slate-500">{salario.reference_code}</span>
+            <span className="text-[var(--text-tertiary)] font-normal">&bull;</span>
+            <span className="font-mono text-[var(--text-secondary)]">{salario.reference_code}</span>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-[var(--text-primary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] hover:bg-[var(--surface-dim)] shadow-2xs transition-colors cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Imprimir Recibo</span>
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors"
+              className="p-1.5 rounded-xl text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-dim)] transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -271,13 +271,13 @@ export function SalarioReceiptModal({
         </div>
 
         {/* Footer actions */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between print:hidden">
-          <span className="text-xs text-slate-500">
+        <div className="px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex items-center justify-between print:hidden">
+          <span className="text-xs text-[var(--text-tertiary)]">
             Documento emitido para efeitos de registo e recibo de vencimento.
           </span>
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+            className="px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-dim)] transition-colors cursor-pointer"
           >
             Fechar
           </button>

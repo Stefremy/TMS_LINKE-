@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
   Euro,
   Users,
@@ -27,7 +28,9 @@ import {
   AlertCircle,
   TrendingUp,
   Receipt,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Shield,
+  Lock,
 } from "lucide-react"
 import { SalarioRecord, MONTH_NAMES } from "../types"
 import { SalarioModal } from "./SalarioModal"
@@ -42,9 +45,10 @@ import {
 
 interface SalariosClientProps {
   initialSalarios: SalarioRecord[]
+  isSuperAdmin?: boolean
 }
 
-export function SalariosClient({ initialSalarios }: SalariosClientProps) {
+export function SalariosClient({ initialSalarios, isSuperAdmin = false }: SalariosClientProps) {
   const [salarios, setSalarios] = React.useState<SalarioRecord[]>(initialSalarios || [])
   const [isRefreshing, setIsRefreshing] = React.useState(false)
 
@@ -373,8 +377,8 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
         <div
           className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-2xl shadow-xl border flex items-center gap-2.5 text-xs font-bold animate-in slide-in-from-top-4 duration-200 ${
             feedbackMsg.type === "success"
-              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-              : "bg-rose-50 text-rose-800 border-rose-200"
+              ? "bg-[var(--status-success-soft)] text-[var(--status-success)] border-[rgba(18,138,71,0.25)]"
+              : "bg-[var(--status-error-soft)] text-[var(--status-error)] border-[rgba(220,38,38,0.2)]"
           }`}
         >
           {feedbackMsg.type === "success" ? (
@@ -389,38 +393,52 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
       {/* Top Header & Month Selector */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Salários & Vencimentos</h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Salários & Vencimentos</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)]">
               <Euro className="w-3.5 h-3.5" />
               Tesouraria Linke
             </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(217,119,6,0.2)]">
+              <Lock className="w-3 h-3" />
+              Área Restrita
+            </span>
+            {isSuperAdmin && (
+              <Link
+                href="/ops/entidades/colaboradores"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-primary)] hover:text-[var(--accent)] transition-colors shadow-2xs cursor-pointer"
+                title="Super-Admin: gerir quem tem acesso a esta secção"
+              >
+                <Shield className="w-3.5 h-3.5 text-[var(--accent)]" />
+                Gerir Acessos
+              </Link>
+            )}
           </div>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-[var(--text-tertiary)] mt-1">
             Processamento salarial, recibos de vencimento, retenções fiscais e transferências SEPA.
           </p>
         </div>
 
         {/* Month Selector Bar */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
+          <div className="flex items-center bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-2xl p-1 shadow-2xs">
             <button
               onClick={handlePrevMonth}
-              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
+              className="p-2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded-xl transition-colors"
               title="Mês Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <div className="px-4 py-1 flex items-center gap-2 text-sm font-bold text-slate-800">
-              <Calendar className="w-4 h-4 text-emerald-600" />
+            <div className="px-4 py-1 flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
+              <Calendar className="w-4 h-4 text-[var(--accent)]" />
               <span>{MONTH_NAMES[selectedMonth - 1]}</span>
-              <span className="font-mono text-slate-500">{selectedYear}</span>
+              <span className="font-mono text-[var(--text-tertiary)]">{selectedYear}</span>
             </div>
 
             <button
               onClick={handleNextMonth}
-              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
+              className="p-2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded-xl transition-colors"
               title="Próximo Mês"
             >
               <ChevronRight className="w-4 h-4" />
@@ -430,7 +448,7 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+            className="p-2.5 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] shadow-2xs transition-colors"
             title="Atualizar dados"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -442,87 +460,87 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Total Líquido a Pagar */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
               Total Líquido a Pagar
             </span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <div className="w-10 h-10 rounded-xl bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)]">
               <Euro className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-emerald-900 font-mono">
+            <span className="text-2xl font-extrabold text-[var(--text-primary)] font-mono">
               {stats.totalLiquido.toLocaleString("pt-PT", { minimumFractionDigits: 2 })} €
             </span>
           </div>
-          <span className="text-xs font-medium text-emerald-600 mt-1 block">
+          <span className="text-xs font-medium text-[var(--accent)] mt-1 block">
             {stats.count} colaboradores processados
           </span>
         </div>
 
         {/* Custo Total Empresa */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
               Custo Total Linke
             </span>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+            <div className="w-10 h-10 rounded-xl bg-[var(--surface-muted)] flex items-center justify-center text-[var(--text-secondary)]">
               <Building2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-blue-900 font-mono">
+            <span className="text-2xl font-extrabold text-[var(--text-primary)] font-mono">
               {stats.totalCustoEmpresa.toLocaleString("pt-PT", { minimumFractionDigits: 2 })} €
             </span>
           </div>
-          <span className="text-xs font-medium text-blue-600 mt-1 block">
+          <span className="text-xs font-medium text-[var(--text-tertiary)] mt-1 block">
             Inclui TSU 23.75% + Alimentação
           </span>
         </div>
 
         {/* Retenções Fiscais (IRS + SS) */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
               Impostos & Encargos
             </span>
-            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+            <div className="w-10 h-10 rounded-xl bg-[var(--surface-muted)] flex items-center justify-center text-[var(--text-secondary)]">
               <Receipt className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-purple-900 font-mono">
+            <span className="text-2xl font-extrabold text-[var(--status-error)] font-mono">
               {stats.totalRetencoes.toLocaleString("pt-PT", { minimumFractionDigits: 2 })} €
             </span>
           </div>
-          <span className="text-xs font-medium text-purple-600 mt-1 block">
+          <span className="text-xs font-medium text-[var(--text-tertiary)] mt-1 block">
             IRS ({stats.totalIrs.toFixed(0)}€) + SS ({stats.totalSsTrabalhador.toFixed(0)}€) + TSU ({stats.totalTsuEmpresa.toFixed(0)}€)
           </span>
         </div>
 
         {/* Estado dos Pagamentos */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
               Liquidação de Salários
             </span>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+            <div className="w-10 h-10 rounded-xl bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)]">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-center gap-3">
             <div className="text-xs">
-              <span className="font-bold text-emerald-700 text-lg block">{stats.pagos}</span>
-              <span className="text-slate-500">Pagos</span>
+              <span className="font-bold text-[var(--accent)] text-lg block">{stats.pagos}</span>
+              <span className="text-[var(--text-tertiary)]">Pagos</span>
             </div>
-            <div className="text-xs border-l border-slate-200 pl-3">
-              <span className="font-bold text-blue-700 text-lg block">{stats.agendados}</span>
-              <span className="text-slate-500">Agendados</span>
+            <div className="text-xs border-l border-[var(--border-subtle)] pl-3">
+              <span className="font-bold text-[var(--text-primary)] text-lg block">{stats.agendados}</span>
+              <span className="text-[var(--text-tertiary)]">Agendados</span>
             </div>
-            <div className="text-xs border-l border-slate-200 pl-3">
-              <span className="font-bold text-amber-700 text-lg block">{stats.pendentes}</span>
-              <span className="text-slate-500">Pendentes</span>
+            <div className="text-xs border-l border-[var(--border-subtle)] pl-3">
+              <span className="font-bold text-[var(--status-warning)] text-lg block">{stats.pendentes}</span>
+              <span className="text-[var(--text-tertiary)]">Pendentes</span>
             </div>
           </div>
         </div>
@@ -530,18 +548,18 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
       </div>
 
       {/* Toolbar & Filters */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-4">
+      <div className="bg-[var(--surface-bg)] rounded-2xl p-4 border border-[var(--border-subtle)] shadow-2xs space-y-4">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           
           {/* Search Box */}
           <div className="relative w-full md:max-w-md">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Pesquisar por colaborador, cargo, NIF, ref..."
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+              className="w-full pl-10 pr-4 py-2 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-xs text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:bg-[var(--surface-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition-colors"
             />
           </div>
 
@@ -550,7 +568,7 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
             {selectedIds.length > 0 && (
               <button
                 onClick={handleBatchMarkPaid}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition-all shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--accent-soft)] hover:bg-[var(--accent-soft)]/80 text-[var(--accent)] border border-[rgba(18,138,71,0.2)] rounded-xl text-xs font-bold transition-all shadow-sm"
               >
                 <Check className="w-3.5 h-3.5" />
                 Marcar ({selectedIds.length}) como Pagos
@@ -559,24 +577,24 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
 
             <button
               onClick={handleBatchGenerate}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-xs font-bold transition-all shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-xl text-xs font-bold transition-all shadow-sm"
               title="Gerar Folha do Mês para todos os colaboradores ativos"
             >
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
               Gerar Folha do Mês
             </button>
 
             <button
               onClick={handleExportSEPA}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-xl text-xs font-bold transition-all shadow-sm"
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-slate-500" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
               Exportar SEPA / CSV
             </button>
 
             <button
               onClick={handleOpenNew}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-xs font-bold transition-all shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" />
               Novo Vencimento
@@ -586,13 +604,13 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
         </div>
 
         {/* Filter Row */}
-        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100 text-xs">
+        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-[var(--border-subtle)] text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-medium">Estado:</span>
+            <span className="text-[var(--text-tertiary)] font-medium">Estado:</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-800 font-medium focus:outline-none"
+              className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-2.5 py-1 text-[var(--text-primary)] font-medium focus:outline-none"
             >
               <option value="todos">Todos os Estados</option>
               <option value="Pago">Pago</option>
@@ -603,11 +621,11 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-medium">Departamento:</span>
+            <span className="text-[var(--text-tertiary)] font-medium">Departamento:</span>
             <select
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-800 font-medium focus:outline-none"
+              className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-2.5 py-1 text-[var(--text-primary)] font-medium focus:outline-none"
             >
               <option value="todos">Todos os Departamentos</option>
               {departments.map((d) => (
@@ -625,7 +643,7 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
                 setStatusFilter("todos")
                 setDepartmentFilter("todos")
               }}
-              className="text-green-700 hover:text-green-800 font-semibold underline ml-auto text-xs"
+              className="text-[var(--accent)] hover:text-[var(--accent-hover)] font-semibold underline ml-auto text-xs"
             >
               Repor filtros
             </button>
@@ -634,17 +652,17 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
       </div>
 
       {/* Salary Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/75 font-bold text-slate-500 uppercase tracking-wider text-[11px]">
+              <tr className="border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] font-bold text-[var(--text-tertiary)] uppercase tracking-wider text-[11px]">
                 <th className="py-3.5 px-4 w-10 text-center">
                   <input
                     type="checkbox"
                     checked={filteredSalarios.length > 0 && selectedIds.length === filteredSalarios.length}
                     onChange={handleSelectAll}
-                    className="rounded border-slate-300 text-green-600 focus:ring-green-500 cursor-pointer"
+                    className="rounded cursor-pointer accent-[var(--accent)]"
                   />
                 </th>
                 <th className="py-3.5 px-3">Colaborador</th>
@@ -658,23 +676,23 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
                 <th className="py-3.5 px-4 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-[var(--border-subtle)]">
               {filteredSalarios.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-500">
+                  <td colSpan={10} className="py-12 text-center text-[var(--text-tertiary)]">
                     <div className="max-w-md mx-auto space-y-3">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                      <div className="w-12 h-12 rounded-2xl bg-[var(--surface-muted)] text-[var(--text-tertiary)] flex items-center justify-center mx-auto">
                         <Euro className="w-6 h-6" />
                       </div>
-                      <p className="text-sm font-semibold text-slate-700">
+                      <p className="text-sm font-semibold text-[var(--text-primary)]">
                         Nenhum vencimento processado para {MONTH_NAMES[selectedMonth - 1]} de {selectedYear}
                       </p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-[var(--text-tertiary)]">
                         Pode gerar automaticamente a folha salarial da equipa com 1 clique.
                       </p>
                       <button
                         onClick={handleBatchGenerate}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-xs font-bold transition-all shadow-sm"
                       >
                         <Sparkles className="w-3.5 h-3.5" />
                         Gerar Folha Salarial de {MONTH_NAMES[selectedMonth - 1]}
@@ -691,8 +709,8 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
                     <tr
                       key={s.id}
                       onClick={() => handleOpenReceipt(s)}
-                      className={`hover:bg-slate-50/80 cursor-pointer transition-colors group ${
-                        isSelected ? "bg-green-50/30" : ""
+                      className={`hover:bg-[var(--surface-muted)]/60 cursor-pointer transition-colors group ${
+                        isSelected ? "bg-[var(--accent-soft)]/30" : ""
                       }`}
                     >
                       {/* Checkbox */}
@@ -701,7 +719,7 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => {}}
-                          className="rounded border-slate-300 text-green-600 focus:ring-green-500 cursor-pointer"
+                          className="rounded cursor-pointer accent-[var(--accent)]"
                         />
                       </td>
 
@@ -715,10 +733,10 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
                             {s.colaborador_name.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <span className="font-bold text-slate-900 group-hover:text-green-700 transition-colors block">
+                            <span className="font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors block">
                               {s.colaborador_name}
                             </span>
-                            <span className="font-mono text-[10px] text-slate-400">
+                            <span className="font-mono text-[10px] text-[var(--text-tertiary)]">
                               NIF: {s.colaborador_nif || "---"}
                             </span>
                           </div>
@@ -728,34 +746,34 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
                       {/* Cargo & Departamento */}
                       <td className="py-3.5 px-3">
                         <div>
-                          <span className="font-semibold text-slate-800 block text-xs">{s.colaborador_role}</span>
-                          <span className="text-[11px] text-slate-500">{s.colaborador_department}</span>
+                          <span className="font-semibold text-[var(--text-primary)] block text-xs">{s.colaborador_role}</span>
+                          <span className="text-[11px] text-[var(--text-tertiary)]">{s.colaborador_department}</span>
                         </div>
                       </td>
 
                       {/* Vencimento Base */}
-                      <td className="py-3.5 px-3 text-right font-mono font-medium text-slate-700">
+                      <td className="py-3.5 px-3 text-right font-mono font-medium text-[var(--text-secondary)]">
                         {s.base_salary.toFixed(2)} €
                       </td>
 
                       {/* Subsídio Alimentação */}
-                      <td className="py-3.5 px-3 text-right font-mono text-slate-600">
+                      <td className="py-3.5 px-3 text-right font-mono text-[var(--text-secondary)]">
                         {s.meal_allowance_total.toFixed(2)} €
                       </td>
 
                       {/* Total Bruto */}
-                      <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-900">
+                      <td className="py-3.5 px-3 text-right font-mono font-bold text-[var(--text-primary)]">
                         {s.gross_total.toFixed(2)} €
                       </td>
 
                       {/* Deduções */}
-                      <td className="py-3.5 px-3 text-right font-mono text-rose-700">
+                      <td className="py-3.5 px-3 text-right font-mono text-[var(--status-error)]">
                         -{totalDeductions.toFixed(2)} €
                       </td>
 
                       {/* Total Líquido */}
                       <td className="py-3.5 px-3 text-right">
-                        <span className="font-mono font-black text-emerald-700 text-sm bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                        <span className="font-mono font-black text-[var(--accent)] text-sm bg-[var(--accent-soft)] px-2 py-0.5 rounded-lg border border-[rgba(18,138,71,0.2)]">
                           {s.net_total.toFixed(2)} €
                         </span>
                       </td>
@@ -766,14 +784,14 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
                           onClick={() => handleTogglePaid(s)}
                           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-transform hover:scale-105 ${
                             s.payment_status === "Pago"
-                              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                              ? "bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)]"
                               : s.payment_status === "Agendado"
-                              ? "bg-blue-50 text-blue-800 border border-blue-200"
-                              : "bg-amber-50 text-amber-800 border border-amber-200"
+                              ? "bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)]"
+                              : "bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(217,119,6,0.2)]"
                           }`}
                           title="Clique para alternar estado de pagamento"
                         >
-                          {s.payment_status === "Pago" && <Check className="w-3 h-3 text-emerald-700" />}
+                          {s.payment_status === "Pago" && <Check className="w-3 h-3 text-[var(--accent)]" />}
                           <span>{s.payment_status}</span>
                         </button>
                       </td>
@@ -783,15 +801,15 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => handleOpenReceipt(s)}
-                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded-lg transition-colors"
                             title="Ver Recibo de Vencimento"
                           >
-                            <FileCheck className="w-4 h-4 text-emerald-600" />
+                            <FileCheck className="w-4 h-4 text-[var(--accent)]" />
                           </button>
 
                           <button
                             onClick={() => handleOpenEdit(s)}
-                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded-lg transition-colors"
                             title="Editar Valores"
                           >
                             <Edit className="w-4 h-4" />
@@ -799,7 +817,7 @@ export function SalariosClient({ initialSalarios }: SalariosClientProps) {
 
                           <button
                             onClick={() => handleDelete(s.id, s.colaborador_name)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--status-error)] hover:bg-[var(--status-error-soft)] rounded-lg transition-colors"
                             title="Eliminar Registo"
                           >
                             <Trash2 className="w-4 h-4" />

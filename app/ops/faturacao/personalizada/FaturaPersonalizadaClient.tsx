@@ -58,42 +58,36 @@ const SERVICE_TEMPLATES = [
     description: "Criação de website responsivo em Next.js com páginas institucionais, catálogo e formulários.",
     unitPrice: 850,
     taxRate: 23,
-    icon: "🌐"
   },
   {
     title: "Criação de Loja Online E-Commerce",
     description: "Implementação de plataforma de comércio eletrónico com gestão de produtos, pagamentos e envios Linke.",
     unitPrice: 1450,
     taxRate: 23,
-    icon: "🛒"
   },
   {
     title: "Consultoria Estratégica de Logística & E-Commerce",
     description: "Sessão de consultoria e otimização de fluxos operacionais de transporte e integração de inventário.",
     unitPrice: 350,
     taxRate: 23,
-    icon: "💼"
   },
   {
     title: "Manutenção Web & Alojamento Mensal",
     description: "Avença mensal de suporte técnico, atualizações de segurança e alojamento cloud.",
     unitPrice: 75,
     taxRate: 23,
-    icon: "🛠️"
   },
   {
     title: "Design Gráfico & Identidade Visual",
     description: "Criação de material gráfico corporativo, logótipos e banners para redes sociais e loja online.",
     unitPrice: 250,
     taxRate: 23,
-    icon: "🎨"
   },
   {
     title: "Serviço Operacional Extra / Armazenagem",
     description: "Taxa suplementar de reenvio, manuseamento de carga especial ou armazenagem temporária em armazém.",
     unitPrice: 120,
     taxRate: 23,
-    icon: "📦"
   }
 ]
 
@@ -519,8 +513,7 @@ export default function FaturaPersonalizadaClient({
                   onClick={() => handleAddItem(tmpl)}
                   className="text-left p-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20 transition-all group flex flex-col justify-between cursor-pointer shadow-2xs"
                 >
-                  <div className="flex items-start gap-2.5">
-                    <span className="text-lg leading-none">{tmpl.icon}</span>
+                  <div className="flex items-start">
                     <div>
                       <div className="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors leading-tight">
                         {tmpl.title}
