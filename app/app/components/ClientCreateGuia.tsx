@@ -376,8 +376,16 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
 
         {currentClient && (
           <div className="flex items-center gap-2.5 bg-white border border-slate-200 px-4 py-2 rounded-2xl shadow-2xs text-xs">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
-              <Building2 className="w-4 h-4" />
+            <div 
+              className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white shadow-2xs shrink-0 overflow-hidden border border-slate-200"
+              style={{ backgroundColor: currentClient.color || "#10b981" }}
+            >
+              {currentClient.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={currentClient.logo_url} alt={currentClient.short_name} className="w-full h-full object-cover bg-white" />
+              ) : (
+                <span>{currentClient.short_name ? currentClient.short_name.substring(0, 2).toUpperCase() : <Building2 className="w-4 h-4" />}</span>
+              )}
             </div>
             <div>
               <div className="font-bold text-slate-900">{currentClient.short_name}</div>

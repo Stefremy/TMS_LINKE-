@@ -36,28 +36,95 @@ export function ClientImpersonationBanner() {
   )
 }
 
+import { getClientesAction } from "@/app/actions/clientes"
+import type { Cliente } from "@/app/ops/entidades/clientes/types"
+import { createClient } from "@/lib/supabase/client"
+
 export function ClientProfileSidebar() {
   const searchParams = useSearchParams()
   const clientName = searchParams.get("clientName")
+  const clientId = searchParams.get("clientId")
 
-  const displayName = clientName ? decodeURIComponent(clientName) : "Conta Cliente"
+  const [client, setClient] = React.useState<Cliente | null>(null)
+  const [userAvatar, setUserAvatar] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    // 1. Fetch user session for auth avatar fallback
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.user_metadata?.avatar) {
+        setUserAvatar(user.user_metadata.avatar)
+      } else if (user?.user_metadata?.avatar_url) {
+        setUserAvatar(user.user_metadata.avatar_url)
+      }
+    })
+
+    // 2. Fetch clients to get current client's store logo, color, and store name
+    getClientesAction().then((clients) => {
+      if (!clients || clients.length === 0) return
+
+      let target: Cliente | undefined
+      if (clientId) {
+        target = clients.find((c) => c.id === clientId)
+      }
+      if (!target && clientName) {
+        const decoded = decodeURIComponent(clientName).toLowerCase()
+        target = clients.find(
+          (c) =>
+            c.short_name?.toLowerCase() === decoded ||
+            c.legal_name?.toLowerCase() === decoded
+        )
+      }
+      if (!target) {
+        target = clients[0]
+      }
+
+      if (target) {
+        setClient(target)
+      }
+    })
+  }, [clientId, clientName])
+
+  const displayName = client?.short_name || (clientName ? decodeURIComponent(clientName) : "Conta Cliente")
+  const storeSubtitle = client?.legal_name && client.legal_name.toLowerCase() !== displayName.toLowerCase()
+    ? client.legal_name
+    : "Conta Ativa"
+
+  const avatarImage = client?.logo_url || userAvatar || null
   const initial = displayName.substring(0, 2).toUpperCase()
+  const avatarBg = client?.color || "var(--accent)"
 
   return (
     <div className="px-3 mb-4">
       <div className="w-full flex items-center justify-between p-2 bg-[var(--accent-soft)] rounded-md border border-[rgba(18,138,71,0.12)] transition-colors">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-[var(--accent)] text-white rounded-md flex items-center justify-center font-semibold text-[10px]">
-            {initial}
+        <div className="flex items-center gap-2 min-w-0">
+          <div 
+            className="w-7 h-7 rounded-md flex items-center justify-center font-semibold text-[10px] text-white shrink-0 overflow-hidden shadow-2xs border border-[rgba(18,138,71,0.2)]"
+            style={{ backgroundColor: avatarBg }}
+          >
+            {avatarImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img 
+                src={avatarImage} 
+                alt={displayName} 
+                className="w-full h-full object-cover bg-white" 
+              />
+            ) : (
+              <span>{initial}</span>
+            )}
           </div>
-          <div className="flex flex-col text-left">
-            <span className="font-semibold text-[var(--text-primary)] text-[11px] truncate max-w-[120px]">{displayName}</span>
-            <span className="text-[9px] text-[var(--accent)] font-medium">Conta Ativa</span>
+          <div className="flex flex-col text-left min-w-0">
+            <span className="font-semibold text-[var(--text-primary)] text-[11px] truncate max-w-[125px]" title={displayName}>
+              {displayName}
+            </span>
+            <span className="text-[9px] text-[var(--accent)] font-medium truncate max-w-[125px]" title={storeSubtitle}>
+              {storeSubtitle}
+            </span>
           </div>
         </div>
         <Link 
           href="/ops/entidades/clientes" 
-          className="text-[var(--text-tertiary)] hover:text-[var(--accent)] p-1"
+          className="text-[var(--text-tertiary)] hover:text-[var(--accent)] p-1 shrink-0"
           title="Ver no TMS"
         >
           <Building2 className="w-3 h-3" />
@@ -66,3 +133,4 @@ export function ClientProfileSidebar() {
     </div>
   )
 }
+
