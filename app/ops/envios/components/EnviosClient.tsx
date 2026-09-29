@@ -36,11 +36,17 @@ interface EnviosClientProps {
   envios: any[]
   recolhas: any[]
   clients: any[]
+  pagination?: {
+    page: number
+    totalPages: number
+    total: number
+  }
+  initialSearch?: string
 }
 
-export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
+export function EnviosClient({ envios, recolhas, clients, pagination, initialSearch }: EnviosClientProps) {
   const router = useRouter()
-  const [searchQuery, setSearchQuery] = React.useState("")
+  const [searchQuery, setSearchQuery] = React.useState(initialSearch || "")
   const [statusFilter, setStatusFilter] = React.useState("Todos")
   const [showFilters, setShowFilters] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
@@ -617,6 +623,42 @@ export function EnviosClient({ envios, recolhas, clients }: EnviosClientProps) {
         </table>
       </div>
       
+      {pagination && viewMode === "envios" && (
+        <div className="px-5 py-3 border-t border-[var(--border-subtle)] flex items-center justify-between shrink-0 bg-[var(--surface-bg)]">
+          <span className="text-[11px] text-[var(--text-secondary)] font-medium">
+            A mostrar {envios.length} de {pagination.total} envios (Página {pagination.page} de {pagination.totalPages})
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagination.page <= 1}
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search)
+                params.set("page", (pagination.page - 1).toString())
+                router.push(`?${params.toString()}`)
+              }}
+              className="h-7 text-[11px]"
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagination.page >= pagination.totalPages}
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search)
+                params.set("page", (pagination.page + 1).toString())
+                router.push(`?${params.toString()}`)
+              }}
+              className="h-7 text-[11px]"
+            >
+              Próxima
+            </Button>
+          </div>
+        </div>
+      )}
+
       {showRecolhaModal && (
         <NovaRecolhaModal onClose={() => setShowRecolhaModal(false)} clients={clients} />
       )}

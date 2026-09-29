@@ -1,16 +1,20 @@
 import { createAdminClient } from "@/lib/supabase/server"
-import { getShipmentsAction } from "@/app/actions/shipments"
+import { fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
 import { getClientesAction } from "@/app/actions/clientes"
 import { EnviosClient } from "./components/EnviosClient"
 
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 
-export default async function EnviosPage() {
+export default async function EnviosPage(props: { searchParams?: Promise<{ page?: string, search?: string }> }) {
+  const searchParams = await props.searchParams || {}
   const supabase = createAdminClient()
+  
+  const page = parseInt(searchParams.page || "1", 10)
+  const search = searchParams.search || ""
 
   // Fetch real data from DB & persistent actions
-  const [shipments, recolhasResult, clients] = await Promise.all([
-    getShipmentsAction(),
+  const [paginatedResult, recolhasResult, clients] = await Promise.all([
+    fetchPaginatedShipments({ page, search }),
     supabase
       .from("recolhas")
       .select("*")
@@ -23,7 +27,7 @@ export default async function EnviosPage() {
   const recolhas = recolhasResult.data || []
 
   // Map to the shape expected by EnviosClient (formerly mock data)
-  const mappedEnvios = shipments.map((s: any) => {
+  const mappedEnvios = paginatedResult.data.map((s: any) => {
     const statusCfg = getShipmentStatusConfig(s.status)
     const isCorreos = s.carrier_code === "correos" || 
                       s.carrier_code === "correos_express" ||
@@ -162,6 +166,12 @@ const mappedRecolhas = recolhas.map((r: any) => ({
       envios={mappedEnvios} 
       recolhas={mappedRecolhas}
       clients={clients.map(c => ({ id: c.id, name: c.short_name || c.legal_name || "Cliente" }))} 
+      pagination={{
+        page: paginatedResult.page,
+        totalPages: paginatedResult.totalPages,
+        total: paginatedResult.total
+      }}
+      initialSearch={search}
     />
   )
 }
