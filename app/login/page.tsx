@@ -25,8 +25,9 @@ function SubmitButton() {
 }
 
 import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
-export default function LoginPage() {
+function LoginFormContent() {
   const searchParams = useSearchParams()
   const isError = searchParams.get('error') === 'true'
   return (
@@ -120,5 +121,13 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-white via-transparent to-transparent opacity-40"></div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginFormContent />
+    </Suspense>
   )
 }
