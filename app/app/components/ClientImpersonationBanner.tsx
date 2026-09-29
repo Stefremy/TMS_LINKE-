@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { ExternalLink, ArrowLeft, Building2 } from "lucide-react"
+import { ExternalLink, ArrowLeft, Building2, ChevronRight } from "lucide-react"
 
 export function ClientImpersonationBanner() {
   const searchParams = useSearchParams()
@@ -39,6 +39,7 @@ export function ClientImpersonationBanner() {
 import { getClientesAction } from "@/app/actions/clientes"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { createClient } from "@/lib/supabase/client"
+import { ClientAccountDetailsModal } from "./ClientAccountDetailsModal"
 
 export function ClientProfileSidebar() {
   const searchParams = useSearchParams()
@@ -47,6 +48,7 @@ export function ClientProfileSidebar() {
 
   const [client, setClient] = React.useState<Cliente | null>(null)
   const [userAvatar, setUserAvatar] = React.useState<string | null>(null)
+  const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
 
   React.useEffect(() => {
     // 1. Fetch user session for auth avatar fallback
@@ -95,42 +97,51 @@ export function ClientProfileSidebar() {
   const avatarBg = client?.color || "var(--accent)"
 
   return (
-    <div className="px-3 mb-4">
-      <div className="w-full flex items-center justify-between p-2 bg-[var(--accent-soft)] rounded-md border border-[rgba(18,138,71,0.12)] transition-colors">
-        <div className="flex items-center gap-2 min-w-0">
-          <div 
-            className="w-7 h-7 rounded-md flex items-center justify-center font-semibold text-[10px] text-white shrink-0 overflow-hidden shadow-2xs border border-[rgba(18,138,71,0.2)]"
-            style={{ backgroundColor: avatarBg }}
-          >
-            {avatarImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img 
-                src={avatarImage} 
-                alt={displayName} 
-                className="w-full h-full object-cover bg-white" 
-              />
-            ) : (
-              <span>{initial}</span>
-            )}
+    <>
+      <div className="px-3 mb-4">
+        <div 
+          onClick={() => setIsDetailsOpen(true)}
+          className="w-full flex items-center justify-between p-2 bg-[var(--accent-soft)] hover:bg-[var(--accent-soft)]/90 rounded-md border border-[rgba(18,138,71,0.18)] hover:border-[rgba(18,138,71,0.35)] transition-all cursor-pointer group shadow-2xs"
+          title="Clique para ver todos os detalhes da sua conta"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <div 
+              className="w-7 h-7 rounded-md flex items-center justify-center font-semibold text-[10px] text-white shrink-0 overflow-hidden shadow-2xs border border-[rgba(18,138,71,0.2)] group-hover:scale-105 transition-transform"
+              style={{ backgroundColor: avatarBg }}
+            >
+              {avatarImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img 
+                  src={avatarImage} 
+                  alt={displayName} 
+                  className="w-full h-full object-cover bg-white" 
+                />
+              ) : (
+                <span>{initial}</span>
+              )}
+            </div>
+            <div className="flex flex-col text-left min-w-0">
+              <span className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)] text-[11px] truncate max-w-[125px] transition-colors" title={displayName}>
+                {displayName}
+              </span>
+              <span className="text-[9px] text-[var(--accent)] font-medium truncate max-w-[125px]" title={storeSubtitle}>
+                {storeSubtitle}
+              </span>
+            </div>
           </div>
-          <div className="flex flex-col text-left min-w-0">
-            <span className="font-semibold text-[var(--text-primary)] text-[11px] truncate max-w-[125px]" title={displayName}>
-              {displayName}
-            </span>
-            <span className="text-[9px] text-[var(--accent)] font-medium truncate max-w-[125px]" title={storeSubtitle}>
-              {storeSubtitle}
-            </span>
+          <div className="text-[var(--text-tertiary)] group-hover:text-[var(--accent)] p-1 shrink-0 transition-colors">
+            <ChevronRight className="w-3.5 h-3.5" />
           </div>
         </div>
-        <Link 
-          href="/ops/entidades/clientes" 
-          className="text-[var(--text-tertiary)] hover:text-[var(--accent)] p-1 shrink-0"
-          title="Ver no TMS"
-        >
-          <Building2 className="w-3 h-3" />
-        </Link>
       </div>
-    </div>
+
+      <ClientAccountDetailsModal
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+        client={client}
+        userAvatar={userAvatar}
+      />
+    </>
   )
 }
 
