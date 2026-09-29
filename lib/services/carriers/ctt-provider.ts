@@ -90,10 +90,19 @@ export class CttProvider implements CarrierProvider {
         "delivery_aggregation": "DeliveryAggregation"
       }
 
-      // NOTE: CTT SOAP rejects SpecialServiceType for most subproducts (EMSF056.01 etc) with DeserializationFailed.
-      // Special services (Frágil, SMS, COD, Retorno) are recorded as Observations on the label instead.
-      // Do NOT map them to SOAP SpecialServices.
-      const specialServices: any[] | undefined = undefined
+      // CTT SOAP usually accepts SpecialServices like AgainstReimbursement, Fragil, etc.
+      // But some subproducts might reject them. We'll map the critical ones like COD.
+      const specialServices: any[] = []
+      
+      // If COD / AgainstReimbursement is requested
+      if (input.codValue && input.codValue > 0) {
+        specialServices.push({
+          SpecialServiceType: "AgainstReimbursement", // Tipo 2
+          Value: input.codValue.toString()
+        })
+      }
+      
+      const finalSpecialServices = specialServices.length > 0 ? specialServices : undefined
 
       const payload = {
         clientReference: input.reference || "LNK_GEN",
@@ -101,7 +110,7 @@ export class CttProvider implements CarrierProvider {
         sender: senderData,
         receiver: recipientData,
         shipment: shipmentData,
-        specialServices
+        specialServices: finalSpecialServices
       }
 
       const result = input.autoClose === false

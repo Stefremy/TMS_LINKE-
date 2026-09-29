@@ -589,6 +589,7 @@ export async function emitClientGuiaAction(data: {
   lengthCm?: number
   widthCm?: number
   heightCm?: number
+  observations?: string
 }) {
   
   const ctx = await requireUser()
@@ -661,7 +662,11 @@ export async function emitClientGuiaAction(data: {
       { special_service_code: "cod", special_service_name: "Cobrança (COD)", api_type_code: 1, fee_type: "percentage", percentage_value: 2.0, min_value: 1.80, description: "", is_enabled: true },
       { special_service_code: "fragil", special_service_name: "Tratamento Frágil", api_type_code: 2, fee_type: "fixed", fixed_value: 1.50, description: "", is_enabled: true },
       { special_service_code: "sms_tracking", special_service_name: "Alerta SMS & Tracking", api_type_code: 3, fee_type: "fixed", fixed_value: 0.15, description: "", is_enabled: true },
-      { special_service_code: "auth_return", special_service_name: "Logística Inversa (Retorno)", api_type_code: 4, fee_type: "fixed", fixed_value: 3.85, description: "", is_enabled: true }
+      { special_service_code: "auth_return", special_service_name: "Logística Inversa (Retorno)", api_type_code: 4, fee_type: "fixed", fixed_value: 3.85, description: "", is_enabled: true },
+      { special_service_code: "correos_cod", special_service_name: "AgainstReimbursement (Cobrança)", api_type_code: 2, fee_type: "percentage", percentage_value: 2.0, min_value: 1.80, description: "", is_enabled: true },
+      { special_service_code: "correos_saturday", special_service_name: "Saturday (Sábado)", api_type_code: 4, fee_type: "fixed", fixed_value: 8.50, description: "", is_enabled: true },
+      { special_service_code: "correos_insurance", special_service_name: "SpecialInsurance (Seguro)", api_type_code: 6, fee_type: "percentage", percentage_value: 1.0, min_value: 3.50, description: "", is_enabled: true },
+      { special_service_code: "correos_fragil", special_service_name: "Fragil", api_type_code: 7, fee_type: "fixed", fixed_value: 1.50, description: "", is_enabled: true },
     ]
 
     const clientSpecialFees = matchedClient.pricing?.special_services_fees && matchedClient.pricing.special_services_fees.length > 0 
@@ -676,7 +681,7 @@ export async function emitClientGuiaAction(data: {
           if (feeConfig.fee_type === "fixed") {
             feeAmt = feeConfig.fixed_value || 0
           } else if (feeConfig.fee_type === "percentage") {
-            if (code === "cod" && data.codValue) {
+            if ((code === "cod" || code === "correos_cod") && data.codValue) {
                // COD percentage is calculated on the COD value!
                feeAmt = data.codValue * ((feeConfig.percentage_value || 0) / 100)
             } else {
@@ -776,7 +781,13 @@ export async function emitClientGuiaAction(data: {
         kilos: data.weightKg || 1,
         producto: data.subProductId || "63",
         portes: "P",
-        reembolso: data.codValue ? data.codValue.toString() : "",
+        reembolso: data.selectedSpecialServices?.includes("correos_cod") && data.codValue ? data.codValue.toString() : "",
+        entrSabado: data.selectedSpecialServices?.includes("correos_saturday") ? "S" : undefined,
+        seguro: data.selectedSpecialServices?.includes("correos_insurance") ? "1" : undefined,
+        observaciones: [
+          data.selectedSpecialServices?.includes("correos_fragil") ? "CUIDADO: FRÁGIL" : undefined,
+          data.observations
+        ].filter(Boolean).join(" | ").substring(0, 40) || undefined,
         tipoEtiqueta: "1"
       })
 
@@ -814,7 +825,8 @@ export async function emitClientGuiaAction(data: {
       if (data.selectedSpecialServices?.includes("fragil")) obsLines.push("CUIDADO: FRÁGIL")
       if (data.selectedSpecialServices?.includes("cod") && data.codValue) obsLines.push(`COBRANÇA: ${data.codValue.toFixed(2)}€`)
       if (data.selectedSpecialServices?.includes("auth_return")) obsLines.push("LOGÍSTICA INVERSA")
-      const observations = obsLines.length > 0 ? obsLines.join(" | ").substring(0, 70) : undefined
+      if (data.observations) obsLines.push(data.observations)
+      const observations = obsLines.length > 0 ? obsLines.join(" | ").substring(0, 40) : undefined
 
       const cttResult = await cttProvider.createShipment({
         reference: trackingNumber,
@@ -838,7 +850,7 @@ export async function emitClientGuiaAction(data: {
         weightKg: data.weightKg || 1,
         volumes: data.volumesCount || 1,
         subProduct: data.subProductId || "EMSF056.01",
-        codValue: data.codValue,
+        codValue: data.selectedSpecialServices?.includes("cod") ? data.codValue : 0,
         isReturn: data.isReturn,
         observations,
         autoClose: false

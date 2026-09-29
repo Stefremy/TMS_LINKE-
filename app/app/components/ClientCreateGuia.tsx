@@ -61,6 +61,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
   const [lengthCm, setLengthCm] = React.useState("")
   const [widthCm, setWidthCm] = React.useState("")
   const [heightCm, setHeightCm] = React.useState("")
+  const [observations, setObservations] = React.useState("")
 
   // Special Services selections
   const [selectedSpecialServices, setSelectedSpecialServices] = React.useState<string[]>([])
@@ -280,6 +281,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
         calculatedPrice: numericVal,
         codValue: parseFloat(codAmount) || 0,
         selectedSpecialServices,
+        observations,
       })
 
       const newCode = res.guia
@@ -287,7 +289,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
       const newShipment = {
         guia: newCode,
         destinatario: `${recipientName}${recipientCity ? `, ${recipientCity}` : ""}`,
-        transportadora: "CTT Expresso",
+        transportadora: chosenService.toLowerCase().includes("correos") ? "Correos Express" : "CTT Expresso",
         servico: chosenService,
         estado: "pendente",
         data: new Date().toLocaleDateString("pt-PT"),
@@ -368,7 +370,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
           </div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Criar Novo Envio</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Emissão direta com produtos CTT Expresso, serviços suplementares e preçário personalizado da sua conta.
+            Emissão direta com transportadoras parceiras, serviços suplementares e preçário personalizado da sua conta.
           </p>
         </div>
 
@@ -655,6 +657,21 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700">Observações (opcional)</label>
+            <input 
+              type="text" 
+              placeholder="Ex: Entregar até às 18h..." 
+              value={observations}
+              onChange={(e) => setObservations(e.target.value)}
+              maxLength={40}
+              className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+            />
+            <p className="text-[10px] text-slate-400">
+              Máximo de 40 caracteres suportados pela transportadora.
+            </p>
+          </div>
+
           {/* SELEÇÃO DO SERVIÇO LINKE */}
           <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200 space-y-3">
             <div className="flex items-center justify-between">
@@ -663,7 +680,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
                     src={getCarrierLogo(activeLinkeService?.preferred_carrier_name || "ctt") || ""} 
-                    alt="CTT Expresso" 
+                    alt="Transportadora" 
                     className="max-w-full max-h-full object-contain" 
                   />
                 </div>
@@ -674,7 +691,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
                   {activeLinkeService?.category || "Nacional"}
                 </span>
                 <span className="text-[10px] font-semibold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                  Operador: CTT Expresso API
+                  Operador: {activeLinkeService?.preferred_carrier_name?.toUpperCase() || "CTT EXPRESSO"} API
                 </span>
               </div>
             </div>
@@ -694,7 +711,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
               <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>
             <p className="text-[11px] text-slate-500 pl-1">
-              {activeLinkeService?.description || "Serviço expresso porta-a-porta com emissão integrada CTT Expresso."}
+              {activeLinkeService?.description || "Serviço expresso porta-a-porta com emissão integrada."}
             </p>
           </div>
 
@@ -703,13 +720,16 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <label className="block text-xs font-bold text-slate-900 flex items-center gap-2">
                 <Zap className="w-4 h-4 text-amber-500" />
-                <span>Serviços Especiais & Suplementares CTT (SpecialServices)</span>
+                <span>Serviços Especiais & Suplementares {activeLinkeService?.name?.toLowerCase().includes("correos") ? "Correos Express" : "CTT"} (SpecialServices)</span>
               </label>
               <span className="text-[11px] text-slate-400">Opcionais por envio</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-              {specialFeesList.filter(f => f.is_enabled).map(fee => {
+              {specialFeesList
+                .filter(f => f.is_enabled)
+                .filter(f => activeLinkeService?.name?.toLowerCase().includes("correos") ? f.special_service_code.startsWith("correos_") : !f.special_service_code.startsWith("correos_"))
+                .map(fee => {
                 const isSelected = selectedSpecialServices.includes(fee.special_service_code)
                 return (
                   <div key={fee.special_service_code} className={`p-3 rounded-xl border transition-colors ${isSelected ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
@@ -731,7 +751,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
                         {fee.special_service_name}
                       </label>
                     </div>
-                    {fee.special_service_code === "cod" && isSelected && (
+                    {(fee.special_service_code === "cod" || fee.special_service_code === "correos_cod") && isSelected && (
                       <div className="mt-2 pl-6 flex items-center gap-1.5">
                         <span className="text-[11px] text-slate-500">Valor (€):</span>
                         <input

@@ -50,7 +50,15 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
   const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
 
-  const specialServicesAvailable = currentClient?.pricing?.special_services_fees?.filter(f => f.is_enabled) || []
+  const specialServicesAvailable = React.useMemo(() => {
+    if (!currentClient?.pricing?.special_services_fees) return []
+    const isCorreos = activeLinkeService?.name?.toLowerCase().includes("correos")
+    return currentClient.pricing.special_services_fees.filter((f) => {
+      if (!f.is_enabled) return false
+      if (isCorreos) return f.special_service_code.startsWith("correos_")
+      return !f.special_service_code.startsWith("correos_")
+    })
+  }, [currentClient, activeLinkeService])
 
   // Client-side weight-based estimate (display only; server recalculates using assigned table)
   const estimatedTier = (() => {
@@ -547,7 +555,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                         </div>
                         <p className="text-[10px] text-[var(--text-secondary)] pl-6 leading-tight font-medium">{service.description}</p>
                         
-                        {isSelected && service.special_service_code === "cod" && (
+                        {isSelected && (service.special_service_code === "cod" || service.special_service_code === "correos_cod") && (
                           <div className="mt-2 pl-6" onClick={e => e.stopPropagation()}>
                             <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)] block mb-1">Valor a Cobrar (€)</label>
                             <input 

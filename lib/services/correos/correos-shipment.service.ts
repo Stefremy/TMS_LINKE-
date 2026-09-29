@@ -24,18 +24,25 @@ export class CorreosShipmentService {
     const isRemitentePT = input.remitente.paisISO.toUpperCase() === "PT"
     const isDestinatarioPT = input.destinatario.paisISO.toUpperCase() === "PT"
 
+    // Helper to format PT zip code as XXXX-XXX
+    const formatPTZip = (zip: string) => {
+      const clean = (zip || "").replace(/\D/g, "")
+      return clean.length === 7 ? `${clean.slice(0, 4)}-${clean.slice(4)}` : zip
+    }
+
     // For Portugal, send the full postal code (e.g. 4800-019)
-    const cpRtePT = (input.remitente.cpInternacional || input.remitente.cpNacional || "").trim() || "4000-001"
-    const cpDestPT = (input.destinatario.cpInternacional || input.destinatario.cpNacional || "").trim() || "1000-001"
+    const rawCpRtePT = (input.remitente.cpInternacional || input.remitente.cpNacional || "").trim() || "4000-001"
+    const rawCpDestPT = (input.destinatario.cpInternacional || input.destinatario.cpNacional || "").trim() || "1000-001"
+    
+    const cpRtePT = isRemitentePT ? formatPTZip(rawCpRtePT) : rawCpRtePT
+    const cpDestPT = isDestinatarioPT ? formatPTZip(rawCpDestPT) : rawCpDestPT
 
-    // Ensure full postal code is included in poblacion so it is printed completely on the label below routing zone
-    const formattedPobDest = isDestinatarioPT && cpDestPT && !input.destinatario.poblacion.includes(cpDestPT.slice(0, 4))
-      ? `${cpDestPT} ${input.destinatario.poblacion}`.slice(0, 40)
-      : input.destinatario.poblacion.slice(0, 40)
-
-    const formattedPobRte = isRemitentePT && cpRtePT && !input.remitente.poblacion.includes(cpRtePT.slice(0, 4))
-      ? `${cpRtePT} ${input.remitente.poblacion}`.slice(0, 40)
-      : input.remitente.poblacion.slice(0, 40)
+    // We no longer need to prepend the postal code to poblacion.
+    // Correos Express treats Portugal as "National" (Iberia), so we must pass the 7-digit postal code
+    // in `codPosNac` (without hyphens) and leave `codPosInt` empty. Their system will then correctly
+    // format the label (e.g., "4800" routing zone and "019-BRAGA" sub-zone).
+    const formattedPobDest = input.destinatario.poblacion.slice(0, 40)
+    const formattedPobRte = input.remitente.poblacion.slice(0, 40)
 
     const numBultos = Number(input.bultos) || 1
     const totalKilos = Number(input.kilos) || 1
@@ -64,22 +71,22 @@ export class CorreosShipmentService {
       
       nomRte: input.remitente.nombre,
       nifRte: input.remitente.nif || "",
-      dirRte: input.remitente.direccion,
+      dirRte: isRemitentePT ? `${input.remitente.direccion} - CP: ${cpRtePT}`.slice(0, 100) : input.remitente.direccion,
       pobRte: formattedPobRte,
-      codPosNacRte: isRemitentePT ? "" : (input.remitente.cpNacional || ""),
+      codPosNacRte: input.remitente.paisISO === "ES" ? (input.remitente.cpNacional || "") : "",
       paisISORte: input.remitente.paisISO,
-      codPosIntRte: isRemitentePT ? cpRtePT : "",
+      codPosIntRte: cpRtePT,
       contacRte: input.remitente.contacto || input.remitente.nombre || "",
       telefRte: input.remitente.telefono || "",
       emailRte: input.remitente.email || "",
       
       nomDest: input.destinatario.nombre,
       nifDest: input.destinatario.nif || "",
-      dirDest: input.destinatario.direccion,
+      dirDest: isDestinatarioPT ? `${input.destinatario.direccion} - CP: ${cpDestPT}`.slice(0, 100) : input.destinatario.direccion,
       pobDest: formattedPobDest,
-      codPosNacDest: isDestinatarioPT ? "" : (input.destinatario.cpNacional || ""),
+      codPosNacDest: input.destinatario.paisISO === "ES" ? (input.destinatario.cpNacional || "") : "",
       paisISODest: input.destinatario.paisISO,
-      codPosIntDest: isDestinatarioPT ? cpDestPT : "",
+      codPosIntDest: cpDestPT,
       contacDest: input.destinatario.contacto || input.destinatario.nombre || "",
       telefDest: input.destinatario.telefono || "",
       emailDest: input.destinatario.email || "",

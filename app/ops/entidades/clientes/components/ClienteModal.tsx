@@ -53,6 +53,7 @@ import {
   DEFAULT_CLIENT_PRICING,
   DEFAULT_CTT_SERVICES_PRICING,
   DEFAULT_CTT_SPECIAL_SERVICES_FEES,
+  DEFAULT_CORREOS_SPECIAL_SERVICES_FEES,
   ClientPricingConfig,
   ClientServicePrice,
   ClientSpecialServiceFee
@@ -72,6 +73,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
+  const [specialProviderTab, setSpecialProviderTab] = React.useState<"ctt" | "correos">("ctt")
   const [saveSuccessMsg, setSaveSuccessMsg] = React.useState(false)
 
   // Initialize form data with rich pricing and webservices
@@ -152,7 +154,14 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
           ...DEFAULT_CLIENT_PRICING,
           ...initialData.pricing,
           services_pricing: initialData.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING,
-          special_services_fees: initialData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES,
+          special_services_fees: [
+            ...(initialData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES),
+            ...DEFAULT_CORREOS_SPECIAL_SERVICES_FEES.filter(
+              (defFee) => !(initialData.pricing?.special_services_fees || []).some(
+                (existingFee) => existingFee.special_service_code === defFee.special_service_code
+              )
+            )
+          ],
         },
       })
     }
@@ -1539,7 +1548,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                     <div>
                       <h2 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
                         <Zap className="w-4 h-4 text-amber-500" />
-                        Tabela de Taxas Suplementares e Serviços Especiais (SpecialServices API CTT)
+                        Tabela de Taxas Suplementares e Serviços Especiais
                       </h2>
                       <p className="text-[11px] text-[var(--text-secondary)]">
                         Valores cobrados ao cliente quando adiciona opções especiais de entrega aos seus envios.
@@ -1547,8 +1556,29 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                     </div>
                   </div>
 
+                  {/* Tabs para as diferentes transportadoras */}
+                  <div className="flex border-b border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+                    <button
+                      type="button"
+                      onClick={() => setSpecialProviderTab("ctt")}
+                      className={`flex-1 py-3 text-xs font-bold transition-colors ${specialProviderTab === "ctt" ? "text-[var(--accent)] border-b-2 border-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"}`}
+                    >
+                      CTT Expresso
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSpecialProviderTab("correos")}
+                      className={`flex-1 py-3 text-xs font-bold transition-colors ${specialProviderTab === "correos" ? "text-[var(--accent)] border-b-2 border-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"}`}
+                    >
+                      Correos Express
+                    </button>
+                  </div>
+
                   <div className="divide-y divide-[var(--border-subtle)]">
-                    {specialFeesList.map((fee, idx) => (
+                    {specialFeesList
+                      .map((fee, idx) => ({ fee, idx }))
+                      .filter(({ fee }) => specialProviderTab === "correos" ? fee.special_service_code.startsWith("correos_") : !fee.special_service_code.startsWith("correos_"))
+                      .map(({ fee, idx }) => (
                       <div 
                         key={fee.special_service_code}
                         className={`p-4 flex flex-wrap items-center justify-between gap-4 transition-colors ${

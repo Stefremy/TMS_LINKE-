@@ -1,4 +1,5 @@
 import { CorreosCredentials } from "./types"
+import * as https from "https"
 
 export class CorreosRestClient {
   /**
@@ -19,34 +20,43 @@ export class CorreosRestClient {
     }
 
     // The test environment of Correos Express has a self-signed certificate chain.
-    // We temporarily disable TLS verification for test endpoints.
     const isTestEnv = endpoint.includes("test.cexpr.es")
-    const originalTlsReject = process.env.NODE_TLS_REJECT_UNAUTHORIZED
 
-    try {
-      if (isTestEnv) {
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
-      }
-
-      const response = await fetch(endpoint, {
+    return new Promise((resolve, reject) => {
+      const url = new URL(endpoint)
+      const options = {
         method: "POST",
         headers,
-        body: JSON.stringify(body),
+        rejectUnauthorized: !isTestEnv, // Pass directly to avoid modifying process.env which causes Turbopack to restart
+      }
+
+      const req = https.request(url, options, (res) => {
+        let data = ""
+
+        res.on("data", (chunk) => {
+          data += chunk
+        })
+
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              resolve(JSON.parse(data) as T)
+            } catch (err) {
+              reject(new Error("Failed to parse JSON response"))
+            }
+          } else {
+            reject(new Error(`Correos API Error: ${res.statusCode} ${res.statusMessage}`))
+          }
+        })
       })
 
-      if (isTestEnv) {
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalTlsReject
-      }
+      req.on("error", (error) => {
+        console.error("Correos API Request Failed:", error.message)
+        reject(error)
+      })
 
-      if (!response.ok) {
-        throw new Error(`Correos API Error: ${response.status} ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      return data as T
-    } catch (error: any) {
-      console.error("Correos API Request Failed:", error.message)
-      throw error
-    }
+      req.write(JSON.stringify(body))
+      req.end()
+    })
   }
 }
