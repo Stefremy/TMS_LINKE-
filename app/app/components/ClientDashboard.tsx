@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
 import { 
   Package, 
   Receipt, 
@@ -24,28 +23,27 @@ import {
   Trash2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { getClientesAction } from "@/app/actions/clientes"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { syncCttTrackingAction, closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { 
   getClientPortalStatsAction, 
+  getShipmentLabelAction,
   createReturnShipmentAction, 
   deleteShipmentAction
 } from "@/app/actions/shipments"
-import { Cliente, DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
+import { DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CreditCard } from "lucide-react"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
+import { useClientScope } from "./ClientScope"
 
-export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: string, passedClientId?: string }) {
-  const searchParams = useSearchParams()
-  const clientId = searchParams.get("clientId") || passedClientId
-  const clientNameParam = searchParams.get("clientName")
-
-  const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
+export function ClientDashboard() {
+  const { client: currentClient } = useClientScope()
+  const [loadingStats, setLoadingStats] = React.useState(true)
+  const [statsError, setStatsError] = React.useState(false)
   const [stats, setStats] = React.useState<{
     totalCount: number
     totalRevenue: number
@@ -105,42 +103,23 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
 
   const [servicosLinke, setServicosLinke] = React.useState<any[]>([])
 
-  // Load client data & real DB stats
   React.useEffect(() => {
-    Promise.all([getClientesAction(), getServicosLinkeAction()]).then(([clients, servicos]) => {
-      setServicosLinke(servicos)
-
-      let target: Cliente | undefined
-      if (clientId) {
-        target = clients.find((c) => c.id === clientId)
-      }
-      if (!target && clientNameParam) {
-        target = clients.find((c) => c.short_name.toLowerCase() === clientNameParam.toLowerCase())
-      }
-      if (!target && userEmail) {
-        target = clients.find(c => c.email?.toLowerCase().trim() === userEmail.toLowerCase().trim())
-      }
-      
-      // Fallback para administradores a testar o portal sem parâmetros
-      if (!target && clients.length > 0) {
-        target = clients[0]
-      }
-
-      if (target) {
-        setCurrentClient(target)
-      }
-
-      // Fetch 100% real stats for this client
-      if (target) {
-        getClientPortalStatsAction(target.id, target.short_name).then((res) => {
-          if (res) {
-            setStats(res)
-            setShipments(res.allShipments || res.recentShipments || [])
-          }
-        })
-      }
+    let active = true
+    setLoadingStats(true)
+    setStatsError(false)
+    getServicosLinkeAction().then(servicos => { if (active) setServicosLinke(servicos) })
+    getClientPortalStatsAction(currentClient.id, currentClient.short_name).then(res => {
+      if (!active) return
+      if (res) {
+        setStats(res)
+        setShipments(res.allShipments || res.recentShipments || [])
+      } else setStatsError(true)
+      setLoadingStats(false)
+    }).catch(() => {
+      if (active) { setStatsError(true); setLoadingStats(false) }
     })
-  }, [clientId, clientNameParam, userEmail])
+    return () => { active = false }
+  }, [currentClient.id, currentClient.short_name])
 
   // Handle click outside dropdown
   React.useEffect(() => {
@@ -153,10 +132,7 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const querySuffix = React.useMemo(() => {
-    if (!currentClient) return ""
-    return `?clientId=${encodeURIComponent(currentClient.id || "")}&clientName=${encodeURIComponent(currentClient.short_name || "")}`
-  }, [currentClient])
+  const querySuffix = ""
 
   // Filtered shipments
   const filteredShipments = React.useMemo(() => {
@@ -235,12 +211,12 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
   }
 
   const printLabel = async (shipmentItem: any) => {
-    const label = await resolveLabel(shipmentItem?.ctt_label_base64)
+    const label = await resolveLabel(shipmentItem?.ctt_label_base64 || await getShipmentLabelAction(shipmentItem.id))
     if (label) printCttLabel(label)
   }
 
   const downloadLabel = async (shipmentItem: any, ref: string) => {
-    const label = await resolveLabel(shipmentItem?.ctt_label_base64)
+    const label = await resolveLabel(shipmentItem?.ctt_label_base64 || await getShipmentLabelAction(shipmentItem.id))
     if (label) downloadCttLabel(label, `${ref}_Etiqueta_CTT.pdf`)
   }
 
@@ -275,6 +251,13 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
 
   // Real credit calculation
   const usedCreditPct = creditLimit > 0 ? Math.min((stats.totalRevenue / creditLimit) * 100, 100).toFixed(1) : "0"
+
+  if (loadingStats || statsError) return (
+    <div className="p-8 text-sm text-[var(--text-secondary)]" role="status">
+      <h1 className="text-lg font-semibold text-[var(--text-primary)]">{currentClient.legal_name || currentClient.short_name}</h1>
+      <p>{statsError ? "Não foi possível carregar os dados desta conta." : "A carregar os dados desta conta..."}</p>
+    </div>
+  )
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto font-sans relative">

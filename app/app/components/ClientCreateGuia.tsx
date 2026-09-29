@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
 import { 
   Building2, 
   MapPin, 
@@ -21,14 +20,12 @@ import {
   Download
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { getClientesAction } from "@/app/actions/clientes"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { 
-  Cliente, 
   DEFAULT_CLIENT_PRICING, 
   SYSTEM_AVAILABLE_WEBSERVICES, 
   DEFAULT_CTT_SERVICES_PRICING, 
@@ -37,13 +34,10 @@ import {
   ClientSpecialServiceFee
 } from "@/app/ops/entidades/clientes/types"
 import { getCarrierLogo } from "@/lib/carrier-logos"
+import { useClientScope } from "./ClientScope"
 
-export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
-  const searchParams = useSearchParams()
-  const clientId = searchParams.get("clientId")
-  const clientNameParam = searchParams.get("clientName")
-
-  const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
+export function ClientCreateGuia() {
+  const { client: currentClient } = useClientScope()
   const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>([])
   const [loadingClient, setLoadingClient] = React.useState(true)
 
@@ -83,50 +77,21 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
     numericValue: number
   }>>([])
 
-  // Load client data & Linke services
   React.useEffect(() => {
-    Promise.all([getClientesAction(), getServicosLinkeAction()]).then(([clients, servicos]) => {
+    let active = true
+    getServicosLinkeAction().then(servicos => {
+      if (!active) return
       setServicosLinke(servicos || [])
-      let target: Cliente | undefined
-      if (clientId) {
-        target = clients.find((c) => c.id === clientId)
-      }
-      if (!target && clientNameParam) {
-        const decoded = decodeURIComponent(clientNameParam).toLowerCase()
-        target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
-      }
-      if (!target && userEmail) {
-        const emailLower = userEmail.toLowerCase()
-        target = clients.find((c) => c.email?.toLowerCase() === emailLower || c.billing_email?.toLowerCase() === emailLower)
-      }
-      if (!target && clients.length > 0) {
-        target = clients[0]
-      }
-
-      if (target) {
-        setCurrentClient(target)
-        const allowed = (target.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter((w) => w.is_enabled)
-        const defWs = allowed.find((w) => w.is_default) || allowed[0]
-        if (defWs) {
-          setSelectedCarrierCode(defWs.code)
-        }
-
-        // Set initial selected Linke service based on client's assigned table
-        const activeServicos = (servicos || []).filter((s) => s.is_active !== false)
-        if (target.default_linke_table_id) {
-          const match = activeServicos.find((s) => s.id === target.default_linke_table_id)
-          if (match) {
-            setSelectedServiceId(match.id)
-          } else if (activeServicos.length > 0) {
-            setSelectedServiceId(activeServicos[0].id)
-          }
-        } else if (activeServicos.length > 0) {
-          setSelectedServiceId(activeServicos[0].id)
-        }
-      }
+      const allowed = (currentClient.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter(w => w.is_enabled)
+      const defWs = allowed.find(w => w.is_default) || allowed[0]
+      if (defWs) setSelectedCarrierCode(defWs.code)
+      const services = (servicos || []).filter(s => s.is_active !== false)
+      const selected = services.find(s => s.id === currentClient.default_linke_table_id) || services[0]
+      if (selected) setSelectedServiceId(selected.id)
       setLoadingClient(false)
-    })
-  }, [clientId, clientNameParam])
+    }).catch(() => { if (active) setLoadingClient(false) })
+    return () => { active = false }
+  }, [currentClient.id, currentClient.allowed_webservices, currentClient.default_linke_table_id])
 
   // Available Linke services
   const availableServicos = React.useMemo(() => {
@@ -347,10 +312,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
     }
   }
 
-  const querySuffix = React.useMemo(() => {
-    if (!currentClient) return ""
-    return `?clientId=${encodeURIComponent(currentClient.id || "")}&clientName=${encodeURIComponent(currentClient.short_name || "")}`
-  }, [currentClient])
+  const querySuffix = ""
 
   const senderName = currentClient?.legal_name || currentClient?.short_name || "Empresa Cliente"
   const senderAddress = currentClient?.address 

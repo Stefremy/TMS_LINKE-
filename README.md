@@ -1,36 +1,25 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Linke TMS
 
-## Getting Started
+Aplicação Next.js com autenticação Supabase e dados no Postgres.
 
-First, run the development server:
+## Desenvolvimento
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Copiar `.env.example` para `.env.local` e configurar as variáveis no ambiente local.
+2. Executar `npm ci` e `npm run dev`.
+3. Aplicar as migrações em `supabase/migrations` no projeto Supabase antes de publicar alterações de base de dados.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Consultas de envios
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`getShipmentsAction({ includeLabels: false })` lê as vistas `shipment_metadata` e `shipment_audit_metadata`, que retiram etiquetas PDF/ZPL e manifestos antes da transferência do Postgres. A área de cliente pede a etiqueta apenas ao imprimir ou descarregar. O código recorre às tabelas originais durante a instalação da migração; nessa fase a transferência da base de dados ainda não fica reduzida.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+A migração `20260929120000_shipment_audit_metadata.sql` acrescenta a vista, a função de leitura individual da etiqueta e índices para as consultas de envios e clientes. Verificar no Supabase as métricas de egress, as consultas mais lentas e o plano de execução depois de aplicar a migração. A listagem continua a carregar todos os envios e deve ser paginada no servidor quando o volume crescer.
 
-## Learn More
+O rastreio público procura apenas códigos exatos e consulta no máximo um envio de cada origem. Não cria dados de demonstração. O endpoint `/api/test-providers` não aceita GET e só executa testes por POST para um administrador quando `ENABLE_PROVIDER_TESTS=true`.
 
-To learn more about Next.js, take a look at the following resources:
+## Webhook CTT
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Configurar `CTT_WEBHOOK_SECRET` com um valor aleatório forte no ambiente de produção. O emissor do webhook tem de enviar `Authorization: Bearer <segredo>`. Sem o segredo e as variáveis Supabase, o endpoint responde 503. Se a origem CTT não suportar este cabeçalho, colocar um adaptador autenticado entre a origem e o endpoint antes de ativar esta integração.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Verificação
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`npx tsc --noEmit` verifica os tipos; `npm run build` verifica a compilação. `npm run lint` assinala problemas preexistentes que devem ser corrigidos por módulos.

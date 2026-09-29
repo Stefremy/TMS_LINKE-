@@ -2,12 +2,8 @@ import * as React from "react"
 import { Suspense } from "react"
 import { ClientCreateGuia } from "../components/ClientCreateGuia"
 import { Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/server"
 
 export default async function CriarGuiaPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
   return (
     <Suspense
       fallback={
@@ -17,8 +13,7 @@ export default async function CriarGuiaPage() {
         </div>
       }
     >
-      <ClientCreateGuia userEmail={user?.email} />
+      <ClientCreateGuia />
     </Suspense>
   )
 }
-

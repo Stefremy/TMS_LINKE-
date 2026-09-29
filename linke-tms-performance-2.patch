@@ -1,0 +1,2099 @@
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..fb8933c
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,5 @@
++NEXT_PUBLIC_SUPABASE_URL=
++NEXT_PUBLIC_SUPABASE_ANON_KEY=
++SUPABASE_SERVICE_ROLE_KEY=
++CTT_WEBHOOK_SECRET=
++# ENABLE_PROVIDER_TESTS=true only in a controlled test environment
+diff --git a/.gitignore b/.gitignore
+index 5ef6a52..7b8da95 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -32,6 +32,7 @@ yarn-error.log*
+ 
+ # env files (can opt-in for committing if needed)
+ .env*
++!.env.example
+ 
+ # vercel
+ .vercel
+diff --git a/README.md b/README.md
+index e215bc4..871afca 100644
+--- a/README.md
++++ b/README.md
+@@ -1,36 +1,25 @@
+-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
++# Linke TMS
+ 
+-## Getting Started
++Aplicação Next.js com autenticação Supabase e dados no Postgres.
+ 
+-First, run the development server:
++## Desenvolvimento
+ 
+-```bash
+-npm run dev
+-# or
+-yarn dev
+-# or
+-pnpm dev
+-# or
+-bun dev
+-```
++1. Copiar `.env.example` para `.env.local` e configurar as variáveis no ambiente local.
++2. Executar `npm ci` e `npm run dev`.
++3. Aplicar as migrações em `supabase/migrations` no projeto Supabase antes de publicar alterações de base de dados.
+ 
+-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
++## Consultas de envios
+ 
+-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
++`getShipmentsAction({ includeLabels: false })` lê as vistas `shipment_metadata` e `shipment_audit_metadata`, que retiram etiquetas PDF/ZPL e manifestos antes da transferência do Postgres. A área de cliente pede a etiqueta apenas ao imprimir ou descarregar. O código recorre às tabelas originais durante a instalação da migração; nessa fase a transferência da base de dados ainda não fica reduzida.
+ 
+-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
++A migração `20260929120000_shipment_audit_metadata.sql` acrescenta a vista, a função de leitura individual da etiqueta e índices para as consultas de envios e clientes. Verificar no Supabase as métricas de egress, as consultas mais lentas e o plano de execução depois de aplicar a migração. A listagem continua a carregar todos os envios e deve ser paginada no servidor quando o volume crescer.
+ 
+-## Learn More
++O rastreio público procura apenas códigos exatos e consulta no máximo um envio de cada origem. Não cria dados de demonstração. O endpoint `/api/test-providers` não aceita GET e só executa testes por POST para um administrador quando `ENABLE_PROVIDER_TESTS=true`.
+ 
+-To learn more about Next.js, take a look at the following resources:
++## Webhook CTT
+ 
+-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
++Configurar `CTT_WEBHOOK_SECRET` com um valor aleatório forte no ambiente de produção. O emissor do webhook tem de enviar `Authorization: Bearer <segredo>`. Sem o segredo e as variáveis Supabase, o endpoint responde 503. Se a origem CTT não suportar este cabeçalho, colocar um adaptador autenticado entre a origem e o endpoint antes de ativar esta integração.
+ 
+-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
++## Verificação
+ 
+-## Deploy on Vercel
+-
+-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+-
+-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
++`npx tsc --noEmit` verifica os tipos; `npm run build` verifica a compilação. `npm run lint` assinala problemas preexistentes que devem ser corrigidos por módulos.
+diff --git a/app/actions/clientes.ts b/app/actions/clientes.ts
+index 27e02ed..700565a 100644
+--- a/app/actions/clientes.ts
++++ b/app/actions/clientes.ts
+@@ -146,18 +146,21 @@ const DEFAULT_CLIENTES: Cliente[] = [
+ /**
+  * Obtém todos os clientes para listagem
+  */
+-export async function getClientesAction(): Promise<Cliente[]> {
++export async function getClientesAction(selectedClientId?: string): Promise<Cliente[]> {
+   const ctx = await requireUser()
++  const scopedId = ctx.role === "client" ? ctx.client_id! : selectedClientId
+ 
+   const supabase = createAdminClient()
+ 
+   let dbClients: any[] = []
+   try {
+-    const { data, error } = await supabase
++    let clientsQuery = supabase
+       .from("clients")
+       .select("*")
+       .eq("tenant_id", (await getTenantId()))
+       .order("created_at", { ascending: false })
++    if (scopedId) clientsQuery = clientsQuery.eq("id", scopedId)
++    const { data, error } = await clientsQuery
+ 
+     if (!error && data) {
+       dbClients = data
+@@ -169,11 +172,13 @@ export async function getClientesAction(): Promise<Cliente[]> {
+   // Obter detalhes ricos de audit_log
+   let auditClients: Record<string, Cliente> = {}
+   try {
+-    const { data: logs, error } = await supabase
++    let auditQuery = supabase
+       .from("audit_log")
+       .select("details")
+       .eq("action", "client_data")
+       .order("created_at", { ascending: false })
++    if (scopedId) auditQuery = auditQuery.eq("details->>id", scopedId)
++    const { data: logs, error } = await auditQuery
+ 
+     if (!error && logs) {
+       logs.forEach((log: any) => {
+@@ -190,10 +195,12 @@ export async function getClientesAction(): Promise<Cliente[]> {
+   // 0. Obter lista de IDs eliminados (tombstones) para nunca ressurgirem
+   const deletedIds = new Set<string>()
+   try {
+-    const { data: deletedLogs } = await supabase
++    let deletedQuery = supabase
+       .from("audit_log")
+       .select("details")
+       .eq("action", "deleted_client")
++    if (scopedId) deletedQuery = deletedQuery.eq("details->>id", scopedId)
++    const { data: deletedLogs } = await deletedQuery
+ 
+     if (deletedLogs) {
+       deletedLogs.forEach((log: any) => {
+@@ -260,8 +267,8 @@ export async function getClientesAction(): Promise<Cliente[]> {
+     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+   })
+ 
+-  if (ctx.role === "client") {
+-    result = result.filter((c) => c.id === ctx.client_id)
++  if (scopedId) {
++    result = result.filter((c) => c.id === scopedId)
+   }
+ 
+   return result
+diff --git a/app/actions/notifications.ts b/app/actions/notifications.ts
+index 3fbfd8f..829b5f6 100644
+--- a/app/actions/notifications.ts
++++ b/app/actions/notifications.ts
+@@ -22,7 +22,7 @@ export async function getOperationalNotificationsAction(): Promise<OperationalNo
+ 
+   try {
+     const [shipments, clients, connections] = await Promise.all([
+-      getShipmentsAction().catch(() => []),
++      getShipmentsAction({ includeLabels: false }).catch(() => []),
+       getClientesAction().catch(() => []),
+       getCarrierConnectionsAction().catch(() => []),
+     ])
+diff --git a/app/actions/relatorios.ts b/app/actions/relatorios.ts
+index f21d081..5f32988 100644
+--- a/app/actions/relatorios.ts
++++ b/app/actions/relatorios.ts
+@@ -106,7 +106,7 @@ export async function getRelatoriosDataAction(
+   const supabase = createAdminClient()
+ 
+   const [rawShipments, rawClients, recolhasResult] = await Promise.all([
+-    getShipmentsAction(),
++    getShipmentsAction({ includeLabels: false }),
+     getClientesAction(),
+     supabase.from("recolhas").select("*").order("created_at", { ascending: false }),
+   ])
+diff --git a/app/actions/shipments.ts b/app/actions/shipments.ts
+index dcd414d..5fa8d72 100644
+--- a/app/actions/shipments.ts
++++ b/app/actions/shipments.ts
+@@ -128,7 +128,7 @@ function formatOrGenerateCttObjectId(s: any): string {
+ /**
+  * Fetches all shipments combining the DB shipments table and audit log resilience.
+  */
+-export async function getShipmentsAction(): Promise<any[]> {
++export async function getShipmentsAction(options: { includeLabels?: boolean } = {}): Promise<any[]> {
+   
+   const ctx = await requireUser()
+ 
+@@ -157,15 +157,27 @@ export async function getShipmentsAction(): Promise<any[]> {
+ 
+   // 1. Fetch from shipments table
+   try {
+-    let shipmentsQuery = supabase.from("shipments").select("*").order("created_at", { ascending: false })
++    const lean = options.includeLabels === false
++    let shipmentsQuery = supabase
++      .from(lean ? "shipment_metadata" : "shipments")
++      .select(lean ? "details" : "*")
++      .order("created_at", { ascending: false })
+     if (ctx.role === "client") {
+       shipmentsQuery = shipmentsQuery.eq("client_id", ctx.client_id)
+     }
+ 
+-    const { data: dbShipments, error } = await shipmentsQuery
++    let { data: dbShipments, error } = await shipmentsQuery
++    if (error && lean) {
++      let fallbackQuery = supabase.from("shipments").select("*").order("created_at", { ascending: false })
++      if (ctx.role === "client") fallbackQuery = fallbackQuery.eq("client_id", ctx.client_id)
++      const fallback = await fallbackQuery
++      dbShipments = fallback.data
++      error = fallback.error
++    }
+ 
+     if (!error && dbShipments) {
+-      dbShipments.forEach((s: any) => {
++      dbShipments.forEach((row: any) => {
++        const s = row.details || row
+         const key = s.id || s.tracking_number
+         if (key && !deletedIds.has(key) && !deletedIds.has(s.id)) {
+           const isCorreos = isCorreosShipment(s)
+@@ -181,6 +193,7 @@ export async function getShipmentsAction(): Promise<any[]> {
+             carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
+             carrier_tracking_number: s.carrier_tracking_number || (isCorreos ? s.carrier_object_id : null),
+             ctt_object_id: isCorreos ? null : cttCode,
++            has_label: Boolean(s.has_label || s.ctt_label_base64),
+           })
+         }
+       })
+@@ -189,13 +202,31 @@ export async function getShipmentsAction(): Promise<any[]> {
+     console.warn("Could not query shipments table:", err?.message)
+   }
+ 
+-  // 2. Fetch from audit_log for shipment_data (merge rich metadata: real CTT tracking, labels, etc.)
++  // A lightweight view removes PDF/ZPL payloads before they leave Postgres.
++  // Keep the original query as a rollout fallback until the migration is applied.
+   try {
+-    const { data: logs, error: logError } = await supabase
+-      .from("audit_log")
++    const source = options.includeLabels === false ? "shipment_audit_metadata" : "audit_log"
++    let logsQuery = supabase
++      .from(source)
+       .select("details, created_at")
+       .eq("action", "shipment_data")
+       .order("created_at", { ascending: false })
++    if (ctx.role === "client") {
++      logsQuery = logsQuery.eq(source === "audit_log" ? "details->>client_id" : "client_id", ctx.client_id!)
++    }
++    let { data: logs, error: logError } = await logsQuery
++
++    if (logError && source !== "audit_log") {
++      let fallbackQuery = supabase
++        .from("audit_log")
++        .select("details, created_at")
++        .eq("action", "shipment_data")
++        .order("created_at", { ascending: false })
++      if (ctx.role === "client") fallbackQuery = fallbackQuery.eq("details->>client_id", ctx.client_id!)
++      const fallback = await fallbackQuery
++      logs = fallback.data
++      logError = fallback.error
++    }
+ 
+     if (!logError && logs) {
+       logs.forEach((log: any) => {
+@@ -252,13 +283,16 @@ export async function getShipmentsAction(): Promise<any[]> {
+                 carrier_name: isCorreos ? "Correos Express" : (existing.carrier_name || s.carrier_name || "CTT Expresso"),
+                 carrier_tracking_number: carrierRef || existing.carrier_tracking_number || s.carrier_tracking_number,
+                 reference: linkeRef,
+-                ctt_label_base64: s.ctt_label_base64 || existing.ctt_label_base64 || s.carrier_label_base64,
++                ctt_label_base64: options.includeLabels === false ? undefined : (s.ctt_label_base64 || existing.ctt_label_base64 || s.carrier_label_base64),
++                has_label: Boolean(s.has_label || s.ctt_label_base64 || s.carrier_label_base64 || existing.has_label || existing.ctt_label_base64),
+                 ctt_object_id: isCorreos ? null : formatOrGenerateCttObjectId({ ...existing, ...s, tracking_number: carrierRef || effectiveTracking }),
+               })
+             } else {
+               const cttCode = isCorreos ? null : formatOrGenerateCttObjectId(s)
+               shipmentsMap.set(key, {
+                 ...s,
++                ...(options.includeLabels === false ? { ctt_label_base64: undefined, carrier_label_base64: undefined } : {}),
++                has_label: Boolean(s.has_label || s.ctt_label_base64 || s.carrier_label_base64),
+                 carrier_code: isCorreos ? "correos" : (s.carrier_code || "ctt"),
+                 carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
+                 carrier_tracking_number: s.carrier_tracking_number || s.carrier_object_id || (isRealTracking(s.tracking_number) ? s.tracking_number : null),
+@@ -277,18 +311,62 @@ export async function getShipmentsAction(): Promise<any[]> {
+ 
+   return Array.from(shipmentsMap.values()).map((s) => {
+     const isCorreos = isCorreosShipment(s)
+-    return {
++    const result = {
+       ...s,
+       carrier_code: isCorreos ? "correos" : (s.carrier_code || "ctt"),
+       carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
+       carrier_tracking_number: s.carrier_tracking_number || (isCorreos ? s.carrier_object_id : null),
+       ctt_object_id: isCorreos ? null : (s.ctt_object_id || formatOrGenerateCttObjectId(s))
+     }
++    if (options.includeLabels === false) {
++      delete result.ctt_label_base64
++      delete result.carrier_label_base64
++      delete result.labelBase64
++      delete result.ctt_manifest_pdf
++    }
++    return result
+   }).sort((a, b) => {
+     return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+   })
+ }
+ 
++/** Retrieve a label only when the user explicitly opens or prints that shipment. */
++export async function getShipmentLabelAction(shipmentId: string): Promise<string | null> {
++  const ctx = await requireUser()
++  if (!isValidUuid(shipmentId)) return null
++
++  const supabase = createAdminClient()
++  const { data: labelRows, error: rpcError } = await supabase.rpc("shipment_label_by_id", { shipment_id: shipmentId })
++  if (!rpcError) {
++    const labelRow = labelRows?.[0]
++    return labelRow && (ctx.role !== "client" || labelRow.client_id === ctx.client_id) ? labelRow.label : null
++  }
++
++  // Rollout fallback while the database migration has not been applied.
++  const { data, error } = await supabase
++    .from("audit_log")
++    .select("details")
++    .eq("action", "shipment_data")
++    .eq("details->>id", shipmentId)
++    .order("created_at", { ascending: false })
++    .limit(20)
++
++  if (error) throw new Error("Não foi possível consultar a etiqueta do envio.")
++  const details = data?.map((row: any) => row.details).find((item: any) => item?.ctt_label_base64 || item?.carrier_label_base64 || item?.labelBase64)
++  if (details) {
++    return ctx.role !== "client" || details.client_id === ctx.client_id
++      ? details.ctt_label_base64 || details.carrier_label_base64 || details.labelBase64 || null
++      : null
++  }
++  const { data: shipment } = await supabase.from("shipments")
++    .select("client_id,ctt_label_base64")
++    .eq("id", shipmentId)
++    .maybeSingle()
++  return shipment && (ctx.role !== "client" || shipment.client_id === ctx.client_id)
++    ? shipment.ctt_label_base64 || null
++    : null
++}
++
+ export async function createShipmentAction(formData: FormData) {
+   
+   const ctx = await requireUser()
+@@ -474,7 +552,7 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
+ 
+   const effectiveClientId = ctx.role === "client" ? ctx.client_id : clientId
+   
+-  const allShipments = await getShipmentsAction()
++  const allShipments = await getShipmentsAction({ includeLabels: false })
+ 
+   let clientShipments = allShipments
+ 
+@@ -1202,7 +1280,7 @@ export async function updateShipmentStatusAction(
+ /**
+  * Obtém a timeline completa de eventos de rastreio e pickagens de um envio
+  */
+-export async function getShipmentTrackingTimelineAction(
++async function loadShipmentTrackingTimeline(
+   shipmentId: string,
+   trackingNumber?: string
+ ) {
+@@ -1333,6 +1411,27 @@ export async function getShipmentTrackingTimelineAction(
+   return events
+ }
+ 
++export async function getShipmentTrackingTimelineAction(shipmentId: string, trackingNumber?: string) {
++  const ctx = await requireUser()
++  if (ctx.role === "client") {
++    if (!isValidUuid(shipmentId)) throw new Error("Acesso negado ao rastreio deste envio.")
++    const supabase = createAdminClient()
++    const { data: shipment } = await supabase.from("shipments")
++      .select("client_id").eq("id", shipmentId).maybeSingle()
++    let ownerId = shipment?.client_id
++    if (!ownerId) {
++      const { data: audit } = await supabase.from("audit_log")
++        .select("owner_id:details->>client_id")
++        .eq("action", "shipment_data")
++        .eq("details->>id", shipmentId)
++        .limit(1)
++      ownerId = audit?.[0]?.owner_id
++    }
++    if (ownerId !== ctx.client_id) throw new Error("Acesso negado ao rastreio deste envio.")
++  }
++  return loadShipmentTrackingTimeline(shipmentId, trackingNumber)
++}
++
+ /**
+  * Sincroniza todos os envios ativos em lote com as pickagens CTT
+  */
+@@ -1509,99 +1608,51 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+   const query = (trackingOrId || "").trim().toUpperCase()
+   if (!query) return { success: false, error: "Por favor introduza um número de rastreio ou guia válido." }
+ 
+-  const supabase = createAdminClient()
+-  const allShipments = await getShipmentsAction()
+-  
+-  let shipment = allShipments.find(
+-    (s) => (s.tracking_number && s.tracking_number.toUpperCase() === query) ||
+-           (s.id && s.id.toUpperCase() === query) ||
+-           (s.ctt_object_id && s.ctt_object_id.toUpperCase() === query) ||
+-           (s.reference && s.reference.toUpperCase() === query) ||
+-           (s.carrier_tracking_number && s.carrier_tracking_number.toUpperCase() === query)
+-  )
+-
+-  // Se não encontrou e é um código LTK, tentar resolver pelo prefixo do ID
+-  // (ex: LTK7D7B1884 -> id começa com 7d7b1884)
+-  if (!shipment && query.startsWith("LTK")) {
+-    const idPrefix = query.replace(/^LTK/i, "").toLowerCase()
+-    shipment = allShipments.find(
+-      (s) => s.id && s.id.toLowerCase().startsWith(idPrefix)
+-    )
++  // Public lookups must be exact and bounded; never load every shipment or its labels.
++  if (!/^[A-Z0-9-]{7,40}$/.test(query)) {
++    return { success: false, error: "Referência de rastreio inválida." }
+   }
+ 
+-  // Último fallback: pesquisar diretamente na tabela shipments por carrier_tracking_number
+-  // (cobre casos em que o shipment foi sincronizado com um carrier code EQ/DD/DB/etc.)
+-  if (!shipment) {
+-    try {
+-      const { data: directMatch } = await supabase
+-        .from("shipments")
+-        .select("*")
+-        .or(`tracking_number.ilike.%${query}%,carrier_tracking_number.ilike.%${query}%`)
+-        .limit(1)
+-        .single()
+-      if (directMatch) shipment = directMatch
+-    } catch { /* not found */ }
++  const supabase = createAdminClient()
++  const dbFilters = [
++    `tracking_number.eq.${query}`,
++    `carrier_tracking_number.eq.${query}`,
++    `ctt_object_id.eq.${query}`,
++  ]
++  if (isValidUuid(query)) dbFilters.push(`id.eq.${query.toLowerCase()}`)
++
++  let { data: dbRow, error: dbError } = await supabase.from("shipment_metadata")
++    .select("details").or(dbFilters.join(",")).limit(1).maybeSingle()
++  if (dbError) {
++    const fallback = await supabase.from("shipments")
++      .select("id,client_id,tracking_number,carrier_tracking_number,carrier_code,ctt_object_id,status,service_type,recipient_name,recipient_address,sender_name,sender_address,created_at,updated_at,weight_kg")
++      .or(dbFilters.join(",")).limit(1).maybeSingle()
++    dbRow = fallback.data
++    dbError = fallback.error
+   }
++  let shipment: any = dbError ? null : (dbRow?.details || dbRow)
+ 
+-  // Se o utilizador pesquisar pelo tracking de referência LTK1425602 e ainda não existir na BD, inicializar automaticamente
+-  if (!shipment && query === "LTK1425602") {
+-    const demoId = crypto.randomUUID()
+-    const now = new Date()
+-    const h1 = new Date(now.getTime() - 20 * 3600 * 1000).toISOString()
+-    const h2 = new Date(now.getTime() - 10 * 3600 * 1000).toISOString()
+-    const h3 = new Date(now.getTime() - 2 * 3600 * 1000).toISOString()
+-
+-    const demoShipment = {
+-      id: demoId,
+-      tenant_id: (await getTenantId()),
+-      tracking_number: "LTK1425602",
+-      ctt_object_id: "DB290719717PT",
+-      carrier_name: "ctt",
+-      service_type: "CTT Expresso 24H",
+-      status: "em_distribuicao",
+-      sender_name: "Linke Logistics Lisboa",
+-      sender_address: "Av. do Atlântico 16, Lisboa",
+-      recipient_name: "Maria Silva",
+-      recipient_address: "Rua de Santa Catarina 320, 4000-443 Porto",
+-      package_count: 1,
+-      weight_kg: 1.5,
+-      created_at: h1,
+-      updated_at: h3,
+-    }
+-
+-    try {
+-      await supabase.from("shipments").insert(demoShipment)
+-      await supabase.from("tracking_events").insert([
+-        {
+-          shipment_id: demoId,
+-          event_code: "EMA",
+-          event_name: "Aceitação CTT Expresso",
+-          description: "Objeto aceite nas instalações CTT Expresso Lisboa.",
+-          location: "Centro de Produção Lisboa",
+-          created_at: h1,
+-        },
+-        {
+-          shipment_id: demoId,
+-          event_code: "EMF",
+-          event_name: "Expedição Nacional",
+-          description: "Em trânsito para o Centro de Distribuição do Norte.",
+-          location: "MARL - Loures",
+-          created_at: h2,
+-        },
+-        {
+-          shipment_id: demoId,
+-          event_code: "EMZ",
+-          event_name: "Em Distribuição (Com o Estafeta)",
+-          description: "Objeto em distribuição na morada do destinatário.",
+-          location: "Centro de Distribuição Porto",
+-          created_at: h3,
+-        }
+-      ])
+-    } catch (e) {
+-      console.warn("Could not seed LTK1425602 to db:", e)
++  if (!shipment) {
++    const auditFilters = [
++      `tracking_number.eq.${query}`,
++      `carrier_tracking_number.eq.${query}`,
++      `ctt_object_id.eq.${query}`,
++      `reference.eq.${query}`,
++    ]
++    let { data: auditRow, error: auditError } = await supabase.from("shipment_audit_metadata")
++      .select("details").or(auditFilters.join(","))
++      .order("created_at", { ascending: false }).limit(1).maybeSingle()
++    if (auditError) {
++      const rawFilters = ["tracking_number", "carrier_tracking_number", "ctt_object_id", "reference"]
++        .map((key) => `details->>${key}.eq.${query}`)
++      const fallback = await supabase.from("audit_log")
++        .select("details").eq("action", "shipment_data")
++        .or(rawFilters.join(","))
++        .order("created_at", { ascending: false }).limit(1).maybeSingle()
++      auditRow = fallback.data
++      auditError = fallback.error
+     }
+-
+-    shipment = demoShipment as any
++    if (!auditError) shipment = auditRow?.details || null
+   }
+ 
+   if (!shipment) {
+@@ -1610,10 +1661,10 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+ 
+   // Obter eventos de rastreio reais — passa o carrier_tracking_number (EQ...) para o fallback
+   const carrierTrkForLookup = shipment.carrier_tracking_number || shipment.ctt_object_id || shipment.tracking_number
+-  const events = await getShipmentTrackingTimelineAction(shipment.id, carrierTrkForLookup)
++  const events = await loadShipmentTrackingTimeline(shipment.id, carrierTrkForLookup)
+ 
+   // Identificar dados do operador / carrier provider (ex: CTT Expresso)
+-  const carrierCode = shipment.carrier_name || "ctt"
++  const carrierCode = shipment.carrier_name || shipment.carrier_code || "ctt"
+   const linkeInternalRef = 
+     (shipment.reference?.startsWith("LTK") ? shipment.reference : null) ||
+     (shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null) ||
+@@ -1644,10 +1695,10 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+       id: shipment.id,
+       trackingNumber: linkeInternalRef || shipment.id.substring(0, 8).toUpperCase(),
+       serviceType: shipment.service_type || "CTT Expresso 24H",
+-      carrierName: carrierCode.toUpperCase() === "CTT" ? "CTT Expresso" : (shipment.carrier_name || "CTT Expresso"),
++      carrierName: carrierCode.toLowerCase().includes("correos") ? "Correos Express" : "CTT Expresso",
+       carrierTrackingNumber: carrierTrackingNumber || null,
+       carrierDirectUrl,
+-      status: shipment.status || "em_distribuicao",
++      status: ["entrada_rede", "recolhido"].includes(shipment.status) ? "em_transito" : (shipment.status || "pendente"),
+       createdAt: shipment.created_at,
+       updatedAt: shipment.updated_at,
+       recipientName: shipment.recipient_name,
+diff --git a/app/api/test-providers/route.ts b/app/api/test-providers/route.ts
+index f0978cd..2e9a944 100644
+--- a/app/api/test-providers/route.ts
++++ b/app/api/test-providers/route.ts
+@@ -2,8 +2,21 @@ import { NextResponse } from "next/server"
+ import { CttProvider } from "@/lib/services/carriers/ctt-provider"
+ import { CorreosShipmentService } from "@/lib/services/correos/correos-shipment.service"
+ import { resolveCttCredentials, resolveCorreosCredentials } from "@/lib/services/carriers/credentials"
++import { requireAdmin } from "@/lib/auth/context"
+ 
+ export async function GET() {
++  return NextResponse.json({ error: "Method not allowed" }, { status: 405 })
++}
++
++export async function POST() {
++  if (process.env.ENABLE_PROVIDER_TESTS !== "true") {
++    return NextResponse.json({ error: "Provider tests disabled" }, { status: 404 })
++  }
++  try {
++    await requireAdmin()
++  } catch {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
++  }
+   const results: any = { ctt: {}, correos: {} }
+ 
+   // 1. CTT EXPRESSO
+@@ -86,8 +99,6 @@ export async function GET() {
+       tipoEtiqueta: "1"
+     })
+ 
+-    results.correos.rawResult = correosResult // Added this so we can inspect the exact payload!
+-
+     if (correosResult.codigoRetorno === 0 || (correosResult.codigoRetorno === 404 && correosResult.datosResultado)) {
+       results.correos.status = "SUCCESS"
+       results.correos.tracking = correosResult.datosResultado
+diff --git a/app/api/webhooks/ctt/tracking/route.ts b/app/api/webhooks/ctt/tracking/route.ts
+index 5762c69..8023a27 100644
+--- a/app/api/webhooks/ctt/tracking/route.ts
++++ b/app/api/webhooks/ctt/tracking/route.ts
+@@ -1,5 +1,6 @@
+ import { NextResponse } from "next/server"
+ import { createClient } from "@supabase/supabase-js"
++import { timingSafeEqual } from "node:crypto"
+ import { CTTTrackingService } from "@/lib/services/ctt/ctt-tracking.service"
+ import {
+   CTT_NON_DELIVERY_REASONS,
+@@ -8,11 +9,6 @@ import {
+   CTT_INCIDENT_CODES
+ } from "@/lib/services/ctt/ctt-types"
+ 
+-const supabase = createClient(
+-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+-)
+-
+ // Schema expected from CTT (simulated or real webhook)
+ export interface CTTTrackingWebhookPayload {
+   events: {
+@@ -27,15 +23,34 @@ export interface CTTTrackingWebhookPayload {
+ 
+ export async function POST(req: Request) {
+   try {
++    const secret = process.env.CTT_WEBHOOK_SECRET
++    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
++    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
++    if (!secret || !supabaseUrl || !serviceKey) {
++      return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
++    }
++
++    const supplied = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || ""
++    const expectedBytes = Buffer.from(secret)
++    const suppliedBytes = Buffer.from(supplied)
++    if (expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
++    }
++
+     const payload = (await req.json()) as CTTTrackingWebhookPayload
+ 
+-    if (!payload.events || !Array.isArray(payload.events)) {
++    if (!Array.isArray(payload?.events) || payload.events.length > 100) {
+       return NextResponse.json({ error: "Invalid payload format" }, { status: 400 })
+     }
+ 
++    const supabase = createClient(supabaseUrl, serviceKey)
+     const results = []
+ 
+     for (const evt of payload.events) {
++      if (typeof evt.tracking_number !== "string" || !/^[a-z0-9]{8,32}$/i.test(evt.tracking_number)) {
++        results.push({ error: "Invalid tracking number" })
++        continue
++      }
+       // Look up by carrier_tracking_number (EQ…) first; fall back to tracking_number for
+       // legacy records that stored the CTT number there before the LTK/EQ split fix.
+       const { data: shipment, error: fetchError } = await supabase
+@@ -108,9 +123,9 @@ export async function POST(req: Request) {
+       try {
+         const { sendTrackingEmailNotification } = await import("@/lib/email/tracking-notifications")
+         if (evt.eventCode === "EMZ") {
+-          sendTrackingEmailNotification(shipment.id, "in_transit")
++          await sendTrackingEmailNotification(shipment.id, "in_transit")
+         } else if (CTT_INCIDENT_CODES?.has(evt.eventCode) || evt.eventCode === "EMH") {
+-          sendTrackingEmailNotification(shipment.id, "incident", { reason: reasonDesc || description })
++          await sendTrackingEmailNotification(shipment.id, "incident", { reason: reasonDesc || description })
+         }
+       } catch (err) {
+         console.warn("Failed to trigger tracking email in webhook", err)
+diff --git a/app/app/components/ClientAccountDetailsModal.tsx b/app/app/components/ClientAccountDetailsModal.tsx
+index fcd6480..c6771da 100644
+--- a/app/app/components/ClientAccountDetailsModal.tsx
++++ b/app/app/components/ClientAccountDetailsModal.tsx
+@@ -35,10 +35,13 @@ export function ClientAccountDetailsModal({
+   const [servicosLinke, setServicosLinke] = React.useState<any[]>([])
+ 
+   React.useEffect(() => {
++    if (!isOpen) return
++    let active = true
+     getServicosLinkeAction().then((res) => {
+-      if (res) setServicosLinke(res)
++      if (active && res) setServicosLinke(res)
+     })
+-  }, [])
++    return () => { active = false }
++  }, [isOpen])
+ 
+   // Detect which carrier operators actually exist in the client's assigned price table
+   const activeCarrierCodes = React.useMemo(() => {
+diff --git a/app/app/components/ClientCreateGuia.tsx b/app/app/components/ClientCreateGuia.tsx
+index ecd1a88..d44422b 100644
+--- a/app/app/components/ClientCreateGuia.tsx
++++ b/app/app/components/ClientCreateGuia.tsx
+@@ -2,7 +2,6 @@
+ 
+ import * as React from "react"
+ import Link from "next/link"
+-import { useSearchParams } from "next/navigation"
+ import { 
+   Building2, 
+   MapPin, 
+@@ -21,14 +20,12 @@ import {
+   Download
+ } from "lucide-react"
+ import { Badge } from "@/components/ui/badge"
+-import { getClientesAction } from "@/app/actions/clientes"
+ import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
+ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
+ import { emitClientGuiaAction } from "@/app/actions/shipments"
+ import { convertZplToPdfAction } from "@/app/actions/ctt"
+ import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
+ import { 
+-  Cliente, 
+   DEFAULT_CLIENT_PRICING, 
+   SYSTEM_AVAILABLE_WEBSERVICES, 
+   DEFAULT_CTT_SERVICES_PRICING, 
+@@ -37,13 +34,10 @@ import {
+   ClientSpecialServiceFee
+ } from "@/app/ops/entidades/clientes/types"
+ import { getCarrierLogo } from "@/lib/carrier-logos"
++import { useClientScope } from "./ClientScope"
+ 
+-export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
+-  const searchParams = useSearchParams()
+-  const clientId = searchParams.get("clientId")
+-  const clientNameParam = searchParams.get("clientName")
+-
+-  const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
++export function ClientCreateGuia() {
++  const { client: currentClient } = useClientScope()
+   const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>([])
+   const [loadingClient, setLoadingClient] = React.useState(true)
+ 
+@@ -83,50 +77,21 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
+     numericValue: number
+   }>>([])
+ 
+-  // Load client data & Linke services
+   React.useEffect(() => {
+-    Promise.all([getClientesAction(), getServicosLinkeAction()]).then(([clients, servicos]) => {
++    let active = true
++    getServicosLinkeAction().then(servicos => {
++      if (!active) return
+       setServicosLinke(servicos || [])
+-      let target: Cliente | undefined
+-      if (clientId) {
+-        target = clients.find((c) => c.id === clientId)
+-      }
+-      if (!target && clientNameParam) {
+-        const decoded = decodeURIComponent(clientNameParam).toLowerCase()
+-        target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
+-      }
+-      if (!target && userEmail) {
+-        const emailLower = userEmail.toLowerCase()
+-        target = clients.find((c) => c.email?.toLowerCase() === emailLower || c.billing_email?.toLowerCase() === emailLower)
+-      }
+-      if (!target && clients.length > 0) {
+-        target = clients[0]
+-      }
+-
+-      if (target) {
+-        setCurrentClient(target)
+-        const allowed = (target.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter((w) => w.is_enabled)
+-        const defWs = allowed.find((w) => w.is_default) || allowed[0]
+-        if (defWs) {
+-          setSelectedCarrierCode(defWs.code)
+-        }
+-
+-        // Set initial selected Linke service based on client's assigned table
+-        const activeServicos = (servicos || []).filter((s) => s.is_active !== false)
+-        if (target.default_linke_table_id) {
+-          const match = activeServicos.find((s) => s.id === target.default_linke_table_id)
+-          if (match) {
+-            setSelectedServiceId(match.id)
+-          } else if (activeServicos.length > 0) {
+-            setSelectedServiceId(activeServicos[0].id)
+-          }
+-        } else if (activeServicos.length > 0) {
+-          setSelectedServiceId(activeServicos[0].id)
+-        }
+-      }
++      const allowed = (currentClient.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter(w => w.is_enabled)
++      const defWs = allowed.find(w => w.is_default) || allowed[0]
++      if (defWs) setSelectedCarrierCode(defWs.code)
++      const services = (servicos || []).filter(s => s.is_active !== false)
++      const selected = services.find(s => s.id === currentClient.default_linke_table_id) || services[0]
++      if (selected) setSelectedServiceId(selected.id)
+       setLoadingClient(false)
+-    })
+-  }, [clientId, clientNameParam])
++    }).catch(() => { if (active) setLoadingClient(false) })
++    return () => { active = false }
++  }, [currentClient.id, currentClient.allowed_webservices, currentClient.default_linke_table_id])
+ 
+   // Available Linke services
+   const availableServicos = React.useMemo(() => {
+@@ -347,10 +312,7 @@ export function ClientCreateGuia({ userEmail }: { userEmail?: string }) {
+     }
+   }
+ 
+-  const querySuffix = React.useMemo(() => {
+-    if (!currentClient) return ""
+-    return `?clientId=${encodeURIComponent(currentClient.id || "")}&clientName=${encodeURIComponent(currentClient.short_name || "")}`
+-  }, [currentClient])
++  const querySuffix = ""
+ 
+   const senderName = currentClient?.legal_name || currentClient?.short_name || "Empresa Cliente"
+   const senderAddress = currentClient?.address 
+diff --git a/app/app/components/ClientDashboard.tsx b/app/app/components/ClientDashboard.tsx
+index cbfa35f..dc51be9 100644
+--- a/app/app/components/ClientDashboard.tsx
++++ b/app/app/components/ClientDashboard.tsx
+@@ -2,7 +2,6 @@
+ 
+ import * as React from "react"
+ import Link from "next/link"
+-import { useSearchParams } from "next/navigation"
+ import { 
+   Package, 
+   Receipt, 
+@@ -24,28 +23,27 @@ import {
+   Trash2
+ } from "lucide-react"
+ import { Badge } from "@/components/ui/badge"
+-import { getClientesAction } from "@/app/actions/clientes"
+ import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
+ import { syncCttTrackingAction, closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
+ import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
+ import { 
+   getClientPortalStatsAction, 
++  getShipmentLabelAction,
+   createReturnShipmentAction, 
+   deleteShipmentAction
+ } from "@/app/actions/shipments"
+-import { Cliente, DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
++import { DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
+ import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
+ import { getCarrierLogo } from "@/lib/carrier-logos"
+ import { getShipmentStatusConfig } from "@/lib/status-helpers"
+ import { CreditCard } from "lucide-react"
+ import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
++import { useClientScope } from "./ClientScope"
+ 
+-export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: string, passedClientId?: string }) {
+-  const searchParams = useSearchParams()
+-  const clientId = searchParams.get("clientId") || passedClientId
+-  const clientNameParam = searchParams.get("clientName")
+-
+-  const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
++export function ClientDashboard() {
++  const { client: currentClient } = useClientScope()
++  const [loadingStats, setLoadingStats] = React.useState(true)
++  const [statsError, setStatsError] = React.useState(false)
+   const [stats, setStats] = React.useState<{
+     totalCount: number
+     totalRevenue: number
+@@ -105,42 +103,23 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
+ 
+   const [servicosLinke, setServicosLinke] = React.useState<any[]>([])
+ 
+-  // Load client data & real DB stats
+   React.useEffect(() => {
+-    Promise.all([getClientesAction(), getServicosLinkeAction()]).then(([clients, servicos]) => {
+-      setServicosLinke(servicos)
+-
+-      let target: Cliente | undefined
+-      if (clientId) {
+-        target = clients.find((c) => c.id === clientId)
+-      }
+-      if (!target && clientNameParam) {
+-        target = clients.find((c) => c.short_name.toLowerCase() === clientNameParam.toLowerCase())
+-      }
+-      if (!target && userEmail) {
+-        target = clients.find(c => c.email?.toLowerCase().trim() === userEmail.toLowerCase().trim())
+-      }
+-      
+-      // Fallback para administradores a testar o portal sem parâmetros
+-      if (!target && clients.length > 0) {
+-        target = clients[0]
+-      }
+-
+-      if (target) {
+-        setCurrentClient(target)
+-      }
+-
+-      // Fetch 100% real stats for this client
+-      if (target) {
+-        getClientPortalStatsAction(target.id, target.short_name).then((res) => {
+-          if (res) {
+-            setStats(res)
+-            setShipments(res.allShipments || res.recentShipments || [])
+-          }
+-        })
+-      }
++    let active = true
++    setLoadingStats(true)
++    setStatsError(false)
++    getServicosLinkeAction().then(servicos => { if (active) setServicosLinke(servicos) })
++    getClientPortalStatsAction(currentClient.id, currentClient.short_name).then(res => {
++      if (!active) return
++      if (res) {
++        setStats(res)
++        setShipments(res.allShipments || res.recentShipments || [])
++      } else setStatsError(true)
++      setLoadingStats(false)
++    }).catch(() => {
++      if (active) { setStatsError(true); setLoadingStats(false) }
+     })
+-  }, [clientId, clientNameParam, userEmail])
++    return () => { active = false }
++  }, [currentClient.id, currentClient.short_name])
+ 
+   // Handle click outside dropdown
+   React.useEffect(() => {
+@@ -153,10 +132,7 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
+     return () => document.removeEventListener("mousedown", handleClickOutside)
+   }, [])
+ 
+-  const querySuffix = React.useMemo(() => {
+-    if (!currentClient) return ""
+-    return `?clientId=${encodeURIComponent(currentClient.id || "")}&clientName=${encodeURIComponent(currentClient.short_name || "")}`
+-  }, [currentClient])
++  const querySuffix = ""
+ 
+   // Filtered shipments
+   const filteredShipments = React.useMemo(() => {
+@@ -235,12 +211,12 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
+   }
+ 
+   const printLabel = async (shipmentItem: any) => {
+-    const label = await resolveLabel(shipmentItem?.ctt_label_base64)
++    const label = await resolveLabel(shipmentItem?.ctt_label_base64 || await getShipmentLabelAction(shipmentItem.id))
+     if (label) printCttLabel(label)
+   }
+ 
+   const downloadLabel = async (shipmentItem: any, ref: string) => {
+-    const label = await resolveLabel(shipmentItem?.ctt_label_base64)
++    const label = await resolveLabel(shipmentItem?.ctt_label_base64 || await getShipmentLabelAction(shipmentItem.id))
+     if (label) downloadCttLabel(label, `${ref}_Etiqueta_CTT.pdf`)
+   }
+ 
+@@ -276,6 +252,13 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
+   // Real credit calculation
+   const usedCreditPct = creditLimit > 0 ? Math.min((stats.totalRevenue / creditLimit) * 100, 100).toFixed(1) : "0"
+ 
++  if (loadingStats || statsError) return (
++    <div className="p-8 text-sm text-[var(--text-secondary)]" role="status">
++      <h1 className="text-lg font-semibold text-[var(--text-primary)]">{currentClient.legal_name || currentClient.short_name}</h1>
++      <p>{statsError ? "Não foi possível carregar os dados desta conta." : "A carregar os dados desta conta..."}</p>
++    </div>
++  )
++
+   return (
+     <div className="flex flex-col gap-6 max-w-7xl mx-auto font-sans relative">
+ 
+diff --git a/app/app/components/ClientImpersonationBanner.tsx b/app/app/components/ClientImpersonationBanner.tsx
+index 2a39039..2b4c76f 100644
+--- a/app/app/components/ClientImpersonationBanner.tsx
++++ b/app/app/components/ClientImpersonationBanner.tsx
+@@ -2,17 +2,13 @@
+ 
+ import * as React from "react"
+ import Link from "next/link"
+-import { useSearchParams } from "next/navigation"
+-import { ExternalLink, ArrowLeft, Building2, ChevronRight } from "lucide-react"
++import { ArrowLeft, ChevronRight } from "lucide-react"
++import { useClientScope } from "./ClientScope"
+ 
+ export function ClientImpersonationBanner() {
+-  const searchParams = useSearchParams()
+-  const clientName = searchParams.get("clientName")
+-  const clientId = searchParams.get("clientId")
+-
+-  if (!clientName && !clientId) return null
+-
+-  const displayName = clientName ? decodeURIComponent(clientName) : "Cliente Selecionado"
++  const { client, isEmployee } = useClientScope()
++  if (!isEmployee) return null
++  const displayName = client.short_name
+ 
+   return (
+     <div className="bg-[#141714] text-white px-5 py-1.5 text-[11px] flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-[rgba(255,255,255,0.08)]">
+@@ -36,63 +32,17 @@ export function ClientImpersonationBanner() {
+   )
+ }
+ 
+-import { getClientesAction } from "@/app/actions/clientes"
+-import type { Cliente } from "@/app/ops/entidades/clientes/types"
+-import { createClient } from "@/lib/supabase/client"
+ import { ClientAccountDetailsModal } from "./ClientAccountDetailsModal"
+ 
+ export function ClientProfileSidebar() {
+-  const searchParams = useSearchParams()
+-  const clientName = searchParams.get("clientName")
+-  const clientId = searchParams.get("clientId")
+-
+-  const [client, setClient] = React.useState<Cliente | null>(null)
+-  const [userAvatar, setUserAvatar] = React.useState<string | null>(null)
++  const { client } = useClientScope()
+   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
+-
+-  React.useEffect(() => {
+-    // 1. Fetch user session for auth avatar fallback
+-    const supabase = createClient()
+-    supabase.auth.getUser().then(({ data: { user } }) => {
+-      if (user?.user_metadata?.avatar) {
+-        setUserAvatar(user.user_metadata.avatar)
+-      } else if (user?.user_metadata?.avatar_url) {
+-        setUserAvatar(user.user_metadata.avatar_url)
+-      }
+-    })
+-
+-    // 2. Fetch clients to get current client's store logo, color, and store name
+-    getClientesAction().then((clients) => {
+-      if (!clients || clients.length === 0) return
+-
+-      let target: Cliente | undefined
+-      if (clientId) {
+-        target = clients.find((c) => c.id === clientId)
+-      }
+-      if (!target && clientName) {
+-        const decoded = decodeURIComponent(clientName).toLowerCase()
+-        target = clients.find(
+-          (c) =>
+-            c.short_name?.toLowerCase() === decoded ||
+-            c.legal_name?.toLowerCase() === decoded
+-        )
+-      }
+-      if (!target) {
+-        target = clients[0]
+-      }
+-
+-      if (target) {
+-        setClient(target)
+-      }
+-    })
+-  }, [clientId, clientName])
+-
+-  const displayName = client?.short_name || (clientName ? decodeURIComponent(clientName) : "Conta Cliente")
++  const displayName = client.short_name
+   const storeSubtitle = client?.legal_name && client.legal_name.toLowerCase() !== displayName.toLowerCase()
+     ? client.legal_name
+     : "Conta Ativa"
+ 
+-  const avatarImage = client?.logo_url || userAvatar || null
++  const avatarImage = client.logo_url || null
+   const initial = displayName.substring(0, 2).toUpperCase()
+   const avatarBg = client?.color || "var(--accent)"
+ 
+@@ -139,9 +89,8 @@ export function ClientProfileSidebar() {
+         isOpen={isDetailsOpen}
+         onClose={() => setIsDetailsOpen(false)}
+         client={client}
+-        userAvatar={userAvatar}
++        userAvatar={null}
+       />
+     </>
+   )
+ }
+-
+diff --git a/app/app/components/ClientRequestPickup.tsx b/app/app/components/ClientRequestPickup.tsx
+index 7f38ca5..a03cc47 100644
+--- a/app/app/components/ClientRequestPickup.tsx
++++ b/app/app/components/ClientRequestPickup.tsx
+@@ -2,17 +2,11 @@
+ 
+ import * as React from "react"
+ import Link from "next/link"
+-import { useSearchParams } from "next/navigation"
+ import { Calendar, Truck, CheckCircle2, Building2, Clock, MapPin, Package, ArrowLeft } from "lucide-react"
+-import { getClientesAction } from "@/app/actions/clientes"
+-import { Cliente } from "@/app/ops/entidades/clientes/types"
++import { useClientScope } from "./ClientScope"
+ 
+ export function ClientRequestPickup() {
+-  const searchParams = useSearchParams()
+-  const clientId = searchParams.get("clientId")
+-  const clientNameParam = searchParams.get("clientName")
+-
+-  const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
++  const { client: currentClient } = useClientScope()
+   const [pickupDate, setPickupDate] = React.useState(new Date().toISOString().split("T")[0])
+   const [pickupVolumes, setPickupVolumes] = React.useState("2")
+   const [pickupWeight, setPickupWeight] = React.useState("5.0")
+@@ -21,29 +15,7 @@ export function ClientRequestPickup() {
+   const [pickupSuccess, setPickupSuccess] = React.useState(false)
+   const [pickupId, setPickupId] = React.useState<string | null>(null)
+ 
+-  React.useEffect(() => {
+-    getClientesAction().then((clients) => {
+-      let target: Cliente | undefined
+-      if (clientId) {
+-        target = clients.find((c) => c.id === clientId)
+-      }
+-      if (!target && clientNameParam) {
+-        const decoded = decodeURIComponent(clientNameParam).toLowerCase()
+-        target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
+-      }
+-      if (!target && clients.length > 0) {
+-        target = clients[0]
+-      }
+-      if (target) {
+-        setCurrentClient(target)
+-      }
+-    })
+-  }, [clientId, clientNameParam])
+-
+-  const querySuffix = React.useMemo(() => {
+-    if (!currentClient) return ""
+-    return `?clientId=${encodeURIComponent(currentClient.id || "")}&clientName=${encodeURIComponent(currentClient.short_name || "")}`
+-  }, [currentClient])
++  const querySuffix = ""
+ 
+   const senderAddress = currentClient?.address 
+     ? `${currentClient.address}, ${currentClient.postal_code} ${currentClient.city}` 
+diff --git a/app/app/components/ClientScope.tsx b/app/app/components/ClientScope.tsx
+new file mode 100644
+index 0000000..c336a4cf
+--- /dev/null
++++ b/app/app/components/ClientScope.tsx
+@@ -0,0 +1,17 @@
++"use client"
++
++import * as React from "react"
++import type { Cliente } from "@/app/ops/entidades/clientes/types"
++
++type Scope = { client: Cliente; isEmployee: boolean }
++const ClientScopeContext = React.createContext<Scope | null>(null)
++
++export function ClientScopeProvider({ value, children }: { value: Scope; children: React.ReactNode }) {
++  return <ClientScopeContext.Provider value={value}>{children}</ClientScopeContext.Provider>
++}
++
++export function useClientScope(): Scope {
++  const scope = React.useContext(ClientScopeContext)
++  if (!scope) throw new Error("Área de cliente sem conta selecionada")
++  return scope
++}
+diff --git a/app/app/components/ClientShipmentDetailModal.tsx b/app/app/components/ClientShipmentDetailModal.tsx
+index cd124a2..81f40e6 100644
+--- a/app/app/components/ClientShipmentDetailModal.tsx
++++ b/app/app/components/ClientShipmentDetailModal.tsx
+@@ -35,6 +35,7 @@ import {
+ import { Badge } from "@/components/ui/badge"
+ import { 
+   getShipmentTrackingTimelineAction,
++  getShipmentLabelAction,
+   deleteShipmentAction,
+   createReturnShipmentAction
+ } from "@/app/actions/shipments"
+@@ -156,14 +157,14 @@ export function ClientShipmentDetailModal({
+ 
+   // 1. Imprimir Etiqueta CTT
+   const printLabel = async () => {
+-    const label = await resolveLabel(currentShipment.ctt_label_base64)
++    const label = await resolveLabel(currentShipment.ctt_label_base64 || await getShipmentLabelAction(currentShipment.id))
+     if (!label) return
+     printCttLabel(label)
+   }
+ 
+   // 2. Descarregar Etiqueta PDF
+   const downloadLabel = async () => {
+-    const label = await resolveLabel(currentShipment.ctt_label_base64)
++    const label = await resolveLabel(currentShipment.ctt_label_base64 || await getShipmentLabelAction(currentShipment.id))
+     if (!label) return
+     downloadCttLabel(label, `${tracking}_Etiqueta_CTT.pdf`)
+   }
+@@ -294,7 +295,7 @@ export function ClientShipmentDetailModal({
+   const isFragil = Boolean(currentShipment.is_fragil)
+   const isSMS = currentShipment.is_sms_notification !== false // default true
+ 
+-  const hasLabel = Boolean(currentShipment.ctt_label_base64)
++  const hasLabel = Boolean(currentShipment.has_label || currentShipment.ctt_label_base64)
+ 
+   // Stepper calculations
+   const steps = [
+diff --git a/app/app/components/ClientShipmentsHistory.tsx b/app/app/components/ClientShipmentsHistory.tsx
+index 1106d6c..1bd10b6 100644
+--- a/app/app/components/ClientShipmentsHistory.tsx
++++ b/app/app/components/ClientShipmentsHistory.tsx
+@@ -2,28 +2,23 @@
+ 
+ import * as React from "react"
+ import Link from "next/link"
+-import { useSearchParams } from "next/navigation"
+ import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon, Undo2, Trash2 } from "lucide-react"
+ import { Badge } from "@/components/ui/badge"
+-import { getClientesAction } from "@/app/actions/clientes"
+-import { getClientPortalStatsAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
++import { getClientPortalStatsAction, getShipmentLabelAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
+ import { closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
+ import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
+ import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
+ import { getCarrierLogo } from "@/lib/carrier-logos"
+ import { getShipmentStatusConfig } from "@/lib/status-helpers"
+-import { Cliente } from "@/app/ops/entidades/clientes/types"
++import { useClientScope } from "./ClientScope"
+ 
+-export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
+-  const searchParams = useSearchParams()
+-  const clientId = searchParams.get("clientId")
+-  const clientNameParam = searchParams.get("clientName")
+-
+-  const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
++export function ClientShipmentsHistory() {
++  const { client: currentClient } = useClientScope()
+   const [shipments, setShipments] = React.useState<any[]>([])
+   const [searchTerm, setSearchTerm] = React.useState("")
+   const [statusFilter, setStatusFilter] = React.useState("todos")
+   const [loading, setLoading] = React.useState(true)
++  const [loadError, setLoadError] = React.useState(false)
+   const [closingBatch, setClosingBatch] = React.useState(false)
+   const [manifestData, setManifestData] = React.useState<{ fileName: string, base64: string } | null>(null)
+   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
+@@ -44,49 +39,29 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
+   }
+ 
+   const printLabel = async (envioItem: any) => {
+-    const label = await resolveLabel(envioItem?.ctt_label_base64)
++    const label = await resolveLabel(envioItem?.ctt_label_base64 || await getShipmentLabelAction(envioItem.id))
+     if (label) printCttLabel(label)
+   }
+ 
+   const downloadLabel = async (envioItem: any, ref: string) => {
+-    const label = await resolveLabel(envioItem?.ctt_label_base64)
++    const label = await resolveLabel(envioItem?.ctt_label_base64 || await getShipmentLabelAction(envioItem.id))
+     if (label) downloadCttLabel(label, `${ref}_Etiqueta_CTT.pdf`)
+   }
+ 
+   React.useEffect(() => {
+-    getClientesAction().then((clients) => {
+-      let target: Cliente | undefined
+-      if (clientId) {
+-        target = clients.find((c) => c.id === clientId)
+-      }
+-      if (!target && clientNameParam) {
+-        const decoded = decodeURIComponent(clientNameParam).toLowerCase()
+-        target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
+-      }
+-      if (!target && userEmail) {
+-        const emailLower = userEmail.toLowerCase()
+-        target = clients.find((c) => c.email?.toLowerCase() === emailLower || c.billing_email?.toLowerCase() === emailLower)
+-      }
+-      if (!target && clients.length > 0) {
+-        target = clients[0]
+-      }
+-      if (target) {
+-        setCurrentClient(target)
+-      }
++    let active = true
++    setLoading(true)
++    setLoadError(false)
++    getClientPortalStatsAction(currentClient.id, currentClient.short_name).then(res => {
++      if (!active) return
++      setShipments(res?.allShipments || res?.recentShipments || [])
++      if (!res) setLoadError(true)
++      setLoading(false)
++    }).catch(() => { if (active) { setLoadError(true); setLoading(false) } })
++    return () => { active = false }
++  }, [currentClient.id, currentClient.short_name])
+ 
+-      getClientPortalStatsAction(target?.id, target?.short_name).then((res) => {
+-        if (res) {
+-          setShipments(res.allShipments || res.recentShipments || [])
+-        }
+-        setLoading(false)
+-      })
+-    })
+-  }, [clientId, clientNameParam])
+-
+-  const querySuffix = React.useMemo(() => {
+-    if (!currentClient) return ""
+-    return `?clientId=${encodeURIComponent(currentClient.id || "")}&clientName=${encodeURIComponent(currentClient.short_name || "")}`
+-  }, [currentClient])
++  const querySuffix = ""
+ 
+   const filteredShipments = React.useMemo(() => {
+     return shipments.filter((item) => {
+@@ -149,6 +124,13 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
+     return () => document.removeEventListener('mousedown', handleClickOutside)
+   }, [])
+ 
++  if (loading || loadError) return (
++    <div className="p-8 text-sm text-slate-600" role="status">
++      <h1 className="text-lg font-semibold text-slate-900">{currentClient.legal_name || currentClient.short_name}</h1>
++      <p>{loadError ? "Não foi possível carregar os envios desta conta." : "A carregar os envios desta conta..."}</p>
++    </div>
++  )
++
+   return (
+     <div className="flex flex-col gap-6 max-w-6xl mx-auto font-sans relative">
+       
+diff --git a/app/app/components/ClientSidebarNav.tsx b/app/app/components/ClientSidebarNav.tsx
+index eb639ba..266df60 100644
+--- a/app/app/components/ClientSidebarNav.tsx
++++ b/app/app/components/ClientSidebarNav.tsx
+@@ -1,23 +1,11 @@
+ "use client"
+ 
+-import * as React from "react"
+ import Link from "next/link"
+-import { usePathname, useSearchParams } from "next/navigation"
++import { usePathname } from "next/navigation"
+ import { Home, FileText, Search, Plus } from "lucide-react"
+ 
+ export function ClientSidebarNav() {
+   const pathname = usePathname()
+-  const searchParams = useSearchParams()
+-  const clientId = searchParams.get("clientId")
+-  const clientName = searchParams.get("clientName")
+-
+-  const queryParams = React.useMemo(() => {
+-    if (!clientId && !clientName) return ""
+-    const params = new URLSearchParams()
+-    if (clientId) params.set("clientId", clientId)
+-    if (clientName) params.set("clientName", clientName)
+-    return `?${params.toString()}`
+-  }, [clientId, clientName])
+ 
+   const navItems = [
+     { href: "/app", label: "Painel Principal", icon: Home },
+@@ -35,7 +23,7 @@ export function ClientSidebarNav() {
+         return (
+           <Link
+             key={item.href}
+-            href={`${item.href}${queryParams}`}
++            href={item.href}
+             className={`flex items-center gap-3 px-3 py-2 rounded-md font-medium text-[12px] transition-colors ${
+               isActive
+                 ? "text-[var(--accent)] bg-[var(--accent-soft)] font-semibold border border-[rgba(18,138,71,0.15)]"
+@@ -54,23 +42,11 @@ export function ClientSidebarNav() {
+ import { TrackingQuickBar } from "@/app/ops/components/TrackingQuickBar"
+ 
+ export function ClientTopHeaderAction() {
+-  const searchParams = useSearchParams()
+-  const clientId = searchParams.get("clientId")
+-  const clientName = searchParams.get("clientName")
+-
+-  const queryParams = React.useMemo(() => {
+-    if (!clientId && !clientName) return ""
+-    const params = new URLSearchParams()
+-    if (clientId) params.set("clientId", clientId)
+-    if (clientName) params.set("clientName", clientName)
+-    return `?${params.toString()}`
+-  }, [clientId, clientName])
+-
+   return (
+     <div className="flex items-center gap-2">
+       <TrackingQuickBar />
+       <Link
+-        href={`/app/criar-guia${queryParams}`}
++        href="/app/criar-guia"
+         className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.99] text-white px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+       >
+         <Plus className="w-3.5 h-3.5" />
+diff --git a/app/app/components/ClientStoreShippingPortal.tsx b/app/app/components/ClientStoreShippingPortal.tsx
+index bebf00d..12dd13e 100644
+--- a/app/app/components/ClientStoreShippingPortal.tsx
++++ b/app/app/components/ClientStoreShippingPortal.tsx
+@@ -1,7 +1,6 @@
+ "use client"
+ 
+ import * as React from "react"
+-import { useSearchParams } from "next/navigation"
+ import { 
+   Calendar, 
+   ChevronDown, 
+@@ -23,9 +22,8 @@ import {
+   Info
+ } from "lucide-react"
+ import { Badge } from "@/components/ui/badge"
+-import { getClientesAction } from "@/app/actions/clientes"
++import { useClientScope } from "./ClientScope"
+ import { 
+-  Cliente, 
+   DEFAULT_CLIENT_PRICING, 
+   SYSTEM_AVAILABLE_WEBSERVICES, 
+   DEFAULT_CTT_SERVICES_PRICING,
+@@ -36,11 +34,7 @@ import {
+ } from "@/app/ops/entidades/clientes/types"
+ 
+ export function ClientStoreShippingPortal() {
+-  const searchParams = useSearchParams()
+-  const clientId = searchParams.get("clientId")
+-  const clientNameParam = searchParams.get("clientName")
+-
+-  const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
++  const { client: currentClient } = useClientScope()
+   const [loadingClient, setLoadingClient] = React.useState(true)
+ 
+   // Form states for Guia
+@@ -83,32 +77,12 @@ export function ClientStoreShippingPortal() {
+   const [pickupVolumes, setPickupVolumes] = React.useState("2")
+   const [pickupSuccess, setPickupSuccess] = React.useState(false)
+ 
+-  // Load client data
+   React.useEffect(() => {
+-    getClientesAction().then((clients) => {
+-      let target: Cliente | undefined
+-      if (clientId) {
+-        target = clients.find((c) => c.id === clientId)
+-      }
+-      if (!target && clientNameParam) {
+-        const decoded = decodeURIComponent(clientNameParam).toLowerCase()
+-        target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
+-      }
+-      if (!target && clients.length > 0) {
+-        target = clients[0]
+-      }
+-
+-      if (target) {
+-        setCurrentClient(target)
+-        const allowed = (target.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter((w) => w.is_enabled)
+-        const defWs = allowed.find((w) => w.is_default) || allowed[0]
+-        if (defWs) {
+-          setSelectedCarrierCode(defWs.code)
+-        }
+-      }
+-      setLoadingClient(false)
+-    })
+-  }, [clientId, clientNameParam])
++    const allowed = (currentClient.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter(w => w.is_enabled)
++    const defWs = allowed.find(w => w.is_default) || allowed[0]
++    if (defWs) setSelectedCarrierCode(defWs.code)
++    setLoadingClient(false)
++  }, [currentClient.id, currentClient.allowed_webservices])
+ 
+   // Available client services pricing
+   const servicesPricingList: ClientServicePrice[] = React.useMemo(() => {
+diff --git a/app/app/criar-guia/page.tsx b/app/app/criar-guia/page.tsx
+index 424b47d..d80a253 100644
+--- a/app/app/criar-guia/page.tsx
++++ b/app/app/criar-guia/page.tsx
+@@ -2,12 +2,8 @@ import * as React from "react"
+ import { Suspense } from "react"
+ import { ClientCreateGuia } from "../components/ClientCreateGuia"
+ import { Loader2 } from "lucide-react"
+-import { createClient } from "@/lib/supabase/server"
+ 
+ export default async function CriarGuiaPage() {
+-  const supabase = await createClient()
+-  const { data: { user } } = await supabase.auth.getUser()
+-
+   return (
+     <Suspense
+       fallback={
+@@ -17,8 +13,7 @@ export default async function CriarGuiaPage() {
+         </div>
+       }
+     >
+-      <ClientCreateGuia userEmail={user?.email} />
++      <ClientCreateGuia />
+     </Suspense>
+   )
+ }
+-
+diff --git a/app/app/envios/page.tsx b/app/app/envios/page.tsx
+index 932bdd3..3672a09 100644
+--- a/app/app/envios/page.tsx
++++ b/app/app/envios/page.tsx
+@@ -2,12 +2,8 @@ import * as React from "react"
+ import { Suspense } from "react"
+ import { ClientShipmentsHistory } from "../components/ClientShipmentsHistory"
+ import { Loader2 } from "lucide-react"
+-import { createClient } from "@/lib/supabase/server"
+ 
+ export default async function EnviosPage() {
+-  const supabase = await createClient()
+-  const { data: { user } } = await supabase.auth.getUser()
+-
+   return (
+     <Suspense
+       fallback={
+@@ -17,8 +13,7 @@ export default async function EnviosPage() {
+         </div>
+       }
+     >
+-      <ClientShipmentsHistory userEmail={user?.email} />
++      <ClientShipmentsHistory />
+     </Suspense>
+   )
+ }
+-
+diff --git a/app/app/faturas/page.tsx b/app/app/faturas/page.tsx
+index e8c5467..919a796 100644
+--- a/app/app/faturas/page.tsx
++++ b/app/app/faturas/page.tsx
+@@ -1,41 +1,16 @@
+-import { createClient } from "@/lib/supabase/server"
+-import { redirect } from "next/navigation"
+ import * as React from "react"
+ import FaturasClient from "./FaturasClient"
+ import { getClientesAction } from "@/app/actions/clientes"
+ import { getBillingStatementsAction } from "@/app/actions/moloni"
++import { requireUser } from "@/lib/auth/context"
+ 
+ export const dynamic = "force-dynamic"
+ 
+-export default async function FaturasPage({
+-  searchParams,
+-}: {
+-  searchParams?: Promise<{ clientId?: string; clientName?: string }>
+-}) {
+-  const supabase = await createClient()
+-  
+-  const { data: { user } } = await supabase.auth.getUser()
+-  if (!user) redirect("/login")
+-
+-  const resolvedParams = searchParams ? await searchParams : {}
+-  const clients = await getClientesAction()
+-  
+-  let targetClient: any = undefined
+-  if (resolvedParams.clientId) {
+-    targetClient = clients.find(c => c.id === resolvedParams.clientId)
+-  }
+-  if (!targetClient && resolvedParams.clientName) {
+-    targetClient = clients.find(c => c.short_name?.toLowerCase() === resolvedParams.clientName?.toLowerCase())
+-  }
+-  if (!targetClient && user?.email) {
+-    targetClient = clients.find(c => 
+-      c.email?.toLowerCase().trim() === user.email?.toLowerCase().trim() ||
+-      c.billing_email?.toLowerCase().trim() === user.email?.toLowerCase().trim()
+-    )
+-  }
+-  if (!targetClient && clients.length > 0) {
+-    targetClient = clients[0]
+-  }
++export default async function FaturasPage() {
++  const ctx = await requireUser()
++  const targetClient = ctx.client_id
++    ? (await getClientesAction(ctx.client_id)).find(c => c.id === ctx.client_id)
++    : undefined
+ 
+   const statements = targetClient ? await getBillingStatementsAction(targetClient.id) : []
+ 
+diff --git a/app/app/layout.tsx b/app/app/layout.tsx
+index 76a43c9..848e7cb 100644
+--- a/app/app/layout.tsx
++++ b/app/app/layout.tsx
+@@ -10,13 +10,25 @@ import {
+ import { Suspense } from "react"
+ import { ClientImpersonationBanner, ClientProfileSidebar } from "./components/ClientImpersonationBanner"
+ import { ClientSidebarNav, ClientTopHeaderAction } from "./components/ClientSidebarNav"
++import { requireUser } from "@/lib/auth/context"
++import { getClientesAction } from "@/app/actions/clientes"
++import { redirect } from "next/navigation"
++import { ClientScopeProvider } from "./components/ClientScope"
+ 
+-export default function OpsLayout({
++export default async function OpsLayout({
+   children,
+ }: {
+   children: React.ReactNode
+ }) {
++  const ctx = await requireUser()
++  if (!ctx.client_id) redirect("/ops/entidades/clientes")
++  const client = (await getClientesAction(ctx.client_id)).find(c => c.id === ctx.client_id)
++  if (!client) {
++    if (ctx.role !== "client") redirect("/ops/entidades/clientes")
++    throw new Error("A conta de cliente associada a esta sessão não foi encontrada.")
++  }
+   return (
++    <ClientScopeProvider key={client.id} value={{ client, isEmployee: ctx.role !== "client" }}>
+     <div className="min-h-screen bg-[var(--canvas-bg)] flex flex-col text-[var(--text-primary)]">
+       {/* Top Admin Impersonation Bar */}
+       <Suspense fallback={null}>
+@@ -30,7 +42,7 @@ export default function OpsLayout({
+           {/* Logo Area */}
+           <div className="pt-7 pb-5 px-5">
+             <div className="flex flex-col">
+-              <Image src="/Linke-logo.png" alt="Linke" width={100} height={30} className="object-contain" priority />
++              <Image src="/Linke-logo.png" alt="Linke" width={100} height={30} className="object-contain" preload />
+               <span className="text-[var(--text-tertiary)] text-[10px] font-semibold tracking-wider mt-2 uppercase">Portal do Cliente</span>
+             </div>
+           </div>
+@@ -89,5 +101,6 @@ export default function OpsLayout({
+         </div>
+       </div>
+     </div>
++    </ClientScopeProvider>
+   )
+ }
+diff --git a/app/app/page.tsx b/app/app/page.tsx
+index 9113ce5..42d92dd 100644
+--- a/app/app/page.tsx
++++ b/app/app/page.tsx
+@@ -2,23 +2,8 @@ import * as React from "react"
+ import { Suspense } from "react"
+ import { ClientDashboard } from "./components/ClientDashboard"
+ import { Loader2 } from "lucide-react"
+-import { createClient } from "@/lib/supabase/server"
+ 
+ export default async function ClientStorePage() {
+-  const supabase = await createClient()
+-  const { data: { user } } = await supabase.auth.getUser()
+-
+-  if (!user) {
+-    const { redirect } = await import("next/navigation")
+-    redirect("/login")
+-  }
+-
+-  const { data: clientUser } = await supabase
+-    .from('client_users')
+-    .select('client_id')
+-    .eq('user_id', user?.id)
+-    .single()
+-
+   return (
+     <Suspense
+       fallback={
+@@ -28,8 +13,7 @@ export default async function ClientStorePage() {
+         </div>
+       }
+     >
+-      <ClientDashboard userEmail={user?.email} passedClientId={clientUser?.client_id} />
++      <ClientDashboard />
+     </Suspense>
+   )
+ }
+-
+diff --git a/app/app/selecionar/route.ts b/app/app/selecionar/route.ts
+new file mode 100644
+index 0000000..110064a
+--- /dev/null
++++ b/app/app/selecionar/route.ts
+@@ -0,0 +1,19 @@
++import { NextRequest, NextResponse } from "next/server"
++import { requireEmployee } from "@/lib/auth/context"
++import { getClientesAction } from "@/app/actions/clientes"
++
++export async function GET(request: NextRequest) {
++  await requireEmployee()
++  const clientId = request.nextUrl.searchParams.get("clientId")
++  const client = clientId && (await getClientesAction(clientId)).find(c => c.id === clientId)
++  if (!client) return NextResponse.redirect(new URL("/ops/entidades/clientes", request.url))
++
++  const response = NextResponse.redirect(new URL("/app", request.url))
++  response.cookies.set("impersonated_client_id", client.id, {
++    httpOnly: true,
++    secure: process.env.NODE_ENV === "production",
++    sameSite: "lax",
++    path: "/",
++  })
++  return response
++}
+diff --git a/app/login/actions.ts b/app/login/actions.ts
+index 6ad5329..9082d08 100644
+--- a/app/login/actions.ts
++++ b/app/login/actions.ts
+@@ -25,7 +25,7 @@ export async function login(formData: FormData) {
+ 
+     revalidatePath('/', 'layout')
+     
+-    if (user.user_metadata?.role === 'client') {
++    if (user.app_metadata?.role === 'client') {
+       redirect('/app')
+     } else {
+       redirect('/ops')
+diff --git a/app/login/page.tsx b/app/login/page.tsx
+index e69284d..31bfc25 100644
+--- a/app/login/page.tsx
++++ b/app/login/page.tsx
+@@ -44,7 +44,7 @@ function LoginFormContent() {
+             width={140} 
+             height={36} 
+             className="object-contain" 
+-            priority
++            preload
+           />
+         </div>
+ 
+@@ -105,20 +105,17 @@ function LoginFormContent() {
+         </div>
+       </div>
+ 
+-      {/* Right Column - Visual */}
+-      <div className="hidden lg:flex w-7/12 relative bg-[#F8FAFC] items-center justify-center overflow-hidden border-l border-slate-100">
+-        <div className="absolute inset-0 w-full h-full">
+-          <Image 
+-            src="/login_abstract_spiral.jpg" 
+-            alt="Linke TMS Logistics Abstract Graphic" 
+-            fill 
+-            className="object-cover object-center opacity-95 mix-blend-multiply"
+-            priority
+-          />
++      {/* Decorative illustration rendered as HTML/CSS, without a full-screen image request. */}
++      <div className="hidden lg:flex w-7/12 relative items-center justify-center overflow-hidden border-l border-slate-100 bg-[linear-gradient(135deg,#f1fff5_0%,#e6f8ed_48%,#e8f1ff_100%)]" aria-hidden="true">
++        <div className="absolute -top-48 -right-32 h-[680px] w-[680px] rounded-full bg-emerald-200/40 blur-3xl" />
++        <div className="absolute -bottom-52 -left-24 h-[650px] w-[650px] rounded-full bg-sky-200/40 blur-3xl" />
++        <div className="relative flex h-[min(65vw,620px)] w-[min(65vw,620px)] items-center justify-center rounded-full border border-emerald-300/60 bg-white/20 shadow-[0_30px_100px_rgba(13,148,136,0.12)] rotate-[-25deg]">
++          <div className="flex h-[78%] w-[78%] items-center justify-center rounded-full border-[35px] border-emerald-400/30 shadow-[inset_0_0_70px_rgba(16,185,129,0.1)]">
++            <div className="flex h-[73%] w-[73%] items-center justify-center rounded-full border-[42px] border-emerald-500/50 bg-white/30">
++              <div className="h-[65%] w-[65%] rounded-full bg-[radial-gradient(circle_at_35%_30%,#e2fff0,#34d399_75%,#10b981)] shadow-[0_24px_65px_rgba(5,150,105,0.25)]" />
++            </div>
++          </div>
+         </div>
+-        
+-        {/* Subtle overlay gradient to ensure text readability if we had any, and just make it blend nice */}
+-        <div className="absolute inset-0 bg-gradient-to-r from-white via-transparent to-transparent opacity-40"></div>
+       </div>
+     </div>
+   )
+diff --git a/app/ops/clientes/page.tsx b/app/ops/clientes/page.tsx
+index 1781d18..7f422f8 100644
+--- a/app/ops/clientes/page.tsx
++++ b/app/ops/clientes/page.tsx
+@@ -76,9 +76,9 @@ export default async function ClientesPage() {
+                     </td>
+                     <td className="px-4 py-4">
+                       <div className="flex items-center gap-3">
+-                        <Link href={`/app`} className="px-4 py-1.5 bg-green-50 text-green-700 rounded-md text-xs font-bold hover:bg-green-100 transition-colors">
++                        <a href={`/app/selecionar?clientId=${encodeURIComponent(cliente.id)}`} className="px-4 py-1.5 bg-green-50 text-green-700 rounded-md text-xs font-bold hover:bg-green-100 transition-colors">
+                           Aceder Dashboard
+-                        </Link>
++                        </a>
+                         <button className="text-slate-400 hover:text-slate-600">
+                           <MoreVertical className="w-5 h-5" />
+                         </button>
+diff --git a/app/ops/entidades/clientes/components/ClienteModal.tsx b/app/ops/entidades/clientes/components/ClienteModal.tsx
+index fd58488..5fdd58f 100644
+--- a/app/ops/entidades/clientes/components/ClienteModal.tsx
++++ b/app/ops/entidades/clientes/components/ClienteModal.tsx
+@@ -392,7 +392,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
+           <div className="flex items-center gap-2.5 shrink-0">
+             {/* Redirect to Client Store / Portal UI */}
+             <a
+-              href={`/app?clientId=${encodeURIComponent(formData.id || "")}&clientName=${encodeURIComponent(formData.short_name || "")}`}
++              href={`/app/selecionar?clientId=${encodeURIComponent(formData.id || "")}`}
+               target="_blank"
+               rel="noopener noreferrer"
+               className="px-3.5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.99] text-white rounded-md text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+diff --git a/app/ops/entidades/clientes/page.tsx b/app/ops/entidades/clientes/page.tsx
+index cca332a..dc5dbd5 100644
+--- a/app/ops/entidades/clientes/page.tsx
++++ b/app/ops/entidades/clientes/page.tsx
+@@ -10,7 +10,7 @@ export default async function EntidadesClientesPage() {
+   const [clientes, servicosLinke, shipments, statements] = await Promise.all([
+     getClientesAction(),
+     getServicosLinkeAction(),
+-    getShipmentsAction(),
++    getShipmentsAction({ includeLabels: false }),
+     getBillingStatementsAction()
+   ])
+ 
+diff --git a/app/ops/faturacao/contas-corrente/page.tsx b/app/ops/faturacao/contas-corrente/page.tsx
+index 0e5a04c..cd40eb5 100644
+--- a/app/ops/faturacao/contas-corrente/page.tsx
++++ b/app/ops/faturacao/contas-corrente/page.tsx
+@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
+ export default async function ContasCorrentePage() {
+   const [clients, shipments, statements, moloniConfig] = await Promise.all([
+     getClientesAction(),
+-    getShipmentsAction(),
++    getShipmentsAction({ includeLabels: false }),
+     getBillingStatementsAction(),
+     getMoloniConfigAction()
+   ])
+@@ -40,4 +40,3 @@ export default async function ContasCorrentePage() {
+     </div>
+   )
+ }
+-
+diff --git a/app/ops/layout.tsx b/app/ops/layout.tsx
+index 85023c1..c942fe3 100644
+--- a/app/ops/layout.tsx
++++ b/app/ops/layout.tsx
+@@ -6,6 +6,7 @@ import { NotificationBell } from "./components/NotificationBell"
+ import { TrackingQuickBar } from "./components/TrackingQuickBar"
+ import { createClient } from "@/lib/supabase/server"
+ import { signout } from "@/app/login/actions"
++import { requireEmployee } from "@/lib/auth/context"
+ import { 
+   Plus,
+   HelpCircle,
+@@ -20,6 +21,7 @@ export default async function OpsLayout({
+ }: {
+   children: React.ReactNode
+ }) {
++  await requireEmployee()
+   const supabase = await createClient()
+   const { data: { user } } = await supabase.auth.getUser()
+   
+diff --git a/app/ops/page.tsx b/app/ops/page.tsx
+index 6276f6c..59160c8 100644
+--- a/app/ops/page.tsx
++++ b/app/ops/page.tsx
+@@ -24,7 +24,7 @@ export default async function OpsDashboardPage() {
+ 
+   // Fetch real data from DB & persistent actions
+   const [shipments, recolhasResult, clients] = await Promise.all([
+-    getShipmentsAction(),
++    getShipmentsAction({ includeLabels: false }),
+     supabase
+       .from("recolhas")
+       .select("*")
+diff --git a/lib/auth/context.ts b/lib/auth/context.ts
+index 3d03fd4..19a8b36 100644
+--- a/lib/auth/context.ts
++++ b/lib/auth/context.ts
+@@ -1,5 +1,6 @@
+ import { createServerClient } from "@supabase/ssr"
+ import { cookies } from "next/headers"
++import { cache } from "react"
+ 
+ import { createAdminClient } from "@/lib/supabase/server"
+ import { DEFAULT_COLABORADORES } from "@/app/ops/entidades/colaboradores/types"
+@@ -23,7 +24,7 @@ export async function getTenantId(): Promise<string> {
+   return ctx?.tenant_id || LINKE_TENANT_ID
+ }
+ 
+-export async function getAuthContext(): Promise<AuthContext | null> {
++export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
+   const cookieStore = await cookies()
+   const supabase = createServerClient(
+     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+@@ -55,18 +56,20 @@ export async function getAuthContext(): Promise<AuthContext | null> {
+   // 1. Check if the user is an employee in the database
+   const { data: colab } = await supabaseAdmin
+     .from("colaboradores")
+-    .select("id, access_level, permissions")
++    .select("id, access_level, permissions, status")
+     .eq("email", user.email)
+     .single()
+ 
+   if (colab) {
+-    role = colab.access_level === 'Administrador' ? 'admin' : 'employee'
+-    colaborador_id = colab.id
+-    permissions = Array.isArray(colab.permissions) ? colab.permissions : JSON.parse(colab.permissions || '[]')
++    if (colab.status !== 'Inativo') {
++      role = colab.access_level === 'Administrador' ? 'admin' : 'employee'
++      colaborador_id = colab.id
++      permissions = Array.isArray(colab.permissions) ? colab.permissions : JSON.parse(colab.permissions || '[]')
++    }
+   } else {
+-    // 2. Fall back to app_metadata (secure) or user_metadata (legacy)
+-    const metadata = user.app_metadata?.role ? user.app_metadata : (user.user_metadata || {})
+-    role = metadata.role || null
++    // Only server-managed metadata may assign roles or client scope.
++    const metadata = user.app_metadata || {}
++    role = ['client', 'employee', 'admin'].includes(metadata.role) ? metadata.role : null
+ 
+     if (role === 'client') {
+       client_id = metadata.client_id || null
+@@ -76,7 +79,19 @@ export async function getAuthContext(): Promise<AuthContext | null> {
+       permissions = metadata.permissions || []
+     }
+ 
+-    // 3. Final fallback: check DEFAULT_COLABORADORES by email
++    if (!role || (role === 'client' && !client_id)) {
++      const { data: clientUser } = await supabaseAdmin
++        .from('client_users')
++        .select('client_id')
++        .eq('user_id', user.id)
++        .maybeSingle()
++      if (clientUser?.client_id) {
++        role = 'client'
++        client_id = clientUser.client_id
++      }
++    }
++
++    // 3. Final fallback: check DEFAULT_COLABORADORES by exact email
+     //    This ensures hardcoded staff (Stefano, Nathalia, Gilberto) always
+     //    resolve correctly even when the DB table is unreachable.
+     if (!role || (role !== 'employee' && role !== 'admin')) {
+@@ -91,21 +106,6 @@ export async function getAuthContext(): Promise<AuthContext | null> {
+     }
+   }
+ 
+-  // Stefano Remy is the permanent Super-Admin with unrestricted full access
+-  if (user.email?.toLowerCase().includes("stefano")) {
+-    role = "admin"
+-    colaborador_id = "col-stefano-001"
+-    permissions = [
+-      "Acesso Total (Super-Admin)",
+-      "Gestão de Clientes & Contratos",
+-      "Emissão e Controlo de Guias CTT",
+-      "Pedidos de Recolha & Distribuição",
+-      "Faturação & Contas Correntes",
+-      "Gestão de Transportadoras & Frotas",
+-      "Configurações de Webservices & Integrações"
+-    ]
+-  }
+-
+   // Check for secure impersonation cookie
+   if ((role === 'employee' || role === 'admin')) {
+     const impersonatedId = cookieStore.get("impersonated_client_id")?.value
+@@ -122,14 +122,14 @@ export async function getAuthContext(): Promise<AuthContext | null> {
+     colaborador_id,
+     permissions
+   }
+-}
++})
+ 
+ /**
+  * Ensures the caller is authenticated. Throws if not.
+  */
+ export async function requireUser(): Promise<AuthContext> {
+   const ctx = await getAuthContext()
+-  if (!ctx) {
++  if (!ctx || !ctx.role || (ctx.role === 'client' && !ctx.client_id)) {
+     throw new Error("Não autorizado. Faça login para continuar.")
+   }
+   return ctx
+@@ -158,13 +158,12 @@ export async function requirePermission(permission: string): Promise<AuthContext
+ }
+ 
+ /**
+- * Ensures the caller is specifically an Admin / Super-Admin (Stefano). Throws if not.
++ * Ensures the caller has a server-assigned administrator role.
+  */
+ export async function requireAdmin(): Promise<AuthContext> {
+   const ctx = await requireUser()
+-  const isStefano = ctx.user?.email?.toLowerCase().includes("stefano")
+-  if (ctx.role !== 'admin' && !isStefano) {
+-    throw new Error("Acesso restrito. Apenas o administrador Stefano tem permissão para gerir credenciais e níveis de acesso.")
++  if (ctx.role !== 'admin') {
++    throw new Error("Acesso restrito. Apenas administradores podem gerir credenciais e níveis de acesso.")
+   }
+   return ctx
+ }
+@@ -181,7 +180,7 @@ export async function requireClientAccess(targetClientId: string): Promise<AuthC
+     return ctx
+   }
+ 
+-  if (ctx.role === 'client' && ctx.client_id !== targetClientId) {
++  if (ctx.role !== 'client' || ctx.client_id !== targetClientId) {
+     throw new Error("Acesso negado. Não tem permissão para aceder a dados deste cliente.")
+   }
+ 
+diff --git a/lib/supabase/middleware.ts b/lib/supabase/middleware.ts
+index e01ee96..4636226 100644
+--- a/lib/supabase/middleware.ts
++++ b/lib/supabase/middleware.ts
+@@ -48,7 +48,7 @@ export async function updateSession(request: NextRequest) {
+   }
+ 
+   if (user) {
+-    const role = user.user_metadata?.role
++    const role = user.app_metadata?.role
+ 
+     // Redirect away from login page if already logged in
+     if (pathname === '/login') {
+@@ -59,10 +59,11 @@ export async function updateSession(request: NextRequest) {
+ 
+     // Secure Impersonation Logic
+     if (role === 'employee' || role === 'admin') {
+-      if (request.nextUrl.searchParams.has('clientId')) {
++      if (isProtectedApp && pathname !== '/app/selecionar' && request.nextUrl.searchParams.has('clientId')) {
+         const clientId = request.nextUrl.searchParams.get('clientId')
+         const url = request.nextUrl.clone()
+         url.searchParams.delete('clientId') // Remove sensitive param from URL
++        url.searchParams.delete('clientName')
+         
+         const res = NextResponse.redirect(url)
+         if (clientId) {
+diff --git a/middleware.ts b/middleware.ts
+deleted file mode 100644
+index ff2e079..0000000
+--- a/middleware.ts
++++ /dev/null
+@@ -1,19 +0,0 @@
+-import { type NextRequest } from 'next/server'
+-import { updateSession } from '@/lib/supabase/middleware'
+-
+-export async function middleware(request: NextRequest) {
+-  return await updateSession(request)
+-}
+-
+-export const config = {
+-  matcher: [
+-    /*
+-     * Match all request paths except for the ones starting with:
+-     * - _next/static (static files)
+-     * - _next/image (image optimization files)
+-     * - favicon.ico (favicon file)
+-     * Feel free to modify this pattern to include more paths.
+-     */
+-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+-  ],
+-}
+diff --git a/proxy.ts b/proxy.ts
+new file mode 100644
+index 0000000..634bf7f
+--- /dev/null
++++ b/proxy.ts
+@@ -0,0 +1,10 @@
++import { type NextRequest } from 'next/server'
++import { updateSession } from '@/lib/supabase/middleware'
++
++export async function proxy(request: NextRequest) {
++  return await updateSession(request)
++}
++
++export const config = {
++  matcher: ['/ops/:path*', '/app/:path*', '/login'],
++}
+diff --git a/supabase/migrations/20260929120000_shipment_audit_metadata.sql b/supabase/migrations/20260929120000_shipment_audit_metadata.sql
+new file mode 100644
+index 0000000..7654a25
+--- /dev/null
++++ b/supabase/migrations/20260929120000_shipment_audit_metadata.sql
+@@ -0,0 +1,107 @@
++-- Keep large labels in audit_log for printing, but omit them from list/report queries.
++-- security_invoker makes the view obey the underlying table's permissions.
++create or replace view public.shipment_metadata
++with (security_invoker = true)
++as
++select
++  s.id,
++  s.client_id,
++  s.created_at,
++  s.tracking_number,
++  s.carrier_tracking_number,
++  s.ctt_object_id,
++  (to_jsonb(s) - array['ctt_label_base64', 'ctt_manifest_pdf']) ||
++    jsonb_build_object('has_label', nullif(s.ctt_label_base64, '') is not null) as details
++from public.shipments s;
++
++revoke all on public.shipment_metadata from anon, authenticated;
++grant select on public.shipment_metadata to service_role;
++
++create or replace view public.shipment_audit_metadata
++with (security_invoker = true)
++as
++select
++  id,
++  tenant_id,
++  action,
++  created_at,
++  details ->> 'client_id' as client_id,
++  details ->> 'tracking_number' as tracking_number,
++  details ->> 'carrier_tracking_number' as carrier_tracking_number,
++  details ->> 'ctt_object_id' as ctt_object_id,
++  details ->> 'reference' as reference,
++  (details - array['ctt_label_base64', 'carrier_label_base64', 'labelBase64']) ||
++    jsonb_build_object('has_label', coalesce(
++      nullif(details ->> 'ctt_label_base64', ''),
++      nullif(details ->> 'carrier_label_base64', ''),
++      nullif(details ->> 'labelBase64', '')
++    ) is not null) as details
++from public.audit_log
++where action = 'shipment_data';
++
++revoke all on public.shipment_audit_metadata from anon, authenticated;
++grant select on public.shipment_audit_metadata to service_role;
++
++create index if not exists audit_log_shipment_data_created_at_idx
++  on public.audit_log (created_at desc)
++  where action = 'shipment_data';
++
++create index if not exists audit_log_shipment_data_id_idx
++  on public.audit_log ((details ->> 'id'), created_at desc)
++  where action = 'shipment_data';
++
++create index if not exists audit_log_shipment_data_client_idx
++  on public.audit_log ((details ->> 'client_id'), created_at desc)
++  where action = 'shipment_data';
++
++create index if not exists shipments_tracking_number_idx on public.shipments (tracking_number);
++create index if not exists shipments_carrier_tracking_number_idx on public.shipments (carrier_tracking_number);
++create index if not exists shipments_ctt_object_id_idx on public.shipments (ctt_object_id);
++
++create index if not exists audit_log_shipment_tracking_idx
++  on public.audit_log ((details ->> 'tracking_number')) where action = 'shipment_data';
++create index if not exists audit_log_shipment_carrier_tracking_idx
++  on public.audit_log ((details ->> 'carrier_tracking_number')) where action = 'shipment_data';
++create index if not exists audit_log_shipment_ctt_object_idx
++  on public.audit_log ((details ->> 'ctt_object_id')) where action = 'shipment_data';
++create index if not exists audit_log_shipment_reference_idx
++  on public.audit_log ((details ->> 'reference')) where action = 'shipment_data';
++
++create index if not exists audit_log_client_id_idx
++  on public.audit_log ((details ->> 'id'))
++  where action in ('client_data', 'deleted_client');
++
++-- Fetch one label on demand instead of shipping an entire audit JSON document.
++create or replace function public.shipment_label_by_id(shipment_id uuid)
++returns table(client_id text, label text)
++language sql stable security invoker
++set search_path = ''
++as $$
++  with audit_label as (
++    select a.details ->> 'client_id' as client_id,
++      coalesce(
++        nullif(a.details ->> 'ctt_label_base64', ''),
++        nullif(a.details ->> 'carrier_label_base64', ''),
++        nullif(a.details ->> 'labelBase64', '')
++      ) as label
++    from public.audit_log a
++    where a.action = 'shipment_data'
++      and a.details ->> 'id' = shipment_id::text
++      and coalesce(
++        nullif(a.details ->> 'ctt_label_base64', ''),
++        nullif(a.details ->> 'carrier_label_base64', ''),
++        nullif(a.details ->> 'labelBase64', '')
++      ) is not null
++    order by a.created_at desc
++    limit 1
++  ), db_label as (
++    select s.client_id::text as client_id, nullif(s.ctt_label_base64, '') as label
++    from public.shipments s where s.id = shipment_id
++  )
++  select coalesce(a.client_id, d.client_id), coalesce(a.label, d.label)
++  from audit_label a full join db_label d on true
++  where coalesce(a.label, d.label) is not null;
++$$;
++
++revoke all on function public.shipment_label_by_id(uuid) from public, anon, authenticated;
++grant execute on function public.shipment_label_by_id(uuid) to service_role;

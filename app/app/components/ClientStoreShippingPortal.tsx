@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useSearchParams } from "next/navigation"
 import { 
   Calendar, 
   ChevronDown, 
@@ -23,9 +22,8 @@ import {
   Info
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { getClientesAction } from "@/app/actions/clientes"
+import { useClientScope } from "./ClientScope"
 import { 
-  Cliente, 
   DEFAULT_CLIENT_PRICING, 
   SYSTEM_AVAILABLE_WEBSERVICES, 
   DEFAULT_CTT_SERVICES_PRICING,
@@ -36,11 +34,7 @@ import {
 } from "@/app/ops/entidades/clientes/types"
 
 export function ClientStoreShippingPortal() {
-  const searchParams = useSearchParams()
-  const clientId = searchParams.get("clientId")
-  const clientNameParam = searchParams.get("clientName")
-
-  const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
+  const { client: currentClient } = useClientScope()
   const [loadingClient, setLoadingClient] = React.useState(true)
 
   // Form states for Guia
@@ -83,32 +77,12 @@ export function ClientStoreShippingPortal() {
   const [pickupVolumes, setPickupVolumes] = React.useState("2")
   const [pickupSuccess, setPickupSuccess] = React.useState(false)
 
-  // Load client data
   React.useEffect(() => {
-    getClientesAction().then((clients) => {
-      let target: Cliente | undefined
-      if (clientId) {
-        target = clients.find((c) => c.id === clientId)
-      }
-      if (!target && clientNameParam) {
-        const decoded = decodeURIComponent(clientNameParam).toLowerCase()
-        target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
-      }
-      if (!target && clients.length > 0) {
-        target = clients[0]
-      }
-
-      if (target) {
-        setCurrentClient(target)
-        const allowed = (target.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter((w) => w.is_enabled)
-        const defWs = allowed.find((w) => w.is_default) || allowed[0]
-        if (defWs) {
-          setSelectedCarrierCode(defWs.code)
-        }
-      }
-      setLoadingClient(false)
-    })
-  }, [clientId, clientNameParam])
+    const allowed = (currentClient.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter(w => w.is_enabled)
+    const defWs = allowed.find(w => w.is_default) || allowed[0]
+    if (defWs) setSelectedCarrierCode(defWs.code)
+    setLoadingClient(false)
+  }, [currentClient.id, currentClient.allowed_webservices])
 
   // Available client services pricing
   const servicesPricingList: ClientServicePrice[] = React.useMemo(() => {

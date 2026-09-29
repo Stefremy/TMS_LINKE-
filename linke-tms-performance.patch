@@ -1,0 +1,821 @@
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..fb8933c
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,5 @@
++NEXT_PUBLIC_SUPABASE_URL=
++NEXT_PUBLIC_SUPABASE_ANON_KEY=
++SUPABASE_SERVICE_ROLE_KEY=
++CTT_WEBHOOK_SECRET=
++# ENABLE_PROVIDER_TESTS=true only in a controlled test environment
+diff --git a/.gitignore b/.gitignore
+index 5ef6a52..7b8da95 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -34,0 +35 @@ yarn-error.log*
++!.env.example
+diff --git a/README.md b/README.md
+index e215bc4..871afca 100644
+--- a/README.md
++++ b/README.md
+@@ -1 +1 @@
+-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
++# Linke TMS
+@@ -3 +3 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
+-## Getting Started
++Aplicação Next.js com autenticação Supabase e dados no Postgres.
+@@ -5 +5 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
+-First, run the development server:
++## Desenvolvimento
+@@ -7,9 +7,3 @@ First, run the development server:
+-```bash
+-npm run dev
+-# or
+-yarn dev
+-# or
+-pnpm dev
+-# or
+-bun dev
+-```
++1. Copiar `.env.example` para `.env.local` e configurar as variáveis no ambiente local.
++2. Executar `npm ci` e `npm run dev`.
++3. Aplicar as migrações em `supabase/migrations` no projeto Supabase antes de publicar alterações de base de dados.
+@@ -17 +11 @@ bun dev
+-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
++## Consultas de envios
+@@ -19 +13 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
+-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
++`getShipmentsAction({ includeLabels: false })` lê as vistas `shipment_metadata` e `shipment_audit_metadata`, que retiram etiquetas PDF/ZPL e manifestos antes da transferência do Postgres. A área de cliente pede a etiqueta apenas ao imprimir ou descarregar. O código recorre às tabelas originais durante a instalação da migração; nessa fase a transferência da base de dados ainda não fica reduzida.
+@@ -21 +15 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
+-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
++A migração `20260929120000_shipment_audit_metadata.sql` acrescenta a vista, a função de leitura individual da etiqueta e índices para as consultas de envios e clientes. Verificar no Supabase as métricas de egress, as consultas mais lentas e o plano de execução depois de aplicar a migração. A listagem continua a carregar todos os envios e deve ser paginada no servidor quando o volume crescer.
+@@ -23 +17 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
+-## Learn More
++O rastreio público procura apenas códigos exatos e consulta no máximo um envio de cada origem. Não cria dados de demonstração. O endpoint `/api/test-providers` não aceita GET e só executa testes por POST para um administrador quando `ENABLE_PROVIDER_TESTS=true`.
+@@ -25 +19 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
+-To learn more about Next.js, take a look at the following resources:
++## Webhook CTT
+@@ -27,2 +21 @@ To learn more about Next.js, take a look at the following resources:
+-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
++Configurar `CTT_WEBHOOK_SECRET` com um valor aleatório forte no ambiente de produção. O emissor do webhook tem de enviar `Authorization: Bearer <segredo>`. Sem o segredo e as variáveis Supabase, o endpoint responde 503. Se a origem CTT não suportar este cabeçalho, colocar um adaptador autenticado entre a origem e o endpoint antes de ativar esta integração.
+@@ -30 +23 @@ To learn more about Next.js, take a look at the following resources:
+-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
++## Verificação
+@@ -32,5 +25 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
+-## Deploy on Vercel
+-
+-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+-
+-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
++`npx tsc --noEmit` verifica os tipos; `npm run build` verifica a compilação. `npm run lint` assinala problemas preexistentes que devem ser corrigidos por módulos.
+diff --git a/app/actions/clientes.ts b/app/actions/clientes.ts
+index 27e02ed..8a3e45a 100644
+--- a/app/actions/clientes.ts
++++ b/app/actions/clientes.ts
+@@ -156 +156 @@ export async function getClientesAction(): Promise<Cliente[]> {
+-    const { data, error } = await supabase
++    let clientsQuery = supabase
+@@ -160,0 +161,2 @@ export async function getClientesAction(): Promise<Cliente[]> {
++    if (ctx.role === "client") clientsQuery = clientsQuery.eq("id", ctx.client_id!)
++    const { data, error } = await clientsQuery
+@@ -172 +174 @@ export async function getClientesAction(): Promise<Cliente[]> {
+-    const { data: logs, error } = await supabase
++    let auditQuery = supabase
+@@ -176,0 +179,2 @@ export async function getClientesAction(): Promise<Cliente[]> {
++    if (ctx.role === "client") auditQuery = auditQuery.eq("details->>id", ctx.client_id!)
++    const { data: logs, error } = await auditQuery
+@@ -193 +197 @@ export async function getClientesAction(): Promise<Cliente[]> {
+-    const { data: deletedLogs } = await supabase
++    let deletedQuery = supabase
+@@ -196,0 +201,2 @@ export async function getClientesAction(): Promise<Cliente[]> {
++    if (ctx.role === "client") deletedQuery = deletedQuery.eq("details->>id", ctx.client_id!)
++    const { data: deletedLogs } = await deletedQuery
+diff --git a/app/actions/notifications.ts b/app/actions/notifications.ts
+index 3fbfd8f..829b5f6 100644
+--- a/app/actions/notifications.ts
++++ b/app/actions/notifications.ts
+@@ -25 +25 @@ export async function getOperationalNotificationsAction(): Promise<OperationalNo
+-      getShipmentsAction().catch(() => []),
++      getShipmentsAction({ includeLabels: false }).catch(() => []),
+diff --git a/app/actions/relatorios.ts b/app/actions/relatorios.ts
+index f21d081..5f32988 100644
+--- a/app/actions/relatorios.ts
++++ b/app/actions/relatorios.ts
+@@ -109 +109 @@ export async function getRelatoriosDataAction(
+-    getShipmentsAction(),
++    getShipmentsAction({ includeLabels: false }),
+diff --git a/app/actions/shipments.ts b/app/actions/shipments.ts
+index dcd414d..5fa8d72 100644
+--- a/app/actions/shipments.ts
++++ b/app/actions/shipments.ts
+@@ -131 +131 @@ function formatOrGenerateCttObjectId(s: any): string {
+-export async function getShipmentsAction(): Promise<any[]> {
++export async function getShipmentsAction(options: { includeLabels?: boolean } = {}): Promise<any[]> {
+@@ -160 +160,5 @@ export async function getShipmentsAction(): Promise<any[]> {
+-    let shipmentsQuery = supabase.from("shipments").select("*").order("created_at", { ascending: false })
++    const lean = options.includeLabels === false
++    let shipmentsQuery = supabase
++      .from(lean ? "shipment_metadata" : "shipments")
++      .select(lean ? "details" : "*")
++      .order("created_at", { ascending: false })
+@@ -165 +169,8 @@ export async function getShipmentsAction(): Promise<any[]> {
+-    const { data: dbShipments, error } = await shipmentsQuery
++    let { data: dbShipments, error } = await shipmentsQuery
++    if (error && lean) {
++      let fallbackQuery = supabase.from("shipments").select("*").order("created_at", { ascending: false })
++      if (ctx.role === "client") fallbackQuery = fallbackQuery.eq("client_id", ctx.client_id)
++      const fallback = await fallbackQuery
++      dbShipments = fallback.data
++      error = fallback.error
++    }
+@@ -168 +179,2 @@ export async function getShipmentsAction(): Promise<any[]> {
+-      dbShipments.forEach((s: any) => {
++      dbShipments.forEach((row: any) => {
++        const s = row.details || row
+@@ -183,0 +196 @@ export async function getShipmentsAction(): Promise<any[]> {
++            has_label: Boolean(s.has_label || s.ctt_label_base64),
+@@ -192 +205,2 @@ export async function getShipmentsAction(): Promise<any[]> {
+-  // 2. Fetch from audit_log for shipment_data (merge rich metadata: real CTT tracking, labels, etc.)
++  // A lightweight view removes PDF/ZPL payloads before they leave Postgres.
++  // Keep the original query as a rollout fallback until the migration is applied.
+@@ -194,2 +208,3 @@ export async function getShipmentsAction(): Promise<any[]> {
+-    const { data: logs, error: logError } = await supabase
+-      .from("audit_log")
++    const source = options.includeLabels === false ? "shipment_audit_metadata" : "audit_log"
++    let logsQuery = supabase
++      .from(source)
+@@ -198,0 +214,16 @@ export async function getShipmentsAction(): Promise<any[]> {
++    if (ctx.role === "client") {
++      logsQuery = logsQuery.eq(source === "audit_log" ? "details->>client_id" : "client_id", ctx.client_id!)
++    }
++    let { data: logs, error: logError } = await logsQuery
++
++    if (logError && source !== "audit_log") {
++      let fallbackQuery = supabase
++        .from("audit_log")
++        .select("details, created_at")
++        .eq("action", "shipment_data")
++        .order("created_at", { ascending: false })
++      if (ctx.role === "client") fallbackQuery = fallbackQuery.eq("details->>client_id", ctx.client_id!)
++      const fallback = await fallbackQuery
++      logs = fallback.data
++      logError = fallback.error
++    }
+@@ -255 +286,2 @@ export async function getShipmentsAction(): Promise<any[]> {
+-                ctt_label_base64: s.ctt_label_base64 || existing.ctt_label_base64 || s.carrier_label_base64,
++                ctt_label_base64: options.includeLabels === false ? undefined : (s.ctt_label_base64 || existing.ctt_label_base64 || s.carrier_label_base64),
++                has_label: Boolean(s.has_label || s.ctt_label_base64 || s.carrier_label_base64 || existing.has_label || existing.ctt_label_base64),
+@@ -261,0 +294,2 @@ export async function getShipmentsAction(): Promise<any[]> {
++                ...(options.includeLabels === false ? { ctt_label_base64: undefined, carrier_label_base64: undefined } : {}),
++                has_label: Boolean(s.has_label || s.ctt_label_base64 || s.carrier_label_base64),
+@@ -280 +314 @@ export async function getShipmentsAction(): Promise<any[]> {
+-    return {
++    const result = {
+@@ -286,0 +321,7 @@ export async function getShipmentsAction(): Promise<any[]> {
++    if (options.includeLabels === false) {
++      delete result.ctt_label_base64
++      delete result.carrier_label_base64
++      delete result.labelBase64
++      delete result.ctt_manifest_pdf
++    }
++    return result
+@@ -291,0 +333,37 @@ export async function getShipmentsAction(): Promise<any[]> {
++/** Retrieve a label only when the user explicitly opens or prints that shipment. */
++export async function getShipmentLabelAction(shipmentId: string): Promise<string | null> {
++  const ctx = await requireUser()
++  if (!isValidUuid(shipmentId)) return null
++
++  const supabase = createAdminClient()
++  const { data: labelRows, error: rpcError } = await supabase.rpc("shipment_label_by_id", { shipment_id: shipmentId })
++  if (!rpcError) {
++    const labelRow = labelRows?.[0]
++    return labelRow && (ctx.role !== "client" || labelRow.client_id === ctx.client_id) ? labelRow.label : null
++  }
++
++  // Rollout fallback while the database migration has not been applied.
++  const { data, error } = await supabase
++    .from("audit_log")
++    .select("details")
++    .eq("action", "shipment_data")
++    .eq("details->>id", shipmentId)
++    .order("created_at", { ascending: false })
++    .limit(20)
++
++  if (error) throw new Error("Não foi possível consultar a etiqueta do envio.")
++  const details = data?.map((row: any) => row.details).find((item: any) => item?.ctt_label_base64 || item?.carrier_label_base64 || item?.labelBase64)
++  if (details) {
++    return ctx.role !== "client" || details.client_id === ctx.client_id
++      ? details.ctt_label_base64 || details.carrier_label_base64 || details.labelBase64 || null
++      : null
++  }
++  const { data: shipment } = await supabase.from("shipments")
++    .select("client_id,ctt_label_base64")
++    .eq("id", shipmentId)
++    .maybeSingle()
++  return shipment && (ctx.role !== "client" || shipment.client_id === ctx.client_id)
++    ? shipment.ctt_label_base64 || null
++    : null
++}
++
+@@ -477 +555 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
+-  const allShipments = await getShipmentsAction()
++  const allShipments = await getShipmentsAction({ includeLabels: false })
+@@ -1205 +1283 @@ export async function updateShipmentStatusAction(
+-export async function getShipmentTrackingTimelineAction(
++async function loadShipmentTrackingTimeline(
+@@ -1335,0 +1414,21 @@ export async function getShipmentTrackingTimelineAction(
++export async function getShipmentTrackingTimelineAction(shipmentId: string, trackingNumber?: string) {
++  const ctx = await requireUser()
++  if (ctx.role === "client") {
++    if (!isValidUuid(shipmentId)) throw new Error("Acesso negado ao rastreio deste envio.")
++    const supabase = createAdminClient()
++    const { data: shipment } = await supabase.from("shipments")
++      .select("client_id").eq("id", shipmentId).maybeSingle()
++    let ownerId = shipment?.client_id
++    if (!ownerId) {
++      const { data: audit } = await supabase.from("audit_log")
++        .select("owner_id:details->>client_id")
++        .eq("action", "shipment_data")
++        .eq("details->>id", shipmentId)
++        .limit(1)
++      ownerId = audit?.[0]?.owner_id
++    }
++    if (ownerId !== ctx.client_id) throw new Error("Acesso negado ao rastreio deste envio.")
++  }
++  return loadShipmentTrackingTimeline(shipmentId, trackingNumber)
++}
++
+@@ -1512,18 +1611,3 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+-  const supabase = createAdminClient()
+-  const allShipments = await getShipmentsAction()
+-  
+-  let shipment = allShipments.find(
+-    (s) => (s.tracking_number && s.tracking_number.toUpperCase() === query) ||
+-           (s.id && s.id.toUpperCase() === query) ||
+-           (s.ctt_object_id && s.ctt_object_id.toUpperCase() === query) ||
+-           (s.reference && s.reference.toUpperCase() === query) ||
+-           (s.carrier_tracking_number && s.carrier_tracking_number.toUpperCase() === query)
+-  )
+-
+-  // Se não encontrou e é um código LTK, tentar resolver pelo prefixo do ID
+-  // (ex: LTK7D7B1884 -> id começa com 7d7b1884)
+-  if (!shipment && query.startsWith("LTK")) {
+-    const idPrefix = query.replace(/^LTK/i, "").toLowerCase()
+-    shipment = allShipments.find(
+-      (s) => s.id && s.id.toLowerCase().startsWith(idPrefix)
+-    )
++  // Public lookups must be exact and bounded; never load every shipment or its labels.
++  if (!/^[A-Z0-9-]{7,40}$/.test(query)) {
++    return { success: false, error: "Referência de rastreio inválida." }
+@@ -1532,12 +1616,16 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+-  // Último fallback: pesquisar diretamente na tabela shipments por carrier_tracking_number
+-  // (cobre casos em que o shipment foi sincronizado com um carrier code EQ/DD/DB/etc.)
+-  if (!shipment) {
+-    try {
+-      const { data: directMatch } = await supabase
+-        .from("shipments")
+-        .select("*")
+-        .or(`tracking_number.ilike.%${query}%,carrier_tracking_number.ilike.%${query}%`)
+-        .limit(1)
+-        .single()
+-      if (directMatch) shipment = directMatch
+-    } catch { /* not found */ }
++  const supabase = createAdminClient()
++  const dbFilters = [
++    `tracking_number.eq.${query}`,
++    `carrier_tracking_number.eq.${query}`,
++    `ctt_object_id.eq.${query}`,
++  ]
++  if (isValidUuid(query)) dbFilters.push(`id.eq.${query.toLowerCase()}`)
++
++  let { data: dbRow, error: dbError } = await supabase.from("shipment_metadata")
++    .select("details").or(dbFilters.join(",")).limit(1).maybeSingle()
++  if (dbError) {
++    const fallback = await supabase.from("shipments")
++      .select("id,client_id,tracking_number,carrier_tracking_number,carrier_code,ctt_object_id,status,service_type,recipient_name,recipient_address,sender_name,sender_address,created_at,updated_at,weight_kg")
++      .or(dbFilters.join(",")).limit(1).maybeSingle()
++    dbRow = fallback.data
++    dbError = fallback.error
+@@ -1544,0 +1633 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
++  let shipment: any = dbError ? null : (dbRow?.details || dbRow)
+@@ -1546,56 +1635,19 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+-  // Se o utilizador pesquisar pelo tracking de referência LTK1425602 e ainda não existir na BD, inicializar automaticamente
+-  if (!shipment && query === "LTK1425602") {
+-    const demoId = crypto.randomUUID()
+-    const now = new Date()
+-    const h1 = new Date(now.getTime() - 20 * 3600 * 1000).toISOString()
+-    const h2 = new Date(now.getTime() - 10 * 3600 * 1000).toISOString()
+-    const h3 = new Date(now.getTime() - 2 * 3600 * 1000).toISOString()
+-
+-    const demoShipment = {
+-      id: demoId,
+-      tenant_id: (await getTenantId()),
+-      tracking_number: "LTK1425602",
+-      ctt_object_id: "DB290719717PT",
+-      carrier_name: "ctt",
+-      service_type: "CTT Expresso 24H",
+-      status: "em_distribuicao",
+-      sender_name: "Linke Logistics Lisboa",
+-      sender_address: "Av. do Atlântico 16, Lisboa",
+-      recipient_name: "Maria Silva",
+-      recipient_address: "Rua de Santa Catarina 320, 4000-443 Porto",
+-      package_count: 1,
+-      weight_kg: 1.5,
+-      created_at: h1,
+-      updated_at: h3,
+-    }
+-
+-    try {
+-      await supabase.from("shipments").insert(demoShipment)
+-      await supabase.from("tracking_events").insert([
+-        {
+-          shipment_id: demoId,
+-          event_code: "EMA",
+-          event_name: "Aceitação CTT Expresso",
+-          description: "Objeto aceite nas instalações CTT Expresso Lisboa.",
+-          location: "Centro de Produção Lisboa",
+-          created_at: h1,
+-        },
+-        {
+-          shipment_id: demoId,
+-          event_code: "EMF",
+-          event_name: "Expedição Nacional",
+-          description: "Em trânsito para o Centro de Distribuição do Norte.",
+-          location: "MARL - Loures",
+-          created_at: h2,
+-        },
+-        {
+-          shipment_id: demoId,
+-          event_code: "EMZ",
+-          event_name: "Em Distribuição (Com o Estafeta)",
+-          description: "Objeto em distribuição na morada do destinatário.",
+-          location: "Centro de Distribuição Porto",
+-          created_at: h3,
+-        }
+-      ])
+-    } catch (e) {
+-      console.warn("Could not seed LTK1425602 to db:", e)
++  if (!shipment) {
++    const auditFilters = [
++      `tracking_number.eq.${query}`,
++      `carrier_tracking_number.eq.${query}`,
++      `ctt_object_id.eq.${query}`,
++      `reference.eq.${query}`,
++    ]
++    let { data: auditRow, error: auditError } = await supabase.from("shipment_audit_metadata")
++      .select("details").or(auditFilters.join(","))
++      .order("created_at", { ascending: false }).limit(1).maybeSingle()
++    if (auditError) {
++      const rawFilters = ["tracking_number", "carrier_tracking_number", "ctt_object_id", "reference"]
++        .map((key) => `details->>${key}.eq.${query}`)
++      const fallback = await supabase.from("audit_log")
++        .select("details").eq("action", "shipment_data")
++        .or(rawFilters.join(","))
++        .order("created_at", { ascending: false }).limit(1).maybeSingle()
++      auditRow = fallback.data
++      auditError = fallback.error
+@@ -1603,2 +1655 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+-
+-    shipment = demoShipment as any
++    if (!auditError) shipment = auditRow?.details || null
+@@ -1613 +1664 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+-  const events = await getShipmentTrackingTimelineAction(shipment.id, carrierTrkForLookup)
++  const events = await loadShipmentTrackingTimeline(shipment.id, carrierTrkForLookup)
+@@ -1616 +1667 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+-  const carrierCode = shipment.carrier_name || "ctt"
++  const carrierCode = shipment.carrier_name || shipment.carrier_code || "ctt"
+@@ -1647 +1698 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+-      carrierName: carrierCode.toUpperCase() === "CTT" ? "CTT Expresso" : (shipment.carrier_name || "CTT Expresso"),
++      carrierName: carrierCode.toLowerCase().includes("correos") ? "Correos Express" : "CTT Expresso",
+@@ -1650 +1701 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
+-      status: shipment.status || "em_distribuicao",
++      status: ["entrada_rede", "recolhido"].includes(shipment.status) ? "em_transito" : (shipment.status || "pendente"),
+diff --git a/app/api/test-providers/route.ts b/app/api/test-providers/route.ts
+index f0978cd..2e9a944 100644
+--- a/app/api/test-providers/route.ts
++++ b/app/api/test-providers/route.ts
+@@ -4,0 +5 @@ import { resolveCttCredentials, resolveCorreosCredentials } from "@/lib/services
++import { requireAdmin } from "@/lib/auth/context"
+@@ -6,0 +8,12 @@ export async function GET() {
++  return NextResponse.json({ error: "Method not allowed" }, { status: 405 })
++}
++
++export async function POST() {
++  if (process.env.ENABLE_PROVIDER_TESTS !== "true") {
++    return NextResponse.json({ error: "Provider tests disabled" }, { status: 404 })
++  }
++  try {
++    await requireAdmin()
++  } catch {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
++  }
+@@ -89,2 +101,0 @@ export async function GET() {
+-    results.correos.rawResult = correosResult // Added this so we can inspect the exact payload!
+-
+diff --git a/app/api/webhooks/ctt/tracking/route.ts b/app/api/webhooks/ctt/tracking/route.ts
+index 5762c69..8023a27 100644
+--- a/app/api/webhooks/ctt/tracking/route.ts
++++ b/app/api/webhooks/ctt/tracking/route.ts
+@@ -2,0 +3 @@ import { createClient } from "@supabase/supabase-js"
++import { timingSafeEqual } from "node:crypto"
+@@ -11,5 +11,0 @@ import {
+-const supabase = createClient(
+-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+-)
+-
+@@ -29,0 +26,14 @@ export async function POST(req: Request) {
++    const secret = process.env.CTT_WEBHOOK_SECRET
++    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
++    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
++    if (!secret || !supabaseUrl || !serviceKey) {
++      return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
++    }
++
++    const supplied = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || ""
++    const expectedBytes = Buffer.from(secret)
++    const suppliedBytes = Buffer.from(supplied)
++    if (expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
++      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
++    }
++
+@@ -32 +42 @@ export async function POST(req: Request) {
+-    if (!payload.events || !Array.isArray(payload.events)) {
++    if (!Array.isArray(payload?.events) || payload.events.length > 100) {
+@@ -35,0 +46 @@ export async function POST(req: Request) {
++    const supabase = createClient(supabaseUrl, serviceKey)
+@@ -38,0 +50,4 @@ export async function POST(req: Request) {
++      if (typeof evt.tracking_number !== "string" || !/^[a-z0-9]{8,32}$/i.test(evt.tracking_number)) {
++        results.push({ error: "Invalid tracking number" })
++        continue
++      }
+@@ -111 +126 @@ export async function POST(req: Request) {
+-          sendTrackingEmailNotification(shipment.id, "in_transit")
++          await sendTrackingEmailNotification(shipment.id, "in_transit")
+@@ -113 +128 @@ export async function POST(req: Request) {
+-          sendTrackingEmailNotification(shipment.id, "incident", { reason: reasonDesc || description })
++          await sendTrackingEmailNotification(shipment.id, "incident", { reason: reasonDesc || description })
+diff --git a/app/app/components/ClientDashboard.tsx b/app/app/components/ClientDashboard.tsx
+index cbfa35f..d6efb8c 100644
+--- a/app/app/components/ClientDashboard.tsx
++++ b/app/app/components/ClientDashboard.tsx
+@@ -32,0 +33 @@ import {
++  getShipmentLabelAction,
+@@ -238 +239 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
+-    const label = await resolveLabel(shipmentItem?.ctt_label_base64)
++    const label = await resolveLabel(shipmentItem?.ctt_label_base64 || await getShipmentLabelAction(shipmentItem.id))
+@@ -243 +244 @@ export function ClientDashboard({ userEmail, passedClientId }: { userEmail?: str
+-    const label = await resolveLabel(shipmentItem?.ctt_label_base64)
++    const label = await resolveLabel(shipmentItem?.ctt_label_base64 || await getShipmentLabelAction(shipmentItem.id))
+diff --git a/app/app/components/ClientShipmentDetailModal.tsx b/app/app/components/ClientShipmentDetailModal.tsx
+index cd124a2..81f40e6 100644
+--- a/app/app/components/ClientShipmentDetailModal.tsx
++++ b/app/app/components/ClientShipmentDetailModal.tsx
+@@ -37,0 +38 @@ import {
++  getShipmentLabelAction,
+@@ -159 +160 @@ export function ClientShipmentDetailModal({
+-    const label = await resolveLabel(currentShipment.ctt_label_base64)
++    const label = await resolveLabel(currentShipment.ctt_label_base64 || await getShipmentLabelAction(currentShipment.id))
+@@ -166 +167 @@ export function ClientShipmentDetailModal({
+-    const label = await resolveLabel(currentShipment.ctt_label_base64)
++    const label = await resolveLabel(currentShipment.ctt_label_base64 || await getShipmentLabelAction(currentShipment.id))
+@@ -297 +298 @@ export function ClientShipmentDetailModal({
+-  const hasLabel = Boolean(currentShipment.ctt_label_base64)
++  const hasLabel = Boolean(currentShipment.has_label || currentShipment.ctt_label_base64)
+diff --git a/app/app/components/ClientShipmentsHistory.tsx b/app/app/components/ClientShipmentsHistory.tsx
+index 1106d6c..7ee0ff9 100644
+--- a/app/app/components/ClientShipmentsHistory.tsx
++++ b/app/app/components/ClientShipmentsHistory.tsx
+@@ -9 +9 @@ import { getClientesAction } from "@/app/actions/clientes"
+-import { getClientPortalStatsAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
++import { getClientPortalStatsAction, getShipmentLabelAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
+@@ -47 +47 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
+-    const label = await resolveLabel(envioItem?.ctt_label_base64)
++    const label = await resolveLabel(envioItem?.ctt_label_base64 || await getShipmentLabelAction(envioItem.id))
+@@ -52 +52 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
+-    const label = await resolveLabel(envioItem?.ctt_label_base64)
++    const label = await resolveLabel(envioItem?.ctt_label_base64 || await getShipmentLabelAction(envioItem.id))
+diff --git a/app/app/layout.tsx b/app/app/layout.tsx
+index 76a43c9..178f056 100644
+--- a/app/app/layout.tsx
++++ b/app/app/layout.tsx
+@@ -12,0 +13 @@ import { ClientSidebarNav, ClientTopHeaderAction } from "./components/ClientSide
++import { requireUser } from "@/lib/auth/context"
+@@ -14 +15 @@ import { ClientSidebarNav, ClientTopHeaderAction } from "./components/ClientSide
+-export default function OpsLayout({
++export default async function OpsLayout({
+@@ -18,0 +20 @@ export default function OpsLayout({
++  await requireUser()
+@@ -33 +35 @@ export default function OpsLayout({
+-              <Image src="/Linke-logo.png" alt="Linke" width={100} height={30} className="object-contain" priority />
++              <Image src="/Linke-logo.png" alt="Linke" width={100} height={30} className="object-contain" preload />
+diff --git a/app/login/actions.ts b/app/login/actions.ts
+index 6ad5329..9082d08 100644
+--- a/app/login/actions.ts
++++ b/app/login/actions.ts
+@@ -28 +28 @@ export async function login(formData: FormData) {
+-    if (user.user_metadata?.role === 'client') {
++    if (user.app_metadata?.role === 'client') {
+diff --git a/app/login/page.tsx b/app/login/page.tsx
+index e69284d..31bfc25 100644
+--- a/app/login/page.tsx
++++ b/app/login/page.tsx
+@@ -47 +47 @@ function LoginFormContent() {
+-            priority
++            preload
+@@ -108,10 +108,10 @@ function LoginFormContent() {
+-      {/* Right Column - Visual */}
+-      <div className="hidden lg:flex w-7/12 relative bg-[#F8FAFC] items-center justify-center overflow-hidden border-l border-slate-100">
+-        <div className="absolute inset-0 w-full h-full">
+-          <Image 
+-            src="/login_abstract_spiral.jpg" 
+-            alt="Linke TMS Logistics Abstract Graphic" 
+-            fill 
+-            className="object-cover object-center opacity-95 mix-blend-multiply"
+-            priority
+-          />
++      {/* Decorative illustration rendered as HTML/CSS, without a full-screen image request. */}
++      <div className="hidden lg:flex w-7/12 relative items-center justify-center overflow-hidden border-l border-slate-100 bg-[linear-gradient(135deg,#f1fff5_0%,#e6f8ed_48%,#e8f1ff_100%)]" aria-hidden="true">
++        <div className="absolute -top-48 -right-32 h-[680px] w-[680px] rounded-full bg-emerald-200/40 blur-3xl" />
++        <div className="absolute -bottom-52 -left-24 h-[650px] w-[650px] rounded-full bg-sky-200/40 blur-3xl" />
++        <div className="relative flex h-[min(65vw,620px)] w-[min(65vw,620px)] items-center justify-center rounded-full border border-emerald-300/60 bg-white/20 shadow-[0_30px_100px_rgba(13,148,136,0.12)] rotate-[-25deg]">
++          <div className="flex h-[78%] w-[78%] items-center justify-center rounded-full border-[35px] border-emerald-400/30 shadow-[inset_0_0_70px_rgba(16,185,129,0.1)]">
++            <div className="flex h-[73%] w-[73%] items-center justify-center rounded-full border-[42px] border-emerald-500/50 bg-white/30">
++              <div className="h-[65%] w-[65%] rounded-full bg-[radial-gradient(circle_at_35%_30%,#e2fff0,#34d399_75%,#10b981)] shadow-[0_24px_65px_rgba(5,150,105,0.25)]" />
++            </div>
++          </div>
+@@ -119,3 +118,0 @@ function LoginFormContent() {
+-        
+-        {/* Subtle overlay gradient to ensure text readability if we had any, and just make it blend nice */}
+-        <div className="absolute inset-0 bg-gradient-to-r from-white via-transparent to-transparent opacity-40"></div>
+diff --git a/app/ops/entidades/clientes/page.tsx b/app/ops/entidades/clientes/page.tsx
+index cca332a..dc5dbd5 100644
+--- a/app/ops/entidades/clientes/page.tsx
++++ b/app/ops/entidades/clientes/page.tsx
+@@ -13 +13 @@ export default async function EntidadesClientesPage() {
+-    getShipmentsAction(),
++    getShipmentsAction({ includeLabels: false }),
+diff --git a/app/ops/faturacao/contas-corrente/page.tsx b/app/ops/faturacao/contas-corrente/page.tsx
+index 0e5a04c..cd40eb5 100644
+--- a/app/ops/faturacao/contas-corrente/page.tsx
++++ b/app/ops/faturacao/contas-corrente/page.tsx
+@@ -12 +12 @@ export default async function ContasCorrentePage() {
+-    getShipmentsAction(),
++    getShipmentsAction({ includeLabels: false }),
+@@ -43 +42,0 @@ export default async function ContasCorrentePage() {
+-
+diff --git a/app/ops/layout.tsx b/app/ops/layout.tsx
+index 85023c1..c942fe3 100644
+--- a/app/ops/layout.tsx
++++ b/app/ops/layout.tsx
+@@ -8,0 +9 @@ import { signout } from "@/app/login/actions"
++import { requireEmployee } from "@/lib/auth/context"
+@@ -22,0 +24 @@ export default async function OpsLayout({
++  await requireEmployee()
+diff --git a/app/ops/page.tsx b/app/ops/page.tsx
+index 6276f6c..59160c8 100644
+--- a/app/ops/page.tsx
++++ b/app/ops/page.tsx
+@@ -27 +27 @@ export default async function OpsDashboardPage() {
+-    getShipmentsAction(),
++    getShipmentsAction({ includeLabels: false }),
+diff --git a/lib/auth/context.ts b/lib/auth/context.ts
+index 3d03fd4..19a8b36 100644
+--- a/lib/auth/context.ts
++++ b/lib/auth/context.ts
+@@ -2,0 +3 @@ import { cookies } from "next/headers"
++import { cache } from "react"
+@@ -26 +27 @@ export async function getTenantId(): Promise<string> {
+-export async function getAuthContext(): Promise<AuthContext | null> {
++export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
+@@ -58 +59 @@ export async function getAuthContext(): Promise<AuthContext | null> {
+-    .select("id, access_level, permissions")
++    .select("id, access_level, permissions, status")
+@@ -63,3 +64,5 @@ export async function getAuthContext(): Promise<AuthContext | null> {
+-    role = colab.access_level === 'Administrador' ? 'admin' : 'employee'
+-    colaborador_id = colab.id
+-    permissions = Array.isArray(colab.permissions) ? colab.permissions : JSON.parse(colab.permissions || '[]')
++    if (colab.status !== 'Inativo') {
++      role = colab.access_level === 'Administrador' ? 'admin' : 'employee'
++      colaborador_id = colab.id
++      permissions = Array.isArray(colab.permissions) ? colab.permissions : JSON.parse(colab.permissions || '[]')
++    }
+@@ -67,3 +70,3 @@ export async function getAuthContext(): Promise<AuthContext | null> {
+-    // 2. Fall back to app_metadata (secure) or user_metadata (legacy)
+-    const metadata = user.app_metadata?.role ? user.app_metadata : (user.user_metadata || {})
+-    role = metadata.role || null
++    // Only server-managed metadata may assign roles or client scope.
++    const metadata = user.app_metadata || {}
++    role = ['client', 'employee', 'admin'].includes(metadata.role) ? metadata.role : null
+@@ -79 +82,13 @@ export async function getAuthContext(): Promise<AuthContext | null> {
+-    // 3. Final fallback: check DEFAULT_COLABORADORES by email
++    if (!role || (role === 'client' && !client_id)) {
++      const { data: clientUser } = await supabaseAdmin
++        .from('client_users')
++        .select('client_id')
++        .eq('user_id', user.id)
++        .maybeSingle()
++      if (clientUser?.client_id) {
++        role = 'client'
++        client_id = clientUser.client_id
++      }
++    }
++
++    // 3. Final fallback: check DEFAULT_COLABORADORES by exact email
+@@ -94,15 +108,0 @@ export async function getAuthContext(): Promise<AuthContext | null> {
+-  // Stefano Remy is the permanent Super-Admin with unrestricted full access
+-  if (user.email?.toLowerCase().includes("stefano")) {
+-    role = "admin"
+-    colaborador_id = "col-stefano-001"
+-    permissions = [
+-      "Acesso Total (Super-Admin)",
+-      "Gestão de Clientes & Contratos",
+-      "Emissão e Controlo de Guias CTT",
+-      "Pedidos de Recolha & Distribuição",
+-      "Faturação & Contas Correntes",
+-      "Gestão de Transportadoras & Frotas",
+-      "Configurações de Webservices & Integrações"
+-    ]
+-  }
+-
+@@ -125 +125 @@ export async function getAuthContext(): Promise<AuthContext | null> {
+-}
++})
+@@ -132 +132 @@ export async function requireUser(): Promise<AuthContext> {
+-  if (!ctx) {
++  if (!ctx || !ctx.role || (ctx.role === 'client' && !ctx.client_id)) {
+@@ -161 +161 @@ export async function requirePermission(permission: string): Promise<AuthContext
+- * Ensures the caller is specifically an Admin / Super-Admin (Stefano). Throws if not.
++ * Ensures the caller has a server-assigned administrator role.
+@@ -165,3 +165,2 @@ export async function requireAdmin(): Promise<AuthContext> {
+-  const isStefano = ctx.user?.email?.toLowerCase().includes("stefano")
+-  if (ctx.role !== 'admin' && !isStefano) {
+-    throw new Error("Acesso restrito. Apenas o administrador Stefano tem permissão para gerir credenciais e níveis de acesso.")
++  if (ctx.role !== 'admin') {
++    throw new Error("Acesso restrito. Apenas administradores podem gerir credenciais e níveis de acesso.")
+@@ -184 +183 @@ export async function requireClientAccess(targetClientId: string): Promise<AuthC
+-  if (ctx.role === 'client' && ctx.client_id !== targetClientId) {
++  if (ctx.role !== 'client' || ctx.client_id !== targetClientId) {
+diff --git a/lib/supabase/middleware.ts b/lib/supabase/middleware.ts
+index e01ee96..009fee2 100644
+--- a/lib/supabase/middleware.ts
++++ b/lib/supabase/middleware.ts
+@@ -51 +51 @@ export async function updateSession(request: NextRequest) {
+-    const role = user.user_metadata?.role
++    const role = user.app_metadata?.role
+diff --git a/middleware.ts b/middleware.ts
+deleted file mode 100644
+index ff2e079..0000000
+--- a/middleware.ts
++++ /dev/null
+@@ -1,19 +0,0 @@
+-import { type NextRequest } from 'next/server'
+-import { updateSession } from '@/lib/supabase/middleware'
+-
+-export async function middleware(request: NextRequest) {
+-  return await updateSession(request)
+-}
+-
+-export const config = {
+-  matcher: [
+-    /*
+-     * Match all request paths except for the ones starting with:
+-     * - _next/static (static files)
+-     * - _next/image (image optimization files)
+-     * - favicon.ico (favicon file)
+-     * Feel free to modify this pattern to include more paths.
+-     */
+-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+-  ],
+-}
+diff --git a/proxy.ts b/proxy.ts
+new file mode 100644
+index 0000000..634bf7f
+--- /dev/null
++++ b/proxy.ts
+@@ -0,0 +1,10 @@
++import { type NextRequest } from 'next/server'
++import { updateSession } from '@/lib/supabase/middleware'
++
++export async function proxy(request: NextRequest) {
++  return await updateSession(request)
++}
++
++export const config = {
++  matcher: ['/ops/:path*', '/app/:path*', '/login'],
++}
+diff --git a/supabase/migrations/20260929120000_shipment_audit_metadata.sql b/supabase/migrations/20260929120000_shipment_audit_metadata.sql
+new file mode 100644
+index 0000000..7654a25
+--- /dev/null
++++ b/supabase/migrations/20260929120000_shipment_audit_metadata.sql
+@@ -0,0 +1,107 @@
++-- Keep large labels in audit_log for printing, but omit them from list/report queries.
++-- security_invoker makes the view obey the underlying table's permissions.
++create or replace view public.shipment_metadata
++with (security_invoker = true)
++as
++select
++  s.id,
++  s.client_id,
++  s.created_at,
++  s.tracking_number,
++  s.carrier_tracking_number,
++  s.ctt_object_id,
++  (to_jsonb(s) - array['ctt_label_base64', 'ctt_manifest_pdf']) ||
++    jsonb_build_object('has_label', nullif(s.ctt_label_base64, '') is not null) as details
++from public.shipments s;
++
++revoke all on public.shipment_metadata from anon, authenticated;
++grant select on public.shipment_metadata to service_role;
++
++create or replace view public.shipment_audit_metadata
++with (security_invoker = true)
++as
++select
++  id,
++  tenant_id,
++  action,
++  created_at,
++  details ->> 'client_id' as client_id,
++  details ->> 'tracking_number' as tracking_number,
++  details ->> 'carrier_tracking_number' as carrier_tracking_number,
++  details ->> 'ctt_object_id' as ctt_object_id,
++  details ->> 'reference' as reference,
++  (details - array['ctt_label_base64', 'carrier_label_base64', 'labelBase64']) ||
++    jsonb_build_object('has_label', coalesce(
++      nullif(details ->> 'ctt_label_base64', ''),
++      nullif(details ->> 'carrier_label_base64', ''),
++      nullif(details ->> 'labelBase64', '')
++    ) is not null) as details
++from public.audit_log
++where action = 'shipment_data';
++
++revoke all on public.shipment_audit_metadata from anon, authenticated;
++grant select on public.shipment_audit_metadata to service_role;
++
++create index if not exists audit_log_shipment_data_created_at_idx
++  on public.audit_log (created_at desc)
++  where action = 'shipment_data';
++
++create index if not exists audit_log_shipment_data_id_idx
++  on public.audit_log ((details ->> 'id'), created_at desc)
++  where action = 'shipment_data';
++
++create index if not exists audit_log_shipment_data_client_idx
++  on public.audit_log ((details ->> 'client_id'), created_at desc)
++  where action = 'shipment_data';
++
++create index if not exists shipments_tracking_number_idx on public.shipments (tracking_number);
++create index if not exists shipments_carrier_tracking_number_idx on public.shipments (carrier_tracking_number);
++create index if not exists shipments_ctt_object_id_idx on public.shipments (ctt_object_id);
++
++create index if not exists audit_log_shipment_tracking_idx
++  on public.audit_log ((details ->> 'tracking_number')) where action = 'shipment_data';
++create index if not exists audit_log_shipment_carrier_tracking_idx
++  on public.audit_log ((details ->> 'carrier_tracking_number')) where action = 'shipment_data';
++create index if not exists audit_log_shipment_ctt_object_idx
++  on public.audit_log ((details ->> 'ctt_object_id')) where action = 'shipment_data';
++create index if not exists audit_log_shipment_reference_idx
++  on public.audit_log ((details ->> 'reference')) where action = 'shipment_data';
++
++create index if not exists audit_log_client_id_idx
++  on public.audit_log ((details ->> 'id'))
++  where action in ('client_data', 'deleted_client');
++
++-- Fetch one label on demand instead of shipping an entire audit JSON document.
++create or replace function public.shipment_label_by_id(shipment_id uuid)
++returns table(client_id text, label text)
++language sql stable security invoker
++set search_path = ''
++as $$
++  with audit_label as (
++    select a.details ->> 'client_id' as client_id,
++      coalesce(
++        nullif(a.details ->> 'ctt_label_base64', ''),
++        nullif(a.details ->> 'carrier_label_base64', ''),
++        nullif(a.details ->> 'labelBase64', '')
++      ) as label
++    from public.audit_log a
++    where a.action = 'shipment_data'
++      and a.details ->> 'id' = shipment_id::text
++      and coalesce(
++        nullif(a.details ->> 'ctt_label_base64', ''),
++        nullif(a.details ->> 'carrier_label_base64', ''),
++        nullif(a.details ->> 'labelBase64', '')
++      ) is not null
++    order by a.created_at desc
++    limit 1
++  ), db_label as (
++    select s.client_id::text as client_id, nullif(s.ctt_label_base64, '') as label
++    from public.shipments s where s.id = shipment_id
++  )
++  select coalesce(a.client_id, d.client_id), coalesce(a.label, d.label)
++  from audit_label a full join db_label d on true
++  where coalesce(a.label, d.label) is not null;
++$$;
++
++revoke all on function public.shipment_label_by_id(uuid) from public, anon, authenticated;
++grant execute on function public.shipment_label_by_id(uuid) to service_role;

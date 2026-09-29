@@ -76,9 +76,9 @@ export default async function ClientesPage() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
-                        <Link href={`/app`} className="px-4 py-1.5 bg-green-50 text-green-700 rounded-md text-xs font-bold hover:bg-green-100 transition-colors">
+                        <a href={`/app/selecionar?clientId=${encodeURIComponent(cliente.id)}`} className="px-4 py-1.5 bg-green-50 text-green-700 rounded-md text-xs font-bold hover:bg-green-100 transition-colors">
                           Aceder Dashboard
-                        </Link>
+                        </a>
                         <button className="text-slate-400 hover:text-slate-600">
                           <MoreVertical className="w-5 h-5" />
                         </button>

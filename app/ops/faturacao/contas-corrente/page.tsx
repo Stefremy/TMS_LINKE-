@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 export default async function ContasCorrentePage() {
   const [clients, shipments, statements, moloniConfig] = await Promise.all([
     getClientesAction(),
-    getShipmentsAction(),
+    getShipmentsAction({ includeLabels: false }),
     getBillingStatementsAction(),
     getMoloniConfigAction()
   ])
@@ -40,4 +40,3 @@ export default async function ContasCorrentePage() {
     </div>
   )
 }
-

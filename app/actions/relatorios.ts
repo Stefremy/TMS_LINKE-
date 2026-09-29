@@ -106,7 +106,7 @@ export async function getRelatoriosDataAction(
   const supabase = createAdminClient()
 
   const [rawShipments, rawClients, recolhasResult] = await Promise.all([
-    getShipmentsAction(),
+    getShipmentsAction({ includeLabels: false }),
     getClientesAction(),
     supabase.from("recolhas").select("*").order("created_at", { ascending: false }),
   ])

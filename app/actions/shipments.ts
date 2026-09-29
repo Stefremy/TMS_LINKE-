@@ -128,7 +128,7 @@ function formatOrGenerateCttObjectId(s: any): string {
 /**
  * Fetches all shipments combining the DB shipments table and audit log resilience.
  */
-export async function getShipmentsAction(): Promise<any[]> {
+export async function getShipmentsAction(options: { includeLabels?: boolean } = {}): Promise<any[]> {
   
   const ctx = await requireUser()
 
@@ -157,15 +157,27 @@ export async function getShipmentsAction(): Promise<any[]> {
 
   // 1. Fetch from shipments table
   try {
-    let shipmentsQuery = supabase.from("shipments").select("*").order("created_at", { ascending: false })
+    const lean = options.includeLabels === false
+    let shipmentsQuery = supabase
+      .from(lean ? "shipment_metadata" : "shipments")
+      .select(lean ? "details" : "*")
+      .order("created_at", { ascending: false })
     if (ctx.role === "client") {
       shipmentsQuery = shipmentsQuery.eq("client_id", ctx.client_id)
     }
 
-    const { data: dbShipments, error } = await shipmentsQuery
+    let { data: dbShipments, error } = await shipmentsQuery
+    if (error && lean) {
+      let fallbackQuery = supabase.from("shipments").select("*").order("created_at", { ascending: false })
+      if (ctx.role === "client") fallbackQuery = fallbackQuery.eq("client_id", ctx.client_id)
+      const fallback = await fallbackQuery
+      dbShipments = fallback.data
+      error = fallback.error
+    }
 
     if (!error && dbShipments) {
-      dbShipments.forEach((s: any) => {
+      dbShipments.forEach((row: any) => {
+        const s = row.details || row
         const key = s.id || s.tracking_number
         if (key && !deletedIds.has(key) && !deletedIds.has(s.id)) {
           const isCorreos = isCorreosShipment(s)
@@ -181,6 +193,7 @@ export async function getShipmentsAction(): Promise<any[]> {
             carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
             carrier_tracking_number: s.carrier_tracking_number || (isCorreos ? s.carrier_object_id : null),
             ctt_object_id: isCorreos ? null : cttCode,
+            has_label: Boolean(s.has_label || s.ctt_label_base64),
           })
         }
       })
@@ -189,13 +202,31 @@ export async function getShipmentsAction(): Promise<any[]> {
     console.warn("Could not query shipments table:", err?.message)
   }
 
-  // 2. Fetch from audit_log for shipment_data (merge rich metadata: real CTT tracking, labels, etc.)
+  // A lightweight view removes PDF/ZPL payloads before they leave Postgres.
+  // Keep the original query as a rollout fallback until the migration is applied.
   try {
-    const { data: logs, error: logError } = await supabase
-      .from("audit_log")
+    const source = options.includeLabels === false ? "shipment_audit_metadata" : "audit_log"
+    let logsQuery = supabase
+      .from(source)
       .select("details, created_at")
       .eq("action", "shipment_data")
       .order("created_at", { ascending: false })
+    if (ctx.role === "client") {
+      logsQuery = logsQuery.eq(source === "audit_log" ? "details->>client_id" : "client_id", ctx.client_id!)
+    }
+    let { data: logs, error: logError } = await logsQuery
+
+    if (logError && source !== "audit_log") {
+      let fallbackQuery = supabase
+        .from("audit_log")
+        .select("details, created_at")
+        .eq("action", "shipment_data")
+        .order("created_at", { ascending: false })
+      if (ctx.role === "client") fallbackQuery = fallbackQuery.eq("details->>client_id", ctx.client_id!)
+      const fallback = await fallbackQuery
+      logs = fallback.data
+      logError = fallback.error
+    }
 
     if (!logError && logs) {
       logs.forEach((log: any) => {
@@ -252,13 +283,16 @@ export async function getShipmentsAction(): Promise<any[]> {
                 carrier_name: isCorreos ? "Correos Express" : (existing.carrier_name || s.carrier_name || "CTT Expresso"),
                 carrier_tracking_number: carrierRef || existing.carrier_tracking_number || s.carrier_tracking_number,
                 reference: linkeRef,
-                ctt_label_base64: s.ctt_label_base64 || existing.ctt_label_base64 || s.carrier_label_base64,
+                ctt_label_base64: options.includeLabels === false ? undefined : (s.ctt_label_base64 || existing.ctt_label_base64 || s.carrier_label_base64),
+                has_label: Boolean(s.has_label || s.ctt_label_base64 || s.carrier_label_base64 || existing.has_label || existing.ctt_label_base64),
                 ctt_object_id: isCorreos ? null : formatOrGenerateCttObjectId({ ...existing, ...s, tracking_number: carrierRef || effectiveTracking }),
               })
             } else {
               const cttCode = isCorreos ? null : formatOrGenerateCttObjectId(s)
               shipmentsMap.set(key, {
                 ...s,
+                ...(options.includeLabels === false ? { ctt_label_base64: undefined, carrier_label_base64: undefined } : {}),
+                has_label: Boolean(s.has_label || s.ctt_label_base64 || s.carrier_label_base64),
                 carrier_code: isCorreos ? "correos" : (s.carrier_code || "ctt"),
                 carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
                 carrier_tracking_number: s.carrier_tracking_number || s.carrier_object_id || (isRealTracking(s.tracking_number) ? s.tracking_number : null),
@@ -277,16 +311,60 @@ export async function getShipmentsAction(): Promise<any[]> {
 
   return Array.from(shipmentsMap.values()).map((s) => {
     const isCorreos = isCorreosShipment(s)
-    return {
+    const result = {
       ...s,
       carrier_code: isCorreos ? "correos" : (s.carrier_code || "ctt"),
       carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
       carrier_tracking_number: s.carrier_tracking_number || (isCorreos ? s.carrier_object_id : null),
       ctt_object_id: isCorreos ? null : (s.ctt_object_id || formatOrGenerateCttObjectId(s))
     }
+    if (options.includeLabels === false) {
+      delete result.ctt_label_base64
+      delete result.carrier_label_base64
+      delete result.labelBase64
+      delete result.ctt_manifest_pdf
+    }
+    return result
   }).sort((a, b) => {
     return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
   })
+}
+
+/** Retrieve a label only when the user explicitly opens or prints that shipment. */
+export async function getShipmentLabelAction(shipmentId: string): Promise<string | null> {
+  const ctx = await requireUser()
+  if (!isValidUuid(shipmentId)) return null
+
+  const supabase = createAdminClient()
+  const { data: labelRows, error: rpcError } = await supabase.rpc("shipment_label_by_id", { shipment_id: shipmentId })
+  if (!rpcError) {
+    const labelRow = labelRows?.[0]
+    return labelRow && (ctx.role !== "client" || labelRow.client_id === ctx.client_id) ? labelRow.label : null
+  }
+
+  // Rollout fallback while the database migration has not been applied.
+  const { data, error } = await supabase
+    .from("audit_log")
+    .select("details")
+    .eq("action", "shipment_data")
+    .eq("details->>id", shipmentId)
+    .order("created_at", { ascending: false })
+    .limit(20)
+
+  if (error) throw new Error("Não foi possível consultar a etiqueta do envio.")
+  const details = data?.map((row: any) => row.details).find((item: any) => item?.ctt_label_base64 || item?.carrier_label_base64 || item?.labelBase64)
+  if (details) {
+    return ctx.role !== "client" || details.client_id === ctx.client_id
+      ? details.ctt_label_base64 || details.carrier_label_base64 || details.labelBase64 || null
+      : null
+  }
+  const { data: shipment } = await supabase.from("shipments")
+    .select("client_id,ctt_label_base64")
+    .eq("id", shipmentId)
+    .maybeSingle()
+  return shipment && (ctx.role !== "client" || shipment.client_id === ctx.client_id)
+    ? shipment.ctt_label_base64 || null
+    : null
 }
 
 export async function createShipmentAction(formData: FormData) {
@@ -474,7 +552,7 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
 
   const effectiveClientId = ctx.role === "client" ? ctx.client_id : clientId
   
-  const allShipments = await getShipmentsAction()
+  const allShipments = await getShipmentsAction({ includeLabels: false })
 
   let clientShipments = allShipments
 
@@ -1202,7 +1280,7 @@ export async function updateShipmentStatusAction(
 /**
  * Obtém a timeline completa de eventos de rastreio e pickagens de um envio
  */
-export async function getShipmentTrackingTimelineAction(
+async function loadShipmentTrackingTimeline(
   shipmentId: string,
   trackingNumber?: string
 ) {
@@ -1331,6 +1409,27 @@ export async function getShipmentTrackingTimelineAction(
   }
 
   return events
+}
+
+export async function getShipmentTrackingTimelineAction(shipmentId: string, trackingNumber?: string) {
+  const ctx = await requireUser()
+  if (ctx.role === "client") {
+    if (!isValidUuid(shipmentId)) throw new Error("Acesso negado ao rastreio deste envio.")
+    const supabase = createAdminClient()
+    const { data: shipment } = await supabase.from("shipments")
+      .select("client_id").eq("id", shipmentId).maybeSingle()
+    let ownerId = shipment?.client_id
+    if (!ownerId) {
+      const { data: audit } = await supabase.from("audit_log")
+        .select("owner_id:details->>client_id")
+        .eq("action", "shipment_data")
+        .eq("details->>id", shipmentId)
+        .limit(1)
+      ownerId = audit?.[0]?.owner_id
+    }
+    if (ownerId !== ctx.client_id) throw new Error("Acesso negado ao rastreio deste envio.")
+  }
+  return loadShipmentTrackingTimeline(shipmentId, trackingNumber)
 }
 
 /**
@@ -1509,99 +1608,51 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
   const query = (trackingOrId || "").trim().toUpperCase()
   if (!query) return { success: false, error: "Por favor introduza um número de rastreio ou guia válido." }
 
+  // Public lookups must be exact and bounded; never load every shipment or its labels.
+  if (!/^[A-Z0-9-]{7,40}$/.test(query)) {
+    return { success: false, error: "Referência de rastreio inválida." }
+  }
+
   const supabase = createAdminClient()
-  const allShipments = await getShipmentsAction()
-  
-  let shipment = allShipments.find(
-    (s) => (s.tracking_number && s.tracking_number.toUpperCase() === query) ||
-           (s.id && s.id.toUpperCase() === query) ||
-           (s.ctt_object_id && s.ctt_object_id.toUpperCase() === query) ||
-           (s.reference && s.reference.toUpperCase() === query) ||
-           (s.carrier_tracking_number && s.carrier_tracking_number.toUpperCase() === query)
-  )
+  const dbFilters = [
+    `tracking_number.eq.${query}`,
+    `carrier_tracking_number.eq.${query}`,
+    `ctt_object_id.eq.${query}`,
+  ]
+  if (isValidUuid(query)) dbFilters.push(`id.eq.${query.toLowerCase()}`)
 
-  // Se não encontrou e é um código LTK, tentar resolver pelo prefixo do ID
-  // (ex: LTK7D7B1884 -> id começa com 7d7b1884)
-  if (!shipment && query.startsWith("LTK")) {
-    const idPrefix = query.replace(/^LTK/i, "").toLowerCase()
-    shipment = allShipments.find(
-      (s) => s.id && s.id.toLowerCase().startsWith(idPrefix)
-    )
+  let { data: dbRow, error: dbError } = await supabase.from("shipment_metadata")
+    .select("details").or(dbFilters.join(",")).limit(1).maybeSingle()
+  if (dbError) {
+    const fallback = await supabase.from("shipments")
+      .select("id,client_id,tracking_number,carrier_tracking_number,carrier_code,ctt_object_id,status,service_type,recipient_name,recipient_address,sender_name,sender_address,created_at,updated_at,weight_kg")
+      .or(dbFilters.join(",")).limit(1).maybeSingle()
+    dbRow = fallback.data
+    dbError = fallback.error
   }
+  let shipment: any = dbError ? null : (dbRow?.details || dbRow)
 
-  // Último fallback: pesquisar diretamente na tabela shipments por carrier_tracking_number
-  // (cobre casos em que o shipment foi sincronizado com um carrier code EQ/DD/DB/etc.)
   if (!shipment) {
-    try {
-      const { data: directMatch } = await supabase
-        .from("shipments")
-        .select("*")
-        .or(`tracking_number.ilike.%${query}%,carrier_tracking_number.ilike.%${query}%`)
-        .limit(1)
-        .single()
-      if (directMatch) shipment = directMatch
-    } catch { /* not found */ }
-  }
-
-  // Se o utilizador pesquisar pelo tracking de referência LTK1425602 e ainda não existir na BD, inicializar automaticamente
-  if (!shipment && query === "LTK1425602") {
-    const demoId = crypto.randomUUID()
-    const now = new Date()
-    const h1 = new Date(now.getTime() - 20 * 3600 * 1000).toISOString()
-    const h2 = new Date(now.getTime() - 10 * 3600 * 1000).toISOString()
-    const h3 = new Date(now.getTime() - 2 * 3600 * 1000).toISOString()
-
-    const demoShipment = {
-      id: demoId,
-      tenant_id: (await getTenantId()),
-      tracking_number: "LTK1425602",
-      ctt_object_id: "DB290719717PT",
-      carrier_name: "ctt",
-      service_type: "CTT Expresso 24H",
-      status: "em_distribuicao",
-      sender_name: "Linke Logistics Lisboa",
-      sender_address: "Av. do Atlântico 16, Lisboa",
-      recipient_name: "Maria Silva",
-      recipient_address: "Rua de Santa Catarina 320, 4000-443 Porto",
-      package_count: 1,
-      weight_kg: 1.5,
-      created_at: h1,
-      updated_at: h3,
+    const auditFilters = [
+      `tracking_number.eq.${query}`,
+      `carrier_tracking_number.eq.${query}`,
+      `ctt_object_id.eq.${query}`,
+      `reference.eq.${query}`,
+    ]
+    let { data: auditRow, error: auditError } = await supabase.from("shipment_audit_metadata")
+      .select("details").or(auditFilters.join(","))
+      .order("created_at", { ascending: false }).limit(1).maybeSingle()
+    if (auditError) {
+      const rawFilters = ["tracking_number", "carrier_tracking_number", "ctt_object_id", "reference"]
+        .map((key) => `details->>${key}.eq.${query}`)
+      const fallback = await supabase.from("audit_log")
+        .select("details").eq("action", "shipment_data")
+        .or(rawFilters.join(","))
+        .order("created_at", { ascending: false }).limit(1).maybeSingle()
+      auditRow = fallback.data
+      auditError = fallback.error
     }
-
-    try {
-      await supabase.from("shipments").insert(demoShipment)
-      await supabase.from("tracking_events").insert([
-        {
-          shipment_id: demoId,
-          event_code: "EMA",
-          event_name: "Aceitação CTT Expresso",
-          description: "Objeto aceite nas instalações CTT Expresso Lisboa.",
-          location: "Centro de Produção Lisboa",
-          created_at: h1,
-        },
-        {
-          shipment_id: demoId,
-          event_code: "EMF",
-          event_name: "Expedição Nacional",
-          description: "Em trânsito para o Centro de Distribuição do Norte.",
-          location: "MARL - Loures",
-          created_at: h2,
-        },
-        {
-          shipment_id: demoId,
-          event_code: "EMZ",
-          event_name: "Em Distribuição (Com o Estafeta)",
-          description: "Objeto em distribuição na morada do destinatário.",
-          location: "Centro de Distribuição Porto",
-          created_at: h3,
-        }
-      ])
-    } catch (e) {
-      console.warn("Could not seed LTK1425602 to db:", e)
-    }
-
-    shipment = demoShipment as any
+    if (!auditError) shipment = auditRow?.details || null
   }
 
   if (!shipment) {
@@ -1610,10 +1661,10 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
 
   // Obter eventos de rastreio reais — passa o carrier_tracking_number (EQ...) para o fallback
   const carrierTrkForLookup = shipment.carrier_tracking_number || shipment.ctt_object_id || shipment.tracking_number
-  const events = await getShipmentTrackingTimelineAction(shipment.id, carrierTrkForLookup)
+  const events = await loadShipmentTrackingTimeline(shipment.id, carrierTrkForLookup)
 
   // Identificar dados do operador / carrier provider (ex: CTT Expresso)
-  const carrierCode = shipment.carrier_name || "ctt"
+  const carrierCode = shipment.carrier_name || shipment.carrier_code || "ctt"
   const linkeInternalRef = 
     (shipment.reference?.startsWith("LTK") ? shipment.reference : null) ||
     (shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null) ||
@@ -1644,10 +1695,10 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
       id: shipment.id,
       trackingNumber: linkeInternalRef || shipment.id.substring(0, 8).toUpperCase(),
       serviceType: shipment.service_type || "CTT Expresso 24H",
-      carrierName: carrierCode.toUpperCase() === "CTT" ? "CTT Expresso" : (shipment.carrier_name || "CTT Expresso"),
+      carrierName: carrierCode.toLowerCase().includes("correos") ? "Correos Express" : "CTT Expresso",
       carrierTrackingNumber: carrierTrackingNumber || null,
       carrierDirectUrl,
-      status: shipment.status || "em_distribuicao",
+      status: ["entrada_rede", "recolhido"].includes(shipment.status) ? "em_transito" : (shipment.status || "pendente"),
       createdAt: shipment.created_at,
       updatedAt: shipment.updated_at,
       recipientName: shipment.recipient_name,

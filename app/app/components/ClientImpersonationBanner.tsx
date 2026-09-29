@@ -2,17 +2,13 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { ExternalLink, ArrowLeft, Building2, ChevronRight } from "lucide-react"
+import { ArrowLeft, ChevronRight } from "lucide-react"
+import { useClientScope } from "./ClientScope"
 
 export function ClientImpersonationBanner() {
-  const searchParams = useSearchParams()
-  const clientName = searchParams.get("clientName")
-  const clientId = searchParams.get("clientId")
-
-  if (!clientName && !clientId) return null
-
-  const displayName = clientName ? decodeURIComponent(clientName) : "Cliente Selecionado"
+  const { client, isEmployee } = useClientScope()
+  if (!isEmployee) return null
+  const displayName = client.short_name
 
   return (
     <div className="bg-[#141714] text-white px-5 py-1.5 text-[11px] flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-[rgba(255,255,255,0.08)]">
@@ -36,63 +32,17 @@ export function ClientImpersonationBanner() {
   )
 }
 
-import { getClientesAction } from "@/app/actions/clientes"
-import type { Cliente } from "@/app/ops/entidades/clientes/types"
-import { createClient } from "@/lib/supabase/client"
 import { ClientAccountDetailsModal } from "./ClientAccountDetailsModal"
 
 export function ClientProfileSidebar() {
-  const searchParams = useSearchParams()
-  const clientName = searchParams.get("clientName")
-  const clientId = searchParams.get("clientId")
-
-  const [client, setClient] = React.useState<Cliente | null>(null)
-  const [userAvatar, setUserAvatar] = React.useState<string | null>(null)
+  const { client } = useClientScope()
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
-
-  React.useEffect(() => {
-    // 1. Fetch user session for auth avatar fallback
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.user_metadata?.avatar) {
-        setUserAvatar(user.user_metadata.avatar)
-      } else if (user?.user_metadata?.avatar_url) {
-        setUserAvatar(user.user_metadata.avatar_url)
-      }
-    })
-
-    // 2. Fetch clients to get current client's store logo, color, and store name
-    getClientesAction().then((clients) => {
-      if (!clients || clients.length === 0) return
-
-      let target: Cliente | undefined
-      if (clientId) {
-        target = clients.find((c) => c.id === clientId)
-      }
-      if (!target && clientName) {
-        const decoded = decodeURIComponent(clientName).toLowerCase()
-        target = clients.find(
-          (c) =>
-            c.short_name?.toLowerCase() === decoded ||
-            c.legal_name?.toLowerCase() === decoded
-        )
-      }
-      if (!target) {
-        target = clients[0]
-      }
-
-      if (target) {
-        setClient(target)
-      }
-    })
-  }, [clientId, clientName])
-
-  const displayName = client?.short_name || (clientName ? decodeURIComponent(clientName) : "Conta Cliente")
+  const displayName = client.short_name
   const storeSubtitle = client?.legal_name && client.legal_name.toLowerCase() !== displayName.toLowerCase()
     ? client.legal_name
     : "Conta Ativa"
 
-  const avatarImage = client?.logo_url || userAvatar || null
+  const avatarImage = client.logo_url || null
   const initial = displayName.substring(0, 2).toUpperCase()
   const avatarBg = client?.color || "var(--accent)"
 
@@ -139,9 +89,8 @@ export function ClientProfileSidebar() {
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
         client={client}
-        userAvatar={userAvatar}
+        userAvatar={null}
       />
     </>
   )
 }
-

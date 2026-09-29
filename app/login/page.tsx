@@ -44,7 +44,7 @@ function LoginFormContent() {
             width={140} 
             height={36} 
             className="object-contain" 
-            priority
+            preload
           />
         </div>
 
@@ -105,20 +105,17 @@ function LoginFormContent() {
         </div>
       </div>
 
-      {/* Right Column - Visual */}
-      <div className="hidden lg:flex w-7/12 relative bg-[#F8FAFC] items-center justify-center overflow-hidden border-l border-slate-100">
-        <div className="absolute inset-0 w-full h-full">
-          <Image 
-            src="/login_abstract_spiral.jpg" 
-            alt="Linke TMS Logistics Abstract Graphic" 
-            fill 
-            className="object-cover object-center opacity-95 mix-blend-multiply"
-            priority
-          />
+      {/* Decorative illustration rendered as HTML/CSS, without a full-screen image request. */}
+      <div className="hidden lg:flex w-7/12 relative items-center justify-center overflow-hidden border-l border-slate-100 bg-[linear-gradient(135deg,#f1fff5_0%,#e6f8ed_48%,#e8f1ff_100%)]" aria-hidden="true">
+        <div className="absolute -top-48 -right-32 h-[680px] w-[680px] rounded-full bg-emerald-200/40 blur-3xl" />
+        <div className="absolute -bottom-52 -left-24 h-[650px] w-[650px] rounded-full bg-sky-200/40 blur-3xl" />
+        <div className="relative flex h-[min(65vw,620px)] w-[min(65vw,620px)] items-center justify-center rounded-full border border-emerald-300/60 bg-white/20 shadow-[0_30px_100px_rgba(13,148,136,0.12)] rotate-[-25deg]">
+          <div className="flex h-[78%] w-[78%] items-center justify-center rounded-full border-[35px] border-emerald-400/30 shadow-[inset_0_0_70px_rgba(16,185,129,0.1)]">
+            <div className="flex h-[73%] w-[73%] items-center justify-center rounded-full border-[42px] border-emerald-500/50 bg-white/30">
+              <div className="h-[65%] w-[65%] rounded-full bg-[radial-gradient(circle_at_35%_30%,#e2fff0,#34d399_75%,#10b981)] shadow-[0_24px_65px_rgba(5,150,105,0.25)]" />
+            </div>
+          </div>
         </div>
-        
-        {/* Subtle overlay gradient to ensure text readability if we had any, and just make it blend nice */}
-        <div className="absolute inset-0 bg-gradient-to-r from-white via-transparent to-transparent opacity-40"></div>
       </div>
     </div>
   )

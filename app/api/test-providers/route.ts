@@ -2,8 +2,21 @@ import { NextResponse } from "next/server"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { CorreosShipmentService } from "@/lib/services/correos/correos-shipment.service"
 import { resolveCttCredentials, resolveCorreosCredentials } from "@/lib/services/carriers/credentials"
+import { requireAdmin } from "@/lib/auth/context"
 
 export async function GET() {
+  return NextResponse.json({ error: "Method not allowed" }, { status: 405 })
+}
+
+export async function POST() {
+  if (process.env.ENABLE_PROVIDER_TESTS !== "true") {
+    return NextResponse.json({ error: "Provider tests disabled" }, { status: 404 })
+  }
+  try {
+    await requireAdmin()
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+  }
   const results: any = { ctt: {}, correos: {} }
 
   // 1. CTT EXPRESSO
@@ -85,8 +98,6 @@ export async function GET() {
       portes: "P",
       tipoEtiqueta: "1"
     })
-
-    results.correos.rawResult = correosResult // Added this so we can inspect the exact payload!
 
     if (correosResult.codigoRetorno === 0 || (correosResult.codigoRetorno === 404 && correosResult.datosResultado)) {
       results.correos.status = "SUCCESS"

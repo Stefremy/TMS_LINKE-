@@ -24,7 +24,7 @@ export default async function OpsDashboardPage() {
 
   // Fetch real data from DB & persistent actions
   const [shipments, recolhasResult, clients] = await Promise.all([
-    getShipmentsAction(),
+    getShipmentsAction({ includeLabels: false }),
     supabase
       .from("recolhas")
       .select("*")

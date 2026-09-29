@@ -10,7 +10,7 @@ export default async function EntidadesClientesPage() {
   const [clientes, servicosLinke, shipments, statements] = await Promise.all([
     getClientesAction(),
     getServicosLinkeAction(),
-    getShipmentsAction(),
+    getShipmentsAction({ includeLabels: false }),
     getBillingStatementsAction()
   ])
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { timingSafeEqual } from "node:crypto"
 import { CTTTrackingService } from "@/lib/services/ctt/ctt-tracking.service"
 import {
   CTT_NON_DELIVERY_REASONS,
@@ -7,11 +8,6 @@ import {
   CTT_TRACKING_EVENTS,
   CTT_INCIDENT_CODES
 } from "@/lib/services/ctt/ctt-types"
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 // Schema expected from CTT (simulated or real webhook)
 export interface CTTTrackingWebhookPayload {
@@ -27,15 +23,34 @@ export interface CTTTrackingWebhookPayload {
 
 export async function POST(req: Request) {
   try {
+    const secret = process.env.CTT_WEBHOOK_SECRET
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!secret || !supabaseUrl || !serviceKey) {
+      return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
+    }
+
+    const supplied = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || ""
+    const expectedBytes = Buffer.from(secret)
+    const suppliedBytes = Buffer.from(supplied)
+    if (expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const payload = (await req.json()) as CTTTrackingWebhookPayload
 
-    if (!payload.events || !Array.isArray(payload.events)) {
+    if (!Array.isArray(payload?.events) || payload.events.length > 100) {
       return NextResponse.json({ error: "Invalid payload format" }, { status: 400 })
     }
 
+    const supabase = createClient(supabaseUrl, serviceKey)
     const results = []
 
     for (const evt of payload.events) {
+      if (typeof evt.tracking_number !== "string" || !/^[a-z0-9]{8,32}$/i.test(evt.tracking_number)) {
+        results.push({ error: "Invalid tracking number" })
+        continue
+      }
       // Look up by carrier_tracking_number (EQ…) first; fall back to tracking_number for
       // legacy records that stored the CTT number there before the LTK/EQ split fix.
       const { data: shipment, error: fetchError } = await supabase
@@ -108,9 +123,9 @@ export async function POST(req: Request) {
       try {
         const { sendTrackingEmailNotification } = await import("@/lib/email/tracking-notifications")
         if (evt.eventCode === "EMZ") {
-          sendTrackingEmailNotification(shipment.id, "in_transit")
+          await sendTrackingEmailNotification(shipment.id, "in_transit")
         } else if (CTT_INCIDENT_CODES?.has(evt.eventCode) || evt.eventCode === "EMH") {
-          sendTrackingEmailNotification(shipment.id, "incident", { reason: reasonDesc || description })
+          await sendTrackingEmailNotification(shipment.id, "incident", { reason: reasonDesc || description })
         }
       } catch (err) {
         console.warn("Failed to trigger tracking email in webhook", err)

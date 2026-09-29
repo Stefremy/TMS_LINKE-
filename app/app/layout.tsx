@@ -10,13 +10,25 @@ import {
 import { Suspense } from "react"
 import { ClientImpersonationBanner, ClientProfileSidebar } from "./components/ClientImpersonationBanner"
 import { ClientSidebarNav, ClientTopHeaderAction } from "./components/ClientSidebarNav"
+import { requireUser } from "@/lib/auth/context"
+import { getClientesAction } from "@/app/actions/clientes"
+import { redirect } from "next/navigation"
+import { ClientScopeProvider } from "./components/ClientScope"
 
-export default function OpsLayout({
+export default async function OpsLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const ctx = await requireUser()
+  if (!ctx.client_id) redirect("/ops/entidades/clientes")
+  const client = (await getClientesAction(ctx.client_id)).find(c => c.id === ctx.client_id)
+  if (!client) {
+    if (ctx.role !== "client") redirect("/ops/entidades/clientes")
+    throw new Error("A conta de cliente associada a esta sessão não foi encontrada.")
+  }
   return (
+    <ClientScopeProvider key={client.id} value={{ client, isEmployee: ctx.role !== "client" }}>
     <div className="min-h-screen bg-[var(--canvas-bg)] flex flex-col text-[var(--text-primary)]">
       {/* Top Admin Impersonation Bar */}
       <Suspense fallback={null}>
@@ -30,7 +42,7 @@ export default function OpsLayout({
           {/* Logo Area */}
           <div className="pt-7 pb-5 px-5">
             <div className="flex flex-col">
-              <Image src="/Linke-logo.png" alt="Linke" width={100} height={30} className="object-contain" priority />
+              <Image src="/Linke-logo.png" alt="Linke" width={100} height={30} className="object-contain" preload />
               <span className="text-[var(--text-tertiary)] text-[10px] font-semibold tracking-wider mt-2 uppercase">Portal do Cliente</span>
             </div>
           </div>
@@ -89,5 +101,6 @@ export default function OpsLayout({
         </div>
       </div>
     </div>
+    </ClientScopeProvider>
   )
 }

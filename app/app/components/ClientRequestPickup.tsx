@@ -2,17 +2,11 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
 import { Calendar, Truck, CheckCircle2, Building2, Clock, MapPin, Package, ArrowLeft } from "lucide-react"
-import { getClientesAction } from "@/app/actions/clientes"
-import { Cliente } from "@/app/ops/entidades/clientes/types"
+import { useClientScope } from "./ClientScope"
 
 export function ClientRequestPickup() {
-  const searchParams = useSearchParams()
-  const clientId = searchParams.get("clientId")
-  const clientNameParam = searchParams.get("clientName")
-
-  const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
+  const { client: currentClient } = useClientScope()
   const [pickupDate, setPickupDate] = React.useState(new Date().toISOString().split("T")[0])
   const [pickupVolumes, setPickupVolumes] = React.useState("2")
   const [pickupWeight, setPickupWeight] = React.useState("5.0")
@@ -21,29 +15,7 @@ export function ClientRequestPickup() {
   const [pickupSuccess, setPickupSuccess] = React.useState(false)
   const [pickupId, setPickupId] = React.useState<string | null>(null)
 
-  React.useEffect(() => {
-    getClientesAction().then((clients) => {
-      let target: Cliente | undefined
-      if (clientId) {
-        target = clients.find((c) => c.id === clientId)
-      }
-      if (!target && clientNameParam) {
-        const decoded = decodeURIComponent(clientNameParam).toLowerCase()
-        target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
-      }
-      if (!target && clients.length > 0) {
-        target = clients[0]
-      }
-      if (target) {
-        setCurrentClient(target)
-      }
-    })
-  }, [clientId, clientNameParam])
-
-  const querySuffix = React.useMemo(() => {
-    if (!currentClient) return ""
-    return `?clientId=${encodeURIComponent(currentClient.id || "")}&clientName=${encodeURIComponent(currentClient.short_name || "")}`
-  }, [currentClient])
+  const querySuffix = ""
 
   const senderAddress = currentClient?.address 
     ? `${currentClient.address}, ${currentClient.postal_code} ${currentClient.city}` 

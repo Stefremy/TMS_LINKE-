@@ -1,23 +1,11 @@
 "use client"
 
-import * as React from "react"
 import Link from "next/link"
-import { usePathname, useSearchParams } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { Home, FileText, Search, Plus } from "lucide-react"
 
 export function ClientSidebarNav() {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const clientId = searchParams.get("clientId")
-  const clientName = searchParams.get("clientName")
-
-  const queryParams = React.useMemo(() => {
-    if (!clientId && !clientName) return ""
-    const params = new URLSearchParams()
-    if (clientId) params.set("clientId", clientId)
-    if (clientName) params.set("clientName", clientName)
-    return `?${params.toString()}`
-  }, [clientId, clientName])
 
   const navItems = [
     { href: "/app", label: "Painel Principal", icon: Home },
@@ -35,7 +23,7 @@ export function ClientSidebarNav() {
         return (
           <Link
             key={item.href}
-            href={`${item.href}${queryParams}`}
+            href={item.href}
             className={`flex items-center gap-3 px-3 py-2 rounded-md font-medium text-[12px] transition-colors ${
               isActive
                 ? "text-[var(--accent)] bg-[var(--accent-soft)] font-semibold border border-[rgba(18,138,71,0.15)]"
@@ -54,23 +42,11 @@ export function ClientSidebarNav() {
 import { TrackingQuickBar } from "@/app/ops/components/TrackingQuickBar"
 
 export function ClientTopHeaderAction() {
-  const searchParams = useSearchParams()
-  const clientId = searchParams.get("clientId")
-  const clientName = searchParams.get("clientName")
-
-  const queryParams = React.useMemo(() => {
-    if (!clientId && !clientName) return ""
-    const params = new URLSearchParams()
-    if (clientId) params.set("clientId", clientId)
-    if (clientName) params.set("clientName", clientName)
-    return `?${params.toString()}`
-  }, [clientId, clientName])
-
   return (
     <div className="flex items-center gap-2">
       <TrackingQuickBar />
       <Link
-        href={`/app/criar-guia${queryParams}`}
+        href="/app/criar-guia"
         className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.99] text-white px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
       >
         <Plus className="w-3.5 h-3.5" />

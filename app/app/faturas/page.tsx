@@ -1,41 +1,16 @@
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
 import * as React from "react"
 import FaturasClient from "./FaturasClient"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getBillingStatementsAction } from "@/app/actions/moloni"
+import { requireUser } from "@/lib/auth/context"
 
 export const dynamic = "force-dynamic"
 
-export default async function FaturasPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ clientId?: string; clientName?: string }>
-}) {
-  const supabase = await createClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
-
-  const resolvedParams = searchParams ? await searchParams : {}
-  const clients = await getClientesAction()
-  
-  let targetClient: any = undefined
-  if (resolvedParams.clientId) {
-    targetClient = clients.find(c => c.id === resolvedParams.clientId)
-  }
-  if (!targetClient && resolvedParams.clientName) {
-    targetClient = clients.find(c => c.short_name?.toLowerCase() === resolvedParams.clientName?.toLowerCase())
-  }
-  if (!targetClient && user?.email) {
-    targetClient = clients.find(c => 
-      c.email?.toLowerCase().trim() === user.email?.toLowerCase().trim() ||
-      c.billing_email?.toLowerCase().trim() === user.email?.toLowerCase().trim()
-    )
-  }
-  if (!targetClient && clients.length > 0) {
-    targetClient = clients[0]
-  }
+export default async function FaturasPage() {
+  const ctx = await requireUser()
+  const targetClient = ctx.client_id
+    ? (await getClientesAction(ctx.client_id)).find(c => c.id === ctx.client_id)
+    : undefined
 
   const statements = targetClient ? await getBillingStatementsAction(targetClient.id) : []
 

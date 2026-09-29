@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
+import { cache } from "react"
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { DEFAULT_COLABORADORES } from "@/app/ops/entidades/colaboradores/types"
@@ -23,7 +24,7 @@ export async function getTenantId(): Promise<string> {
   return ctx?.tenant_id || LINKE_TENANT_ID
 }
 
-export async function getAuthContext(): Promise<AuthContext | null> {
+export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -55,18 +56,20 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   // 1. Check if the user is an employee in the database
   const { data: colab } = await supabaseAdmin
     .from("colaboradores")
-    .select("id, access_level, permissions")
+    .select("id, access_level, permissions, status")
     .eq("email", user.email)
     .single()
 
   if (colab) {
-    role = colab.access_level === 'Administrador' ? 'admin' : 'employee'
-    colaborador_id = colab.id
-    permissions = Array.isArray(colab.permissions) ? colab.permissions : JSON.parse(colab.permissions || '[]')
+    if (colab.status !== 'Inativo') {
+      role = colab.access_level === 'Administrador' ? 'admin' : 'employee'
+      colaborador_id = colab.id
+      permissions = Array.isArray(colab.permissions) ? colab.permissions : JSON.parse(colab.permissions || '[]')
+    }
   } else {
-    // 2. Fall back to app_metadata (secure) or user_metadata (legacy)
-    const metadata = user.app_metadata?.role ? user.app_metadata : (user.user_metadata || {})
-    role = metadata.role || null
+    // Only server-managed metadata may assign roles or client scope.
+    const metadata = user.app_metadata || {}
+    role = ['client', 'employee', 'admin'].includes(metadata.role) ? metadata.role : null
 
     if (role === 'client') {
       client_id = metadata.client_id || null
@@ -76,7 +79,19 @@ export async function getAuthContext(): Promise<AuthContext | null> {
       permissions = metadata.permissions || []
     }
 
-    // 3. Final fallback: check DEFAULT_COLABORADORES by email
+    if (!role || (role === 'client' && !client_id)) {
+      const { data: clientUser } = await supabaseAdmin
+        .from('client_users')
+        .select('client_id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (clientUser?.client_id) {
+        role = 'client'
+        client_id = clientUser.client_id
+      }
+    }
+
+    // 3. Final fallback: check DEFAULT_COLABORADORES by exact email
     //    This ensures hardcoded staff (Stefano, Nathalia, Gilberto) always
     //    resolve correctly even when the DB table is unreachable.
     if (!role || (role !== 'employee' && role !== 'admin')) {
@@ -89,21 +104,6 @@ export async function getAuthContext(): Promise<AuthContext | null> {
         permissions = defaultColab.permissions || []
       }
     }
-  }
-
-  // Stefano Remy is the permanent Super-Admin with unrestricted full access
-  if (user.email?.toLowerCase().includes("stefano")) {
-    role = "admin"
-    colaborador_id = "col-stefano-001"
-    permissions = [
-      "Acesso Total (Super-Admin)",
-      "Gestão de Clientes & Contratos",
-      "Emissão e Controlo de Guias CTT",
-      "Pedidos de Recolha & Distribuição",
-      "Faturação & Contas Correntes",
-      "Gestão de Transportadoras & Frotas",
-      "Configurações de Webservices & Integrações"
-    ]
   }
 
   // Check for secure impersonation cookie
@@ -122,14 +122,14 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     colaborador_id,
     permissions
   }
-}
+})
 
 /**
  * Ensures the caller is authenticated. Throws if not.
  */
 export async function requireUser(): Promise<AuthContext> {
   const ctx = await getAuthContext()
-  if (!ctx) {
+  if (!ctx || !ctx.role || (ctx.role === 'client' && !ctx.client_id)) {
     throw new Error("Não autorizado. Faça login para continuar.")
   }
   return ctx
@@ -158,13 +158,12 @@ export async function requirePermission(permission: string): Promise<AuthContext
 }
 
 /**
- * Ensures the caller is specifically an Admin / Super-Admin (Stefano). Throws if not.
+ * Ensures the caller has a server-assigned administrator role.
  */
 export async function requireAdmin(): Promise<AuthContext> {
   const ctx = await requireUser()
-  const isStefano = ctx.user?.email?.toLowerCase().includes("stefano")
-  if (ctx.role !== 'admin' && !isStefano) {
-    throw new Error("Acesso restrito. Apenas o administrador Stefano tem permissão para gerir credenciais e níveis de acesso.")
+  if (ctx.role !== 'admin') {
+    throw new Error("Acesso restrito. Apenas administradores podem gerir credenciais e níveis de acesso.")
   }
   return ctx
 }
@@ -181,7 +180,7 @@ export async function requireClientAccess(targetClientId: string): Promise<AuthC
     return ctx
   }
 
-  if (ctx.role === 'client' && ctx.client_id !== targetClientId) {
+  if (ctx.role !== 'client' || ctx.client_id !== targetClientId) {
     throw new Error("Acesso negado. Não tem permissão para aceder a dados deste cliente.")
   }
 

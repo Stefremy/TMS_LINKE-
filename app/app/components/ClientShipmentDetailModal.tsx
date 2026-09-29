@@ -35,6 +35,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { 
   getShipmentTrackingTimelineAction,
+  getShipmentLabelAction,
   deleteShipmentAction,
   createReturnShipmentAction
 } from "@/app/actions/shipments"
@@ -156,14 +157,14 @@ export function ClientShipmentDetailModal({
 
   // 1. Imprimir Etiqueta CTT
   const printLabel = async () => {
-    const label = await resolveLabel(currentShipment.ctt_label_base64)
+    const label = await resolveLabel(currentShipment.ctt_label_base64 || await getShipmentLabelAction(currentShipment.id))
     if (!label) return
     printCttLabel(label)
   }
 
   // 2. Descarregar Etiqueta PDF
   const downloadLabel = async () => {
-    const label = await resolveLabel(currentShipment.ctt_label_base64)
+    const label = await resolveLabel(currentShipment.ctt_label_base64 || await getShipmentLabelAction(currentShipment.id))
     if (!label) return
     downloadCttLabel(label, `${tracking}_Etiqueta_CTT.pdf`)
   }
@@ -294,7 +295,7 @@ export function ClientShipmentDetailModal({
   const isFragil = Boolean(currentShipment.is_fragil)
   const isSMS = currentShipment.is_sms_notification !== false // default true
 
-  const hasLabel = Boolean(currentShipment.ctt_label_base64)
+  const hasLabel = Boolean(currentShipment.has_label || currentShipment.ctt_label_base64)
 
   // Stepper calculations
   const steps = [

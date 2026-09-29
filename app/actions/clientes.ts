@@ -146,18 +146,21 @@ const DEFAULT_CLIENTES: Cliente[] = [
 /**
  * Obtém todos os clientes para listagem
  */
-export async function getClientesAction(): Promise<Cliente[]> {
+export async function getClientesAction(selectedClientId?: string): Promise<Cliente[]> {
   const ctx = await requireUser()
+  const scopedId = ctx.role === "client" ? ctx.client_id! : selectedClientId
 
   const supabase = createAdminClient()
 
   let dbClients: any[] = []
   try {
-    const { data, error } = await supabase
+    let clientsQuery = supabase
       .from("clients")
       .select("*")
       .eq("tenant_id", (await getTenantId()))
       .order("created_at", { ascending: false })
+    if (scopedId) clientsQuery = clientsQuery.eq("id", scopedId)
+    const { data, error } = await clientsQuery
 
     if (!error && data) {
       dbClients = data
@@ -169,11 +172,13 @@ export async function getClientesAction(): Promise<Cliente[]> {
   // Obter detalhes ricos de audit_log
   let auditClients: Record<string, Cliente> = {}
   try {
-    const { data: logs, error } = await supabase
+    let auditQuery = supabase
       .from("audit_log")
       .select("details")
       .eq("action", "client_data")
       .order("created_at", { ascending: false })
+    if (scopedId) auditQuery = auditQuery.eq("details->>id", scopedId)
+    const { data: logs, error } = await auditQuery
 
     if (!error && logs) {
       logs.forEach((log: any) => {
@@ -190,10 +195,12 @@ export async function getClientesAction(): Promise<Cliente[]> {
   // 0. Obter lista de IDs eliminados (tombstones) para nunca ressurgirem
   const deletedIds = new Set<string>()
   try {
-    const { data: deletedLogs } = await supabase
+    let deletedQuery = supabase
       .from("audit_log")
       .select("details")
       .eq("action", "deleted_client")
+    if (scopedId) deletedQuery = deletedQuery.eq("details->>id", scopedId)
+    const { data: deletedLogs } = await deletedQuery
 
     if (deletedLogs) {
       deletedLogs.forEach((log: any) => {
@@ -260,8 +267,8 @@ export async function getClientesAction(): Promise<Cliente[]> {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
 
-  if (ctx.role === "client") {
-    result = result.filter((c) => c.id === ctx.client_id)
+  if (scopedId) {
+    result = result.filter((c) => c.id === scopedId)
   }
 
   return result

@@ -6,6 +6,7 @@ import { NotificationBell } from "./components/NotificationBell"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
 import { createClient } from "@/lib/supabase/server"
 import { signout } from "@/app/login/actions"
+import { requireEmployee } from "@/lib/auth/context"
 import { 
   Plus,
   HelpCircle,
@@ -20,6 +21,7 @@ export default async function OpsLayout({
 }: {
   children: React.ReactNode
 }) {
+  await requireEmployee()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   

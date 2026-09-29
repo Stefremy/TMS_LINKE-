@@ -22,7 +22,7 @@ export async function getOperationalNotificationsAction(): Promise<OperationalNo
 
   try {
     const [shipments, clients, connections] = await Promise.all([
-      getShipmentsAction().catch(() => []),
+      getShipmentsAction({ includeLabels: false }).catch(() => []),
       getClientesAction().catch(() => []),
       getCarrierConnectionsAction().catch(() => []),
     ])

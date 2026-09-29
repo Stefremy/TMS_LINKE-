@@ -392,7 +392,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
           <div className="flex items-center gap-2.5 shrink-0">
             {/* Redirect to Client Store / Portal UI */}
             <a
-              href={`/app?clientId=${encodeURIComponent(formData.id || "")}&clientName=${encodeURIComponent(formData.short_name || "")}`}
+              href={`/app/selecionar?clientId=${encodeURIComponent(formData.id || "")}`}
               target="_blank"
               rel="noopener noreferrer"
               className="px-3.5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.99] text-white rounded-md text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"

@@ -35,10 +35,13 @@ export function ClientAccountDetailsModal({
   const [servicosLinke, setServicosLinke] = React.useState<any[]>([])
 
   React.useEffect(() => {
+    if (!isOpen) return
+    let active = true
     getServicosLinkeAction().then((res) => {
-      if (res) setServicosLinke(res)
+      if (active && res) setServicosLinke(res)
     })
-  }, [])
+    return () => { active = false }
+  }, [isOpen])
 
   // Detect which carrier operators actually exist in the client's assigned price table
   const activeCarrierCodes = React.useMemo(() => {

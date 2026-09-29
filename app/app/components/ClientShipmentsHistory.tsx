@@ -2,28 +2,23 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
 import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon, Undo2, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { getClientesAction } from "@/app/actions/clientes"
-import { getClientPortalStatsAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
+import { getClientPortalStatsAction, getShipmentLabelAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
 import { closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
-import { Cliente } from "@/app/ops/entidades/clientes/types"
+import { useClientScope } from "./ClientScope"
 
-export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
-  const searchParams = useSearchParams()
-  const clientId = searchParams.get("clientId")
-  const clientNameParam = searchParams.get("clientName")
-
-  const [currentClient, setCurrentClient] = React.useState<Cliente | null>(null)
+export function ClientShipmentsHistory() {
+  const { client: currentClient } = useClientScope()
   const [shipments, setShipments] = React.useState<any[]>([])
   const [searchTerm, setSearchTerm] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("todos")
   const [loading, setLoading] = React.useState(true)
+  const [loadError, setLoadError] = React.useState(false)
   const [closingBatch, setClosingBatch] = React.useState(false)
   const [manifestData, setManifestData] = React.useState<{ fileName: string, base64: string } | null>(null)
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
@@ -44,49 +39,29 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
   }
 
   const printLabel = async (envioItem: any) => {
-    const label = await resolveLabel(envioItem?.ctt_label_base64)
+    const label = await resolveLabel(envioItem?.ctt_label_base64 || await getShipmentLabelAction(envioItem.id))
     if (label) printCttLabel(label)
   }
 
   const downloadLabel = async (envioItem: any, ref: string) => {
-    const label = await resolveLabel(envioItem?.ctt_label_base64)
+    const label = await resolveLabel(envioItem?.ctt_label_base64 || await getShipmentLabelAction(envioItem.id))
     if (label) downloadCttLabel(label, `${ref}_Etiqueta_CTT.pdf`)
   }
 
   React.useEffect(() => {
-    getClientesAction().then((clients) => {
-      let target: Cliente | undefined
-      if (clientId) {
-        target = clients.find((c) => c.id === clientId)
-      }
-      if (!target && clientNameParam) {
-        const decoded = decodeURIComponent(clientNameParam).toLowerCase()
-        target = clients.find((c) => c.short_name.toLowerCase() === decoded || c.legal_name.toLowerCase() === decoded)
-      }
-      if (!target && userEmail) {
-        const emailLower = userEmail.toLowerCase()
-        target = clients.find((c) => c.email?.toLowerCase() === emailLower || c.billing_email?.toLowerCase() === emailLower)
-      }
-      if (!target && clients.length > 0) {
-        target = clients[0]
-      }
-      if (target) {
-        setCurrentClient(target)
-      }
+    let active = true
+    setLoading(true)
+    setLoadError(false)
+    getClientPortalStatsAction(currentClient.id, currentClient.short_name).then(res => {
+      if (!active) return
+      setShipments(res?.allShipments || res?.recentShipments || [])
+      if (!res) setLoadError(true)
+      setLoading(false)
+    }).catch(() => { if (active) { setLoadError(true); setLoading(false) } })
+    return () => { active = false }
+  }, [currentClient.id, currentClient.short_name])
 
-      getClientPortalStatsAction(target?.id, target?.short_name).then((res) => {
-        if (res) {
-          setShipments(res.allShipments || res.recentShipments || [])
-        }
-        setLoading(false)
-      })
-    })
-  }, [clientId, clientNameParam])
-
-  const querySuffix = React.useMemo(() => {
-    if (!currentClient) return ""
-    return `?clientId=${encodeURIComponent(currentClient.id || "")}&clientName=${encodeURIComponent(currentClient.short_name || "")}`
-  }, [currentClient])
+  const querySuffix = ""
 
   const filteredShipments = React.useMemo(() => {
     return shipments.filter((item) => {
@@ -148,6 +123,13 @@ export function ClientShipmentsHistory({ userEmail }: { userEmail?: string }) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  if (loading || loadError) return (
+    <div className="p-8 text-sm text-slate-600" role="status">
+      <h1 className="text-lg font-semibold text-slate-900">{currentClient.legal_name || currentClient.short_name}</h1>
+      <p>{loadError ? "Não foi possível carregar os envios desta conta." : "A carregar os envios desta conta..."}</p>
+    </div>
+  )
 
   return (
     <div className="flex flex-col gap-6 max-w-6xl mx-auto font-sans relative">

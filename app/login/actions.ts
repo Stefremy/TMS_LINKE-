@@ -25,7 +25,7 @@ export async function login(formData: FormData) {
 
     revalidatePath('/', 'layout')
     
-    if (user.user_metadata?.role === 'client') {
+    if (user.app_metadata?.role === 'client') {
       redirect('/app')
     } else {
       redirect('/ops')

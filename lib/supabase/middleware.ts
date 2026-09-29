@@ -48,7 +48,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user) {
-    const role = user.user_metadata?.role
+    const role = user.app_metadata?.role
 
     // Redirect away from login page if already logged in
     if (pathname === '/login') {
@@ -59,10 +59,11 @@ export async function updateSession(request: NextRequest) {
 
     // Secure Impersonation Logic
     if (role === 'employee' || role === 'admin') {
-      if (request.nextUrl.searchParams.has('clientId')) {
+      if (isProtectedApp && pathname !== '/app/selecionar' && request.nextUrl.searchParams.has('clientId')) {
         const clientId = request.nextUrl.searchParams.get('clientId')
         const url = request.nextUrl.clone()
         url.searchParams.delete('clientId') // Remove sensitive param from URL
+        url.searchParams.delete('clientName')
         
         const res = NextResponse.redirect(url)
         if (clientId) {

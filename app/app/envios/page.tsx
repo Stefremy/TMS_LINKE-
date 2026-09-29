@@ -2,12 +2,8 @@ import * as React from "react"
 import { Suspense } from "react"
 import { ClientShipmentsHistory } from "../components/ClientShipmentsHistory"
 import { Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/server"
 
 export default async function EnviosPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
   return (
     <Suspense
       fallback={
@@ -17,8 +13,7 @@ export default async function EnviosPage() {
         </div>
       }
     >
-      <ClientShipmentsHistory userEmail={user?.email} />
+      <ClientShipmentsHistory />
     </Suspense>
   )
 }
-
