@@ -3,6 +3,7 @@
 import * as React from "react"
 import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro } from "lucide-react"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
+import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
 
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
@@ -19,6 +20,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
     recipientName?: string;
     recipientCity?: string;
     serviceName?: string;
+    carrierName?: string;
     weightKg?: number;
     volumes?: number;
     sellPrice?: number;
@@ -31,7 +33,49 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   const [selectedSpecialServices, setSelectedSpecialServices] = React.useState<string[]>([])
   const [codValue, setCodValue] = React.useState<number>(0)
 
+  // Address inputs state
+  const [senderName, setSenderName] = React.useState("")
+  const [senderAddress, setSenderAddress] = React.useState("")
+  const [senderZip, setSenderZip] = React.useState("")
+  const [senderCity, setSenderCity] = React.useState("")
+
+  const [recipientName, setRecipientName] = React.useState("")
+  const [recipientAddress, setRecipientAddress] = React.useState("")
+  const [recipientZip, setRecipientZip] = React.useState("")
+  const [recipientCity, setRecipientCity] = React.useState("")
+
   const currentClient = clients.find(c => c.id === selectedClientId)
+
+  // Auto-fill sender when client is selected
+  React.useEffect(() => {
+    if (currentClient) {
+      if (!senderName) setSenderName(currentClient.short_name || currentClient.legal_name || "")
+      if (!senderAddress) setSenderAddress(currentClient.address || "")
+      if (!senderZip) setSenderZip(currentClient.postal_code || "")
+      if (!senderCity) setSenderCity(currentClient.city || "")
+    }
+  }, [currentClient])
+
+  // Postal code lookup hooks
+  const senderPostalLookup = usePostalCodeLookup({
+    country: "PT",
+    onFound: (info) => {
+      setSenderCity(info.city)
+      if (!senderAddress && info.street) {
+        setSenderAddress(`${info.street}, nº `)
+      }
+    }
+  })
+
+  const recipientPostalLookup = usePostalCodeLookup({
+    country: recipientCountry,
+    onFound: (info) => {
+      setRecipientCity(info.city)
+      if (!recipientAddress && info.street) {
+        setRecipientAddress(`${info.street}, nº `)
+      }
+    }
+  })
 
   const availableServicos = React.useMemo(() => {
     let active = servicosLinke.filter((s) => s.is_active !== false)
@@ -49,6 +93,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   }, [servicosLinke, currentClient])
 
   const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
+  const isCorreos = activeLinkeService?.name?.toLowerCase().includes("correos") || (activeLinkeService as any)?.carrier_code === "correos"
+  const carrierDisplayName = activeLinkeService ? (isCorreos ? "Correos Express" : "CTT Expresso") : "Transportadora"
 
   const specialServicesAvailable = React.useMemo(() => {
     if (!currentClient?.pricing?.special_services_fees) return []
@@ -117,7 +163,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       })
       
       if (!res.success) {
-        throw new Error((res as any).error || "Erro ao comunicar com os CTT")
+        throw new Error((res as any).error || `Erro ao comunicar com a transportadora (${carrierDisplayName})`)
       }
       
       setShipmentResult({
@@ -128,6 +174,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         recipientName: formData.get("recipient_name") as string,
         recipientCity: formData.get("recipient_city") as string,
         serviceName: activeLinkeService?.name || "Linke Expresso 24H",
+        carrierName: carrierDisplayName,
         weightKg: Number(formData.get("weight_kg")) || 1,
         volumes: Number(formData.get("volumes")) || 1,
         sellPrice: estimatedTier.sell
@@ -161,7 +208,9 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
             </div>
             <div>
               <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Criar Novo Envio</h2>
-              <p className="text-[11px] font-medium text-[var(--text-secondary)]">Registar expedição operacional via CTT</p>
+              <p className="text-[11px] font-medium text-[var(--text-secondary)]">
+                Registar expedição operacional {activeLinkeService ? `via ${carrierDisplayName}` : "multicarrier"}
+              </p>
             </div>
           </div>
         </div>
@@ -194,7 +243,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                         </span>
                       </div>
                       <p className="text-[14px] text-[var(--text-secondary)] max-w-2xl leading-relaxed mt-1">
-                        A expedição foi registada no sistema, comunicada em tempo real à Autoridade Tributária e a ordem de recolha foi confirmada pela <strong className="text-[var(--text-primary)] font-medium">CTT Expresso</strong>.
+                        A expedição foi registada no sistema, comunicada em tempo real à Autoridade Tributária e a ordem de recolha foi confirmada pela <strong className="text-[var(--text-primary)] font-medium">{shipmentResult.carrierName || "transportadora"}</strong>.
                       </p>
                     </div>
                   </div>
@@ -217,7 +266,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Package className="text-[var(--accent)] w-5 h-5" />
-                        <span className="text-[11px] text-[var(--text-primary)] uppercase tracking-wider font-bold">Credenciais Fiscais & Rastreio CTT</span>
+                        <span className="text-[11px] text-[var(--text-primary)] uppercase tracking-wider font-bold">Credenciais Fiscais & Rastreio ({shipmentResult.carrierName || "Operacional"})</span>
                       </div>
                       <span className="font-mono text-[11px] text-[var(--text-tertiary)] font-medium">Protocolo SAF-T PT v1.04_01 · Webservice AT</span>
                     </div>
@@ -245,7 +294,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       {/* Carrier AWB Box */}
                       <div className="bg-[var(--surface-bg)] rounded-lg p-4 shadow-sm border border-[var(--border-subtle)] space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase">AWB CTT Expresso (Tracking)</span>
+                          <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase">AWB {shipmentResult.carrierName || "Transportadora"} (Tracking)</span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] font-bold border border-[rgba(18,138,71,0.2)]">
                             Pronto para Recolha
                           </span>
@@ -292,7 +341,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       
                       {/* Col 4: Custo Faturado */}
                       <div className="space-y-0.5">
-                        <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase block">Custo Faturado CTT</span>
+                        <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase block">Custo Faturado ({shipmentResult.carrierName || "Envio"})</span>
                         <div className="flex items-baseline gap-1">
                           <span className="text-[16px] text-[var(--text-primary)] font-bold" style={{ fontVariantNumeric: "tabular-nums" }}>{shipmentResult.sellPrice?.toFixed(2)} €</span>
                           <span className="text-[12px] font-medium text-[var(--text-tertiary)]">+ IVA</span>
@@ -466,20 +515,85 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                   <div className="space-y-4">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Nome</label>
-                      <input type="text" name="sender_name" required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" />
+                      <input 
+                        type="text" 
+                        name="sender_name" 
+                        value={senderName}
+                        onChange={(e) => setSenderName(e.target.value)}
+                        required 
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                      />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Morada</label>
-                      <input type="text" name="sender_address" required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" />
+                      <input 
+                        type="text" 
+                        name="sender_address" 
+                        value={senderAddress}
+                        onChange={(e) => setSenderAddress(e.target.value)}
+                        placeholder="Rua, avenida, número..."
+                        required 
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                      />
+                      {senderPostalLookup.info?.streets && senderPostalLookup.info.streets.length > 1 && (
+                        <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[9px] text-[var(--text-tertiary)] font-medium">Ruas:</span>
+                          {senderPostalLookup.info.streets.slice(0, 4).map((st) => (
+                            <button
+                              key={st}
+                              type="button"
+                              onClick={() => setSenderAddress(`${st}, nº `)}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
+                            >
+                              {st}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">C. Postal</label>
-                        <input type="text" name="sender_zip" placeholder="Ex: 1000-001" required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" />
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">C. Postal</label>
+                          {senderPostalLookup.loading && (
+                            <span className="text-[9px] text-[var(--text-tertiary)] flex items-center gap-1 font-mono">
+                              <Loader2 className="w-2.5 h-2.5 animate-spin" /> A validar...
+                            </span>
+                          )}
+                          {senderPostalLookup.status === "valid" && (
+                            <span className="text-[9px] text-[var(--accent)] font-semibold flex items-center gap-0.5 truncate max-w-[120px]" title={senderPostalLookup.info?.city}>
+                              <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> {senderPostalLookup.info?.city}
+                            </span>
+                          )}
+                          {senderPostalLookup.status === "invalid" && (
+                            <span className="text-[9px] text-[var(--status-warning)] font-medium">
+                              Não registado
+                            </span>
+                          )}
+                        </div>
+                        <input 
+                          type="text" 
+                          name="sender_zip" 
+                          placeholder="Ex: 1000-001" 
+                          value={senderZip}
+                          onChange={(e) => {
+                            const formatted = senderPostalLookup.lookup(e.target.value, "PT")
+                            setSenderZip(formatted)
+                          }}
+                          required 
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs" 
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Localidade</label>
-                        <input type="text" name="sender_city" required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" />
+                        <input 
+                          type="text" 
+                          name="sender_city" 
+                          value={senderCity}
+                          onChange={(e) => setSenderCity(e.target.value)}
+                          required 
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                        />
                       </div>
                     </div>
                   </div>
@@ -492,39 +606,118 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                     Destinatário
                   </h3>
                   <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Nome</label>
-                      <input type="text" name="recipient_name" required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" />
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2 space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Nome *</label>
+                        <input 
+                          type="text" 
+                          name="recipient_name" 
+                          value={recipientName}
+                          onChange={(e) => setRecipientName(e.target.value)}
+                          required 
+                          placeholder="Nome da pessoa ou empresa"
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">País de Destino *</label>
+                        <select 
+                          name="recipient_country" 
+                          value={recipientCountry}
+                          onChange={(e) => {
+                            const c = e.target.value
+                            setRecipientCountry(c)
+                            setRecipientZip("")
+                            setRecipientCity("")
+                            recipientPostalLookup.reset()
+                          }}
+                          required 
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] font-semibold focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs cursor-pointer"
+                        >
+                          <option value="PT">Portugal</option>
+                          <option value="ES">Espanha</option>
+                          <option value="FR">França</option>
+                          <option value="DE">Alemanha</option>
+                          <option value="IT">Itália</option>
+                        </select>
+                      </div>
                     </div>
+
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Morada</label>
-                      <input type="text" name="recipient_address" required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" />
+                      <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Morada *</label>
+                      <input 
+                        type="text" 
+                        name="recipient_address" 
+                        value={recipientAddress}
+                        onChange={(e) => setRecipientAddress(e.target.value)}
+                        placeholder="Rua, avenida, número, andar..."
+                        required 
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                      />
+                      {recipientPostalLookup.info?.streets && recipientPostalLookup.info.streets.length > 1 && (
+                        <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[9px] text-[var(--text-tertiary)] font-medium">Ruas:</span>
+                          {recipientPostalLookup.info.streets.slice(0, 4).map((st) => (
+                            <button
+                              key={st}
+                              type="button"
+                              onClick={() => setRecipientAddress(`${st}, nº `)}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
+                            >
+                              {st}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
+
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">C. Postal</label>
-                        <input type="text" name="recipient_zip" placeholder="Ex: 4000-001" required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" />
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+                            {recipientCountry === "PT" ? "C. Postal (PT)" : recipientCountry === "ES" ? "C. Postal (ES)" : "C. Postal"} *
+                          </label>
+                          {recipientPostalLookup.loading && (
+                            <span className="text-[9px] text-[var(--text-tertiary)] flex items-center gap-1 font-mono">
+                              <Loader2 className="w-2.5 h-2.5 animate-spin" /> A validar...
+                            </span>
+                          )}
+                          {recipientPostalLookup.status === "valid" && (
+                            <span className="text-[9px] text-[var(--accent)] font-semibold flex items-center gap-0.5 truncate max-w-[120px]" title={recipientPostalLookup.info?.city}>
+                              <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> {recipientPostalLookup.info?.city}
+                            </span>
+                          )}
+                          {recipientPostalLookup.status === "invalid" && (
+                            <span className="text-[9px] text-[var(--status-warning)] font-medium">
+                              Não registado
+                            </span>
+                          )}
+                        </div>
+                        <input 
+                          type="text" 
+                          name="recipient_zip" 
+                          placeholder={recipientCountry === "ES" ? "Ex: 28001" : recipientCountry === "PT" ? "Ex: 4000-001" : "Código postal"} 
+                          value={recipientZip}
+                          onChange={(e) => {
+                            const formatted = recipientPostalLookup.lookup(e.target.value, recipientCountry)
+                            setRecipientZip(formatted)
+                          }}
+                          required 
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs" 
+                        />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Localidade</label>
-                        <input type="text" name="recipient_city" required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" />
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Localidade / Cidade *</label>
+                        <input 
+                          type="text" 
+                          name="recipient_city" 
+                          value={recipientCity}
+                          onChange={(e) => setRecipientCity(e.target.value)}
+                          required 
+                          placeholder="Cidade ou localidade"
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                        />
                       </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">País</label>
-                      <select 
-                        name="recipient_country" 
-                        value={recipientCountry}
-                        onChange={(e) => setRecipientCountry(e.target.value)}
-                        required 
-                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs cursor-pointer"
-                      >
-                        <option value="PT">Portugal</option>
-                        <option value="ES">Espanha</option>
-                        <option value="FR">França</option>
-                        <option value="DE">Alemanha</option>
-                        <option value="IT">Itália</option>
-                      </select>
                     </div>
                   </div>
                 </div>

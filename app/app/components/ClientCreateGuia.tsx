@@ -17,7 +17,9 @@ import {
   AlertCircle,
   Clock,
   Sparkles,
-  Download
+  Download,
+  Loader2,
+  CheckCircle2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
@@ -35,6 +37,7 @@ import {
 } from "@/app/ops/entidades/clientes/types"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { useClientScope } from "./ClientScope"
+import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
 
 export function ClientCreateGuia() {
   const { client: currentClient } = useClientScope()
@@ -60,6 +63,19 @@ export function ClientCreateGuia() {
   // Special Services selections
   const [selectedSpecialServices, setSelectedSpecialServices] = React.useState<string[]>([])
   const [codAmount, setCodAmount] = React.useState("50.00")
+
+  // Postal code lookup
+  const [recipientCountry, setRecipientCountry] = React.useState("PT")
+
+  const postalLookup = usePostalCodeLookup({
+    country: recipientCountry,
+    onFound: (info) => {
+      setRecipientCity(info.city)
+      if (!recipientAddress && info.street) {
+        setRecipientAddress(`${info.street}, nº `)
+      }
+    }
+  })
 
   // Generation feedback & session history
   const [generatedGuia, setGeneratedGuia] = React.useState<string | null>(null)
@@ -471,22 +487,44 @@ export function ClientCreateGuia() {
               <div className="text-[11px] text-slate-500 leading-relaxed">{senderAddress}</div>
             </div>
 
-            {/* Destinatário Name */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-700">Nome do Destinatário *</label>
-              <input 
-                id="field-recipient-name"
-                type="text" 
-                required
-                placeholder="Ex: Comercial Lisboa Lda ou Maria Fernandes" 
-                value={recipientName}
-                onChange={(e) => { setRecipientName(e.target.value); if (fieldError === "name") setFieldError(null) }}
-                className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 font-medium ${
-                  fieldError === "name" 
-                    ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400" 
-                    : "border-slate-300 focus:ring-emerald-500"
-                }`} 
-              />
+            {/* Destinatário Name & Country */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="md:col-span-2 space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">Nome do Destinatário *</label>
+                <input 
+                  id="field-recipient-name"
+                  type="text" 
+                  required
+                  placeholder="Ex: Comercial Lisboa Lda ou Maria Fernandes" 
+                  value={recipientName}
+                  onChange={(e) => { setRecipientName(e.target.value); if (fieldError === "name") setFieldError(null) }}
+                  className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 font-medium ${
+                    fieldError === "name" 
+                      ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400" 
+                      : "border-slate-300 focus:ring-emerald-500"
+                  }`} 
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">País de Destino *</label>
+                <select
+                  value={recipientCountry}
+                  onChange={(e) => {
+                    const c = e.target.value
+                    setRecipientCountry(c)
+                    setRecipientPostal("")
+                    setRecipientCity("")
+                    postalLookup.reset()
+                  }}
+                  className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                >
+                  <option value="PT">Portugal</option>
+                  <option value="ES">Espanha</option>
+                  <option value="FR">França</option>
+                  <option value="DE">Alemanha</option>
+                  <option value="IT">Itália</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -513,14 +551,35 @@ export function ClientCreateGuia() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Código Postal & Cidade</label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-700">Código Postal & Cidade</label>
+                {postalLookup.loading && (
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> A validar morada...
+                  </span>
+                )}
+                {postalLookup.status === "valid" && (
+                  <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> {postalLookup.info?.city}
+                  </span>
+                )}
+                {postalLookup.status === "invalid" && (
+                  <span className="text-[10px] text-amber-600 font-medium">
+                    Código não registado
+                  </span>
+                )}
+              </div>
               <div className="flex gap-2">
                 <input 
                   id="field-recipient-postal"
                   type="text" 
-                  placeholder="4000-001" 
+                  placeholder={recipientCountry === "ES" ? "28001" : recipientCountry === "PT" ? "4000-001" : "Código postal"} 
                   value={recipientPostal}
-                  onChange={(e) => { setRecipientPostal(e.target.value); if (fieldError === "postal") setFieldError(null) }}
+                  onChange={(e) => {
+                    const formatted = postalLookup.lookup(e.target.value, recipientCountry)
+                    setRecipientPostal(formatted)
+                    if (fieldError === "postal") setFieldError(null)
+                  }}
                   className={`w-1/2 px-2.5 py-2.5 bg-white border rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 ${
                     fieldError === "postal"
                       ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
@@ -535,6 +594,21 @@ export function ClientCreateGuia() {
                   className="w-1/2 px-2.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
                 />
               </div>
+              {postalLookup.info?.streets && postalLookup.info.streets.length > 1 && (
+                <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] text-slate-400 font-medium">Ruas:</span>
+                  {postalLookup.info.streets.slice(0, 4).map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setRecipientAddress(`${st}, nº `)}
+                      className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
