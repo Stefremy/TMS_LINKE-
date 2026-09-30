@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
+import { syncShipmentTracking } from "@/lib/services/tracking"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { 
   CTTShipmentService, 
@@ -675,182 +676,27 @@ export async function closeCttShipmentsAction(shipmentIds?: string[]) {
 }
 
 /**
- * Sincroniza o estado de tracking com os CTT e atualiza o ciclo de vida do envio
+ * Sincroniza o estado de tracking com a transportadora (CTT Expresso ou Correos Express)
+ * Mantém retrocompatibilidade total com todos os componentes da interface (UI).
  */
 export async function syncCttTrackingAction(trackingNumber: string, shipmentId?: string) {
   const ctx = await requireUser()
-  const supabase = createAdminClient()
-  
-  if (ctx.role === 'client') {
-    const { data: shipment } = await supabase
-      .from('shipments')
-      .select('client_id')
-      .or(`tracking_number.eq.${trackingNumber},carrier_tracking_number.eq.${trackingNumber},id.eq.${shipmentId || trackingNumber}`)
-      .limit(1)
-      .maybeSingle()
-    if (shipment && shipment.client_id !== ctx.client_id) {
-      return { success: false, error: 'Unauthorized' }
+  const res = await syncShipmentTracking(
+    { trackingNumber, shipmentId },
+    {
+      skipAuth: ctx.role !== "client",
+      userRole: ctx.role,
+      clientId: ctx.client_id,
     }
-  }
-  // 1. Obter dados do envio
-  let targetShipment: any = null
-  if (shipmentId) {
-    const { data } = await supabase.from("shipments").select("*").eq("id", shipmentId).single()
-    targetShipment = data
-  } else if (trackingNumber) {
-    // Pesquisar pelo numero interno Linke OU pelo numero de transportadora (CTT)
-    const { data: d1 } = await supabase.from("shipments").select("*").eq("tracking_number", trackingNumber).single()
-    if (d1) {
-      targetShipment = d1
-    } else {
-      const { data: d2 } = await supabase.from("shipments").select("*").eq("carrier_tracking_number", trackingNumber).single()
-      targetShipment = d2
-    }
-  }
-
-  // Fallback to audit_log if not found in shipments table
-  if (!targetShipment && (shipmentId || trackingNumber)) {
-    try {
-      const { data: logs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("action", "shipment_data")
-        .order("created_at", { ascending: false })
-      const found = logs?.find((l: any) => 
-        (shipmentId && l.details?.id === shipmentId) ||
-        (trackingNumber && (l.details?.tracking_number === trackingNumber || l.details?.ctt_object_id === trackingNumber))
-      )
-      if (found?.details) {
-        targetShipment = found.details
-      }
-    } catch {}
-  }
-
-  const effectiveId = targetShipment?.id || shipmentId
-  const createdAt = targetShipment?.created_at ? new Date(targetShipment.created_at) : new Date()
-  const hoursElapsed = (Date.now() - createdAt.getTime()) / (1000 * 3600)
-
-  // 2. Chamar a API real dos CTT com credenciais da BD
-  // Usar o numero de tracking do transportador (carrier_tracking_number) se existir
-  let parsedEvents: any[] = []
-  try {
-    const credentials = await getCttCredentials()
-    
-    // Se 'trackingNumber' for fornecido e não começar por LTK, assume-se que é o da transportadora.
-    let carrierTrackingNumber = targetShipment?.carrier_tracking_number || targetShipment?.ctt_object_id || targetShipment?.tracking_number || trackingNumber
-    if (carrierTrackingNumber && (carrierTrackingNumber.startsWith('LTK') || carrierTrackingNumber.startsWith('LKT'))) {
-      if (targetShipment?.carrier_tracking_number && !targetShipment.carrier_tracking_number.startsWith('LTK')) {
-        carrierTrackingNumber = targetShipment.carrier_tracking_number
-      } else if (targetShipment?.ctt_object_id && !targetShipment.ctt_object_id.startsWith('LTK')) {
-        carrierTrackingNumber = targetShipment.ctt_object_id
-      }
-    }
-    if (carrierTrackingNumber === 'LTK7D7B1884' || trackingNumber === 'LTK7D7B1884') {
-      carrierTrackingNumber = 'EQ418727568PT'
-    }
-    
-    const provider = new CttProvider()
-    await provider.initialize(credentials)
-    
-    const trackResult = await provider.getTracking(carrierTrackingNumber)
-    
-    if (!trackResult.success || !trackResult.events || trackResult.events.length === 0) {
-      throw new Error(`A CTT não retornou nenhum evento para o tracking: ${carrierTrackingNumber}. ${trackResult.error || ""}`)
-    }
-    parsedEvents = trackResult.events
-    
-    console.log(`[CTT Sync] Recebidos ${parsedEvents.length} eventos para ${carrierTrackingNumber}`)
-  } catch (error: any) {
-    console.error("Erro ao chamar API real de tracking CTT:", error)
-    return { success: false, error: error.message }
-  }
-
-  if (!parsedEvents || parsedEvents.length === 0) {
-    return { success: true, count: 0, statusUpdated: false }
-  }
-
-  // 3. Obter o último evento (mais recente) para atualizar o status geral
-  const lastEvent = parsedEvents[parsedEvents.length - 1]
-  const newStatus = lastEvent.status
-  const eventCode = lastEvent.code || lastEvent.status
-  const eventName = lastEvent.description
-  const eventLoc = lastEvent.location || "Rede CTT Expresso"
-
-  // 3. Atualizar estado do envio na base de dados
-  if (effectiveId) {
-    try {
-      // Map status to valid DB enum: em_transito maps to entrada_rede in postgres enum
-      const dbStatus = newStatus === "em_transito" ? "entrada_rede" : newStatus
-      await supabase
-        .from("shipments")
-        .update({
-          status: dbStatus,
-          ops_substatus: eventCode.toLowerCase(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", effectiveId)
-    } catch (e: any) {
-      console.warn("Aviso ao atualizar status do envio:", e?.message)
-    }
-
-      // 4. Inserir eventos na cronologia que ainda não existam
-      let insertedCount = 0
-      try {
-        const { data: existingEvents } = await supabase
-          .from("tracking_events")
-          .select("event_code, timestamp")
-          .eq("shipment_id", effectiveId)
-
-        for (const evt of parsedEvents) {
-          // Simplificação: Assume-se que um evento é igual se tiver o mesmo código e mesma data aproximada, 
-          // ou se a API enviar um ID único, usar esse ID. Aqui usamos event_code.
-          const evtCode = evt.code || evt.status
-          const alreadyHasEvent = existingEvents?.some((e: any) => e.event_code === evtCode)
-          if (!alreadyHasEvent) {
-            await supabase.from("tracking_events").insert({
-              tenant_id: targetShipment?.tenant_id || (await getTenantId()),
-              shipment_id: effectiveId,
-              event_code: evtCode,
-              description: `${evt.description} (${evt.location || "Rede CTT"})${evt.rawEvent?.reasonText ? ` | Razão: ${evt.rawEvent.reasonText}` : ''}${evt.rawEvent?.situationText ? ` | Situação: ${evt.rawEvent.situationText}` : ''}`,
-              timestamp: evt.date || new Date().toISOString(),
-              created_at: new Date().toISOString(),
-            })
-            insertedCount++
-          }
-        }
-      } catch (e: any) {
-        console.warn("Aviso ao inserir tracking events:", e?.message)
-      }
-
-    // 5. Atualizar audit_log se existir
-    try {
-      const { data: logs } = await supabase
-        .from("audit_log")
-        .select("id, details")
-        .eq("action", "shipment_data")
-      const targetLog = logs?.find((l: any) => l.details?.id === effectiveId)
-      if (targetLog) {
-        await supabase.from("audit_log").update({
-          details: {
-            ...targetLog.details,
-            status: newStatus,
-            updated_at: new Date().toISOString(),
-          }
-        }).eq("id", targetLog.id)
-      }
-    } catch {}
-  }
+  )
 
   revalidatePath("/ops/envios")
   revalidatePath("/ops")
   revalidatePath("/app/envios")
 
-  return {
-    success: true,
-    latestStatus: newStatus,
-    event: lastEvent,
-  }
+  return res
 }
+
 
 /**
  * Agenda uma recolha junto dos CTT

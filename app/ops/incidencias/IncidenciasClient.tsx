@@ -421,7 +421,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                     className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-0 cursor-pointer"
                   />
                 </th>
-                <th className="py-3 px-4">Envio / Objeto CTT</th>
+                <th className="py-3 px-4">Envio / Nº Rastreio</th>
                 <th className="py-3 px-4">Cliente</th>
                 <th className="py-3 px-4">Destinatário & Localidade</th>
                 <th className="py-3 px-4">Motivo da Incidência</th>

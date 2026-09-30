@@ -8,7 +8,6 @@ import {
   Package, 
   PackagePlus,
   CalendarCheck, 
-  MapPin, 
   AlertTriangle, 
   Building2, 
   FileText, 
@@ -43,7 +42,6 @@ const navConfig: NavSection[] = [
       { title: "Novo Envio", href: "/ops/envios/novo", icon: PackagePlus },
       { title: "Envios", href: "/ops/envios", icon: Package },
       { title: "Recolhas", href: "/ops/envios/recolhas", icon: CalendarCheck },
-      { title: "Tracking", href: "/ops/envios/rastreabilidade", icon: MapPin },
       { title: "Incidências", href: "/ops/incidencias", icon: AlertTriangle },
     ]
   },

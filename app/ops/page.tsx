@@ -130,42 +130,90 @@ export default async function OpsDashboardPage() {
     <div className="flex flex-col gap-6">
       
       {/* Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, idx) => (
-          <div key={idx} className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 flex flex-col relative overflow-hidden shadow-2xs">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-9 h-9 rounded-md bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] border border-[rgba(18,138,71,0.1)]">
-                <stat.icon className="w-4.5 h-4.5" strokeWidth={2} />
+          <div 
+            key={idx} 
+            className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 flex flex-col justify-between shadow-2xs hover:border-[var(--border-strong)] transition-all duration-150"
+          >
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
+                {stat.label}
+              </span>
+              <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] flex items-center justify-center text-[var(--text-secondary)] border border-[var(--border-subtle)] shrink-0">
+                <stat.icon className="w-4 h-4" strokeWidth={1.75} />
               </div>
-              <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">{stat.label}</span>
             </div>
             
-            <div className="flex items-end justify-between mt-auto">
-              <span className="text-3xl font-bold text-[var(--text-primary)]">{stat.value}</span>
-              
-              <div className="flex flex-col items-end gap-1">
-                <span className="text-[11px] font-medium text-[var(--text-tertiary)]">{stat.subtext}</span>
-              </div>
+            <div className="flex items-baseline justify-between mt-auto">
+              <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
+                {stat.value}
+              </span>
+              <span className="text-[11px] font-medium text-[var(--text-tertiary)]">
+                {stat.subtext}
+              </span>
             </div>
           </div>
         ))}
       </div>
 
       {/* Breakdown Row */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: "Pendentes", value: statusCounts.pendente, color: "bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)]" },
-          { label: "Em Trânsito", value: statusCounts.em_transito, color: "bg-[var(--status-info-soft)] text-[var(--status-info)] border border-[rgba(37,99,235,0.15)]" },
-          { label: "Em Distrib.", value: statusCounts.em_distribuicao, color: "bg-purple-50 text-purple-700 border border-purple-200/60" },
-          { label: "Incidências", value: statusCounts.incidencia, color: "bg-[var(--status-critical-soft)] text-[var(--status-critical)] border border-[rgba(220,38,38,0.15)]" },
-          { label: "Entregues", value: statusCounts.entregue, color: "bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.15)]" }
+          { 
+            label: "Pendentes", 
+            value: statusCounts.pendente, 
+            dot: "bg-slate-400",
+            href: "/ops/envios?search=pendente"
+          },
+          { 
+            label: "Em Trânsito", 
+            value: statusCounts.em_transito, 
+            dot: "bg-blue-500",
+            href: "/ops/envios?search=transito"
+          },
+          { 
+            label: "Em Distrib.", 
+            value: statusCounts.em_distribuicao, 
+            dot: "bg-amber-500",
+            href: "/ops/envios?search=distribuicao"
+          },
+          { 
+            label: "Incidências", 
+            value: statusCounts.incidencia, 
+            dot: statusCounts.incidencia > 0 ? "bg-rose-500 animate-pulse" : "bg-neutral-300",
+            href: "/ops/incidencias"
+          },
+          { 
+            label: "Entregues", 
+            value: statusCounts.entregue, 
+            dot: "bg-emerald-500",
+            href: "/ops/envios?search=entregue"
+          }
         ].map((s, i) => (
-          <div key={i} className={`rounded-lg p-3 flex flex-col items-center justify-center text-center ${s.color}`}>
-            <span className="text-lg font-bold">{s.value}</span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider mt-0.5 opacity-90">{s.label}</span>
-          </div>
+          <Link
+            key={i}
+            href={s.href}
+            className="group bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-3.5 flex flex-col justify-between shadow-2xs hover:border-[var(--border-strong)] hover:shadow-xs transition-all duration-150"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-[var(--text-secondary)] tracking-wide">
+                {s.label}
+              </span>
+              <span className={`w-2 h-2 rounded-full ${s.dot} shrink-0`} />
+            </div>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
+                {s.value}
+              </span>
+              <span className="text-[10px] text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity">
+                Ver &rarr;
+              </span>
+            </div>
+          </Link>
         ))}
       </div>
+
 
       {/* Table & Widgets Grid */}
       <div className="flex flex-col xl:flex-row gap-5">

@@ -2,7 +2,6 @@
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { syncCttTrackingAction } from "@/app/actions/ctt"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { calculateShipmentPrice, resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
@@ -14,6 +13,7 @@ import { resolveCttCredentials, resolveCorreosCredentials } from "@/lib/services
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
 import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId, ensureTenantAndClient } from "@/lib/services/shipments/shipment-utils"
 import { fetchShipments, fetchShipmentLabel, fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
+import { syncShipmentTracking, syncAllActiveShipmentsTracking, mapCorreosStatus } from "@/lib/services/tracking"
 
 export async function getShipmentsAction(options: { includeLabels?: boolean } = {}): Promise<any[]> {
   return fetchShipments(options)
@@ -775,6 +775,21 @@ async function loadShipmentTrackingTimeline(
   const supabase = createAdminClient()
   const events: any[] = []
 
+  // Determinar se o envio é Correos Express ou CTT
+  let isCorreos = false
+  try {
+    const { data: sRow } = await supabase
+      .from("shipments")
+      .select("carrier_code, service_type, carrier_tracking_number, tracking_number")
+      .eq("id", shipmentId)
+      .maybeSingle()
+    if (sRow) {
+      isCorreos = isCorreosShipment(sRow)
+    } else if (trackingNumber && /^\d{16}$/.test(trackingNumber.trim())) {
+      isCorreos = true
+    }
+  } catch {}
+
   // 1. Query Supabase tracking_events table by shipment_id
   try {
     const { data: dbEvents, error } = await supabase
@@ -785,45 +800,64 @@ async function loadShipmentTrackingTimeline(
 
     if (!error && dbEvents && dbEvents.length > 0) {
       dbEvents.forEach((ev: any) => {
-        const cttInfo = CTT_TRACKING_EVENTS[ev.event_code]
-        const isIncidencia = CTT_INCIDENT_CODES.has(ev.event_code)
-        events.push({
-          id: ev.id,
-          eventCode: ev.event_code || "EMA",
-          eventName: cttInfo?.description || ev.event_name || (
-            ev.event_code === "EMI" ? "Entrega Conseguida" :
-            ev.event_code === "EMZ" ? "Em Distribuição (Com o Estafeta)" :
-            ev.event_code === "EMH" ? "Entrega Não Conseguida (Incidência)" :
-            ev.event_code === "EMF" ? "Expedição Nacional" : "Aceitação CTT"
-          ),
-          description: ev.description || "Evento registado na rede CTT",
-          location: ev.location || "Rede CTT Expresso",
-          timestamp: ev.timestamp || ev.created_at,
-          tmsStatus: cttInfo?.tms_status || (
-                     ev.event_code === "EMI" ? "entregue" :
-                     ev.event_code === "EMZ" ? "em_distribuicao" :
-                     ev.event_code === "EMH" ? "incidencia" : "em_transito"),
-          isTerminal: cttInfo?.is_terminal ?? (ev.event_code === "EMI" || ev.event_code === "EMM"),
-          isIncidencia,
-        })
+        const evDesc = ev.description || ""
+        const evIsCorreos = isCorreos || evDesc.includes("Correos") || /^\d+$/.test(ev.event_code || "")
+
+        if (evIsCorreos) {
+          const mapped = mapCorreosStatus(ev.event_code, evDesc)
+          events.push({
+            id: ev.id,
+            eventCode: ev.event_code || "CORREOS",
+            eventName: ev.event_name || mapped.eventName,
+            description: evDesc || "Evento registado na rede Correos Express",
+            location: ev.location || "Rede Correos Express",
+            timestamp: ev.timestamp || ev.created_at,
+            tmsStatus: mapped.displayStatus,
+            isTerminal: mapped.isTerminal,
+            isIncidencia: mapped.isIncidencia,
+          })
+        } else {
+          const cttInfo = CTT_TRACKING_EVENTS[ev.event_code]
+          const isIncidencia = CTT_INCIDENT_CODES.has(ev.event_code)
+          events.push({
+            id: ev.id,
+            eventCode: ev.event_code || "EMA",
+            eventName: cttInfo?.description || ev.event_name || (
+              ev.event_code === "EMI" ? "Entrega Conseguida" :
+              ev.event_code === "EMZ" ? "Em Distribuição (Com o Estafeta)" :
+              ev.event_code === "EMH" ? "Entrega Não Conseguida (Incidência)" :
+              ev.event_code === "EMF" ? "Expedição Nacional" : "Aceitação CTT"
+            ),
+            description: evDesc || "Evento registado na rede CTT",
+            location: ev.location || "Rede CTT Expresso",
+            timestamp: ev.timestamp || ev.created_at,
+            tmsStatus: cttInfo?.tms_status || (
+                       ev.event_code === "EMI" ? "entregue" :
+                       ev.event_code === "EMZ" ? "em_distribuicao" :
+                       ev.event_code === "EMH" ? "incidencia" : "em_transito"),
+            isTerminal: cttInfo?.is_terminal ?? (ev.event_code === "EMI" || ev.event_code === "EMM"),
+            isIncidencia,
+          })
+        }
       })
     }
   } catch (err: any) {
     console.warn("Could not load tracking_events from table:", err?.message)
   }
 
-  // 1b. Se não encontrou eventos pelo shipment_id, tenta pelo carrier_tracking_number (EQ...)
-  //     Útil quando o envio no audit_log tem um ID diferente do que está na tabela shipments.
+  // 1b. Se não encontrou eventos pelo shipment_id, tenta pelo carrier_tracking_number (EQ... ou 16 dígitos)
   if (events.length === 0 && trackingNumber) {
     try {
-      // Encontrar o shipment real pelo carrier_tracking_number OU tracking_number (LTK)
       const { data: linkedShipments } = await supabase
         .from("shipments")
-        .select("id")
+        .select("id, carrier_code, service_type")
         .or(`carrier_tracking_number.eq.${trackingNumber},tracking_number.eq.${trackingNumber}`)
 
       if (linkedShipments && linkedShipments.length > 0) {
-        const linkedId = linkedShipments[0].id
+        const linkedShipment = linkedShipments[0]
+        const linkedId = linkedShipment.id
+        const linkedIsCorreos = isCorreosShipment(linkedShipment) || /^\d{16}$/.test(trackingNumber.trim())
+
         const { data: linkedEvents, error: evtErr } = await supabase
           .from("tracking_events")
           .select("*")
@@ -832,27 +866,45 @@ async function loadShipmentTrackingTimeline(
 
         if (!evtErr && linkedEvents && linkedEvents.length > 0) {
           linkedEvents.forEach((ev: any) => {
-            const cttInfo = CTT_TRACKING_EVENTS[ev.event_code]
-            const isIncidencia = CTT_INCIDENT_CODES.has(ev.event_code)
-            events.push({
-              id: ev.id,
-              eventCode: ev.event_code || "EMA",
-              eventName: cttInfo?.description || ev.event_name || (
-                ev.event_code === "EMI" ? "Entrega Conseguida" :
-                ev.event_code === "EMZ" ? "Em Distribuição (Com o Estafeta)" :
-                ev.event_code === "EMH" ? "Entrega Não Conseguida (Incidência)" :
-                ev.event_code === "EMF" ? "Expedição Nacional" : "Aceitação CTT"
-              ),
-              description: ev.description || "Evento registado na rede CTT",
-              location: ev.location || "Rede CTT Expresso",
-              timestamp: ev.timestamp || ev.created_at,
-              tmsStatus: cttInfo?.tms_status || (
-                         ev.event_code === "EMI" ? "entregue" :
-                         ev.event_code === "EMZ" ? "em_distribuicao" :
-                         ev.event_code === "EMH" ? "incidencia" : "em_transito"),
-              isTerminal: cttInfo?.is_terminal ?? (ev.event_code === "EMI" || ev.event_code === "EMM"),
-              isIncidencia,
-            })
+            const evDesc = ev.description || ""
+            const evIsCorreos = linkedIsCorreos || evDesc.includes("Correos") || /^\d+$/.test(ev.event_code || "")
+
+            if (evIsCorreos) {
+              const mapped = mapCorreosStatus(ev.event_code, evDesc)
+              events.push({
+                id: ev.id,
+                eventCode: ev.event_code || "CORREOS",
+                eventName: ev.event_name || mapped.eventName,
+                description: evDesc || "Evento registado na rede Correos Express",
+                location: ev.location || "Rede Correos Express",
+                timestamp: ev.timestamp || ev.created_at,
+                tmsStatus: mapped.displayStatus,
+                isTerminal: mapped.isTerminal,
+                isIncidencia: mapped.isIncidencia,
+              })
+            } else {
+              const cttInfo = CTT_TRACKING_EVENTS[ev.event_code]
+              const isIncidencia = CTT_INCIDENT_CODES.has(ev.event_code)
+              events.push({
+                id: ev.id,
+                eventCode: ev.event_code || "EMA",
+                eventName: cttInfo?.description || ev.event_name || (
+                  ev.event_code === "EMI" ? "Entrega Conseguida" :
+                  ev.event_code === "EMZ" ? "Em Distribuição (Com o Estafeta)" :
+                  ev.event_code === "EMH" ? "Entrega Não Conseguida (Incidência)" :
+                  ev.event_code === "EMF" ? "Expedição Nacional" : "Aceitação CTT"
+                ),
+                description: evDesc || "Evento registado na rede CTT",
+                location: ev.location || "Rede CTT Expresso",
+                timestamp: ev.timestamp || ev.created_at,
+                tmsStatus: cttInfo?.tms_status || (
+                           ev.event_code === "EMI" ? "entregue" :
+                           ev.event_code === "EMZ" ? "em_distribuicao" :
+                           ev.event_code === "EMH" ? "incidencia" : "em_transito"),
+                isTerminal: cttInfo?.is_terminal ?? (ev.event_code === "EMI" || ev.event_code === "EMM"),
+                isIncidencia,
+              })
+            }
           })
         }
       }
@@ -874,20 +926,36 @@ async function loadShipmentTrackingTimeline(
         auditEvents.forEach((log: any) => {
           const d = log.details || {}
           if (d.eventCode || d.status) {
-            const code = d.eventCode || (d.status === "entregue" ? "EMI" : d.status === "em_distribuicao" ? "EMZ" : "EMA")
-            const cttInfo = CTT_TRACKING_EVENTS[code]
-            const isIncidencia = CTT_INCIDENT_CODES.has(code)
-            events.push({
-              id: log.id,
-              eventCode: code,
-              eventName: cttInfo?.description || d.eventName || (isIncidencia ? "Incidência de Entrega" : "Atualização de Estado"),
-              description: d.description || (d.reasonDesc ? `Razão: ${d.reasonDesc}` : "Evento registado"),
-              location: d.location || "Rede CTT Expresso",
-              timestamp: d.timestamp || log.created_at,
-              tmsStatus: cttInfo?.tms_status || d.status || "em_transito",
-              isTerminal: cttInfo?.is_terminal || false,
-              isIncidencia: Boolean(isIncidencia),
-            })
+            const evIsCorreos = isCorreos || (d.carrierCode === "correos") || (d.carrier === "correos")
+            if (evIsCorreos) {
+              const mapped = mapCorreosStatus(d.eventCode, d.description || d.eventName)
+              events.push({
+                id: log.id,
+                eventCode: d.eventCode || "CORREOS",
+                eventName: d.eventName || mapped.eventName,
+                description: d.description || "Evento registado",
+                location: d.location || "Rede Correos Express",
+                timestamp: d.timestamp || log.created_at,
+                tmsStatus: mapped.displayStatus || d.status || "em_transito",
+                isTerminal: mapped.isTerminal,
+                isIncidencia: Boolean(mapped.isIncidencia),
+              })
+            } else {
+              const code = d.eventCode || (d.status === "entregue" ? "EMI" : d.status === "em_distribuicao" ? "EMZ" : "EMA")
+              const cttInfo = CTT_TRACKING_EVENTS[code]
+              const isIncidencia = CTT_INCIDENT_CODES.has(code)
+              events.push({
+                id: log.id,
+                eventCode: code,
+                eventName: cttInfo?.description || d.eventName || (isIncidencia ? "Incidência de Entrega" : "Atualização de Estado"),
+                description: d.description || (d.reasonDesc ? `Razão: ${d.reasonDesc}` : "Evento registado"),
+                location: d.location || "Rede CTT Expresso",
+                timestamp: d.timestamp || log.created_at,
+                tmsStatus: cttInfo?.tms_status || d.status || "em_transito",
+                isTerminal: cttInfo?.is_terminal || false,
+                isIncidencia: Boolean(isIncidencia),
+              })
+            }
           }
         })
       }
@@ -921,30 +989,41 @@ export async function getShipmentTrackingTimelineAction(shipmentId: string, trac
 }
 
 /**
- * Sincroniza todos os envios ativos em lote com as pickagens CTT
+ * Sincroniza o tracking de um envio individual (Correos Express ou CTT Expresso)
+ */
+export async function syncShipmentTrackingAction(trackingNumber: string, shipmentId?: string) {
+  const ctx = await requireUser()
+  const res = await syncShipmentTracking(
+    { trackingNumber, shipmentId },
+    {
+      skipAuth: ctx.role !== "client",
+      userRole: ctx.role,
+      clientId: ctx.client_id,
+    }
+  )
+
+  revalidatePath("/ops/envios")
+  revalidatePath("/ops")
+  revalidatePath("/app/envios")
+
+  return res
+}
+
+/**
+ * Sincroniza todos os envios ativos em lote (Correos Express e CTT Expresso)
  */
 export async function syncAllActiveShipmentsTrackingAction() {
-  
   await requireEmployee()
 
-  const allShipments = await getShipmentsAction()
-  const active = allShipments.filter((s) => s.status !== "entregue" && s.status !== "cancelado" && s.status !== "devolvido")
-  
-  let syncedCount = 0
-  for (const s of active) {
-    const trk = s.tracking_number || s.id
-    if (trk) {
-      await syncCttTrackingAction(trk, s.id)
-      syncedCount++
-    }
-  }
+  const result = await syncAllActiveShipmentsTracking({ skipAuth: false })
 
   revalidatePath("/ops/envios")
   revalidatePath("/app/envios")
   revalidatePath("/ops")
 
-  return { success: true, count: syncedCount }
+  return { success: true, count: result.count, errors: result.errors }
 }
+
 
 /**
  * Elimina um envio da base de dados e registos associados

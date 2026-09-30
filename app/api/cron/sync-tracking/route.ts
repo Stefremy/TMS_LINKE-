@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { syncAllActiveShipmentsTrackingAction } from "@/app/actions/shipments"
+import { syncAllActiveShipmentsTracking } from "@/lib/services/tracking"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 /**
- * Cron / Webhook Endpoint para sincronização contínua de tracking (CTT Expresso e transportadoras)
+ * Cron / Webhook Endpoint para sincronização contínua de tracking (CTT Expresso e Correos Express)
  * Suporta GET e POST.
  */
 export async function GET(request: Request) {
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const authHeader = request.headers.get("authorization")
     const cronSecret = process.env.CRON_SECRET
 
-    // Se CRON_SECRET estiver configurado, validar Bearer token
+    // Se CRON_SECRET estiver configurado, validar Bearer token ou query param
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       const url = new URL(request.url)
       const tokenQuery = url.searchParams.get("token")
@@ -22,12 +22,14 @@ export async function GET(request: Request) {
       }
     }
 
-    const result = await syncAllActiveShipmentsTrackingAction()
+    // Executa a sincronização com privilégios de sistema (sem exigir sessão de browser)
+    const result = await syncAllActiveShipmentsTracking({ skipAuth: true })
 
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
       syncedCount: result.count,
+      errors: result.errors?.length > 0 ? result.errors : undefined,
       message: `Sincronização de tracking concluída com sucesso para ${result.count} envio(s) ativo(s).`,
     })
   } catch (error: any) {
