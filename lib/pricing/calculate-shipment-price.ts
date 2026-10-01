@@ -30,6 +30,8 @@ export interface PriceResult {
   tableUsed: string
   /** Whether this result came from the client's specific table or a fallback */
   isFallback: boolean
+  /** True when the service explicitly blocks this destination zone */
+  isBlocked?: boolean
 }
 
 const FALLBACK_SELL_PRICE = 5.50
@@ -38,24 +40,70 @@ const DEFAULT_ZONE = "PT-CONT"
 
 /**
  * Determines the zone code from country code and postal code.
- * PT → PT-CONT (or PT-ILHAS for islands), ES → ES-PENIN, others → INTL
+ * PT -> PT-CONT (or PT-ILHAS for islands 9xxx)
+ * ES -> ES-PENIN (or ES-ILHAS for Baleares 07xxx, Canárias 35xxx/38xxx, Ceuta 51xxx, Melilla 52xxx)
+ * EU -> EU-Z1, EU-Z2, EU-Z3
+ * Others -> INTL
  */
 export function resolveZoneCode(countryCode: string = "PT", postalCode?: string): string {
-  const country = (countryCode || "PT").toUpperCase()
+  const country = (countryCode || "PT").toUpperCase().trim()
 
   if (country === "PT") {
-    // Açores (postal codes 9xxx) and Madeira (9xxx) are islands
-    if (postalCode && /^9[0-9]{3}/.test(postalCode.replace("-", ""))) {
-      return "PT-ILHAS"
+    // Açores (9500-9999) and Madeira (9000-9499)
+    if (postalCode) {
+      const clean = postalCode.replace(/\D/g, "")
+      if (/^9\d{3}/.test(clean)) {
+        return "PT-ILHAS"
+      }
     }
     return "PT-CONT"
   }
 
-  if (country === "ES") return "ES-PENIN"
-  if (["FR", "DE", "IT", "NL", "BE", "LU"].includes(country)) return "EU-Z1"
-  if (["PL", "CZ", "AT", "HU", "RO", "SK", "SI"].includes(country)) return "EU-Z2"
-  if (["SE", "DK", "FI", "NO", "GR", "HR", "BG"].includes(country)) return "EU-Z3"
+  if (country === "ES") {
+    // Baleares (07xxx), Las Palmas (35xxx), Santa Cruz de Tenerife (38xxx), Ceuta (51xxx), Melilla (52xxx)
+    if (postalCode) {
+      const clean = postalCode.replace(/\D/g, "").padStart(5, "0")
+      if (/^(07|35|38|51|52)/.test(clean)) {
+        return "ES-ILHAS"
+      }
+    }
+    return "ES-PENIN"
+  }
+
+  if (["FR", "DE", "IT", "NL", "BE", "LU", "MC"].includes(country)) return "EU-Z1"
+  if (["PL", "CZ", "AT", "HU", "RO", "SK", "SI", "IE"].includes(country)) return "EU-Z2"
+  if (["SE", "DK", "FI", "NO", "GR", "HR", "BG", "EE", "LV", "LT"].includes(country)) return "EU-Z3"
+
   return "INTL"
+}
+
+/**
+ * Checks if a destination zone code is authorized by a service's allowed_zones list.
+ * If allowed_zones is empty or undefined, all zones are permitted (legacy behavior).
+ */
+export function isZoneAllowedByService(allowedZones: string[] | undefined, zoneCode: string): boolean {
+  if (!allowedZones || allowedZones.length === 0) return true
+  if (allowedZones.includes(zoneCode)) return true
+
+  // Specific allowances:
+  // INTL allowed by INTL-AERO or INTL-MAR or INTL
+  if (zoneCode === "INTL" && (allowedZones.includes("INTL-AERO") || allowedZones.includes("INTL-MAR") || allowedZones.includes("INTL"))) {
+    return true
+  }
+  // ES-ILHAS (Baleares / Canárias) allowed by INTL-MAR if maritime table
+  if (zoneCode === "ES-ILHAS" && (allowedZones.includes("ES-ILHAS") || allowedZones.includes("INTL-MAR"))) {
+    return true
+  }
+  // PT-ILHAS (Açores / Madeira) allowed by INTL-MAR if maritime table
+  if (zoneCode === "PT-ILHAS" && (allowedZones.includes("PT-ILHAS") || allowedZones.includes("INTL-MAR"))) {
+    return true
+  }
+  // EU zones allowed if INTL-AERO or INTL is enabled on table
+  if (zoneCode.startsWith("EU-") && (allowedZones.includes("INTL-AERO") || allowedZones.includes("INTL"))) {
+    return true
+  }
+
+  return false
 }
 
 /**
@@ -80,8 +128,8 @@ function findExactZone(zones: ZonePriceMatrix[], zoneCode: string): ZonePriceMat
 /**
  * Resolves which Linke service table to use for a client.
  * Priority:
- *  1. Client's `default_linke_table_id` → exact match in allServicos
- *  2. Client's `assigned_linke_profile` → first table with matching pricing_profile
+ *  1. Client's `default_linke_table_id` -> exact match in allServicos
+ *  2. Client's `assigned_linke_profile` -> first table with matching pricing_profile
  *  3. First active Standard table in allServicos
  *  4. First table in allServicos
  */
@@ -141,22 +189,48 @@ export function calculateShipmentPrice(
   const zoneCode = resolveZoneCode(recipientCountry, recipientPostal)
   const clientTable = resolveClientTable(client, allServicos)
 
-  // 1. Try to find the exact zone in the client's assigned table
-  let effectiveTable = clientTable
-  let zone = clientTable ? findExactZone(clientTable.zones, zoneCode) : null
+  // 1. Try to find the zone in the client's assigned table, verifying allowed_zones
+  let effectiveTable: ServicoLinke | null = null
+  let zone: ZonePriceMatrix | null = null
   let isDifferentTable = false
 
-  // 2. If client table doesn't have this zone (e.g. client table is Continental-only,
-  // but shipment is for Spain "ES-PENIN", Islands "PT-ILHAS", or Europe), search
-  // all active tables for one that actually has this zone configured.
+  if (clientTable && isZoneAllowedByService(clientTable.allowed_zones, zoneCode)) {
+    zone = findExactZone(clientTable.zones, zoneCode)
+    if (zone && zone.tiers && zone.tiers.length > 0) {
+      effectiveTable = clientTable
+    }
+  }
+
+  // 2. If client table doesn't cover this zone, search all active tables that allow this zone
   if ((!zone || !zone.tiers || zone.tiers.length === 0) && allServicos && allServicos.length > 0) {
     const alternativeTable = allServicos.find(
-      (s) => s.is_active !== false && s.zones?.some((z) => z.zone_code === zoneCode && z.tiers?.length > 0)
+      (s) =>
+        s.is_active !== false &&
+        isZoneAllowedByService(s.allowed_zones, zoneCode) &&
+        s.zones?.some((z) => (z.zone_code === zoneCode || (zoneCode.startsWith("EU-") && z.zone_code.startsWith("EU-"))) && z.tiers?.length > 0)
     )
     if (alternativeTable) {
       effectiveTable = alternativeTable
-      zone = findExactZone(alternativeTable.zones, zoneCode)
+      zone = findExactZone(alternativeTable.zones, zoneCode) ||
+             (zoneCode.startsWith("EU-") ? alternativeTable.zones.find((z) => z.zone_code.startsWith("EU-")) : null) || null
       isDifferentTable = true
+    }
+  }
+
+  // 3. If no allowed table found at all, check if blocked by configuration
+  if (!effectiveTable || !zone || !zone.tiers || zone.tiers.length === 0) {
+    const isExplicitlyBlocked = clientTable?.allowed_zones && clientTable.allowed_zones.length > 0 && !isZoneAllowedByService(clientTable.allowed_zones, zoneCode)
+    if (isExplicitlyBlocked) {
+      return {
+        sellPrice: 0,
+        buyPrice: 0,
+        tierLabel: `Destino Bloqueado (${zoneCode})`,
+        zoneName: zoneCode,
+        fuelSurchargeAmount: 0,
+        tableUsed: clientTable.name,
+        isFallback: false,
+        isBlocked: true,
+      }
     }
   }
 

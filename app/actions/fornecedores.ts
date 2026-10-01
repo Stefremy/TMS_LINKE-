@@ -93,7 +93,7 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
     id: "forn_lk000_1",
     code: "LK000",
     center_code: "A01",
-    short_name: "CORREIOS",
+    short_name: "CTT Correios (Postal)",
     color: "#f87171",
     legal_name: "Ctt - Correios de Portugal, S.a.",
     nif: "500077568",

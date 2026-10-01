@@ -5,7 +5,8 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { getFornecedoresAction, saveFornecedorAction } from "@/app/actions/fornecedores"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
-import { getTenantId } from "@/lib/auth/context"
+import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
+import { getTenantId, getAuthContext } from "@/lib/auth/context"
 
 const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   // ─────────────────────────────────────────────────────────────────────────
@@ -23,14 +24,16 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     pricing_profile: "Standard / Geral",
     target_client_name: "Clientes Gerais",
     discount_vs_standard_pct: 0,
-    preferred_carrier_id: "forn_lk003",
-    preferred_carrier_name: "CTT EXPRESSO",
+    preferred_carrier_id: "forn_2",
+    preferred_carrier_name: "CTT Expresso",
+    webservice_connection_id: "ctt_expresso",
     webservice_service_code: "EMSF056.01",
     transit_time_label: "24h",
     global_markup_pct: 25.0,
     fuel_surcharge_pct: 12.5,
     cod_fee_pct: 2.5,
     cod_min_fee: 2.50,
+    allowed_zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN"],
     created_at: "2026-09-01T10:00:00Z",
     zones: [
       {
@@ -87,14 +90,16 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     pricing_profile: "Standard / Geral",
     target_client_name: "Todos os Clientes",
     discount_vs_standard_pct: 0,
-    preferred_carrier_id: "forn_lk003",
-    preferred_carrier_name: "CTT EXPRESSO",
+    preferred_carrier_id: "forn_2",
+    preferred_carrier_name: "CTT Expresso",
+    webservice_connection_id: "ctt_expresso",
     webservice_service_code: "EMSF057.01",
     transit_time_label: "48h",
     global_markup_pct: 25.0,
     fuel_surcharge_pct: 12.5,
     cod_fee_pct: 2.5,
     cod_min_fee: 2.50,
+    allowed_zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN"],
     created_at: "2026-09-01T10:10:00Z",
     zones: [
       {
@@ -157,14 +162,16 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     pricing_profile: "Standard / Geral",
     target_client_name: "Todos os Clientes",
     discount_vs_standard_pct: 0,
-    preferred_carrier_id: "forn_lk003",
-    preferred_carrier_name: "CTT EXPRESSO",
+    preferred_carrier_id: "forn_2",
+    preferred_carrier_name: "CTT Expresso",
+    webservice_connection_id: "ctt_expresso",
     webservice_service_code: "ENCF008.01",
     transit_time_label: "48h",
     global_markup_pct: 25.0,
     fuel_surcharge_pct: 12.5,
     cod_fee_pct: 2.5,
     cod_min_fee: 2.50,
+    allowed_zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN"],
     created_at: "2026-09-01T10:20:00Z",
     zones: [
       {
@@ -200,14 +207,16 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     pricing_profile: "Standard / Geral",
     target_client_name: "Clientes com Grande Volume (10+ volumes/remessa)",
     discount_vs_standard_pct: 0,
-    preferred_carrier_id: "forn_lk003",
-    preferred_carrier_name: "CTT EXPRESSO",
+    preferred_carrier_id: "forn_2",
+    preferred_carrier_name: "CTT Expresso",
+    webservice_connection_id: "ctt_expresso",
     webservice_service_code: "EMSF010.01",
     transit_time_label: "24h",
     global_markup_pct: 22.0,
     fuel_surcharge_pct: 12.5,
     cod_fee_pct: 2.5,
     cod_min_fee: 2.50,
+    allowed_zones: ["PT-CONT", "ES-PENIN"],
     created_at: "2026-09-01T10:30:00Z",
     zones: [
       {
@@ -242,14 +251,16 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     pricing_profile: "Standard / Geral",
     target_client_name: "Todos os Clientes",
     discount_vs_standard_pct: 0,
-    preferred_carrier_id: "forn_lk003",
-    preferred_carrier_name: "CTT EXPRESSO",
+    preferred_carrier_id: "forn_2",
+    preferred_carrier_name: "CTT Expresso",
+    webservice_connection_id: "ctt_expresso",
     webservice_service_code: "EMSF081.01",
     transit_time_label: "3-5 dias úteis",
     global_markup_pct: 22.0,
     fuel_surcharge_pct: 15.0,
     cod_fee_pct: 0,
     cod_min_fee: 0,
+    allowed_zones: ["EU-Z1", "EU-Z2", "EU-Z3", "INTL-AERO", "INTL"],
     created_at: "2026-09-01T10:40:00Z",
     zones: [
       {
@@ -304,14 +315,16 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     pricing_profile: "E-Commerce PME",
     target_client_name: "Lojas Online & E-commerce",
     discount_vs_standard_pct: 0,
-    preferred_carrier_id: "forn_lk003",
-    preferred_carrier_name: "CTT EXPRESSO",
+    preferred_carrier_id: "forn_2",
+    preferred_carrier_name: "CTT Expresso",
+    webservice_connection_id: "ctt_expresso",
     webservice_service_code: "EMSF056.01",
     transit_time_label: "24h",
     global_markup_pct: 25.0,
     fuel_surcharge_pct: 12.5,
     cod_fee_pct: 2.5,
     cod_min_fee: 2.50,
+    allowed_zones: ["PT-CONT"],
     created_at: "2026-09-01T10:50:00Z",
     zones: [
       {
@@ -363,7 +376,12 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
       .order("created_at", { ascending: true })
 
     if (!error && data && data.length > 0) {
-      return data.filter((s: any) => !deletedIds.has(s.id))
+      return data
+        .filter((s: any) => !deletedIds.has(s.id))
+        .map((s: any) => ({
+          ...s,
+          is_primordial: isPrimordialServico(s),
+        }))
     }
   } catch {}
 
@@ -391,7 +409,12 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
 
   // 3. Converter map para array e filtrar os apagados
   const merged = Array.from(servicosMap.values())
-  return merged.filter((s) => !deletedIds.has(s.id))
+  return merged
+    .filter((s) => !deletedIds.has(s.id))
+    .map((s) => ({
+      ...s,
+      is_primordial: isPrimordialServico(s),
+    }))
 }
 
 /**
@@ -434,8 +457,8 @@ export async function saveServicoLinkeAction(
     pricing_profile: servico.pricing_profile || "Standard / Geral",
     target_client_name: servico.target_client_name || "Clientes Gerais",
     discount_vs_standard_pct: servico.discount_vs_standard_pct ?? 0,
-    preferred_carrier_id: servico.preferred_carrier_id || "forn_lk003",
-    preferred_carrier_name: servico.preferred_carrier_name || "CORREOS EXPRESS",
+    preferred_carrier_id: servico.preferred_carrier_id || "forn_2",
+    preferred_carrier_name: servico.preferred_carrier_name || "CTT Expresso",
     webservice_connection_id: servico.webservice_connection_id || undefined,
     webservice_service_code: servico.webservice_service_code || undefined,
     transit_time_label: servico.transit_time_label || "24h",
@@ -445,6 +468,9 @@ export async function saveServicoLinkeAction(
     cod_min_fee: servico.cod_min_fee ?? 2.50,
     saturday_fee: servico.saturday_fee ?? 15.0,
     return_guide_fee: servico.return_guide_fee ?? 3.5,
+    allowed_zones: servico.allowed_zones !== undefined
+      ? servico.allowed_zones
+      : (processedZones.length > 0 ? processedZones.map(z => z.zone_code) : ["PT-CONT"]),
     zones: processedZones.length > 0 ? processedZones : [
       {
         zone_code: "PT-CONT",
@@ -555,6 +581,7 @@ export async function duplicateServicoForClientAction(
     pricing_profile: targetProfile,
     target_client_name: targetClientName,
     discount_vs_standard_pct: discountPct,
+    is_primordial: false,
     zones: clonedZones,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -611,8 +638,24 @@ export async function toggleServicoLinkeStatusAction(id: string, is_active: bool
 
 /**
  * Elimina um Serviço Linke
+ * Proteção de Segurança: As tabelas base primordiais (OG) só podem ser eliminadas pelo Administrador Principal (Stefano).
  */
-export async function deleteServicoLinkeAction(id: string) {
+export async function deleteServicoLinkeAction(id: string): Promise<{ success: boolean; error?: string }> {
+  const ctx = await getAuthContext()
+  const isStefano = Boolean(
+    ctx?.user?.email?.toLowerCase().includes("stefano") ||
+    ctx?.colaborador_id === "col-stefano-001"
+  )
+
+  const isPrimordial = isPrimordialServico({ id })
+
+  if (isPrimordial && !isStefano) {
+    return {
+      success: false,
+      error: "Esta é uma Tabela Base Primordial (OG). Apenas o Administrador Principal (Stefano) tem autorização para eliminá-la.",
+    }
+  }
+
   const supabase = createAdminClient()
 
   try {

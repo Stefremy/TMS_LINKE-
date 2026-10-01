@@ -1,12 +1,23 @@
 import * as React from "react"
 import { getServicosDashboardDataAction } from "@/app/actions/servicos-linke"
+import { getAuthContext } from "@/lib/auth/context"
 import { ServicosLinkeClient } from "./components/ServicosLinkeClient"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export default async function ServicosPage() {
-  const { servicos, fornecedores, webservices } = await getServicosDashboardDataAction()
+  const [dashboardData, authCtx] = await Promise.all([
+    getServicosDashboardDataAction(),
+    getAuthContext(),
+  ])
+
+  const isStefano = Boolean(
+    authCtx?.user?.email?.toLowerCase().includes("stefano") ||
+    authCtx?.colaborador_id === "col-stefano-001"
+  )
+
+  const { servicos, fornecedores, webservices } = dashboardData
 
   return (
     <div className="min-h-[calc(100vh-8rem)]">
@@ -14,6 +25,7 @@ export default async function ServicosPage() {
         initialServicos={servicos}
         initialFornecedores={fornecedores}
         initialWebservices={webservices || []}
+        canDeletePrimordial={isStefano}
       />
     </div>
   )

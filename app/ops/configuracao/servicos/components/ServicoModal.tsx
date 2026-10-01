@@ -6,48 +6,51 @@ import {
   Save, 
   Plus, 
   Trash2, 
-  Percent, 
   Package, 
-  Layers, 
-  Sparkles,
   ShieldCheck,
   UserCheck,
-  Tag,
-  Clock,
-  ArrowDownRight,
   TrendingDown,
-  Building2,
   Globe,
-  Link2,
-  Cpu
+  Cpu,
+  MapPin,
+  CheckSquare,
+  Square,
+  AlertCircle,
+  Plane,
+  Ship
 } from "lucide-react"
+import { PortugalFlag, SpainFlag, EuFlag, DestinationBadge } from "./DestinationIcons"
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "../types"
 import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 
 // Zonas disponíveis por transportador parceiro
 const CARRIER_ZONES: Record<string, { zone_code: string; zone_name: string; flag: string }[]> = {
   default: [
-    { zone_code: "PT-CONT",  zone_name: "Portugal Continental",      flag: "🇵🇹" },
-    { zone_code: "PT-ILHAS", zone_name: "Açores & Madeira (Ilhas)",   flag: "🏝️" },
-    { zone_code: "ES-PENIN", zone_name: "Espanha Peninsular",          flag: "🇪🇸" },
-    { zone_code: "ES-ILHAS", zone_name: "Espanha — Ilhas Canárias",   flag: "🇪🇸" },
-    { zone_code: "EU-Z1",    zone_name: "Europa Zona 1 (FR/DE/IT/NL)",flag: "🇪🇺" },
-    { zone_code: "EU-Z2",    zone_name: "Europa Zona 2 (PL/CZ/AT/BE)",flag: "🇪🇺" },
-    { zone_code: "EU-Z3",    zone_name: "Europa Zona 3 (Resto Europa)",flag: "🇪🇺" },
-    { zone_code: "INTL",     zone_name: "Internacional (Resto Mundo)",flag: "🌍" },
+    { zone_code: "PT-CONT",   zone_name: "Portugal Continental",               flag: "🇵🇹" },
+    { zone_code: "PT-ILHAS",  zone_name: "Açores & Madeira (Ilhas PT)",        flag: "🏝️" },
+    { zone_code: "ES-PENIN",  zone_name: "Espanha Peninsular",                 flag: "🇪🇸" },
+    { zone_code: "ES-ILHAS",  zone_name: "Espanha — Ilhas (Canárias/Baleares)",flag: "🇪🇸" },
+    { zone_code: "EU-Z1",     zone_name: "Europa Zona 1 (FR/DE/IT/NL/BE)",    flag: "🇪🇺" },
+    { zone_code: "EU-Z2",     zone_name: "Europa Zona 2 (PL/CZ/AT/HU/RO)",   flag: "🇪🇺" },
+    { zone_code: "EU-Z3",     zone_name: "Europa Zona 3 (SE/DK/GR/HR/BG)",   flag: "🇪🇺" },
+    { zone_code: "INTL-AERO", zone_name: "Internacional Aéreo (Worldwide)",   flag: "✈️" },
+    { zone_code: "INTL-MAR",  zone_name: "Internacional Marítimo / Ilhas",    flag: "🚢" },
+    { zone_code: "INTL",      zone_name: "Internacional (Resto do Mundo)",    flag: "🌍" },
   ],
   ctt: [
-    { zone_code: "PT-CONT",  zone_name: "Portugal Continental",           flag: "🇵🇹" },
-    { zone_code: "PT-ILHAS", zone_name: "Açores & Madeira (Ilhas)",        flag: "🏝️" },
-    { zone_code: "ES-PENIN", zone_name: "Espanha Peninsular (CTT 24H ES)", flag: "🇪🇸" },
-    { zone_code: "EU-Z1",    zone_name: "Europa Clássica (CTT Europa)",    flag: "🇪🇺" },
-    { zone_code: "INTL",     zone_name: "Internacional Express (CTT)",     flag: "🌍" },
+    { zone_code: "PT-CONT",   zone_name: "Portugal Continental",              flag: "🇵🇹" },
+    { zone_code: "PT-ILHAS",  zone_name: "Açores & Madeira (Ilhas)",          flag: "🏝️" },
+    { zone_code: "ES-PENIN",  zone_name: "Espanha Peninsular (CTT 24H ES)",   flag: "🇪🇸" },
+    { zone_code: "EU-Z1",     zone_name: "Europa Clássica (CTT Europa)",      flag: "🇪🇺" },
+    { zone_code: "INTL-AERO", zone_name: "Internacional Avião Express (CTT)", flag: "✈️" },
+    { zone_code: "INTL",      zone_name: "Internacional Express (CTT)",       flag: "🌍" },
   ],
   correos: [
-    { zone_code: "PT-CONT",  zone_name: "Portugal Continental",            flag: "🇵🇹" },
-    { zone_code: "ES-PENIN", zone_name: "Espanha Peninsular (Paq Iberia)", flag: "🇪🇸" },
-    { zone_code: "ES-ILHAS", zone_name: "Espanha — Ilhas Canárias",        flag: "🇪🇸" },
-    { zone_code: "PT-ILHAS", zone_name: "Açores & Madeira (Paq Marítimo)", flag: "🏝️" },
+    { zone_code: "PT-CONT",   zone_name: "Portugal Continental",              flag: "🇵🇹" },
+    { zone_code: "PT-ILHAS",  zone_name: "Açores & Madeira (Paq Marítimo)",  flag: "🏝️" },
+    { zone_code: "ES-PENIN",  zone_name: "Espanha Peninsular (Paq Iberia)",  flag: "🇪🇸" },
+    { zone_code: "ES-ILHAS",  zone_name: "Espanha — Ilhas Canárias/Baleares",flag: "🇪🇸" },
+    { zone_code: "INTL-MAR",  zone_name: "Internacional Marítimo Correos",   flag: "🚢" },
   ],
   dpd: [
     { zone_code: "PT-CONT",  zone_name: "Portugal Continental",             flag: "🇵🇹" },
@@ -64,12 +67,13 @@ const CARRIER_ZONES: Record<string, { zone_code: string; zone_name: string; flag
     { zone_code: "EU-Z3",    zone_name: "Europa Zona 3",                    flag: "🇪🇺" },
   ],
   ups: [
-    { zone_code: "PT-CONT",  zone_name: "Portugal Continental",          flag: "🇵🇹" },
-    { zone_code: "ES-PENIN", zone_name: "Espanha Peninsular",             flag: "🇪🇸" },
-    { zone_code: "EU-Z1",    zone_name: "Europa Zona 1 (UPS Standard)",  flag: "🇪🇺" },
-    { zone_code: "EU-Z2",    zone_name: "Europa Zona 2",                 flag: "🇪🇺" },
-    { zone_code: "EU-Z3",    zone_name: "Europa Zona 3",                 flag: "🇪🇺" },
-    { zone_code: "INTL",     zone_name: "Internacional (UPS Worldwide)", flag: "🌍" },
+    { zone_code: "PT-CONT",   zone_name: "Portugal Continental",              flag: "🇵🇹" },
+    { zone_code: "ES-PENIN",  zone_name: "Espanha Peninsular",               flag: "🇪🇸" },
+    { zone_code: "EU-Z1",     zone_name: "Europa Zona 1 (UPS Standard)",     flag: "🇪🇺" },
+    { zone_code: "EU-Z2",     zone_name: "Europa Zona 2",                   flag: "🇪🇺" },
+    { zone_code: "EU-Z3",     zone_name: "Europa Zona 3",                   flag: "🇪🇺" },
+    { zone_code: "INTL-AERO", zone_name: "Internacional Aéreo (UPS Worldwide)",flag: "✈️" },
+    { zone_code: "INTL",      zone_name: "Internacional (UPS Worldwide)",   flag: "🌍" },
   ],
   vasp: [
     { zone_code: "PT-CONT",  zone_name: "Portugal Continental", flag: "🇵🇹" },
@@ -138,6 +142,7 @@ export function ServicoModal({
     fuel_surcharge_pct: 12.0,
     cod_fee_pct: 2.5,
     cod_min_fee: 2.50,
+    allowed_zones: ["PT-CONT"],
     zones: [
       {
         zone_code: "PT-CONT",
@@ -154,8 +159,50 @@ export function ServicoModal({
 
   React.useEffect(() => {
     if (initialData) {
-      setFormData(initialData)
+      // Auto-correct any legacy mismatch between carrier ID, carrier name, and subproduct
+      let carrierId = initialData.preferred_carrier_id
+      let carrierName = initialData.preferred_carrier_name
+
+      const matchedCarrier = fornecedores.find((f) => f.id === carrierId)
+      
+      const isActuallyCtt = (
+        (initialData.name && initialData.name.toLowerCase().includes("ctt")) ||
+        (initialData.preferred_carrier_name && initialData.preferred_carrier_name.toLowerCase().includes("ctt")) ||
+        (initialData.webservice_service_code && (initialData.webservice_service_code.startsWith("EM") || initialData.webservice_service_code.startsWith("EN")))
+      )
+      const isActuallyCorreos = (
+        (initialData.name && initialData.name.toLowerCase().includes("correos")) ||
+        (initialData.preferred_carrier_name && initialData.preferred_carrier_name.toLowerCase().includes("correos")) ||
+        (initialData.webservice_service_code && ["93", "63", "62"].includes(initialData.webservice_service_code))
+      )
+
+      if (isActuallyCtt && matchedCarrier && matchedCarrier.short_name.toLowerCase().includes("correos")) {
+        const cttCarrier = fornecedores.find((f) => f.id === "forn_2" || f.short_name.toLowerCase().includes("ctt"))
+        if (cttCarrier) {
+          carrierId = cttCarrier.id
+          carrierName = cttCarrier.short_name
+        }
+      } else if (isActuallyCorreos && matchedCarrier && !matchedCarrier.short_name.toLowerCase().includes("correos")) {
+        const correosCarrier = fornecedores.find((f) => f.id === "forn_lk003" || f.short_name.toLowerCase().includes("correos"))
+        if (correosCarrier) {
+          carrierId = correosCarrier.id
+          carrierName = correosCarrier.short_name
+        }
+      } else if (matchedCarrier) {
+        carrierName = matchedCarrier.short_name
+      }
+
+      const isCorreosCarrier = carrierName?.toLowerCase().includes("correos")
+      const defaultWsConn = isCorreosCarrier ? "correos_express" : "ctt_expresso"
+
+      setFormData({
+        ...initialData,
+        preferred_carrier_id: carrierId,
+        preferred_carrier_name: carrierName,
+        webservice_connection_id: initialData.webservice_connection_id || defaultWsConn,
+      })
     } else {
+      const defaultCtt = fornecedores.find(f => f.id === "forn_2" || f.short_name.toLowerCase().includes("ctt")) || fornecedores[0]
       setFormData({
         name: "",
         code: `LK-${Math.floor(100 + Math.random() * 900)}`,
@@ -166,13 +213,17 @@ export function ServicoModal({
         pricing_profile: "Standard / Geral",
         target_client_name: "Clientes Gerais (Volume Base)",
         discount_vs_standard_pct: 0,
-        preferred_carrier_id: fornecedores[0]?.id || "",
-        preferred_carrier_name: fornecedores[0]?.short_name || "CORREOS EXPRESS",
+        preferred_carrier_id: defaultCtt?.id || "",
+        preferred_carrier_name: defaultCtt?.short_name || "CTT Expresso",
+        webservice_connection_id: "ctt_expresso",
+        webservice_service_code: "EMSF056.01",
         transit_time_label: "24h",
         global_markup_pct: 20.0,
         fuel_surcharge_pct: 12.0,
         cod_fee_pct: 2.5,
         cod_min_fee: 2.50,
+        allowed_zones: ["PT-CONT"],
+        is_primordial: false,
         zones: [
           {
             zone_code: "PT-CONT",
@@ -188,11 +239,54 @@ export function ServicoModal({
 
   const handleCarrierChange = (carrierId: string) => {
     const carrier = fornecedores.find((f) => f.id === carrierId)
-    setFormData((prev) => ({
-      ...prev,
-      preferred_carrier_id: carrierId,
-      preferred_carrier_name: carrier?.short_name || prev.preferred_carrier_name || "",
-    }))
+    const carrierName = carrier?.short_name || ""
+    const isCorreos = carrierName.toLowerCase().includes("correos")
+    const isCtt = carrierName.toLowerCase().includes("ctt") || carrierName.toLowerCase().includes("correios")
+
+    setFormData((prev) => {
+      let nextWsConn = prev.webservice_connection_id
+      let nextWsCode = prev.webservice_service_code
+
+      if (isCorreos) {
+        nextWsConn = "correos_express"
+        if (!nextWsCode || nextWsCode.startsWith("EM") || nextWsCode.startsWith("EN")) {
+          nextWsCode = "93"
+        }
+      } else if (isCtt) {
+        nextWsConn = "ctt_expresso"
+        if (!nextWsCode || ["93", "63", "62"].includes(nextWsCode)) {
+          nextWsCode = "EMSF056.01"
+        }
+      }
+
+      return {
+        ...prev,
+        preferred_carrier_id: carrierId,
+        preferred_carrier_name: carrierName || prev.preferred_carrier_name || "",
+        webservice_connection_id: nextWsConn,
+        webservice_service_code: nextWsCode,
+      }
+    })
+  }
+
+  const handleWebserviceChange = (wsConnId: string) => {
+    setFormData((prev) => {
+      let nextWsCode = prev.webservice_service_code
+      if (wsConnId === "correos_express") {
+        if (!nextWsCode || nextWsCode.startsWith("EM") || nextWsCode.startsWith("EN")) {
+          nextWsCode = "93"
+        }
+      } else if (wsConnId === "ctt_expresso") {
+        if (!nextWsCode || ["93", "63", "62"].includes(nextWsCode)) {
+          nextWsCode = "EMSF056.01"
+        }
+      }
+      return {
+        ...prev,
+        webservice_connection_id: wsConnId,
+        webservice_service_code: nextWsCode,
+      }
+    })
   }
 
   const handleGlobalMarkupChange = (newMarkup: number) => {
@@ -586,98 +680,281 @@ export function ServicoModal({
           </div>
 
           {/* Section 3.5: Webservice & Automatic Label API Connection */}
-          <div className="bg-gradient-to-r from-emerald-50/70 via-slate-50 to-blue-50/40 p-4 rounded-xl border border-emerald-200/80 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold shadow-2xs">
-                  <Globe className="w-4 h-4" />
+          {(() => {
+            const currentCarrierName = formData.preferred_carrier_name || ""
+            const isCarrierCorreos = currentCarrierName.toLowerCase().includes("correos")
+            const isCarrierCtt = currentCarrierName.toLowerCase().includes("ctt") || currentCarrierName.toLowerCase().includes("correios")
+            const currentWsConn = formData.webservice_connection_id || (isCarrierCorreos ? "correos_express" : "ctt_expresso")
+            const isWsCorreos = currentWsConn === "correos_express"
+            const isWsCtt = currentWsConn === "ctt_expresso"
+            const hasCarrierMismatch = (isCarrierCorreos && isWsCtt) || (isCarrierCtt && isWsCorreos)
+
+            return (
+              <div className="bg-gradient-to-r from-emerald-50/70 via-slate-50 to-blue-50/40 p-4 rounded-xl border border-emerald-200/80 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold shadow-2xs">
+                      <Globe className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                        Integração Webservice & Emissão Automática de Guias (API)
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                          Motor de Expedição
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Ao criar envios na Área de Cliente com este serviço, o TMS chamará este Webservice para gerar a etiqueta e o tracking oficial.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
-                    Integração Webservice & Emissão Automática de Guias (API)
-                    <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                      Motor de Expedição
-                    </span>
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    Ao criar envios na Área de Cliente com este serviço, o TMS chamará este Webservice para gerar a etiqueta e o tracking oficial.
-                  </p>
+
+                {hasCarrierMismatch && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Aviso de Associação:</span> O transportador selecionado é <span className="font-semibold">{currentCarrierName}</span>, mas a conexão de API escolhida é <span className="font-semibold">{isWsCorreos ? "Correos Express" : "CTT Expresso"}</span>. Para emissão direta sem erros, garanta que o fornecedor e a API são do mesmo operador.
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Conexão Webservice / Conta de API *
+                    </label>
+                    <select
+                      value={currentWsConn}
+                      onChange={(e) => handleWebserviceChange(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500/20 shadow-2xs"
+                    >
+                      <option value="ctt_expresso">
+                        🟢 CTT Expresso API (Conexão Ativa • Linke Core){isCarrierCtt ? " (Recomendada)" : ""}
+                      </option>
+                      <option value="correos_express">
+                        🟢 Correos Express API (Conexão Ativa • Linke Core){isCarrierCorreos ? " (Recomendada)" : ""}
+                      </option>
+                      <option value="">Sem Integração API (Emissão Manual / Offline)</option>
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Atualmente configurado com a API oficial {isWsCorreos ? "Correos Express" : isWsCtt ? "CTT Expresso" : "Manual"}.
+                    </p>
+                  </div>
+
+                  <div className="bg-emerald-50/80 p-4 rounded-xl border border-emerald-200/80 shadow-2xs">
+                    <label className="block text-xs font-bold text-emerald-800 mb-1 flex items-center gap-1.5">
+                      <Cpu className="w-4 h-4" />
+                      Código Subproduto na API {isWsCorreos ? "(Correos Express)" : "(CTT Expresso)"} *
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder={isWsCorreos ? "Ex: 93 ou 63" : "Ex: EMSF056.01"}
+                        value={formData.webservice_service_code || ""}
+                        onChange={(e) => setFormData({ ...formData, webservice_service_code: e.target.value })}
+                        className="w-36 px-3 py-2 bg-white border border-emerald-300 rounded-lg text-xs font-mono font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500/20 shadow-2xs"
+                      />
+                      <select
+                        value={formData.webservice_service_code || ""}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setFormData({ ...formData, webservice_service_code: e.target.value })
+                          }
+                        }}
+                        className="flex-1 min-w-0 px-2.5 py-2 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-lg text-[11px] font-bold text-emerald-900 cursor-pointer transition-colors truncate"
+                      >
+                        <option value="">-- Escolher Preset Rápido --</option>
+                        {isWsCorreos ? (
+                          <>
+                            <optgroup label="-- Presets Correos Express --">
+                              <option value="93">93 — Correos Paq 24 (Ibérico 24h) ✅</option>
+                              <option value="63">63 — Correos E-Paq 24 (E-Commerce) ✅</option>
+                              <option value="62">62 — Correos Paq 48 / Ilhas (48h) ✅</option>
+                            </optgroup>
+                            <optgroup label="-- Presets CTT Expresso --">
+                              <option value="EMSF056.01">EMSF056.01 — CTT Para Amanhã 24H (Guia DD)</option>
+                              <option value="EMSF057.01">EMSF057.01 — CTT Em 2 Dias 48H (Guia DB)</option>
+                              <option value="ENCF008.01">ENCF008.01 — CTT Económico 48 (Guia EQ)</option>
+                              <option value="EMSF010.01">EMSF010.01 — CTT 19 Múltiplo (Guia EG)</option>
+                            </optgroup>
+                          </>
+                        ) : (
+                          <>
+                            <optgroup label="-- Presets CTT Expresso --">
+                              <option value="EMSF056.01">EMSF056.01 — CTT Para Amanhã 24H (Guia DD) ✅</option>
+                              <option value="EMSF057.01">EMSF057.01 — CTT Em 2 Dias 48H (Guia DB) ✅</option>
+                              <option value="ENCF008.01">ENCF008.01 — CTT Económico 48 (Guia EQ) ✅</option>
+                              <option value="EMSF010.01">EMSF010.01 — CTT 19 Múltiplo (Guia EG) ✅</option>
+                              <option value="EMSF021.02">EMSF021.02 — CTT Espanha Peninsular (Guia DD)</option>
+                              <option value="EMSF081.01">EMSF081.01 — CTT Internacional Avião Express</option>
+                            </optgroup>
+                            <optgroup label="-- Presets Correos Express --">
+                              <option value="93">93 — Correos Paq 24 (Ibérico 24h)</option>
+                              <option value="63">63 — Correos E-Paq 24 (E-Commerce)</option>
+                              <option value="62">62 — Correos Paq 48 / Ilhas</option>
+                            </optgroup>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                    <p className="text-[11px] font-medium text-emerald-700/80 mt-1.5 leading-snug">
+                      {isWsCorreos
+                        ? "Código do produto enviado à API Correos Express (ex: 93 para Paq 24, 63 para E-Paq 24, 62 para Ilhas)."
+                        : "Código do Subproduto enviado à API dos CTT para emitir a etiqueta (ex: EMSF056.01 para CTT 24H, ENCF008.01 para Económico 48)."}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )
+          })()}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          {/* Section 4: Allowed Destinations */}
+          <div className="bg-gradient-to-r from-blue-50/60 to-indigo-50/40 p-4 rounded-xl border border-blue-200/70 shadow-xs space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-blue-700 text-white rounded-lg">
+                <MapPin className="w-4 h-4" />
+              </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Conexão Webservice / Conta de API *
-                </label>
-                <select
-                  value={formData.webservice_connection_id || (formData.preferred_carrier_name?.toLowerCase().includes("correos") ? "correos_express" : "ctt_expresso")}
-                  onChange={(e) => setFormData({ ...formData, webservice_connection_id: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500/20 shadow-2xs"
-                >
-                  {formData.preferred_carrier_name?.toLowerCase().includes("correos") ? (
-                    <option value="correos_express">
-                      🟢 Correos Express API (Conexão Ativa • Linke Core)
-                    </option>
-                  ) : (
-                    <option value="ctt_expresso">
-                      🟢 CTT Expresso API (Conexão Ativa • Linke Core)
-                    </option>
-                  )}
-                  <option value="">Sem Integração API (Emissão Manual / Offline)</option>
-                </select>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Atualmente configurado com a API oficial {formData.preferred_carrier_name?.toLowerCase().includes("correos") ? "Correos Express" : "CTT Expresso"}.
-                </p>
-              </div>
-
-              <div className="bg-emerald-50/80 p-4 rounded-xl border border-emerald-200/80 shadow-2xs">
-                <label className="block text-xs font-bold text-emerald-800 mb-1 flex items-center gap-1.5">
-                  <Cpu className="w-4 h-4" />
-                  Código Subproduto na API (ex: {formData.preferred_carrier_name?.toLowerCase().includes("correos") ? "63 para E-Paq 24" : "EMSF056.01 para CTT 24H"}) *
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder={formData.preferred_carrier_name?.toLowerCase().includes("correos") ? "Ex: 63" : "Ex: EMSF056.01"}
-                    value={formData.webservice_service_code || ""}
-                    onChange={(e) => setFormData({ ...formData, webservice_service_code: e.target.value })}
-                    className="flex-1 px-3 py-2 bg-white border border-emerald-300 rounded-lg text-xs font-mono font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500/20 shadow-2xs"
-                  />
-                  <select
-                    value={formData.webservice_service_code || ""}
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        setFormData({ ...formData, webservice_service_code: e.target.value })
-                      }
-                    }}
-                    className="px-2.5 py-2 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-lg text-[11px] font-bold text-emerald-900 cursor-pointer transition-colors"
-                  >
-                      <option value="">-- Escolher Preset Rápido --</option>
-                      <optgroup label="-- Presets Correos Express --">
-                        <option value="93">Correos Paq 24 (93) ✅</option>
-                        <option value="63">Correos E-Paq 24 / E-Commerce (63) ✅</option>
-                        <option value="62">Correos Paq 48 / Islas (62) ✅</option>
-                      </optgroup>
-                      <optgroup label="-- Presets CTT Expresso --">
-                        <option value="EMSF056.01">CTT Para Amanhã 24H • Guia DD (EMSF056.01) ✅</option>
-                        <option value="EMSF057.01">CTT Em 2 Dias 48H • Guia DB (EMSF057.01) ✅</option>
-                        <option value="ENCF008.01">CTT Económico 48 Continente • Guia EQ (ENCF008.01) ✅</option>
-                        <option value="EMSF010.01">CTT 19 Múltiplo (10+ vol.) • Guia EG (EMSF010.01) ✅</option>
-                        <option value="EMSF021.02">CTT Espanha Peninsular • Guia DD (EMSF021.02)</option>
-                        <option value="EMSF081.01">CTT Internacional Avião Express (EMSF081.01)</option>
-                      </optgroup>
-                  </select>
-                </div>
-                <p className="text-[11px] font-medium text-emerald-700/80 mt-1.5 leading-snug">
-                  Este é o código do Subproduto enviado à API da {formData.preferred_carrier_name?.toLowerCase().includes("correos") ? "Correos Express" : "CTT"} para emitir a etiqueta. Tem de corresponder exatamente ao serviço contratado.
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Destinos Permitidos neste Serviço</h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Define para que zonas geográficas este serviço pode ser utilizado. O sistema bloqueará envios para destinos não selecionados.
                 </p>
               </div>
             </div>
+
+            {/* Quick Presets */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1 border-b border-blue-200/50 pb-2.5">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">Atalhos Rápidos:</span>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, allowed_zones: ["PT-CONT"] }))}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 rounded-md border border-slate-200 transition-colors shadow-2xs"
+              >
+                <PortugalFlag />
+                <span>Só PT Continental</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, allowed_zones: ["PT-CONT", "PT-ILHAS"] }))}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 rounded-md border border-slate-200 transition-colors shadow-2xs"
+              >
+                <PortugalFlag />
+                <span className="text-[9px] font-extrabold uppercase px-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300/60 leading-none">ILHAS</span>
+                <span>Portugal + Ilhas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, allowed_zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN", "ES-ILHAS"] }))}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold bg-white hover:bg-orange-50 text-slate-700 hover:text-orange-800 rounded-md border border-slate-200 transition-colors shadow-2xs"
+              >
+                <span className="inline-flex items-center -space-x-1">
+                  <PortugalFlag />
+                  <SpainFlag />
+                </span>
+                <span>Península & Ilhas Ibéricas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, allowed_zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN", "ES-ILHAS", "EU-Z1", "EU-Z2", "EU-Z3"] }))}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-800 rounded-md border border-slate-200 transition-colors shadow-2xs"
+              >
+                <EuFlag />
+                <span>Toda a Europa</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, allowed_zones: ["INTL-AERO", "INTL-MAR", "INTL"] }))}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-800 rounded-md border border-slate-200 transition-colors shadow-2xs"
+              >
+                <Plane className="w-3 h-3 text-sky-600 shrink-0" />
+                <Ship className="w-3 h-3 text-indigo-600 shrink-0" />
+                <span>Internacional</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, allowed_zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN", "ES-ILHAS", "EU-Z1", "EU-Z2", "EU-Z3", "INTL-AERO", "INTL-MAR", "INTL"] }))}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-md border border-emerald-300 transition-colors shadow-2xs"
+              >
+                <Globe className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Todos os Destinos</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, allowed_zones: [] }))}
+                className="px-2.5 py-1 text-[11px] font-medium bg-red-50 hover:bg-red-100 text-red-700 rounded-md border border-red-200 transition-colors ml-auto"
+              >
+                Limpar
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {([
+                { code: "PT-CONT",  label: "Portugal Continental",              group: "Nacional" },
+                { code: "PT-ILHAS", label: "Ilhas PT (Açores / Madeira)",        group: "Nacional" },
+                { code: "ES-PENIN", label: "Espanha Peninsular",                 group: "Ibérico" },
+                { code: "ES-ILHAS", label: "Ilhas Espanha (Canárias / Baleares)",group: "Ibérico" },
+                { code: "EU-Z1",    label: "Europa Z1 (FR/DE/IT/NL/BE)",        group: "Europa" },
+                { code: "EU-Z2",    label: "Europa Z2 (PL/CZ/AT/HU/RO)",       group: "Europa" },
+                { code: "EU-Z3",    label: "Europa Z3 (SE/DK/GR/HR/BG)",       group: "Europa" },
+                { code: "INTL-AERO",label: "Internacional Aéreo (Worldwide)",   group: "Internacional" },
+                { code: "INTL-MAR", label: "Internacional Marítimo / Ilhas",    group: "Internacional" },
+                { code: "INTL",     label: "Internacional (Resto do Mundo)",    group: "Internacional" },
+              ] as { code: string; label: string; group: string }[]).map((dest) => {
+                const isAllowed = (formData.allowed_zones || []).includes(dest.code)
+                const toggleZone = () => {
+                  const current = formData.allowed_zones || []
+                  const next = isAllowed
+                    ? current.filter((z) => z !== dest.code)
+                    : [...current, dest.code]
+                  setFormData((prev) => ({ ...prev, allowed_zones: next }))
+                }
+                const GROUP_ACTIVE_COLORS: Record<string, string> = {
+                  "Nacional": "bg-emerald-50/90 border-emerald-500 text-emerald-950 shadow-2xs font-semibold ring-1 ring-emerald-500/30",
+                  "Ibérico": "bg-orange-50/90 border-orange-500 text-orange-950 shadow-2xs font-semibold ring-1 ring-orange-500/30",
+                  "Europa": "bg-blue-50/90 border-blue-500 text-blue-950 shadow-2xs font-semibold ring-1 ring-blue-500/30",
+                  "Internacional": "bg-purple-50/90 border-purple-500 text-purple-950 shadow-2xs font-semibold ring-1 ring-purple-500/30",
+                }
+                const GROUP_INACTIVE_COLORS: Record<string, string> = {
+                  "Nacional": "bg-white border-slate-200 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/20",
+                  "Ibérico": "bg-white border-slate-200 text-slate-700 hover:border-orange-300 hover:bg-orange-50/20",
+                  "Europa": "bg-white border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50/20",
+                  "Internacional": "bg-white border-slate-200 text-slate-700 hover:border-purple-300 hover:bg-purple-50/20",
+                }
+                const styleClass = isAllowed
+                  ? GROUP_ACTIVE_COLORS[dest.group] || "bg-indigo-50 border-indigo-500 text-indigo-950 font-semibold"
+                  : GROUP_INACTIVE_COLORS[dest.group] || "bg-white text-slate-700"
+
+                return (
+                  <button
+                    key={dest.code}
+                    type="button"
+                    onClick={toggleZone}
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-left transition-all text-[11px] ${styleClass}`}
+                  >
+                    {isAllowed ? (
+                      <span className="w-4 h-4 rounded bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                        <CheckSquare className="w-3.5 h-3.5" />
+                      </span>
+                    ) : (
+                      <span className="w-4 h-4 rounded border border-slate-300 bg-white shrink-0" />
+                    )}
+                    <DestinationBadge code={dest.code} />
+                    <span className="leading-tight truncate">{dest.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {(formData.allowed_zones || []).length === 0 && (
+              <p className="flex items-center gap-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Nenhum destino selecionado. Este serviço não poderá ser utilizado para criar envios.</span>
+              </p>
+            )}
           </div>
 
-          {/* Section 4: Zones and Tiers Table */}
+          {/* Section 5: Zones and Tiers Table */}
           <div className="space-y-4 pt-4 border-t border-slate-100">
             <div className="flex items-center justify-between">
               <div>

@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
+import { resolveZoneCode, isZoneAllowedByService } from "@/lib/pricing/calculate-shipment-price"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { 
@@ -138,11 +139,13 @@ export function ClientCreateGuia() {
     const pricing = currentClient?.pricing || DEFAULT_CLIENT_PRICING
     const srv = activeLinkeService
     const w = parseFloat(weight) || 1.0
+    const destinationZone = resolveZoneCode(recipientCountry, recipientPostal)
+    const isAllowed = isZoneAllowedByService(srv?.allowed_zones, destinationZone)
 
     let base = 5.50
     if (srv && srv.zones && srv.zones.length > 0) {
-      const zone = srv.zones[0]
-      const origTiers = zone.tiers || []
+      const zone = srv.zones.find((z) => z.zone_code === destinationZone) || srv.zones[0]
+      const origTiers = zone?.tiers || []
       const tiers = origTiers.filter((t) => t.enabled !== false).sort((a, b) => a.weight_max - b.weight_max)
       const matchedTierIndex = tiers.findIndex((t) => w <= t.weight_max)
       const matchedTier = matchedTierIndex !== -1 ? tiers[matchedTierIndex] : tiers[tiers.length - 1]
@@ -184,9 +187,6 @@ export function ClientCreateGuia() {
             const codVal = parseFloat(codAmount) || 0
             fee = Math.max(codVal * (pct / 100), minVal)
           } else {
-            // For other percentage fees (e.g. SpecialInsurance), assume it applies to base price unless specified otherwise.
-            // But usually SpecialInsurance also requires a declared value input, which we might need to add later.
-            // For now, if no declared value, just apply min_value.
             fee = minVal
           }
         } else {
@@ -212,12 +212,17 @@ export function ClientCreateGuia() {
       specialItems: activeSpecialItems,
       discount: discountVal.toFixed(2),
       discountPct: discPct,
-      total: finalTotal.toFixed(2),
+      total: isAllowed ? finalTotal.toFixed(2) : "0.00",
+      destinationZone,
+      isBlocked: !isAllowed,
+      blockedReason: !isAllowed ? `O serviço '${srv?.name || "selecionado"}' não permite envios para ${destinationZone} (${recipientCountry}). Por favor selecione um serviço alternativo.` : null,
     }
   }, [
     currentClient,
     activeLinkeService,
     weight,
+    recipientCountry,
+    recipientPostal,
     specialFeesList,
     selectedSpecialServices,
     codAmount,
@@ -227,6 +232,11 @@ export function ClientCreateGuia() {
     e.preventDefault()
     if (!recipientName) {
       alert("Por favor indique o nome do destinatário.")
+      return
+    }
+
+    if (calculatedPrice.isBlocked) {
+      setSubmitError(calculatedPrice.blockedReason || "Este serviço não permite envios para o destino selecionado.")
       return
     }
 
@@ -249,6 +259,7 @@ export function ClientCreateGuia() {
         recipientAddress,
         recipientCity,
         recipientPostal,
+        recipientCountry,
         recipientPhone,
         recipientEmail,
         weightKg: parseFloat(weight) || 1.0,
@@ -256,6 +267,7 @@ export function ClientCreateGuia() {
         lengthCm: parseInt(lengthCm) || 0,
         widthCm: parseInt(widthCm) || 0,
         heightCm: parseInt(heightCm) || 0,
+        serviceId: activeLinkeService?.id,
         serviceName: chosenService,
         subProductId: activeLinkeService?.webservice_service_code,
         webserviceConnectionId: activeLinkeService?.webservice_connection_id,
@@ -744,16 +756,35 @@ export function ClientCreateGuia() {
               <select 
                 value={selectedServiceId}
                 onChange={(e) => setSelectedServiceId(e.target.value)}
-                className="w-full pl-3.5 pr-8 py-3 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                className={`w-full pl-3.5 pr-8 py-3 bg-white border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 cursor-pointer shadow-2xs ${
+                  calculatedPrice.isBlocked
+                    ? "border-amber-400 text-amber-900 focus:ring-amber-500 bg-amber-50/30"
+                    : "border-slate-300 text-slate-900 focus:ring-emerald-500"
+                }`}
               >
-                {availableServicos.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    [{service.category}] {service.name} — ({service.transit_time_label || "24h"})
-                  </option>
-                ))}
+                {availableServicos.map((service) => {
+                  const destZone = resolveZoneCode(recipientCountry, recipientPostal)
+                  const coversZone = isZoneAllowedByService(service.allowed_zones, destZone)
+                  return (
+                    <option key={service.id} value={service.id}>
+                      {coversZone ? "✅" : "⚠️"} [{service.category}] {service.name} — ({service.transit_time_label || "24h"}) {!coversZone ? `(Sem cobertura para ${destZone})` : ""}
+                    </option>
+                  )
+                })}
               </select>
               <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>
+
+            {calculatedPrice.isBlocked && (
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-bold">Destino não coberto por este serviço</div>
+                  <div className="text-[11px] text-amber-800 mt-0.5">{calculatedPrice.blockedReason}</div>
+                </div>
+              </div>
+            )}
+
             <p className="text-[11px] text-slate-500 pl-1">
               {activeLinkeService?.description || "Serviço expresso porta-a-porta com emissão integrada."}
             </p>

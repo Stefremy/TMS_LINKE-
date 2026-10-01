@@ -59,6 +59,12 @@ export async function createShipment(formData: FormData) {
     const matchedClient = allClients.find((c: any) => c.id === client_id) || {}
     const recipientCountry = (formData.get("recipient_country") as string) || "PT"
     const priceResult = calculateShipmentPrice(weightKg, matchedClient, allServicos, recipientCountry, recipient_zip)
+    if (priceResult.isBlocked) {
+      return {
+        success: false,
+        error: `Destino não autorizado: O serviço '${priceResult.tableUsed}' não cobre o destino ${priceResult.zoneName} (${recipientCountry}). Contacte o suporte para ativar este destino.`
+      }
+    }
     computedSellPrice = priceResult.sellPrice
     computedBuyPrice = priceResult.buyPrice
     computedFuelAmount = priceResult.fuelSurchargeAmount || 0

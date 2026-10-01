@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
-import { calculateShipmentPrice, resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
+import { calculateShipmentPrice, resolveZoneCode, isZoneAllowedByService } from "@/lib/pricing/calculate-shipment-price"
 import { getAuthContext, requireUser, requireEmployee, requireClientAccess, getTenantId } from "@/lib/auth/context"
 import { CTT_TRACKING_EVENTS, CTT_INCIDENT_CODES } from "@/lib/services/ctt/ctt-types"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
@@ -141,10 +141,12 @@ export async function emitClientGuiaAction(data: {
   recipientAddress: string
   recipientCity?: string
   recipientPostal?: string
+  recipientCountry?: string
   recipientPhone?: string
   recipientEmail?: string
   weightKg: number
   volumesCount?: number
+  serviceId?: string
   serviceName: string
   subProductId?: string
   webserviceConnectionId?: string
@@ -206,14 +208,28 @@ export async function emitClientGuiaAction(data: {
     matchedClient = allClients.find(
       (c) => c.id === finalClientId || (finalClientName && c.short_name === finalClientName)
     ) || {} as any
+    const recipientCountry = data.recipientCountry || "PT"
     const recipientPostal = data.recipientPostal || ""
+    const targetZone = resolveZoneCode(recipientCountry, recipientPostal)
+
+    // Check if user's selected service permits this zone
+    const chosenService = allServicos.find(s => (data.serviceId && s.id === data.serviceId) || s.name === data.serviceName)
+    if (chosenService && !isZoneAllowedByService(chosenService.allowed_zones, targetZone)) {
+      throw new Error(`Destino não autorizado: O serviço '${chosenService.name}' não permite envios para ${targetZone} (${recipientCountry}). Por favor selecione um serviço com cobertura para este destino.`)
+    }
+
     const priceResult = calculateShipmentPrice(
       data.weightKg || 1,
-      matchedClient,
+      chosenService ? { ...matchedClient, default_linke_table_id: chosenService.id } : matchedClient,
       allServicos,
-      "PT", // recipient country — extend later for international
+      recipientCountry,
       recipientPostal
     )
+
+    if (priceResult.isBlocked) {
+      throw new Error(`Destino bloqueado: O serviço '${priceResult.tableUsed}' não cobre o destino ${priceResult.zoneName} (${recipientCountry}).`)
+    }
+
     computedSellPrice = priceResult.sellPrice
     computedBuyPrice = priceResult.buyPrice
     computedFuelAmount = priceResult.fuelSurchargeAmount

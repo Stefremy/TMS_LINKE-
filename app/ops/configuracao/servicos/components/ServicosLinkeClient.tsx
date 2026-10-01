@@ -35,6 +35,7 @@ interface ServicosLinkeClientProps {
   initialServicos: ServicoLinke[]
   initialFornecedores: Fornecedor[]
   initialWebservices?: any[]
+  canDeletePrimordial?: boolean
 }
 
 type TabType = "subprodutos_base" | "servicos_linke" | "simulador"
@@ -43,6 +44,7 @@ export function ServicosLinkeClient({
   initialServicos,
   initialFornecedores,
   initialWebservices = [],
+  canDeletePrimordial = false,
 }: ServicosLinkeClientProps) {
   const [servicos, setServicos] = React.useState<ServicoLinke[]>(initialServicos)
   const [fornecedores] = React.useState<Fornecedor[]>(initialFornecedores)
@@ -103,9 +105,13 @@ export function ServicosLinkeClient({
   }
 
   const handleDeleteServico = async (id: string) => {
-    await deleteServicoLinkeAction(id)
+    const res = await deleteServicoLinkeAction(id)
+    if (res && res.success === false) {
+      showNotification(res.error || "Apenas o Administrador Principal (Stefano) tem autorização para eliminar tabelas base primordiais.")
+      return
+    }
     setServicos((prev) => prev.filter((s) => s.id !== id))
-    showNotification("Serviço eliminado com sucesso.")
+    showNotification("Tabela eliminada com sucesso.")
   }
 
   const handleQuickMarkupChange = async (servicoId: string, markup: number) => {
@@ -148,25 +154,24 @@ export function ServicosLinkeClient({
       
       {/* Toast Notification */}
       {notification && (
-        <div className="fixed top-5 right-5 z-50 bg-emerald-800 text-white px-4 py-2.5 rounded-xl shadow-lg flex items-center gap-2 text-xs font-semibold animate-in fade-in slide-in-from-top-4 duration-200">
-          <Sparkles className="w-4 h-4 text-emerald-300" />
+        <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-xs font-medium animate-in fade-in slide-in-from-top-4 duration-200">
           <span>{notification}</span>
         </div>
       )}
 
       {/* Main Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200/80 shadow-2xs">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-700/20">
-              <Package className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-200/80">
+              <Package className="w-4 h-4 text-slate-700" />
             </div>
             <div>
-              <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+              <h1 className="text-lg font-semibold text-slate-900 tracking-tight">
                 Serviços Linke & Gestão de Tarifários
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                Crie e edite serviços ilimitados, associe parceiros e configure preços diferenciados para clientes com maior volume de envios.
+                Configuração de tabelas base contratadas e tarifários personalizados para clientes.
               </p>
             </div>
           </div>
@@ -178,50 +183,49 @@ export function ServicosLinkeClient({
               setSelectedServicoForEdit(null)
               setIsModalOpen(true)
             }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all hover:shadow-emerald-700/20"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium shadow-2xs transition-colors"
           >
-            <Plus className="w-4 h-4" />
-            Adicionar Novo Serviço Linke
+            <Plus className="w-3.5 h-3.5" />
+            Novo Serviço
           </button>
         </div>
       </div>
 
-
       {/* Navigation Tabs Bar */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2 rounded-xl shadow-2xs">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 bg-white px-3 py-1.5 rounded-xl shadow-2xs">
         <button
           onClick={() => setActiveTab("subprodutos_base")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             activeTab === "subprodutos_base"
-              ? "bg-emerald-700 text-white shadow-sm"
+              ? "bg-slate-900 text-white shadow-2xs"
               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           }`}
         >
-          <Package className="w-4 h-4" />
+          <Package className="w-3.5 h-3.5" />
           Subprodutos por Transportadora
         </button>
 
         <button
           onClick={() => setActiveTab("servicos_linke")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             activeTab === "servicos_linke"
-              ? "bg-indigo-700 text-white shadow-sm"
+              ? "bg-slate-900 text-white shadow-2xs"
               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           }`}
         >
-          <Layers className="w-4 h-4" />
+          <Layers className="w-3.5 h-3.5" />
           Serviços Linke
         </button>
 
         <button
           onClick={() => setActiveTab("simulador")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             activeTab === "simulador"
-              ? "bg-teal-700 text-white shadow-sm"
+              ? "bg-slate-900 text-white shadow-2xs"
               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           }`}
         >
-          <Calculator className="w-4 h-4" />
+          <Calculator className="w-3.5 h-3.5" />
           Simulador de Cotação
         </button>
       </div>
@@ -233,6 +237,7 @@ export function ServicosLinkeClient({
             mode="base"
             servicos={servicos}
             fornecedores={fornecedores}
+            canDeletePrimordial={canDeletePrimordial}
             onEditServico={(servico) => {
               setSelectedServicoForEdit(servico)
               setIsModalOpen(true)
@@ -256,6 +261,7 @@ export function ServicosLinkeClient({
             mode="linke_services"
             servicos={servicos}
             fornecedores={fornecedores}
+            canDeletePrimordial={canDeletePrimordial}
             onEditServico={(servico) => {
               setSelectedServicoForEdit(servico)
               setIsModalOpen(true)
