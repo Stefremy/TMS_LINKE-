@@ -140,12 +140,8 @@ export function ClientShipmentDetailModal({
     : "Recentemente"
 
   // Resolve a etiqueta: se for ZPL cru, converte server-side via Labelary
-  // Resolve a etiqueta: se for ZPL cru, converte server-side via Labelary
   const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
-    if (!rawLabel) {
-      alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
-      return null
-    }
+    if (!rawLabel) return null
     if (rawLabel.trimStart().startsWith("^XA")) {
       const res = await convertZplToPdfAction(rawLabel)
       if (res.success && res.base64) return res.base64
@@ -155,18 +151,51 @@ export function ClientShipmentDetailModal({
     return rawLabel
   }
 
-  // 1. Imprimir Etiqueta CTT
+  const fetchLabelForShipment = async (): Promise<string | null> => {
+    let rawLabel = currentShipment?.ctt_label_base64 || currentShipment?.carrier_label_base64 || currentShipment?.labelBase64
+    if (!rawLabel) {
+      const candidates = [
+        currentShipment?.rawId,
+        currentShipment?.id,
+        currentShipment?.carrier_tracking_number,
+        carrierTracking,
+        currentShipment?.ctt_object_id,
+        currentShipment?.tracking_number,
+        tracking,
+        currentShipment?.reference
+      ].filter(Boolean) as string[]
+
+      for (const idToSearch of Array.from(new Set(candidates))) {
+        try {
+          rawLabel = await getShipmentLabelAction(idToSearch)
+          if (rawLabel) break
+        } catch {}
+      }
+    }
+    return resolveLabel(rawLabel)
+  }
+
+  // 1. Imprimir Etiqueta
   const printLabel = async () => {
-    const label = await resolveLabel(currentShipment.ctt_label_base64 || await getShipmentLabelAction(currentShipment.id))
-    if (!label) return
-    printCttLabel(label)
+    const label = await fetchLabelForShipment()
+    if (label) {
+      printCttLabel(label)
+    } else {
+      alert("Não foi possível carregar a etiqueta para este envio.")
+    }
   }
 
   // 2. Descarregar Etiqueta PDF
   const downloadLabel = async () => {
-    const label = await resolveLabel(currentShipment.ctt_label_base64 || await getShipmentLabelAction(currentShipment.id))
-    if (!label) return
-    downloadCttLabel(label, `${tracking}_Etiqueta_CTT.pdf`)
+    const label = await fetchLabelForShipment()
+    if (label) {
+      const carrier = (currentShipment?.carrier_code || currentShipment?.service_type || currentShipment?.servico || "").toLowerCase().includes("correos")
+        ? "Correos"
+        : "CTT"
+      downloadCttLabel(label, `${tracking || "envio"}_Etiqueta_${carrier}.pdf`)
+    } else {
+      alert("Não foi possível carregar a etiqueta para este envio.")
+    }
   }
 
   // Sincronizar com CTT Track & Trace API
@@ -362,29 +391,25 @@ export function ClientShipmentDetailModal({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {hasLabel ? (
-              <>
-                <button
-                  type="button"
-                  onClick={printLabel}
-                  className="px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                  title="Imprimir etiqueta CTT em nova janela"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Imprimir Etiqueta</span>
-                </button>
+            <button
+              type="button"
+              onClick={printLabel}
+              className="px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Imprimir etiqueta em nova janela"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Imprimir Etiqueta</span>
+            </button>
 
-                <button
-                  type="button"
-                  onClick={downloadLabel}
-                  className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
-                  title="Descarregar etiqueta em PDF"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Descarregar PDF</span>
-                </button>
-              </>
-            ) : null}
+            <button
+              type="button"
+              onClick={downloadLabel}
+              className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Descarregar etiqueta em PDF"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Descarregar PDF</span>
+            </button>
 
             {/* Criar Devolução */}
             <button
@@ -750,16 +775,7 @@ export function ClientShipmentDetailModal({
           {activeTab === "dados" && (
             <div className="space-y-6">
               
-              {/* Missing label warning if not available */}
-              {!hasLabel && (
-                <div className="bg-[var(--status-warning-soft)] border border-[rgba(217,119,6,0.2)] text-[var(--status-warning)] rounded-xl p-4 flex items-start gap-2.5 text-xs shadow-2xs">
-                  <AlertCircle className="w-4 h-4 text-[var(--status-warning)] shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <p className="font-bold">Este envio ainda não tem a etiqueta CTT associada no sistema.</p>
-                    <p className="opacity-90">A etiqueta é gerada exclusivamente no momento da criação do envio.</p>
-                  </div>
-                </div>
-              )}
+
 
               {/* 1. Remetente e Destinatário */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -939,27 +955,23 @@ export function ClientShipmentDetailModal({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {hasLabel ? (
-              <>
-                <button
-                  type="button"
-                  onClick={printLabel}
-                  className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Imprimir Etiqueta</span>
-                </button>
+            <button
+              type="button"
+              onClick={printLabel}
+              className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Imprimir Etiqueta</span>
+            </button>
 
-                <button
-                  type="button"
-                  onClick={downloadLabel}
-                  className="px-4 py-2 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
-                  <span>Descarregar PDF</span>
-                </button>
-              </>
-            ) : null}
+            <button
+              type="button"
+              onClick={downloadLabel}
+              className="px-4 py-2 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>Descarregar PDF</span>
+            </button>
 
             <button
               type="button"

@@ -350,25 +350,10 @@ export function ClientStoreShippingPortal() {
               </div>
             </div>
 
-            {/* Morada Destino & Peso */}
+            {/* Código Postal & Cidade, Morada Destino & Peso */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="md:col-span-2 space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700">Morada de Entrega *</label>
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="Rua, número, andar, porta..." 
-                    value={recipientAddress}
-                    onChange={(e) => setRecipientAddress(e.target.value)}
-                    className="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
-                  />
-                  <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                </div>
-              </div>
-
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700">Código Postal & Cidade</label>
+                <label className="block text-xs font-bold text-slate-700">Código Postal & Cidade *</label>
                 <div className="flex gap-2">
                   <input 
                     type="text" 
@@ -382,8 +367,23 @@ export function ClientStoreShippingPortal() {
                     placeholder="Porto" 
                     value={recipientCity}
                     onChange={(e) => setRecipientCity(e.target.value)}
-                    className="w-1/2 px-2 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                    className="w-1/2 px-2 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium" 
                   />
+                </div>
+              </div>
+
+              <div className="md:col-span-2 space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">Morada de Entrega *</label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Rua, número, andar, porta..." 
+                    value={recipientAddress}
+                    onChange={(e) => setRecipientAddress(e.target.value)}
+                    className="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                  />
+                  <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 </div>
               </div>
 

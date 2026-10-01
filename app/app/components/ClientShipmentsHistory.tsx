@@ -25,10 +25,7 @@ export function ClientShipmentsHistory() {
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
 
   const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
-    if (!rawLabel) {
-      alert("Este envio não tem etiqueta CTT. A etiqueta é gerada exclusivamente na criação do envio.")
-      return null
-    }
+    if (!rawLabel) return null
     if (rawLabel.trimStart().startsWith("^XA")) {
       const res = await convertZplToPdfAction(rawLabel)
       if (res.success && res.base64) return res.base64
@@ -38,14 +35,46 @@ export function ClientShipmentsHistory() {
     return rawLabel
   }
 
+  const fetchLabelForShipment = async (item: any, fallbackRef?: string): Promise<string | null> => {
+    let rawLabel = item?.ctt_label_base64 || item?.carrier_label_base64 || item?.labelBase64
+    if (!rawLabel) {
+      const candidates = [
+        item?.rawId,
+        item?.id,
+        item?.carrier_tracking_number,
+        item?.ctt_object_id,
+        item?.tracking_number,
+        fallbackRef,
+        item?.reference
+      ].filter(Boolean) as string[]
+
+      for (const idToSearch of Array.from(new Set(candidates))) {
+        try {
+          rawLabel = await getShipmentLabelAction(idToSearch)
+          if (rawLabel) break
+        } catch {}
+      }
+    }
+    return resolveLabel(rawLabel)
+  }
+
   const printLabel = async (envioItem: any) => {
-    const label = await resolveLabel(envioItem?.ctt_label_base64 || await getShipmentLabelAction(envioItem.id))
-    if (label) printCttLabel(label)
+    const label = await fetchLabelForShipment(envioItem)
+    if (label) {
+      printCttLabel(label)
+    } else {
+      alert("Não foi possível carregar a etiqueta para este envio.")
+    }
   }
 
   const downloadLabel = async (envioItem: any, ref: string) => {
-    const label = await resolveLabel(envioItem?.ctt_label_base64 || await getShipmentLabelAction(envioItem.id))
-    if (label) downloadCttLabel(label, `${ref}_Etiqueta_CTT.pdf`)
+    const label = await fetchLabelForShipment(envioItem, ref)
+    if (label) {
+      const carrier = (envioItem?.transportadora || envioItem?.servico || "").toLowerCase().includes("correos") ? "Correos" : "CTT"
+      downloadCttLabel(label, `${ref || "envio"}_Etiqueta_${carrier}.pdf`)
+    } else {
+      alert("Não foi possível carregar a etiqueta para este envio.")
+    }
   }
 
   React.useEffect(() => {

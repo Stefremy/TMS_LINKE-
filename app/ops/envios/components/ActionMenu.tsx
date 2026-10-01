@@ -19,7 +19,8 @@ import {
   dispatchShipmentAction, 
   deleteShipmentAction, 
   createReturnShipmentAction,
-  regenerateCttLabelAction
+  regenerateCttLabelAction,
+  getShipmentLabelAction
 } from "@/app/actions/shipments"
 import { convertZplToPdfAction, syncCttTrackingAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
@@ -76,11 +77,37 @@ export function ActionMenu({
   }
 
   const getOrFetchLabel = async (): Promise<string | null> => {
-    let rawLabel = shipment?.ctt_label_base64
+    let rawLabel = shipment?.ctt_label_base64 || shipment?.carrier_label_base64 || shipment?.labelBase64
+    
     if (!rawLabel) {
-      alert("Nenhuma etiqueta CTT disponível para este envio. A etiqueta só é gerada na criação do envio.")
+      const candidates = [
+        shipment?.rawId,
+        shipment?.id,
+        effectiveId,
+        shipment?.carrier_tracking_number,
+        shipment?.ctt_object_id,
+        shipment?.tracking_number,
+        effectiveRef,
+        shipment?.reference
+      ].filter(Boolean) as string[]
+
+      const uniqueCandidates = Array.from(new Set(candidates))
+
+      for (const idToSearch of uniqueCandidates) {
+        try {
+          rawLabel = await getShipmentLabelAction(idToSearch)
+          if (rawLabel) break
+        } catch (e) {
+          console.warn(`Falha ao procurar etiqueta para ${idToSearch}:`, e)
+        }
+      }
+    }
+
+    if (!rawLabel) {
+      alert("Não foi possível carregar a etiqueta para este envio.")
       return null
     }
+
     return resolveLabel(rawLabel)
   }
 
@@ -101,7 +128,10 @@ export function ActionMenu({
     try {
       const label = await getOrFetchLabel()
       if (label) {
-        downloadCttLabel(label, `${effectiveRef}_Etiqueta_CTT.pdf`)
+        const carrierCode = (shipment?.service_type || shipment?.carrier_name || "").toLowerCase().includes("correos")
+          ? "Correos"
+          : "CTT"
+        downloadCttLabel(label, `${effectiveRef}_Etiqueta_${carrierCode}.pdf`)
       }
     } finally {
       setIsProcessing(false)
@@ -246,7 +276,7 @@ export function ActionMenu({
               ) : (
                 <Printer className="w-4 h-4 text-emerald-600" />
               )}
-              <span>Imprimir Etiqueta CTT</span>
+              <span>Imprimir Etiqueta</span>
             </button>
 
             <button 

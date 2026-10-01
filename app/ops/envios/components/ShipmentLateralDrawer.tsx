@@ -26,7 +26,7 @@ import {
 } from "lucide-react"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
-import { getShipmentTrackingTimelineAction, regenerateCttLabelAction } from "@/app/actions/shipments"
+import { getShipmentTrackingTimelineAction, regenerateCttLabelAction, getShipmentLabelAction } from "@/app/actions/shipments"
 import { syncCttTrackingAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { Button } from "@/components/ui/button"
@@ -187,14 +187,26 @@ export function ShipmentLateralDrawer({
       let labelToDownload = shipment.ctt_label_base64
       
       if (!labelToDownload) {
-        const idToGen = shipment.rawId || shipment.id
-        const res = await regenerateCttLabelAction(idToGen)
-        if (res.success && res.labelBase64) {
-          labelToDownload = res.labelBase64
-        } else {
-          alert("Etiqueta ainda não disponível para este envio.")
-          return
+        const candidates = [
+          shipment.rawId,
+          shipment.id,
+          carrierCode !== "N/A" ? carrierCode : null,
+          shipment.tracking_number,
+          shipment.carrier_tracking_number,
+          internalRef
+        ].filter(Boolean) as string[]
+
+        for (const c of Array.from(new Set(candidates))) {
+          try {
+            labelToDownload = await getShipmentLabelAction(c)
+            if (labelToDownload) break
+          } catch {}
         }
+      }
+
+      if (!labelToDownload) {
+        alert("Não foi possível carregar a etiqueta para este envio.")
+        return
       }
 
       if (labelToDownload && labelToDownload.trimStart().startsWith("^XA")) {

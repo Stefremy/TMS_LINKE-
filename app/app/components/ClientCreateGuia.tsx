@@ -540,31 +540,11 @@ export function ClientCreateGuia() {
             </div>
           </div>
 
-          {/* Morada, Localidade, CP, Telefone e Peso */}
+          {/* Código Postal & Cidade, Morada de Entrega, e Peso Total */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-2 space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Morada de Entrega *</label>
-              <div className="relative">
-                <input 
-                  id="field-recipient-address"
-                  type="text" 
-                  required
-                  placeholder="Rua, avenida, número, andar, porta..." 
-                  value={recipientAddress}
-                  onChange={(e) => { setRecipientAddress(e.target.value); if (fieldError === "address") setFieldError(null) }}
-                  className={`w-full pl-3.5 pr-8 py-2.5 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
-                    fieldError === "address"
-                      ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
-                      : "border-slate-300 focus:ring-emerald-500"
-                  }`} 
-                />
-                <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              </div>
-            </div>
-
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-700">Código Postal & Cidade</label>
+                <label className="block text-xs font-bold text-slate-700">Código Postal & Cidade *</label>
                 {postalLookup.loading && (
                   <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
                     <Loader2 className="w-2.5 h-2.5 animate-spin" /> A validar morada...
@@ -621,6 +601,26 @@ export function ClientCreateGuia() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div className="md:col-span-2 space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">Morada de Entrega *</label>
+              <div className="relative">
+                <input 
+                  id="field-recipient-address"
+                  type="text" 
+                  required
+                  placeholder="Rua, avenida, número, andar, porta..." 
+                  value={recipientAddress}
+                  onChange={(e) => { setRecipientAddress(e.target.value); if (fieldError === "address") setFieldError(null) }}
+                  className={`w-full pl-3.5 pr-8 py-2.5 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
+                    fieldError === "address"
+                      ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
+                      : "border-slate-300 focus:ring-emerald-500"
+                  }`} 
+                />
+                <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              </div>
             </div>
 
             <div className="space-y-1.5">

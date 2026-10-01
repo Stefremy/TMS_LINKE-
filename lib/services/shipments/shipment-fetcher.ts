@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { requireUser } from "@/lib/auth/context"
 import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "./shipment-utils"
+import { applyLinkeLogoToCorreosLabel, isCorreosPdfLabel } from "@/lib/services/correos/correos-label-customizer"
+import { convertZplToPdfBase64 } from "@/lib/label-utils"
 
 /**
  * Fetches all shipments combining the DB shipments table and audit log resilience.
@@ -68,7 +70,7 @@ export async function fetchShipments(options: { includeLabels?: boolean } = {}):
             carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
             carrier_tracking_number: s.carrier_tracking_number || (isCorreos ? s.carrier_object_id : null),
             ctt_object_id: isCorreos ? null : cttCode,
-            has_label: Boolean(s.has_label || s.ctt_label_base64),
+            has_label: true,
           })
         }
       })
@@ -153,7 +155,7 @@ export async function fetchShipments(options: { includeLabels?: boolean } = {}):
                 carrier_tracking_number: carrierRef || existing.carrier_tracking_number || s.carrier_tracking_number,
                 reference: linkeRef,
                 ctt_label_base64: options.includeLabels === false ? undefined : (s.ctt_label_base64 || existing.ctt_label_base64 || s.carrier_label_base64),
-                has_label: Boolean(s.has_label || s.ctt_label_base64 || s.carrier_label_base64 || existing.has_label || existing.ctt_label_base64),
+                has_label: true,
                 ctt_object_id: isCorreos ? null : formatOrGenerateCttObjectId({ ...existing, ...s, tracking_number: carrierRef || effectiveTracking }),
               })
             } else {
@@ -161,7 +163,7 @@ export async function fetchShipments(options: { includeLabels?: boolean } = {}):
               shipmentsMap.set(key, {
                 ...s,
                 ...(options.includeLabels === false ? { ctt_label_base64: undefined, carrier_label_base64: undefined } : {}),
-                has_label: Boolean(s.has_label || s.ctt_label_base64 || s.carrier_label_base64),
+                has_label: true,
                 carrier_code: isCorreos ? "correos" : (s.carrier_code || "ctt"),
                 carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
                 carrier_tracking_number: s.carrier_tracking_number || s.carrier_object_id || (isRealTracking(s.tracking_number) ? s.tracking_number : null),
@@ -199,41 +201,113 @@ export async function fetchShipments(options: { includeLabels?: boolean } = {}):
   })
 }
 
+import { generateTransportLabelPdfBase64 } from "./transport-label-generator"
+
 /** Retrieve a label only when the user explicitly opens or prints that shipment. */
-export async function fetchShipmentLabel(shipmentId: string): Promise<string | null> {
+export async function fetchShipmentLabel(identifier: string): Promise<string | null> {
   const ctx = await requireUser()
-  if (!isValidUuid(shipmentId)) return null
+  if (!identifier) return null
 
+  const cleanId = String(identifier).trim()
   const supabase = createAdminClient()
-  const { data: labelRows, error: rpcError } = await supabase.rpc("shipment_label_by_id", { shipment_id: shipmentId })
-  if (!rpcError) {
-    const labelRow = labelRows?.[0]
-    return labelRow && (ctx.role !== "client" || labelRow.client_id === ctx.client_id) ? labelRow.label : null
+  let label: string | null = null
+  const isUuid = isValidUuid(cleanId)
+
+  // 1. Try finding in audit_log resilience (where shipment_data stores full payloads and cached labels)
+  try {
+    const { data: auditRows } = await supabase
+      .from("audit_log")
+      .select("id, details, created_at")
+      .eq("action", "shipment_data")
+      .or(
+        `details->>id.eq.${cleanId},details->>tracking_number.eq.${cleanId},details->>reference.eq.${cleanId},details->>carrier_tracking_number.eq.${cleanId},details->>ctt_object_id.eq.${cleanId},details->>carrier_object_id.eq.${cleanId}`
+      )
+      .order("created_at", { ascending: false })
+      .limit(1)
+
+    if (auditRows && auditRows.length > 0) {
+      const targetRow = auditRows[0]
+      const d = targetRow.details
+      if (d) {
+        if (ctx.role === "client" && d.client_id !== ctx.client_id) {
+          return null
+        }
+        
+        let existingLabel = d.carrier_label_base64 || d.ctt_label_base64 || d.labelBase64 || null
+        if (existingLabel) {
+          if (existingLabel.trimStart().startsWith("^XA")) {
+            existingLabel = await convertZplToPdfBase64(existingLabel)
+          }
+          if (await isCorreosPdfLabel(existingLabel)) {
+            existingLabel = await applyLinkeLogoToCorreosLabel(existingLabel)
+          }
+          return existingLabel
+        }
+
+        // If shipment exists in audit_log but has no label attached, generate and cache it
+        label = await generateTransportLabelPdfBase64(d)
+        if (label) {
+          try {
+            await supabase.from("audit_log").update({
+              details: {
+                ...d,
+                ctt_label_base64: label,
+                carrier_label_base64: label,
+                has_label: true,
+                updated_at: new Date().toISOString()
+              }
+            }).eq("id", targetRow.id)
+          } catch (e) {
+            console.warn("Could not cache generated label in audit_log:", e)
+          }
+          return label
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn("fetchShipmentLabel: audit_log query error:", err?.message)
   }
 
-  // Rollout fallback while the database migration has not been applied.
-  const { data, error } = await supabase
-    .from("audit_log")
-    .select("details")
-    .eq("action", "shipment_data")
-    .eq("details->>id", shipmentId)
-    .order("created_at", { ascending: false })
-    .limit(20)
+  // 2. Query shipments table if not found in audit_log
+  try {
+    let query = supabase.from("shipments").select("*")
+    if (isUuid) {
+      query = query.eq("id", cleanId)
+    } else {
+      query = query.or(`tracking_number.eq.${cleanId},carrier_tracking_number.eq.${cleanId}`)
+    }
+    const { data: shipment } = await query.maybeSingle()
+    if (shipment) {
+      if (ctx.role === "client" && shipment.client_id !== ctx.client_id) {
+        return null
+      }
 
-  if (error) throw new Error("Não foi possível consultar a etiqueta do envio.")
-  const details = data?.map((row: any) => row.details).find((item: any) => item?.ctt_label_base64 || item?.carrier_label_base64 || item?.labelBase64)
-  if (details) {
-    return ctx.role !== "client" || details.client_id === ctx.client_id
-      ? details.ctt_label_base64 || details.carrier_label_base64 || details.labelBase64 || null
-      : null
+      // Generate printable transport label
+      label = await generateTransportLabelPdfBase64(shipment)
+      if (label) {
+        // Save to audit_log for future instant retrieval
+        try {
+          await supabase.from("audit_log").insert({
+            tenant_id: shipment.tenant_id,
+            action: "shipment_data",
+            details: {
+              ...shipment,
+              ctt_label_base64: label,
+              carrier_label_base64: label,
+              has_label: true,
+            }
+          })
+        } catch (e) {
+          console.warn("Could not save generated label to audit_log:", e)
+        }
+        return label
+      }
+    }
+  } catch (err: any) {
+    console.warn("fetchShipmentLabel: shipments table query error:", err?.message)
   }
-  const { data: shipment } = await supabase.from("shipments")
-    .select("client_id,ctt_label_base64")
-    .eq("id", shipmentId)
-    .maybeSingle()
-  return shipment && (ctx.role !== "client" || shipment.client_id === ctx.client_id)
-    ? shipment.ctt_label_base64 || null
-    : null
+
+  return label
 }
 
 export async function fetchPaginatedShipments(options: { 
@@ -287,7 +361,7 @@ export async function fetchPaginatedShipments(options: {
       carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
       carrier_tracking_number: s.carrier_tracking_number || (isCorreos ? s.carrier_object_id : null),
       ctt_object_id: isCorreos ? null : cttCode,
-      has_label: Boolean(s.has_label || s.ctt_label_base64),
+      has_label: true,
     }
   })
 

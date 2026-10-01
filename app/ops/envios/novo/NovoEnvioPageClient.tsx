@@ -9,6 +9,7 @@ import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { Button } from "@/components/ui/button"
 import { resolveInternationalZone, OFFICIAL_LINKE_ZONES } from "@/lib/services/geo/international-zones"
+import { downloadCttLabel } from "@/lib/label-utils"
 
 export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: Cliente[], servicosLinke?: ServicoLinke[] }) {
   const [loading, setLoading] = React.useState(false)
@@ -44,6 +45,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   const [recipientAddress, setRecipientAddress] = React.useState("")
   const [recipientZip, setRecipientZip] = React.useState("")
   const [recipientCity, setRecipientCity] = React.useState("")
+  const [recipientPhone, setRecipientPhone] = React.useState("")
+  const [recipientEmail, setRecipientEmail] = React.useState("")
 
   const currentClient = clients.find(c => c.id === selectedClientId)
 
@@ -175,13 +178,18 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         recipientAddress: formData.get("recipient_address") as string,
         recipientCity: formData.get("recipient_city") as string,
         recipientPostal: formData.get("recipient_zip") as string,
+        recipientCountry: recipientCountry || "PT",
+        recipientPhone: (formData.get("recipient_phone") as string) || recipientPhone || undefined,
+        recipientEmail: (formData.get("recipient_email") as string) || recipientEmail || undefined,
         weightKg: Number(formData.get("weight_kg")) || 1,
         volumesCount: Number(formData.get("volumes")) || 1,
         lengthCm: Number(formData.get("length_cm")) || 0,
         widthCm: Number(formData.get("width_cm")) || 0,
         heightCm: Number(formData.get("height_cm")) || 0,
+        serviceId: activeLinkeService?.id,
         serviceName: activeLinkeService?.name || "Linke Expresso 24H",
         subProductId: activeLinkeService?.webservice_service_code,
+        webserviceConnectionId: activeLinkeService?.webservice_connection_id,
         calculatedPrice: estimatedTier.sell,
         selectedSpecialServices: selectedSpecialServices,
         codValue: selectedSpecialServices.includes("cod") ? codValue : undefined
@@ -207,12 +215,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       setSuccess(true)
       if ((res as any).labelBase64) {
         setTimeout(() => {
-          const link = document.createElement("a");
-          link.href = `data:application/pdf;base64,${(res as any).labelBase64}`;
-          link.download = `etiqueta_${(res as any).guia || "envio"}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          downloadCttLabel((res as any).labelBase64, `etiqueta_${(res as any).guia || "envio"}.pdf`)
         }, 150);
       }
     } catch (err: any) {
@@ -395,12 +398,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                     <button 
                       onClick={() => {
                         if (shipmentResult.labelBase64) {
-                          const link = document.createElement("a");
-                          link.href = `data:application/pdf;base64,${shipmentResult.labelBase64}`;
-                          link.download = `etiqueta_${shipmentResult.guia}.pdf`;
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
+                          downloadCttLabel(shipmentResult.labelBase64, `etiqueta_${shipmentResult.guia}.pdf`)
                         }
                       }}
                       className="h-8 px-4 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-[13px] font-bold flex items-center gap-1.5 transition-colors shadow-xs" 
@@ -549,33 +547,6 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                         className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
                       />
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Morada</label>
-                      <input 
-                        type="text" 
-                        name="sender_address" 
-                        value={senderAddress}
-                        onChange={(e) => setSenderAddress(e.target.value)}
-                        placeholder="Rua, avenida, número..."
-                        required 
-                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
-                      />
-                      {senderPostalLookup.info?.streets && senderPostalLookup.info.streets.length > 1 && (
-                        <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                          <span className="text-[9px] text-[var(--text-tertiary)] font-medium">Ruas:</span>
-                          {senderPostalLookup.info.streets.slice(0, 4).map((st) => (
-                            <button
-                              key={st}
-                              type="button"
-                              onClick={() => setSenderAddress(`${st}, nº `)}
-                              className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
-                            >
-                              {st}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
@@ -620,6 +591,33 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                           className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
                         />
                       </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Morada</label>
+                      <input 
+                        type="text" 
+                        name="sender_address" 
+                        value={senderAddress}
+                        onChange={(e) => setSenderAddress(e.target.value)}
+                        placeholder="Rua, avenida, número..."
+                        required 
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                      />
+                      {senderPostalLookup.info?.streets && senderPostalLookup.info.streets.length > 1 && (
+                        <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[9px] text-[var(--text-tertiary)] font-medium">Ruas:</span>
+                          {senderPostalLookup.info.streets.slice(0, 4).map((st) => (
+                            <button
+                              key={st}
+                              type="button"
+                              onClick={() => setSenderAddress(`${st}, nº `)}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
+                            >
+                              {st}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -762,34 +760,6 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Morada *</label>
-                      <input 
-                        type="text" 
-                        name="recipient_address" 
-                        value={recipientAddress}
-                        onChange={(e) => setRecipientAddress(e.target.value)}
-                        placeholder="Rua, avenida, número, andar..."
-                        required 
-                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
-                      />
-                      {recipientPostalLookup.info?.streets && recipientPostalLookup.info.streets.length > 1 && (
-                        <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                          <span className="text-[9px] text-[var(--text-tertiary)] font-medium">Ruas:</span>
-                          {recipientPostalLookup.info.streets.slice(0, 4).map((st) => (
-                            <button
-                              key={st}
-                              type="button"
-                              onClick={() => setRecipientAddress(`${st}, nº `)}
-                              className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
-                            >
-                              {st}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
@@ -834,6 +804,59 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                           onChange={(e) => setRecipientCity(e.target.value)}
                           required 
                           placeholder="Cidade ou localidade"
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Morada *</label>
+                      <input 
+                        type="text" 
+                        name="recipient_address" 
+                        value={recipientAddress}
+                        onChange={(e) => setRecipientAddress(e.target.value)}
+                        placeholder="Rua, avenida, número, andar..."
+                        required 
+                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                      />
+                      {recipientPostalLookup.info?.streets && recipientPostalLookup.info.streets.length > 1 && (
+                        <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[9px] text-[var(--text-tertiary)] font-medium">Ruas:</span>
+                          {recipientPostalLookup.info.streets.slice(0, 4).map((st) => (
+                            <button
+                              key={st}
+                              type="button"
+                              onClick={() => setRecipientAddress(`${st}, nº `)}
+                              className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
+                            >
+                              {st}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Telefone / Telemóvel</label>
+                        <input 
+                          type="tel" 
+                          name="recipient_phone" 
+                          placeholder="910000000" 
+                          value={recipientPhone}
+                          onChange={(e) => setRecipientPhone(e.target.value)}
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs" 
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Email (Notificação)</label>
+                        <input 
+                          type="email" 
+                          name="recipient_email" 
+                          placeholder="cliente@email.com" 
+                          value={recipientEmail}
+                          onChange={(e) => setRecipientEmail(e.target.value)}
                           className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
                         />
                       </div>

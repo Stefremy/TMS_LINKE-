@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { getAuthContext, requireEmployee, requireUser, requireAdmin, getTenantId } from "@/lib/auth/context"
 import { CorreosShipmentService, CorreosCredentials } from "@/lib/services/correos"
 import { resolveCorreosCredentials } from "@/lib/services/carriers/credentials"
+import { applyLinkeLogoToCorreosLabel } from "@/lib/services/correos/correos-label-customizer"
 
 /**
  * Guarda credenciais Correos Express na base de dados (Apenas Administradores)
@@ -184,6 +185,10 @@ export async function emitCorreosShipmentAction(shipmentInput: {
       // Inject mock label in test environment so UI testing works if sandbox returns no label
       if (!labelBase64 && creds.environment === "test") {
         labelBase64 = "JVBERi0xLjcKCjEgMCBvYmogICUgZW50cnkgcG9pbnQKPDwKICAvVHlwZSAvQ2F0YWxvZwogIC9QYWdlcyAyIDAgUgo+PgplbmRvYmoKCjIgMCBvYmoKPDwKICAvVHlwZSAvUGFnZXMKICAvTWVkaWFCb3ggWyAwIDAgNDAwIDIwMCBdCiAgL0NvdW50IDEKICAvS2lkcyBbIDMgMCBSIF0KPj4KZW5kb2JqCgozIDAgb2JqCjw8CiAgL1R5cGUgL1BhZ2UKICAvUGFyZW50IDIgMCBSCiAgL1Jlc291cmNlcyA8PAogICAgL0ZvbnQgPDwKICAgICAgL0YxIDQgMCBSCiAgICA+PgogID4+CiAgL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iagoKNCAwIG9iago8PAogIC9UeXBlIC9Gb250CiAgL1N1YnR5cGUgL1R5cGUxCiAgL0Jhc2VGb250IC9UaW1lcy1Sb21hbgo+PgplbmRvYmoKCjUgMCBvYmogICUgcGFnZSBjb250ZW50Cjw8CiAgL0xlbmd0aCA4MAo+PgpzdHJlYW0KQlQKNTAgMTAwIFRECi9GMSAyNCBUZgooRXRpcXVldGEgQ29ycmVvcyBUZXN0ZSkgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDEwIDAwMDAwIG4gCjAwMDAwMDAwNzkgMDAwMDAgbiAKMDAwMDAwMDE3MyAwMDAwMCBuIAowMDAwMDAwMzAwIDAwMDAwIG4gCjAwMDAwMDAzODggMDAwMDAgbiAKdHJhaWxlcgo8PAogIC9TaXplIDYKICAvUm9vdCAxIDAgUgo+PgpzdGFydHhyZWYKNTM2CiUlRU9GCg=="
+      }
+
+      if (labelBase64) {
+        labelBase64 = await applyLinkeLogoToCorreosLabel(labelBase64)
       }
 
       return {
