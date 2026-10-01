@@ -252,20 +252,8 @@ export function ShipmentLateralDrawer({
   // Eventos de timeline padrão se a BD não tiver eventos gravados ainda
   const effectiveTimeline = timelineEvents.length > 0 ? timelineEvents : [
     {
-      title: rawStatus === "entregue" ? "Objeto Entregue" : "Em trânsito para Centro Operacional",
-      description: rawStatus === "entregue" ? "Entrega concluída com comprovativo digital assinado." : "Viagem de linha em curso na rede CTT Expresso.",
-      timestamp: formattedCreated,
-      isCompleted: true
-    },
-    {
-      title: "Recolhido em armazém / Aceite na rede",
-      description: "Doca de triagem automática · Concluído sem anomalias.",
-      timestamp: formattedCreated,
-      isCompleted: true
-    },
-    {
-      title: "Guia e etiqueta emitidas",
-      description: `Comunicação validada • Ref ${internalRef}`,
+      title: "Informação Recebida",
+      description: `O envio foi registado. A aguardar atualização da transportadora. (Ref ${internalRef})`,
       timestamp: formattedCreated,
       isCompleted: true
     }

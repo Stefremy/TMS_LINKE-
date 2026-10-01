@@ -540,14 +540,14 @@ export function ClientCreateGuia() {
             </div>
           </div>
 
-          {/* Código Postal & Cidade, Morada de Entrega, e Peso Total */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Código Postal & Cidade, Morada de Entrega */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-700">Código Postal & Cidade *</label>
+                <label className="block text-xs font-bold text-slate-700">Código Postal *</label>
                 {postalLookup.loading && (
                   <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
-                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> A validar morada...
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" /> A validar...
                   </span>
                 )}
                 {postalLookup.status === "valid" && (
@@ -561,68 +561,72 @@ export function ClientCreateGuia() {
                   </span>
                 )}
               </div>
-              <div className="flex gap-2">
-                <input 
-                  id="field-recipient-postal"
-                  type="text" 
-                  placeholder={recipientCountry === "ES" ? "28001" : recipientCountry === "PT" ? "4000-001" : "Código postal"} 
-                  value={recipientPostal}
-                  onChange={(e) => {
-                    const formatted = postalLookup.lookup(e.target.value, recipientCountry)
-                    setRecipientPostal(formatted)
-                    if (fieldError === "postal") setFieldError(null)
-                  }}
-                  className={`w-1/2 px-2.5 py-2.5 bg-white border rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 ${
-                    fieldError === "postal"
-                      ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
-                      : "border-slate-300 focus:ring-emerald-500"
-                  }`} 
-                />
-                <input 
-                  type="text" 
-                  placeholder="Porto" 
-                  value={recipientCity}
-                  onChange={(e) => setRecipientCity(e.target.value)}
-                  className="w-1/2 px-2.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
-                />
-              </div>
-              {postalLookup.info?.streets && postalLookup.info.streets.length > 1 && (
-                <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] text-slate-400 font-medium">Ruas:</span>
-                  {postalLookup.info.streets.slice(0, 4).map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setRecipientAddress(`${st}, nº `)}
-                      className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <input 
+                id="field-recipient-postal"
+                type="text" 
+                placeholder={recipientCountry === "ES" ? "28001" : recipientCountry === "PT" ? "4000-001" : "Código postal"} 
+                value={recipientPostal}
+                onChange={(e) => {
+                  const formatted = postalLookup.lookup(e.target.value, recipientCountry)
+                  setRecipientPostal(formatted)
+                  if (fieldError === "postal") setFieldError(null)
+                }}
+                className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 ${
+                  fieldError === "postal"
+                    ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
+                    : "border-slate-300 focus:ring-emerald-500"
+                }`} 
+              />
             </div>
-
-            <div className="md:col-span-2 space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Morada de Entrega *</label>
-              <div className="relative">
-                <input 
-                  id="field-recipient-address"
-                  type="text" 
-                  required
-                  placeholder="Rua, avenida, número, andar, porta..." 
-                  value={recipientAddress}
-                  onChange={(e) => { setRecipientAddress(e.target.value); if (fieldError === "address") setFieldError(null) }}
-                  className={`w-full pl-3.5 pr-8 py-2.5 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
-                    fieldError === "address"
-                      ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
-                      : "border-slate-300 focus:ring-emerald-500"
-                  }`} 
-                />
-                <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              </div>
+            
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">Localidade / Cidade *</label>
+              <input 
+                type="text" 
+                placeholder="Ex: Porto" 
+                value={recipientCity}
+                onChange={(e) => setRecipientCity(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+              />
             </div>
+          </div>
 
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-slate-700">Morada de Entrega *</label>
+            <div className="relative">
+              <input 
+                id="field-recipient-address"
+                type="text" 
+                required
+                placeholder="Rua, avenida, número, andar, porta..." 
+                value={recipientAddress}
+                onChange={(e) => { setRecipientAddress(e.target.value); if (fieldError === "address") setFieldError(null) }}
+                className={`w-full pl-3.5 pr-8 py-2.5 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
+                  fieldError === "address"
+                    ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
+                    : "border-slate-300 focus:ring-emerald-500"
+                }`} 
+              />
+              <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            </div>
+            {postalLookup.info?.streets && postalLookup.info.streets.length > 1 && (
+              <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-slate-400 font-medium">Ruas:</span>
+                {postalLookup.info.streets.slice(0, 4).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setRecipientAddress(`${st}, nº `)}
+                    className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-slate-700">Peso Total (kg) *</label>
               <input 
