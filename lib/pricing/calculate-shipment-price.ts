@@ -70,16 +70,11 @@ function findTier(tiers: PriceTierLinke[], weightKg: number): PriceTierLinke | n
 }
 
 /**
- * Finds the best matching zone from a service's zones array.
- * Tries exact match first, then falls back to PT-CONT, then first zone.
+ * Finds the exact matching zone from a service's zones array by zone_code.
  */
-function findZone(zones: ZonePriceMatrix[], zoneCode: string): ZonePriceMatrix | null {
+function findExactZone(zones: ZonePriceMatrix[], zoneCode: string): ZonePriceMatrix | null {
   if (!zones || zones.length === 0) return null
-  return (
-    zones.find((z) => z.zone_code === zoneCode) ||
-    zones.find((z) => z.zone_code === DEFAULT_ZONE) ||
-    zones[0]
-  )
+  return zones.find((z) => z.zone_code === zoneCode) || null
 }
 
 /**
@@ -118,6 +113,14 @@ export function resolveClientTable(
   return active[0] || null
 }
 
+// Fallback baseline costs for non-continental shipments when no tariff table exists
+const ES_FALLBACK_SELL = 8.50
+const ES_FALLBACK_BUY = 5.20
+const ILHAS_FALLBACK_SELL = 12.50
+const ILHAS_FALLBACK_BUY = 7.80
+const INTL_FALLBACK_SELL = 16.00
+const INTL_FALLBACK_BUY = 10.50
+
 /**
  * Main pricing function — called server-side when creating or pricing a shipment.
  *
@@ -136,40 +139,68 @@ export function calculateShipmentPrice(
   recipientPostal?: string
 ): PriceResult {
   const zoneCode = resolveZoneCode(recipientCountry, recipientPostal)
-  const table = resolveClientTable(client, allServicos)
+  const clientTable = resolveClientTable(client, allServicos)
 
-  if (!table) {
+  // 1. Try to find the exact zone in the client's assigned table
+  let effectiveTable = clientTable
+  let zone = clientTable ? findExactZone(clientTable.zones, zoneCode) : null
+  let isDifferentTable = false
+
+  // 2. If client table doesn't have this zone (e.g. client table is Continental-only,
+  // but shipment is for Spain "ES-PENIN", Islands "PT-ILHAS", or Europe), search
+  // all active tables for one that actually has this zone configured.
+  if ((!zone || !zone.tiers || zone.tiers.length === 0) && allServicos && allServicos.length > 0) {
+    const alternativeTable = allServicos.find(
+      (s) => s.is_active !== false && s.zones?.some((z) => z.zone_code === zoneCode && z.tiers?.length > 0)
+    )
+    if (alternativeTable) {
+      effectiveTable = alternativeTable
+      zone = findExactZone(alternativeTable.zones, zoneCode)
+      isDifferentTable = true
+    }
+  }
+
+  // 3. If exact zone is found with valid tiers, calculate price
+  if (zone && zone.tiers && zone.tiers.length > 0 && effectiveTable) {
+    return calculateFromZone(zone, weightKg, effectiveTable, client, isDifferentTable)
+  }
+
+  // 4. Zone NOT found in any configured table:
+  // If mainland Portugal (PT-CONT), fallback to standard continental defaults
+  if (zoneCode === DEFAULT_ZONE) {
+    if (effectiveTable) {
+      const fallbackZone = findExactZone(effectiveTable.zones, DEFAULT_ZONE)
+      if (fallbackZone && fallbackZone.tiers?.length) {
+        return calculateFromZone(fallbackZone, weightKg, effectiveTable, client, true)
+      }
+    }
     return {
       sellPrice: FALLBACK_SELL_PRICE,
       buyPrice: FALLBACK_BUY_PRICE,
-      tierLabel: "Tabela Indisponível",
+      tierLabel: "Fallback Continental",
       zoneName: "Portugal Continental",
       fuelSurchargeAmount: 0,
-      tableUsed: "Fallback padrão",
+      tableUsed: effectiveTable?.name || "Fallback padrão",
       isFallback: true,
     }
   }
 
-  const zone = findZone(table.zones, zoneCode)
+  // 5. For Islands, Spain or International: NEVER silently charge continental prices!
+  // Return explicit, cost-covering fallback rates flagged with isFallback = true.
+  const isIsland = zoneCode === "PT-ILHAS"
+  const isSpain = zoneCode === "ES-PENIN"
+  const sellPrice = isIsland ? ILHAS_FALLBACK_SELL : isSpain ? ES_FALLBACK_SELL : INTL_FALLBACK_SELL
+  const buyPrice = isIsland ? ILHAS_FALLBACK_BUY : isSpain ? ES_FALLBACK_BUY : INTL_FALLBACK_BUY
 
-  if (!zone || !zone.tiers || zone.tiers.length === 0) {
-    // Zone not found in this table → try PT-CONT as safe fallback
-    const fallbackZone = findZone(table.zones, DEFAULT_ZONE)
-    if (!fallbackZone) {
-      return {
-        sellPrice: FALLBACK_SELL_PRICE,
-        buyPrice: FALLBACK_BUY_PRICE,
-        tierLabel: "Zona não configurada",
-        zoneName: zoneCode,
-        fuelSurchargeAmount: 0,
-        tableUsed: table.name,
-        isFallback: true,
-      }
-    }
-    return calculateFromZone(fallbackZone, weightKg, table, client, true)
+  return {
+    sellPrice,
+    buyPrice,
+    tierLabel: `Zona ${zoneCode} não configurada`,
+    zoneName: isIsland ? "Ilhas (Açores/Madeira)" : isSpain ? "Espanha Peninsular" : `Internacional (${zoneCode})`,
+    fuelSurchargeAmount: 0,
+    tableUsed: effectiveTable?.name || "Sem tabela compatível",
+    isFallback: true,
   }
-
-  return calculateFromZone(zone, weightKg, table, client, false)
 }
 
 function calculateFromZone(

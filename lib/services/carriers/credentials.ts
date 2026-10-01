@@ -63,13 +63,13 @@ export async function resolveCttCredentials(connectionId?: string): Promise<CTTC
   } catch {}
 
   return {
-    contract_number: process.env.CTT_CONTRACT_ID || "300330941",
-    client_number: process.env.CTT_CLIENT_ID || "100032458",
-    auth_id: process.env.CTT_AUTHENTICATION_ID || "1d7ad9a9-c7bb-43be-9f57-851d1baafb4b",
-    user_id: "cea67efe-b547-4be6-87a7-09d287ccf0f6",
-    distribution_channel: 99,
-    environment: "production",
-    default_subproduct: "EMSF056.01",
+    contract_number: process.env.CTT_CONTRACT_ID || "",
+    client_number: process.env.CTT_CLIENT_ID || "",
+    auth_id: process.env.CTT_AUTHENTICATION_ID || "",
+    user_id: process.env.CTT_USER_ID || undefined,
+    distribution_channel: Number(process.env.CTT_DISTRIBUTION_CHANNEL) || 99,
+    environment: (process.env.CTT_ENVIRONMENT as "qa" | "production") || "production",
+    default_subproduct: process.env.CTT_DEFAULT_SUBPRODUCT || "EMSF056.01",
   }
 }
 
@@ -124,12 +124,12 @@ export async function resolveCorreosCredentials(connectionId?: string): Promise<
     }
   } catch {}
 
-  // Fallback test credentials
+  // Safe fallback to environment variables
   return {
-    solicitante: "1",
-    codRte: "555559999",
-    user: "WS_GoLinke",
-    pass: "l3CtF",
-    environment: "test",
+    solicitante: process.env.CORREOS_SOLICITANTE || "",
+    codRte: process.env.CORREOS_COD_RTE || "",
+    user: process.env.CORREOS_USER || "",
+    pass: process.env.CORREOS_PASSWORD || "",
+    environment: (process.env.CORREOS_ENVIRONMENT as "test" | "production") || "test",
   }
 }

@@ -2,70 +2,12 @@
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
+import { getAuthContext, requireEmployee, requireUser, requireAdmin, getTenantId } from "@/lib/auth/context"
 import { CorreosShipmentService, CorreosCredentials } from "@/lib/services/correos"
+import { resolveCorreosCredentials } from "@/lib/services/carriers/credentials"
 
 /**
- * Obtém credenciais ativas da Correos Express (de carrier_connections, tenant_integrations ou .env.local)
- */
-export async function getCorreosCredentials(): Promise<CorreosCredentials> {
-  const supabase = createAdminClient()
-
-  // 1. Tentar ler de carrier_connections
-  try {
-    const { data: conn } = await supabase
-      .from("carrier_connections")
-      .select("*")
-      .eq("tenant_id", (await getTenantId()))
-      .eq("carrier_code", "correos_express")
-      .single()
-
-    if (conn) {
-      return {
-        solicitante: conn.client_id, // solicitante
-        codRte: conn.contract_number, // codRte
-        user: conn.auth_id, // user
-        pass: conn.user_id || "", // password
-        environment: (conn.environment as "test" | "production") || "production",
-      }
-    }
-  } catch {
-    // Ignorar se a tabela ainda não existir no schema cache
-  }
-
-  // 2. Tentar ler de audit_log
-  try {
-    const { data: logs } = await supabase
-      .from("audit_log")
-      .select("*")
-      .eq("action", "carrier_connection_config")
-      .order("created_at", { ascending: false })
-
-    const connLog = logs?.find((l: any) => l.details?.carrier_code === "correos_express")
-    if (connLog && connLog.details) {
-      const d = connLog.details
-      return {
-        solicitante: d.client_id,
-        codRte: d.contract_number,
-        user: d.auth_id,
-        pass: d.user_id || "",
-        environment: (d.environment as "test" | "production") || "production",
-      }
-    }
-  } catch {}
-
-  // 3. Fallback
-  return {
-    solicitante: "IP49240001",
-    codRte: "P49240001",
-    user: "WS_GoLinke",
-    pass: "l3CtF",
-    environment: "production",
-  }
-}
-
-/**
- * Guarda credenciais Correos Express na base de dados
+ * Guarda credenciais Correos Express na base de dados (Apenas Administradores)
  */
 export async function saveCorreosConnectionAction(creds: {
   solicitante: string
@@ -76,6 +18,7 @@ export async function saveCorreosConnectionAction(creds: {
   description?: string
   supplier_id?: string
 }) {
+  await requireAdmin()
   const supabase = createAdminClient()
 
   const payload = {
@@ -191,7 +134,7 @@ export async function emitCorreosShipmentAction(shipmentInput: {
   selectedSpecialServices?: string[]
 }) {
   await requireEmployee()
-  const creds = await getCorreosCredentials()
+  const creds = await resolveCorreosCredentials()
   const shipmentService = new CorreosShipmentService()
 
   try {
