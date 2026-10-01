@@ -7,6 +7,7 @@ import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
 import { getTenantId, getAuthContext } from "@/lib/auth/context"
+import { buildOfficialLinkeInternationalZones } from "@/lib/services/geo/international-zones"
 
 const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   // ─────────────────────────────────────────────────────────────────────────
@@ -243,8 +244,8 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   {
     id: "srv_linke_europa_air",
     code: "LK-EU-AIR",
-    name: "Linke Europa Aéreo (Zona 2 & Zona 3)",
-    description: "Envios internacionais para toda a Europa por via aérea. Zona 2: Europa Ocidental. Zona 3: Europa do Norte/Leste.",
+    name: "Linke International Express Exportação Aéreo",
+    description: "Tarifas oficiais de exportação aérea internacional em 8 zonas mundiais (Europa 1, 2 e 3, América do Norte, América do Sul, Oriente 1 e 2, África) válidas até 31/12/2025.",
     category: "Internacional",
     color: "#7c3aed",
     is_active: true,
@@ -255,49 +256,14 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     preferred_carrier_name: "CTT Expresso",
     webservice_connection_id: "ctt_expresso",
     webservice_service_code: "EMSF081.01",
-    transit_time_label: "3-5 dias úteis",
+    transit_time_label: "3-7 dias úteis",
     global_markup_pct: 22.0,
-    fuel_surcharge_pct: 15.0,
+    fuel_surcharge_pct: 8.5,
     cod_fee_pct: 0,
     cod_min_fee: 0,
-    allowed_zones: ["EU-Z1", "EU-Z2", "EU-Z3", "INTL-AERO", "INTL"],
+    allowed_zones: ["EU 1", "EU 2", "EU 3", "NA", "SA", "O1", "O2", "A", "EU-Z1", "EU-Z2", "EU-Z3", "INTL-AERO", "INTL"],
     created_at: "2026-09-01T10:40:00Z",
-    zones: [
-      {
-        zone_code: "EU-ZONA2",
-        zone_name: "Europa Zona 2 (Alemanha, França, Espanha, Itália...)",
-        tiers: [
-          { id: "eu2_1",   label: "Até 1 Kg",             weight_max: 1,   cost_price: 13.00, margin_pct: 22, sell_price: 15.86, delivery_time: "3-4 dias úteis", enabled: true },
-          { id: "eu2_2",   label: "Até 2 Kg",             weight_max: 2,   cost_price: 13.95, margin_pct: 22, sell_price: 17.02, delivery_time: "3-4 dias úteis", enabled: true },
-          { id: "eu2_3",   label: "Até 3 Kg",             weight_max: 3,   cost_price: 15.85, margin_pct: 22, sell_price: 19.34, delivery_time: "3-4 dias úteis", enabled: true },
-          { id: "eu2_4",   label: "Até 4 Kg",             weight_max: 4,   cost_price: 17.74, margin_pct: 22, sell_price: 21.64, delivery_time: "3-4 dias úteis", enabled: true },
-          { id: "eu2_5",   label: "Até 5 Kg",             weight_max: 5,   cost_price: 18.64, margin_pct: 22, sell_price: 22.74, delivery_time: "3-4 dias úteis", enabled: true },
-          { id: "eu2_10",  label: "Até 10 Kg",            weight_max: 10,  cost_price: 25.32, margin_pct: 22, sell_price: 30.89, delivery_time: "3-4 dias úteis", enabled: true },
-          { id: "eu2_15",  label: "Até 15 Kg",            weight_max: 15,  cost_price: 34.80, margin_pct: 22, sell_price: 42.46, delivery_time: "3-4 dias úteis", enabled: true },
-          { id: "eu2_20",  label: "Até 20 Kg",            weight_max: 20,  cost_price: 44.28, margin_pct: 22, sell_price: 54.02, delivery_time: "3-4 dias úteis", enabled: true },
-          { id: "eu2_25",  label: "Até 25 Kg",            weight_max: 25,  cost_price: 53.78, margin_pct: 22, sell_price: 65.61, delivery_time: "3-4 dias úteis", enabled: true },
-          { id: "eu2_30",  label: "Até 30 Kg",            weight_max: 30,  cost_price: 63.29, margin_pct: 22, sell_price: 77.21, delivery_time: "3-4 dias úteis", enabled: true },
-          { id: "eu2_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 2.30,  margin_pct: 22, sell_price: 2.81,  delivery_time: "3-4 dias úteis", enabled: true },
-        ],
-      },
-      {
-        zone_code: "EU-ZONA3",
-        zone_name: "Europa Zona 3 (Dinamarca, Finlândia, Noruega, Polónia, Suécia...)",
-        tiers: [
-          { id: "eu3_1",   label: "Até 1 Kg",             weight_max: 1,   cost_price: 13.95, margin_pct: 22, sell_price: 17.02, delivery_time: "4-5 dias úteis", enabled: true },
-          { id: "eu3_2",   label: "Até 2 Kg",             weight_max: 2,   cost_price: 15.31, margin_pct: 22, sell_price: 18.68, delivery_time: "4-5 dias úteis", enabled: true },
-          { id: "eu3_3",   label: "Até 3 Kg",             weight_max: 3,   cost_price: 16.23, margin_pct: 22, sell_price: 19.80, delivery_time: "4-5 dias úteis", enabled: true },
-          { id: "eu3_4",   label: "Até 4 Kg",             weight_max: 4,   cost_price: 21.15, margin_pct: 22, sell_price: 25.80, delivery_time: "4-5 dias úteis", enabled: true },
-          { id: "eu3_5",   label: "Até 5 Kg",             weight_max: 5,   cost_price: 24.05, margin_pct: 22, sell_price: 29.34, delivery_time: "4-5 dias úteis", enabled: true },
-          { id: "eu3_10",  label: "Até 10 Kg",            weight_max: 10,  cost_price: 32.81, margin_pct: 22, sell_price: 40.03, delivery_time: "4-5 dias úteis", enabled: true },
-          { id: "eu3_15",  label: "Até 15 Kg",            weight_max: 15,  cost_price: 47.40, margin_pct: 22, sell_price: 57.83, delivery_time: "4-5 dias úteis", enabled: true },
-          { id: "eu3_20",  label: "Até 20 Kg",            weight_max: 20,  cost_price: 61.98, margin_pct: 22, sell_price: 75.62, delivery_time: "4-5 dias úteis", enabled: true },
-          { id: "eu3_25",  label: "Até 25 Kg",            weight_max: 25,  cost_price: 78.57, margin_pct: 22, sell_price: 95.86, delivery_time: "4-5 dias úteis", enabled: true },
-          { id: "eu3_30",  label: "Até 30 Kg",            weight_max: 30,  cost_price: 81.15, margin_pct: 22, sell_price: 99.00, delivery_time: "4-5 dias úteis", enabled: true },
-          { id: "eu3_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 3.31,  margin_pct: 22, sell_price: 4.04,  delivery_time: "4-5 dias úteis", enabled: true },
-        ],
-      },
-    ],
+    zones: buildOfficialLinkeInternationalZones(22),
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -339,6 +305,203 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
           { id: "ponto_25",  label: "Até 25 Kg",           weight_max: 25,  cost_price: 5.49, margin_pct: 25, sell_price: 6.86, delivery_time: "24h", enabled: true },
           { id: "ponto_30",  label: "Até 30 Kg",           weight_max: 30,  cost_price: 6.26, margin_pct: 25, sell_price: 7.83, delivery_time: "24h", enabled: true },
           { id: "ponto_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.21, margin_pct: 25, sell_price: 0.26, delivery_time: "24h", enabled: true },
+        ],
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 7. CORREOS EXPRESS PAQ 24 — LK-COR-24
+  //    Contrato Correos Express Portugal (CEP II) - Ibérico 24H
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: "srv_linke_cor_24",
+    code: "LK-COR-24",
+    name: "Linke Ibérico 24H (Correos Paq 24)",
+    description: "Serviço expresso porta-a-porta Portugal Continental e Espanha Peninsular com entrega em 24h via Correos Express.",
+    category: "Ibérico",
+    color: "#00a3e0",
+    is_active: true,
+    is_primordial: true,
+    pricing_profile: "Standard / Geral",
+    target_client_name: "Clientes Gerais",
+    discount_vs_standard_pct: 0,
+    preferred_carrier_id: "forn_lk003",
+    preferred_carrier_name: "CORREOS.EXPRESS",
+    webservice_connection_id: "correos_express",
+    webservice_service_code: "61",
+    transit_time_label: "24h",
+    global_markup_pct: 22.0,
+    fuel_surcharge_pct: 11.5,
+    cod_fee_pct: 2.5,
+    cod_min_fee: 2.50,
+    allowed_zones: ["PT-CONT", "ES-PENIN"],
+    created_at: "2026-09-01T11:00:00Z",
+    zones: [
+      {
+        zone_code: "PT-CONT",
+        zone_name: "Portugal Continental",
+        tiers: [
+          { id: "cor24_pt_1",   label: "Até 1 Kg",            weight_max: 1,   cost_price: 2.85, margin_pct: 22, sell_price: 3.48, delivery_time: "24h", enabled: true },
+          { id: "cor24_pt_2",   label: "Até 2 Kg",            weight_max: 2,   cost_price: 3.15, margin_pct: 22, sell_price: 3.84, delivery_time: "24h", enabled: true },
+          { id: "cor24_pt_5",   label: "Até 5 Kg",            weight_max: 5,   cost_price: 3.75, margin_pct: 22, sell_price: 4.58, delivery_time: "24h", enabled: true },
+          { id: "cor24_pt_10",  label: "Até 10 Kg",           weight_max: 10,  cost_price: 4.60, margin_pct: 22, sell_price: 5.61, delivery_time: "24h", enabled: true },
+          { id: "cor24_pt_15",  label: "Até 15 Kg",           weight_max: 15,  cost_price: 5.40, margin_pct: 22, sell_price: 6.59, delivery_time: "24h", enabled: true },
+          { id: "cor24_pt_20",  label: "Até 20 Kg",           weight_max: 20,  cost_price: 6.20, margin_pct: 22, sell_price: 7.56, delivery_time: "24h", enabled: true },
+          { id: "cor24_pt_30",  label: "Até 30 Kg",           weight_max: 30,  cost_price: 7.90, margin_pct: 22, sell_price: 9.64, delivery_time: "24h", enabled: true },
+          { id: "cor24_pt_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.28, margin_pct: 22, sell_price: 0.34, delivery_time: "24h", enabled: true },
+        ],
+      },
+      {
+        zone_code: "ES-PENIN",
+        zone_name: "Espanha Peninsular",
+        tiers: [
+          { id: "cor24_es_1",   label: "Até 1 Kg",             weight_max: 1,   cost_price: 4.20, margin_pct: 25, sell_price: 5.25, delivery_time: "24-48h", enabled: true },
+          { id: "cor24_es_2",   label: "Até 2 Kg",             weight_max: 2,   cost_price: 4.80, margin_pct: 25, sell_price: 6.00, delivery_time: "24-48h", enabled: true },
+          { id: "cor24_es_5",   label: "Até 5 Kg",             weight_max: 5,   cost_price: 5.90, margin_pct: 25, sell_price: 7.38, delivery_time: "24-48h", enabled: true },
+          { id: "cor24_es_10",  label: "Até 10 Kg",            weight_max: 10,  cost_price: 7.50, margin_pct: 25, sell_price: 9.38, delivery_time: "24-48h", enabled: true },
+          { id: "cor24_es_15",  label: "Até 15 Kg",            weight_max: 15,  cost_price: 9.35, margin_pct: 25, sell_price: 11.69, delivery_time: "24-48h", enabled: true },
+          { id: "cor24_es_20",  label: "Até 20 Kg",            weight_max: 20,  cost_price: 11.20, margin_pct: 25, sell_price: 14.00, delivery_time: "24-48h", enabled: true },
+          { id: "cor24_es_30",  label: "Até 30 Kg",            weight_max: 30,  cost_price: 14.90, margin_pct: 25, sell_price: 18.63, delivery_time: "24-48h", enabled: true },
+          { id: "cor24_es_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.45,  margin_pct: 25, sell_price: 0.56,  delivery_time: "24-48h", enabled: true },
+        ],
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 8. CORREOS EXPRESS PAQ 48 — LK-COR-48
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: "srv_linke_cor_48",
+    code: "LK-COR-48",
+    name: "Linke Ibérico 48H (Correos Paq 48)",
+    description: "Serviço económico ibérico para encomendas com prazo de entrega de 48h via Correos Express.",
+    category: "Ibérico",
+    color: "#0284c7",
+    is_active: true,
+    is_primordial: true,
+    pricing_profile: "Standard / Geral",
+    target_client_name: "Todos os Clientes",
+    discount_vs_standard_pct: 0,
+    preferred_carrier_id: "forn_lk003",
+    preferred_carrier_name: "CORREOS.EXPRESS",
+    webservice_connection_id: "correos_express",
+    webservice_service_code: "62",
+    transit_time_label: "48h",
+    global_markup_pct: 22.0,
+    fuel_surcharge_pct: 11.5,
+    cod_fee_pct: 2.5,
+    cod_min_fee: 2.50,
+    allowed_zones: ["PT-CONT", "ES-PENIN"],
+    created_at: "2026-09-01T11:10:00Z",
+    zones: [
+      {
+        zone_code: "PT-CONT",
+        zone_name: "Portugal Continental",
+        tiers: [
+          { id: "cor48_pt_1",   label: "Até 1 Kg",            weight_max: 1,   cost_price: 2.65, margin_pct: 22, sell_price: 3.23, delivery_time: "48h", enabled: true },
+          { id: "cor48_pt_5",   label: "Até 5 Kg",            weight_max: 5,   cost_price: 3.40, margin_pct: 22, sell_price: 4.15, delivery_time: "48h", enabled: true },
+          { id: "cor48_pt_10",  label: "Até 10 Kg",           weight_max: 10,  cost_price: 4.15, margin_pct: 22, sell_price: 5.06, delivery_time: "48h", enabled: true },
+          { id: "cor48_pt_20",  label: "Até 20 Kg",           weight_max: 20,  cost_price: 5.60, margin_pct: 22, sell_price: 6.83, delivery_time: "48h", enabled: true },
+          { id: "cor48_pt_30",  label: "Até 30 Kg",           weight_max: 30,  cost_price: 7.10, margin_pct: 22, sell_price: 8.66, delivery_time: "48h", enabled: true },
+          { id: "cor48_pt_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.25, margin_pct: 22, sell_price: 0.31, delivery_time: "48h", enabled: true },
+        ],
+      },
+      {
+        zone_code: "ES-PENIN",
+        zone_name: "Espanha Peninsular",
+        tiers: [
+          { id: "cor48_es_1",   label: "Até 1 Kg",             weight_max: 1,   cost_price: 3.90, margin_pct: 25, sell_price: 4.88,  delivery_time: "48-72h", enabled: true },
+          { id: "cor48_es_5",   label: "Até 5 Kg",             weight_max: 5,   cost_price: 5.20, margin_pct: 25, sell_price: 6.50,  delivery_time: "48-72h", enabled: true },
+          { id: "cor48_es_10",  label: "Até 10 Kg",            weight_max: 10,  cost_price: 6.80, margin_pct: 25, sell_price: 8.50,  delivery_time: "48-72h", enabled: true },
+          { id: "cor48_es_20",  label: "Até 20 Kg",            weight_max: 20,  cost_price: 9.90, margin_pct: 25, sell_price: 12.38, delivery_time: "48-72h", enabled: true },
+          { id: "cor48_es_30",  label: "Até 30 Kg",            weight_max: 30,  cost_price: 13.50, margin_pct: 25, sell_price: 16.88, delivery_time: "48-72h", enabled: true },
+          { id: "cor48_es_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.40,  margin_pct: 25, sell_price: 0.50,  delivery_time: "48-72h", enabled: true },
+        ],
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 9. CORREOS EXPRESS EPAQ 24 B2C — LK-COR-ECOM
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: "srv_linke_cor_ecom",
+    code: "LK-COR-ECOM",
+    name: "Linke e-Paq 24 B2C (Correos Express)",
+    description: "Solução especializada para lojas de comércio eletrónico B2C com alertas SMS e previsão de entrega.",
+    category: "Nacional",
+    color: "#0369a1",
+    is_active: true,
+    is_primordial: true,
+    pricing_profile: "E-Commerce PME",
+    target_client_name: "Lojas Online & E-commerce",
+    discount_vs_standard_pct: 0,
+    preferred_carrier_id: "forn_lk003",
+    preferred_carrier_name: "CORREOS.EXPRESS",
+    webservice_connection_id: "correos_express",
+    webservice_service_code: "93",
+    transit_time_label: "24h",
+    global_markup_pct: 25.0,
+    fuel_surcharge_pct: 11.5,
+    cod_fee_pct: 2.5,
+    cod_min_fee: 2.50,
+    allowed_zones: ["PT-CONT"],
+    created_at: "2026-09-01T11:20:00Z",
+    zones: [
+      {
+        zone_code: "PT-CONT",
+        zone_name: "Portugal Continental B2C",
+        tiers: [
+          { id: "corecom_1",   label: "Até 1 Kg",            weight_max: 1,   cost_price: 2.75, margin_pct: 25, sell_price: 3.44, delivery_time: "24h", enabled: true },
+          { id: "corecom_2",   label: "Até 2 Kg",            weight_max: 2,   cost_price: 3.05, margin_pct: 25, sell_price: 3.81, delivery_time: "24h", enabled: true },
+          { id: "corecom_5",   label: "Até 5 Kg",            weight_max: 5,   cost_price: 3.60, margin_pct: 25, sell_price: 4.50, delivery_time: "24h", enabled: true },
+          { id: "corecom_10",  label: "Até 10 Kg",           weight_max: 10,  cost_price: 4.40, margin_pct: 25, sell_price: 5.50, delivery_time: "24h", enabled: true },
+          { id: "corecom_20",  label: "Até 20 Kg",           weight_max: 20,  cost_price: 5.95, margin_pct: 25, sell_price: 7.44, delivery_time: "24h", enabled: true },
+          { id: "corecom_30",  label: "Até 30 Kg",           weight_max: 30,  cost_price: 7.60, margin_pct: 25, sell_price: 9.50, delivery_time: "24h", enabled: true },
+          { id: "corecom_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.26, margin_pct: 25, sell_price: 0.33, delivery_time: "24h", enabled: true },
+        ],
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 10. CORREOS EXPRESS ILHAS BALEARES & CANÁRIAS — LK-COR-ISLAS
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: "srv_linke_cor_islas",
+    code: "LK-COR-ISLAS",
+    name: "Linke Ilhas Espanholas (Correos Express)",
+    description: "Serviço expresso para as ilhas espanholas (Baleares e Canárias) com gestão aduaneira e tracking integrado.",
+    category: "Ilhas",
+    color: "#0ea5e9",
+    is_active: true,
+    is_primordial: true,
+    pricing_profile: "Standard / Geral",
+    target_client_name: "Clientes Gerais",
+    discount_vs_standard_pct: 0,
+    preferred_carrier_id: "forn_lk003",
+    preferred_carrier_name: "CORREOS.EXPRESS",
+    webservice_connection_id: "correos_express",
+    webservice_service_code: "66",
+    transit_time_label: "48-72h",
+    global_markup_pct: 25.0,
+    fuel_surcharge_pct: 12.0,
+    cod_fee_pct: 2.5,
+    cod_min_fee: 2.50,
+    allowed_zones: ["ES-ILHAS"],
+    created_at: "2026-09-01T11:30:00Z",
+    zones: [
+      {
+        zone_code: "ES-ILHAS",
+        zone_name: "Espanha — Ilhas Baleares",
+        tiers: [
+          { id: "coris_1",   label: "Até 1 Kg",            weight_max: 1,   cost_price: 8.90,  margin_pct: 25, sell_price: 11.13, delivery_time: "48-72h", enabled: true },
+          { id: "coris_2",   label: "Até 2 Kg",            weight_max: 2,   cost_price: 11.50, margin_pct: 25, sell_price: 14.38, delivery_time: "48-72h", enabled: true },
+          { id: "coris_5",   label: "Até 5 Kg",            weight_max: 5,   cost_price: 16.80, margin_pct: 25, sell_price: 21.00, delivery_time: "48-72h", enabled: true },
+          { id: "coris_10",  label: "Até 10 Kg",           weight_max: 10,  cost_price: 24.50, margin_pct: 25, sell_price: 30.63, delivery_time: "48-72h", enabled: true },
+          { id: "coris_add", label: "Kg Adicional (+10kg)", weight_max: 999, cost_price: 1.80,  margin_pct: 25, sell_price: 2.25,  delivery_time: "48-72h", enabled: true },
         ],
       },
     ],

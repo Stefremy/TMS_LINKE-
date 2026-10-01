@@ -39,13 +39,19 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
   const volumetricWeightKg = Number((volumeM3 * 167).toFixed(2))
   const chargeableWeight = Math.max(weightKg, volumetricWeightKg)
 
-  // Zones available
+  // Zones available (inclui as 8 zonas oficiais do contrato Linke)
   const availableZones = [
     { code: "PT-CONT", name: "Portugal Continental" },
     { code: "ES-PENIN", name: "Espanha Peninsular" },
     { code: "PT-ILHAS", name: "Açores & Madeira (Ilhas)" },
-    { code: "PT-PICKUP", name: "Pontos CTT & Cacifos Locky" },
-    { code: "EU-ZONA1", name: "Europa Zona 1 (FR, DE, BE, NL)" },
+    { code: "EU 1", name: "Europa 1 (DE, FR, GB, IT, ES, NL...)" },
+    { code: "EU 2", name: "Europa 2 (PL, CZ, RO, HU, BG...)" },
+    { code: "EU 3", name: "Europa 3 (CH, NO, FI, GR, AD...)" },
+    { code: "NA", name: "América do Norte (EUA / Canadá / México)" },
+    { code: "SA", name: "América do Sul & Central (Brasil, Argentina...)" },
+    { code: "O1", name: "Oriente 1 (Japão, Coreia, Singapura, HK...)" },
+    { code: "O2", name: "Oriente 2 (China, Austrália, EAU, Índia...)" },
+    { code: "A", name: "África & Resto do Mundo (Angola, Cabo Verde...)" },
   ]
 
   const clientProfiles = ["Todos", "Standard / Geral", "VIP / Alto Volume", "E-Commerce PME", "Tabela Negociada Cliente"]
@@ -60,7 +66,11 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
       .forEach((servico) => {
         // Find matching zone in service
         const zone = servico.zones.find(
-          (z) => z.zone_code === selectedDestinationZone || z.zone_name.toLowerCase().includes(selectedDestinationZone.toLowerCase())
+          (z) => z.zone_code === selectedDestinationZone || 
+                 z.zone_name.toLowerCase().includes(selectedDestinationZone.toLowerCase()) ||
+                 (selectedDestinationZone === "EU 1" && (z.zone_code === "EU-Z1" || z.zone_code === "EU-ZONA1" || z.zone_code === "EU 1")) ||
+                 (selectedDestinationZone === "EU 2" && (z.zone_code === "EU-Z2" || z.zone_code === "EU-ZONA2" || z.zone_code === "EU 2")) ||
+                 (selectedDestinationZone === "EU 3" && (z.zone_code === "EU-Z3" || z.zone_code === "EU-ZONA3" || z.zone_code === "EU 3"))
         )
 
         if (!zone) return

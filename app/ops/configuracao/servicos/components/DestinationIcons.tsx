@@ -116,12 +116,58 @@ export function DestinationBadge({ code, showLabel = false }: { code: string; sh
     case "EU-Z1":
     case "EU-Z2":
     case "EU-Z3":
+    case "EU 1":
+    case "EU 2":
+    case "EU 3":
+    case "EU-1":
+    case "EU-2":
+    case "EU-3":
       return (
         <span className="inline-flex items-center gap-1 shrink-0 text-slate-700">
           <EuFlag className="w-3.5 h-2.5" />
           <span className="text-[10px] font-medium text-slate-600">
-            {code.replace("EU-", "Z")}
+            {code.replace("EU-Z", "EU ").replace("EU-", "EU ")}
           </span>
+        </span>
+      )
+
+    case "NA":
+      return (
+        <span className="inline-flex items-center gap-1 shrink-0 text-slate-700">
+          <Globe className="w-3.5 h-3.5 text-blue-600" />
+          <span className="text-[10px] font-medium text-slate-700">Amér. Norte (NA)</span>
+        </span>
+      )
+
+    case "SA":
+      return (
+        <span className="inline-flex items-center gap-1 shrink-0 text-slate-700">
+          <Globe className="w-3.5 h-3.5 text-emerald-600" />
+          <span className="text-[10px] font-medium text-slate-700">Amér. Sul (SA)</span>
+        </span>
+      )
+
+    case "O1":
+      return (
+        <span className="inline-flex items-center gap-1 shrink-0 text-slate-700">
+          <Globe className="w-3.5 h-3.5 text-amber-600" />
+          <span className="text-[10px] font-medium text-slate-700">Oriente 1 (O1)</span>
+        </span>
+      )
+
+    case "O2":
+      return (
+        <span className="inline-flex items-center gap-1 shrink-0 text-slate-700">
+          <Globe className="w-3.5 h-3.5 text-orange-600" />
+          <span className="text-[10px] font-medium text-slate-700">Oriente 2 (O2)</span>
+        </span>
+      )
+
+    case "A":
+      return (
+        <span className="inline-flex items-center gap-1 shrink-0 text-slate-700">
+          <Globe className="w-3.5 h-3.5 text-purple-600" />
+          <span className="text-[10px] font-medium text-slate-700">África (A)</span>
         </span>
       )
 

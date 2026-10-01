@@ -8,6 +8,7 @@ import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { Button } from "@/components/ui/button"
+import { resolveInternationalZone, OFFICIAL_LINKE_ZONES } from "@/lib/services/geo/international-zones"
 
 export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: Cliente[], servicosLinke?: ServicoLinke[] }) {
   const [loading, setLoading] = React.useState(false)
@@ -77,12 +78,29 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
     }
   })
 
+  const resolvedDestinationZone = React.useMemo(() => {
+    if (recipientCountry === "PT") return "PT-CONT"
+    if (recipientCountry === "ES") return "ES-PENIN"
+    return resolveInternationalZone(recipientCountry) || "INTL"
+  }, [recipientCountry])
+
   const availableServicos = React.useMemo(() => {
     let active = servicosLinke.filter((s) => s.is_active !== false)
     if (currentClient?.assigned_linke_service_ids && currentClient.assigned_linke_service_ids.length > 0) {
       active = active.filter(s => currentClient.assigned_linke_service_ids!.includes(s.id))
     }
     if (active.length === 0) return []
+
+    // Prioritize services that explicitly cover the destination zone
+    const targetZone = resolvedDestinationZone
+    active = [...active].sort((a, b) => {
+      const aCovers = (a.allowed_zones || []).includes(targetZone) || a.zones.some(z => z.zone_code === targetZone)
+      const bCovers = (b.allowed_zones || []).includes(targetZone) || b.zones.some(z => z.zone_code === targetZone)
+      if (aCovers && !bCovers) return -1
+      if (!aCovers && bCovers) return 1
+      return 0
+    })
+
     if (currentClient?.default_linke_table_id) {
       const match = active.find((s) => s.id === currentClient.default_linke_table_id)
       if (match) {
@@ -90,7 +108,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       }
     }
     return active
-  }, [servicosLinke, currentClient])
+  }, [servicosLinke, currentClient, resolvedDestinationZone])
 
   const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
   const isCorreos = activeLinkeService?.name?.toLowerCase().includes("correos") || (activeLinkeService as any)?.carrier_code === "correos"
@@ -108,8 +126,14 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
   // Client-side weight-based estimate (display only; server recalculates using assigned table)
   const estimatedTier = (() => {
-    if (activeLinkeService?.zones?.[0]?.tiers?.length) {
-      const origTiers = activeLinkeService.zones[0].tiers || []
+    const targetZone = activeLinkeService?.zones?.find(
+      (z) => z.zone_code === resolvedDestinationZone || 
+             (resolvedDestinationZone && z.zone_name.toLowerCase().includes(resolvedDestinationZone.toLowerCase())) ||
+             (resolvedDestinationZone === "PT-CONT" && z.zone_code === "PT-CONT")
+    ) || activeLinkeService?.zones?.[0]
+
+    if (targetZone?.tiers?.length) {
+      const origTiers = targetZone.tiers || []
       const tiers = origTiers.filter(t => t.enabled !== false).sort((a, b) => a.weight_max - b.weight_max)
       const tierIndex = tiers.findIndex(t => weightKg <= t.weight_max)
       const matchedTier = tierIndex !== -1 ? tiers[tierIndex] : tiers[tiers.length - 1]
@@ -121,6 +145,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
           label: matchedTier.label || `Até ${matchedTier.weight_max} Kg`,
           sell: effectiveSell,
           buy: matchedTier.cost_price,
+          zoneName: targetZone.zone_name,
         }
       }
     }
@@ -634,12 +659,106 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                           required 
                           className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] font-semibold focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs cursor-pointer"
                         >
-                          <option value="PT">Portugal</option>
-                          <option value="ES">Espanha</option>
-                          <option value="FR">França</option>
-                          <option value="DE">Alemanha</option>
-                          <option value="IT">Itália</option>
+                          <optgroup label="Península Ibérica">
+                            <option value="PT">Portugal (PT)</option>
+                            <option value="ES">Espanha (ES)</option>
+                          </optgroup>
+                          <optgroup label="Europa 1 (EU 1)">
+                            <option value="DE">Alemanha (DE)</option>
+                            <option value="FR">França (FR)</option>
+                            <option value="IT">Itália (IT)</option>
+                            <option value="GB">Reino Unido (GB)</option>
+                            <option value="BE">Bélgica (BE)</option>
+                            <option value="NL">Holanda (NL)</option>
+                            <option value="AT">Áustria (AT)</option>
+                            <option value="SE">Suécia (SE)</option>
+                            <option value="DK">Dinamarca (DK)</option>
+                            <option value="IE">Irlanda (IE)</option>
+                            <option value="LU">Luxemburgo (LU)</option>
+                            <option value="MC">Mónaco (MC)</option>
+                          </optgroup>
+                          <optgroup label="Europa 2 (EU 2)">
+                            <option value="PL">Polónia (PL)</option>
+                            <option value="CZ">República Checa (CZ)</option>
+                            <option value="RO">Roménia (RO)</option>
+                            <option value="BG">Bulgária (BG)</option>
+                            <option value="HU">Hungria (HU)</option>
+                            <option value="HR">Croácia (HR)</option>
+                            <option value="SK">Eslováquia (SK)</option>
+                            <option value="SI">Eslovénia (SI)</option>
+                            <option value="EE">Estónia (EE)</option>
+                            <option value="LV">Letónia (LV)</option>
+                            <option value="LT">Lituânia (LT)</option>
+                            <option value="UA">Ucrânia (UA)</option>
+                          </optgroup>
+                          <optgroup label="Europa 3 (EU 3)">
+                            <option value="CH">Suíça (CH)</option>
+                            <option value="NO">Noruega (NO)</option>
+                            <option value="FI">Finlândia (FI)</option>
+                            <option value="GR">Grécia (GR)</option>
+                            <option value="AD">Andorra (AD)</option>
+                            <option value="GI">Gibraltar (GI)</option>
+                            <option value="LI">Liechtenstein (LI)</option>
+                          </optgroup>
+                          <optgroup label="América do Norte (NA)">
+                            <option value="US">Estados Unidos (US)</option>
+                            <option value="CA">Canadá (CA)</option>
+                            <option value="MX">México (MX)</option>
+                            <option value="PR">Porto Rico (PR)</option>
+                          </optgroup>
+                          <optgroup label="América do Sul (SA)">
+                            <option value="BR">Brasil (BR)</option>
+                            <option value="AR">Argentina (AR)</option>
+                            <option value="CL">Chile (CL)</option>
+                            <option value="CO">Colômbia (CO)</option>
+                            <option value="PE">Peru (PE)</option>
+                            <option value="UY">Uruguai (UY)</option>
+                            <option value="VE">Venezuela (VE)</option>
+                            <option value="PA">Panamá (PA)</option>
+                          </optgroup>
+                          <optgroup label="Oriente 1 (O1)">
+                            <option value="JP">Japão (JP)</option>
+                            <option value="KR">Coreia do Sul (KR)</option>
+                            <option value="SG">Singapura (SG)</option>
+                            <option value="HK">Hong Kong (HK)</option>
+                            <option value="TH">Tailândia (TH)</option>
+                            <option value="TW">Taiwan (TW)</option>
+                            <option value="EG">Egito (EG)</option>
+                          </optgroup>
+                          <optgroup label="Oriente 2 (O2)">
+                            <option value="CN">China (CN)</option>
+                            <option value="AU">Austrália (AU)</option>
+                            <option value="AE">Emiratos Árabes Unidos (AE)</option>
+                            <option value="IN">Índia (IN)</option>
+                            <option value="IL">Israel (IL)</option>
+                            <option value="TR">Turquia (TR)</option>
+                            <option value="NZ">Nova Zelândia (NZ)</option>
+                            <option value="QA">Qatar (QA)</option>
+                          </optgroup>
+                          <optgroup label="África (A)">
+                            <option value="AO">Angola (AO)</option>
+                            <option value="CV">Cabo Verde (CV)</option>
+                            <option value="MZ">Moçambique (MZ)</option>
+                            <option value="ZA">África do Sul (ZA)</option>
+                            <option value="MA">Marrocos (MA)</option>
+                            <option value="NG">Nigéria (NG)</option>
+                            <option value="SN">Senegal (SN)</option>
+                            <option value="TN">Tunísia (TN)</option>
+                          </optgroup>
                         </select>
+                        {resolvedDestinationZone && (
+                          <div className="pt-0.5 flex items-center gap-1.5 text-[10px] text-[var(--text-secondary)] font-medium">
+                            <span>Zona Linke:</span>
+                            <span className="font-mono px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-bold">
+                              {resolvedDestinationZone}
+                            </span>
+                            {OFFICIAL_LINKE_ZONES[resolvedDestinationZone] && (
+                              <span className="text-[9px] text-[var(--text-tertiary)] truncate max-w-[150px]">
+                                ({OFFICIAL_LINKE_ZONES[resolvedDestinationZone].name})
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 

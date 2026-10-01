@@ -65,9 +65,9 @@ export function MatrizRentabilidadeTab({ servicos, fornecedores }: MatrizRentabi
             servicoId: servico.id,
             servicoCode: servico.code,
             servicoName: servico.name,
-            carrierName: servico.preferred_carrier_name,
+            carrierName: servico.preferred_carrier_name || "Linke Standard",
             carrierColor: servico.color || "#059669",
-            zoneName: zone.zone_name,
+            zoneName: zone.zone_name || zone.zone_code || "Zona Geral",
             tierLabel: tier.label,
             weightMax: tier.weight_max,
             costPrice: cost,
@@ -111,8 +111,27 @@ export function MatrizRentabilidadeTab({ servicos, fornecedores }: MatrizRentabi
   const totalPotentialProfit = filteredRows.reduce((acc, r) => acc + r.profitAmount, 0).toFixed(2)
 
   // Unique carriers & zones for filters
-  const carriers = ["Todos", ...Array.from(new Set(rows.map((r) => r.carrierName)))]
-  const zones = ["Todas", ...Array.from(new Set(rows.map((r) => r.zoneName)))]
+  const carriers = React.useMemo(() => {
+    const set = new Set<string>()
+    rows.forEach((r) => {
+      const name = r.carrierName?.trim()
+      if (name && name !== "Todos") {
+        set.add(name)
+      }
+    })
+    return ["Todos", ...Array.from(set)]
+  }, [rows])
+
+  const zones = React.useMemo(() => {
+    const set = new Set<string>()
+    rows.forEach((r) => {
+      const name = r.zoneName?.trim()
+      if (name && name !== "Todas") {
+        set.add(name)
+      }
+    })
+    return ["Todas", ...Array.from(set)]
+  }, [rows])
 
   return (
     <div className="space-y-6">
@@ -180,8 +199,8 @@ export function MatrizRentabilidadeTab({ servicos, fornecedores }: MatrizRentabi
             onChange={(e) => setSelectedCarrier(e.target.value)}
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
           >
-            {carriers.map((c) => (
-              <option key={c} value={c}>
+            {carriers.map((c, idx) => (
+              <option key={`carrier_${c}_${idx}`} value={c}>
                 Parceiro: {c}
               </option>
             ))}
@@ -193,8 +212,8 @@ export function MatrizRentabilidadeTab({ servicos, fornecedores }: MatrizRentabi
             onChange={(e) => setSelectedZone(e.target.value)}
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
           >
-            {zones.map((z) => (
-              <option key={z} value={z}>
+            {zones.map((z, idx) => (
+              <option key={`zone_${z}_${idx}`} value={z}>
                 Zona: {z}
               </option>
             ))}

@@ -28,6 +28,7 @@ import {
 
 import { TabelasLinkeTab } from "./TabelasLinkeTab"
 import { SimuladorCotacaoTab } from "./SimuladorCotacaoTab"
+import { MatrizRentabilidadeTab } from "./MatrizRentabilidadeTab"
 import { ServicoModal } from "./ServicoModal"
 import { DuplicateServicoModal } from "./DuplicateServicoModal"
 
@@ -38,7 +39,7 @@ interface ServicosLinkeClientProps {
   canDeletePrimordial?: boolean
 }
 
-type TabType = "subprodutos_base" | "servicos_linke" | "simulador"
+type TabType = "servicos_linke" | "matriz_margens" | "simulador"
 
 export function ServicosLinkeClient({
   initialServicos,
@@ -168,10 +169,10 @@ export function ServicosLinkeClient({
             </div>
             <div>
               <h1 className="text-lg font-semibold text-slate-900 tracking-tight">
-                Serviços Linke & Gestão de Tarifários
+                Serviços & Tabelas de Preço
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                Configuração de tabelas base contratadas e tarifários personalizados para clientes.
+                Custos base de fornecedores (CTT Expresso, Correos Express), margens e tarifários para clientes.
               </p>
             </div>
           </div>
@@ -186,25 +187,13 @@ export function ServicosLinkeClient({
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium shadow-2xs transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            Novo Serviço
+            Novo Serviço / Tabela
           </button>
         </div>
       </div>
 
       {/* Navigation Tabs Bar */}
       <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 bg-white px-3 py-1.5 rounded-xl shadow-2xs">
-        <button
-          onClick={() => setActiveTab("subprodutos_base")}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-            activeTab === "subprodutos_base"
-              ? "bg-slate-900 text-white shadow-2xs"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-          }`}
-        >
-          <Package className="w-3.5 h-3.5" />
-          Subprodutos por Transportadora
-        </button>
-
         <button
           onClick={() => setActiveTab("servicos_linke")}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
@@ -214,7 +203,19 @@ export function ServicosLinkeClient({
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
-          Serviços Linke
+          Tabelas de Preço & Serviços
+        </button>
+
+        <button
+          onClick={() => setActiveTab("matriz_margens")}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            activeTab === "matriz_margens"
+              ? "bg-slate-900 text-white shadow-2xs"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          }`}
+        >
+          <Percent className="w-3.5 h-3.5" />
+          Matriz de Margens dos Fornecedores
         </button>
 
         <button
@@ -232,30 +233,6 @@ export function ServicosLinkeClient({
 
       {/* Active Tab Body */}
       <div>
-        {activeTab === "subprodutos_base" && (
-          <TabelasLinkeTab
-            mode="base"
-            servicos={servicos}
-            fornecedores={fornecedores}
-            canDeletePrimordial={canDeletePrimordial}
-            onEditServico={(servico) => {
-              setSelectedServicoForEdit(servico)
-              setIsModalOpen(true)
-            }}
-            onNewServico={() => {
-              setSelectedServicoForEdit(null)
-              setIsModalOpen(true)
-            }}
-            onDuplicateServico={(servico) => {
-              setSelectedServicoForDuplicate(servico)
-              setIsDuplicateModalOpen(true)
-            }}
-            onDeleteServico={handleDeleteServico}
-            onToggleStatus={handleToggleStatus}
-            onQuickMarkupChange={handleQuickMarkupChange}
-          />
-        )}
-
         {activeTab === "servicos_linke" && (
           <TabelasLinkeTab
             mode="linke_services"
@@ -277,6 +254,13 @@ export function ServicosLinkeClient({
             onDeleteServico={handleDeleteServico}
             onToggleStatus={handleToggleStatus}
             onQuickMarkupChange={handleQuickMarkupChange}
+          />
+        )}
+
+        {activeTab === "matriz_margens" && (
+          <MatrizRentabilidadeTab
+            servicos={servicos}
+            fornecedores={fornecedores}
           />
         )}
 

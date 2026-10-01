@@ -14,6 +14,7 @@
 
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "@/app/ops/configuracao/servicos/types"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
+import { resolveInternationalZone } from "@/lib/services/geo/international-zones"
 
 export interface PriceResult {
   /** Price charged to the client (Linke's sell price) */
@@ -42,8 +43,8 @@ const DEFAULT_ZONE = "PT-CONT"
  * Determines the zone code from country code and postal code.
  * PT -> PT-CONT (or PT-ILHAS for islands 9xxx)
  * ES -> ES-PENIN (or ES-ILHAS for Baleares 07xxx, Canárias 35xxx/38xxx, Ceuta 51xxx, Melilla 52xxx)
- * EU -> EU-Z1, EU-Z2, EU-Z3
- * Others -> INTL
+ * EU -> EU 1, EU 2, EU 3
+ * World -> NA, SA, O1, O2, A (via Linke official mapping of ~190 countries)
  */
 export function resolveZoneCode(countryCode: string = "PT", postalCode?: string): string {
   const country = (countryCode || "PT").toUpperCase().trim()
@@ -70,9 +71,13 @@ export function resolveZoneCode(countryCode: string = "PT", postalCode?: string)
     return "ES-PENIN"
   }
 
-  if (["FR", "DE", "IT", "NL", "BE", "LU", "MC"].includes(country)) return "EU-Z1"
-  if (["PL", "CZ", "AT", "HU", "RO", "SK", "SI", "IE"].includes(country)) return "EU-Z2"
-  if (["SE", "DK", "FI", "NO", "GR", "HR", "BG", "EE", "LV", "LT"].includes(country)) return "EU-Z3"
+  // Resolves official Linke international zones (EU 1, EU 2, EU 3, NA, SA, O1, O2, A)
+  const intlZone = resolveInternationalZone(country)
+  if (intlZone) return intlZone
+
+  if (["FR", "DE", "IT", "NL", "BE", "LU", "MC"].includes(country)) return "EU 1"
+  if (["PL", "CZ", "AT", "HU", "RO", "SK", "SI", "IE"].includes(country)) return "EU 2"
+  if (["SE", "DK", "FI", "NO", "GR", "HR", "BG", "EE", "LV", "LT"].includes(country)) return "EU 3"
 
   return "INTL"
 }
@@ -85,9 +90,17 @@ export function isZoneAllowedByService(allowedZones: string[] | undefined, zoneC
   if (!allowedZones || allowedZones.length === 0) return true
   if (allowedZones.includes(zoneCode)) return true
 
+  // Equivalences between official Linke codes and legacy codes:
+  if (zoneCode === "EU 1" && (allowedZones.includes("EU-Z1") || allowedZones.includes("EU 1"))) return true
+  if (zoneCode === "EU-Z1" && (allowedZones.includes("EU 1") || allowedZones.includes("EU-Z1"))) return true
+  if (zoneCode === "EU 2" && (allowedZones.includes("EU-Z2") || allowedZones.includes("EU 2"))) return true
+  if (zoneCode === "EU-Z2" && (allowedZones.includes("EU 2") || allowedZones.includes("EU-Z2"))) return true
+  if (zoneCode === "EU 3" && (allowedZones.includes("EU-Z3") || allowedZones.includes("EU 3"))) return true
+  if (zoneCode === "EU-Z3" && (allowedZones.includes("EU 3") || allowedZones.includes("EU-Z3"))) return true
+
   // Specific allowances:
-  // INTL allowed by INTL-AERO or INTL-MAR or INTL
-  if (zoneCode === "INTL" && (allowedZones.includes("INTL-AERO") || allowedZones.includes("INTL-MAR") || allowedZones.includes("INTL"))) {
+  // INTL allowed by INTL-AERO or INTL-MAR or INTL or world zones
+  if (["INTL", "NA", "SA", "O1", "O2", "A"].includes(zoneCode) && (allowedZones.includes("INTL-AERO") || allowedZones.includes("INTL-MAR") || allowedZones.includes("INTL"))) {
     return true
   }
   // ES-ILHAS (Baleares / Canárias) allowed by INTL-MAR if maritime table
@@ -99,7 +112,7 @@ export function isZoneAllowedByService(allowedZones: string[] | undefined, zoneC
     return true
   }
   // EU zones allowed if INTL-AERO or INTL is enabled on table
-  if (zoneCode.startsWith("EU-") && (allowedZones.includes("INTL-AERO") || allowedZones.includes("INTL"))) {
+  if ((zoneCode.startsWith("EU") || ["EU 1", "EU 2", "EU 3"].includes(zoneCode)) && (allowedZones.includes("INTL-AERO") || allowedZones.includes("INTL"))) {
     return true
   }
 

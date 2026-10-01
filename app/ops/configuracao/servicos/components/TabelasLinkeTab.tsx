@@ -10,7 +10,10 @@ import {
   Copy,
   ShieldCheck, 
   Lock,
-  MapPin
+  MapPin,
+  Percent,
+  TrendingUp,
+  DollarSign
 } from "lucide-react"
 import { DestinationBadge } from "./DestinationIcons"
 import { getCarrierLogo } from "@/lib/carrier-logos"
@@ -76,6 +79,13 @@ export function TabelasLinkeTab({
   const customServicos = filteredServicos.filter((s) => !s.is_primordial)
 
   const currentServico = servicos.find((s) => s.id === activeServicoId) || filteredServicos[0]
+  const [quickMarkupInput, setQuickMarkupInput] = React.useState<number>(currentServico?.global_markup_pct || 22)
+
+  React.useEffect(() => {
+    if (currentServico) {
+      setQuickMarkupInput(currentServico.global_markup_pct || 22)
+    }
+  }, [currentServico?.id, currentServico?.global_markup_pct])
 
   const renderServiceCard = (servico: ServicoLinke) => {
     const isSelected = servico.id === currentServico?.id
@@ -531,56 +541,161 @@ export function TabelasLinkeTab({
                 </div>
               </div>
 
-              {/* Price Tables per Zone */}
-              <div className="p-5 space-y-5">
-                {currentServico.zones.map((zone, idx) => (
-                  <div key={zone.zone_code || (zone as any).id || idx} className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                        <h3 className="font-medium text-xs text-slate-800">
-                          {zone.zone_name || (zone as any).name}
-                        </h3>
-                        <span className="text-[11px] font-mono text-slate-400">
-                          ({zone.zone_code || "N/A"})
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-slate-400 font-medium">
-                        {zone.tiers.length} escalões
-                      </span>
-                    </div>
-
-                    <div className="overflow-x-auto rounded-lg border border-slate-200 shadow-2xs">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
-                          <tr>
-                            <th className="py-2.5 px-3 font-medium">Escalão / Peso</th>
-                            <th className="py-2.5 px-3 text-right font-medium">Custo Parceiro (€)</th>
-                            <th className="py-2.5 px-3 text-center font-medium">Prazo</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {zone.tiers.map((tier) => {
-                            const cost = Number(tier.cost_price || 0)
-                            return (
-                              <tr key={tier.id} className="hover:bg-slate-50/50 transition-colors">
-                                <td className="py-2 px-3 font-medium text-slate-800">
-                                  {tier.label}
-                                </td>
-                                <td className="py-2 px-3 text-right font-mono text-slate-700">
-                                  {cost.toFixed(2)}€
-                                </td>
-                                <td className="py-2 px-3 text-center text-slate-500">
-                                  {tier.delivery_time}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+              {/* Quick Margin & Markup Adjustment Bar */}
+              <div className="bg-slate-50/70 border-b border-slate-200/80 px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200 shrink-0">
+                    <Percent className="w-3.5 h-3.5" />
                   </div>
-                ))}
+                  <div>
+                    <span className="font-semibold text-slate-800">
+                      Margem Base Linke: +{currentServico.global_markup_pct || 20}%
+                    </span>
+                    <p className="text-[11px] text-slate-500">
+                      Calcula o Preço de Venda Linke sobre o custo base de {currentServico.preferred_carrier_name}.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] text-slate-500 font-medium">Atalhos:</span>
+                  {[18, 20, 22, 25, 28, 30].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => {
+                        setQuickMarkupInput(pct)
+                        onQuickMarkupChange(currentServico.id, pct)
+                      }}
+                      className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
+                        currentServico.global_markup_pct === pct
+                          ? "bg-slate-900 text-white shadow-2xs"
+                          : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      +{pct}%
+                    </button>
+                  ))}
+
+                  <div className="inline-flex items-center gap-1 ml-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+                    <input
+                      type="number"
+                      value={quickMarkupInput}
+                      onChange={(e) => setQuickMarkupInput(parseFloat(e.target.value) || 0)}
+                      className="w-12 px-1.5 py-0.5 text-xs font-mono font-bold text-center text-slate-800 focus:outline-none"
+                    />
+                    <span className="text-xs text-slate-400 font-bold pr-1">%</span>
+                    <button
+                      type="button"
+                      onClick={() => onQuickMarkupChange(currentServico.id, quickMarkupInput)}
+                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-medium rounded-md transition-colors"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Price Tables per Zone */}
+              <div className="p-5 space-y-6">
+                {currentServico.zones.map((zone, idx) => {
+                  const tiers = zone.tiers || []
+                  const costs = tiers.map(t => Number(t.cost_price || 0))
+                  const sells = tiers.map(t => Number(t.sell_price || 0))
+                  const minCost = costs.length > 0 ? Math.min(...costs) : 0
+                  const maxCost = costs.length > 0 ? Math.max(...costs) : 0
+                  const minSell = sells.length > 0 ? Math.min(...sells) : 0
+                  const maxSell = sells.length > 0 ? Math.max(...sells) : 0
+                  const avgProfit = tiers.length > 0
+                    ? tiers.reduce((acc, t) => acc + (Number(t.sell_price || 0) - Number(t.cost_price || 0)), 0) / tiers.length
+                    : 0
+
+                  return (
+                    <div key={zone.zone_code || (zone as any).id || idx} className="space-y-2.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                          <h3 className="font-semibold text-xs text-slate-800">
+                            {zone.zone_name || (zone as any).name}
+                          </h3>
+                          <span className="text-[11px] font-mono text-slate-400">
+                            ({zone.zone_code || "N/A"})
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500 flex-wrap">
+                          <span>{tiers.length} escalões</span>
+                          <span>•</span>
+                          <span>
+                            Custo {currentServico.preferred_carrier_name}: <strong className="text-slate-700 font-mono">{minCost.toFixed(2)}€ - {maxCost.toFixed(2)}€</strong>
+                          </span>
+                          <span>•</span>
+                          <span>
+                            PVP Linke: <strong className="text-slate-900 font-mono">{minSell.toFixed(2)}€ - {maxSell.toFixed(2)}€</strong>
+                          </span>
+                          <span>•</span>
+                          <span className="text-emerald-700 font-semibold font-mono">
+                            Lucro Médio: +{avgProfit.toFixed(2)}€
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto rounded-lg border border-slate-200 shadow-2xs">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                            <tr>
+                              <th className="py-2.5 px-3 font-medium">Escalão / Peso</th>
+                              <th className="py-2.5 px-3 text-right font-medium text-slate-700" title={`Preço base cobrado por ${currentServico.preferred_carrier_name}`}>
+                                Custo Fornecedor (€)
+                              </th>
+                              <th className="py-2.5 px-3 text-center font-medium">Margem (%)</th>
+                              <th className="py-2.5 px-3 text-right font-semibold text-slate-900">
+                                Preço Venda Cliente (€)
+                              </th>
+                              <th className="py-2.5 px-3 text-right font-semibold text-emerald-700">
+                                Lucro Bruto (€)
+                              </th>
+                              <th className="py-2.5 px-3 text-center font-medium">Prazo</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {tiers.map((tier) => {
+                              const cost = Number(tier.cost_price || 0)
+                              const sell = Number(tier.sell_price || (cost * (1 + (tier.margin_pct || currentServico.global_markup_pct || 20) / 100)))
+                              const profit = sell - cost
+                              const margin = cost > 0 ? Number(tier.margin_pct || Math.round(((profit / cost) * 100))) : 0
+
+                              return (
+                                <tr key={tier.id} className="hover:bg-slate-50/50 transition-colors">
+                                  <td className="py-2 px-3 font-medium text-slate-800">
+                                    {tier.label}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono text-slate-600 bg-slate-50/30">
+                                    {cost.toFixed(2)}€
+                                  </td>
+                                  <td className="py-2 px-3 text-center">
+                                    <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-100 text-slate-700">
+                                      +{margin}%
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 bg-slate-50/50">
+                                    {sell.toFixed(2)}€
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">
+                                    +{profit.toFixed(2)}€
+                                  </td>
+                                  <td className="py-2 px-3 text-center text-slate-500 font-medium">
+                                    {tier.delivery_time}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
 
             </div>

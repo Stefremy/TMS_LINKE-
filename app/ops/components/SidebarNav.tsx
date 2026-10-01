@@ -94,9 +94,8 @@ const navConfig: NavSection[] = [
         subItems: [
           { title: "Geral", href: "/ops/configuracao/geral" },
           { title: "Webservices Globais", href: "/ops/configuracao/webservices" },
-          { title: "Serviços Linke", href: "/ops/configuracao/servicos" },
+          { title: "Serviços & Tabelas de Preço", href: "/ops/configuracao/servicos" },
           { title: "Taxas Adicionais", href: "/ops/configuracao/taxas" },
-          { title: "Tabelas de Preço", href: "/ops/configuracao/precos" },
           { title: "Zonas de Preço", href: "/ops/configuracao/zonas" },
           { title: "Estados de Envio", href: "/ops/configuracao/estados" },
           { title: "Email e Notificações", href: "/ops/configuracao/notificacoes" },
@@ -124,7 +123,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
       section.items.forEach((item) => {
         if (item.subItems) {
           const isChildActive = item.subItems.some((sub) => {
-             return pathname === sub.href || (sub.href === "/ops/configuracao/precos" && pathname === "/ops/configuracao/servicos") || pathname.startsWith(sub.href + "/")
+             return pathname === sub.href || pathname.startsWith(sub.href + "/")
           })
           if (isChildActive && !newOpenItems[item.title]) {
             newOpenItems[item.title] = true
@@ -162,9 +161,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                   : pathname.startsWith(item.href)
 
                 const isGroupActive = hasSubItems && item.subItems!.some(sub =>
-                  pathname === sub.href ||
-                  (sub.href === "/ops/configuracao/precos" && pathname === "/ops/configuracao/servicos") ||
-                  pathname.startsWith(sub.href + "/")
+                  pathname === sub.href || pathname.startsWith(sub.href + "/")
                 )
 
                 if (hasSubItems) {
@@ -187,7 +184,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                           {item.title}
                         </div>
                         {item.subItems!.map((sub) => {
-                          const isSubActive = pathname === sub.href || (sub.href === "/ops/configuracao/precos" && pathname === "/ops/configuracao/servicos")
+                          const isSubActive = pathname === sub.href
                           return (
                             <Link
                               key={sub.title}
@@ -258,9 +255,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
               if (hasSubItems) {
                 const isOpen = openItems[item.title] || false
                 const isGroupActive = item.subItems!.some(sub => 
-                  pathname === sub.href || 
-                  (sub.href === "/ops/configuracao/precos" && pathname === "/ops/configuracao/servicos") ||
-                  pathname.startsWith(sub.href + "/")
+                  pathname === sub.href || pathname.startsWith(sub.href + "/")
                 )
 
                 return (
@@ -294,7 +289,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                     {isOpen && (
                       <div className="flex flex-col space-y-0.5 pl-6 pr-1 mt-0.5 mb-1.5 border-l-2 border-[var(--border-subtle)] ml-4">
                         {item.subItems!.map((sub) => {
-                          const isSubActive = pathname === sub.href || (sub.href === "/ops/configuracao/precos" && pathname === "/ops/configuracao/servicos")
+                          const isSubActive = pathname === sub.href
                           return (
                             <Link
                               key={sub.title}
