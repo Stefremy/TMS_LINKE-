@@ -52,44 +52,7 @@ interface CustomInvoiceHistoryItem {
   created_at: string
 }
 
-const SERVICE_TEMPLATES = [
-  {
-    title: "Desenvolvimento de Website Institucional",
-    description: "Criação de website responsivo em Next.js com páginas institucionais, catálogo e formulários.",
-    unitPrice: 850,
-    taxRate: 23,
-  },
-  {
-    title: "Criação de Loja Online E-Commerce",
-    description: "Implementação de plataforma de comércio eletrónico com gestão de produtos, pagamentos e envios Linke.",
-    unitPrice: 1450,
-    taxRate: 23,
-  },
-  {
-    title: "Consultoria Estratégica de Logística & E-Commerce",
-    description: "Sessão de consultoria e otimização de fluxos operacionais de transporte e integração de inventário.",
-    unitPrice: 350,
-    taxRate: 23,
-  },
-  {
-    title: "Manutenção Web & Alojamento Mensal",
-    description: "Avença mensal de suporte técnico, atualizações de segurança e alojamento cloud.",
-    unitPrice: 75,
-    taxRate: 23,
-  },
-  {
-    title: "Design Gráfico & Identidade Visual",
-    description: "Criação de material gráfico corporativo, logótipos e banners para redes sociais e loja online.",
-    unitPrice: 250,
-    taxRate: 23,
-  },
-  {
-    title: "Serviço Operacional Extra / Armazenagem",
-    description: "Taxa suplementar de reenvio, manuseamento de carga especial ou armazenagem temporária em armazém.",
-    unitPrice: 120,
-    taxRate: 23,
-  }
-]
+
 
 export default function FaturaPersonalizadaClient({
   clients = [],
@@ -184,32 +147,18 @@ export default function FaturaPersonalizadaClient({
   }
 
   // Adicionar linha
-  const handleAddItem = (template?: typeof SERVICE_TEMPLATES[0]) => {
-    if (template) {
-      setItems(prev => [
-        ...prev,
-        {
-          title: template.title,
-          description: template.description,
-          qty: 1,
-          unitPrice: template.unitPrice,
-          taxRate: template.taxRate,
-          discountPct: 0
-        }
-      ])
-    } else {
-      setItems(prev => [
-        ...prev,
-        {
-          title: "",
-          description: "",
-          qty: 1,
-          unitPrice: 0,
-          taxRate: 23,
-          discountPct: 0
-        }
-      ])
-    }
+  const handleAddItem = () => {
+    setItems(prev => [
+      ...prev,
+      {
+        title: "",
+        description: "",
+        qty: 1,
+        unitPrice: 0,
+        taxRate: 23,
+        discountPct: 0
+      }
+    ])
   }
 
   // Remover linha
