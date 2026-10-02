@@ -45,9 +45,16 @@ export function OpsSidebar() {
           {isCollapsed ? (
             <div 
               title="Linke TMS"
-              className="w-10 h-10 rounded-xl bg-[var(--accent)] text-white flex items-center justify-center font-black text-xl shadow-xs hover:bg-[var(--accent-hover)] transition-colors"
+              className="w-10 h-10 rounded-xl flex items-center justify-center transition-transform hover:scale-105"
             >
-              L
+              <Image 
+                src="/favicon.png" 
+                alt="Linke TMS" 
+                width={36} 
+                height={36} 
+                className="object-contain rounded-lg" 
+                priority 
+              />
             </div>
           ) : (
             <>

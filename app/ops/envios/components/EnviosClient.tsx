@@ -31,6 +31,7 @@ import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { closeCttShipmentsAction, syncCttTrackingAction } from "@/app/actions/ctt"
 import { deleteShipmentsBulkAction } from "@/app/actions/shipments"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 
 interface EnviosClientProps {
   envios: any[]
@@ -575,16 +576,9 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                     const cfg = getShipmentStatusConfig(statusVal)
                     return (
                       <div className="flex flex-col gap-1 items-start">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider leading-none border shadow-2xs ${
-                          cfg.color.includes('green') ? 'bg-[var(--status-success-soft)] text-[var(--status-success)] border-[rgba(18,138,71,0.2)]' :
-                          cfg.color.includes('yellow') || cfg.color.includes('orange') ? 'bg-[var(--status-warning-soft)] text-[var(--status-warning)] border-[rgba(217,119,6,0.2)]' :
-                          cfg.color.includes('red') ? 'bg-[var(--status-critical-soft)] text-[var(--status-critical)] border-[rgba(220,38,38,0.2)]' :
-                          cfg.color.includes('blue') ? 'bg-[var(--status-info-soft)] text-[var(--status-info)] border-[rgba(37,99,235,0.2)]' :
-                          'bg-[var(--surface-muted)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
-                        }`}>
-                          <span className={`w-1 h-1 rounded-full ${cfg.dotColor.replace('bg-', 'bg-')} shrink-0`} />
-                          <span>{cfg.label}</span>
-                        </span>
+                        <Badge variant={cfg.badgeVariant}>
+                          {cfg.label}
+                        </Badge>
                         {envio.status?.subCode && (
                           <span className="text-[var(--text-tertiary)] font-semibold text-[9px] tracking-wider ml-1 uppercase">
                             {envio.status?.subCode}

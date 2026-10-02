@@ -378,8 +378,7 @@ export function ClientShipmentsHistory() {
                         const cfg = getShipmentStatusConfig(envio.status)
                         return (
                           <Badge variant={cfg.badgeVariant}>
-                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${cfg.dotColor} shrink-0`} />
-                            <span>{cfg.label}</span>
+                            {cfg.label}
                           </Badge>
                         )
                       })()}

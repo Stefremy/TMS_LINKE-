@@ -5,8 +5,8 @@
   /* Canvas & Surfaces */
   --canvas-bg: #F5F7F5;
   --surface-bg: #FFFFFF;
-  --surface-muted: #F0F3F0;
-  --surface-dim: #d9dbd5;
+  --surface-muted: #F8FAF8;
+  --surface-dim: #F1F4F1;
 
   /* Text hierarchy */
   --text-primary: #141714;
@@ -17,7 +17,7 @@
   --accent: #128A47;
   --accent-hover: #0E6C37;
   --accent-active: #18A957;
-  --accent-soft: #E8F7EE;
+  --accent-soft: #F0FDF4;
 
   /* Borders */
   --border-subtle: rgba(20, 23, 20, 0.08);
@@ -25,12 +25,12 @@
 
   /* Status */
   --status-success: #128A47;
-  --status-success-soft: #E8F7EE;
-  --status-warning: #D97706;
-  --status-warning-soft: #FEF3C7;
+  --status-success-soft: #F0FDF4;
+  --status-warning: #B45309;
+  --status-warning-soft: #FFFBEB;
   --status-critical: #DC2626;
-  --status-critical-soft: #FEE2E2;
-  --status-info: #2563EB;
+  --status-critical-soft: #FEF2F2;
+  --status-info: #1D4ED8;
   --status-info-soft: #EFF6FF;
 
   /* Elevation */

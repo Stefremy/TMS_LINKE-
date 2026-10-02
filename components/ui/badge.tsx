@@ -4,38 +4,40 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'neutral' | 'info' | 'purple'
 }
 
-export function Badge({ className = '', variant = 'default', ...props }: BadgeProps) {
+export function Badge({ className = '', variant = 'default', children, ...props }: BadgeProps) {
   let variantStyles = ''
   
   switch (variant) {
     case 'success':
-      variantStyles = 'bg-[var(--status-success-soft)] text-[var(--status-success)] border-[rgba(18,138,71,0.2)]'
+      variantStyles = 'bg-emerald-50 text-emerald-800 border-emerald-200/80 font-medium'
       break
     case 'warning':
-      variantStyles = 'bg-[var(--status-warning-soft)] text-[var(--status-warning)] border-[rgba(217,119,6,0.2)]'
+      variantStyles = 'bg-amber-50 text-amber-900 border-amber-200/80 font-medium'
       break
     case 'info':
-      variantStyles = 'bg-[var(--status-info-soft)] text-[var(--status-info)] border-[rgba(37,99,235,0.2)]'
+      variantStyles = 'bg-blue-50 text-blue-900 border-blue-200/80 font-medium'
       break
     case 'purple':
-      variantStyles = 'bg-purple-50 text-purple-700 border-purple-200/80'
+      variantStyles = 'bg-violet-50 text-violet-900 border-violet-200/80 font-medium'
       break
     case 'danger':
-      variantStyles = 'bg-[var(--status-critical-soft)] text-[var(--status-critical)] border-[rgba(220,38,38,0.2)]'
+      variantStyles = 'bg-rose-50 text-rose-900 border-rose-200/80 font-medium'
       break
     case 'neutral':
-      variantStyles = 'bg-[var(--surface-muted)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
+      variantStyles = 'bg-slate-100 text-slate-700 border-slate-200 font-medium'
       break
     case 'default':
     default:
-      variantStyles = 'bg-[var(--surface-muted)] text-[var(--text-primary)] border-[var(--border-subtle)]'
+      variantStyles = 'bg-slate-100 text-slate-800 border-slate-200 font-medium'
       break
   }
 
   return (
     <div
-      className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border tracking-wide ${variantStyles} ${className}`}
+      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] border shadow-2xs transition-colors ${variantStyles} ${className}`}
       {...props}
-    />
+    >
+      {children}
+    </div>
   )
 }

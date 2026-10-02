@@ -241,9 +241,8 @@ function PublicTrackingContent() {
                 </div>
 
                 <div className="flex flex-col sm:items-end gap-1.5">
-                  <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold shadow-2xs ${statusCfg.color}`}>
-                    <span className={`w-2 h-2 rounded-full ${statusCfg.dotColor} shrink-0`} />
-                    <span>{statusCfg.label}</span>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-md text-xs font-medium shadow-2xs border ${statusCfg.color}`}>
+                    {statusCfg.label}
                   </span>
                   
                   <div className="flex items-center gap-2 text-[11px] text-slate-500">

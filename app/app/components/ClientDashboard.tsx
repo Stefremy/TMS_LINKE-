@@ -256,29 +256,8 @@ export function ClientDashboard() {
   const paymentTerms = currentClient?.payment_terms || "Pronto Pagamento"
   const activeServices = (currentClient?.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING).filter(s => s.is_enabled)
 
-  const activeWebserviceIds = React.useMemo(() => {
-    const ids = new Set<string>()
-    if (currentClient?.assigned_linke_service_ids && currentClient.assigned_linke_service_ids.length > 0) {
-      currentClient.assigned_linke_service_ids.forEach(id => {
-        const servico = servicosLinke.find(s => s.id === id)
-        if (servico?.webservice_connection_id) {
-          ids.add(servico.webservice_connection_id)
-        } else if (servico?.preferred_carrier_id || servico?.preferred_carrier_name) {
-          const str = (servico.preferred_carrier_id + " " + servico.preferred_carrier_name).toLowerCase()
-          if (str.includes("ctt")) ids.add("ws_ctt")
-          if (str.includes("correos")) ids.add("ws_correos")
-          if (str.includes("dpd")) ids.add("ws_dpd")
-        }
-      })
-    } else {
-      if (activeServices.length > 0) ids.add("ws_ctt")
-    }
-    return ids
-  }, [currentClient, servicosLinke, activeServices])
-
-  const displayWebservices = currentClient?.allowed_webservices?.filter(ws => ws.is_enabled && activeWebserviceIds.has(ws.id)) || []
-
   // Real credit calculation
+  const availableCredit = Math.max(creditLimit - stats.totalRevenue, 0)
   const usedCreditPct = creditLimit > 0 ? Math.min((stats.totalRevenue / creditLimit) * 100, 100).toFixed(1) : "0"
 
   if (loadingStats || statsError) return (
@@ -301,56 +280,44 @@ export function ClientDashboard() {
       />
       
       {/* Top Welcome & Client Header Banner */}
-      <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 text-white rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="bg-white/20 backdrop-blur-xs text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5" />
+      <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 sm:p-7 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-[var(--accent)]" />
+
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)] flex items-center gap-1.5 shadow-2xs">
+              <Building2 className="w-3.5 h-3.5 text-[var(--accent)]" />
               {currentClient?.code || "CLIENTE"}
             </span>
-            <span className="text-emerald-100 text-xs font-semibold">
-              {currentClient?.city ? `Sede: ${currentClient.city}` : "Conta Ativa"}
+            {currentClient?.city && (
+              <span className="text-xs text-[var(--text-tertiary)] flex items-center gap-1 font-medium">
+                <MapPin className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+                Sede: {currentClient.city}
+              </span>
+            )}
+            <span className="text-xs text-[var(--text-tertiary)]">•</span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-[var(--accent)] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
+              Conta Ativa
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--text-primary)]">
             {currentClient?.legal_name || currentClient?.short_name || "Portal de Envios do Cliente"}
           </h1>
-          <p className="text-emerald-100 text-xs sm:text-sm max-w-2xl leading-relaxed">
+
+          <p className="text-xs sm:text-sm text-[var(--text-secondary)] max-w-2xl leading-relaxed">
             Painel operacional e analítico com métricas em tempo real, tabelas de preçário acordadas e emissão integrada de envios.
           </p>
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <span className="text-[11px] text-emerald-200 font-semibold">Operador Integrado:</span>
-            {displayWebservices.length > 0 ? (
-              displayWebservices.map((ws) => (
-                <div key={ws.id} className="flex items-center gap-2 bg-white/10 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-white/15">
-                  <div className="w-5 h-5 rounded bg-white p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={getCarrierLogo(ws.code) || getCarrierLogo("ctt") || ""} alt={ws.name} className="max-w-full max-h-full object-contain" />
-                  </div>
-                  <span className="text-xs font-bold text-white">{ws.name} API</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                </div>
-              ))
-            ) : (
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-white/15">
-                <div className="w-5 h-5 rounded bg-white p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={getCarrierLogo("ctt") || ""} alt="CTT Expresso" className="max-w-full max-h-full object-contain" />
-                </div>
-                <span className="text-xs font-bold text-white">Sem Integração Ativa</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-              </div>
-            )}
-          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
           <button
             type="button"
             onClick={() => setIsTopUpOpen(true)}
-            className="px-5 py-3.5 bg-emerald-800/80 hover:bg-emerald-800 text-white active:scale-[0.99] rounded-2xl text-xs sm:text-sm font-extrabold shadow-md transition-all flex items-center gap-2 backdrop-blur-xs border border-white/20 cursor-pointer"
+            className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-2 transition-colors cursor-pointer"
           >
-            <CreditCard className="w-4 h-4 text-emerald-200" />
+            <CreditCard className="w-4 h-4 text-slate-500" />
             <span>Carregar Saldo</span>
           </button>
           
@@ -361,17 +328,17 @@ export function ClientDashboard() {
                 alert("Conta bloqueada. O teu saldo é 0.00€ ou negativo. Efetua um carregamento para voltares a criar envios.")
                 setIsTopUpOpen(true)
               }}
-              className="px-6 py-3.5 bg-red-100 text-red-700 active:scale-[0.99] rounded-2xl text-xs sm:text-sm font-extrabold shadow-md transition-all flex items-center gap-2"
+              className="px-4 py-2.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-not-allowed shadow-2xs"
             >
-              <PlusCircle className="w-4 h-4 text-red-500" />
+              <PlusCircle className="w-4 h-4 text-slate-400" />
               <span>Novo Envio (Bloqueado)</span>
             </button>
           ) : (
             <Link
               href={`/app/criar-guia${querySuffix}`}
-              className="px-6 py-3.5 bg-white text-emerald-900 hover:bg-emerald-50 active:scale-[0.99] rounded-2xl text-xs sm:text-sm font-extrabold shadow-md transition-all flex items-center gap-2"
+              className="px-5 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-2 transition-colors cursor-pointer"
             >
-              <PlusCircle className="w-4 h-4 text-emerald-600" />
+              <PlusCircle className="w-4 h-4 text-white" />
               <span>Novo Envio</span>
             </Link>
           )}
@@ -385,99 +352,115 @@ export function ClientDashboard() {
       />
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* KPI 1: Envios Totais Reais */}
-        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--accent)] transition-colors">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Volume de Envios</span>
-            <div className="w-9 h-9 rounded-xl bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center font-bold">
-              <Package className="w-5 h-5" />
+        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--border-strong)] transition-all duration-150">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Volume de Envios</span>
+            <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0">
+              <Package className="w-4 h-4" strokeWidth={1.75} />
             </div>
           </div>
           <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[var(--text-primary)] font-mono">{stats.totalCount}</span>
-            </div>
-            <p className="text-[11px] text-[var(--text-tertiary)] mt-1">{stats.deliveredCount} entregues no destino</p>
+            <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">{stats.totalCount}</span>
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-1.5">{stats.deliveredCount} entregues no destino</p>
           </div>
         </div>
 
         {/* KPI 2: Faturação Real */}
-        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--accent)] transition-colors">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Faturação Acumulada</span>
-            <div className="w-9 h-9 rounded-xl bg-[var(--status-info-soft)] text-[var(--status-info)] flex items-center justify-center font-bold">
-              <Receipt className="w-5 h-5" />
+        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--border-strong)] transition-all duration-150">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Faturação Acumulada</span>
+            <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0">
+              <Receipt className="w-4 h-4" strokeWidth={1.75} />
             </div>
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[var(--text-primary)] font-mono">
+              <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
                 {stats.totalRevenue.toFixed(2)}€
               </span>
               <span className="text-[11px] text-[var(--text-tertiary)] font-medium">+ IVA</span>
             </div>
-            <p className="text-[11px] text-[var(--text-tertiary)] mt-1">Condições: <strong>{paymentTerms}</strong></p>
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-1.5">Condições: <strong className="text-[var(--text-secondary)]">{paymentTerms}</strong></p>
           </div>
         </div>
 
         {/* KPI 3: Desconto Real */}
-        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--accent)] transition-colors">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Desconto Contratual</span>
-            <div className="w-9 h-9 rounded-xl bg-[rgba(99,102,241,0.1)] text-[#4f46e5] flex items-center justify-center font-bold">
-              <Percent className="w-5 h-5" />
+        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--border-strong)] transition-all duration-150">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Desconto Contratual</span>
+            <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0">
+              <Percent className="w-4 h-4" strokeWidth={1.75} />
             </div>
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#4f46e5] font-mono">{discountPct}%</span>
-              <span className="text-[11px] text-[#4f46e5] bg-[rgba(99,102,241,0.1)] px-2 py-0.5 rounded-full font-bold">
-                Taxa Comb: {fuelPct}%
+              <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">{discountPct}%</span>
+              <span className="text-[11px] text-[var(--text-secondary)] bg-[var(--surface-muted)] border border-[var(--border-subtle)] px-2 py-0.5 rounded-md font-medium">
+                Comb: {fuelPct}%
               </span>
             </div>
             <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)] mt-1.5">
               <span>{activeServices.length} serviços autorizados</span>
               <div className="flex items-center gap-1">
-                <div className="w-4 h-4 rounded-full bg-[var(--surface-bg)] border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
+                <div className="w-4 h-4 rounded-full bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={getCarrierLogo("ctt") || ""} alt="CTT Expresso" className="max-w-full max-h-full object-contain" />
                 </div>
-                <span className="text-[10px] font-bold text-[var(--text-secondary)]">CTT Expresso</span>
+                <span className="text-[10px] font-semibold text-[var(--text-secondary)]">CTT Expresso</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* KPI 4: Crédito (Saldo) */}
-        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--accent)] transition-colors">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">Crédito (Saldo)</span>
-            <div className="w-9 h-9 rounded-xl bg-[var(--status-warning-soft)] text-[var(--status-warning)] flex items-center justify-center font-bold">
-              <ShieldCheck className="w-5 h-5" />
+        {/* KPI 4: Crédito (Saldo Disponível) */}
+        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--border-strong)] transition-all duration-150">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Saldo Disponível</span>
+            <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4" strokeWidth={1.75} />
             </div>
           </div>
           <div>
             {creditLimit > 0 ? (
               <>
                 <div className="flex items-baseline justify-between mb-1.5">
-                  <span className="text-xl font-black text-[var(--text-primary)] font-mono">
-                    {creditLimit.toLocaleString("pt-PT")}€
+                  <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
+                    {availableCredit.toFixed(2)}€
                   </span>
-                  <span className="text-xs font-bold text-[var(--accent)]">{usedCreditPct}% Utilizado</span>
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
+                    Number(usedCreditPct) >= 90
+                      ? "text-[var(--status-critical)] bg-[var(--status-critical-soft)] border-[rgba(239,68,68,0.2)]"
+                      : Number(usedCreditPct) >= 75
+                        ? "text-[var(--status-warning)] bg-[var(--status-warning-soft)] border-[rgba(245,158,11,0.2)]"
+                        : "text-[var(--accent)] bg-[var(--accent-soft)] border-[rgba(18,138,71,0.2)]"
+                  }`}>
+                    {usedCreditPct}% consumido
+                  </span>
                 </div>
-                <div className="w-full bg-[var(--surface-muted)] rounded-full h-2 overflow-hidden">
-                  <div className="bg-[var(--accent)] h-2 rounded-full transition-all duration-500" style={{ width: `${usedCreditPct}%` }} />
+                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden my-2">
+                  <div
+                    className={`h-1.5 rounded-full transition-all duration-500 ${
+                      Number(usedCreditPct) >= 90
+                        ? "bg-[var(--status-critical)]"
+                        : Number(usedCreditPct) >= 75
+                          ? "bg-[var(--status-warning)]"
+                          : "bg-[var(--accent)]"
+                    }`}
+                    style={{ width: `${Math.min(Number(usedCreditPct) || 0, 100)}%` }}
+                  />
                 </div>
-                <p className="text-[10px] text-[var(--text-tertiary)] mt-1">
-                  Disponível: {Math.max(creditLimit - stats.totalRevenue, 0).toLocaleString("pt-PT")}€
-                </p>
+                <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)] mt-1">
+                  <span>Plafond: <strong className="text-[var(--text-secondary)] font-mono font-semibold">{creditLimit.toLocaleString("pt-PT")}€</strong></span>
+                  <span>Usado: <strong className="text-[var(--text-secondary)] font-mono font-semibold">{stats.totalRevenue.toFixed(2)}€</strong></span>
+                </div>
               </>
             ) : (
               <>
-                <span className="text-2xl font-black text-[var(--text-primary)] font-mono">Sem Limite</span>
-                <p className="text-[11px] text-[var(--text-tertiary)] mt-1">Conta sem teto fixado</p>
+                <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono">Sem Limite</span>
+                <p className="text-[11px] text-[var(--text-tertiary)] mt-1.5">Conta com faturação direta sem teto fixo</p>
               </>
             )}
           </div>
@@ -537,7 +520,7 @@ export function ClientDashboard() {
               </span>
             </div>
             <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-              Lista dos envios emitidos com rastreamento em tempo real e impressão de etiquetas CTT.
+              Lista dos envios emitidos com rastreamento em tempo real e impressão de etiquetas.
             </p>
           </div>
 
@@ -605,7 +588,7 @@ export function ClientDashboard() {
               <thead className="bg-[var(--surface-muted)] text-[var(--text-tertiary)] font-bold uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
                 <tr>
                   <th className="py-3.5 px-5">Guia / Rastreio</th>
-                  <th className="py-3.5 px-5">Serviço CTT</th>
+                  <th className="py-3.5 px-5">Serviço / Operador</th>
                   <th className="py-3.5 px-5">Destinatário & Destino</th>
                   <th className="py-3.5 px-5">Data Emissão</th>
                   <th className="py-3.5 px-5">Valor</th>
@@ -720,8 +703,7 @@ export function ClientDashboard() {
                           const cfg = getShipmentStatusConfig(shipment.status)
                           return (
                             <Badge variant={cfg.badgeVariant}>
-                              <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${cfg.dotColor} shrink-0`} />
-                              <span>{cfg.label}</span>
+                              {cfg.label}
                             </Badge>
                           )
                         })()}
@@ -752,7 +734,7 @@ export function ClientDashboard() {
                                 className="w-full px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] flex items-center gap-2 transition-colors cursor-pointer"
                               >
                                 <Printer className="w-3.5 h-3.5 text-[var(--accent)]" />
-                                <span>Imprimir Etiqueta CTT</span>
+                                <span>Imprimir Etiqueta</span>
                               </button>
                               <button
                                 type="button"
@@ -877,7 +859,7 @@ export function ClientDashboard() {
                 <BarChart3 className="w-5 h-5 text-[var(--accent)]" />
                 <h3 className="text-base font-bold text-[var(--text-primary)]">Volume de Envios por Dia</h3>
               </div>
-              <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Distribuição diária de emissão de guias de transporte CTT</p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-0.5">Distribuição diária de emissão de guias de transporte</p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -893,7 +875,7 @@ export function ClientDashboard() {
               <Package className="w-8 h-8 text-[var(--text-tertiary)] mb-2" />
               <p className="text-xs font-bold text-[var(--text-secondary)]">Sem envios registados</p>
               <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5">
-                Os gráficos de barras serão preenchidos em tempo real à medida que emitir novas guias CTT.
+                Os gráficos de barras serão preenchidos em tempo real à medida que emitir novas guias.
               </p>
             </div>
           ) : (
@@ -921,7 +903,7 @@ export function ClientDashboard() {
           <div className="flex flex-wrap items-center justify-between gap-4 pt-4 text-xs text-[var(--text-secondary)]">
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-sm bg-[var(--accent)]" />
-              <span>Envios CTT Registados</span>
+              <span>Envios Registados</span>
             </div>
             <span className="font-semibold text-[var(--text-secondary)]">
               Total Acumulado: <strong className="text-[var(--text-primary)]">{stats.totalCount} guias</strong>

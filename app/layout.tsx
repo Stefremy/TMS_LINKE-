@@ -6,6 +6,11 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'TMS LINKE',
   description: 'Sistema de Gestão de Transportes',
+  icons: {
+    icon: '/favicon.png',
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
 }
 
 export default function RootLayout({

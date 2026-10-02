@@ -364,24 +364,24 @@ export function ClientShipmentDetailModal({
         {/* Modal Header */}
         <div className="p-5 sm:p-6 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-muted)]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.1)] flex items-center justify-center font-bold shadow-2xs">
-              <Package className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 text-slate-800 flex items-center justify-center font-bold shadow-2xs">
+              <Package className="w-5 h-5 text-slate-700" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Detalhes do Envio</h3>
-                <span className="font-mono text-xs bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)] px-2.5 py-0.5 rounded-md font-bold">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">Detalhes do Envio</h3>
+                <span className="font-mono text-xs bg-white text-slate-900 border border-slate-200 px-2.5 py-0.5 rounded-md font-bold shadow-2xs">
                   {internalRef}
                 </span>
                 {carrierTracking && (
-                  <span className="font-mono text-xs bg-[var(--surface-dim)] text-[var(--text-secondary)] border border-[var(--border-strong)] px-2.5 py-0.5 rounded-md font-bold shadow-xs" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Referência CTT Expresso"}>
+                  <span className="font-mono text-xs bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-md font-medium" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Referência CTT Expresso"}>
                     {isCorreos ? "Correos: " : "CTT: "}{carrierTracking}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 text-xs text-[var(--text-tertiary)] mt-1 font-medium">
+              <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 font-medium">
                 <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5" />
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
                   {dateFormatted}
                 </span>
                 <span>•</span>
@@ -389,8 +389,7 @@ export function ClientShipmentDetailModal({
                   const cfg = getShipmentStatusConfig(currentStatus)
                   return (
                     <Badge variant={cfg.badgeVariant}>
-                      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${cfg.dotColor} shrink-0`} />
-                      <span>{cfg.label}</span>
+                      {cfg.label}
                     </Badge>
                   )
                 })()}
@@ -402,7 +401,7 @@ export function ClientShipmentDetailModal({
             <button
               type="button"
               onClick={printLabel}
-              className="px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Imprimir etiqueta em nova janela"
             >
               <Printer className="w-3.5 h-3.5" />
@@ -412,10 +411,10 @@ export function ClientShipmentDetailModal({
             <button
               type="button"
               onClick={downloadLabel}
-              className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Descarregar etiqueta em PDF"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 text-slate-500" />
               <span>Descarregar PDF</span>
             </button>
 
@@ -424,13 +423,13 @@ export function ClientShipmentDetailModal({
               type="button"
               onClick={handleCreateReturn}
               disabled={isCreatingReturn}
-              className="px-3 py-1.5 bg-[var(--status-warning-soft)] hover:bg-[rgba(217,119,6,0.15)] border border-[rgba(217,119,6,0.2)] text-[var(--status-warning)] rounded-md text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
               title="Criar guia de devolução (inverte remetente/destinatário)"
             >
               {isCreatingReturn ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />
               ) : (
-                <Undo2 className="w-3.5 h-3.5" />
+                <Undo2 className="w-3.5 h-3.5 text-slate-500" />
               )}
               <span>Devolução</span>
             </button>
@@ -440,13 +439,13 @@ export function ClientShipmentDetailModal({
               type="button"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="px-3 py-1.5 bg-[var(--status-critical-soft)] hover:bg-[rgba(220,38,38,0.15)] border border-[rgba(220,38,38,0.2)] text-[var(--status-critical)] rounded-md text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              className="px-3 py-1.5 bg-white border border-slate-200 hover:border-red-200 hover:bg-red-50/60 text-slate-600 hover:text-red-700 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
               title="Eliminar envio permanentemente"
             >
               {isDeleting ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />
               ) : (
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-600" />
               )}
               <span>Eliminar</span>
             </button>
@@ -454,7 +453,7 @@ export function ClientShipmentDetailModal({
             <button 
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-md bg-[var(--surface-bg)] border border-[var(--border-strong)] flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer ml-1 shadow-2xs"
+              className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer ml-1 shadow-2xs"
             >
               <X className="w-4 h-4" />
             </button>
@@ -462,26 +461,19 @@ export function ClientShipmentDetailModal({
         </div>
 
         {/* Status Control Bar */}
-        <div className="px-6 py-2.5 bg-[var(--surface-dim)] border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="px-6 py-2 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2.5">
-            <span className="font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Estado da Encomenda:</span>
+            <span className="text-slate-500 font-medium text-xs">Estado da Encomenda:</span>
             {(() => {
               const cfg = getShipmentStatusConfig(currentStatus)
               return (
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider leading-none shadow-2xs border ${
-                  cfg.color.includes('green') ? 'bg-[var(--status-success-soft)] text-[var(--status-success)] border-[rgba(18,138,71,0.2)]' :
-                  cfg.color.includes('yellow') || cfg.color.includes('orange') ? 'bg-[var(--status-warning-soft)] text-[var(--status-warning)] border-[rgba(217,119,6,0.2)]' :
-                  cfg.color.includes('red') ? 'bg-[var(--status-critical-soft)] text-[var(--status-critical)] border-[rgba(220,38,38,0.2)]' :
-                  cfg.color.includes('blue') ? 'bg-[var(--status-info-soft)] text-[var(--status-info)] border-[rgba(37,99,235,0.2)]' :
-                  'bg-[var(--surface-muted)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dotColor.replace('bg-', 'bg-')} shrink-0`} />
-                  <span>{cfg.label}</span>
-                </span>
+                <Badge variant={cfg.badgeVariant}>
+                  {cfg.label}
+                </Badge>
               )
             })()}
-            <span className="text-[10px] text-[var(--text-tertiary)] font-medium hidden sm:inline ml-1">
-              {isCorreos ? "(Sincronizado com API Correos)" : "(Sincronizado com API CTT)"}
+            <span className="text-xs text-slate-400 font-normal hidden sm:inline ml-1">
+              {isCorreos ? "(Sincronizado com API Correos Express)" : "(Sincronizado com API CTT)"}
             </span>
           </div>
 
@@ -490,10 +482,10 @@ export function ClientShipmentDetailModal({
               type="button"
               onClick={handleSyncTracking}
               disabled={isSyncing}
-              className="bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold px-3 py-1 rounded-md flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50 text-[10px] uppercase tracking-wider"
+              className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 font-medium px-3 py-1 rounded-md flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50 text-xs"
               title={isCorreos ? "Consultar API Correos Express para obter novas leituras de tracking" : "Consultar API dos CTT para obter novas leituras de tracking"}
             >
-              <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin text-[var(--accent)]" : ""}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-slate-600" : "text-slate-500"}`} />
               <span>{isSyncing ? "A Sincronizar..." : "Sincronizar"}</span>
             </button>
           </div>

@@ -117,6 +117,36 @@ export async function recordTrackingEvents(
     console.warn("[Tracking Recorder] Falha ao atualizar audit_log:", err?.message)
   }
 
+  // 4. Disparo automático de notificações por email ao destinatário (CTT e Correos Express)
+  try {
+    const isIncident = Boolean(lastEvent.isIncidencia || lastEvent.status === "incidencia" || lastEvent.displayStatus === "incidencia")
+    const isInTransit = Boolean(
+      lastEvent.status === "em_distribuicao" ||
+      lastEvent.status === "entrada_rede" ||
+      lastEvent.displayStatus === "em_distribuicao" ||
+      lastEvent.displayStatus === "em_transito"
+    )
+
+    if (isIncident) {
+      import("@/lib/email/tracking-notifications").then(({ sendTrackingEmailNotification }) => {
+        sendTrackingEmailNotification(shipmentId, "incident", {
+          reason: lastEvent.description || "Ocorreu uma anomalia durante a tentativa de entrega.",
+          eventCode: lastEvent.eventCode,
+          shipment: targetShipment,
+        }).catch(err => console.warn("[Tracking Recorder] Falha ao enviar email de incidência:", err?.message))
+      })
+    } else if (isInTransit) {
+      import("@/lib/email/tracking-notifications").then(({ sendTrackingEmailNotification }) => {
+        sendTrackingEmailNotification(shipmentId, "in_transit", {
+          eventCode: lastEvent.eventCode,
+          shipment: targetShipment,
+        }).catch(err => console.warn("[Tracking Recorder] Falha ao enviar email de trânsito:", err?.message))
+      })
+    }
+  } catch (err: any) {
+    console.warn("[Tracking Recorder] Erro ao disparar notificação por email:", err?.message)
+  }
+
   return {
     success: true,
     carrier,
