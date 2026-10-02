@@ -1239,7 +1239,44 @@ export async function emitReceiptAction(statementId: string, clientId: string, m
 }
 
 
-export async function emitMoloniReceiptForStatementAction(statementId: string) {
+export async function getMoloniPaymentMethodsAction() {
+  await requireEmployee()
+  try {
+    const supabase = createAdminClient()
+    let moloniConfig: any = null
+    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
+      moloniConfig = {
+        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
+        companyId: process.env.MOLONI_COMPANY_ID,
+      }
+    } else {
+      const { data: mLogs } = await supabase
+        .from("audit_log")
+        .select("details")
+        .eq("action", "moloni_connection_config")
+        .order("created_at", { ascending: false })
+        .limit(1)
+      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
+        moloniConfig = {
+          refreshToken: mLogs[0].details.refresh_token,
+          companyId: mLogs[0].details.company_id,
+        }
+      }
+    }
+    if (!moloniConfig) return { success: false, methods: [] }
+    const moloni = new MoloniClient(moloniConfig)
+    const methods = await moloni.getPaymentMethods()
+    return { success: true, methods }
+  } catch (err: any) {
+    console.error("getMoloniPaymentMethodsAction error:", err)
+    return { success: false, methods: [] }
+  }
+}
+
+export async function emitMoloniReceiptForStatementAction(
+  statementId: string,
+  opts?: { date?: string; paymentMethodId?: number; notes?: string }
+) {
   await requireEmployee()
   try {
     const supabase = createAdminClient()
@@ -1330,7 +1367,7 @@ export async function emitMoloniReceiptForStatementAction(statementId: string) {
       })
     }
 
-    const dateNow = new Date().toISOString().split("T")[0]
+    const dateNow = opts?.date || new Date().toISOString().split("T")[0]
 
     // Criar o recibo
     const receiptRes = await moloni.createReceipt({
@@ -1338,7 +1375,9 @@ export async function emitMoloniReceiptForStatementAction(statementId: string) {
       date: dateNow,
       documentSetId: documentSetId,
       invoiceId: stmt.moloni_document_id,
-      value: Number(stmt.total_value || 0)
+      value: Number(stmt.total_value || 0),
+      paymentMethodId: opts?.paymentMethodId,
+      notes: opts?.notes,
     })
 
     const moloniReceiptId = receiptRes.document_id

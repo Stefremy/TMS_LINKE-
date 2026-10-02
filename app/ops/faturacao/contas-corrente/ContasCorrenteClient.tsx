@@ -47,6 +47,18 @@ export default function ContasCorrenteClient({
   const [startDate, setStartDate] = React.useState<string>("")
   const [endDate, setEndDate] = React.useState<string>("")
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
+
+  // Modal emissão de recibo
+  const [receiptModalStmt, setReceiptModalStmt] = React.useState<any | null>(null)
+  const [receiptDate, setReceiptDate] = React.useState<string>(new Date().toISOString().split('T')[0])
+  const [receiptPaymentMethod, setReceiptPaymentMethod] = React.useState<number>(3320318)
+  const [receiptNotes, setReceiptNotes] = React.useState<string>("")
+  const [availablePaymentMethods, setAvailablePaymentMethods] = React.useState<Array<{ payment_method_id: number; name: string }>>([
+    { payment_method_id: 3320318, name: "Transferência Bancária" },
+    { payment_method_id: 3320323, name: "Multibanco / MB Way" },
+    { payment_method_id: 3320308, name: "Numerário" },
+    { payment_method_id: 3320313, name: "Cheque" },
+  ])
   
   // Envios excluídos manualmente pelo utilizador
   const [excludedShipmentIds, setExcludedShipmentIds] = React.useState<Set<string>>(new Set())
@@ -64,18 +76,43 @@ export default function ContasCorrenteClient({
   const paidStatements = React.useMemo(() => statements?.filter((s: any) => s.status === 'paid' || Boolean(s.moloni_receipt_pdf) || Boolean(s.moloni_receipt_id)) || [], [statements])
   const unpaidStatements = React.useMemo(() => statements?.filter((s: any) => s.status !== 'paid' && !s.moloni_receipt_pdf && !s.moloni_receipt_id && !s.is_pro_forma && Boolean(s.moloni_document_id)) || [], [statements])
 
-  const handleEmitReceipt = async (stmt: any) => {
+  const handleEmitReceipt = (stmt: any) => {
     if (!moloniConfig?.isConnected) {
       setIsMoloniModalOpen(true)
       return
     }
-    const ok = confirm(`Deseja emitir o recibo no Moloni para a fatura ${stmt.statement_number}? Ao emitir o recibo, a conta será liquidada e passará para o Histórico de Contas Pagas.`)
-    if (!ok) return
+    // Open the receipt modal instead of confirm()
+    setReceiptDate(new Date().toISOString().split('T')[0])
+    const defaultMethod = availablePaymentMethods.find(m => /transfer[eê]ncia/i.test(m.name))
+    setReceiptPaymentMethod(defaultMethod?.payment_method_id || 3320318)
+    setReceiptNotes("")
+    setReceiptModalStmt(stmt)
 
+    // Load actual live payment methods from Moloni
+    import("@/app/actions/moloni").then(({ getMoloniPaymentMethodsAction }) => {
+      getMoloniPaymentMethodsAction().then(res => {
+        if (res.success && res.methods && res.methods.length > 0) {
+          setAvailablePaymentMethods(res.methods)
+          const m = res.methods.find((x: any) => /transfer[eê]ncia/i.test(x.name))
+          if (m) {
+            setReceiptPaymentMethod(m.payment_method_id)
+          }
+        }
+      })
+    }).catch(() => {})
+  }
+
+  const handleConfirmReceipt = async () => {
+    if (!receiptModalStmt) return
+    const stmt = receiptModalStmt
+    setReceiptModalStmt(null)
     setIsLoading(true)
     try {
       const { emitMoloniReceiptForStatementAction } = await import("@/app/actions/moloni")
-      const res = await emitMoloniReceiptForStatementAction(stmt.statement_number || stmt.id)
+      const res = await emitMoloniReceiptForStatementAction(
+        stmt.statement_number || stmt.id,
+        { date: receiptDate, paymentMethodId: receiptPaymentMethod, notes: receiptNotes || undefined }
+      )
       if (res.success) {
         if (res.moloniReceiptPdf) {
           try {
@@ -745,35 +782,10 @@ export default function ContasCorrenteClient({
                               </a>
                             ) : (stmt.moloni_document_id && !stmt.is_pro_forma) ? (
                               <button
-                                onClick={async (e) => {
+                                onClick={(e) => {
                                   e.stopPropagation()
                                   setOpenActionMenuId(null)
-                                  if (!moloniConfig?.isConnected) {
-                                    setIsMoloniModalOpen(true)
-                                    return
-                                  }
-                                  const ok = confirm(`Deseja emitir o recibo no Moloni para o extrato ${stmt.statement_number} marcando-o como pago?`)
-                                  if (!ok) return
-                                  
-                                  const { emitMoloniReceiptForStatementAction } = await import("@/app/actions/moloni")
-                                  const res = await emitMoloniReceiptForStatementAction(stmt.statement_number || stmt.id)
-                                  if (res.success) {
-                                    if (res.moloniReceiptPdf) {
-                                      try {
-                                        const link = document.createElement("a")
-                                        link.href = res.moloniReceiptPdf
-                                        link.setAttribute("download", `Recibo_${(stmt.statement_number || stmt.id).replace(/[\\/\\]/g, "_")}.pdf`)
-                                        link.target = "_blank"
-                                        document.body.appendChild(link)
-                                        link.click()
-                                        document.body.removeChild(link)
-                                      } catch (err) {}
-                                    }
-                                    alert("Recibo emitido com sucesso!")
-                                    window.location.reload()
-                                  } else {
-                                    alert(`Erro ao emitir recibo: ${res.error}`)
-                                  }
+                                  handleEmitReceipt(stmt)
                                 }}
                                 className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
                               >
@@ -907,6 +919,108 @@ export default function ContasCorrenteClient({
         onClose={() => setIsMoloniModalOpen(false)}
         config={moloniConfig}
       />
+
+      {/* ── Modal Emitir Recibo ── */}
+      {receiptModalStmt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-md rounded-2xl" style={{ background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-layer)' }}>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}>
+                  <FileText className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Emitir Recibo</h3>
+                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{receiptModalStmt.statement_number}</p>
+                </div>
+              </div>
+              <button onClick={() => setReceiptModalStmt(null)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-70 transition-opacity" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border-subtle)' }}>
+                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Valor */}
+              <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: 'var(--accent-soft)', border: '1px solid rgba(18,138,71,0.15)' }}>
+                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Valor a receber</span>
+                <span className="text-base font-bold" style={{ color: 'var(--accent)' }}>
+                  {Number(receiptModalStmt.total_value || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                </span>
+              </div>
+
+              {/* Data de emissão */}
+              <div>
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                  Data de Emissão
+                </label>
+                <input
+                  type="date"
+                  value={receiptDate}
+                  onChange={e => setReceiptDate(e.target.value)}
+                  className="w-full rounded-xl px-4 py-2.5 text-sm outline-none transition-all"
+                  style={{ background: 'var(--surface-muted)', border: '1px solid var(--border-strong)', color: 'var(--text-primary)' }}
+                />
+              </div>
+
+              {/* Método de pagamento */}
+              <div>
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                  Método de Pagamento
+                </label>
+                <select
+                  value={receiptPaymentMethod}
+                  onChange={e => setReceiptPaymentMethod(Number(e.target.value))}
+                  className="w-full rounded-xl px-4 py-2.5 text-sm outline-none transition-all cursor-pointer"
+                  style={{ background: 'var(--surface-muted)', border: '1px solid var(--border-strong)', color: 'var(--text-primary)' }}
+                >
+                  {availablePaymentMethods.map(m => (
+                    <option key={m.payment_method_id} value={m.payment_method_id} style={{ background: 'var(--surface-bg)', color: 'var(--text-primary)' }}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Notas */}
+              <div>
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                  Notas <span className="font-normal" style={{ color: 'var(--text-tertiary)' }}>(opcional)</span>
+                </label>
+                <textarea
+                  value={receiptNotes}
+                  onChange={e => setReceiptNotes(e.target.value)}
+                  placeholder="Ex: Pagamento referente à fatura FT 2026/12"
+                  rows={2}
+                  className="w-full rounded-xl px-4 py-2.5 text-sm outline-none transition-all resize-none"
+                  style={{ background: 'var(--surface-muted)', border: '1px solid var(--border-strong)', color: 'var(--text-primary)' }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center gap-3 px-6 pb-5" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
+              <button
+                onClick={() => setReceiptModalStmt(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-70"
+                style={{ background: 'var(--surface-muted)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmReceipt}
+                disabled={isLoading || !receiptDate}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                {isLoading ? 'A emitir…' : 'Emitir Recibo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

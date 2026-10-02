@@ -492,47 +492,6 @@ export default function FaturaPersonalizadaClient({
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Coluna da Esquerda (2 colunas de largura) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Card de Atalhos Rápidos (Templates) */}
-          <div className="bg-[var(--surface-bg)] rounded-xl p-5 shadow-2xs border border-[var(--border-subtle)]">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-[var(--accent)]" />
-              <h2 className="text-sm font-bold text-[var(--text-primary)]">Atalhos de Serviços Rápidos</h2>
-              <span className="text-[10px] bg-[var(--accent-soft)] text-[var(--accent)] font-bold px-2 py-0.5 rounded-full border border-[rgba(18,138,71,0.2)]">
-                Clique para adicionar
-              </span>
-            </div>
-            <p className="text-xs text-[var(--text-secondary)] mb-4">
-              Selecione serviços habituais da empresa para preencher automaticamente as linhas de faturação:
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {SERVICE_TEMPLATES.map((tmpl, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleAddItem(tmpl)}
-                  className="text-left p-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] hover:border-[var(--accent)] hover:bg-[var(--accent-soft)]/20 transition-all group flex flex-col justify-between cursor-pointer shadow-2xs"
-                >
-                  <div className="flex items-start">
-                    <div>
-                      <div className="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors leading-tight">
-                        {tmpl.title}
-                      </div>
-                      <div className="text-[11px] text-[var(--text-tertiary)] mt-1 line-clamp-2 leading-relaxed">
-                        {tmpl.description}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-3 pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between text-xs">
-                    <span className="font-mono font-bold text-[var(--text-primary)]">{tmpl.unitPrice.toFixed(2)} €</span>
-                    <span className="text-[var(--accent)] font-semibold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5 text-[11px]">
-                      + Adicionar
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Card de Dados do Cliente */}
           <div className="bg-[var(--surface-bg)] rounded-xl p-5 shadow-2xs border border-[var(--border-subtle)]">

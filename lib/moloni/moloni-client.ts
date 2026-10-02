@@ -631,6 +631,25 @@ export class MoloniClient {
   }
 
   /**
+   * Obtém os Métodos de Pagamento da empresa no Moloni
+   */
+  async getPaymentMethods(): Promise<Array<{ payment_method_id: number; name: string }>> {
+    try {
+      const result = await this.request("paymentMethods/getAll", {});
+      if (Array.isArray(result)) {
+        return result.map((m: any) => ({
+          payment_method_id: Number(m.payment_method_id),
+          name: String(m.name || "")
+        }));
+      }
+      return [];
+    } catch (e) {
+      console.warn("Could not fetch payment methods from Moloni:", e);
+      return [];
+    }
+  }
+
+  /**
    * Cria um Recibo para Liquidar uma Fatura
    */
   async createReceipt(data: {
@@ -639,11 +658,44 @@ export class MoloniClient {
     date: string;
     invoiceId: number;
     value: number;
+    paymentMethodId?: number;
+    notes?: string;
   }) {
     const roundTo2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
     const finalValue = roundTo2(Number(data.value));
 
-    const payload = {
+    // Resolver paymentMethodId real do Moloni
+    let paymentMethodId = data.paymentMethodId;
+    if (!paymentMethodId || paymentMethodId < 100) {
+      try {
+        const methods = await this.getPaymentMethods();
+        if (methods && methods.length > 0) {
+          if (paymentMethodId === 1) {
+            // Numerário
+            const match = methods.find(m => /numer[aá]rio|dinheiro/i.test(m.name));
+            paymentMethodId = match ? match.payment_method_id : methods[0].payment_method_id;
+          } else if (paymentMethodId === 2) {
+            // Multibanco
+            const match = methods.find(m => /multibanco|mb/i.test(m.name));
+            paymentMethodId = match ? match.payment_method_id : methods[0].payment_method_id;
+          } else if (paymentMethodId === 4) {
+            // Cheque
+            const match = methods.find(m => /cheque/i.test(m.name));
+            paymentMethodId = match ? match.payment_method_id : methods[0].payment_method_id;
+          } else {
+            // Default ou 3: Transferência Bancária
+            const match = methods.find(m => /transfer[eê]ncia/i.test(m.name));
+            paymentMethodId = match ? match.payment_method_id : (methods.find(m => !/cheque/i.test(m.name))?.payment_method_id || methods[0].payment_method_id);
+          }
+        } else {
+          paymentMethodId = 3320318; // Fallback ID conhecido de Transferência Bancária
+        }
+      } catch {
+        paymentMethodId = 3320318;
+      }
+    }
+
+    const payload: any = {
       date: data.date,
       document_set_id: data.documentSetId,
       customer_id: data.customerId,
@@ -652,7 +704,7 @@ export class MoloniClient {
       net_value: finalValue,
       payments: [
         {
-          payment_method_id: 3, // Transferência Bancária como default
+          payment_method_id: paymentMethodId,
           date: data.date,
           value: finalValue,
         }
@@ -664,6 +716,10 @@ export class MoloniClient {
         }
       ]
     };
+
+    if (data.notes) {
+      payload.notes = data.notes;
+    }
 
     let result;
     try {
