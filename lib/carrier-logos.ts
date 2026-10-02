@@ -49,16 +49,27 @@ export const CARRIER_LOGOS: Record<string, string> = {
 /**
  * Retorna o caminho do logo para uma determinada transportadora, ou null se não houver
  */
-export function getCarrierLogo(nameOrCode?: string): string | null {
+export function getCarrierLogo(nameOrCode?: string, customOverrides?: Record<string, string>): string | null {
   if (!nameOrCode) return "/logo_transportadoras/ctt_express_logo.svg"
   const normalized = nameOrCode.toLowerCase().trim()
 
-  // Match direto
+  // 1. Verificar sobreposições personalizadas configuradas pelo utilizador
+  if (customOverrides && Object.keys(customOverrides).length > 0) {
+    if (customOverrides[normalized]) return customOverrides[normalized]
+    for (const [k, v] of Object.entries(customOverrides)) {
+      const normK = k.toLowerCase().trim()
+      if (normK && (normalized.includes(normK) || normK.includes(normalized))) {
+        return v
+      }
+    }
+  }
+
+  // 2. Match direto nos padrões
   if (CARRIER_LOGOS[normalized]) {
     return CARRIER_LOGOS[normalized]
   }
 
-  // Match parcial
+  // 3. Match parcial nos padrões
   if (normalized.includes("ctt correios") || normalized === "correios") return "/logo_transportadoras/ctt_correios_logo.png"
   if (normalized.includes("correos")) return "/logo_transportadoras/correos_logo.jpeg"
   if (normalized.includes("dpd")) return "/logo_transportadoras/dpd_logo.svg"
@@ -69,3 +80,4 @@ export function getCarrierLogo(nameOrCode?: string): string | null {
 
   return "/logo_transportadoras/ctt_express_logo.svg"
 }
+

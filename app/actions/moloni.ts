@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
+import { getBillingConfigAction } from "@/app/actions/billing-config"
 
 const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 
@@ -102,10 +103,16 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
           })
         }
 
-        // B. Obter dados base do Moloni (Série, Taxa, Artigo Genérico)
-        const taxId = await moloni.getTaxId(23)
-        const documentSetId = await moloni.getDocumentSet()
-        const productId = await moloni.getGenericProductId(taxId)
+        // B. Obter dados base do Moloni (Série, Taxa, Artigo Genérico do TMS)
+        const billingConfig = await getBillingConfigAction()
+        const taxId = await moloni.getTaxId(billingConfig.defaultVatRate || 23)
+        const documentSetId = billingConfig.defaultDocumentSetId || (await moloni.getDocumentSet())
+        const productId = await moloni.getGenericProductId(
+          taxId,
+          billingConfig.articleReference,
+          billingConfig.articleDesignation,
+          billingConfig.articleSummary
+        )
 
         // C. Preparar Linhas da Fatura
         let products: any[] = []
@@ -135,10 +142,10 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
               products.push({
                 productId: productId,
                 name: `Serviço ${serviceName} (${data.qty} envios)`,
-                summary: `Faturação de envios no período.`,
+                summary: billingConfig.articleSummary || `Faturação de envios no período.`,
                 qty: 1, 
                 price: data.basePrice,
-                taxes: [{ tax_id: taxId, value: 23 }]
+                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
               })
             }
             if (data.fuelTax > 0) {
@@ -148,7 +155,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
                 summary: `Taxa suplementar aplicável ao serviço.`,
                 qty: 1,
                 price: data.fuelTax,
-                taxes: [{ tax_id: taxId, value: 23 }]
+                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
               })
             }
             if (data.specialFees > 0) {
@@ -158,7 +165,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
                 summary: `Taxas especiais selecionadas aplicadas ao serviço.`,
                 qty: 1,
                 price: data.specialFees,
-                taxes: [{ tax_id: taxId, value: 23 }]
+                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
               })
             }
           }
@@ -167,20 +174,28 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
           for (const s of shipments) {
             const serviceName = s.service_type || "Transporte / Logística"
             const trackingBase = s.tracking_number || s.reference || `ENV-${(s.id || "").slice(0, 8).toUpperCase()}`
-            const weightStr = s.weight_kg ? ` (Peso: ${s.weight_kg}kg)` : ""
-            const summaryText = s.recipient_name ? `Destino: ${s.recipient_name} ${s.recipient_city ? `(${s.recipient_city})` : ''}` : `Faturação de envio.`
-            const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
+            const weightStr = billingConfig.includeWeightInName !== false && s.weight_kg ? ` (Peso: ${s.weight_kg}kg)` : ""
+            const trackingPrefix = billingConfig.includeTrackingInName !== false ? `Envio ${trackingBase}` : "Envio"
+            const serviceSuffix = billingConfig.includeServiceNameInName !== false ? ` - ${serviceName}` : ""
+            const lineName = `${trackingPrefix}${serviceSuffix}${weightStr}`
 
+            let summaryText = ""
+            if (billingConfig.includeDestinationInSummary !== false && s.recipient_name) {
+              const citySuffix = billingConfig.includeCityInSummary !== false && s.recipient_city ? ` (${s.recipient_city})` : ""
+              summaryText = `Destino: ${s.recipient_name}${citySuffix}`
+            }
+
+            const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
             const specialFees = Number(s.special_fees_amount || 0)
 
             if (hasFuelTax) {
               products.push({
                 productId: productId,
-                name: `Envio ${trackingBase} - ${serviceName}${weightStr}`,
+                name: lineName,
                 summary: summaryText,
                 qty: 1,
                 price: Number(s.base_price || 0),
-                taxes: [{ tax_id: taxId, value: 23 }]
+                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
               })
               products.push({
                 productId: productId,
@@ -188,16 +203,16 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
                 summary: ``,
                 qty: 1,
                 price: Number(s.fuel_tax_amount || 0),
-                taxes: [{ tax_id: taxId, value: 23 }]
+                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
               })
             } else {
               products.push({
                 productId: productId,
-                name: `Envio ${trackingBase} - ${serviceName}${weightStr}`,
+                name: lineName,
                 summary: summaryText,
                 qty: 1,
                 price: Number(s.sell_price || 0) - specialFees,
-                taxes: [{ tax_id: taxId, value: 23 }]
+                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
               })
             }
 
@@ -222,7 +237,8 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
         }
 
         const dateNow = new Date().toISOString().split("T")[0]
-        const expirationDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+        const paymentDays = typeof billingConfig.defaultPaymentDays === "number" ? billingConfig.defaultPaymentDays : 30
+        const expirationDate = new Date(Date.now() + paymentDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
 
         // D. Emitir Fatura ou Fatura Pró-Forma
         let invoiceRes;
@@ -429,7 +445,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
       return { success: false, error: "Nenhuma empresa associada encontrada nesta conta Moloni." }
     }
 
-    const selectedCompany = companies[0]
+    const selectedCompany = (companies || []).find((c: any) => !c.name?.toLowerCase().includes("demonstração")) || companies[0]
     const companyId = String(selectedCompany.company_id)
 
     // 1. Guardar em audit_log
@@ -476,6 +492,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
       console.warn("Could not write to .env.local:", e?.message)
     }
 
+    revalidatePath("/ops/configuracao/faturacao")
     revalidatePath("/ops/faturacao/contas-corrente")
 
     return {
@@ -600,10 +617,16 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       })
     }
 
-    // 5. Obter artigos, taxas e série
-    const taxId = await moloni.getTaxId(23)
-    const documentSetId = await moloni.getDocumentSet()
-    const productId = await moloni.getGenericProductId(taxId)
+    // 5. Obter artigos, taxas e série (respeitando configurações de faturação do TMS)
+    const billingConfig = await getBillingConfigAction()
+    const taxId = await moloni.getTaxId(billingConfig.defaultVatRate || 23)
+    const documentSetId = billingConfig.defaultDocumentSetId || (await moloni.getDocumentSet())
+    const productId = await moloni.getGenericProductId(
+      taxId,
+      billingConfig.articleReference,
+      billingConfig.articleDesignation,
+      billingConfig.articleSummary
+    )
 
     // 6. Preparar linhas dos envios
     const shipments = stmt.shipments || []
@@ -636,10 +659,10 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
           products.push({
             productId: productId,
             name: `Serviço ${serviceName} (${data.qty} envios)`,
-            summary: `Faturação de envios no período.`,
+            summary: billingConfig.articleSummary || `Faturação de envios no período.`,
             qty: 1, 
             price: data.basePrice,
-            taxes: [{ tax_id: taxId, value: 23 }]
+            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
           })
         }
         if (data.fuelTax > 0) {
@@ -649,7 +672,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
             summary: `Taxa suplementar aplicável ao serviço.`,
             qty: 1,
             price: data.fuelTax,
-            taxes: [{ tax_id: taxId, value: 23 }]
+            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
           })
         }
         if (data.specialFees > 0) {
@@ -659,7 +682,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
             summary: `Taxas especiais selecionadas aplicadas ao serviço.`,
             qty: 1,
             price: data.specialFees,
-            taxes: [{ tax_id: taxId, value: 23 }]
+            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
           })
         }
       }
@@ -668,20 +691,28 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       for (const s of shipments) {
         const serviceName = s.service_type || "Transporte / Logística"
         const trackingBase = s.tracking_number || s.reference || `ENV-${(s.id || "").slice(0, 8).toUpperCase()}`
-        const weightStr = s.weight_kg ? ` (Peso: ${s.weight_kg}kg)` : ""
-        const summaryText = s.recipient_name ? `Destino: ${s.recipient_name} ${s.recipient_city ? `(${s.recipient_city})` : ''}` : `Faturação de envio.`
-        const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
+        const weightStr = billingConfig.includeWeightInName !== false && s.weight_kg ? ` (Peso: ${s.weight_kg}kg)` : ""
+        const trackingPrefix = billingConfig.includeTrackingInName !== false ? `Envio ${trackingBase}` : "Envio"
+        const serviceSuffix = billingConfig.includeServiceNameInName !== false ? ` - ${serviceName}` : ""
+        const lineName = `${trackingPrefix}${serviceSuffix}${weightStr}`
 
+        let summaryText = ""
+        if (billingConfig.includeDestinationInSummary !== false && s.recipient_name) {
+          const citySuffix = billingConfig.includeCityInSummary !== false && s.recipient_city ? ` (${s.recipient_city})` : ""
+          summaryText = `Destino: ${s.recipient_name}${citySuffix}`
+        }
+
+        const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
         const specialFees = Number(s.special_fees_amount || 0)
 
         if (hasFuelTax) {
           products.push({
             productId: productId,
-            name: `Envio ${trackingBase} - ${serviceName}${weightStr}`,
+            name: lineName,
             summary: summaryText,
             qty: 1,
             price: Number(s.base_price || 0),
-            taxes: [{ tax_id: taxId, value: 23 }]
+            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
           })
           products.push({
             productId: productId,
@@ -689,16 +720,16 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
             summary: ``,
             qty: 1,
             price: Number(s.fuel_tax_amount || 0),
-            taxes: [{ tax_id: taxId, value: 23 }]
+            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
           })
         } else {
           products.push({
             productId: productId,
-            name: `Envio ${trackingBase} - ${serviceName}${weightStr}`,
+            name: lineName,
             summary: summaryText,
             qty: 1,
             price: Number(s.sell_price || 0) - specialFees,
-            taxes: [{ tax_id: taxId, value: 23 }]
+            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
           })
         }
 
@@ -729,7 +760,8 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     }
 
     const dateNow = new Date().toISOString().split("T")[0]
-    const expirationDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+    const paymentDays = typeof billingConfig.defaultPaymentDays === "number" ? billingConfig.defaultPaymentDays : 30
+    const expirationDate = new Date(Date.now() + paymentDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
 
     // 7. Criar fatura/pro-forma no Moloni
     let invoiceRes
@@ -972,9 +1004,15 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
         }
 
         // 2. Preparar Produtos para o Moloni
-        const documentSetId = await moloni.getDocumentSet()
-        const defaultTaxId = await moloni.getTaxId(23)
-        const genericProductId = await moloni.getGenericProductId(defaultTaxId)
+        const billingConfig = await getBillingConfigAction()
+        const documentSetId = billingConfig.defaultDocumentSetId || (await moloni.getDocumentSet())
+        const defaultTaxId = await moloni.getTaxId(billingConfig.defaultVatRate || 23)
+        const genericProductId = await moloni.getGenericProductId(
+          defaultTaxId,
+          billingConfig.articleReference,
+          billingConfig.articleDesignation,
+          billingConfig.articleSummary
+        )
 
         const moloniProducts = []
         for (const item of calculatedItems) {
@@ -989,11 +1027,11 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
           })
         }
 
-        // 3. Emitir Fatura no Moloni
+        const customPaymentDays = typeof billingConfig.defaultPaymentDays === "number" ? billingConfig.defaultPaymentDays : 30
         const invoiceRes = await moloni.createInvoice({
           customerId: moloniCustomerId,
           date: payload.invoiceDate || new Date().toISOString().split("T")[0],
-          expirationDate: payload.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          expirationDate: payload.dueDate || new Date(Date.now() + customPaymentDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
           documentSetId: documentSetId,
           products: moloniProducts
         })

@@ -69,6 +69,7 @@ const navConfig: NavSection[] = [
           { title: "Fatura Personalizada", href: "/ops/faturacao/personalizada" },
           { title: "Faturação Clientes", href: "/ops/faturacao/clientes" },
           { title: "Análise Estatística", href: "/ops/faturacao/estatistica" },
+          { title: "Configuração Faturação", href: "/ops/configuracao/faturacao" },
         ]
       },
       { 
@@ -93,6 +94,8 @@ const navConfig: NavSection[] = [
         icon: Settings,
         subItems: [
           { title: "Geral", href: "/ops/configuracao/geral" },
+          { title: "Faturação & Moloni", href: "/ops/configuracao/faturacao" },
+          { title: "Transportadoras & Logótipos", href: "/ops/configuracao/transportadoras" },
           { title: "Webservices Globais", href: "/ops/configuracao/webservices" },
           { title: "Serviços & Tabelas de Preço", href: "/ops/configuracao/servicos" },
           { title: "Taxas Adicionais", href: "/ops/configuracao/taxas" },

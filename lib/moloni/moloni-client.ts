@@ -6,6 +6,11 @@ export class MoloniClient {
   private accessToken: string | null = null;
   private tokenExpiresAt: number = 0;
   
+  // Shared in-memory token cache across Server Actions
+  private static cachedAccessToken: string | null = null;
+  private static cachedTokenExpiresAt: number = 0;
+  private static refreshPromise: Promise<string> | null = null;
+  
   // This could be fetched from DB or ENV, for now ENV
   private refreshTokenVal: string;
 
@@ -95,65 +100,106 @@ export class MoloniClient {
    * Obtém um token de acesso fresco (OAuth2 / Refresh Token)
    */
   private async getAccessToken(): Promise<string> {
-    if (this.accessToken && Date.now() < this.tokenExpiresAt) {
-      return this.accessToken;
+    // Use cached in-memory token if still valid
+    if (MoloniClient.cachedAccessToken && Date.now() < MoloniClient.cachedTokenExpiresAt) {
+      this.accessToken = MoloniClient.cachedAccessToken;
+      return MoloniClient.cachedAccessToken;
     }
 
-    if (!this.clientId || !this.clientSecret) {
-      throw new Error("Credenciais do Moloni (Client ID / Client Secret) não configuradas.");
+    if (MoloniClient.refreshPromise) {
+      return MoloniClient.refreshPromise;
     }
 
-    if (!this.refreshTokenVal) {
-      throw new Error("Conta Moloni ainda não conectada (falta Refresh Token). Use a opção 'Ligar Moloni' para autorizar.");
-    }
-
-    const url = "https://api.moloni.pt/v1/grant/?grant_type=refresh_token";
-    const params = new URLSearchParams({
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
-      refresh_token: this.refreshTokenVal
-    });
-
-    const res = await fetch(`${url}&${params.toString()}`);
-    const data = await res.json();
-
-    if (data.error) {
-      throw new Error(`Moloni Auth Error: ${data.error_description || data.error}`);
-    }
-
-    this.accessToken = data.access_token;
-    this.refreshTokenVal = data.refresh_token;
-    this.tokenExpiresAt = Date.now() + (data.expires_in * 1000) - 60000;
-
-    // Immediately persist rotated refresh token
-    if (data.refresh_token) {
+    MoloniClient.refreshPromise = (async () => {
       try {
-        const fs = await import("fs");
-        const path = await import("path");
-        const envPath = path.join(process.cwd(), ".env.local");
-        if (fs.existsSync(envPath)) {
-          let envContent = fs.readFileSync(envPath, "utf8");
-          if (envContent.includes("MOLONI_REFRESH_TOKEN=")) {
-            envContent = envContent.replace(/MOLONI_REFRESH_TOKEN=.*(\r?\n|$)/, `MOLONI_REFRESH_TOKEN=${data.refresh_token}\n`);
-          } else {
-            envContent += `\nMOLONI_REFRESH_TOKEN=${data.refresh_token}\n`;
-          }
-          fs.writeFileSync(envPath, envContent, "utf8");
-          // Update the runtime process.env so subsequent requests in this Node process use the new token
-          process.env.MOLONI_REFRESH_TOKEN = data.refresh_token;
+        if (!this.clientId || !this.clientSecret) {
+          throw new Error("Credenciais do Moloni (Client ID / Client Secret) não configuradas.");
         }
-      } catch (e) {
-        console.warn("Could not save updated refresh token to .env.local:", e);
-      }
-    }
 
-    return this.accessToken!;
+        let currentRefreshToken = this.refreshTokenVal || process.env.MOLONI_REFRESH_TOKEN || "";
+        if (!currentRefreshToken) {
+          throw new Error("Conta Moloni ainda não conectada (falta Refresh Token). Use a opção 'Gerir Conta Moloni' para autorizar.");
+        }
+
+        const url = "https://api.moloni.pt/v1/grant/?grant_type=refresh_token";
+        const params = new URLSearchParams({
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          refresh_token: currentRefreshToken
+        });
+
+        const res = await fetch(`${url}&${params.toString()}`);
+        const data = await res.json();
+
+        if (data.error) {
+          if (data.error === "invalid_grant" || String(data.error_description || "").toLowerCase().includes("refresh token")) {
+            throw new Error("Sessão Moloni expirada (Token inválido). Por favor clique em 'Gerir Conta Moloni' para voltar a ligar.");
+          }
+          throw new Error(`Moloni Auth Error: ${data.error_description || data.error}`);
+        }
+
+        MoloniClient.cachedAccessToken = data.access_token;
+        MoloniClient.cachedTokenExpiresAt = Date.now() + (data.expires_in * 1000) - 60000;
+        this.accessToken = data.access_token;
+        this.refreshTokenVal = data.refresh_token;
+        this.tokenExpiresAt = MoloniClient.cachedTokenExpiresAt;
+
+        // Immediately persist rotated refresh token
+        if (data.refresh_token) {
+          process.env.MOLONI_REFRESH_TOKEN = data.refresh_token;
+
+          // 1. Persist to .env.local
+          try {
+            const fs = await import("fs");
+            const path = await import("path");
+            const envPath = path.join(process.cwd(), ".env.local");
+            if (fs.existsSync(envPath)) {
+              let envContent = fs.readFileSync(envPath, "utf8");
+              if (envContent.includes("MOLONI_REFRESH_TOKEN=")) {
+                envContent = envContent.replace(/MOLONI_REFRESH_TOKEN=.*(\r?\n|$)/, `MOLONI_REFRESH_TOKEN=${data.refresh_token}\n`);
+              } else {
+                envContent += `\nMOLONI_REFRESH_TOKEN=${data.refresh_token}\n`;
+              }
+              fs.writeFileSync(envPath, envContent, "utf8");
+            }
+          } catch (e) {
+            console.warn("Could not save updated refresh token to .env.local:", e);
+          }
+
+          // 2. Persist to Supabase audit log for serverless and cross-instance persistence
+          try {
+            const { createAdminClient } = await import("@/lib/supabase/server");
+            const { getTenantId } = await import("@/lib/auth/context");
+            const supabase = createAdminClient();
+            const tenantId = await getTenantId().catch(() => null);
+            await supabase.from("audit_log").insert({
+              tenant_id: tenantId,
+              action: "moloni_connection_config",
+              details: {
+                company_id: this.companyId,
+                refresh_token: data.refresh_token,
+                connected_at: new Date().toISOString(),
+                source: "token_rotation"
+              }
+            });
+          } catch (dbErr) {
+            // Silently catch in case of context restriction
+          }
+        }
+
+        return MoloniClient.cachedAccessToken!;
+      } finally {
+        MoloniClient.refreshPromise = null;
+      }
+    })();
+
+    return MoloniClient.refreshPromise;
   }
 
   /**
    * Realiza um pedido genérico à API do Moloni usando JSON
    */
-  private async request(endpoint: string, payload: any = {}): Promise<any> {
+  public async request(endpoint: string, payload: any = {}): Promise<any> {
     const token = await this.getAccessToken();
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
     const finalEndpoint = cleanEndpoint.endsWith('/') ? cleanEndpoint : `${cleanEndpoint}/`;
@@ -234,14 +280,34 @@ export class MoloniClient {
     return Array.isArray(methods) && methods[0]?.payment_method_id ? methods[0].payment_method_id : 0;
   }
 
-  async getGenericProductId(taxId: number): Promise<number> {
+  async getGenericProductId(
+    taxId: number,
+    preferredRef: string = 'LINKE-TMS',
+    preferredName: string = 'Serviço de Transporte',
+    preferredSummary: string = ''
+  ): Promise<number> {
     const products = await this.request('products/getAll', { qty: 50, offset: 0 });
     if (Array.isArray(products) && products.length > 0) {
-      const existing = products.find((p: any) => p.reference === 'LINKE-TMS' || p.reference === 'LINKE-ONLINE');
-      if (existing) return existing.product_id;
-      // If any service or general product exists, reuse it
-      const anyService = products.find((p: any) => p.type === 1 || p.name?.toLowerCase().includes('transporte') || p.name?.toLowerCase().includes('logística'));
-      if (anyService) return anyService.product_id;
+      // 1. Procurar exatamente pela referência configurada
+      const exactMatch = products.find((p: any) => p.reference?.toUpperCase() === preferredRef.toUpperCase());
+      if (exactMatch) return exactMatch.product_id;
+
+      // 2. Se procurávamos outro e existir LINKE-TMS, reutilizar LINKE-TMS
+      const tmsMatch = products.find((p: any) => p.reference?.toUpperCase() === 'LINKE-TMS');
+      if (tmsMatch) return tmsMatch.product_id;
+
+      // 3. Fallback estrito apenas se for serviço de transporte/logística real (excluindo LINKE-ONLINE e referências de exemplo EXE.*)
+      const transportService = products.find(
+        (p: any) =>
+          p.reference !== 'LINKE-ONLINE' &&
+          !p.reference?.toUpperCase().startsWith('EXE.') &&
+          !p.name?.toLowerCase().includes('exemplo') &&
+          (p.name?.toLowerCase().includes('transporte') ||
+           p.name?.toLowerCase().includes('logística') ||
+           p.name?.toLowerCase().includes('envio') ||
+           p.name?.toLowerCase().includes('frete'))
+      );
+      if (transportService) return transportService.product_id;
     }
 
     // Obter ou criar unidade de medida
@@ -267,9 +333,9 @@ export class MoloniClient {
     } catch {}
 
     const result = await this.request('products/insert', {
-      name: 'Serviços de Logística e Transporte',
-      summary: 'Produto genérico para faturas do TMS',
-      reference: 'LINKE-TMS',
+      name: preferredName || 'Serviços de Logística e Transporte',
+      summary: preferredSummary || '',
+      reference: preferredRef || 'LINKE-TMS',
       price: 1,
       unit_id: unitId,
       category_id: categoryId,
