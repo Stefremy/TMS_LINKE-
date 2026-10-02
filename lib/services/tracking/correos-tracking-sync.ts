@@ -34,9 +34,20 @@ export function parseCorreosDateTime(fecha?: string, hora?: string): string {
         year = parseInt(parts[2], 10)
       }
     } else if (cleanFecha.length === 8 && /^\d{8}$/.test(cleanFecha)) {
-      year = parseInt(cleanFecha.substring(0, 4), 10)
-      month = parseInt(cleanFecha.substring(4, 6), 10) - 1
-      day = parseInt(cleanFecha.substring(6, 8), 10)
+      // In Spain/Correos Express, date is commonly DDMMAAAA (e.g. 26082026)
+      if (cleanFecha.substring(4, 6) === "20" || cleanFecha.substring(4, 6) === "19") {
+        day = parseInt(cleanFecha.substring(0, 2), 10)
+        month = parseInt(cleanFecha.substring(2, 4), 10) - 1
+        year = parseInt(cleanFecha.substring(4, 8), 10)
+      } else {
+        year = parseInt(cleanFecha.substring(0, 4), 10)
+        month = parseInt(cleanFecha.substring(4, 6), 10) - 1
+        day = parseInt(cleanFecha.substring(6, 8), 10)
+      }
+    }
+
+    if (year > 0 && year < 100) {
+      year += 2000
     }
 
     let hour = 0,

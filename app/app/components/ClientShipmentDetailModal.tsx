@@ -327,19 +327,27 @@ export function ClientShipmentDetailModal({
   const hasLabel = Boolean(currentShipment.has_label || currentShipment.ctt_label_base64)
 
   // Stepper calculations
-  const steps = [
-    { key: "pendente", label: "Aceitação / Registo", eventCode: "EMA" },
-    { key: "em_transito", label: "Em Trânsito CTT", eventCode: "EMF" },
-    { key: "em_distribuicao", label: "Em Distribuição", eventCode: "EMZ" },
-    { key: "entregue", label: "Entregue", eventCode: "EMI" },
-  ]
+  const steps = isCorreos
+    ? [
+        { key: "pendente", label: "Registo / Receção", eventCode: "01" },
+        { key: "em_transito", label: "Em Trânsito", eventCode: "02" },
+        { key: "em_distribuicao", label: "Em Distribuição", eventCode: "03" },
+        { key: "entregue", label: "Entregue", eventCode: "04" },
+      ]
+    : [
+        { key: "pendente", label: "Aceitação / Registo", eventCode: "EMA" },
+        { key: "em_transito", label: "Em Trânsito", eventCode: "EMF" },
+        { key: "em_distribuicao", label: "Em Distribuição", eventCode: "EMZ" },
+        { key: "entregue", label: "Entregue", eventCode: "EMI" },
+      ]
 
   const getStepStatus = (stepKey: string) => {
     if (currentStatus === "incidencia" && stepKey === "entregue") return "failed"
     if (currentStatus === "devolvido" && stepKey === "entregue") return "returned"
     
+    const normalized = currentStatus === "entrada_rede" ? "em_transito" : currentStatus
     const order = ["pendente", "em_transito", "em_distribuicao", "entregue"]
-    const currentIndex = order.indexOf(currentStatus === "incidencia" ? "em_distribuicao" : currentStatus)
+    const currentIndex = order.indexOf(normalized === "incidencia" ? "em_distribuicao" : normalized)
     const stepIndex = order.indexOf(stepKey)
 
     if (stepIndex < currentIndex) return "completed"
@@ -473,7 +481,7 @@ export function ClientShipmentDetailModal({
               )
             })()}
             <span className="text-[10px] text-[var(--text-tertiary)] font-medium hidden sm:inline ml-1">
-              (Sincronizado com API CTT)
+              {isCorreos ? "(Sincronizado com API Correos)" : "(Sincronizado com API CTT)"}
             </span>
           </div>
 
@@ -483,7 +491,7 @@ export function ClientShipmentDetailModal({
               onClick={handleSyncTracking}
               disabled={isSyncing}
               className="bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-bold px-3 py-1 rounded-md flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50 text-[10px] uppercase tracking-wider"
-              title="Consultar API dos CTT para obter novas leituras de tracking"
+              title={isCorreos ? "Consultar API Correos Express para obter novas leituras de tracking" : "Consultar API dos CTT para obter novas leituras de tracking"}
             >
               <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin text-[var(--accent)]" : ""}`} />
               <span>{isSyncing ? "A Sincronizar..." : "Sincronizar"}</span>
@@ -531,7 +539,7 @@ export function ClientShipmentDetailModal({
               <div className="bg-[var(--surface-bg)] p-5 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
                 <h4 className="text-xs font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                   <Truck className="w-4 h-4 text-[var(--accent)]" />
-                  <span>Progresso do Envio na Rede CTT</span>
+                  <span>Progresso do Envio na Rede {isCorreos ? "Correos Express" : "CTT"}</span>
                 </h4>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 relative">
@@ -571,7 +579,7 @@ export function ClientShipmentDetailModal({
                           {step.label}
                         </div>
                         <div className="text-[10px] text-[var(--text-tertiary)] font-mono mt-0.5">
-                          Pickagem CTT: {step.eventCode}
+                          Pickagem: {step.eventCode}
                         </div>
                       </div>
                     )
@@ -625,7 +633,7 @@ export function ClientShipmentDetailModal({
                   <AlertTriangle className="w-5 h-5 text-[var(--status-critical)] shrink-0 mt-0.5" />
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <strong className="text-sm font-bold text-[var(--status-critical)]">Alerta de Incidência CTT (Código EMH)</strong>
+                      <strong className="text-sm font-bold text-[var(--status-critical)]">Alerta de Incidência ({isCorreos ? "Correos Express" : "CTT Expresso"})</strong>
                       <span className="font-mono text-[10px] font-bold bg-[rgba(220,38,38,0.15)] text-[var(--status-critical)] px-2 py-0.5 rounded">
                         Entrega Não Conseguida
                       </span>
@@ -642,7 +650,7 @@ export function ClientShipmentDetailModal({
                         className="px-3 py-1 bg-[var(--status-critical)] hover:opacity-90 disabled:opacity-50 text-white rounded-md font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-                        <span>Verificar Atualização CTT</span>
+                        <span>Verificar Atualização</span>
                       </button>
                     </div>
                   </div>
@@ -655,7 +663,7 @@ export function ClientShipmentDetailModal({
                 <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
                   <h4 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
                     <Clock className="w-4 h-4 text-[var(--accent)]" />
-                    <span>Histórico Cronológico de Pickagens CTT</span>
+                    <span>Histórico de Pickagens</span>
                   </h4>
                   <span className="text-[11px] text-[var(--text-tertiary)] uppercase tracking-wider font-semibold">
                     {timelineEvents.length} evento(s)
@@ -672,9 +680,9 @@ export function ClientShipmentDetailModal({
                     <div className="w-10 h-10 rounded-full bg-[var(--surface-muted)] border border-[var(--border-strong)] text-[var(--text-tertiary)] flex items-center justify-center mx-auto mb-2.5">
                       <Clock className="w-5 h-5" />
                     </div>
-                    <p className="text-xs font-bold text-[var(--text-secondary)] mb-1 uppercase tracking-wider">Aguardar Pickagem CTT</p>
+                    <p className="text-xs font-bold text-[var(--text-secondary)] mb-1 uppercase tracking-wider">Aguardar Pickagens</p>
                     <p className="text-[11px] text-[var(--text-tertiary)] max-w-sm mx-auto">
-                      Ainda não existem leituras óticas registadas na rede CTT para este envio. O histórico será preenchido automaticamente.
+                      Ainda não existem leituras óticas registadas para este envio. O histórico será preenchido automaticamente.
                     </p>
                   </div>
                 ) : (
@@ -758,7 +766,7 @@ export function ClientShipmentDetailModal({
 
                             <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-tertiary)] mt-2 font-medium uppercase tracking-wider text-[9px]">
                               <MapPin className="w-3 h-3 text-[var(--text-tertiary)]" />
-                              <span>{ev.location || "Rede CTT Expresso"}</span>
+                              <span>{ev.location || (isCorreos ? "Rede Correos Express" : "Rede CTT Expresso")}</span>
                             </div>
                           </div>
                         </div>
@@ -906,7 +914,9 @@ export function ClientShipmentDetailModal({
                   )}
                   <div className="flex flex-col">
                     <span className="font-bold text-xs text-[var(--text-primary)] uppercase tracking-wide">{serviceType}</span>
-                    <span className="text-[10px] text-[var(--text-tertiary)] font-semibold">Expedição integrada CTT Expresso API</span>
+                    <span className="text-[10px] text-[var(--text-tertiary)] font-semibold">
+                      Expedição integrada {isCorreos ? "Correos Express" : "CTT Expresso"} API
+                    </span>
                   </div>
                 </div>
               </div>
