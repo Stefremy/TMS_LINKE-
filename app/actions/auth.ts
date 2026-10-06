@@ -93,7 +93,7 @@ export async function setColaboradorCredentialsAction(
     const assignedRole = isSuperAdmin || accessLevel === "Administrador" ? "admin" : "employee"
     const effectiveAccessLevel = isSuperAdmin ? "Administrador" : accessLevel
     const effectivePermissions = isSuperAdmin
-      ? Array.from(new Set([...permissions, "Acesso Total (Super-Admin)"]))
+      ? ["Acesso Total (Super-Admin)"]
       : permissions
 
     const updateData: any = {
