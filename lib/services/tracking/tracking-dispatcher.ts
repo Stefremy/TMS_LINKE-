@@ -49,28 +49,6 @@ export async function syncShipmentTracking(
     }
   }
 
-  // Fallback audit_log se não estiver na tabela shipments
-  if (!targetShipment && (shipmentId || trackingNumber)) {
-    try {
-      const { data: logs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("action", "shipment_data")
-        .order("created_at", { ascending: false })
-
-      const found = logs?.find(
-        (l: any) =>
-          (shipmentId && l.details?.id === shipmentId) ||
-          (trackingNumber &&
-            (l.details?.tracking_number === trackingNumber ||
-              l.details?.carrier_tracking_number === trackingNumber ||
-              l.details?.ctt_object_id === trackingNumber))
-      )
-      if (found?.details) {
-        targetShipment = found.details
-      }
-    } catch {}
-  }
 
   // 2. Validação de autorização para clientes
   if (!options.skipAuth && options.userRole === "client" && options.clientId) {

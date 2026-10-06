@@ -123,5 +123,29 @@ export const DEFAULT_COLABORADORES: Colaborador[] = [
     emergency_contact: "+351 910 000 003",
     notes: "Conta de suporte ao cliente, incidências e gestão de contas correntes.",
     created_at: "2023-01-01T09:00:00Z"
+  },
+  {
+    id: "col-aldara-004",
+    code: "COL004",
+    name: "Aldara",
+    role: "Operações & Logística",
+    department: "Operações & Logística",
+    email: "aldara.linke@gmail.com",
+    phone: "910000004",
+    mobile_phone: "910000004",
+    nif: "",
+    status: "Ativo",
+    access_level: "Operacional",
+    agency_location: "Sede - Felgueiras / Guimarães",
+    admission_date: new Date().toISOString().slice(0, 10),
+    avatar_color: "#db2777", // pink
+    permissions: [
+      "Emissão e Controlo de Guias CTT",
+      "Pedidos de Recolha & Distribuição",
+      "Gestão de Transportadoras & Frotas"
+    ],
+    emergency_contact: "",
+    notes: "Conta de logística e operações.",
+    created_at: new Date().toISOString()
   }
 ]

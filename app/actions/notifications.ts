@@ -1,9 +1,8 @@
 "use server"
 
-import { getShipmentsAction } from "@/app/actions/shipments"
+import { createAdminClient } from "@/lib/supabase/server"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
-
 export interface OperationalNotification {
   id: string
   type: "shipment" | "batch" | "client" | "system" | "warning" | "success"
@@ -21,15 +20,23 @@ export async function getOperationalNotificationsAction(): Promise<OperationalNo
   const now = new Date()
 
   try {
-    const [shipments, clients, connections] = await Promise.all([
-      getShipmentsAction({ includeLabels: false }).catch(() => []),
+    const supabase = createAdminClient()
+
+    // Run highly optimized direct queries instead of downloading all table data to memory
+    const [
+      { data: pendingShipments },
+      { data: recentShipments },
+      clients,
+      connections
+    ] = await Promise.all([
+      supabase.from("shipments").select("id, created_at").eq("status", "pendente"),
+      supabase.from("shipments").select("id, tracking_number, sender_name, recipient_name, service_type, created_at, status").order("created_at", { ascending: false }).limit(5),
       getClientesAction().catch(() => []),
       getCarrierConnectionsAction().catch(() => []),
     ])
 
     // 1. Check Pending Shipments for Batch Closing
-    const pendingShipments = shipments.filter((s: any) => s.status === "pendente")
-    if (pendingShipments.length > 0) {
+    if (pendingShipments && pendingShipments.length > 0) {
       notifications.push({
         id: `batch-pending-${pendingShipments.length}`,
         type: "batch",
@@ -42,25 +49,26 @@ export async function getOperationalNotificationsAction(): Promise<OperationalNo
       })
     }
 
-    // 2. Recent Shipments (last 10 shipments)
-    const recentShipments = shipments.slice(0, 5)
-    recentShipments.forEach((s: any) => {
-      const tracking = s.tracking_number || s.id?.substring(0, 8).toUpperCase()
-      const clientName = s.sender_name || "Cliente"
-      const recipient = s.recipient_name || "Destinatário"
-      const service = s.service_type || "CTT Expresso 24H"
+    // 2. Recent Shipments (last 5 shipments)
+    if (recentShipments) {
+      recentShipments.forEach((s: any) => {
+        const tracking = s.tracking_number || s.id?.substring(0, 8).toUpperCase()
+        const clientName = s.sender_name || "Cliente"
+        const recipient = s.recipient_name || "Destinatário"
+        const service = s.service_type || "CTT Expresso 24H"
 
-      notifications.push({
-        id: `shipment-${s.id || tracking}`,
-        type: "shipment",
-        title: `Novo Envio Registado (${tracking})`,
-        message: `${clientName} emitiu um envio para ${recipient} via ${service}.`,
-        timestamp: s.created_at || now.toISOString(),
-        link: "/ops/envios",
-        actionLabel: "Ver Envio",
-        priority: s.status === "pendente" ? "medium" : "low",
+        notifications.push({
+          id: `shipment-${s.id || tracking}`,
+          type: "shipment",
+          title: `Novo Envio Registado (${tracking})`,
+          message: `${clientName} emitiu um envio para ${recipient} via ${service}.`,
+          timestamp: s.created_at || now.toISOString(),
+          link: "/ops/envios",
+          actionLabel: "Ver Envio",
+          priority: s.status === "pendente" ? "medium" : "low",
+        })
       })
-    })
+    }
 
     // 3. Inactive Clients Alert (if any client is deactivated)
     const inactiveClients = clients.filter((c: any) => !c.is_active)

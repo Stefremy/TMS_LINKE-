@@ -9,17 +9,19 @@ import { Destinatario } from "@/app/ops/entidades/destinatarios/types"
  */
 export async function getDestinatariosAction(): Promise<Destinatario[]> {
   try {
-    const [shipments, clients] = await Promise.all([
-      getShipmentsAction(),
+    const supabase = await import("@/lib/supabase/server").then(m => m.createAdminClient())
+    const [ { data: dbShipments }, clients ] = await Promise.all([
+      supabase.from("shipments").select("id, created_at, client_id, recipient_name, recipient_phone, recipient_email, recipient_address, recipient_zip4, recipient_zip3, recipient_city, recipient_country").order("created_at", { ascending: false }).limit(2000),
       getClientesAction(),
     ])
+    const shipments = dbShipments || []
 
     const clientMap = new Map<string, any>()
     clients.forEach((c) => clientMap.set(c.id, c))
 
     const destMap = new Map<string, Destinatario>()
 
-    shipments.forEach((s) => {
+    shipments.forEach((s: any) => {
       const rawName = (s.recipient_name || "").trim()
       if (!rawName) return
 

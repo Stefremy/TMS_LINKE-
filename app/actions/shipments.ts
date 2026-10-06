@@ -16,7 +16,7 @@ import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId, ensureTena
 import { fetchShipments, fetchShipmentLabel, fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
 import { syncShipmentTracking, syncAllActiveShipmentsTracking, mapCorreosStatus } from "@/lib/services/tracking"
 
-export async function getShipmentsAction(options: { includeLabels?: boolean } = {}): Promise<any[]> {
+export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string } = {}): Promise<any[]> {
   return fetchShipments(options)
 }
 
@@ -593,8 +593,8 @@ export async function regenerateCttLabelAction(shipmentId: string) {
   const supabase = createAdminClient()
   
   // Encontrar o envio
-  const all = await getShipmentsAction()
-  const shipment = all.find((s: any) => s.id === shipmentId || s.tracking_number === shipmentId)
+  const { data: dbShipments } = await supabase.from("shipments").select("*").or(`id.eq.${shipmentId},tracking_number.eq.${shipmentId}`).limit(1)
+  const shipment = dbShipments?.[0]
 
   if (!shipment) {
     throw new Error("Envio não encontrado para reemitir etiqueta.")
@@ -1057,18 +1057,28 @@ export async function syncActiveShipmentsBatchAction(shipmentIds: string[]) {
   const cleanIds = Array.from(new Set(shipmentIds.filter(Boolean))).slice(0, 25)
   let updatedCount = 0
 
-  await Promise.allSettled(
-    cleanIds.map(async (id) => {
-      try {
-        const res = await syncShipmentTracking({ shipmentId: id }, { skipAuth: true })
-        if (res.success && (res.count > 0 || res.latestStatus)) {
-          updatedCount++
+  // Chunk requests into batches of 5 to avoid overloading the CTT API and network bottlenecks
+  const chunkSize = 5
+  for (let i = 0; i < cleanIds.length; i += chunkSize) {
+    const chunk = cleanIds.slice(i, i + chunkSize)
+    
+    await Promise.allSettled(
+      chunk.map(async (id) => {
+        try {
+          // Strict 3.5s timeout per tracking sync to prevent API hangs from halting the entire batch
+          const timeoutPromise = new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3500))
+          const syncPromise = syncShipmentTracking({ shipmentId: id }, { skipAuth: true })
+          
+          const res = await Promise.race([syncPromise, timeoutPromise])
+          if (res && res.success && (res.count > 0 || res.latestStatus)) {
+            updatedCount++
+          }
+        } catch (err: any) {
+          console.warn(`[Sync Active Batch] Erro/Timeout ao sincronizar envio ${id}:`, err?.message)
         }
-      } catch (err: any) {
-        console.warn(`[Sync Active Batch] Erro ao sincronizar envio ${id}:`, err?.message)
-      }
-    })
-  )
+      })
+    )
+  }
 
   if (updatedCount > 0) {
     revalidatePath("/ops/envios")
@@ -1098,8 +1108,8 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
   const supabase = createAdminClient()
   try {
     // 1. Obter dados do envio original
-    const allShipments = await getShipmentsAction()
-    const original = allShipments.find((s) => s.id === originalShipmentId || s.tracking_number === originalShipmentId)
+    const { data: dbShipments } = await supabase.from("shipments").select("*").or(`id.eq.${originalShipmentId},tracking_number.eq.${originalShipmentId}`).limit(1)
+    const original = dbShipments?.[0]
     
     if (!original) {
       return { success: false, error: "Envio original não encontrado." }

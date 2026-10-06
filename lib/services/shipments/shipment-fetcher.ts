@@ -7,7 +7,7 @@ import { convertZplToPdfBase64 } from "@/lib/label-utils"
 /**
  * Fetches all shipments from the DB shipments table.
  */
-export async function fetchShipments(options: { includeLabels?: boolean } = {}): Promise<any[]> {
+export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string } = {}): Promise<any[]> {
   const ctx = await requireUser()
   const supabase = createAdminClient()
 
@@ -19,6 +19,12 @@ export async function fetchShipments(options: { includeLabels?: boolean } = {}):
       
     if (ctx.role === "client") {
       shipmentsQuery = shipmentsQuery.eq("client_id", ctx.client_id)
+    }
+    if (options.createdAfter) {
+      shipmentsQuery = shipmentsQuery.gte("created_at", options.createdAfter)
+    }
+    if (options.limit) {
+      shipmentsQuery = shipmentsQuery.limit(options.limit)
     }
 
     const { data: dbShipments, error } = await shipmentsQuery

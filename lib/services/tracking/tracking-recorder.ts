@@ -100,30 +100,8 @@ export async function recordTrackingEvents(
     console.warn("[Tracking Recorder] Falha ao gravar tracking_events:", err?.message)
   }
 
-  // 3. Atualizar espelho em audit_log (se existir registo com os dados do envio)
-  try {
-    const { data: logs } = await supabase
-      .from("audit_log")
-      .select("id, details")
-      .eq("action", "shipment_data")
-
-    const targetLog = logs?.find((l: any) => l.details?.id === shipmentId)
-    if (targetLog) {
-      await supabase
-        .from("audit_log")
-        .update({
-          details: {
-            ...targetLog.details,
-            status: lastEvent.displayStatus, // Espelho visual para frontend ("em_transito")
-            ops_substatus: (lastEvent.eventCode || "").toLowerCase(),
-            updated_at: new Date().toISOString(),
-          },
-        })
-        .eq("id", targetLog.id)
-    }
-  } catch (err: any) {
-    console.warn("[Tracking Recorder] Falha ao atualizar audit_log:", err?.message)
-  }
+  // 3. Atualizar espelho em audit_log foi removido para melhorar performance.
+  // Os envios migraram para a tabela nativa shipments.
 
   // 4. Disparo automático de notificações por email ao destinatário (CTT e Correos Express)
   try {

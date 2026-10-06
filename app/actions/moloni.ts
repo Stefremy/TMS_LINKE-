@@ -18,17 +18,17 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
   try {
     const supabase = createAdminClient()
     
-    // 1. Obter Cliente do TMS (com fallback garantido)
-    const allClients = await getClientesAction()
-    const client = allClients.find((c: any) => c.id === clientId)
+    // 1. Obter Cliente do TMS
+    const allClients = await getClientesAction(clientId)
+    const client = allClients[0]
       
     if (!client) {
       throw new Error("Cliente não encontrado.")
     }
 
-    // 2. Obter Envios do TMS (Garantir que apanhamos todos os envios, mesmo os que só estão no audit_log)
-    const allShipments = await getShipmentsAction()
-    const shipments = allShipments.filter((s: any) => shipmentIds.includes(s.id))
+    // 2. Obter Envios do TMS
+    const { data: dbShipments } = await supabase.from("shipments").select("*").in("id", shipmentIds)
+    const shipments = dbShipments || []
 
     if (!shipments || shipments.length === 0) {
       throw new Error("Envios não encontrados.")

@@ -9,10 +9,13 @@ export const metadata = {
 }
 
 export default async function IncidenciasPage() {
-  const [shipments, clients] = await Promise.all([
-    getShipmentsAction(),
+  const supabase = await import("@/lib/supabase/server").then(m => m.createAdminClient())
+  
+  const [ { data: dbShipments }, clients ] = await Promise.all([
+    supabase.from("shipments").select("*").eq("status", "incidencia").order("created_at", { ascending: false }),
     getClientesAction()
   ])
+  const shipments = dbShipments || []
 
   // Filter ONLY real incidents from database
   const realIncidents: IncidentShipment[] = (shipments || [])
