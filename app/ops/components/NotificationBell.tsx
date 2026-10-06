@@ -77,10 +77,16 @@ export function NotificationBell() {
   }, [])
 
   React.useEffect(() => {
-    fetchNotifications()
-    // Poll every 60 seconds
-    const interval = setInterval(() => fetchNotifications(), 60000)
-    return () => clearInterval(interval)
+    // Defer the first (heavy) load so it doesn't compete with page navigation
+    const initial = setTimeout(() => fetchNotifications(), 4000)
+    // Poll every 5 minutes, only while the tab is visible
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") fetchNotifications()
+    }, 300000)
+    return () => {
+      clearTimeout(initial)
+      clearInterval(interval)
+    }
   }, [fetchNotifications])
 
   // Close dropdown on click outside

@@ -44,6 +44,7 @@ function LoginFormContent() {
             width={140} 
             height={36} 
             className="object-contain" 
+            style={{ height: "auto" }}
             preload
           />
         </div>

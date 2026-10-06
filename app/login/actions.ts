@@ -31,11 +31,12 @@ export async function login(formData: FormData) {
       redirect('/ops')
     }
   } catch (err) {
-    console.error("Login Server Action Error:", err)
     // Next.js redirect() throws a specific error, we MUST rethrow it!
     if (err && typeof err === 'object' && 'digest' in err && (err as any).digest?.startsWith('NEXT_REDIRECT')) {
       throw err;
     }
+    
+    console.error("Login Server Action Error:", err)
     // For other errors, redirect to error state
     redirect('/login?error=true')
   }

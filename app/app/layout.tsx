@@ -42,7 +42,7 @@ export default async function OpsLayout({
           {/* Logo Area */}
           <div className="pt-7 pb-5 px-5">
             <div className="flex flex-col">
-              <Image src="/Linke-logo.png" alt="Linke" width={100} height={30} className="object-contain" preload />
+              <Image src="/Linke-logo.png" alt="Linke" width={100} height={30} className="object-contain" style={{ height: "auto" }} preload />
               <span className="text-[var(--text-tertiary)] text-[10px] font-semibold tracking-wider mt-2 uppercase">Portal do Cliente</span>
             </div>
           </div>

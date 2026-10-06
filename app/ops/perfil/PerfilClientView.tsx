@@ -16,23 +16,26 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
+import { saveMyProfileAction } from "@/app/actions/profile"
+import type { UserProfile } from "@/lib/auth/profile"
 
-export function PerfilClient({ user }: { user: any }) {
+export function PerfilClient({ user, profile }: { user: any; profile: UserProfile | null }) {
   const router = useRouter()
   const supabase = createClient()
   const [isSaving, setIsSaving] = React.useState(false)
   const [showSuccess, setShowSuccess] = React.useState(false)
-  const [avatarPreview, setAvatarPreview] = React.useState<string | null>(user?.user_metadata?.avatar || null)
+  const legacyAvatar = typeof user?.user_metadata?.avatar === "string" && user.user_metadata.avatar.startsWith("http") ? user.user_metadata.avatar : null
+  const [avatarPreview, setAvatarPreview] = React.useState<string | null>(profile?.avatar_url || legacyAvatar)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
-  // Default values from user_metadata
+  // Defaults come from the database profile, falling back to legacy auth metadata
   const meta = user?.user_metadata || {}
   const [formData, setFormData] = React.useState({
-    name: meta.full_name || meta.name || user?.email?.split('@')[0] || "",
+    name: profile?.name || meta.full_name || meta.name || user?.email?.split('@')[0] || "",
     email: user?.email || "",
-    phone: meta.phone || "",
-    department: meta.role === "ops" ? "Operações" : meta.role || "Geral",
-    location: meta.location || "Porto, PT"
+    phone: profile?.phone || meta.phone || "",
+    department: profile?.department || (meta.role === "ops" ? "Operações" : meta.role) || "Geral",
+    location: profile?.location || meta.location || "Porto, PT"
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -118,17 +121,16 @@ export function PerfilClient({ user }: { user: any }) {
         finalAvatarUrl = publicUrlData.publicUrl
       }
 
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          name: formData.name,
-          phone: formData.phone,
-          role: formData.department,
-          location: formData.location,
-          avatar: finalAvatarUrl
-        }
+      // Profile data is stored in the database (user_profiles), NOT in the auth token.
+      const result = await saveMyProfileAction({
+        name: formData.name,
+        phone: formData.phone,
+        department: formData.department,
+        location: formData.location,
+        avatar_url: finalAvatarUrl,
       })
 
-      if (error) throw error
+      if (!result.success) throw new Error(result.error || "Falha ao guardar")
 
       setShowSuccess(true)
       router.refresh()

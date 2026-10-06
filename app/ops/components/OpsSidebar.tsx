@@ -64,6 +64,7 @@ export function OpsSidebar() {
                 width={130} 
                 height={32} 
                 className="object-contain" 
+                style={{ height: "auto" }}
                 priority 
               />
               <div className="text-[11px] text-[var(--text-tertiary)] font-medium mt-2">

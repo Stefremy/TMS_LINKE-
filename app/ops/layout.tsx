@@ -1,6 +1,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { OpsSidebar } from "./components/OpsSidebar"
+import { getMyProfile } from "@/lib/auth/profile"
 import { NotificationBell } from "./components/NotificationBell"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
 import { createClient } from "@/lib/supabase/server"
@@ -22,7 +23,9 @@ export default async function OpsLayout({
   const user = authContext.user
   
   // Try to get name from metadata, fallback to email prefix, fallback to "Operador"
-  const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || "Operador"
+  const profile = await getMyProfile()
+  const avatarUrl = profile?.avatar_url || (typeof user?.user_metadata?.avatar === "string" && user.user_metadata.avatar.startsWith("http") ? user.user_metadata.avatar : null)
+  const userName = profile?.name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || "Operador"
 
   return (
     <div className="min-h-screen bg-[var(--canvas-bg)] flex flex-col md:flex-row text-[var(--text-primary)]">
@@ -56,9 +59,9 @@ export default async function OpsLayout({
                   <span className="text-[10px] text-[var(--text-secondary)] font-medium group-hover:text-[var(--accent)] transition-colors">Editar Perfil</span>
                 </div>
                 <div className="w-8 h-8 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-xs cursor-pointer group-hover:bg-[var(--accent-hover)] transition-colors overflow-hidden">
-                  {user?.user_metadata?.avatar ? (
+                  {avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={user.user_metadata.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
                     <User className="w-4 h-4" />
                   )}

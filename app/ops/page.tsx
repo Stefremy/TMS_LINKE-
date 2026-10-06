@@ -30,7 +30,8 @@ export default async function OpsDashboardPage() {
     supabase
       .from("recolhas")
       .select("*")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(500),
     getClientesAction()
   ])
 
@@ -67,16 +68,22 @@ export default async function OpsDashboardPage() {
   const deliveredIds = deliveredShipments.map((s: any) => s.id)
   let deliveredWithIncidents = 0
   if (deliveredIds.length > 0) {
-    const { data: incidentEvents } = await supabase
-      .from("tracking_events")
-      .select("shipment_id")
-      .in("shipment_id", deliveredIds)
-      .in("event_code", ["EMH", "EMN", "EDF"])
-    
-    if (incidentEvents) {
-      const incidentShipmentIds = new Set(incidentEvents.map((e: any) => e.shipment_id))
-      deliveredWithIncidents = incidentShipmentIds.size
-    }
+    // Chunk the IN() list: thousands of ids in one request exceed the PostgREST URL limit
+    const CHUNK = 200
+    const incidentShipmentIds = new Set<string>()
+    const chunks: string[][] = []
+    for (let i = 0; i < deliveredIds.length; i += CHUNK) chunks.push(deliveredIds.slice(i, i + CHUNK))
+    const results = await Promise.all(
+      chunks.map((ids) =>
+        supabase
+          .from("tracking_events")
+          .select("shipment_id")
+          .in("shipment_id", ids)
+          .in("event_code", ["EMH", "EMN", "EDF"])
+      )
+    )
+    results.forEach(({ data }) => (data || []).forEach((e: any) => incidentShipmentIds.add(e.shipment_id)))
+    deliveredWithIncidents = incidentShipmentIds.size
   }
   const firstAttemptCount = deliveredCount - deliveredWithIncidents
   const firstAttemptRate = deliveredCount > 0 ? Math.round((firstAttemptCount / deliveredCount) * 100) : 0
