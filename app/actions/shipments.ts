@@ -796,28 +796,31 @@ async function loadShipmentTrackingTimeline(
   const supabase = createAdminClient()
   const events: any[] = []
 
-  // Determinar se o envio é Correos Express ou CTT
-  let isCorreos = false
-  try {
-    const { data: sRow } = await supabase
+  // Run initial queries in parallel to drastically improve loading time
+  const [sRowResult, dbEventsResult] = await Promise.all([
+    supabase
       .from("shipments")
       .select("carrier_code, service_type, carrier_tracking_number, tracking_number")
       .eq("id", shipmentId)
-      .maybeSingle()
-    if (sRow) {
-      isCorreos = isCorreosShipment(sRow)
-    } else if (trackingNumber && /^\d{16}$/.test(trackingNumber.trim())) {
-      isCorreos = true
-    }
-  } catch {}
-
-  // 1. Query Supabase tracking_events table by shipment_id
-  try {
-    const { data: dbEvents, error } = await supabase
+      .maybeSingle(),
+    supabase
       .from("tracking_events")
       .select("*")
       .eq("shipment_id", shipmentId)
       .order("created_at", { ascending: true })
+  ])
+
+  let isCorreos = false
+  if (sRowResult.data) {
+    isCorreos = isCorreosShipment(sRowResult.data)
+  } else if (trackingNumber && /^\d{16}$/.test(trackingNumber.trim())) {
+    isCorreos = true
+  }
+
+  // 1. Process dbEvents
+  try {
+    const dbEvents = dbEventsResult.data
+    const error = dbEventsResult.error
 
     if (!error && dbEvents && dbEvents.length > 0) {
       dbEvents.forEach((ev: any) => {

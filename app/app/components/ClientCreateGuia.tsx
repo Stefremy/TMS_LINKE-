@@ -387,19 +387,19 @@ export function ClientCreateGuia() {
 
       {/* Success notification banner */}
       {generatedGuia && (
-        <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in shadow-xs">
+        <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] border-l-4 border-l-emerald-600 rounded-lg p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in">
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-2xs shrink-0">
-              <Check className="w-6 h-6" />
+            <div className="w-9 h-9 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0">
+              <Check className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+              <div className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
                 <span>Guia Emitida com Sucesso!</span>
-                <span className="font-mono text-xs bg-emerald-200 text-emerald-900 px-2.5 py-0.5 rounded-lg font-bold">
+                <span className="font-mono text-xs bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-primary)] px-2 py-0.5 rounded-md font-semibold">
                   {generatedGuia}
                 </span>
               </div>
-              <p className="text-xs text-emerald-800 mt-0.5">
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 O envio foi registado com o serviço <strong>{activeLinkeService?.name || "Linke Expresso 24H"}</strong>.
               </p>
             </div>
@@ -408,13 +408,13 @@ export function ClientCreateGuia() {
           <div className="flex items-center gap-2.5">
             <Link
               href={`/app${querySuffix}`}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all"
+              className="bg-[var(--text-primary)] hover:opacity-90 text-white px-3.5 py-2 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors"
             >
               <span>Ver no Painel</span>
             </Link>
             <Link
               href={`/app/envios${querySuffix}`}
-              className="bg-emerald-100 hover:bg-emerald-200 text-emerald-900 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all"
+              className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-md text-xs font-semibold transition-colors"
             >
               <span>Ver no Histórico</span>
             </Link>
@@ -435,7 +435,7 @@ export function ClientCreateGuia() {
                     }
                     printCttLabel(label)
                   }}
-                  className="bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-950 px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Imprimir Etiqueta</span>
@@ -493,7 +493,7 @@ export function ClientCreateGuia() {
             <div className="space-y-2 bg-slate-50/80 p-4 rounded-2xl border border-slate-200">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-slate-700">Remetente (A sua Empresa)</label>
-                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100/80 px-2 py-0.5 rounded-full">Conta Ativa</span>
+                <span className="text-[10px] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">Conta Ativa</span>
               </div>
               <div className="text-xs text-slate-900 font-bold">{senderName}</div>
               <div className="text-[11px] text-slate-500 leading-relaxed">{senderAddress}</div>
@@ -747,11 +747,8 @@ export function ClientCreateGuia() {
                 <span>Serviço de Transporte Linke</span>
               </label>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-emerald-700 font-bold bg-emerald-100/80 px-2.5 py-0.5 rounded-full">
+                <span className="text-[11px] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">
                   {activeLinkeService?.category || "Nacional"}
-                </span>
-                <span className="text-[10px] font-semibold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                  Operador: {activeLinkeService?.preferred_carrier_name?.toUpperCase() || "CTT EXPRESSO"} API
                 </span>
               </div>
             </div>
@@ -912,7 +909,7 @@ export function ClientCreateGuia() {
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-bold text-slate-900">Envios Criados Nesta Sessão</h3>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
+            <span className="text-xs font-semibold text-[var(--text-primary)] bg-[var(--surface-muted)] border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">
               {sessionShipments.length} envios
             </span>
           </div>

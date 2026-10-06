@@ -314,8 +314,7 @@ export function ClientDashboard() {
       />
       
       {/* Top Welcome & Client Header Banner */}
-      <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 sm:p-7 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-[var(--accent)]" />
+      <div className="bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
 
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -336,7 +335,7 @@ export function ClientDashboard() {
             </span>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--text-primary)]">
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
             {currentClient?.legal_name || currentClient?.short_name || "Portal de Envios do Cliente"}
           </h1>
 

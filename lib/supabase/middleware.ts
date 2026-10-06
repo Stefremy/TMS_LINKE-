@@ -34,7 +34,12 @@ export async function updateSession(request: NextRequest) {
           request.cookies.getAll().forEach(({ name }) => {
             const isChunk = /^sb-[^-]+-auth-token\.\d+$/.test(name)
             if (isChunk && !cookieNamesBeingSet.has(name)) {
-              supabaseResponse.cookies.delete(name)
+              supabaseResponse.cookies.set(name, '', {
+                maxAge: 0,
+                path: '/',
+                sameSite: 'lax',
+                secure: process.env.NODE_ENV === 'production',
+              })
             }
           })
         },

@@ -34,7 +34,7 @@ export async function fetchShipments(options: { includeLabels?: boolean } = {}):
 
   // 1. Fetch from shipments table
   try {
-    const lean = options.includeLabels === false
+    const lean = options.includeLabels !== true
     let shipmentsQuery = supabase
       .from(lean ? "shipment_metadata" : "shipments")
       .select(lean ? "details" : "*")
@@ -81,7 +81,7 @@ export async function fetchShipments(options: { includeLabels?: boolean } = {}):
 
   // A lightweight view removes PDF/ZPL payloads before they leave Postgres.
   try {
-    const source = options.includeLabels === false ? "shipment_audit_metadata" : "audit_log"
+    const source = options.includeLabels !== true ? "shipment_audit_metadata" : "audit_log"
     let logsQuery = supabase
       .from(source)
       .select("details, created_at")
@@ -324,10 +324,10 @@ export async function fetchPaginatedShipments(options: {
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
   
-  const lean = options.includeLabels === false
+  const lean = options.includeLabels !== true
   let query = supabase
     .from(lean ? "shipment_metadata" : "shipments")
-    .select(lean ? "details" : "*", { count: 'exact' })
+    .select(lean ? "details" : "*", { count: 'estimated' })
     .order("created_at", { ascending: false })
     
   if (ctx.role === "client") {

@@ -51,10 +51,17 @@ export async function recordTrackingEvents(
   // 2. Inserir novos eventos em tracking_events com deduplicação
   let insertedCount = 0
   try {
-    const { data: existingEvents } = await supabase
-      .from("tracking_events")
-      .select("event_code, timestamp, description")
-      .eq("shipment_id", shipmentId)
+    const { data: shipmentExists } = await supabase
+      .from("shipments")
+      .select("id")
+      .eq("id", shipmentId)
+      .maybeSingle()
+
+    if (shipmentExists) {
+      const { data: existingEvents } = await supabase
+        .from("tracking_events")
+        .select("event_code, timestamp, description")
+        .eq("shipment_id", shipmentId)
 
     const tenantId = targetShipment?.tenant_id || (await getTenantId().catch(() => "11111111-1111-1111-1111-111111111111"))
 
@@ -87,6 +94,7 @@ export async function recordTrackingEvents(
           console.warn("[Tracking Recorder] Aviso ao inserir tracking_event:", insErr.message)
         }
       }
+    }
     }
   } catch (err: any) {
     console.warn("[Tracking Recorder] Falha ao gravar tracking_events:", err?.message)

@@ -177,6 +177,7 @@ export async function getClientesAction(selectedClientId?: string): Promise<Clie
       .select("details")
       .eq("action", "client_data")
       .order("created_at", { ascending: false })
+      .limit(100)
     if (scopedId) auditQuery = auditQuery.eq("details->>id", scopedId)
     const { data: logs, error } = await auditQuery
 
@@ -199,6 +200,7 @@ export async function getClientesAction(selectedClientId?: string): Promise<Clie
       .from("audit_log")
       .select("details")
       .eq("action", "deleted_client")
+      .limit(100)
     if (scopedId) deletedQuery = deletedQuery.eq("details->>id", scopedId)
     const { data: deletedLogs } = await deletedQuery
 

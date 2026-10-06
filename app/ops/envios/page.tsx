@@ -18,7 +18,8 @@ export default async function EnviosPage(props: { searchParams?: Promise<{ page?
     supabase
       .from("recolhas")
       .select("*")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(200),
     getClientesAction()
   ])
 
