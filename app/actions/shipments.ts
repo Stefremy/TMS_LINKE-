@@ -1045,6 +1045,38 @@ export async function syncAllActiveShipmentsTrackingAction() {
   return { success: true, count: result.count, errors: result.errors }
 }
 
+/**
+ * Sincroniza em segundo plano uma lista de envios visíveis ativos (sem bloquear a página)
+ */
+export async function syncActiveShipmentsBatchAction(shipmentIds: string[]) {
+  if (!shipmentIds || shipmentIds.length === 0) return { updatedCount: 0 }
+
+  const cleanIds = Array.from(new Set(shipmentIds.filter(Boolean))).slice(0, 25)
+  let updatedCount = 0
+
+  await Promise.allSettled(
+    cleanIds.map(async (id) => {
+      try {
+        const res = await syncShipmentTracking({ shipmentId: id }, { skipAuth: true })
+        if (res.success && (res.count > 0 || res.latestStatus)) {
+          updatedCount++
+        }
+      } catch (err: any) {
+        console.warn(`[Sync Active Batch] Erro ao sincronizar envio ${id}:`, err?.message)
+      }
+    })
+  )
+
+  if (updatedCount > 0) {
+    revalidatePath("/ops/envios")
+    revalidatePath("/ops")
+    revalidatePath("/app")
+    revalidatePath("/app/envios")
+  }
+
+  return { updatedCount }
+}
+
 
 /**
  * Elimina um envio da base de dados e registos associados

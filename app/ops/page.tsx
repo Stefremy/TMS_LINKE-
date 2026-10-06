@@ -19,6 +19,8 @@ import { getShipmentsAction } from "@/app/actions/shipments"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 
+import { OpsDashboardClientSync } from "./components/OpsDashboardClientSync"
+
 export default async function OpsDashboardPage() {
   const supabase = createAdminClient()
 
@@ -126,8 +128,13 @@ export default async function OpsDashboardPage() {
   const recentShipments = shipments.slice(0, 5)
   const latestActiveShipment = shipments.find((s: any) => s.status !== "entregue" && s.status !== "devolvido") || shipments[0] || null
 
+  const activeIds = shipments
+    .filter((s: any) => s.status !== "entregue" && s.status !== "devolvido" && s.status !== "cancelado")
+    .map((s: any) => s.id)
+
   return (
     <div className="flex flex-col gap-6">
+      <OpsDashboardClientSync activeIds={activeIds} />
       
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

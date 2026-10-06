@@ -28,8 +28,8 @@ import { ShipmentLateralDrawer } from "./ShipmentLateralDrawer"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
-import { closeCttShipmentsAction, syncCttTrackingAction } from "@/app/actions/ctt"
-import { deleteShipmentsBulkAction } from "@/app/actions/shipments"
+import { closeCttShipmentsAction } from "@/app/actions/ctt"
+import { deleteShipmentsBulkAction, syncShipmentTrackingAction, syncActiveShipmentsBatchAction } from "@/app/actions/shipments"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
@@ -59,6 +59,44 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
   const [isClosingManifest, setIsClosingManifest] = React.useState(false)
   const [isSyncingSelected, setIsSyncingSelected] = React.useState(false)
   const [isDeletingSelected, setIsDeletingSelected] = React.useState(false)
+
+  // Sincronização automática em segundo plano para envios em curso na página
+  React.useEffect(() => {
+    const activeIds = envios
+      .filter((e) => {
+        const s = (e.rawShipment?.status || e.status?.raw || "").toLowerCase()
+        return s !== "entregue" && s !== "devolvido" && s !== "cancelado"
+      })
+      .map((e) => e.rawId || e.rawShipment?.id)
+      .filter(Boolean) as string[]
+
+    if (activeIds.length === 0) return
+
+    let isMounted = true
+    syncActiveShipmentsBatchAction(activeIds)
+      .then((res) => {
+        if (isMounted && res.updatedCount > 0) {
+          router.refresh()
+        }
+      })
+      .catch(() => {})
+
+    // Polling periódico a cada 5 minutos (300000 ms)
+    const interval = setInterval(() => {
+      syncActiveShipmentsBatchAction(activeIds)
+        .then((res) => {
+          if (isMounted && res.updatedCount > 0) {
+            router.refresh()
+          }
+        })
+        .catch(() => {})
+    }, 300000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [envios.length])
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -97,7 +135,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
     setIsSyncingSelected(true)
     try {
       for (const id of selectedIds) {
-        await syncCttTrackingAction("", id)
+        await syncShipmentTrackingAction("", id)
       }
       alert(`Sincronização concluída com sucesso para ${selectedIds.length} envio(s).`)
       setSelectedIds([])

@@ -14,6 +14,7 @@ function testCorreosMapping() {
     { code: "5", desc: "INCIDENCIA", expectedStatus: "incidencia", expectedDisplay: "incidencia" },
     { code: "6", desc: "DEVUELTO", expectedStatus: "devolvido", expectedDisplay: "devolvido" },
     { code: "7", desc: "ESTACIONADO", expectedStatus: "incidencia", expectedDisplay: "incidencia" },
+    { code: "8", desc: "EM DISTRIBUIÇAO", expectedStatus: "em_distribuicao", expectedDisplay: "em_distribuicao" },
     { code: "8", desc: "DESTRUIDO", expectedStatus: "cancelado", expectedDisplay: "cancelado" },
     { code: "9", desc: "RETENIDO", expectedStatus: "incidencia", expectedDisplay: "incidencia" },
     { code: "10", desc: "REEXPEDIDO", expectedStatus: "entrada_rede", expectedDisplay: "em_transito" },

@@ -214,7 +214,7 @@ export const CTT_TRACKING_EVENTS: Record<string, CTTTrackingEvent> = {
   EMY: { code: "EMY", description: "Expedição do Local Responsável pela Aceitação", tms_status: "em_transito", is_terminal: false },
   EMW: { code: "EMW", description: "Chegada à Estação de Depósito", tms_status: "em_transito", is_terminal: false },
   EMZ: { code: "EMZ", description: "Em Distribuição (Com estafeta)", tms_status: "em_distribuicao", is_terminal: false },
-  EMO: { code: "EMO", description: "Chegada ao Nó Cliente", tms_status: "em_transito", is_terminal: false },
+  EMO: { code: "EMO", description: "Chegada ao Nó Cliente", tms_status: "pendente", is_terminal: false },
   EMT: { code: "EMT", description: "Envio", tms_status: "em_transito", is_terminal: false },
   EMI: { code: "EMI", description: "Entrega Conseguida", tms_status: "entregue", is_terminal: true },
   EMH: { code: "EMH", description: "Entrega Não Conseguida (Incidência)", tms_status: "incidencia", is_terminal: false },

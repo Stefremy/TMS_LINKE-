@@ -111,16 +111,8 @@ export function ClientShipmentDetailModal({
       const carrierTrk = shipment.carrier_tracking_number || shipment.ctt_object_id || (!shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null)
       loadTimeline(shipment.id, carrierTrk || shipment.tracking_number)
 
-      if (carrierTrk && shipment.status !== "entregue" && shipment.status !== "cancelado") {
-        syncCttTrackingAction(carrierTrk, shipment.id).then((res) => {
-          if (res?.success) {
-            loadTimeline(shipment.id, carrierTrk)
-            if (res.latestStatus) {
-              setCurrentShipment((prev: any) => ({ ...prev, status: res.latestStatus }))
-            }
-          }
-        }).catch(() => {})
-      }
+      // Removed automatic on-mount API sync to drastically speed up modal loading.
+      // Background polling (every 5 mins) handles updates automatically now.
     }
   }, [shipment, loadTimeline])
 

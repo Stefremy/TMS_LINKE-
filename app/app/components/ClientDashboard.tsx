@@ -112,7 +112,41 @@ export function ClientDashboard() {
       if (!active) return
       if (res) {
         setStats(res)
-        setShipments(res.allShipments || res.recentShipments || [])
+        const list = res.allShipments || res.recentShipments || []
+        setShipments(list)
+
+        // Sincronização automática em segundo plano para envios em curso
+        const activeIds = list
+          .filter((s: any) => s.status !== "entregue" && s.status !== "devolvido" && s.status !== "cancelado")
+          .map((s: any) => s.id)
+          .filter(Boolean)
+
+        if (activeIds.length > 0) {
+          import("@/app/actions/shipments").then(({ syncActiveShipmentsBatchAction }) => {
+            const doSync = () => {
+              syncActiveShipmentsBatchAction(activeIds).then(r => {
+                if (r.updatedCount > 0 && active) {
+                  getClientPortalStatsAction(currentClient.id, currentClient.short_name).then(fresh => {
+                    if (fresh && active) {
+                      setStats(fresh)
+                      setShipments(fresh.allShipments || fresh.recentShipments || [])
+                    }
+                  })
+                }
+              }).catch(() => {})
+            }
+            
+            // Execute once
+            doSync()
+            
+            // And poll every 5 minutes (300000 ms)
+            const interval = setInterval(() => {
+              if (active) doSync()
+            }, 300000)
+            
+            return () => clearInterval(interval)
+          })
+        }
       } else setStatsError(true)
       setLoadingStats(false)
     }).catch(() => {

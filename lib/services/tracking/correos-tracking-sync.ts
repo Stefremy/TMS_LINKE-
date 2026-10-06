@@ -95,8 +95,102 @@ export function mapCorreosStatus(
   const incCode = (codIncEstado || "").trim()
   const incDesc = (descIncEstado || "").trim()
 
-  // Se tiver indicação de incidência ativa
-  const hasIncident = Boolean(incCode && incCode !== "0" && incCode !== "00") || desc.includes("incidencia")
+  // 1. Deteção explícita: CANCELADO / DESTRUÍDO
+  if (desc.includes("destruid") || desc.includes("cancelad") || desc.includes("anulad")) {
+    return {
+      status: "cancelado",
+      displayStatus: "cancelado",
+      eventName: descEstado || "Cancelado / Destruído",
+      isTerminal: true,
+      isIncidencia: true,
+    }
+  }
+
+  // 2. Deteção prioritária: EM DISTRIBUIÇÃO / EN REPARTO
+  // Em Correos Express Portugal, o código 8 é "EM DISTRIBUIÇAO" e na Espanha é 3 "EN REPARTO".
+  // NUNCA deve ser classificado como cancelado nem como incidência!
+  if (
+    desc.includes("distribui") ||
+    desc.includes("reparto") ||
+    code === "3" ||
+    code === "03" ||
+    code === "8" ||
+    code === "08"
+  ) {
+    const hasSpecificIncident = Boolean(
+      (incCode && incCode !== "0" && incCode !== "00" && incCode.toLowerCase() !== "null") ||
+      (desc.includes("incidencia") && !desc.includes("distribui") && !desc.includes("reparto"))
+    )
+
+    if (hasSpecificIncident) {
+      return {
+        status: "incidencia",
+        displayStatus: "incidencia",
+        eventName: descEstado || (incDesc ? `Incidência: ${incDesc}` : "Incidência de Entrega"),
+        isTerminal: false,
+        isIncidencia: true,
+      }
+    }
+
+    return {
+      status: "em_distribuicao",
+      displayStatus: "em_distribuicao",
+      eventName: descEstado || "Em Distribuição (Com o Estafeta)",
+      isTerminal: false,
+      isIncidencia: false,
+    }
+  }
+
+  // 2. ENTREGUE
+  if (
+    desc.includes("entregad") ||
+    desc.includes("delivered") ||
+    desc.includes("entregue") ||
+    code === "4" ||
+    code === "04"
+  ) {
+    return {
+      status: "entregue",
+      displayStatus: "entregue",
+      eventName: descEstado || "Entregue",
+      isTerminal: true,
+      isIncidencia: false,
+    }
+  }
+
+  // 3. DEVOLVIDO
+  if (desc.includes("devuelt") || desc.includes("devolv") || code === "6" || code === "06") {
+    return {
+      status: "devolvido",
+      displayStatus: "devolvido",
+      eventName: descEstado || "Devolvido ao Remetente",
+      isTerminal: true,
+      isIncidencia: true,
+    }
+  }
+
+  // 4. CANCELADO / DESTRUÍDO
+  if (desc.includes("destruid") || desc.includes("cancelad") || desc.includes("anulad")) {
+    return {
+      status: "cancelado",
+      displayStatus: "cancelado",
+      eventName: descEstado || "Cancelado / Destruído",
+      isTerminal: true,
+      isIncidencia: true,
+    }
+  }
+
+  // 5. INCIDÊNCIA
+  const hasIncident = Boolean(
+    (incCode && incCode !== "0" && incCode !== "00" && incCode.toLowerCase() !== "null") ||
+    desc.includes("incidencia") ||
+    code === "5" ||
+    code === "05" ||
+    code === "7" ||
+    code === "07" ||
+    code === "9" ||
+    code === "09"
+  )
 
   if (hasIncident) {
     return {
@@ -108,130 +202,33 @@ export function mapCorreosStatus(
     }
   }
 
-  switch (code) {
-    case "1":
-    case "01":
-      return {
-        status: "pendente",
-        displayStatus: "pendente",
-        eventName: descEstado || "Envio Registado / Aguarda Receção",
-        isTerminal: false,
-        isIncidencia: false,
-      }
-    case "2":
-    case "02":
-    case "10":
-      return {
-        status: "entrada_rede",
-        displayStatus: "em_transito",
-        eventName: descEstado || "Em Trânsito / Recebido na Plataforma",
-        isTerminal: false,
-        isIncidencia: false,
-      }
-    case "3":
-    case "03":
-      return {
-        status: "em_distribuicao",
-        displayStatus: "em_distribuicao",
-        eventName: descEstado || "Em Distribuição (Com o Estafeta)",
-        isTerminal: false,
-        isIncidencia: false,
-      }
-    case "4":
-    case "04":
-      return {
-        status: "entregue",
-        displayStatus: "entregue",
-        eventName: descEstado || "Entregue",
-        isTerminal: true,
-        isIncidencia: false,
-      }
-    case "5":
-    case "05":
-    case "7":
-    case "07":
-    case "9":
-    case "09":
-      return {
-        status: "incidencia",
-        displayStatus: "incidencia",
-        eventName: descEstado || "Incidência de Entrega",
-        isTerminal: false,
-        isIncidencia: true,
-      }
-    case "6":
-    case "06":
-      return {
-        status: "devolvido",
-        displayStatus: "devolvido",
-        eventName: descEstado || "Devolvido ao Remetente",
-        isTerminal: true,
-        isIncidencia: true,
-      }
-    case "8":
-    case "08":
-      return {
-        status: "cancelado",
-        displayStatus: "cancelado",
-        eventName: descEstado || "Destruído / Cancelado",
-        isTerminal: true,
-        isIncidencia: true,
-      }
-    default: {
-      // Heurística textual de contingência
-      if (desc.includes("entregad") || desc.includes("delivered")) {
-        return {
-          status: "entregue",
-          displayStatus: "entregue",
-          eventName: descEstado || "Entregue",
-          isTerminal: true,
-          isIncidencia: false,
-        }
-      }
-      if (desc.includes("reparto") || desc.includes("distribui")) {
-        return {
-          status: "em_distribuicao",
-          displayStatus: "em_distribuicao",
-          eventName: descEstado || "Em Distribuição",
-          isTerminal: false,
-          isIncidencia: false,
-        }
-      }
-      if (desc.includes("devuelt") || desc.includes("devolv")) {
-        return {
-          status: "devolvido",
-          displayStatus: "devolvido",
-          eventName: descEstado || "Devolvido ao Remetente",
-          isTerminal: true,
-          isIncidencia: true,
-        }
-      }
-      if (desc.includes("arrastre") || desc.includes("transito") || desc.includes("plataforma") || desc.includes("clasifica")) {
-        return {
-          status: "entrada_rede",
-          displayStatus: "em_transito",
-          eventName: descEstado || "Em Trânsito",
-          isTerminal: false,
-          isIncidencia: false,
-        }
-      }
-      if (desc.includes("recepcion") || desc.includes("tramitacion")) {
-        return {
-          status: "pendente",
-          displayStatus: "pendente",
-          eventName: descEstado || "Envio Registado",
-          isTerminal: false,
-          isIncidencia: false,
-        }
-      }
-      return {
-        status: "entrada_rede",
-        displayStatus: "em_transito",
-        eventName: descEstado || "Em Trânsito",
-        isTerminal: false,
-        isIncidencia: false,
-      }
+  // 6. EM TRÂNSITO / EM ARRASTO / RECEBIDO NA PLATAFORMA
+  if (
+    desc.includes("arrastre") ||
+    desc.includes("arrasto") ||
+    desc.includes("transito") ||
+    desc.includes("plataforma") ||
+    desc.includes("clasifica") ||
+    code === "2" ||
+    code === "02" ||
+    code === "10"
+  ) {
+    return {
+      status: "entrada_rede",
+      displayStatus: "em_transito",
+      eventName: descEstado || "Em Trânsito / Recebido na Plataforma",
+      isTerminal: false,
+      isIncidencia: false,
     }
+  }
+
+  // 7. PENDENTE / PRÉ-REGISTO / SEM RECEPÇÃO
+  return {
+    status: "pendente",
+    displayStatus: "pendente",
+    eventName: descEstado || "Envio Registado / Aguarda Receção",
+    isTerminal: false,
+    isIncidencia: false,
   }
 }
 
