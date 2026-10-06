@@ -11,11 +11,13 @@ export default async function ColaboradoresPage() {
   ])
 
   const isSuperAdmin = ctx?.user?.email?.toLowerCase().includes("stefano") || ctx?.role === "admin"
+  const isStefano = Boolean(ctx?.user?.email?.toLowerCase().includes("stefano"))
 
   return (
     <ColaboradoresClient
       initialColaboradores={colaboradores || []}
       isSuperAdmin={Boolean(isSuperAdmin)}
+      isStefano={isStefano}
     />
   )
 }
