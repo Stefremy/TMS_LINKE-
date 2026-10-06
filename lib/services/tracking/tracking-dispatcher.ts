@@ -49,7 +49,7 @@ export async function syncShipmentTracking(
       targetShipment = d2
     }
   }
-
+  }
 
   // 2. Validação de autorização para clientes
   if (!options.skipAuth && options.userRole === "client" && options.clientId) {
