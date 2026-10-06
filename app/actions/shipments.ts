@@ -14,7 +14,7 @@ import { convertZplToPdfBase64 } from "@/lib/label-utils"
 import { applyLinkeLogoToCorreosLabel } from "@/lib/services/correos/correos-label-customizer"
 import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId, ensureTenantAndClient } from "@/lib/services/shipments/shipment-utils"
 import { fetchShipments, fetchShipmentLabel, fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
-import { syncShipmentTracking, syncAllActiveShipmentsTracking, mapCorreosStatus } from "@/lib/services/tracking"
+import { syncShipmentTracking, mapCorreosStatus } from "@/lib/services/tracking"
 
 export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string } = {}): Promise<any[]> {
   return fetchShipments(options)
@@ -486,6 +486,7 @@ export async function emitClientGuiaAction(data: {
       sell_price: shipmentData.sell_price,
       created_at: shipmentData.created_at,
       updated_at: shipmentData.updated_at,
+      ctt_label_base64: labelBase64,
     }
 
     const { error } = await supabase
@@ -499,24 +500,7 @@ export async function emitClientGuiaAction(data: {
     console.warn("Error inserting into shipments table:", err?.message)
   }
 
-  // Dual-write to audit_log with full rich details
-  try {
-    await supabase.from("audit_log").insert({
-      tenant_id: (await getTenantId()),
-      action: "shipment_data",
-      details: {
-        ...shipmentData,
-        tracking_number: realGuia,
-        carrier_object_id: realGuia,
-        ctt_object_id: realGuia,
-        carrier_label_base64: labelBase64,
-        ctt_label_base64: labelBase64,
-        status: "pendente",
-      },
-    })
-  } catch (err: any) {
-    console.warn("Error logging shipment to audit_log:", err?.message)
-  }
+
 
   // Insert package record
   try {
@@ -1039,13 +1023,27 @@ export async function syncShipmentTrackingAction(trackingNumber: string, shipmen
 export async function syncAllActiveShipmentsTrackingAction() {
   await requireEmployee()
 
-  const result = await syncAllActiveShipmentsTracking({ skipAuth: false })
+  const supabase = createAdminClient()
+  const { data: activeShipments } = await supabase
+    .from("shipments")
+    .select("id")
+    .not("status", "in", '("entregue","cancelado","devolvido")')
 
-  revalidatePath("/ops/envios")
-  revalidatePath("/app/envios")
-  revalidatePath("/ops")
+  if (!activeShipments || activeShipments.length === 0) {
+    return { success: true, count: 0, errors: [] }
+  }
 
-  return { success: true, count: result.count, errors: result.errors }
+  const allIds = activeShipments.map((s: any) => s.id)
+  
+  // Use existing batch logic for every chunk of 50
+  let totalUpdated = 0
+  for (let i = 0; i < allIds.length; i += 50) {
+    const chunkIds = allIds.slice(i, i + 50)
+    const res = await syncActiveShipmentsBatchAction(chunkIds)
+    totalUpdated += res.updatedCount
+  }
+
+  return { success: true, count: totalUpdated, errors: [] }
 }
 
 /**
@@ -1054,27 +1052,39 @@ export async function syncAllActiveShipmentsTrackingAction() {
 export async function syncActiveShipmentsBatchAction(shipmentIds: string[]) {
   if (!shipmentIds || shipmentIds.length === 0) return { updatedCount: 0 }
 
-  const cleanIds = Array.from(new Set(shipmentIds.filter(Boolean))).slice(0, 25)
+  const cleanIds = Array.from(new Set(shipmentIds.filter(Boolean))).slice(0, 50)
   let updatedCount = 0
+
+  const supabase = createAdminClient()
+  const { data: activeShipments } = await supabase
+    .from("shipments")
+    .select("*")
+    .in("id", cleanIds)
+    // Only track shipments that are not delivered or canceled
+    .not("status", "in", '("entregue","cancelado","devolvido")')
+
+  if (!activeShipments || activeShipments.length === 0) {
+    return { updatedCount: 0 }
+  }
 
   // Chunk requests into batches of 5 to avoid overloading the CTT API and network bottlenecks
   const chunkSize = 5
-  for (let i = 0; i < cleanIds.length; i += chunkSize) {
-    const chunk = cleanIds.slice(i, i + chunkSize)
+  for (let i = 0; i < activeShipments.length; i += chunkSize) {
+    const chunk = activeShipments.slice(i, i + chunkSize)
     
     await Promise.allSettled(
-      chunk.map(async (id) => {
+      chunk.map(async (shipment: any) => {
         try {
           // Strict 3.5s timeout per tracking sync to prevent API hangs from halting the entire batch
           const timeoutPromise = new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3500))
-          const syncPromise = syncShipmentTracking({ shipmentId: id }, { skipAuth: true })
+          const syncPromise = syncShipmentTracking({ shipmentId: shipment.id, shipment }, { skipAuth: true })
           
           const res = await Promise.race([syncPromise, timeoutPromise])
           if (res && res.success && (res.count > 0 || res.latestStatus)) {
             updatedCount++
           }
         } catch (err: any) {
-          console.warn(`[Sync Active Batch] Erro/Timeout ao sincronizar envio ${id}:`, err?.message)
+          console.warn(`[Sync Active Batch] Erro/Timeout ao sincronizar envio ${shipment.id}:`, err?.message)
         }
       })
     )
@@ -1157,17 +1167,7 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
     // Inserir na tabela shipments
     await supabase.from("shipments").insert(returnShipmentData)
 
-    // Guardar no audit_log
-    await supabase.from("audit_log").insert({
-      tenant_id: (await getTenantId()),
-      action: "shipment_data",
-      details: {
-        ...returnShipmentData,
-        is_return: true,
-        original_shipment_id: originalShipmentId,
-        return_reason: reason || "Devolução solicitada"
-      },
-    })
+
 
     // Inserir evento de rastreio inicial da devolução
     await supabase.from("tracking_events").insert({
@@ -1232,28 +1232,7 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
   }
   let shipment: any = dbError ? null : (dbRow?.details || dbRow)
 
-  if (!shipment) {
-    const auditFilters = [
-      `tracking_number.eq.${query}`,
-      `carrier_tracking_number.eq.${query}`,
-      `ctt_object_id.eq.${query}`,
-      `reference.eq.${query}`,
-    ]
-    let { data: auditRow, error: auditError } = await supabase.from("shipment_audit_metadata")
-      .select("details").or(auditFilters.join(","))
-      .order("created_at", { ascending: false }).limit(1).maybeSingle()
-    if (auditError) {
-      const rawFilters = ["tracking_number", "carrier_tracking_number", "ctt_object_id", "reference"]
-        .map((key) => `details->>${key}.eq.${query}`)
-      const fallback = await supabase.from("audit_log")
-        .select("details").eq("action", "shipment_data")
-        .or(rawFilters.join(","))
-        .order("created_at", { ascending: false }).limit(1).maybeSingle()
-      auditRow = fallback.data
-      auditError = fallback.error
-    }
-    if (!auditError) shipment = auditRow?.details || null
-  }
+
 
   if (!shipment) {
     return { success: false, error: `Nenhum envio encontrado para a referência "${query}". Verifique o código e tente novamente.` }

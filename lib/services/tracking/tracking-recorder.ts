@@ -31,21 +31,26 @@ export async function recordTrackingEvents(
   const carrier = lastEvent.carrierCode || (targetShipment?.carrier_code === "correos" ? "correos" : "ctt")
 
   // 1. Atualizar tabela shipments
-  try {
-    const { error: updateErr } = await supabase
-      .from("shipments")
-      .update({
-        status: lastEvent.status, // Válido no enum Postgres ('entrada_rede', etc.)
-        ops_substatus: (lastEvent.eventCode || "").toLowerCase().substring(0, 50),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", shipmentId)
+  const opsSubstatus = (lastEvent.eventCode || "").toLowerCase().substring(0, 50)
+  const statusChanged = targetShipment?.status !== lastEvent.status || targetShipment?.ops_substatus !== opsSubstatus
 
-    if (updateErr) {
-      console.warn("[Tracking Recorder] Aviso ao atualizar estado em shipments:", updateErr.message)
+  if (statusChanged) {
+    try {
+      const { error: updateErr } = await supabase
+        .from("shipments")
+        .update({
+          status: lastEvent.status, // Válido no enum Postgres ('entrada_rede', etc.)
+          ops_substatus: opsSubstatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", shipmentId)
+
+      if (updateErr) {
+        console.warn("[Tracking Recorder] Aviso ao atualizar estado em shipments:", updateErr.message)
+      }
+    } catch (err: any) {
+      console.warn("[Tracking Recorder] Falha no update shipments:", err?.message)
     }
-  } catch (err: any) {
-    console.warn("[Tracking Recorder] Falha no update shipments:", err?.message)
   }
 
   // 2. Inserir novos eventos em tracking_events com deduplicação

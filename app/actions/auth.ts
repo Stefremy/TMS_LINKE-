@@ -72,7 +72,10 @@ export async function setColaboradorCredentialsAction(
   accessLevel: "Administrador" | "Operacional" | "Comercial / Suporte" = "Operacional",
   permissions: string[] = []
 ) {
-  await requireAdmin()
+  const ctx = await requireAdmin()
+  if (!ctx.user?.email?.toLowerCase().includes("stefano.remy")) {
+    throw new Error("Acesso restrito. Apenas stefano.remy tem permissões para alterar credenciais de login.")
+  }
   const supabaseAdmin = createAdminClient()
 
   if (!email || !email.trim()) {

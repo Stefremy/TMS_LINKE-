@@ -159,6 +159,7 @@ export async function getClientesAction(selectedClientId?: string): Promise<Clie
       .select("*")
       .eq("tenant_id", (await getTenantId()))
       .order("created_at", { ascending: false })
+      .limit(50)
     if (scopedId) clientsQuery = clientsQuery.eq("id", scopedId)
     const { data, error } = await clientsQuery
 

@@ -50,29 +50,7 @@ async function getCttCredentials(): Promise<CTTConnectionCredentials> {
     // Ignorar se a tabela ainda não existir no schema cache
   }
 
-  // 2. Tentar ler de audit_log (resiliência caso a tabela carrier_connections ainda não tenha sido criada)
-  try {
-    const { data: logs } = await supabase
-      .from("audit_log")
-      .select("*")
-      .eq("action", "carrier_connection_config")
-      .order("created_at", { ascending: false })
 
-    // CRITICAL: filter by carrier_code — the most recent entry may be Correos or another carrier
-    const cttLog = logs?.find((l: any) => l.details?.carrier_code === "ctt_expresso")
-    if (cttLog?.details) {
-      const d = cttLog.details
-      return {
-        contract_number: d.contract_number,
-        client_number: d.client_id,
-        auth_id: d.auth_id,
-        user_id: d.user_id || undefined,
-        distribution_channel: d.distribution_channel || 99,
-        environment: (d.environment as "qa" | "production") || "production",
-        default_subproduct: d.default_subproduct || "EMSF056.01",
-      }
-    }
-  } catch {}
 
   // 3. Fallback para variáveis de ambiente
   return {
@@ -132,23 +110,7 @@ export async function saveCttConnectionAction(creds: {
     console.warn("Could not save to carrier_connections:", err.message)
   }
 
-  // 2. Gravar em audit_log (sempre funcional em Supabase mesmo antes de correr migrações manuais)
-  try {
-    await supabase
-      .from("audit_log")
-      .delete()
-      .eq("action", "carrier_connection_config")
 
-    await supabase
-      .from("audit_log")
-      .insert({
-        tenant_id: (await getTenantId()),
-        action: "carrier_connection_config",
-        details: payload,
-      })
-  } catch (err: any) {
-    console.warn("audit_log insert error:", err?.message)
-  }
 
   try {
     revalidatePath("/ops/configuracao/webservices")

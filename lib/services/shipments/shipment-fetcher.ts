@@ -25,6 +25,8 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
     }
     if (options.limit) {
       shipmentsQuery = shipmentsQuery.limit(options.limit)
+    } else {
+      shipmentsQuery = shipmentsQuery.limit(50)
     }
 
     const { data: dbShipments, error } = await shipmentsQuery
@@ -70,62 +72,7 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
   let label: string | null = null
   const isUuid = isValidUuid(cleanId)
 
-  // 1. Try finding in audit_log resilience (where shipment_data stores full payloads and cached labels)
-  try {
-    const { data: auditRows } = await supabase
-      .from("audit_log")
-      .select("id, details, created_at")
-      .eq("action", "shipment_data")
-      .or(
-        `details->>id.eq.${cleanId},details->>tracking_number.eq.${cleanId},details->>reference.eq.${cleanId},details->>carrier_tracking_number.eq.${cleanId},details->>ctt_object_id.eq.${cleanId},details->>carrier_object_id.eq.${cleanId}`
-      )
-      .order("created_at", { ascending: false })
-      .limit(1)
-
-    if (auditRows && auditRows.length > 0) {
-      const targetRow = auditRows[0]
-      const d = targetRow.details
-      if (d) {
-        if (ctx.role === "client" && d.client_id !== ctx.client_id) {
-          return null
-        }
-        
-        let existingLabel = d.carrier_label_base64 || d.ctt_label_base64 || d.labelBase64 || null
-        if (existingLabel) {
-          if (existingLabel.trimStart().startsWith("^XA")) {
-            existingLabel = await convertZplToPdfBase64(existingLabel)
-          }
-          if (await isCorreosPdfLabel(existingLabel)) {
-            existingLabel = await applyLinkeLogoToCorreosLabel(existingLabel)
-          }
-          return existingLabel
-        }
-
-        // If shipment exists in audit_log but has no label attached, generate and cache it
-        label = await generateTransportLabelPdfBase64(d)
-        if (label) {
-          try {
-            await supabase.from("audit_log").update({
-              details: {
-                ...d,
-                ctt_label_base64: label,
-                carrier_label_base64: label,
-                has_label: true,
-                updated_at: new Date().toISOString()
-              }
-            }).eq("id", targetRow.id)
-          } catch (e) {
-            console.warn("Could not cache generated label in audit_log:", e)
-          }
-          return label
-        }
-      }
-    }
-  } catch (err: any) {
-    console.warn("fetchShipmentLabel: audit_log query error:", err?.message)
-  }
-
-  // 2. Query shipments table if not found in audit_log
+  // 1. Query shipments table directly
   try {
     let query = supabase.from("shipments").select("*")
     if (isUuid) {
@@ -139,23 +86,27 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
         return null
       }
 
+      let existingLabel = shipment.ctt_label_base64 || shipment.carrier_label_base64 || null
+      if (existingLabel) {
+        if (existingLabel.trimStart().startsWith("^XA")) {
+          existingLabel = await convertZplToPdfBase64(existingLabel)
+        }
+        if (await isCorreosPdfLabel(existingLabel)) {
+          existingLabel = await applyLinkeLogoToCorreosLabel(existingLabel)
+        }
+        return existingLabel
+      }
+
       // Generate printable transport label
       label = await generateTransportLabelPdfBase64(shipment)
       if (label) {
-        // Save to audit_log for future instant retrieval
+        // Save to shipments table for future instant retrieval
         try {
-          await supabase.from("audit_log").insert({
-            tenant_id: shipment.tenant_id,
-            action: "shipment_data",
-            details: {
-              ...shipment,
-              ctt_label_base64: label,
-              carrier_label_base64: label,
-              has_label: true,
-            }
-          })
+          await supabase.from("shipments").update({
+            ctt_label_base64: label
+          }).eq("id", shipment.id)
         } catch (e) {
-          console.warn("Could not save generated label to audit_log:", e)
+          console.warn("Could not save generated label to shipments:", e)
         }
         return label
       }

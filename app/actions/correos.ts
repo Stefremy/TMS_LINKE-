@@ -50,15 +50,7 @@ export async function saveCorreosConnectionAction(creds: {
     console.warn("Could not save to carrier_connections:", err.message)
   }
 
-  try {
-    await supabase.from("audit_log").insert({
-      tenant_id: (await getTenantId()),
-      action: "carrier_connection_config",
-      details: payload,
-    })
-  } catch (err: any) {
-    console.warn("audit_log insert error:", err?.message)
-  }
+
 
   try {
     revalidatePath("/ops/configuracao/webservices")

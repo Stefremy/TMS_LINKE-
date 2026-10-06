@@ -17,19 +17,20 @@ export interface SyncOptions {
  * consulta o leitor adequado e grava os dados normalizados através do gravador comum.
  */
 export async function syncShipmentTracking(
-  identifier: { trackingNumber?: string; shipmentId?: string },
+  identifier: { trackingNumber?: string; shipmentId?: string; shipment?: any },
   options: SyncOptions = {}
 ): Promise<TrackingSyncResult> {
   const supabase = createAdminClient()
-  const { trackingNumber, shipmentId } = identifier
+  const { trackingNumber, shipmentId, shipment } = identifier
 
   // 1. Obter registo do envio
-  let targetShipment: any = null
+  let targetShipment: any = shipment || null
 
-  if (shipmentId) {
-    const { data } = await supabase.from("shipments").select("*").eq("id", shipmentId).maybeSingle()
-    targetShipment = data
-  } else if (trackingNumber) {
+  if (!targetShipment) {
+    if (shipmentId) {
+      const { data } = await supabase.from("shipments").select("*").eq("id", shipmentId).maybeSingle()
+      targetShipment = data
+    } else if (trackingNumber) {
     const cleanTrk = trackingNumber.trim()
     const { data: d1 } = await supabase
       .from("shipments")

@@ -7,7 +7,7 @@ export default async function RecolhasPage() {
   const supabase = createAdminClient()
 
   const [recolhasResult, clients, carrierConnections] = await Promise.all([
-    supabase.from("recolhas").select("*").order("created_at", { ascending: false }),
+    supabase.from("recolhas").select("*").order("created_at", { ascending: false }).limit(50),
     getClientesAction(),
     getCarrierConnectionsAction(),
   ])

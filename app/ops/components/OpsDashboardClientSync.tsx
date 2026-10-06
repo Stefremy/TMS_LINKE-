@@ -25,9 +25,11 @@ export function OpsDashboardClientSync({ activeIds }: { activeIds: string[] }) {
       // Initial sync
       doSync()
 
-      // Poll every 5 minutes
+      // Poll every 5 minutes but only if tab is active
       const interval = setInterval(() => {
-        if (isMounted) doSync()
+        if (isMounted && document.visibilityState === 'visible') {
+          doSync()
+        }
       }, 300000)
 
       return () => clearInterval(interval)
