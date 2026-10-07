@@ -120,6 +120,45 @@ export function NotificationBell() {
     return notifications.filter((n) => !dismissedIds.includes(n.id) && !readIds.includes(n.id)).length
   }, [notifications, dismissedIds, readIds])
 
+  const prevNotificationsRef = React.useRef<OperationalNotification[]>([])
+
+  React.useEffect(() => {
+    // Verifica se existem novas notificações de envio
+    if (prevNotificationsRef.current.length > 0) {
+      const newShipments = notifications.filter(
+        n => n.type === "shipment" && !prevNotificationsRef.current.find(prev => prev.id === n.id)
+      )
+      if (newShipments.length > 0) {
+        try {
+          // Play a nice double ding for new shipments
+          const AudioContext = window.AudioContext || (window as any).webkitAudioContext
+          const ctx = new AudioContext()
+          
+          const playDing = (delay: number, freq: number) => {
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.type = "sine"
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + delay)
+            gain.gain.setValueAtTime(0, ctx.currentTime + delay)
+            gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + delay + 0.05)
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.5)
+            osc.start(ctx.currentTime + delay)
+            osc.stop(ctx.currentTime + delay + 0.5)
+          }
+          
+          // E6 (1318.51 Hz) -> G#6 (1661.22 Hz) - a nice modern notification chime
+          playDing(0, 1318.51)
+          playDing(0.12, 1661.22)
+        } catch (e) {
+          console.warn("Could not play notification sound:", e)
+        }
+      }
+    }
+    prevNotificationsRef.current = notifications
+  }, [notifications])
+
   const markAsRead = (id: string) => {
     setReadIds((prev) => {
       if (prev.includes(id)) return prev

@@ -89,18 +89,7 @@ export async function getOperationalNotificationsAction(): Promise<OperationalNo
     const cttConn = connections.find((c: any) => c.carrier_id === "ctt" || c.carrier_code === "ctt")
     const isCttActive = cttConn?.is_active ?? true
 
-    if (isCttActive) {
-      notifications.push({
-        id: "ws-ctt-active",
-        type: "success",
-        title: "Webservice CTT Expresso API Conectado",
-        message: "A ligação direta ao webservice CTT Expresso (Recolhas & Envios) está operacional.",
-        timestamp: new Date(now.getTime() - 1000 * 60 * 60).toISOString(),
-        link: "/ops/configuracao/webservices",
-        actionLabel: "Ver Conexões",
-        priority: "low",
-      })
-    } else {
+    if (!isCttActive) {
       notifications.push({
         id: "ws-ctt-warning",
         type: "warning",
