@@ -61,6 +61,13 @@ export function ClientCreateGuia() {
   const [heightCm, setHeightCm] = React.useState("")
   const [observations, setObservations] = React.useState("")
 
+  // Sender states
+  const [isEditingSender, setIsEditingSender] = React.useState(false)
+  const [customSenderName, setCustomSenderName] = React.useState("")
+  const [customSenderAddress, setCustomSenderAddress] = React.useState("")
+  const [customSenderCity, setCustomSenderCity] = React.useState("")
+  const [customSenderPostal, setCustomSenderPostal] = React.useState("")
+
   // Special Services selections
   const [selectedSpecialServices, setSelectedSpecialServices] = React.useState<string[]>([])
   const [codAmount, setCodAmount] = React.useState("50.00")
@@ -105,6 +112,13 @@ export function ClientCreateGuia() {
       const services = (servicos || []).filter(s => s.is_active !== false)
       const selected = services.find(s => s.id === currentClient.default_linke_table_id) || services[0]
       if (selected) setSelectedServiceId(selected.id)
+      
+      // Initialize custom sender with client data
+      setCustomSenderName(currentClient.legal_name || currentClient.short_name || "")
+      setCustomSenderAddress(currentClient.address || "")
+      setCustomSenderCity(currentClient.city || "")
+      setCustomSenderPostal(currentClient.postal_code || "")
+      
       setLoadingClient(false)
     }).catch(() => { if (active) setLoadingClient(false) })
     return () => { active = false }
@@ -250,10 +264,10 @@ export function ClientCreateGuia() {
     try {
       const res = await emitClientGuiaAction({
         clientId: currentClient?.id,
-        clientName: currentClient?.short_name || currentClient?.legal_name,
-        senderAddress: currentClient?.address || "Sede Comercial",
-        senderCity: currentClient?.city || "Portugal",
-        senderPostal: currentClient?.postal_code || "",
+        clientName: isEditingSender ? customSenderName : (currentClient?.short_name || currentClient?.legal_name),
+        senderAddress: isEditingSender ? customSenderAddress : (currentClient?.address || "Sede Comercial"),
+        senderCity: isEditingSender ? customSenderCity : (currentClient?.city || "Portugal"),
+        senderPostal: isEditingSender ? customSenderPostal : (currentClient?.postal_code || ""),
         senderPhone: currentClient?.phone || currentClient?.mobile_phone || "910000000",
         recipientName,
         recipientAddress,
@@ -342,9 +356,9 @@ export function ClientCreateGuia() {
 
   const querySuffix = ""
 
-  const senderName = currentClient?.legal_name || currentClient?.short_name || "Empresa Cliente"
-  const senderAddress = currentClient?.address 
-    ? `${currentClient.address}, ${currentClient.postal_code} ${currentClient.city}` 
+  const defaultSenderName = currentClient?.legal_name || currentClient?.short_name || "Empresa Cliente"
+  const defaultSenderAddressStr = currentClient?.address 
+    ? `${currentClient.address}, ${currentClient.postal_code || ""} ${currentClient.city || ""}`.trim()
     : "Sede Comercial da Empresa"
 
   return (
@@ -490,13 +504,72 @@ export function ClientCreateGuia() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             
             {/* Remetente Card */}
-            <div className="space-y-2 bg-slate-50/80 p-4 rounded-2xl border border-slate-200">
+            <div className="space-y-3 bg-slate-50/80 p-4 rounded-2xl border border-slate-200">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-slate-700">Remetente (A sua Empresa)</label>
-                <span className="text-[10px] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">Conta Ativa</span>
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsEditingSender(!isEditingSender)} 
+                    className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md transition-colors"
+                  >
+                    {isEditingSender ? "Cancelar" : "Editar"}
+                  </button>
+                  <span className="text-[10px] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">Conta Ativa</span>
+                </div>
               </div>
-              <div className="text-xs text-slate-900 font-bold">{senderName}</div>
-              <div className="text-[11px] text-slate-500 leading-relaxed">{senderAddress}</div>
+              
+              {!isEditingSender ? (
+                <div>
+                  <div className="text-xs text-slate-900 font-bold">{customSenderName || defaultSenderName}</div>
+                  <div className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                    {customSenderAddress || currentClient?.address 
+                      ? `${customSenderAddress || currentClient?.address}, ${customSenderPostal || currentClient?.postal_code || ""} ${customSenderCity || currentClient?.city || ""}`.trim()
+                      : defaultSenderAddressStr}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 pt-1">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold uppercase text-slate-500">Nome</label>
+                    <input 
+                      type="text" 
+                      value={customSenderName} 
+                      onChange={e => setCustomSenderName(e.target.value)} 
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold uppercase text-slate-500">Morada</label>
+                    <input 
+                      type="text" 
+                      value={customSenderAddress} 
+                      onChange={e => setCustomSenderAddress(e.target.value)} 
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold uppercase text-slate-500">C. Postal</label>
+                      <input 
+                        type="text" 
+                        value={customSenderPostal} 
+                        onChange={e => setCustomSenderPostal(e.target.value)} 
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold uppercase text-slate-500">Localidade</label>
+                      <input 
+                        type="text" 
+                        value={customSenderCity} 
+                        onChange={e => setCustomSenderCity(e.target.value)} 
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Destinatário Name & Country */}

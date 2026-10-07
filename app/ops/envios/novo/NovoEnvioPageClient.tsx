@@ -36,6 +36,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   const [codValue, setCodValue] = React.useState<number>(0)
 
   // Address inputs state
+  const [isEditingSender, setIsEditingSender] = React.useState(false)
   const [senderName, setSenderName] = React.useState("")
   const [senderAddress, setSenderAddress] = React.useState("")
   const [senderZip, setSenderZip] = React.useState("")
@@ -170,10 +171,10 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
     try {
       const res = await emitClientGuiaAction({
         clientId: selectedClientId,
-        clientName: currentClient?.short_name || currentClient?.legal_name || "Operador",
-        senderAddress: formData.get("sender_address") as string || "",
-        senderCity: formData.get("sender_city") as string || "",
-        senderPostal: formData.get("sender_zip") as string || "",
+        clientName: isEditingSender ? senderName : (currentClient?.short_name || currentClient?.legal_name || "Operador"),
+        senderAddress: isEditingSender ? senderAddress : (currentClient?.address || ""),
+        senderCity: isEditingSender ? senderCity : (currentClient?.city || ""),
+        senderPostal: isEditingSender ? senderZip : (currentClient?.postal_code || ""),
         recipientName: formData.get("recipient_name") as string,
         recipientAddress: formData.get("recipient_address") as string,
         recipientCity: formData.get("recipient_city") as string,
@@ -531,95 +532,123 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Remetente */}
                 <div>
-                  <h3 className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-[var(--status-warning)]" />
-                    Remetente
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Nome</label>
-                      <input 
-                        type="text" 
-                        name="sender_name" 
-                        value={senderName}
-                        onChange={(e) => setSenderName(e.target.value)}
-                        required 
-                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
-                      />
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-[var(--status-warning)]" />
+                      Remetente
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setIsEditingSender(!isEditingSender)} 
+                        className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md transition-colors"
+                      >
+                        {isEditingSender ? "Cancelar" : "Editar"}
+                      </button>
+                      <span className="text-[10px] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">
+                        {currentClient ? "Conta Ativa" : "Selecione"}
+                      </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">C. Postal</label>
-                          {senderPostalLookup.loading && (
-                            <span className="text-[9px] text-[var(--text-tertiary)] flex items-center gap-1 font-mono">
-                              <Loader2 className="w-2.5 h-2.5 animate-spin" /> A validar...
-                            </span>
-                          )}
-                          {senderPostalLookup.status === "valid" && (
-                            <span className="text-[9px] text-[var(--accent)] font-semibold flex items-center gap-0.5 truncate max-w-[120px]" title={senderPostalLookup.info?.city}>
-                              <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> {senderPostalLookup.info?.city}
-                            </span>
-                          )}
-                          {senderPostalLookup.status === "invalid" && (
-                            <span className="text-[9px] text-[var(--status-warning)] font-medium">
-                              Não registado
-                            </span>
-                          )}
-                        </div>
-                        <input 
-                          type="text" 
-                          name="sender_zip" 
-                          placeholder="Ex: 1000-001" 
-                          value={senderZip}
-                          onChange={(e) => {
-                            const formatted = senderPostalLookup.lookup(e.target.value, "PT")
-                            setSenderZip(formatted)
-                          }}
-                          required 
-                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs" 
-                        />
+                  </div>
+                  
+                  {!isEditingSender ? (
+                    <div className="space-y-2 bg-[var(--surface-muted)] p-4 rounded-xl border border-[var(--border-subtle)]">
+                      <div className="text-xs text-[var(--text-primary)] font-bold">
+                        {senderName || currentClient?.short_name || "Empresa Cliente"}
                       </div>
+                      <div className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                        {senderAddress || currentClient?.address 
+                          ? `${senderAddress || currentClient?.address}, ${senderZip || currentClient?.postal_code || ""} ${senderCity || currentClient?.city || ""}`.trim()
+                          : "Sede Comercial da Empresa"}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Localidade</label>
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Nome</label>
                         <input 
                           type="text" 
-                          name="sender_city" 
-                          value={senderCity}
-                          onChange={(e) => setSenderCity(e.target.value)}
+                          name="sender_name" 
+                          value={senderName}
+                          onChange={(e) => setSenderName(e.target.value)}
                           required 
                           className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
                         />
                       </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Morada</label>
-                      <input 
-                        type="text" 
-                        name="sender_address" 
-                        value={senderAddress}
-                        onChange={(e) => setSenderAddress(e.target.value)}
-                        placeholder="Rua, avenida, número..."
-                        required 
-                        className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
-                      />
-                      {senderPostalLookup.info?.streets && senderPostalLookup.info.streets.length > 1 && (
-                        <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                          <span className="text-[9px] text-[var(--text-tertiary)] font-medium">Ruas:</span>
-                          {senderPostalLookup.info.streets.slice(0, 4).map((st) => (
-                            <button
-                              key={st}
-                              type="button"
-                              onClick={() => setSenderAddress(`${st}, nº `)}
-                              className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
-                            >
-                              {st}
-                            </button>
-                          ))}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">C. Postal</label>
+                            {senderPostalLookup.loading && (
+                              <span className="text-[9px] text-[var(--text-tertiary)] flex items-center gap-1 font-mono">
+                                <Loader2 className="w-2.5 h-2.5 animate-spin" /> A validar...
+                              </span>
+                            )}
+                            {senderPostalLookup.status === "valid" && (
+                              <span className="text-[9px] text-[var(--accent)] font-semibold flex items-center gap-0.5 truncate max-w-[120px]" title={senderPostalLookup.info?.city}>
+                                <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> {senderPostalLookup.info?.city}
+                              </span>
+                            )}
+                            {senderPostalLookup.status === "invalid" && (
+                              <span className="text-[9px] text-[var(--status-warning)] font-medium">
+                                Não registado
+                              </span>
+                            )}
+                          </div>
+                          <input 
+                            type="text" 
+                            name="sender_zip" 
+                            placeholder="Ex: 1000-001" 
+                            value={senderZip}
+                            onChange={(e) => {
+                              const formatted = senderPostalLookup.lookup(e.target.value, "PT")
+                              setSenderZip(formatted)
+                            }}
+                            required 
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs" 
+                          />
                         </div>
-                      )}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Localidade</label>
+                          <input 
+                            type="text" 
+                            name="sender_city" 
+                            value={senderCity}
+                            onChange={(e) => setSenderCity(e.target.value)}
+                            required 
+                            className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Morada</label>
+                        <input 
+                          type="text" 
+                          name="sender_address" 
+                          value={senderAddress}
+                          onChange={(e) => setSenderAddress(e.target.value)}
+                          placeholder="Rua, avenida, número..."
+                          required 
+                          className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
+                        />
+                        {senderPostalLookup.info?.streets && senderPostalLookup.info.streets.length > 1 && (
+                          <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                            <span className="text-[9px] text-[var(--text-tertiary)] font-medium">Ruas:</span>
+                            {senderPostalLookup.info.streets.slice(0, 4).map((st) => (
+                              <button
+                                key={st}
+                                type="button"
+                                onClick={() => setSenderAddress(`${st}, nº `)}
+                                className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
+                              >
+                                {st}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Destinatário */}
