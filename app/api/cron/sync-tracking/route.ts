@@ -13,13 +13,13 @@ export async function GET(request: Request) {
     const authHeader = request.headers.get("authorization")
     const cronSecret = process.env.CRON_SECRET
 
-    // Se CRON_SECRET estiver configurado, validar Bearer token ou query param
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      const url = new URL(request.url)
-      const tokenQuery = url.searchParams.get("token")
-      if (tokenQuery !== cronSecret) {
-        return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
-      }
+    if (!cronSecret) {
+      return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 503 })
+    }
+
+    // Validar Bearer token obrigatoriamente
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
     // Executa a sincronização com privilégios de sistema (sem exigir sessão de browser)

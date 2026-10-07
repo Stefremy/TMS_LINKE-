@@ -54,7 +54,7 @@ export async function createShipment(formData: FormData) {
   try {
     const [allClients, allServicos] = await Promise.all([
       getClientesAction(),
-      getServicosLinkeAction(),
+      getServicosLinkeAction(true),
     ])
     const matchedClient = allClients.find((c: any) => c.id === client_id) || {}
     const recipientCountry = (formData.get("recipient_country") as string) || "PT"

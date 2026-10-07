@@ -6,13 +6,13 @@ import { getFornecedoresAction, saveFornecedorAction } from "@/app/actions/forne
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
-import { getTenantId, getAuthContext } from "@/lib/auth/context"
+import { getTenantId, getAuthContext, requireUser, requireEmployee } from "@/lib/auth/context"
 import { buildOfficialLinkeInternationalZones } from "@/lib/services/geo/international-zones"
 
 const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   // ─────────────────────────────────────────────────────────────────────────
   // 1. PARA AMANHÃ (24H) — Guia DD — EMSF056.01
-  //    Preços custo: exatos do contrato CTT 300330941
+  //    Preços custo: exatos do contrato CTT
   // ─────────────────────────────────────────────────────────────────────────
   {
     id: "srv_linke_dd_std",
@@ -511,7 +511,9 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
 /**
  * Obtém todos os Serviços Linke configurados
  */
-export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
+export async function getServicosLinkeAction(skipRedaction: boolean = false): Promise<ServicoLinke[]> {
+  const ctx = await requireUser()
+  const isClient = ctx.role === "client" && !skipRedaction
   const supabase = createAdminClient()
 
   // 0. Obter lista de IDs eliminados (tombstones)
@@ -545,6 +547,31 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
           ...s,
           is_primordial: isPrimordialServico(s),
         }))
+        .filter((s: any) => {
+          if (isClient && s.client_id && s.client_id !== ctx.client_id) return false;
+          return true;
+        })
+        .map((s: any) => {
+          if (isClient) {
+            return {
+              ...s,
+              global_markup_pct: undefined,
+              preferred_carrier_id: undefined,
+              preferred_carrier_name: undefined,
+              webservice_connection_id: undefined,
+              webservice_service_code: undefined,
+              zones: s.zones?.map((z: any) => ({
+                ...z,
+                tiers: z.tiers?.map((t: any) => ({
+                  ...t,
+                  cost_price: undefined,
+                  margin_pct: undefined
+                }))
+              }))
+            }
+          }
+          return s;
+        })
     }
   } catch {}
 
@@ -578,6 +605,31 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
       ...s,
       is_primordial: isPrimordialServico(s),
     }))
+    .filter((s: any) => {
+      if (isClient && s.client_id && s.client_id !== ctx.client_id) return false;
+      return true;
+    })
+    .map((s: any) => {
+      if (isClient) {
+        return {
+          ...s,
+          global_markup_pct: undefined,
+          preferred_carrier_id: undefined,
+          preferred_carrier_name: undefined,
+          webservice_connection_id: undefined,
+          webservice_service_code: undefined,
+          zones: s.zones?.map((z: any) => ({
+            ...z,
+            tiers: z.tiers?.map((t: any) => ({
+              ...t,
+              cost_price: undefined,
+              margin_pct: undefined
+            }))
+          }))
+        } as ServicoLinke
+      }
+      return s as ServicoLinke
+    })
 }
 
 /**
@@ -586,6 +638,7 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
 export async function saveServicoLinkeAction(
   servico: Partial<ServicoLinke>
 ): Promise<{ success: boolean; data: ServicoLinke }> {
+  await requireEmployee()
   const supabase = createAdminClient()
 
   const id = servico.id || `srv_linke_${Date.now()}`
@@ -711,6 +764,7 @@ export async function duplicateServicoForClientAction(
   targetClientName: string,
   discountPct: number
 ): Promise<{ success: boolean; data?: ServicoLinke }> {
+  await requireEmployee()
   const servicos = await getServicosLinkeAction()
   const source = servicos.find((s) => s.id === sourceServicoId)
   if (!source) return { success: false }
@@ -761,6 +815,7 @@ export async function updateServicoMarkupAction(
   servicoId: string,
   newMarkupPct: number
 ): Promise<{ success: boolean }> {
+  await requireEmployee()
   const servicos = await getServicosLinkeAction()
   const target = servicos.find((s) => s.id === servicoId)
   if (!target) return { success: false }
@@ -787,6 +842,7 @@ export async function updateServicoMarkupAction(
  * Altera status ativo/inativo de um Serviço Linke
  */
 export async function toggleServicoLinkeStatusAction(id: string, is_active: boolean) {
+  await requireEmployee()
   const servicos = await getServicosLinkeAction()
   const target = servicos.find((s) => s.id === id)
   if (!target) return { success: false }
@@ -804,6 +860,7 @@ export async function toggleServicoLinkeStatusAction(id: string, is_active: bool
  * Proteção de Segurança: As tabelas base primordiais (OG) só podem ser eliminadas pelo Administrador Principal (Stefano).
  */
 export async function deleteServicoLinkeAction(id: string): Promise<{ success: boolean; error?: string }> {
+  await requireEmployee()
   const ctx = await getAuthContext()
   const isStefano = Boolean(
     ctx?.user?.email?.toLowerCase().includes("stefano") ||
@@ -856,6 +913,7 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
  * Obtém os dados consolidados de Fornecedores, Serviços Linke e Webservices para o Módulo
  */
 export async function getServicosDashboardDataAction() {
+  await requireEmployee()
   const [servicos, fornecedores, webservices] = await Promise.all([
     getServicosLinkeAction(),
     getFornecedoresAction(),

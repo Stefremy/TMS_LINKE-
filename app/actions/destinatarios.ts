@@ -3,15 +3,17 @@
 import { getShipmentsAction } from "./shipments"
 import { getClientesAction } from "./clientes"
 import { Destinatario } from "@/app/ops/entidades/destinatarios/types"
+import { requireEmployee } from "@/lib/auth/context"
 
 /**
  * Obtém todos os destinatários únicos a partir do histórico de envios criados pelos clientes.
  */
 export async function getDestinatariosAction(): Promise<Destinatario[]> {
   try {
+    await requireEmployee()
     const supabase = await import("@/lib/supabase/server").then(m => m.createAdminClient())
     const [ { data: dbShipments }, clients ] = await Promise.all([
-      supabase.from("shipments").select("id, created_at, client_id, recipient_name, recipient_phone, recipient_email, recipient_address, recipient_zip4, recipient_zip3, recipient_city, recipient_country").order("created_at", { ascending: false }).limit(2000),
+      supabase.from("shipments").select("id, created_at, client_id, recipient_name, recipient_phone, recipient_email, recipient_address, recipient_zip, recipient_zip4, recipient_zip3, recipient_city, recipient_country, sender_name, ctt_object_id, tracking_number, status, sell_price, buy_price, weight_kg, service_type").order("created_at", { ascending: false }).limit(2000),
       getClientesAction(),
     ])
     const shipments = dbShipments || []

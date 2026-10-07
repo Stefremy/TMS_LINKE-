@@ -68,21 +68,16 @@ export async function POST(req: Request) {
         // 2. Add amount to client balance exactly once
         const amountEuro = session.amount_total ? session.amount_total / 100 : Number(updatedTx.amount || 0)
 
-        const { data: client, error: clientErr } = await supabase
-          .from("clients")
-          .select("credit_limit")
-          .eq("id", clientId)
-          .single()
+        const { error: rpcErr } = await supabase.rpc("increment_client_balance", {
+          client_id: clientId,
+          amount: amountEuro
+        })
 
-        if (!clientErr && client) {
-          const newBalance = Number(client.credit_limit || 0) + amountEuro
-
-          await supabase
-            .from("clients")
-            .update({ credit_limit: newBalance })
-            .eq("id", clientId)
-
-          console.log(`[Stripe Webhook] Successfully credited ${amountEuro}€ to client ${clientId}. New Balance: ${newBalance}€`)
+        if (rpcErr) {
+          console.error("[Stripe Webhook] Error updating client balance via RPC:", rpcErr)
+          // Em caso de falha no RPC, avisar (mas a transação já está paga e deduzida no stripe)
+        } else {
+          console.log(`[Stripe Webhook] Successfully credited ${amountEuro}€ to client ${clientId} via RPC.`)
         }
       }
     } else if (event.type === "checkout.session.async_payment_failed") {

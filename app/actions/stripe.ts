@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import Stripe from "stripe"
 import { headers } from "next/headers"
+import { requireUser } from "@/lib/auth/context"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_dummy", {
   apiVersion: "2026-08-26.dahlia" as any,
@@ -10,6 +11,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_dummy", {
 
 export async function createTopUpCheckoutSession(clientId: string, amountEuro: number) {
   try {
+    const ctx = await requireUser()
+    if (ctx.role === "client" && ctx.client_id !== clientId) {
+      throw new Error("Não autorizado a carregar esta conta.")
+    }
+
     const supabase = createAdminClient()
 
     console.log("[Stripe Action] Received clientId:", clientId, "Amount:", amountEuro)

@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { getTenantId } from "@/lib/auth/context"
+import { getTenantId, requireEmployee } from "@/lib/auth/context"
 
 export interface IntegrationConfig {
   id?: string
@@ -26,6 +26,7 @@ export interface IntegrationConfig {
  * Obtém todas as integrações configuradas com resiliência a esquemas e fallbacks seguros
  */
 export async function getIntegrations(): Promise<IntegrationConfig[]> {
+  await requireEmployee()
   const supabase = createAdminClient()
   const tenantId = await getTenantId()
   const integrationsMap = new Map<string, IntegrationConfig>()
@@ -104,10 +105,10 @@ export async function getIntegrations(): Promise<IntegrationConfig[]> {
           provider: "CTT",
           is_active: d.is_active ?? true,
           credentials: {
-            client_id: d.client_id || "100032458",
-            contract_number: d.contract_number || "300330941",
-            auth_id: d.auth_id || "1d7ad9a9-c7bb-43be-9f57-851d1baafb4b",
-            user_id: d.user_id || "cea67efe-b547-4be6-87a7-09d287ccf0f6",
+            client_id: d.client_id || process.env.CTT_CLIENT_ID || "",
+            contract_number: d.contract_number || process.env.CTT_CONTRACT_ID || "",
+            auth_id: d.auth_id || process.env.CTT_AUTHENTICATION_ID || "",
+            user_id: d.user_id || process.env.CTT_USER_ID || "",
             environment: d.environment || "production",
             default_subproduct: d.default_subproduct || "EMSF056.01"
           },
@@ -121,10 +122,10 @@ export async function getIntegrations(): Promise<IntegrationConfig[]> {
 
   // 4. Se CTT ainda não constar com dados completos, carregar credenciais reais do ambiente (.env.local)
   if (!integrationsMap.has("CTT") || !integrationsMap.get("CTT")?.credentials?.client_id) {
-    const envClientId = process.env.CTT_CLIENT_ID || "100032458"
-    const envContract = process.env.CTT_CONTRACT_ID || "300330941"
-    const envAuthId = process.env.CTT_AUTHENTICATION_ID || "1d7ad9a9-c7bb-43be-9f57-851d1baafb4b"
-    const envUserId = "cea67efe-b547-4be6-87a7-09d287ccf0f6"
+    const envClientId = process.env.CTT_CLIENT_ID || ""
+    const envContract = process.env.CTT_CONTRACT_ID || ""
+    const envAuthId = process.env.CTT_AUTHENTICATION_ID || ""
+    const envUserId = process.env.CTT_USER_ID || ""
 
     integrationsMap.set("CTT", {
       provider: "CTT",
@@ -140,7 +141,16 @@ export async function getIntegrations(): Promise<IntegrationConfig[]> {
     })
   }
 
-  return Array.from(integrationsMap.values())
+  return Array.from(integrationsMap.values()).map(integration => {
+    return {
+      ...integration,
+      credentials: {
+        ...integration.credentials,
+        auth_id: integration.credentials.auth_id ? "********" : "",
+        password: integration.credentials.password ? "********" : undefined,
+      }
+    }
+  })
 }
 
 /**
@@ -156,6 +166,7 @@ export async function saveIntegrationAction(payload: {
   default_subproduct?: string
   is_active?: boolean
 }) {
+  await requireEmployee()
   const supabase = createAdminClient()
   const tenantId = await getTenantId()
   const now = new Date().toISOString()
@@ -165,7 +176,7 @@ export async function saveIntegrationAction(payload: {
     client_id,
     contract_number,
     auth_id,
-    user_id = "cea67efe-b547-4be6-87a7-09d287ccf0f6",
+    user_id = process.env.CTT_USER_ID || "",
     environment = "production",
     default_subproduct = "EMSF056.01",
     is_active = true

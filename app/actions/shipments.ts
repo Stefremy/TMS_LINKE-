@@ -16,7 +16,7 @@ import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId, ensureTena
 import { fetchShipments, fetchShipmentLabel, fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
 import { syncShipmentTracking, mapCorreosStatus } from "@/lib/services/tracking"
 
-export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string } = {}): Promise<any[]> {
+export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
   return fetchShipments(options)
 }
 
@@ -40,8 +40,7 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   const ctx = await requireUser()
 
   const effectiveClientId = ctx.role === "client" ? ctx.client_id : clientId
-  
-  const allShipments = await getShipmentsAction({ includeLabels: false })
+  const allShipments = await getShipmentsAction({ includeLabels: false, limit: 100000, clientId: effectiveClientId || undefined })
 
   let clientShipments = allShipments
 
@@ -127,7 +126,7 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
     serviceBreakdown,
     destinationRegions,
     recentShipments: clientShipments.slice(0, 5),
-    allShipments: clientShipments,
+    allShipments: clientShipments.slice(0, 500),
   }
 }
 

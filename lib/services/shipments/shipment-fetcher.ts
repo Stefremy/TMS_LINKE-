@@ -7,7 +7,7 @@ import { convertZplToPdfBase64 } from "@/lib/label-utils"
 /**
  * Fetches all shipments from the DB shipments table.
  */
-export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string } = {}): Promise<any[]> {
+export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
   const ctx = await requireUser()
   const supabase = createAdminClient()
 
@@ -19,6 +19,8 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
       
     if (ctx.role === "client") {
       shipmentsQuery = shipmentsQuery.eq("client_id", ctx.client_id)
+    } else if (options.clientId) {
+      shipmentsQuery = shipmentsQuery.eq("client_id", options.clientId)
     }
     if (options.createdAfter) {
       shipmentsQuery = shipmentsQuery.gte("created_at", options.createdAfter)
@@ -26,7 +28,7 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
     if (options.limit) {
       shipmentsQuery = shipmentsQuery.limit(options.limit)
     } else {
-      shipmentsQuery = shipmentsQuery.limit(50)
+      shipmentsQuery = shipmentsQuery.limit(10000) // allow up to 10000 to cover 90 days for Contas Corrente
     }
 
     const { data: dbShipments, error } = await shipmentsQuery
@@ -36,7 +38,12 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
       return []
     }
 
-    return dbShipments.map((s: any) => {
+    return dbShipments.map((rawShipment: any) => {
+      const s: any = { ...rawShipment }
+      if (!options.includeLabels) {
+        delete s.ctt_label_base64
+        delete s.carrier_label_base64
+      }
       const isCorreos = s.service_type?.toLowerCase().includes("correos") || s.carrier_code === "correos"
       const cttCode = isCorreos ? null : formatOrGenerateCttObjectId(s)
       const linkeRef = s.tracking_number?.startsWith("LTK") ? s.tracking_number : null

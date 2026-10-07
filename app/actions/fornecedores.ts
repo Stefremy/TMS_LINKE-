@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
-import { getTenantId } from "@/lib/auth/context"
+import { getTenantId, requireEmployee } from "@/lib/auth/context"
 import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 import { 
   DEFAULT_PRICE_FAMILIES, 
@@ -212,6 +212,7 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
  * Obtém todos os fornecedores cadastrados
  */
 export async function getFornecedoresAction(): Promise<Fornecedor[]> {
+  await requireEmployee()
   const supabase = createAdminClient()
 
   // 0. Obter lista de IDs eliminados (tombstones)
@@ -270,6 +271,7 @@ export async function getFornecedoresAction(): Promise<Fornecedor[]> {
  * Grava ou atualiza um fornecedor
  */
 export async function saveFornecedorAction(fornecedor: Partial<Fornecedor>): Promise<{ success: boolean; data: Fornecedor }> {
+  await requireEmployee()
   const supabase = createAdminClient()
 
   const id = fornecedor.id || `forn_${Date.now()}`
@@ -359,6 +361,7 @@ export async function saveFornecedorAction(fornecedor: Partial<Fornecedor>): Pro
  * Ativa ou inativa um fornecedor
  */
 export async function toggleFornecedorStatusAction(id: string, is_active: boolean) {
+  await requireEmployee()
   const supabase = createAdminClient()
 
   // 1. Tentar atualizar na tabela
@@ -392,6 +395,7 @@ export async function toggleFornecedorStatusAction(id: string, is_active: boolea
  * Elimina um fornecedor permanentemente
  */
 export async function deleteFornecedorAction(id: string) {
+  await requireEmployee()
   const supabase = createAdminClient()
 
   // 1. Tentar apagar da tabela

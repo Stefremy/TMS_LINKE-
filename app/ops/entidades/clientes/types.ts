@@ -136,7 +136,6 @@ export const CLIENT_COLOR_OPTIONS = [
 
 /**
  * 1. PRODUTOS & SUB-PRODUTOS DE TRANSPORTE CTT (SubProductId)
- * Contrato: 300330941 | Cliente: 100032458
  * Fonte: CTT RecolhasWS (GetProdutosRecolha) + teste real à API de produção
  * Códigos validados e confirmados (geram guia real):
  * - EMSF056.01: Para Amanhã (24H) — Guia DD

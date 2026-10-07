@@ -39,34 +39,7 @@ export function formatOrGenerateCttObjectId(s: any): string {
     return s.tracking_number.trim().toUpperCase()
   }
 
-  if (s?.tracking_number === "LTK1425602" || s?.id?.includes("27a52042")) {
-    return "DB290719717PT"
-  }
-
-  if (s?.ctt_object_id && /^(DA|DB|DD|EA|EQ|EG)/i.test(s.ctt_object_id.trim())) {
-    return s.ctt_object_id.trim().toUpperCase()
-  }
-
-  if (s?.tracking_number && /^(DA|DB|DD|EA|EQ|EG)/i.test(s.tracking_number.trim())) {
-    return s.tracking_number.trim().toUpperCase()
-  }
-
-  const rawSeed = (s?.tracking_number || s?.id || "").replace(/\D/g, "") || "838291042"
-  const digits = (rawSeed + "838291042571").slice(0, 9)
-  
-  let prefix = "DD"
-  const srv = (s?.service_type || s?.serviceName || "").toLowerCase()
-  if (srv.includes("eq") || srv.includes("económico") || srv.includes("48")) {
-    prefix = "EQ"
-  } else if (srv.includes("db") || srv.includes("2 dias") || srv.includes("d+2")) {
-    prefix = "DB"
-  } else if (srv.includes("eg") || srv.includes("múltiplo")) {
-    prefix = "EG"
-  } else if (s?.tracking_number && parseInt(s.tracking_number.slice(-1) || "0", 10) % 2 === 0) {
-    prefix = "DB"
-  }
-  
-  return `${prefix}838${digits.slice(3, 9)}PT`
+  return s?.ctt_object_id?.trim() || s?.carrier_tracking_number?.trim() || s?.tracking_number?.trim() || ""
 }
 
 import { getTenantId } from "@/lib/auth/context"

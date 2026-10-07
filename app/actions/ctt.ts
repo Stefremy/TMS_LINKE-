@@ -53,11 +53,15 @@ async function getCttCredentials(): Promise<CTTConnectionCredentials> {
 
 
   // 3. Fallback para variáveis de ambiente
+  if (!process.env.CTT_CONTRACT_ID || !process.env.CTT_CLIENT_ID || !process.env.CTT_AUTHENTICATION_ID) {
+    throw new Error("Missing required CTT environment variables. Please check your configuration.")
+  }
+
   return {
-    contract_number: process.env.CTT_CONTRACT_ID || "300330941",
-    client_number: process.env.CTT_CLIENT_ID || "100032458",
-    auth_id: process.env.CTT_AUTHENTICATION_ID || "1d7ad9a9-c7bb-43be-9f57-851d1baafb4b",
-    user_id: "cea67efe-b547-4be6-87a7-09d287ccf0f6",
+    contract_number: process.env.CTT_CONTRACT_ID,
+    client_number: process.env.CTT_CLIENT_ID,
+    auth_id: process.env.CTT_AUTHENTICATION_ID,
+    user_id: process.env.CTT_USER_ID,
     distribution_channel: 99,
     environment: "production",
     default_subproduct: "EMSF056.01",
@@ -77,6 +81,7 @@ export async function saveCttConnectionAction(creds: {
   description?: string
   supplier_id?: string
 }) {
+  await requireEmployee()
   const supabase = createAdminClient()
 
   const payload = {
@@ -287,67 +292,22 @@ export async function deleteCarrierConnectionAction(
 export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
   await requireEmployee()
   try {
-    const shipmentService = new CTTShipmentService()
+    const { CTTReferencesService } = await import("@/lib/services/ctt/ctt-references.service")
+    const refService = new CTTReferencesService()
     
-    // Executar teste com pedido mínimo aos CTT
-    const subProdToTest = creds.default_subproduct || "EMSF056.01"
-    const result = await shipmentService.createShipment(creds, {
-      clientReference: "TEST-CONN-" + Date.now().toString().slice(-6),
-      subProduct: subProdToTest,
-      sender: {
-        Name: "Linke Logistica",
-        Address: "Avenida da Boavista 1000",
-        City: "Porto",
-        Country: "PT",
-        PTZipCode4: "4100",
-        PTZipCode3: "001",
-        Phone: "910000001",
-        Type: 1
-      },
-      receiver: {
-        Name: "Destinatario Teste",
-        Address: "Rua Garrett 20",
-        City: "Lisboa",
-        Country: "PT",
-        PTZipCode4: "1200",
-        PTZipCode3: "001",
-        Phone: "920000002",
-        Type: 2
-      },
-      shipment: {
-        ClientReference: "TEST-CONN-" + Date.now().toString().slice(-6),
-        Weight: 1000,
-        Quantity: 1
-      }
-    })
-
-    if (result.Status === 1) {
-      return {
-        success: true,
-        message: `Comunicação e Autenticação CTT (${creds.environment === "production" ? "Produção" : "Ambiente QA"}) validadas com SUCESSO! A conta está pronta a emitir expedições.`,
-      }
-    }
-
-    const cttError = result.ErrorsList?.[0]
+    // Test connection by fetching points in a specific zip code (lightweight)
+    const result = await refService.getDeliveryPoints(creds, { codigoPostal: "4100" })
     
-    // EW0061 significa que a comunicação e a autenticação da conta CTT foram APROVADAS no servidor CTT!
-    if (cttError?.ErrorCode === "EW0061") {
-      return {
-        success: true,
-        message: `Ligação SOAP e Autenticação de Produção CTT validadas com SUCESSO! (Servidor CTT ativo e conta autorizada. Altere o 'SubProduto Padrão' para o código contratado com a CTT).`,
+    if (result && Array.isArray(result)) {
+      return { 
+        success: true, 
+        message: `Comunicação e Autenticação CTT (${creds.environment === "production" ? "Produção" : "Ambiente QA"}) validadas com SUCESSO! A conta está pronta a ser utilizada.` 
       }
-    }
-
-    if (cttError?.ErrorCode === "EW0001" || cttError?.Message?.includes("autenticação")) {
-      return {
-        success: false,
-        message: `Comunicação ativa, mas a AuthenticationID (${creds.auth_id}) não foi autorizada pelos CTT: ${cttError.Message}`,
+    } else {
+      return { 
+        success: false, 
+        message: "Resposta inesperada da API (Autenticação falhou ou conta inativa)." 
       }
-    }
-
-    return {
-      success: false,
-      message: `Resposta dos CTT: ${cttError?.Message || JSON.stringify(result.ErrorsList)}`,
     }
   } catch (err: any) {
     return {
