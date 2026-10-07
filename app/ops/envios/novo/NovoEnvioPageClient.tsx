@@ -345,6 +345,11 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       <p className="text-[14px] text-[var(--text-secondary)] max-w-2xl leading-relaxed mt-1">
                         A expedição foi registada no sistema{shipmentResult.moloniDoc ? ", emitida no Moloni e comunicada à AT" : " e comunicada à transportadora"} e a ordem de recolha foi confirmada pela <strong className="text-[var(--text-primary)] font-medium">{shipmentResult.carrierName || "transportadora"}</strong>.
                       </p>
+                      {(shipmentResult as any).dbWarning && (
+                        <div className="mt-2 p-3 bg-[var(--status-warning-soft)] text-[var(--status-warning)] text-xs font-medium rounded-md border border-[var(--status-warning)]">
+                          <strong>Aviso de Sistema:</strong> O envio foi gerado na transportadora, mas houve um erro ao guardar na base de dados: {(shipmentResult as any).dbWarning}. Por favor verifique ou crie novamente para que apareça na lista.
+                        </div>
+                      )}
                     </div>
                   </div>
                   {/* Dismiss Icon Button */}
@@ -606,13 +611,13 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Cliente *</label>
-                    <select name="client_id" value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)} required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] font-medium focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors cursor-pointer shadow-2xs">
-                      {displayClients.length > 1 && <option value="">Selecione o Cliente</option>}
+                    <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Cliente (Bloqueado Operações) *</label>
+                    <select name="client_id" value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)} disabled required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] font-bold focus:outline-none bg-[var(--surface-muted)] text-[var(--text-primary)] transition-colors cursor-not-allowed shadow-2xs opacity-80">
                       {displayClients.map(c => (
                         <option key={c.id} value={c.id}>{c.short_name || c.legal_name}</option>
                       ))}
                     </select>
+                    <input type="hidden" name="client_id" value={selectedClientId} />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Serviço/Produto *</label>

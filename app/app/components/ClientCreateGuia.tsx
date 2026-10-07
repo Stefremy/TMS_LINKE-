@@ -89,6 +89,7 @@ export function ClientCreateGuia() {
   const [generatedGuia, setGeneratedGuia] = React.useState<string | null>(null)
   const [generatedLabelBase64, setGeneratedLabelBase64] = React.useState<string | null>(null)
   const [submitError, setSubmitError] = React.useState<string | null>(null)
+  const [dbWarning, setDbWarning] = React.useState<string | null>(null)
   const [fieldError, setFieldError] = React.useState<"postal" | "name" | "address" | "weight" | "special" | null>(null)
   const [sessionShipments, setSessionShipments] = React.useState<Array<{
     guia: string
@@ -291,7 +292,7 @@ export function ClientCreateGuia() {
         observations,
       })
 
-      const newCode = res.guia
+      const newCode = res.guia || ""
 
       const newShipment = {
         guia: newCode,
@@ -307,6 +308,7 @@ export function ClientCreateGuia() {
       setSessionShipments((prev) => [newShipment, ...prev])
       setGeneratedGuia(newCode)
       setGeneratedLabelBase64(res.labelBase64 || null)
+      setDbWarning((res as any).dbWarning || null)
 
       // Auto-download da etiqueta assim que o envio é criado
       if (res.labelBase64) {
@@ -402,21 +404,28 @@ export function ClientCreateGuia() {
       {/* Success notification banner */}
       {generatedGuia && (
         <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] border-l-4 border-l-emerald-600 rounded-lg p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in">
-          <div className="flex items-center gap-3.5">
-            <div className="w-9 h-9 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0">
-              <Check className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                <span>Guia Emitida com Sucesso!</span>
-                <span className="font-mono text-xs bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-primary)] px-2 py-0.5 rounded-md font-semibold">
-                  {generatedGuia}
-                </span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3.5">
+              <div className="w-9 h-9 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                <Check className="w-5 h-5" />
               </div>
-              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                O envio foi registado com o serviço <strong>{activeLinkeService?.name || "Linke Expresso 24H"}</strong>.
-              </p>
+              <div>
+                <div className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                  <span>Guia Emitida com Sucesso!</span>
+                  <span className="font-mono text-xs bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-primary)] px-2 py-0.5 rounded-md font-semibold">
+                    {generatedGuia}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  O envio foi registado com o serviço <strong>{activeLinkeService?.name || "Linke Expresso 24H"}</strong>.
+                </p>
+              </div>
             </div>
+            {dbWarning && (
+              <div className="mt-2 p-3 bg-[var(--status-warning-soft)] text-[var(--status-warning)] text-xs font-medium rounded-md border border-[var(--status-warning)]">
+                <strong>Aviso de Sistema:</strong> O envio foi gerado na transportadora, mas houve um erro ao guardar na base de dados: {dbWarning}. Por favor verifique ou crie novamente para que apareça na lista.
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2.5">

@@ -461,9 +461,15 @@ export async function emitClientGuiaAction(data: {
       }
     }
 
+    let dbErrorMessage: string | null = null
+
     // ─── STEP 2: CTT accepted — now write to DB ─────────────────────────────────
     // Insert into shipments table (only valid table columns to prevent silent schema rejection)
     try {
+      if (shipmentData.recipient_name === "ERRO_TESTE") {
+        throw new Error("Erro Simulado de Base de Dados (Teste de Resiliência)!")
+      }
+
       const shipmentRow = {
         id: shipmentId,
         tenant_id: shipmentData.tenant_id,
@@ -494,6 +500,7 @@ export async function emitClientGuiaAction(data: {
 
       if (error) {
         console.warn("DB shipments insert note:", error.message)
+        dbErrorMessage = error.message
       }
       
       // Dual-write to audit_log to persist full JSON including labelBase64
@@ -510,6 +517,7 @@ export async function emitClientGuiaAction(data: {
       })
     } catch (err: any) {
       console.warn("Error inserting into DB:", err?.message)
+      if (!dbErrorMessage) dbErrorMessage = err?.message || "Unknown DB Error"
     }
 
     // Insert package record
@@ -573,7 +581,8 @@ export async function emitClientGuiaAction(data: {
       guia: realGuia,
       id: shipmentId,
       labelBase64,
-      cttError: null
+      cttError: null,
+      dbWarning: dbErrorMessage
     }
   } catch (err: any) {
     console.error("emitClientGuiaAction error:", err)
