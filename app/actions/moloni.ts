@@ -1498,7 +1498,9 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
     // 5. Obter Série e Artigo
     const billingConfig = await getBillingConfigAction()
     const taxId = await moloni.getTaxId(billingConfig.defaultVatRate || 23)
-    const documentSetId = billingConfig.defaultDocumentSetId || (await moloni.getDocumentSet())
+    // Séries para Faturas e Guias de Transporte podem ser diferentes (AT requirements)
+    // Usamos sempre uma série certificada para transporte
+    let documentSetId = await moloni.getTransportDocumentSet();
     const productId = await moloni.getGenericProductId(
       taxId,
       "CONSUMIVEIS",

@@ -509,6 +509,7 @@ export async function emitClientGuiaAction(data: {
         action: "shipment_data",
         details: {
           ...shipmentData,
+          id: shipmentId,
           ctt_label_base64: labelBase64,
           carrier_tracking_number: realGuia,
           carrier_code: data.serviceName?.toLowerCase().includes("correos") ? "correos" : "ctt"
@@ -674,6 +675,7 @@ export async function regenerateCttLabelAction(shipmentId: string) {
         await supabase.from("audit_log").update({
           details: {
             ...targetLog.details,
+            id: shipment.id,
             tracking_number: updatedGuia,
             ctt_object_id: updatedGuia,
             carrier_tracking_number: updatedGuia,

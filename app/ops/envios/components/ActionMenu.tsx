@@ -286,7 +286,7 @@ export function ActionMenu({
               className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-slate-50 rounded-lg text-xs text-slate-700 font-semibold transition-colors cursor-pointer disabled:opacity-50"
             >
               <Download className="w-4 h-4 text-emerald-600" />
-              <span>Descarregar PDF</span>
+              <span>Descarregar Etiqueta Oficial</span>
             </button>
           </div>
 

@@ -423,29 +423,31 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
                         {/* Card Action Strip */}
                         <div className="pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2 flex-wrap">
-                          {shipmentResult.moloniDoc?.pdfUrl ? (
+                          {/* Botão de CTT Etiqueta (Sempre vísivel) */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (shipmentResult.labelBase64) {
+                                downloadCttLabel(shipmentResult.labelBase64, `etiqueta_ctt_${shipmentResult.guia || "AT"}.pdf`)
+                              }
+                            }}
+                            className="text-[11px] font-bold text-[var(--accent)] hover:underline flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Descarregar Etiqueta CTT (.pdf)</span>
+                          </button>
+
+                          {/* Botão de Moloni Guia (Apenas se existir Moloni) */}
+                          {shipmentResult.moloniDoc?.pdfUrl && (
                             <a
                               href={shipmentResult.moloniDoc.pdfUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[11px] font-bold text-[var(--accent)] hover:underline flex items-center gap-1.5"
+                              className="text-[11px] font-bold text-emerald-600 hover:underline flex items-center gap-1.5"
                             >
                               <Download className="w-3.5 h-3.5" />
                               <span>Descarregar Guia Moloni (.pdf)</span>
                             </a>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (shipmentResult.labelBase64) {
-                                  downloadCttLabel(shipmentResult.labelBase64, `guia_transporte_${shipmentResult.guia || "AT"}.pdf`)
-                                }
-                              }}
-                              className="text-[11px] font-bold text-[var(--accent)] hover:underline flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Descarregar Guia (.pdf)</span>
-                            </button>
                           )}
 
                           {!shipmentResult.moloniDoc && (

@@ -322,7 +322,7 @@ export function ShipmentLateralDrawer({
           className="h-7 px-2.5 text-xs font-semibold bg-[var(--surface-bg)] text-[var(--text-primary)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)] shadow-2xs shrink-0"
         >
           {isPrinting ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Download className="w-3 h-3 mr-1" />}
-          Descarregar PDF
+          Descarregar Etiqueta CTT
         </Button>
 
         <Button

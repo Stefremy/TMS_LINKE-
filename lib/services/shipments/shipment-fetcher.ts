@@ -87,6 +87,21 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
       }
 
       let existingLabel = shipment.ctt_label_base64 || shipment.carrier_label_base64 || null
+      
+      if (!existingLabel) {
+        // As labels are heavily stored in audit_log due to schema size limits
+        const { data: auditLogs } = await supabase
+          .from("audit_log")
+          .select("details")
+          .eq("action", "shipment_data")
+          .contains("details", { id: shipment.id })
+          .limit(1)
+        
+        if (auditLogs && auditLogs.length > 0 && auditLogs[0].details?.ctt_label_base64) {
+          existingLabel = auditLogs[0].details.ctt_label_base64
+        }
+      }
+
       if (existingLabel) {
         if (existingLabel.trimStart().startsWith("^XA")) {
           existingLabel = await convertZplToPdfBase64(existingLabel)
@@ -97,23 +112,9 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
         return existingLabel
       }
 
-      // Generate printable transport label
+      // Generate printable transport label as temporary fallback (do not save to DB)
       label = await generateTransportLabelPdfBase64(shipment)
-      if (label) {
-        // Save to audit_log for future instant retrieval
-        try {
-          const { data: auditLogs } = await supabase.from("audit_log").select("id, details").eq("action", "shipment_data")
-          const targetLog = auditLogs?.find((l: any) => l.details?.id === shipment.id)
-          if (targetLog) {
-            await supabase.from("audit_log").update({
-              details: { ...targetLog.details, ctt_label_base64: label }
-            }).eq("id", targetLog.id)
-          }
-        } catch (e) {
-          console.warn("Could not save generated label to audit_log:", e)
-        }
-        return label
-      }
+      return label
     }
   } catch (err: any) {
     console.warn("fetchShipmentLabel: shipments table query error:", err?.message)

@@ -483,7 +483,8 @@ export function ClientCreateGuia() {
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Descarregar PDF</span>
+                  <span className="hidden sm:inline">Descarregar Etiqueta CTT</span>
+                  <span className="sm:hidden">Etiqueta CTT</span>
                 </button>
               </>
             ) : (

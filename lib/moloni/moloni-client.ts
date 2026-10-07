@@ -231,7 +231,7 @@ export class MoloniClient {
       if (json[0]?.error) {
         throw new Error(`Moloni API Error [${endpoint}]: ${json[0].error_description || json[0].error}`);
       }
-      if (json[0]?.msg) {
+      if (json[0]?.msg || json[0]?.description) {
         const errorMsg = json.map((e: any) => `${e.field || ''}: ${e.msg || e.description || JSON.stringify(e)}`).join(', ');
         throw new Error(`Moloni API Error [${endpoint}]: ${errorMsg}`);
       }
@@ -256,6 +256,21 @@ export class MoloniClient {
     if (!Array.isArray(sets) || sets.length === 0) {
       throw new Error("Nenhuma série documental encontrada na empresa Moloni.");
     }
+    const activeSet = sets.find((s: any) => s.active === 1);
+    return activeSet ? activeSet.document_set_id : sets[0]?.document_set_id;
+  }
+
+  async getTransportDocumentSet() {
+    const sets = await this.request('documentSets/getAll', {});
+    if (!Array.isArray(sets) || sets.length === 0) {
+      throw new Error("Nenhuma série documental encontrada na empresa Moloni.");
+    }
+    // Find a document set that is active and configured for AT WebServices
+    const transportSet = sets.find((s: any) => s.active === 1 && (s.e_fatura_ws_at === 1 || s.document_set_wsat_id));
+    if (transportSet) {
+      return transportSet.document_set_id;
+    }
+    // Fallback to active set if we couldn't specifically identify a WS AT one
     const activeSet = sets.find((s: any) => s.active === 1);
     return activeSet ? activeSet.document_set_id : sets[0]?.document_set_id;
   }
@@ -611,11 +626,13 @@ export class MoloniClient {
 
     const payload: any = {
       date: data.date,
-      document_set_id: data.documentSetId,
+      document_set_id: Number(data.documentSetId) > 0 ? Number(data.documentSetId) : 1, // Fallback safe id if not provided
       customer_id: data.customerId,
       notes: data.notes || "",
       status: 1, // 1 = Fechado / Comunicado AT
       products: formattedProducts,
+      delivery_datetime: data.date + "T" + new Date().toISOString().split("T")[1].split(".")[0], // e.g. "2024-01-01T12:00:00"
+      delivery_method_id: 1, // 1 is usually "Viatura Propria" or "Outro", valid fallback
     };
 
     if (data.deliveryDepartureAddress) {
