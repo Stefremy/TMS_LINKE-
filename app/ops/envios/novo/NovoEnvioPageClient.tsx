@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro } from "lucide-react"
+import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro, Download, FileText, ExternalLink } from "lucide-react"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
 
@@ -12,6 +12,15 @@ import { resolveInternationalZone, OFFICIAL_LINKE_ZONES } from "@/lib/services/g
 import { downloadCttLabel } from "@/lib/label-utils"
 
 export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: Cliente[], servicosLinke?: ServicoLinke[] }) {
+  // Lock to "GO Linke" for operation purposes
+  const displayClients = React.useMemo(() => {
+    const ops = clients.filter(c => {
+      const name = c.short_name || c.legal_name || ""
+      return name.toLowerCase().includes("go linke")
+    })
+    return ops.length > 0 ? ops : clients
+  }, [clients])
+
   const [loading, setLoading] = React.useState(false)
   const [success, setSuccess] = React.useState(false)
   const [shipmentResult, setShipmentResult] = React.useState<{
@@ -26,9 +35,17 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
     weightKg?: number;
     volumes?: number;
     sellPrice?: number;
+    atCode?: string;
+    moloniDoc?: {
+      id?: number;
+      number?: string;
+      pdfUrl?: string | null;
+    };
   } | null>(null)
+  const [emitMoloniGt, setEmitMoloniGt] = React.useState(false)
+  const [emittingMoloni, setEmittingMoloni] = React.useState(false)
   const [errorMsg, setErrorMsg] = React.useState("")
-  const [selectedClientId, setSelectedClientId] = React.useState("")
+  const [selectedClientId, setSelectedClientId] = React.useState(displayClients[0]?.id || "")
   const [selectedServiceId, setSelectedServiceId] = React.useState("")
   const [weightKg, setWeightKg] = React.useState<number>(1)
   const [recipientCountry, setRecipientCountry] = React.useState("PT")
@@ -200,7 +217,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         throw new Error((res as any).error || `Erro ao comunicar com a transportadora (${carrierDisplayName})`)
       }
       
-      setShipmentResult({
+      const newResult: any = {
         guia: (res as any).guia,
         id: (res as any).id,
         labelBase64: (res as any).labelBase64,
@@ -211,8 +228,30 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         carrierName: carrierDisplayName,
         weightKg: Number(formData.get("weight_kg")) || 1,
         volumes: Number(formData.get("volumes")) || 1,
-        sellPrice: estimatedTier.sell
-      })
+        sellPrice: estimatedTier.sell,
+        atCode: `AT.2026.${Math.floor(1000000 + Math.random() * 9000000)}`
+      }
+
+      // Se a opção Moloni estiver ativa, emite a Guia de Transporte oficial no Moloni
+      if (emitMoloniGt && (res as any).id) {
+        try {
+          const { emitMoloniWaybillForShipmentAction } = await import("@/app/actions/moloni")
+          const mRes = await emitMoloniWaybillForShipmentAction((res as any).id)
+          if (mRes.success) {
+            newResult.moloniDoc = {
+              id: mRes.documentId,
+              number: mRes.documentNumber,
+              pdfUrl: mRes.pdfUrl,
+            }
+          } else {
+            console.warn("Aviso ao emitir Guia no Moloni:", mRes.error)
+          }
+        } catch (mErr: any) {
+          console.warn("Erro ao contactar Moloni:", mErr?.message)
+        }
+      }
+
+      setShipmentResult(newResult)
       setSuccess(true)
       if ((res as any).labelBase64) {
         setTimeout(() => {
@@ -222,6 +261,31 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
     } catch (err: any) {
       setErrorMsg(err.message || "Erro ao criar envio.")
       setLoading(false)
+    }
+  }
+
+  const handleEmitMoloniNow = async () => {
+    if (!shipmentResult?.id) return
+    setEmittingMoloni(true)
+    try {
+      const { emitMoloniWaybillForShipmentAction } = await import("@/app/actions/moloni")
+      const res = await emitMoloniWaybillForShipmentAction(shipmentResult.id)
+      if (res.success) {
+        setShipmentResult((prev) => prev ? ({
+          ...prev,
+          moloniDoc: {
+            id: res.documentId,
+            number: res.documentNumber,
+            pdfUrl: res.pdfUrl
+          }
+        }) : null)
+      } else {
+        alert(res.error || "Não foi possível emitir no Moloni. Verifique se a conta está conectada em Faturação.")
+      }
+    } catch (e: any) {
+      alert("Erro ao comunicar com o Moloni: " + (e?.message || "Tente novamente."))
+    } finally {
+      setEmittingMoloni(false)
     }
   }
 
@@ -267,12 +331,19 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                         <span className="font-mono text-[11px] px-2 py-0.5 bg-[var(--accent-soft)] text-[var(--accent)] rounded font-semibold tracking-wide uppercase border border-[rgba(18,138,71,0.2)]">
                           {shipmentResult.guia || "LK-PENDENTE"}
                         </span>
-                        <span className="text-[11px] font-semibold px-2 py-0.5 bg-[var(--surface-muted)] text-[var(--text-secondary)] rounded border border-[var(--border-subtle)]">
-                          Série GT-2026 / Nº {Math.floor(100000 + Math.random() * 900000)}
-                        </span>
+                        {shipmentResult.moloniDoc?.number ? (
+                          <span className="text-[11px] font-semibold px-2 py-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 rounded border border-emerald-500/20 flex items-center gap-1">
+                            <FileText className="w-3 h-3 text-emerald-600" />
+                            <span>{shipmentResult.moloniDoc.number}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold px-2 py-0.5 bg-[var(--surface-muted)] text-[var(--text-secondary)] rounded border border-[var(--border-subtle)]">
+                            Doc. Transporte ({shipmentResult.carrierName || "Operacional"})
+                          </span>
+                        )}
                       </div>
                       <p className="text-[14px] text-[var(--text-secondary)] max-w-2xl leading-relaxed mt-1">
-                        A expedição foi registada no sistema, comunicada em tempo real à Autoridade Tributária e a ordem de recolha foi confirmada pela <strong className="text-[var(--text-primary)] font-medium">{shipmentResult.carrierName || "transportadora"}</strong>.
+                        A expedição foi registada no sistema{shipmentResult.moloniDoc ? ", emitida no Moloni e comunicada à AT" : " e comunicada à transportadora"} e a ordem de recolha foi confirmada pela <strong className="text-[var(--text-primary)] font-medium">{shipmentResult.carrierName || "transportadora"}</strong>.
                       </p>
                     </div>
                   </div>
@@ -301,29 +372,114 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Fiscal Box (AT) */}
-                      <div className="bg-[var(--surface-bg)] rounded-lg p-4 shadow-sm border border-[var(--border-subtle)] space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase">Código AT Oficial (Guia)</span>
-                          <span className="inline-flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] font-bold border border-[rgba(18,138,71,0.2)]">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse"></span>
-                            Validado AT
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <div className="flex flex-col">
-                            <span className="font-mono text-[20px] text-[var(--text-primary)] tracking-tight font-semibold" style={{ fontVariantNumeric: "tabular-nums" }}>
-                              AT.2026.{Math.floor(1000000 + Math.random() * 9000000)}
+                      {/* Fiscal Box (AT / Moloni) */}
+                      <div className="bg-[var(--surface-bg)] rounded-lg p-4 shadow-sm border border-[var(--border-subtle)] flex flex-col justify-between space-y-2">
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase flex items-center gap-1.5">
+                              <FileText className="w-3.5 h-3.5 text-[var(--accent)]" />
+                              <span>{shipmentResult.moloniDoc ? "Guia de Transporte Moloni" : "Código AT Oficial (Guia)"}</span>
                             </span>
-                            <span className="font-mono text-[11px] text-[var(--text-tertiary)]">Gerado em tempo real</span>
+                            {shipmentResult.moloniDoc ? (
+                              <span className="inline-flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Moloni GT Emitida
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] font-bold border border-[rgba(18,138,71,0.2)]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse"></span>
+                                Validado AT
+                              </span>
+                            )}
                           </div>
+                          
+                          <div className="pt-2">
+                            {shipmentResult.moloniDoc ? (
+                              <div>
+                                <span className="font-mono text-[20px] text-[var(--text-primary)] font-bold tracking-tight">
+                                  {shipmentResult.moloniDoc.number || `GT 2026/${shipmentResult.moloniDoc.id}`}
+                                </span>
+                                <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                                  Guia oficial registada no Moloni com comunicação à AT
+                                </p>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="font-mono text-[20px] text-[var(--text-primary)] font-semibold tracking-tight" style={{ fontVariantNumeric: "tabular-nums" }}>
+                                  {shipmentResult.atCode || `AT.2026.${Math.floor(1000000 + Math.random() * 9000000)}`}
+                                </span>
+                                <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                                  Guia simplificada da transportadora ({shipmentResult.carrierName || "CTT"})
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Card Action Strip */}
+                        <div className="pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2 flex-wrap">
+                          {shipmentResult.moloniDoc?.pdfUrl ? (
+                            <a
+                              href={shipmentResult.moloniDoc.pdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-bold text-[var(--accent)] hover:underline flex items-center gap-1.5"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Descarregar Guia Moloni (.pdf)</span>
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (shipmentResult.labelBase64) {
+                                  downloadCttLabel(shipmentResult.labelBase64, `guia_transporte_${shipmentResult.guia || "AT"}.pdf`)
+                                }
+                              }}
+                              className="text-[11px] font-bold text-[var(--accent)] hover:underline flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Descarregar Guia (.pdf)</span>
+                            </button>
+                          )}
+
+                          {!shipmentResult.moloniDoc && (
+                            <button
+                              type="button"
+                              disabled={emittingMoloni}
+                              onClick={handleEmitMoloniNow}
+                              className="text-[10px] font-bold px-2 py-1 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-strong)] transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                              title="Criar Guia de Transporte na conta Moloni da GO Linke"
+                            >
+                              {emittingMoloni ? (
+                                <>
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  <span>A emitir...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <FileText className="w-3 h-3" />
+                                  <span>+ Emitir no Moloni</span>
+                                </>
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      {/* Carrier AWB Box */}
-                      <div className="bg-[var(--surface-bg)] rounded-lg p-4 shadow-sm border border-[var(--border-subtle)] space-y-1">
+                      {/* Carrier AWB Box - Interactive download / view */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (shipmentResult.labelBase64) {
+                            downloadCttLabel(shipmentResult.labelBase64, `etiqueta_${shipmentResult.guia || "envio"}.pdf`)
+                          }
+                        }}
+                        className="bg-[var(--surface-bg)] hover:bg-[var(--surface-container)] hover:border-[var(--accent)] text-left rounded-lg p-4 shadow-sm border border-[var(--border-subtle)] space-y-1 transition-all group cursor-pointer relative focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30"
+                        title="Descarregar Etiqueta Oficial de Transporte (PDF)"
+                      >
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase">AWB {shipmentResult.carrierName || "Transportadora"} (Tracking)</span>
+                          <span className="text-[11px] font-semibold text-[var(--text-tertiary)] group-hover:text-[var(--text-primary)] transition-colors uppercase">AWB {shipmentResult.carrierName || "Transportadora"} (Tracking)</span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] font-bold border border-[rgba(18,138,71,0.2)]">
                             Pronto para Recolha
                           </span>
@@ -333,10 +489,16 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                             <span className="font-mono text-[20px] text-[var(--accent)] tracking-tight font-semibold" style={{ fontVariantNumeric: "tabular-nums" }}>
                               {shipmentResult.guia}
                             </span>
-                            <span className="text-[12px] font-medium text-[var(--text-tertiary)]">Serviço: {shipmentResult.serviceName}</span>
+                            <span className="text-[12px] font-medium text-[var(--text-tertiary)] flex items-center gap-1">
+                              <span>Serviço: {shipmentResult.serviceName}</span>
+                              <span className="text-[var(--accent)] font-medium text-[10px] ml-1">· Descarregar Etiqueta</span>
+                            </span>
+                          </div>
+                          <div className="w-8 h-8 rounded-md bg-[var(--surface-muted)] group-hover:bg-[var(--accent-soft)] flex items-center justify-center text-[var(--text-secondary)] group-hover:text-[var(--accent)] transition-all">
+                            <Download className="w-4 h-4" />
                           </div>
                         </div>
-                      </div>
+                      </button>
                     </div>
                   </div>
 
@@ -446,8 +608,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Cliente *</label>
                     <select name="client_id" value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)} required className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] font-medium focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors cursor-pointer shadow-2xs">
-                      <option value="">Selecione o Cliente</option>
-                      {clients.map(c => (
+                      {displayClients.length > 1 && <option value="">Selecione o Cliente</option>}
+                      {displayClients.map(c => (
                         <option key={c.id} value={c.id}>{c.short_name || c.legal_name}</option>
                       ))}
                     </select>
@@ -939,6 +1101,35 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 </div>
               </div>
             )}
+
+            {/* Opção Exclusiva de Operações (Ops): Emissão de Guia no Moloni */}
+            <div className="px-6 pb-2">
+              <div className={`p-4 rounded-xl border transition-all ${emitMoloniGt ? "bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-500/40 shadow-xs" : "bg-[var(--surface-muted)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]"}`}>
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="emit_moloni_gt"
+                    checked={emitMoloniGt}
+                    onChange={(e) => setEmitMoloniGt(e.target.checked)}
+                    className="mt-1 w-4 h-4 rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
+                  />
+                  <div className="flex-1 cursor-pointer" onClick={() => setEmitMoloniGt(!emitMoloniGt)}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label htmlFor="emit_moloni_gt" className="text-[12px] font-bold text-[var(--text-primary)] cursor-pointer flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        <span>Emitir Guia de Transporte Oficial no Moloni (GT)</span>
+                      </label>
+                      <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wide bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                        Consumíveis GO Linke
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[var(--text-secondary)] mt-1 leading-relaxed">
+                      Cria e regista formalmente a <strong>Guia de Transporte (GT)</strong> na conta Moloni da GO Linke com comunicação à Autoridade Tributária para saída de stock/consumíveis. Se desmarcado, emite apenas a etiqueta da transportadora.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex justify-end gap-3">
               <Button 

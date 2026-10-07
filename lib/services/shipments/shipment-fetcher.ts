@@ -100,13 +100,17 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
       // Generate printable transport label
       label = await generateTransportLabelPdfBase64(shipment)
       if (label) {
-        // Save to shipments table for future instant retrieval
+        // Save to audit_log for future instant retrieval
         try {
-          await supabase.from("shipments").update({
-            ctt_label_base64: label
-          }).eq("id", shipment.id)
+          const { data: auditLogs } = await supabase.from("audit_log").select("id, details").eq("action", "shipment_data")
+          const targetLog = auditLogs?.find((l: any) => l.details?.id === shipment.id)
+          if (targetLog) {
+            await supabase.from("audit_log").update({
+              details: { ...targetLog.details, ctt_label_base64: label }
+            }).eq("id", targetLog.id)
+          }
         } catch (e) {
-          console.warn("Could not save generated label to shipments:", e)
+          console.warn("Could not save generated label to audit_log:", e)
         }
         return label
       }

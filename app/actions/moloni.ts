@@ -1414,3 +1414,170 @@ export async function emitMoloniReceiptForStatementAction(
     return { success: false, error: err.message || "Erro ao emitir recibo no Moloni" }
   }
 }
+
+/**
+ * Emite a Guia de Transporte Oficial (GT) no Moloni para um envio do Ops
+ */
+export async function emitMoloniWaybillForShipmentAction(shipmentId: string, notes?: string) {
+  await requireEmployee()
+  try {
+    const supabase = createAdminClient()
+
+    // 1. Obter envio
+    const { data: dbShipments } = await supabase
+      .from("shipments")
+      .select("*")
+      .or(`id.eq.${shipmentId},tracking_number.eq.${shipmentId}`)
+      .limit(1)
+
+    const shipment = dbShipments?.[0]
+    if (!shipment) {
+      throw new Error("Envio não encontrado no sistema.")
+    }
+
+    // 2. Obter Cliente do TMS
+    let client: any = null
+    if (shipment.client_id) {
+      const allClients = await getClientesAction(shipment.client_id)
+      client = allClients[0]
+    }
+
+    // 3. Obter Configuração Moloni
+    let moloniConfig: any = null
+    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
+      moloniConfig = {
+        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
+        companyId: process.env.MOLONI_COMPANY_ID,
+      }
+    } else {
+      const { data: mLogs } = await supabase
+        .from("audit_log")
+        .select("details")
+        .eq("action", "moloni_connection_config")
+        .order("created_at", { ascending: false })
+        .limit(1)
+      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
+        moloniConfig = {
+          refreshToken: mLogs[0].details.refresh_token,
+          companyId: mLogs[0].details.company_id,
+        }
+      }
+    }
+
+    if (!moloniConfig) {
+      throw new Error("A conta Moloni não está configurada ou conectada. Vá a Faturação > Gerir Conta Moloni para autorizar.")
+    }
+
+    const moloni = new MoloniClient(moloniConfig)
+
+    // 4. Obter ou Criar Cliente no Moloni
+    let moloniCustomerId = null
+    const clientVat = client?.nif || "999999990"
+    const clientName = shipment.recipient_name || client?.legal_name || client?.short_name || "Cliente Final"
+    
+    if (client?.nif) {
+      const moloniCust = await moloni.getCustomerByVat(client.nif).catch(() => null)
+      if (moloniCust) {
+        moloniCustomerId = moloniCust.customer_id
+      }
+    }
+
+    if (!moloniCustomerId) {
+      moloniCustomerId = await moloni.createCustomer({
+        vat: clientVat,
+        number: `C${Date.now()}`,
+        name: clientName,
+        address: shipment.recipient_address || client?.address || "Desconhecida",
+        zipCode: shipment.recipient_zip4 ? `${shipment.recipient_zip4}-${shipment.recipient_zip3 || "001"}` : (client?.postal_code || "1000-001"),
+        city: client?.city || "Portugal",
+        email: client?.email,
+        phone: client?.phone,
+      })
+    }
+
+    // 5. Obter Série e Artigo
+    const billingConfig = await getBillingConfigAction()
+    const taxId = await moloni.getTaxId(billingConfig.defaultVatRate || 23)
+    const documentSetId = billingConfig.defaultDocumentSetId || (await moloni.getDocumentSet())
+    const productId = await moloni.getGenericProductId(
+      taxId,
+      "CONSUMIVEIS",
+      "Material e Consumíveis de Embalagem",
+      "Consumíveis operacionais expedidos via TMS"
+    )
+
+    const dateNow = new Date().toISOString().split("T")[0]
+
+    // 6. Criar a Guia de Transporte (Bills of Lading)
+    const waybillRes = await moloni.createBillOfLading({
+      customerId: moloniCustomerId,
+      date: dateNow,
+      documentSetId: documentSetId,
+      notes: notes || `Expedição ${shipment.tracking_number || ""} · AWB: ${shipment.carrier_tracking_number || ""}`,
+      deliveryDepartureAddress: shipment.sender_address || "Sede GO Linke",
+      deliveryDepartureZip: shipment.sender_zip4 ? `${shipment.sender_zip4}-${shipment.sender_zip3 || "001"}` : "4000-001",
+      deliveryDepartureCity: "Portugal",
+      deliveryDestinationAddress: shipment.recipient_address || "Morada Destinatário",
+      deliveryDestinationZip: shipment.recipient_zip4 ? `${shipment.recipient_zip4}-${shipment.recipient_zip3 || "001"}` : "1000-001",
+      deliveryDestinationCity: "Portugal",
+      products: [
+        {
+          productId: productId,
+          name: "Material e Consumíveis de Embalagem",
+          summary: `Envio operacional ${shipment.tracking_number} (${shipment.service_type || "CTT"})`,
+          qty: 1,
+          price: Number(shipment.sell_price || 0),
+          exemptionReason: "M00",
+          taxes: [{ tax_id: taxId, value: 23 }]
+        }
+      ]
+    })
+
+    const moloniDocId = waybillRes?.document_id
+    if (!moloniDocId) {
+      throw new Error(`Falha ao emitir Guia no Moloni: ${JSON.stringify(waybillRes)}`)
+    }
+
+    let moloniDocNum: string | null = null
+    let moloniPdfUrl: string | null = null
+    try {
+      moloniDocNum = await moloni.getDocumentNumber(moloniDocId)
+      moloniPdfUrl = await moloni.getDocumentPDFLink(moloniDocId)
+    } catch {}
+
+    // 7. Registar no audit_log
+    const tenantId = await getTenantId()
+    const userCtx = await getAuthContext()
+    await supabase.from("audit_log").insert({
+      tenant_id: tenantId,
+      user_id: userCtx?.user?.id,
+      action: "moloni_waybill_created",
+      entity_type: "shipment",
+      entity_id: shipment.id,
+      details: {
+        moloni_document_id: moloniDocId,
+        moloni_document_number: moloniDocNum,
+        moloni_document_pdf: moloniPdfUrl,
+        tracking_number: shipment.tracking_number,
+        carrier_tracking_number: shipment.carrier_tracking_number,
+        created_at: new Date().toISOString(),
+      }
+    })
+
+    revalidatePath("/ops/envios")
+
+    return {
+      success: true,
+      documentId: moloniDocId,
+      documentNumber: moloniDocNum || `GT ${new Date().getFullYear()}/${moloniDocId}`,
+      pdfUrl: moloniPdfUrl,
+    }
+  } catch (err: any) {
+    console.error("emitMoloniWaybillForShipmentAction error:", err)
+    return {
+      success: false,
+      error: err.message || "Erro ao emitir Guia de Transporte no Moloni"
+    }
+  }
+}
+

@@ -569,6 +569,86 @@ export class MoloniClient {
     return result;
   }
 
+  /**
+   * Cria uma Guia de Transporte Oficial (Bills of Lading / GT)
+   */
+  async createBillOfLading(data: {
+    customerId: number;
+    date: string;
+    documentSetId: number;
+    notes?: string;
+    deliveryDepartureAddress?: string;
+    deliveryDepartureZip?: string;
+    deliveryDepartureCity?: string;
+    deliveryDestinationAddress?: string;
+    deliveryDestinationZip?: string;
+    deliveryDestinationCity?: string;
+    products: Array<{
+      productId?: number;
+      name: string;
+      summary?: string;
+      qty: number;
+      price?: number;
+      exemptionReason?: string;
+      taxes?: Array<{ tax_id: number; value: number }>;
+    }>;
+  }) {
+    const formattedProducts = data.products.map((p) => ({
+      product_id: p.productId || 0,
+      name: p.name,
+      summary: p.summary || "",
+      qty: p.qty || 1,
+      price: Number(p.price || 0),
+      discount: 0,
+      exemption_reason: p.exemptionReason || "M00",
+      taxes: (p.taxes || []).map((t, tIdx) => ({
+        tax_id: t.tax_id,
+        value: Number(t.value || 23),
+        order: tIdx + 1,
+        cumulative: 0,
+      })),
+    }));
+
+    const payload: any = {
+      date: data.date,
+      document_set_id: data.documentSetId,
+      customer_id: data.customerId,
+      notes: data.notes || "",
+      status: 1, // 1 = Fechado / Comunicado AT
+      products: formattedProducts,
+    };
+
+    if (data.deliveryDepartureAddress) {
+      payload.delivery_departure_address = data.deliveryDepartureAddress;
+      payload.delivery_departure_city = data.deliveryDepartureCity || "Portugal";
+      payload.delivery_departure_zip_code = data.deliveryDepartureZip || "1000-001";
+      payload.delivery_departure_country = 1;
+    }
+
+    if (data.deliveryDestinationAddress) {
+      payload.delivery_destination_address = data.deliveryDestinationAddress;
+      payload.delivery_destination_city = data.deliveryDestinationCity || "Portugal";
+      payload.delivery_destination_zip_code = data.deliveryDestinationZip || "1000-001";
+      payload.delivery_destination_country = 1;
+    }
+
+    let result;
+    try {
+      result = await this.request("billsOfLading/insert", payload);
+    } catch (err1: any) {
+      console.warn("Could not insert status 1 bill of lading, falling back to status 0:", err1?.message);
+      payload.status = 0;
+      try {
+        result = await this.request("billsOfLading/insert", payload);
+      } catch (err2: any) {
+        console.warn("Could not insert billsOfLading, trying deliveryNotes:", err2?.message);
+        result = await this.request("deliveryNotes/insert", payload);
+      }
+    }
+
+    return result;
+  }
+
 
   /**
    * Cria uma Fatura Pró-Forma

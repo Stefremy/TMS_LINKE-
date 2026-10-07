@@ -160,410 +160,427 @@ export async function emitClientGuiaAction(data: {
   heightCm?: number
   observations?: string
 }) {
-  
-  const ctx = await requireUser()
-
-  const finalClientId = ctx.role === "client" ? ctx.client_id! : data.clientId
-  const finalClientName = ctx.role === "client" ? undefined : data.clientName
-
-  const supabase = createAdminClient()
-  const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
-  const shipmentId = crypto.randomUUID()
-  const now = new Date().toISOString()
-
-  // Portuguese postal code: "4610-001" → zip4="4610" (4-digit prefix), zip3="001" (3-digit extension)
-  const senderZip4 = data.senderPostal?.split("-")[0] || ""
-  const senderZip3 = data.senderPostal?.split("-")[1] || ""
-
-  const recipientZip4 = data.recipientPostal?.split("-")[0] || ""
-  const recipientZip3 = data.recipientPostal?.split("-")[1] || ""
-
-  // Ensure DB foreign keys are valid
-  const validatedClientId = await ensureTenantAndClient(supabase, finalClientId, finalClientName)
-
-  if (validatedClientId) {
-    const { data: clientCheck } = await supabase
-      .from('clientes')
-      .select('credit_limit')
-      .eq('id', validatedClientId)
-      .single()
-      
-    if (clientCheck && clientCheck.credit_limit <= 0) {
-      throw new Error("Conta bloqueada. O seu saldo atual é igual ou inferior a 0.00€. Por favor, efetue um carregamento.")
-    }
-  }
-
-  // Server-side price recalculation — never trust the frontend value
-  let computedSellPrice = Number(data.calculatedPrice) || 5.50
-  let computedBuyPrice = 0
-  let computedSpecialAmount = 0
-  let computedFuelAmount = 0
-  let computedBasePrice = computedSellPrice
-  let computedSpecialDesc: string | null = null
-  let matchedClient: any = {}
   try {
-    const [allClients, allServicos] = await Promise.all([
-      getClientesAction(),
-      getServicosLinkeAction(),
-    ])
-    matchedClient = allClients.find(
-      (c) => c.id === finalClientId || (finalClientName && c.short_name === finalClientName)
-    ) || {} as any
-    const recipientCountry = data.recipientCountry || "PT"
-    const recipientPostal = data.recipientPostal || ""
-    const targetZone = resolveZoneCode(recipientCountry, recipientPostal)
+    const ctx = await requireUser()
 
-    // Check if user's selected service permits this zone
-    const chosenService = allServicos.find(s => (data.serviceId && s.id === data.serviceId) || s.name === data.serviceName)
-    if (chosenService && !isZoneAllowedByService(chosenService.allowed_zones, targetZone)) {
-      throw new Error(`Destino não autorizado: O serviço '${chosenService.name}' não permite envios para ${targetZone} (${recipientCountry}). Por favor selecione um serviço com cobertura para este destino.`)
-    }
+    const finalClientId = ctx.role === "client" ? ctx.client_id! : data.clientId
+    const finalClientName = ctx.role === "client" ? undefined : data.clientName
 
-    const priceResult = calculateShipmentPrice(
-      data.weightKg || 1,
-      chosenService ? { ...matchedClient, default_linke_table_id: chosenService.id } : matchedClient,
-      allServicos,
-      recipientCountry,
-      recipientPostal
-    )
+    const supabase = createAdminClient()
+    const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
+    const shipmentId = crypto.randomUUID()
+    const now = new Date().toISOString()
 
-    if (priceResult.isBlocked) {
-      throw new Error(`Destino bloqueado: O serviço '${priceResult.tableUsed}' não cobre o destino ${priceResult.zoneName} (${recipientCountry}).`)
-    }
+    // Portuguese postal code: "4610-001" → zip4="4610" (4-digit prefix), zip3="001" (3-digit extension)
+    const senderZip4 = data.senderPostal?.split("-")[0] || ""
+    const senderZip3 = data.senderPostal?.split("-")[1] || ""
 
-    computedSellPrice = priceResult.sellPrice
-    computedBuyPrice = priceResult.buyPrice
-    computedFuelAmount = priceResult.fuelSurchargeAmount
-    computedBasePrice = Number((computedSellPrice - computedFuelAmount).toFixed(2))
+    const recipientZip4 = data.recipientPostal?.split("-")[0] || ""
+    const recipientZip3 = data.recipientPostal?.split("-")[1] || ""
 
-    // Calculate Special Services
-    let specialFeesTotal = 0
-    let specialFeesDetails: Array<{ name: string, amount: number }> = []
-    
-    // Import DEFAULT_CTT_SPECIAL_SERVICES_FEES inside the function or file
-    const defaultSpecials = [
-      { special_service_code: "cod", special_service_name: "Cobrança (COD)", api_type_code: 1, fee_type: "percentage", percentage_value: 2.0, min_value: 1.80, description: "", is_enabled: true },
-      { special_service_code: "fragil", special_service_name: "Tratamento Frágil", api_type_code: 2, fee_type: "fixed", fixed_value: 1.50, description: "", is_enabled: true },
-      { special_service_code: "sms_tracking", special_service_name: "Alerta SMS & Tracking", api_type_code: 3, fee_type: "fixed", fixed_value: 0.15, description: "", is_enabled: true },
-      { special_service_code: "auth_return", special_service_name: "Logística Inversa (Retorno)", api_type_code: 4, fee_type: "fixed", fixed_value: 3.85, description: "", is_enabled: true },
-      { special_service_code: "correos_cod", special_service_name: "AgainstReimbursement (Cobrança)", api_type_code: 2, fee_type: "percentage", percentage_value: 2.0, min_value: 1.80, description: "", is_enabled: true },
-      { special_service_code: "correos_saturday", special_service_name: "Saturday (Sábado)", api_type_code: 4, fee_type: "fixed", fixed_value: 8.50, description: "", is_enabled: true },
-      { special_service_code: "correos_insurance", special_service_name: "SpecialInsurance (Seguro)", api_type_code: 6, fee_type: "percentage", percentage_value: 1.0, min_value: 3.50, description: "", is_enabled: true },
-      { special_service_code: "correos_fragil", special_service_name: "Fragil", api_type_code: 7, fee_type: "fixed", fixed_value: 1.50, description: "", is_enabled: true },
-    ]
+    // Ensure DB foreign keys are valid
+    const validatedClientId = await ensureTenantAndClient(supabase, finalClientId, finalClientName)
 
-    const clientSpecialFees = matchedClient.pricing?.special_services_fees && matchedClient.pricing.special_services_fees.length > 0 
-      ? matchedClient.pricing.special_services_fees 
-      : defaultSpecials
-
-    if (data.selectedSpecialServices && data.selectedSpecialServices.length > 0) {
-      data.selectedSpecialServices.forEach(code => {
-        const feeConfig = clientSpecialFees.find((f: any) => f.special_service_code === code && f.is_enabled)
-        if (feeConfig) {
-          let feeAmt = 0
-          if (feeConfig.fee_type === "fixed") {
-            feeAmt = feeConfig.fixed_value || 0
-          } else if (feeConfig.fee_type === "percentage") {
-            if ((code === "cod" || code === "correos_cod") && data.codValue) {
-               // COD percentage is calculated on the COD value!
-               feeAmt = data.codValue * ((feeConfig.percentage_value || 0) / 100)
-            } else {
-               // Apply percentage on base sell price (before special fees, includes fuel)
-               feeAmt = computedSellPrice * ((feeConfig.percentage_value || 0) / 100)
-            }
-            
-            if (feeConfig.min_value && feeAmt < feeConfig.min_value) {
-              feeAmt = feeConfig.min_value
-            }
-          }
-          specialFeesTotal += feeAmt
-          specialFeesDetails.push({
-            name: feeConfig.special_service_name,
-            amount: feeAmt
-          })
-        }
-      })
-    }
-    
-    // Add Special Services to final DB price
-    computedSellPrice += specialFeesTotal
-
-    // Define data to pass into DB. Save JSON string for PDF rendering.
-    computedSpecialAmount = specialFeesTotal
-    computedSpecialDesc = specialFeesDetails.length > 0 ? JSON.stringify(specialFeesDetails) : null
-
-  } catch (pricingErr: any) {
-    console.warn("Client pricing engine fallback:", pricingErr?.message)
-  }
-
-  const shipmentData = {
-    id: shipmentId,
-    tenant_id: (await getTenantId()),
-    client_id: validatedClientId,
-    tracking_number: trackingNumber,
-    service_type: data.serviceName || "CTT Expresso 24H",
-    status: "pendente",
-    sender_name: ctx.role === "client" ? matchedClient.short_name || "Empresa Cliente" : (data.clientName || "Empresa Cliente"),
-    sender_address: `${data.senderAddress || "Sede Comercial"}${data.senderCity ? `, ${data.senderCity}` : ""}`,
-    sender_zip3: senderZip3,
-    sender_zip4: senderZip4,
-    recipient_name: data.recipientName,
-    recipient_address: `${data.recipientAddress}${data.recipientCity ? `, ${data.recipientCity}` : ""}`,
-    recipient_zip3: recipientZip3,
-    recipient_zip4: recipientZip4,
-    base_price: computedBasePrice,
-    fuel_tax_amount: computedFuelAmount,
-    buy_price: computedBuyPrice,
-    sell_price: computedSellPrice,
-    reference: trackingNumber,
-    special_fees_amount: computedSpecialAmount || 0,
-    special_fees_description: computedSpecialDesc,
-    cod_value: data.codValue || 0,
-    length_cm: data.lengthCm || 0,
-    width_cm: data.widthCm || 0,
-    height_cm: data.heightCm || 0,
-    created_at: now,
-    updated_at: now,
-  }
-
-  // ─── STEP 1: Call carrier API — only write to DB if carrier accepts ──────────
-  let realGuia = trackingNumber
-  let labelBase64: string | null = null
-
-  if (data.serviceName?.toLowerCase().includes("correos")) {
-    // ── CORREOS EXPRESS ──────────────────────────────────────────────────────────
-    try {
-      const cleanPostal = (zip?: string) => (zip || "").trim()
-      const creds = await resolveCorreosCredentials(data.webserviceConnectionId)
-      const correosService = new CorreosShipmentService()
-      const result = await correosService.createShipment(creds, {
-        ref: trackingNumber,
-        fecha: new Date().toLocaleDateString("pt-PT").replace(/\//g, ""),
-        remitente: {
-          nombre: shipmentData.sender_name,
-          direccion: data.senderAddress || "Sede Comercial",
-          poblacion: data.senderCity || "Portugal",
-          cpNacional: "",
-          cpInternacional: cleanPostal(data.senderPostal || "4000-001"),
-          paisISO: "PT",
-          contacto: shipmentData.sender_name,
-          telefono: data.senderPhone || "910000000"
-        },
-        destinatario: {
-          nombre: data.recipientName,
-          direccion: data.recipientAddress,
-          poblacion: data.recipientCity || "Portugal",
-          cpNacional: "",
-          cpInternacional: cleanPostal(data.recipientPostal || "1000-001"),
-          paisISO: "PT",
-          contacto: data.recipientName,
-          telefono: data.recipientPhone || "920000000",
-          email: data.recipientEmail
-        },
-        bultos: data.volumesCount || 1,
-        kilos: data.weightKg || 1,
-        producto: data.subProductId || "63",
-        portes: "P",
-        reembolso: data.selectedSpecialServices?.includes("correos_cod") && data.codValue ? data.codValue.toString() : "",
-        entrSabado: data.selectedSpecialServices?.includes("correos_saturday") ? "S" : undefined,
-        seguro: data.selectedSpecialServices?.includes("correos_insurance") ? "1" : undefined,
-        observaciones: [
-          data.selectedSpecialServices?.includes("correos_fragil") ? "CUIDADO: FRÁGIL" : undefined,
-          data.observations
-        ].filter(Boolean).join(" | ").substring(0, 40) || undefined,
-        tipoEtiqueta: "1"
-      })
-
-      // codigoRetorno === 0 = success; 404 with datosResultado = created but no label (sandbox warning)
-      console.log("CORREOS PRODUCTION RESPONSE:", JSON.stringify(result, null, 2))
-      if (result.codigoRetorno === 0 || (result.codigoRetorno === 404 && result.datosResultado)) {
-        realGuia = result.datosResultado || trackingNumber
-        let rawLabel = ""
-        if (result.etiqueta && result.etiqueta.length > 0) {
-          const firstEtiqueta = result.etiqueta[0]
-          rawLabel = firstEtiqueta.etiqueta1 || Object.values(firstEtiqueta)[0] || ""
-        }
-        if (!rawLabel && result.listaInformacionAdicional && result.listaInformacionAdicional.length > 0) {
-          rawLabel = result.listaInformacionAdicional[0].etiquetaPDF || ""
-        }
-        // Fallback mock label in test environment if test endpoint returns 404
-        labelBase64 = rawLabel || (creds.environment === "test"
-          ? "JVBERi0xLjcKCjEgMCBvYmogICUgZW50cnkgcG9pbnQKPDwKICAvVHlwZSAvQ2F0YWxvZwogIC9QYWdlcyAyIDAgUgo+PgplbmRvYmoKCjIgMCBvYmoKPDwKICAvVHlwZSAvUGFnZXMKICAvTWVkaWFCb3ggWyAwIDAgNDAwIDIwMCBdCiAgL0NvdW50IDEKICAvS2lkcyBbIDMgMCBSIF0KPj4KZW5kb2JqCgozIDAgb2JqCjw8CiAgL1R5cGUgL1BhZ2UKICAvUGFyZW50IDIgMCBSCiAgL1Jlc291cmNlcyA8PAogICAgL0ZvbnQgPDwKICAgICAgL0YxIDQgMCBSCiAgICA+PgogID4+CiAgL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iagoKNCAwIG9iago8PAogIC9UeXBlIC9Gb250CiAgL1N1YnR5cGUgL1R5cGUxCiAgL0Jhc2VGb250IC9UaW1lcy1Sb21hbgo+PgplbmRvYmoKCjUgMCBvYmogICUgcGFnZSBjb250ZW50Cjw8CiAgL0xlbmd0aCA4MAo+PgpzdHJlYW0KQlQKNTAgMTAwIFRECi9GMSAyNCBUZgooRXRpcXVldGEgQ29ycmVvcyBUZXN0ZSkgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDEwIDAwMDAwIG4gCjAwMDAwMDAwNzkgMDAwMDAgbiAKMDAwMDAwMDE3MyAwMDAwMCBuIAowMDAwMDAwMzAwIDAwMDAwIG4gCjAwMDAwMDAzODggMDAwMDAgbiAKdHJhaWxlcgo8PAogIC9TaXplIDYKICAvUm9vdCAxIDAgUgo+PgpzdGFydHhyZWYKNTM2CiUlRU9GCg=="
-          : null)
-
-        if (labelBase64) {
-          labelBase64 = await applyLinkeLogoToCorreosLabel(labelBase64)
-        }
-      } else {
-        throw new Error(`Correos Express: ${result.mensajeRetorno || "Erro desconhecido"} (Código ${result.codigoRetorno})`)
-      }
-    } catch (e: any) {
-      throw new Error("Erro Correos Express: " + (e?.message || "Tente novamente."))
-    }
-
-  } else if (data.serviceName?.toLowerCase().includes("ctt") || data.serviceName?.includes("ERS") || data.serviceName?.includes("D+")) {
-    // ── CTT EXPRESSO ─────────────────────────────────────────────────────────────
-    try {
-      const cttCreds = await resolveCttCredentials(data.webserviceConnectionId)
-      const cttProvider = new CttProvider()
-      await cttProvider.initialize(cttCreds)
-
-      const obsLines: string[] = []
-      if (data.selectedSpecialServices?.includes("fragil")) obsLines.push("CUIDADO: FRÁGIL")
-      if (data.selectedSpecialServices?.includes("cod") && data.codValue) obsLines.push(`COBRANÇA: ${data.codValue.toFixed(2)}€`)
-      if (data.selectedSpecialServices?.includes("auth_return")) obsLines.push("LOGÍSTICA INVERSA")
-      if (data.observations) obsLines.push(data.observations)
-      const observations = obsLines.length > 0 ? obsLines.join(" | ").substring(0, 40) : undefined
-
-      const cttResult = await cttProvider.createShipment({
-        reference: trackingNumber,
-        sender: {
-          name: shipmentData.sender_name,
-          address: data.senderAddress || "Sede Comercial",
-          city: data.senderCity || "Portugal",
-          zip: data.senderPostal || "1000-001",
-          phone: data.senderPhone || "910000000",
-          country: "PT"
-        },
-        recipient: {
-          name: data.recipientName,
-          address: data.recipientAddress,
-          city: data.recipientCity || "Portugal",
-          zip: data.recipientPostal || "1000-001",
-          phone: data.recipientPhone || "920000000",
-          email: data.recipientEmail,
-          country: "PT"
-        },
-        weightKg: data.weightKg || 1,
-        volumes: data.volumesCount || 1,
-        subProduct: data.subProductId || "EMSF056.01",
-        codValue: data.selectedSpecialServices?.includes("cod") ? data.codValue : 0,
-        isReturn: data.isReturn,
-        observations,
-        autoClose: false
-      })
-
-      if (!cttResult.success) {
-        const raw = cttResult.error || ""
-        console.error("[CTT] Raw error:", raw)
-        // Show exact CTT error — prefix with [CTT] so it's clear but not hidden
-        throw new Error(raw || "Os CTT não devolveram uma resposta válida. Verifique o terminal do servidor.")
-      }
-
-      realGuia = cttResult.trackingNumber || trackingNumber
-      const rawZpl = cttResult.labelBase64 || ""
-      labelBase64 = rawZpl ? await convertZplToPdfBase64(rawZpl) : null
-    } catch (e: any) {
-      if (e.message?.includes("rejeitaram") || e.message?.includes("inválido") || e.message?.includes("suportado")) {
-        throw e
-      }
-      throw new Error("Erro de ligação aos CTT: " + (e?.message || "Tente novamente."))
-    }
-  }
-
-  // ─── STEP 2: CTT accepted — now write to DB ─────────────────────────────────
-  // Insert into shipments table (only valid table columns to prevent silent schema rejection)
-  try {
-    const shipmentRow = {
-      id: shipmentId,
-      tenant_id: shipmentData.tenant_id,
-      client_id: shipmentData.client_id,
-      tracking_number: trackingNumber,
-      carrier_tracking_number: realGuia,
-      carrier_code: data.serviceName?.toLowerCase().includes("correos") ? "correos" : "ctt",
-      service_type: shipmentData.service_type,
-      status: "pendente",
-      ops_substatus: null,
-      sender_name: shipmentData.sender_name,
-      sender_address: shipmentData.sender_address,
-      sender_zip3: shipmentData.sender_zip3,
-      sender_zip4: shipmentData.sender_zip4,
-      recipient_name: shipmentData.recipient_name,
-      recipient_address: shipmentData.recipient_address,
-      recipient_zip3: shipmentData.recipient_zip3,
-      recipient_zip4: shipmentData.recipient_zip4,
-      buy_price: shipmentData.buy_price,
-      sell_price: shipmentData.sell_price,
-      created_at: shipmentData.created_at,
-      updated_at: shipmentData.updated_at,
-      ctt_label_base64: labelBase64,
-    }
-
-    const { error } = await supabase
-      .from("shipments")
-      .insert(shipmentRow)
-
-    if (error) {
-      console.warn("DB shipments insert note:", error.message)
-    }
-  } catch (err: any) {
-    console.warn("Error inserting into shipments table:", err?.message)
-  }
-
-
-
-  // Insert package record
-  try {
-    await supabase.from("packages").insert({
-      tenant_id: (await getTenantId()),
-      shipment_id: shipmentId,
-      weight_g: Math.round((data.weightKg || 1) * 1000)
-    })
-  } catch {}
-
-  // ─── STEP 3: Deduct from client credit ──────────────────────────────────────
-  if (validatedClientId && computedSellPrice > 0) {
-    try {
-      const { data: clientData } = await supabase
-        .from("clientes")
-        .select("credit_limit, email")
-        .eq("id", validatedClientId)
+    if (validatedClientId) {
+      const { data: clientCheck } = await supabase
+        .from('clientes')
+        .select('credit_limit')
+        .eq('id', validatedClientId)
         .single()
         
-      if (clientData && typeof clientData.credit_limit === "number") {
-        const newCredit = Math.max(0, clientData.credit_limit - computedSellPrice)
-        await supabase
-          .from("clientes")
-          .update({ credit_limit: newCredit })
-          .eq("id", validatedClientId)
+      if (clientCheck && clientCheck.credit_limit <= 0) {
+        throw new Error("Conta bloqueada. O seu saldo atual é igual ou inferior a 0.00€. Por favor, efetue um carregamento.")
+      }
+    }
 
-        if (clientData.credit_limit >= 15 && newCredit < 15 && clientData.email) {
-          try {
-            const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
-            const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
-            const html = compileTemplate(emailTemplates.low_balance, {
-              current_balance: newCredit.toFixed(2),
-              topup_url: "https://tms.linke.pt/app"
+    // Server-side price recalculation — never trust the frontend value
+    let computedSellPrice = Number(data.calculatedPrice) || 5.50
+    let computedBuyPrice = 0
+    let computedSpecialAmount = 0
+    let computedFuelAmount = 0
+    let computedBasePrice = computedSellPrice
+    let computedSpecialDesc: string | null = null
+    let matchedClient: any = {}
+    try {
+      const [allClients, allServicos] = await Promise.all([
+        getClientesAction(),
+        getServicosLinkeAction(),
+      ])
+      matchedClient = allClients.find(
+        (c) => c.id === finalClientId || (finalClientName && c.short_name === finalClientName)
+      ) || {} as any
+      const recipientCountry = data.recipientCountry || "PT"
+      const recipientPostal = data.recipientPostal || ""
+      const targetZone = resolveZoneCode(recipientCountry, recipientPostal)
+
+      // Check if user's selected service permits this zone
+      const chosenService = allServicos.find(s => (data.serviceId && s.id === data.serviceId) || s.name === data.serviceName)
+      if (chosenService && !isZoneAllowedByService(chosenService.allowed_zones, targetZone)) {
+        throw new Error(`Destino não autorizado: O serviço '${chosenService.name}' não permite envios para ${targetZone} (${recipientCountry}). Por favor selecione um serviço com cobertura para este destino.`)
+      }
+
+      const priceResult = calculateShipmentPrice(
+        data.weightKg || 1,
+        chosenService ? { ...matchedClient, default_linke_table_id: chosenService.id } : matchedClient,
+        allServicos,
+        recipientCountry,
+        recipientPostal
+      )
+
+      if (priceResult.isBlocked) {
+        throw new Error(`Destino bloqueado: O serviço '${priceResult.tableUsed}' não cobre o destino ${priceResult.zoneName} (${recipientCountry}).`)
+      }
+
+      computedSellPrice = priceResult.sellPrice
+      computedBuyPrice = priceResult.buyPrice
+      computedFuelAmount = priceResult.fuelSurchargeAmount
+      computedBasePrice = Number((computedSellPrice - computedFuelAmount).toFixed(2))
+
+      // Calculate Special Services
+      let specialFeesTotal = 0
+      let specialFeesDetails: Array<{ name: string, amount: number }> = []
+      
+      // Import DEFAULT_CTT_SPECIAL_SERVICES_FEES inside the function or file
+      const defaultSpecials = [
+        { special_service_code: "cod", special_service_name: "Cobrança (COD)", api_type_code: 1, fee_type: "percentage", percentage_value: 2.0, min_value: 1.80, description: "", is_enabled: true },
+        { special_service_code: "fragil", special_service_name: "Tratamento Frágil", api_type_code: 2, fee_type: "fixed", fixed_value: 1.50, description: "", is_enabled: true },
+        { special_service_code: "sms_tracking", special_service_name: "Alerta SMS & Tracking", api_type_code: 3, fee_type: "fixed", fixed_value: 0.15, description: "", is_enabled: true },
+        { special_service_code: "auth_return", special_service_name: "Logística Inversa (Retorno)", api_type_code: 4, fee_type: "fixed", fixed_value: 3.85, description: "", is_enabled: true },
+        { special_service_code: "correos_cod", special_service_name: "AgainstReimbursement (Cobrança)", api_type_code: 2, fee_type: "percentage", percentage_value: 2.0, min_value: 1.80, description: "", is_enabled: true },
+        { special_service_code: "correos_saturday", special_service_name: "Saturday (Sábado)", api_type_code: 4, fee_type: "fixed", fixed_value: 8.50, description: "", is_enabled: true },
+        { special_service_code: "correos_insurance", special_service_name: "SpecialInsurance (Seguro)", api_type_code: 6, fee_type: "percentage", percentage_value: 1.0, min_value: 3.50, description: "", is_enabled: true },
+        { special_service_code: "correos_fragil", special_service_name: "Fragil", api_type_code: 7, fee_type: "fixed", fixed_value: 1.50, description: "", is_enabled: true },
+      ]
+
+      const clientSpecialFees = matchedClient.pricing?.special_services_fees && matchedClient.pricing.special_services_fees.length > 0 
+        ? matchedClient.pricing.special_services_fees 
+        : defaultSpecials
+
+      if (data.selectedSpecialServices && data.selectedSpecialServices.length > 0) {
+        data.selectedSpecialServices.forEach(code => {
+          const feeConfig = clientSpecialFees.find((f: any) => f.special_service_code === code && f.is_enabled)
+          if (feeConfig) {
+            let feeAmt = 0
+            if (feeConfig.fee_type === "fixed") {
+              feeAmt = feeConfig.fixed_value || 0
+            } else if (feeConfig.fee_type === "percentage") {
+              if ((code === "cod" || code === "correos_cod") && data.codValue) {
+                 // COD percentage is calculated on the COD value!
+                 feeAmt = data.codValue * ((feeConfig.percentage_value || 0) / 100)
+              } else {
+                 // Apply percentage on base sell price (before special fees, includes fuel)
+                 feeAmt = computedSellPrice * ((feeConfig.percentage_value || 0) / 100)
+              }
+              
+              if (feeConfig.min_value && feeAmt < feeConfig.min_value) {
+                feeAmt = feeConfig.min_value
+              }
+            }
+            specialFeesTotal += feeAmt
+            specialFeesDetails.push({
+              name: feeConfig.special_service_name,
+              amount: feeAmt
             })
-            sendEmail({
-              to: clientData.email,
-              subject: "Linke | Aviso de Saldo Baixo",
-              html,
-            }).catch(err => console.error("Error sending low balance email:", err))
-          } catch (e) {
-            console.error("Failed to dispatch low balance email:", e)
+          }
+        })
+      }
+      
+      // Add Special Services to final DB price
+      computedSellPrice += specialFeesTotal
+
+      // Define data to pass into DB. Save JSON string for PDF rendering.
+      computedSpecialAmount = specialFeesTotal
+      computedSpecialDesc = specialFeesDetails.length > 0 ? JSON.stringify(specialFeesDetails) : null
+
+    } catch (pricingErr: any) {
+      console.warn("Client pricing engine fallback:", pricingErr?.message)
+    }
+
+    const shipmentData = {
+      id: shipmentId,
+      tenant_id: (await getTenantId()),
+      client_id: validatedClientId,
+      tracking_number: trackingNumber,
+      service_type: data.serviceName || "CTT Expresso 24H",
+      status: "pendente",
+      sender_name: ctx.role === "client" ? matchedClient.short_name || "Empresa Cliente" : (data.clientName || "Empresa Cliente"),
+      sender_address: `${data.senderAddress || "Sede Comercial"}${data.senderCity ? `, ${data.senderCity}` : ""}`,
+      sender_zip3: senderZip3,
+      sender_zip4: senderZip4,
+      recipient_name: data.recipientName,
+      recipient_address: `${data.recipientAddress}${data.recipientCity ? `, ${data.recipientCity}` : ""}`,
+      recipient_zip3: recipientZip3,
+      recipient_zip4: recipientZip4,
+      base_price: computedBasePrice,
+      fuel_tax_amount: computedFuelAmount,
+      buy_price: computedBuyPrice,
+      sell_price: computedSellPrice,
+      reference: trackingNumber,
+      special_fees_amount: computedSpecialAmount || 0,
+      special_fees_description: computedSpecialDesc,
+      cod_value: data.codValue || 0,
+      length_cm: data.lengthCm || 0,
+      width_cm: data.widthCm || 0,
+      height_cm: data.heightCm || 0,
+      created_at: now,
+      updated_at: now,
+    }
+
+    // ─── STEP 1: Call carrier API — only write to DB if carrier accepts ──────────
+    let realGuia = trackingNumber
+    let labelBase64: string | null = null
+
+    if (data.serviceName?.toLowerCase().includes("correos")) {
+      // ── CORREOS EXPRESS ──────────────────────────────────────────────────────────
+      try {
+        const cleanPostal = (zip?: string) => (zip || "").trim()
+        const creds = await resolveCorreosCredentials(data.webserviceConnectionId)
+        const correosService = new CorreosShipmentService()
+        const result = await correosService.createShipment(creds, {
+          ref: trackingNumber,
+          fecha: new Date().toLocaleDateString("pt-PT").replace(/\//g, ""),
+          remitente: {
+            nombre: shipmentData.sender_name,
+            direccion: data.senderAddress || "Sede Comercial",
+            poblacion: data.senderCity || "Portugal",
+            cpNacional: "",
+            cpInternacional: cleanPostal(data.senderPostal || "4000-001"),
+            paisISO: "PT",
+            contacto: shipmentData.sender_name,
+            telefono: data.senderPhone || "910000000"
+          },
+          destinatario: {
+            nombre: data.recipientName,
+            direccion: data.recipientAddress,
+            poblacion: data.recipientCity || "Portugal",
+            cpNacional: "",
+            cpInternacional: cleanPostal(data.recipientPostal || "1000-001"),
+            paisISO: "PT",
+            contacto: data.recipientName,
+            telefono: data.recipientPhone || "920000000",
+            email: data.recipientEmail
+          },
+          bultos: data.volumesCount || 1,
+          kilos: data.weightKg || 1,
+          producto: data.subProductId || "63",
+          portes: "P",
+          reembolso: data.selectedSpecialServices?.includes("correos_cod") && data.codValue ? data.codValue.toString() : "",
+          entrSabado: data.selectedSpecialServices?.includes("correos_saturday") ? "S" : undefined,
+          seguro: data.selectedSpecialServices?.includes("correos_insurance") ? "1" : undefined,
+          observaciones: [
+            data.selectedSpecialServices?.includes("correos_fragil") ? "CUIDADO: FRÁGIL" : undefined,
+            data.observations
+          ].filter(Boolean).join(" | ").substring(0, 40) || undefined,
+          tipoEtiqueta: "1"
+        })
+
+        // codigoRetorno === 0 = success; 404 with datosResultado = created but no label (sandbox warning)
+        console.log("CORREOS PRODUCTION RESPONSE:", JSON.stringify(result, null, 2))
+        if (result.codigoRetorno === 0 || (result.codigoRetorno === 404 && result.datosResultado)) {
+          realGuia = result.datosResultado || trackingNumber
+          let rawLabel = ""
+          if (result.etiqueta && result.etiqueta.length > 0) {
+            const firstEtiqueta = result.etiqueta[0]
+            rawLabel = firstEtiqueta.etiqueta1 || Object.values(firstEtiqueta)[0] || ""
+          }
+          if (!rawLabel && result.listaInformacionAdicional && result.listaInformacionAdicional.length > 0) {
+            rawLabel = result.listaInformacionAdicional[0].etiquetaPDF || ""
+          }
+          // Fallback mock label in test environment if test endpoint returns 404
+          labelBase64 = rawLabel || (creds.environment === "test"
+            ? "JVBERi0xLjcKCjEgMCBvYmogICUgZW50cnkgcG9pbnQKPDwKICAvVHlwZSAvQ2F0YWxvZwogIC9QYWdlcyAyIDAgUgo+PgplbmRvYmoKCjIgMCBvYmoKPDwKICAvVHlwZSAvUGFnZXMKICAvTWVkaWFCb3ggWyAwIDAgNDAwIDIwMCBdCiAgL0NvdW50IDEKICAvS2lkcyBbIDMgMCBSIF0KPj4KZW5kb2JqCgozIDAgb2JqCjw8CiAgL1R5cGUgL1BhZ2UKICAvUGFyZW50IDIgMCBSCiAgL1Jlc291cmNlcyA8PAogICAgL0ZvbnQgPDwKICAgICAgL0YxIDQgMCBSCiAgICA+PgogID4+CiAgL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iagoKNCAwIG9iago8PAogIC9UeXBlIC9Gb250CiAgL1N1YnR5cGUgL1R5cGUxCiAgL0Jhc2VGb250IC9UaW1lcy1Sb21hbgo+PgplbmRvYmoKCjUgMCBvYmogICUgcGFnZSBjb250ZW50Cjw8CiAgL0xlbmd0aCA4MAo+PgpzdHJlYW0KQlQKNTAgMTAwIFRECi9GMSAyNCBUZgooRXRpcXVldGEgQ29ycmVvcyBUZXN0ZSkgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDEwIDAwMDAwIG4gCjAwMDAwMDAwNzkgMDAwMDAgbiAKMDAwMDAwMDE3MyAwMDAwMCBuIAowMDAwMDAwMzAwIDAwMDAwIG4gCjAwMDAwMDAzODggMDAwMDAgbiAKdHJhaWxlcgo8PAogIC9TaXplIDYKICAvUm9vdCAxIDAgUgo+PgpzdGFydHhyZWYKNTM2CiUlRU9GCg=="
+            : null)
+
+          if (labelBase64) {
+            labelBase64 = await applyLinkeLogoToCorreosLabel(labelBase64)
+          }
+        } else {
+          throw new Error(`Correos Express: ${result.mensajeRetorno || "Erro desconhecido"} (Código ${result.codigoRetorno})`)
+        }
+      } catch (e: any) {
+        throw new Error("Erro Correos Express: " + (e?.message || "Tente novamente."))
+      }
+
+    } else if (data.serviceName?.toLowerCase().includes("ctt") || data.serviceName?.includes("ERS") || data.serviceName?.includes("D+")) {
+      // ── CTT EXPRESSO ─────────────────────────────────────────────────────────────
+      try {
+        const cttCreds = await resolveCttCredentials(data.webserviceConnectionId)
+        const cttProvider = new CttProvider()
+        await cttProvider.initialize(cttCreds)
+
+        const obsLines: string[] = []
+        if (data.selectedSpecialServices?.includes("fragil")) obsLines.push("CUIDADO: FRÁGIL")
+        if (data.selectedSpecialServices?.includes("cod") && data.codValue) obsLines.push(`COBRANÇA: ${data.codValue.toFixed(2)}€`)
+        if (data.selectedSpecialServices?.includes("auth_return")) obsLines.push("LOGÍSTICA INVERSA")
+        if (data.observations) obsLines.push(data.observations)
+        const observations = obsLines.length > 0 ? obsLines.join(" | ").substring(0, 40) : undefined
+
+        const cttResult = await cttProvider.createShipment({
+          reference: trackingNumber,
+          sender: {
+            name: shipmentData.sender_name,
+            address: data.senderAddress || "Sede Comercial",
+            city: data.senderCity || "Portugal",
+            zip: data.senderPostal || "1000-001",
+            phone: data.senderPhone || "910000000",
+            country: "PT"
+          },
+          recipient: {
+            name: data.recipientName,
+            address: data.recipientAddress,
+            city: data.recipientCity || "Portugal",
+            zip: data.recipientPostal || "1000-001",
+            phone: data.recipientPhone || "920000000",
+            email: data.recipientEmail,
+            country: "PT"
+          },
+          weightKg: data.weightKg || 1,
+          volumes: data.volumesCount || 1,
+          subProduct: data.subProductId || "EMSF056.01",
+          codValue: data.selectedSpecialServices?.includes("cod") ? data.codValue : 0,
+          isReturn: data.isReturn,
+          observations,
+          autoClose: false
+        })
+
+        if (!cttResult.success) {
+          const raw = cttResult.error || ""
+          console.error("[CTT] Raw error:", raw)
+          // Show exact CTT error — prefix with [CTT] so it's clear but not hidden
+          throw new Error(raw || "Os CTT não devolveram uma resposta válida. Verifique o terminal do servidor.")
+        }
+
+        realGuia = cttResult.trackingNumber || trackingNumber
+        const rawZpl = cttResult.labelBase64 || ""
+        labelBase64 = rawZpl ? await convertZplToPdfBase64(rawZpl) : null
+      } catch (e: any) {
+        if (e.message?.includes("rejeitaram") || e.message?.includes("inválido") || e.message?.includes("suportado")) {
+          throw e
+        }
+        throw new Error("Erro de ligação aos CTT: " + (e?.message || "Tente novamente."))
+      }
+    }
+
+    // ─── STEP 2: CTT accepted — now write to DB ─────────────────────────────────
+    // Insert into shipments table (only valid table columns to prevent silent schema rejection)
+    try {
+      const shipmentRow = {
+        id: shipmentId,
+        tenant_id: shipmentData.tenant_id,
+        client_id: shipmentData.client_id,
+        tracking_number: trackingNumber,
+        carrier_tracking_number: realGuia,
+        carrier_code: data.serviceName?.toLowerCase().includes("correos") ? "correos" : "ctt",
+        service_type: shipmentData.service_type,
+        status: "pendente",
+        ops_substatus: null,
+        sender_name: shipmentData.sender_name,
+        sender_address: shipmentData.sender_address,
+        sender_zip3: shipmentData.sender_zip3,
+        sender_zip4: shipmentData.sender_zip4,
+        recipient_name: shipmentData.recipient_name,
+        recipient_address: shipmentData.recipient_address,
+        recipient_zip3: shipmentData.recipient_zip3,
+        recipient_zip4: shipmentData.recipient_zip4,
+        buy_price: shipmentData.buy_price,
+        sell_price: shipmentData.sell_price,
+        created_at: shipmentData.created_at,
+        updated_at: shipmentData.updated_at,
+      }
+
+      const { error } = await supabase
+        .from("shipments")
+        .insert(shipmentRow)
+
+      if (error) {
+        console.warn("DB shipments insert note:", error.message)
+      }
+      
+      // Dual-write to audit_log to persist full JSON including labelBase64
+      await supabase.from("audit_log").insert({
+        tenant_id: shipmentData.tenant_id,
+        action: "shipment_data",
+        details: {
+          ...shipmentData,
+          ctt_label_base64: labelBase64,
+          carrier_tracking_number: realGuia,
+          carrier_code: data.serviceName?.toLowerCase().includes("correos") ? "correos" : "ctt"
+        },
+        created_at: now
+      })
+    } catch (err: any) {
+      console.warn("Error inserting into DB:", err?.message)
+    }
+
+    // Insert package record
+    try {
+      await supabase.from("packages").insert({
+        tenant_id: (await getTenantId()),
+        shipment_id: shipmentId,
+        weight_g: Math.round((data.weightKg || 1) * 1000)
+      })
+    } catch {}
+
+    // ─── STEP 3: Deduct from client credit ──────────────────────────────────────
+    if (validatedClientId && computedSellPrice > 0) {
+      try {
+        const { data: clientData } = await supabase
+          .from("clientes")
+          .select("credit_limit, email")
+          .eq("id", validatedClientId)
+          .single()
+          
+        if (clientData && typeof clientData.credit_limit === "number") {
+          const newCredit = Math.max(0, clientData.credit_limit - computedSellPrice)
+          await supabase
+            .from("clientes")
+            .update({ credit_limit: newCredit })
+            .eq("id", validatedClientId)
+
+          if (clientData.credit_limit >= 15 && newCredit < 15 && clientData.email) {
+            try {
+              const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
+              const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
+              const html = compileTemplate(emailTemplates.low_balance, {
+                current_balance: newCredit.toFixed(2),
+                topup_url: "https://tms.linke.pt/app"
+              })
+              sendEmail({
+                to: clientData.email,
+                subject: "Linke | Aviso de Saldo Baixo",
+                html,
+              }).catch(err => console.error("Error sending low balance email:", err))
+            } catch (e) {
+              console.error("Failed to dispatch low balance email:", e)
+            }
           }
         }
+      } catch (e: any) {
+        console.warn("Failed to decrement client credit:", e.message)
       }
-    } catch (e: any) {
-      console.warn("Failed to decrement client credit:", e.message)
     }
-  }
 
-  try {
-    revalidatePath("/app")
-    revalidatePath("/app/criar-guia")
-    revalidatePath("/app/envios")
-    revalidatePath("/ops/envios")
-    revalidatePath("/ops")
-  } catch {}
+    try {
+      revalidatePath("/app")
+      revalidatePath("/app/criar-guia")
+      revalidatePath("/app/envios")
+      revalidatePath("/ops/envios")
+      revalidatePath("/ops")
+    } catch {}
 
-  return {
-    success: true,
-    guia: realGuia,
-    id: shipmentId,
-    labelBase64,
-    cttError: null
+    return {
+      success: true,
+      guia: realGuia,
+      id: shipmentId,
+      labelBase64,
+      cttError: null
+    }
+  } catch (err: any) {
+    console.error("emitClientGuiaAction error:", err)
+    return {
+      success: false,
+      error: err.message || "Erro interno ao criar envio.",
+    }
   }
 }
 
