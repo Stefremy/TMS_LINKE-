@@ -329,21 +329,11 @@ export function ActionMenu({
 
           <div className="h-px bg-slate-100 my-1" />
 
-          {/* 4. Ações CTT Expresso */}
+          {/* 4. Ações de Transportadora */}
           <div className="px-1.5 py-1 bg-red-50/40 rounded-lg mx-1 my-0.5">
-            <div className="px-2 py-0.5 text-[10px] font-black text-red-600 uppercase tracking-wider">Ações CTT Expresso</div>
+            <div className="px-2 py-0.5 text-[10px] font-black text-red-600 uppercase tracking-wider">Ações de Transportadora</div>
             
-            {shipment?.status === "pendente" && (
-              <button 
-                type="button"
-                onClick={handleEmitCtt}
-                disabled={isEmitting || !effectiveId}
-                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-red-100/60 rounded-md text-xs text-red-700 font-bold disabled:opacity-50 transition-colors cursor-pointer"
-              >
-                <Truck className={`w-3.5 h-3.5 text-red-600 ${isEmitting ? 'animate-pulse' : ''}`} />
-                <span>{isEmitting ? 'A Emitir...' : 'Emitir Envio CTT'}</span>
-              </button>
-            )}
+
 
             <button 
               type="button"
@@ -352,7 +342,7 @@ export function ActionMenu({
               className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-red-100/60 rounded-md text-xs text-red-700 font-semibold transition-colors cursor-pointer disabled:opacity-50"
             >
               <RotateCcw className={`w-3.5 h-3.5 text-red-600 ${isProcessing ? "animate-spin" : ""}`} />
-              <span>Sincronizar Pickagens CTT</span>
+              <span>Sincronizar Pickagens</span>
             </button>
           </div>
 
