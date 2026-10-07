@@ -201,7 +201,7 @@ export function FerramentasMenu() {
 
             <div className="h-px bg-slate-100 my-1" />
 
-            {/* CTT WEBSERVICES ACTIONS */}
+            {/* TRANSPORTADORAS WEBSERVICES ACTIONS */}
             <div className="px-2 py-1">
               <button 
                 onClick={handleSyncTracking}
@@ -220,14 +220,14 @@ export function FerramentasMenu() {
                 className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-red-50 hover:text-red-700 rounded text-[13px] text-slate-700 font-medium transition-colors"
               >
                 <Barcode className="w-4 h-4 text-red-600" />
-                Atribuir código CTT correios
+                Atribuir código de barras
               </button>
               <button 
                 onClick={handleCloseManifest}
                 className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-red-50 hover:text-red-700 rounded text-[13px] text-slate-700 font-medium transition-colors"
               >
                 <Check className="w-4 h-4 text-red-600" />
-                Certificados de Aceitação CTT
+                Certificados de Aceitação
               </button>
             </div>
 
@@ -235,7 +235,7 @@ export function FerramentasMenu() {
         )}
       </div>
 
-      {/* MODAL 1: Emissão de Envio CTT */}
+      {/* MODAL 1: Emissão de Envio */}
       {activeModal === "emit_ctt" && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95">
@@ -245,8 +245,8 @@ export function FerramentasMenu() {
                   <Barcode className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-800">Emissão de Envio CTT Expresso</h3>
-                  <p className="text-xs text-slate-500">Comunicação SOAP SGEE V1.8 (CompleteShipment)</p>
+                  <h3 className="text-base font-bold text-slate-800">Emissão de Envio na Transportadora</h3>
+                  <p className="text-xs text-slate-500">Comunicação de Novo Envio</p>
                 </div>
               </div>
               <button onClick={() => setActiveModal("none")} className="p-1 text-slate-400 hover:text-slate-600 rounded">
@@ -258,8 +258,8 @@ export function FerramentasMenu() {
               {loading ? (
                 <div className="py-8 flex flex-col items-center justify-center gap-3">
                   <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
-                  <div className="text-sm font-semibold text-slate-700">A comunicar com Web Service CTT...</div>
-                  <div className="text-xs text-slate-400">A validar código postal e a gerar código de barras oficial</div>
+                  <div className="text-sm font-semibold text-slate-700">A comunicar com Web Service...</div>
+                  <div className="text-xs text-slate-400">A validar dados e a gerar código de barras oficial</div>
                 </div>
               ) : modalResult?.success ? (
                 <div className="space-y-4">
@@ -267,13 +267,13 @@ export function FerramentasMenu() {
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-sm font-bold text-emerald-800">Envio Emitido com Sucesso!</h4>
-                      <p className="text-xs text-emerald-700 mt-1">O código de barras CTT foi atribuído e registado no sistema.</p>
+                      <p className="text-xs text-emerald-700 mt-1">O código de barras foi atribuído e registado no sistema.</p>
                     </div>
                   </div>
 
                   <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-2">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-500">Tracking CTT (FirstObject):</span>
+                      <span className="text-slate-500">Tracking (FirstObject):</span>
                       <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
                         {modalResult.trackingNumber}
                       </span>
@@ -298,7 +298,7 @@ export function FerramentasMenu() {
                     className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded text-sm shadow transition-colors flex items-center justify-center gap-2"
                   >
                     <Download className="w-4 h-4" />
-                    Descarregar Etiqueta Oficial CTT (PDF)
+                    Descarregar Etiqueta Oficial (PDF)
                   </button>
                 </div>
               ) : (
@@ -324,7 +324,7 @@ export function FerramentasMenu() {
         </div>
       )}
 
-      {/* MODAL 2: Certificados de Aceitação CTT (Manifesto) */}
+      {/* MODAL 2: Certificados de Aceitação (Manifesto) */}
       {activeModal === "close_cert" && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95">
@@ -334,7 +334,7 @@ export function FerramentasMenu() {
                   <Check className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-800">Fecho de Expedição & Certificado CTT</h3>
+                  <h3 className="text-base font-bold text-slate-800">Fecho de Expedição & Certificado</h3>
                   <p className="text-xs text-slate-500">Emissão do Certificado de Aceitação oficial</p>
                 </div>
               </div>
@@ -359,7 +359,7 @@ export function FerramentasMenu() {
                         Manifesto: <strong>{modalResult?.deliveryNoteId || "N/A"}</strong> ({modalResult?.count || 0} envio(s) fechado(s)).
                       </p>
                       <p className="text-xs text-emerald-600 mt-0.5">
-                        O Certificado de Aceitação está pronto para assinatura pelo motorista CTT na recolha.
+                        O Certificado de Aceitação está pronto para assinatura pelo motorista da Transportadora na recolha.
                       </p>
                     </div>
                   </div>
@@ -369,7 +369,7 @@ export function FerramentasMenu() {
                       if (modalResult?.manifestPdfBase64) {
                         const link = document.createElement("a")
                         link.href = `data:application/pdf;base64,${modalResult.manifestPdfBase64}`
-                        link.download = `Guia_Transporte_CTT_${modalResult.deliveryNoteId || "fecho"}.pdf`
+                        link.download = `Guia_Transporte_Manifesto_${modalResult.deliveryNoteId || "fecho"}.pdf`
                         document.body.appendChild(link)
                         link.click()
                         document.body.removeChild(link)
@@ -400,8 +400,8 @@ export function FerramentasMenu() {
                   <RefreshCw className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-800">Sincronização de Estados CTT</h3>
-                  <p className="text-xs text-slate-500">Mapeamento de 23 eventos oficiais e razões de entrega</p>
+                  <h3 className="text-base font-bold text-slate-800">Sincronização de Estados</h3>
+                  <p className="text-xs text-slate-500">Mapeamento de eventos oficiais e razões de entrega</p>
                 </div>
               </div>
               <button onClick={() => setActiveModal("none")} className="p-1 text-slate-400 hover:text-slate-600 rounded">
@@ -413,7 +413,7 @@ export function FerramentasMenu() {
               {loading ? (
                 <div className="py-8 flex flex-col items-center justify-center gap-3">
                   <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
-                  <div className="text-sm font-semibold text-slate-700">A consultar rede CTT Track & Trace...</div>
+                  <div className="text-sm font-semibold text-slate-700">A consultar rede Track & Trace...</div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -421,7 +421,7 @@ export function FerramentasMenu() {
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-sm font-bold text-emerald-800">Estados Atualizados!</h4>
-                      <p className="text-xs text-emerald-700 mt-1">Todos os envios foram sincronizados com a rede CTT.</p>
+                      <p className="text-xs text-emerald-700 mt-1">Todos os envios foram sincronizados com a rede de rastreio.</p>
                     </div>
                   </div>
 

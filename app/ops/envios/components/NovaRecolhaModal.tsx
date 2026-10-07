@@ -81,8 +81,8 @@ export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => voi
               <Package className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-800">Nova Recolha CTT</h3>
-              <p className="text-xs text-slate-500">Agendar pedido de recolha (RecolhasWS)</p>
+              <h3 className="text-base font-bold text-slate-800">Nova Recolha na Transportadora</h3>
+              <p className="text-xs text-slate-500">Agendar pedido de recolha</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded">
@@ -94,7 +94,7 @@ export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => voi
           {loading ? (
             <div className="py-8 flex flex-col items-center justify-center gap-3">
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-              <div className="text-sm font-semibold text-slate-700">A comunicar com Web Service CTT...</div>
+              <div className="text-sm font-semibold text-slate-700">A comunicar com Web Service...</div>
             </div>
           ) : result?.Success ? (
             <div className="space-y-4">
@@ -102,7 +102,7 @@ export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => voi
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-sm font-bold text-emerald-800">Recolha Agendada com Sucesso!</h4>
-                  <p className="text-xs text-emerald-700 mt-1">O pedido de recolha foi registado nos CTT.</p>
+                  <p className="text-xs text-emerald-700 mt-1">O pedido de recolha foi registado na transportadora.</p>
                 </div>
               </div>
 
@@ -124,7 +124,7 @@ export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => voi
             <div className="space-y-4">
               {result && !result.Success && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-                  {result.message || "Falha ao agendar recolha CTT"}
+                  {result.message || "Falha ao agendar recolha"}
                 </div>
               )}
               
@@ -249,7 +249,7 @@ export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => voi
               <div className="flex justify-end gap-2 mt-6">
                 <button onClick={onClose} className="px-4 py-2 rounded text-sm text-slate-600 hover:bg-slate-100 font-semibold">Cancelar</button>
                 <button onClick={handleSchedule} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-semibold shadow-sm transition-colors">
-                  Agendar nos CTT
+                  Agendar Recolha
                 </button>
               </div>
             </div>

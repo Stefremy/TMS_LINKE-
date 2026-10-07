@@ -35,7 +35,7 @@ export function ManifestModal({
     if (!manifestPdfBase64) return
     const link = document.createElement("a")
     link.href = `data:application/pdf;base64,${manifestPdfBase64}`
-    link.download = `Guia_Transporte_CTT_${deliveryNoteId}.pdf`
+    link.download = `Manifesto_Transporte_${deliveryNoteId}.pdf`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -79,7 +79,7 @@ export function ManifestModal({
           {/* Summary Box */}
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Nº Manifesto CTT:</span>
+              <span className="text-xs font-semibold text-slate-500">Nº Manifesto:</span>
               <span className="font-mono font-bold text-sm text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
                 {deliveryNoteId}
               </span>
@@ -95,7 +95,7 @@ export function ManifestModal({
               <span className="text-xs font-semibold text-slate-500">Transportadora:</span>
               <span className="font-bold text-xs text-red-600 flex items-center gap-1">
                 <Truck className="w-3.5 h-3.5" />
-                CTT Expresso
+                Várias
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -110,7 +110,7 @@ export function ManifestModal({
           <div className="p-3 bg-amber-50 border border-amber-200/70 rounded-xl flex items-start gap-2.5 text-xs text-amber-900">
             <FileText className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
             <p>
-              Imprima este documento ou descarregue em PDF para assinatura conjunta no ato de recolha pelo motorista da <strong>CTT Expresso</strong>. Os envios passaram automaticamente ao estado <strong>Em Trânsito</strong>.
+              Imprima este documento ou descarregue em PDF para assinatura conjunta no ato de recolha pelo motorista da <strong>Transportadora</strong>. Os envios passaram automaticamente ao estado <strong>Em Trânsito</strong>.
             </p>
           </div>
 
