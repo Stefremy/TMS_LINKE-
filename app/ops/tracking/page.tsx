@@ -80,9 +80,9 @@ export default async function OpsTrackingPage() {
       const progressPercent = pickagens.length > 0 ? Math.round((completedScans / pickagens.length) * 100) : 0
 
       const rawCarrier = s.provider === "correos_express" ? "Correos Express" : (s.service_type || "Linke Express")
-      const finalCarrier = rawCarrier.toLowerCase().includes("ctt") ? "Correos Express" : rawCarrier
+      const finalCarrier = rawCarrier.toLowerCase().includes("ctt") ? "CTT Expresso" : rawCarrier
       const finalServiceType = (s.service_type || "Distribuição Rodoviária").toLowerCase().includes("ctt") 
-        ? "Correos Express 24h" 
+        ? "CTT Expresso 24h" 
         : (s.service_type || "Distribuição Rodoviária")
 
       return {

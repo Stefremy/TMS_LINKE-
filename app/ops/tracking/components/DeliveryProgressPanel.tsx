@@ -93,7 +93,7 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
             <ScanLine className="w-3.5 h-3.5 text-emerald-600" />
             Pickagens & Checkpoints
           </h4>
-          <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">
+          <span className="text-[10px] font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] border border-[var(--border-strong)] shadow-2xs px-3 py-1 rounded-full">
             Itinerário Mapeado
           </span>
         </div>

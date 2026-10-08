@@ -320,12 +320,12 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
             <h2 className="font-mono text-lg font-bold text-[var(--text-primary)] tracking-tight">
               {shipment.displayId}
             </h2>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-[var(--surface-bg)] text-emerald-600 border border-[var(--border-strong)] shadow-2xs">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               {shipment.statusLabel}
             </span>
-            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/60">
-              <ScanLine className="w-3 h-3 text-emerald-600" />
+            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] px-3 py-1 rounded-full border border-[var(--border-strong)] shadow-2xs">
+              <ScanLine className="w-3.5 h-3.5 text-emerald-600" />
               {shipment.metrics.completedScansCount} de {shipment.metrics.totalScansCount} Pickagens Registadas
             </span>
           </div>
@@ -356,15 +356,15 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
           <button
             type="button"
             onClick={() => setMapStyle(mapStyle === "streets" ? "satellite" : "streets")}
-            className="bg-white/95 dark:bg-slate-900/95 hover:bg-white dark:hover:bg-slate-800 backdrop-blur-md border border-[var(--border-strong)] rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[var(--text-primary)] flex items-center gap-1.5 shadow-md transition-colors"
+            className="bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-xs font-bold text-[var(--text-primary)] flex items-center gap-2 shadow-md transition-colors"
           >
             <Layers className="w-3.5 h-3.5 text-emerald-600" />
             <span>{mapStyle === "streets" ? "Vista Satélite" : "Vista Ruas"}</span>
           </button>
 
-          <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-[var(--border-strong)] text-[11px] text-[var(--text-secondary)] shadow-md">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--surface-bg)] border border-[var(--border-strong)] text-[11px] text-[var(--text-secondary)] shadow-md">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Última Pickagem: <strong className="text-[var(--text-primary)]">{shipment.metrics.lastPickagemLocation}</strong></span>
+            <span>Última Pickagem: <strong className="text-[var(--text-primary)] font-bold">{shipment.metrics.lastPickagemLocation}</strong></span>
           </div>
         </div>
 
@@ -373,7 +373,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
           <button
             type="button"
             onClick={handleFitAllRoute}
-            className="w-8 h-8 rounded-lg bg-white/95 dark:bg-slate-900/95 hover:bg-emerald-50 dark:hover:bg-slate-800 text-emerald-600 border border-[var(--border-strong)] flex items-center justify-center shadow-md transition-colors"
+            className="w-8 h-8 rounded-lg bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-emerald-600 border border-[var(--border-strong)] flex items-center justify-center shadow-md transition-colors"
             title="Ajustar rota completa no mapa"
           >
             <Navigation className="w-4 h-4" />
@@ -381,7 +381,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
           <button
             type="button"
             onClick={handleCenterOnLastPickagem}
-            className="w-8 h-8 rounded-lg bg-white/95 dark:bg-slate-900/95 hover:bg-emerald-50 dark:hover:bg-slate-800 text-emerald-600 border border-[var(--border-strong)] flex items-center justify-center shadow-md transition-colors"
+            className="w-8 h-8 rounded-lg bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-emerald-600 border border-[var(--border-strong)] flex items-center justify-center shadow-md transition-colors"
             title="Centrar na última pickagem"
           >
             <Crosshair className="w-4 h-4" />

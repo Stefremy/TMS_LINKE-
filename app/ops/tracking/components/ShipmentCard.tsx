@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Truck
 } from "lucide-react"
+import Image from "next/image"
 
 interface ShipmentCardProps {
   shipment: TrackingShipment
@@ -24,36 +25,45 @@ interface ShipmentCardProps {
 export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
+  const getCarrierLogo = (carrier: string) => {
+    const c = carrier.toLowerCase()
+    if (c.includes("ctt")) return "/logo_transportadoras/ctt_express_logo.svg"
+    if (c.includes("correos")) return "/logo_transportadoras/correos_logo.jpeg"
+    if (c.includes("dpd")) return "/logo_transportadoras/dpd_logo.svg"
+    return null
+  }
+  const carrierLogo = getCarrierLogo(shipment.carrier)
+
   // Status pill styling
   const getStatusBadge = () => {
     switch (shipment.status) {
       case "active":
         return {
-          bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
+          bg: "bg-[var(--surface-bg)] text-emerald-600 border-[var(--border-strong)] font-bold shadow-2xs",
           dot: "bg-emerald-500 animate-pulse",
           label: "Em Trânsito"
         }
       case "arriving":
         return {
-          bg: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800",
+          bg: "bg-[var(--surface-bg)] text-indigo-600 border-[var(--border-strong)] font-bold shadow-2xs",
           dot: "bg-indigo-500",
           label: "A Chegar"
         }
       case "departed":
         return {
-          bg: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800",
+          bg: "bg-[var(--surface-bg)] text-sky-600 border-[var(--border-strong)] font-bold shadow-2xs",
           dot: "bg-sky-500",
           label: "Partida Recente"
         }
       case "delivered":
         return {
-          bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
+          bg: "bg-[var(--surface-bg)] text-emerald-600 border-[var(--border-strong)] font-bold shadow-2xs",
           dot: "bg-emerald-500",
           label: "Entregue"
         }
       default:
         return {
-          bg: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
+          bg: "bg-[var(--surface-bg)] text-emerald-600 border-[var(--border-strong)] font-bold shadow-2xs",
           dot: "bg-emerald-500",
           label: shipment.statusLabel || "Em Rota"
         }
@@ -64,7 +74,8 @@ export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardPro
 
   return (
     <div 
-      className={`rounded-xl border transition-all duration-200 bg-[var(--surface-bg)] shadow-xs ${
+      onClick={() => onSelect(shipment)}
+      className={`cursor-pointer rounded-xl border transition-all duration-200 bg-[var(--surface-bg)] shadow-xs ${
         isSelected 
           ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-md" 
           : "border-[var(--border-subtle)] hover:border-emerald-300 dark:hover:border-emerald-800"
@@ -120,34 +131,27 @@ export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardPro
             <Clock className="w-3.5 h-3.5 text-emerald-500" />
             <span>ETA: <strong className="text-[var(--text-primary)]">{shipment.destination.eta}</strong></span>
           </span>
-          <span className="text-[10px] font-medium text-[var(--text-tertiary)] truncate max-w-[130px]">
-            {shipment.carrier}
-          </span>
-        </div>
-
-        {/* Action Buttons Row */}
-        <div className="flex items-center justify-between pt-1 gap-2">
-          <button
-            type="button"
-            onClick={() => onSelect(shipment)}
-            className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              isSelected
-                ? "bg-emerald-600 text-white shadow-xs"
-                : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300 dark:hover:bg-emerald-900"
-            }`}
-          >
-            <Navigation className="w-3.5 h-3.5" />
-            <span>{isSelected ? "A Seguir" : "Seguir"}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] transition-colors border border-[var(--border-subtle)]"
-          >
-            <span>{isExpanded ? "Ver menos" : "Ver mais"}</span>
-            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
+          <div className="flex items-center gap-2">
+            {carrierLogo ? (
+              <img src={carrierLogo} alt={shipment.carrier} className="h-4 object-contain max-w-[80px]" />
+            ) : (
+              <span className="text-[10px] font-medium text-[var(--text-tertiary)] truncate max-w-[100px]">
+                {shipment.carrier}
+              </span>
+            )}
+            
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsExpanded(!isExpanded)
+              }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] transition-colors border border-[var(--border-subtle)]"
+            >
+              <span>{isExpanded ? "Menos" : "Mais"}</span>
+              {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -182,9 +186,9 @@ export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardPro
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/30 px-2 py-1 rounded">
+          <div className="flex items-center justify-between text-[10px] font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] px-2 py-1.5 rounded-lg shadow-2xs mt-2">
             <span>{shipment.serviceType}</span>
-            <span>Seguro: {shipment.documentation.insuredValueEur.toLocaleString()} €</span>
+            <span className="text-[var(--text-secondary)] font-semibold">Seguro: {shipment.documentation.insuredValueEur.toLocaleString()} €</span>
           </div>
         </div>
       )}

@@ -90,20 +90,20 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
   return (
     <div className="flex flex-col gap-4 min-h-[calc(100vh-120px)]">
       {/* Top Banner Notice */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-900/60 rounded-xl text-xs text-emerald-900 dark:text-emerald-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-xl text-xs shadow-xs">
         <div className="flex items-center gap-2">
           <span className="flex h-2 w-2 relative">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
           </span>
-          <span className="font-bold">Posto de Controlo de Rastreio por Pickagens & Checkpoints</span>
-          <span className="text-emerald-500 dark:text-emerald-400">•</span>
-          <span className="text-[11px] text-emerald-700 dark:text-emerald-300">
+          <span className="font-bold text-[var(--text-primary)]">Posto de Controlo de Rastreio por Pickagens & Checkpoints</span>
+          <span className="text-[var(--text-tertiary)]">•</span>
+          <span className="text-[11px] font-medium text-[var(--text-secondary)]">
             Itinerário geolocalizado com mapa real OpenStreetMap / CartoDB com base nas leituras dos hubs da transportadora.
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-300/60">
+        <div className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] px-3 py-1 rounded-full border border-[var(--border-strong)] shadow-2xs">
           <Info className="w-3.5 h-3.5 text-emerald-600" />
           <span>Mapeamento por Pickagens Ativo</span>
         </div>
