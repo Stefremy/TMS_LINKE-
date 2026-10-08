@@ -237,7 +237,7 @@ export function TeamCalendar() {
       setEvents([...events, newEvent])
       setIsModalOpen(false)
     } else {
-      alert("Erro ao guardar evento.")
+      alert("Erro ao guardar evento: " + (result.error || "Erro desconhecido"))
     }
     setIsSubmitting(false)
   }
