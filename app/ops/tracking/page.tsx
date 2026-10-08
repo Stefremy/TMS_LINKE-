@@ -98,7 +98,7 @@ export default async function OpsTrackingPage(props: {
           let candidateCity = parenMatch && parenMatch[1] ? parenMatch[1].trim() : rawLocation
           candidateCity = candidateCity.replace(/^(c\.?\s*o\.?|co|ctc|cd|cdp|hub|centro operacional|centro de tratamento|plataforma|cais|delegação|delegacion|delegación|correos express|posto)\s+/i, "").trim()
 
-          const isEntregueEvent = e.description?.toUpperCase().includes("ENTREGUE") || e.event_code === "EMI"
+          const isEntregueEvent = e.description?.toUpperCase().includes("ENTREGUE") || e.description?.toUpperCase().includes("ENTREGA CONSEGUIDA") || e.event_code === "EMI"
 
           let evtCoord
           if (isEntregueEvent) {
@@ -144,7 +144,20 @@ export default async function OpsTrackingPage(props: {
         }
 
         const completedScans = pickagens.filter(p => p.status === "completed" || p.status === "current").length
-        const progressPercent = pickagens.length > 0 ? Math.round((completedScans / pickagens.length) * 100) : 0
+        
+        const isEntregue = s.status === "entregue" || s.status === "devolvido" || s.status === "entregue_pudo"
+        let progressPercent = 0
+        if (isEntregue) {
+          progressPercent = 100
+        } else if (isArriving) {
+          progressPercent = 85
+        } else if (s.status === "em_transito" || s.status === "em transito") {
+          progressPercent = 50
+        } else if (pickagens.length > 0) {
+          progressPercent = 25
+        }
+        
+        const totalEstimatedScans = isEntregue ? completedScans : completedScans + 2
 
         const rawCarrier = s.provider === "correos_express" ? "Correos Express" : (s.service_type || "Linke Express")
         const finalCarrier = rawCarrier.toLowerCase().includes("ctt") ? "CTT Expresso" : rawCarrier
@@ -152,7 +165,7 @@ export default async function OpsTrackingPage(props: {
           ? "CTT Expresso 24h"
           : (s.service_type || "Distribuição Rodoviária")
 
-        const isDelivered = progressPercent === 100
+        const isDelivered = isEntregue
         let dynamicEta = "Hoje, até 19:00"
         let dynamicRemaining = "A calcular..."
 
@@ -221,7 +234,7 @@ export default async function OpsTrackingPage(props: {
             lastPickagemStatus: "Última Leitura Validada",
             progressPercent,
             completedScansCount: completedScans,
-            totalScansCount: pickagens.length
+            totalScansCount: totalEstimatedScans
           },
           pickagens,
           documentation: {

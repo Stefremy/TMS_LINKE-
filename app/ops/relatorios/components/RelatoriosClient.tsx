@@ -111,17 +111,17 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
   return (
     <div className="space-y-6 pb-20">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[var(--border-subtle)] pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
               Relatórios & Inteligência Operacional
             </h1>
             <span className="px-2 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full">
               Live BI
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-[var(--text-secondary)] mt-1">
             Métricas de desempenho das transportadoras, margens financeiras, destinos e monitorização de clientes.
           </p>
         </div>
@@ -131,7 +131,7 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
           <button
             onClick={handleRefresh}
             disabled={isLoading}
-            className="p-2 text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-xs"
+            className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-muted)] transition-colors shadow-xs"
             title="Atualizar Dados"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-blue-600" : ""}`} />
@@ -139,10 +139,10 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
 
           <button
             onClick={handleExportCSV}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[var(--text-primary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-muted)] transition-colors shadow-xs"
             title="Exportar como folha de cálculo"
           >
-            <Download className="w-4 h-4 text-slate-500" />
+            <Download className="w-4 h-4 text-[var(--text-secondary)]" />
             <span>Exportar CSV</span>
           </button>
 
@@ -159,7 +159,7 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
 
       {/* Period Filter Pills */}
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl border border-slate-200/80 text-xs">
+        <div className="flex items-center gap-1.5 bg-[var(--surface-muted)]/80 p-1 rounded-xl border border-[var(--border-subtle)]/80 text-xs">
           {[
             { id: "hoje", label: "Hoje" },
             { id: "esta_semana", label: "Esta Semana" },
@@ -173,8 +173,8 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
                 onClick={() => handlePeriodChange(item.id)}
                 className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
                   active
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                    ? "bg-[var(--surface-bg)] text-[var(--text-primary)] shadow-xs"
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-slate-200/50"
                 }`}
               >
                 {item.label}
@@ -186,24 +186,26 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
         {/* Tab Filters */}
         <div className="flex items-center gap-1 overflow-x-auto text-xs">
           {[
-            { id: "todos", label: "Todos os 5 Módulos" },
-            { id: "sla", label: "📦 1. Raio-X & SLA" },
-            { id: "margem", label: "💰 2. Margem Real" },
-            { id: "destinos", label: "🗺️ 3. Destinos" },
-            { id: "incidencias", label: "⚠️ 4. Incidências" },
-            { id: "churn", label: "🏆 5. Clientes" },
+            { id: "todos", label: "Visão Geral", icon: Layers },
+            { id: "sla", label: "Raio-X & SLA", icon: Package },
+            { id: "margem", label: "Margem Real", icon: DollarSign },
+            { id: "destinos", label: "Destinos", icon: MapPin },
+            { id: "incidencias", label: "Incidências", icon: AlertTriangle },
+            { id: "churn", label: "Clientes", icon: PieChart },
           ].map((tab) => {
             const active = activeTab === tab.id
+            const Icon = tab.icon
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-2.5 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors ${
                   active
                     ? "bg-blue-50 text-blue-700 font-bold border border-blue-200"
-                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
                 }`}
               >
+                <Icon className={`w-3.5 h-3.5 ${active ? "text-blue-600" : "text-[var(--text-tertiary)]"}`} />
                 {tab.label}
               </button>
             )
@@ -214,15 +216,15 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
       {/* HIGHLIGHT EXECUTIVE CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* Total Envios */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-4 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Volume Total</span>
+            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Volume Total</span>
             <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
               <Package className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">{data.totalShipments}</div>
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{data.totalShipments}</div>
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-emerald-600 font-medium">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>{data.deliveredShipments} entregues</span>
@@ -231,39 +233,39 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
         </div>
 
         {/* SLA No Prazo */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-4 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">SLA no Prazo</span>
+            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">SLA no Prazo</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-emerald-600">{data.slaOnTimeRate}%</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500">
+            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[var(--text-secondary)]">
               <span>Trânsito médio: <strong>{data.avgTransitHours}h</strong></span>
             </div>
           </div>
         </div>
 
         {/* Faturação Bruta */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between">
+        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-4 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Faturação Bruta</span>
+            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Faturação Bruta</span>
             <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">{data.totalRevenue.toFixed(2)} €</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-500">
+            <div className="text-2xl font-bold text-[var(--text-primary)]">{data.totalRevenue.toFixed(2)} €</div>
+            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[var(--text-secondary)]">
               <span>Custo: {data.totalCost.toFixed(2)} €</span>
             </div>
           </div>
         </div>
 
         {/* Margem Líquida */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between bg-gradient-to-br from-white to-emerald-50/40">
+        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-4 shadow-xs flex flex-col justify-between bg-gradient-to-br from-white to-emerald-50/40">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Margem Bruta</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
@@ -283,17 +285,17 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
       {/* 1. RELATÓRIO 1: RAIO-X DE ENTREGAS & SLA DAS TRANSPORTADORAS */}
       {/* ========================================================================= */}
       {(activeTab === "todos" || activeTab === "sla") && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-4">
+        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--border-subtle)] pb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
                 <Truck className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">
+                <h2 className="text-base font-bold text-[var(--text-primary)]">
                   1. Raio-X de Entregas & SLA das Transportadoras
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[var(--text-secondary)]">
                   Comparativo de cumprimento de prazos, tempo de trânsito e sucesso à primeira tentativa.
                 </p>
               </div>
@@ -302,7 +304,7 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
             {/* SLA Badge */}
             <div className="flex items-center gap-2">
               <div className="text-right">
-                <span className="text-xs font-semibold text-slate-500 block">Saúde Operacional Global</span>
+                <span className="text-xs font-semibold text-[var(--text-secondary)] block">Saúde Operacional Global</span>
                 <span className="text-sm font-bold text-emerald-700">{data.slaOnTimeRate}% Entregas no Prazo</span>
               </div>
               <div className="w-10 h-10 rounded-full border-4 border-emerald-500 flex items-center justify-center text-xs font-bold text-emerald-700">
@@ -316,11 +318,11 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
             {data.carriersPerformance.map((carrier) => (
               <div
                 key={carrier.code}
-                className="bg-slate-50 border border-slate-200/90 rounded-xl p-4 flex flex-col justify-between hover:bg-slate-100/60 transition-colors"
+                className="bg-[var(--surface-muted)] border border-[var(--border-subtle)]/90 rounded-xl p-4 flex flex-col justify-between hover:bg-[var(--surface-muted)]/60 transition-colors"
               >
                 <div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-slate-900">{carrier.name}</span>
+                    <span className="text-sm font-bold text-[var(--text-primary)]">{carrier.name}</span>
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                         carrier.slaStatus === "Excelente"
@@ -335,15 +337,15 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
                   </div>
 
                   <div className="mt-3 flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-slate-900">{carrier.volume}</span>
-                    <span className="text-xs text-slate-500 font-medium">envios ({Math.round((carrier.volume / data.totalShipments) * 100)}%)</span>
+                    <span className="text-2xl font-bold text-[var(--text-primary)]">{carrier.volume}</span>
+                    <span className="text-xs text-[var(--text-secondary)] font-medium">envios ({Math.round((carrier.volume / data.totalShipments) * 100)}%)</span>
                   </div>
 
                   {/* SLA Progress Bar */}
                   <div className="mt-3 space-y-1">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500 font-medium">Cumprimento SLA</span>
-                      <span className="font-bold text-slate-800">{carrier.onTimeRate}%</span>
+                      <span className="text-[var(--text-secondary)] font-medium">Cumprimento SLA</span>
+                      <span className="font-bold text-[var(--text-primary)]">{carrier.onTimeRate}%</span>
                     </div>
                     <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
                       <div
@@ -354,9 +356,9 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500">
+                <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]/60 flex items-center justify-between text-xs text-[var(--text-secondary)]">
                   <span>Trânsito médio</span>
-                  <span className="font-semibold text-slate-700">{carrier.avgHours} horas</span>
+                  <span className="font-semibold text-[var(--text-primary)]">{carrier.avgHours} horas</span>
                 </div>
               </div>
             ))}
@@ -384,17 +386,17 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
       {/* 2. RELATÓRIO 2: MARGEM & RENTABILIDADE REAL */}
       {/* ========================================================================= */}
       {(activeTab === "todos" || activeTab === "margem") && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-4">
+        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--border-subtle)] pb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
                 <DollarSign className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">
+                <h2 className="text-base font-bold text-[var(--text-primary)]">
                   2. Margem & Rentabilidade Real
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[var(--text-secondary)]">
                   Diferença entre o preço faturado aos clientes e o custo pago às transportadoras.
                 </p>
               </div>
@@ -410,25 +412,25 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
           </div>
 
           {/* Gráfico Visual Comparativo / Mini Timeline */}
-          <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-5">
+          <div className="bg-[var(--surface-muted)] border border-[var(--border-subtle)]/80 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
                 Evolução Diária de Margem (€)
               </h3>
               <div className="flex items-center gap-4 text-xs">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm bg-blue-500" />
-                  <span className="text-slate-600">Volume de Envios</span>
+                  <span className="text-[var(--text-secondary)]">Volume de Envios</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm bg-emerald-500" />
-                  <span className="text-slate-600">Margem Bruta (€)</span>
+                  <span className="text-[var(--text-secondary)]">Margem Bruta (€)</span>
                 </div>
               </div>
             </div>
 
             {/* Simple Visual SVG Bar Chart */}
-            <div className="grid grid-cols-7 gap-2 pt-4 border-t border-slate-200 items-end h-32">
+            <div className="grid grid-cols-7 gap-2 pt-4 border-t border-[var(--border-subtle)] items-end h-32">
               {data.timeline.map((day) => {
                 const maxMargin = Math.max(...data.timeline.map(t => t.margem), 1)
                 const heightPercent = Math.max(15, Math.round((day.margem / maxMargin) * 100))
@@ -444,7 +446,7 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
                         style={{ height: `${heightPercent}%` }}
                       />
                     </div>
-                    <span className="text-xs font-semibold text-slate-500">{day.label}</span>
+                    <span className="text-xs font-semibold text-[var(--text-secondary)]">{day.label}</span>
                   </div>
                 )
               })}
@@ -470,17 +472,17 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
       {/* 3. RELATÓRIO 3: MAPA DE CALOR & DESTINOS ESTRELA */}
       {/* ========================================================================= */}
       {(activeTab === "todos" || activeTab === "destinos") && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-4">
+        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--border-subtle)] pb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
                 <MapPin className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">
+                <h2 className="text-base font-bold text-[var(--text-primary)]">
                   3. Mapa de Calor Europeu Interativo (Ibéria & Europa)
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[var(--text-secondary)]">
                   Densidade de expedições, rotas trans-europeias ativas e tarifas médias por país e região.
                 </p>
               </div>
@@ -504,17 +506,17 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
       {/* 4. RELATÓRIO 4: BARÓMETRO DE INCIDÊNCIAS & DEVOLUÇÕES */}
       {/* ========================================================================= */}
       {(activeTab === "todos" || activeTab === "incidencias") && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-4">
+        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--border-subtle)] pb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">
+                <h2 className="text-base font-bold text-[var(--text-primary)]">
                   4. Barómetro de Incidências & Devoluções
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[var(--text-secondary)]">
                   Diagnóstico das causas de retenção e tempo médio de desbloqueio pelo suporte.
                 </p>
               </div>
@@ -531,37 +533,37 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* KPI 1 */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-              <span className="text-xs font-semibold text-slate-500 uppercase block">Taxa de Incidência</span>
-              <div className="text-2xl font-bold text-slate-900 mt-1">3.1%</div>
+            <div className="p-4 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl">
+              <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase block">Taxa de Incidência</span>
+              <div className="text-2xl font-bold text-[var(--text-primary)] mt-1">3.1%</div>
               <span className="text-[11px] text-emerald-600 font-medium mt-1 block">Abaixo do benchmark de 4.5%</span>
             </div>
 
             {/* KPI 2 */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-              <span className="text-xs font-semibold text-slate-500 uppercase block">Tempo de Resolução</span>
-              <div className="text-2xl font-bold text-slate-900 mt-1">{data.avgResolutionHours}h</div>
-              <span className="text-[11px] text-slate-500 mt-1 block">Tempo médio até reencaminhar</span>
+            <div className="p-4 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl">
+              <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase block">Tempo de Resolução</span>
+              <div className="text-2xl font-bold text-[var(--text-primary)] mt-1">{data.avgResolutionHours}h</div>
+              <span className="text-[11px] text-[var(--text-secondary)] mt-1 block">Tempo médio até reencaminhar</span>
             </div>
 
             {/* KPI 3 */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-              <span className="text-xs font-semibold text-slate-500 uppercase block">Taxa de Devolução Definitiva</span>
+            <div className="p-4 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl">
+              <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase block">Taxa de Devolução Definitiva</span>
               <div className="text-2xl font-bold text-emerald-700 mt-1">0.8%</div>
-              <span className="text-[11px] text-slate-500 mt-1 block">Menos de 1 por cada 100 envios</span>
+              <span className="text-[11px] text-[var(--text-secondary)] mt-1 block">Menos de 1 por cada 100 envios</span>
             </div>
           </div>
 
           {/* Breakdown de Causas */}
           <div className="space-y-3 pt-2">
-            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
               Principais Motivos de Retenção
             </h3>
 
             {data.incidentBreakdown.map((item) => (
               <div
                 key={item.reason}
-                className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-center justify-between text-xs"
+                className="p-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)]/80 rounded-xl flex items-center justify-between text-xs"
               >
                 <div className="flex items-center gap-2.5">
                   <span
@@ -573,12 +575,12 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
                         : "bg-blue-500"
                     }`}
                   />
-                  <span className="font-semibold text-slate-800">{item.reason}</span>
+                  <span className="font-semibold text-[var(--text-primary)]">{item.reason}</span>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <span className="text-slate-500 font-medium">{item.count} casos</span>
-                  <span className="px-2 py-0.5 rounded-md font-bold text-[11px] bg-slate-200 text-slate-700">
+                  <span className="text-[var(--text-secondary)] font-medium">{item.count} casos</span>
+                  <span className="px-2 py-0.5 rounded-md font-bold text-[11px] bg-slate-200 text-[var(--text-primary)]">
                     {item.percentage}%
                   </span>
                 </div>
@@ -592,17 +594,17 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
       {/* 5. RELATÓRIO 5: DETECTOR DE CLIENTES (CRESCIMENTO VS CHURN) */}
       {/* ========================================================================= */}
       {(activeTab === "todos" || activeTab === "churn") && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-4">
+        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--border-subtle)] pb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-bold">
                 <Flame className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">
+                <h2 className="text-base font-bold text-[var(--text-primary)]">
                   5. Detector de Clientes (Crescimento 🔥 vs Risco de Churn ❄️)
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[var(--text-secondary)]">
                   Identifique clientes com forte subida no volume e clientes habituais que deixaram de expedir.
                 </p>
               </div>
@@ -621,7 +623,7 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-400 font-semibold uppercase text-[11px]">
+                <tr className="border-b border-[var(--border-subtle)] text-[var(--text-tertiary)] font-semibold uppercase text-[11px]">
                   <th className="py-3 px-3">Cliente</th>
                   <th className="py-3 px-3">Volume Período</th>
                   <th className="py-3 px-3">Variação</th>
@@ -636,15 +638,15 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
                   const isChurn = client.status === "risco_churn"
 
                   return (
-                    <tr key={client.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={client.id} className="hover:bg-[var(--surface-muted)]/80 transition-colors">
                       <td className="py-3.5 px-3">
-                        <div className="font-bold text-slate-900">{client.name}</div>
-                        <div className="font-mono text-[11px] text-slate-400">{client.code}</div>
+                        <div className="font-bold text-[var(--text-primary)]">{client.name}</div>
+                        <div className="font-mono text-[11px] text-[var(--text-tertiary)]">{client.code}</div>
                       </td>
 
                       <td className="py-3.5 px-3">
-                        <span className="font-bold text-slate-800">{client.recentVolume} envios</span>
-                        <span className="text-[11px] text-slate-400 block">ant: {client.previousVolume}</span>
+                        <span className="font-bold text-[var(--text-primary)]">{client.recentVolume} envios</span>
+                        <span className="text-[11px] text-[var(--text-tertiary)] block">ant: {client.previousVolume}</span>
                       </td>
 
                       <td className="py-3.5 px-3">
@@ -659,15 +661,15 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
                             {client.growthRate}%
                           </span>
                         ) : (
-                          <span className="text-slate-400 font-semibold">0%</span>
+                          <span className="text-[var(--text-tertiary)] font-semibold">0%</span>
                         )}
                       </td>
 
-                      <td className="py-3.5 px-3 text-slate-600 font-medium">
+                      <td className="py-3.5 px-3 text-[var(--text-secondary)] font-medium">
                         {client.lastShipmentDate}
                       </td>
 
-                      <td className="py-3.5 px-3 font-bold text-slate-900">
+                      <td className="py-3.5 px-3 font-bold text-[var(--text-primary)]">
                         {client.totalSpent.toFixed(2)} €
                       </td>
 
@@ -686,7 +688,7 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
                             </span>
                             <Link
                               href={`/ops/clientes?search=${encodeURIComponent(client.name)}`}
-                              className="px-2 py-1 text-[11px] font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors"
+                              className="px-2 py-1 text-[11px] font-semibold text-[var(--text-primary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] hover:bg-[var(--surface-muted)] rounded-lg transition-colors"
                               title="Contactar Cliente"
                             >
                               Contactar
@@ -694,7 +696,7 @@ export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
                           </div>
                         )}
                         {!isHot && !isChurn && (
-                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--surface-muted)] text-[var(--text-secondary)]">
                             Estável
                           </span>
                         )}

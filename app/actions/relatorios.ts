@@ -55,7 +55,8 @@ export interface RelatoriosData {
     transitHours: number
     carriers: string[]
     intensity: "muito_alto" | "alto" | "medio" | "baixo"
-    hubCoords: { x: number; y: number }
+    lat: number
+    lng: number
   }[]
 
   // Detalhe Regional de Portugal
@@ -123,256 +124,233 @@ export async function getRelatoriosDataAction(
   // 1. Filtragem básica por período
   const now = new Date()
   let filteredShipments = [...shipments]
+  let prevPeriodStart = new Date(0)
+  let prevPeriodEnd = new Date(now)
 
   if (periodFilter === "hoje") {
     const todayStr = now.toISOString().slice(0, 10)
     filteredShipments = shipments.filter(s => s.created_at?.slice(0, 10) === todayStr)
+    prevPeriodStart = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    prevPeriodEnd = new Date(now.getTime() - 24 * 60 * 60 * 1000)
   } else if (periodFilter === "esta_semana") {
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     filteredShipments = shipments.filter(s => new Date(s.created_at) >= weekAgo)
+    prevPeriodStart = new Date(weekAgo.getTime() - 7 * 24 * 60 * 60 * 1000)
+    prevPeriodEnd = weekAgo
   } else if (periodFilter === "este_mes") {
     const monthAgo = new Date(now.getFullYear(), now.getMonth(), 1)
     filteredShipments = shipments.filter(s => new Date(s.created_at) >= monthAgo)
+    prevPeriodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    prevPeriodEnd = monthAgo
   } else if (periodFilter === "ultimos_30") {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
     filteredShipments = shipments.filter(s => new Date(s.created_at) >= thirtyDaysAgo)
+    prevPeriodStart = new Date(thirtyDaysAgo.getTime() - 30 * 24 * 60 * 60 * 1000)
+    prevPeriodEnd = thirtyDaysAgo
   }
 
-  // Se a base de dados ainda tiver poucos envios reais, preenchemos estatísticas proporcionais
-  // para que o relatório fique completo e visualmente representativo
-  const baseVolume = Math.max(filteredShipments.length, 48)
+  const baseVolume = filteredShipments.length
   
-  const deliveredCount = filteredShipments.filter(s => s.status === "entregue").length || Math.round(baseVolume * 0.88)
-  const inTransitCount = filteredShipments.filter(s => s.status === "em_transito" || s.status === "recolhido").length || Math.round(baseVolume * 0.08)
-  const incidentCount = filteredShipments.filter(s => s.status === "incidencia" || s.status === "problema").length || Math.round(baseVolume * 0.03)
-  const returnedCount = filteredShipments.filter(s => s.status === "devolvido").length || Math.max(1, Math.round(baseVolume * 0.01))
+  const deliveredCount = filteredShipments.filter(s => s.status === "entregue" || s.status === "entregue_pudo").length
+  const inTransitCount = filteredShipments.filter(s => s.status === "em_transito" || s.status === "em_distribuicao" || s.status === "recolhido").length
+  const incidentCount = filteredShipments.filter(s => s.status === "incidencia" || s.status === "com_incidencia").length
+  const returnedCount = filteredShipments.filter(s => s.status === "devolvido").length
 
-  const slaOnTimeRate = 97.8
-  const firstAttemptRate = 92.4
-  const avgTransitHours = 21.6
+  const slaOnTimeRate = baseVolume > 0 ? Math.round((deliveredCount / baseVolume) * 100) : 0
+  const firstAttemptRate = baseVolume > 0 ? Math.round(((deliveredCount - incidentCount) / baseVolume) * 100) : 0
+  const avgTransitHours = 24
 
   // 2. Margem & Rentabilidade
   let totalRevenue = 0
   let totalCost = 0
 
-  if (filteredShipments.length > 0 && filteredShipments.some(s => s.sell_price)) {
-    filteredShipments.forEach(s => {
-      const sell = Number(s.sell_price) || 5.20
-      const cost = Number(s.cost_price) || (sell * 0.65)
-      totalRevenue += sell
-      totalCost += cost
-    })
-  } else {
-    totalRevenue = baseVolume * 5.45
-    totalCost = baseVolume * 3.40
-  }
+  filteredShipments.forEach(s => {
+    const sell = Number(s.sell_price) || 0
+    const cost = Number(s.cost_price) || 0
+    totalRevenue += sell
+    totalCost += cost
+  })
 
   const totalGrossMargin = Math.max(0, totalRevenue - totalCost)
-  const marginPercentage = totalRevenue > 0 ? (totalGrossMargin / totalRevenue) * 100 : 37.6
-  const avgMarginPerShipment = baseVolume > 0 ? totalGrossMargin / baseVolume : 2.05
+  const marginPercentage = totalRevenue > 0 ? (totalGrossMargin / totalRevenue) * 100 : 0
+  const avgMarginPerShipment = baseVolume > 0 ? totalGrossMargin / baseVolume : 0
 
   // 3. Performance por Transportadora
-  const carriersPerformance: RelatoriosData["carriersPerformance"] = [
-    {
-      code: "ctt_expresso",
-      name: "CTT Expresso",
-      logo: "/logo_transportadoras/ctt_express_logo.svg",
-      volume: Math.round(baseVolume * 0.68),
-      deliveredRate: 98.6,
-      onTimeRate: 98.2,
-      avgHours: 19.8,
-      slaStatus: "Excelente",
-    },
-    {
-      code: "dpd",
-      name: "DPD Portugal",
-      logo: "/logo_transportadoras/dpd_logo.svg",
-      volume: Math.round(baseVolume * 0.18),
-      deliveredRate: 96.4,
-      onTimeRate: 95.8,
-      avgHours: 23.4,
-      slaStatus: "Bom",
-    },
-    {
-      code: "correos_express",
-      name: "Correos Express",
-      logo: "/logo_transportadoras/correos_logo.jpeg",
-      volume: Math.round(baseVolume * 0.10),
-      deliveredRate: 94.2,
-      onTimeRate: 93.5,
-      avgHours: 26.2,
-      slaStatus: "Atenção",
-    },
-    {
-      code: "mrw",
-      name: "MRW",
-      logo: "/logo_transportadoras/mrw_logo.jpeg",
-      volume: Math.max(2, Math.round(baseVolume * 0.04)),
-      deliveredRate: 95.0,
-      onTimeRate: 94.8,
-      avgHours: 24.0,
-      slaStatus: "Bom",
+  const carrierGroups: Record<string, any> = {}
+  filteredShipments.forEach(s => {
+    const cName = s.carrier_name || s.provider || "Outra"
+    if (!carrierGroups[cName]) {
+      carrierGroups[cName] = { volume: 0, delivered: 0, totalHours: 0 }
     }
-  ]
-
-  // 4. Destinos & Heatmap Regional
-  const destinationStats: RelatoriosData["destinationStats"] = [
-    { district: "Porto & Grande Porto", zone: "Norte", count: Math.round(baseVolume * 0.32), percentage: 32, avgCost: 3.25 },
-    { district: "Lisboa & Vale do Tejo", zone: "Centro / Sul", count: Math.round(baseVolume * 0.28), percentage: 28, avgCost: 3.45 },
-    { district: "Braga & Guimarães", zone: "Norte", count: Math.round(baseVolume * 0.15), percentage: 15, avgCost: 3.10 },
-    { district: "Aveiro & Coimbra", zone: "Centro", count: Math.round(baseVolume * 0.10), percentage: 10, avgCost: 3.40 },
-    { district: "Algarve (Faro)", zone: "Sul", count: Math.round(baseVolume * 0.06), percentage: 6, avgCost: 3.80 },
-    { district: "Madeira & Açores", zone: "Ilhas", count: Math.max(1, Math.round(baseVolume * 0.05)), percentage: 5, avgCost: 7.90 },
-    { district: "Espanha Peninsular", zone: "Internacional Ibérico", count: Math.max(1, Math.round(baseVolume * 0.04)), percentage: 4, avgCost: 5.60 },
-  ]
-
-  // 4.1 Destinos Europeus & Mapa de Calor Interativo
-  const europeanDestinations: RelatoriosData["europeanDestinations"] = [
-    {
-      code: "PT",
-      name: "Portugal (Hub Nacional)",
-      flag: "🇵🇹",
-      count: Math.round(baseVolume * 0.78),
-      percentage: 78,
-      avgCost: 3.40,
-      transitHours: 20,
-      carriers: ["CTT Expresso", "DPD", "MRW"],
-      intensity: "muito_alto",
-      hubCoords: { x: 90, y: 550 },
-    },
-    {
-      code: "ES",
-      name: "Espanha (Ibéria Express)",
-      flag: "🇪🇸",
-      count: Math.max(1, Math.round(baseVolume * 0.12)),
-      percentage: 12,
-      avgCost: 5.80,
-      transitHours: 32,
-      carriers: ["Correos Express", "CTT Expresso", "MRW"],
-      intensity: "alto",
-      hubCoords: { x: 160, y: 520 },
-    },
-    {
-      code: "FR",
-      name: "França",
-      flag: "🇫🇷",
-      count: Math.max(1, Math.round(baseVolume * 0.04)),
-      percentage: 4,
-      avgCost: 8.90,
-      transitHours: 48,
-      carriers: ["DPD Chronopost", "CTT EuroExpresso"],
-      intensity: "medio",
-      hubCoords: { x: 220, y: 410 },
-    },
-    {
-      code: "DE",
-      name: "Alemanha",
-      flag: "🇩🇪",
-      count: Math.max(1, Math.round(baseVolume * 0.03)),
-      percentage: 3,
-      avgCost: 10.50,
-      transitHours: 72,
-      carriers: ["DPD / DPDgroup", "DHL Partner"],
-      intensity: "medio",
-      hubCoords: { x: 330, y: 330 },
-    },
-    {
-      code: "UK",
-      name: "Reino Unido",
-      flag: "🇬🇧",
-      count: Math.max(1, Math.round(baseVolume * 0.015)),
-      percentage: 1.5,
-      avgCost: 12.20,
-      transitHours: 72,
-      carriers: ["CTT Air Express", "DPD"],
-      intensity: "baixo",
-      hubCoords: { x: 180, y: 280 },
-    },
-    {
-      code: "IT",
-      name: "Itália",
-      flag: "🇮🇹",
-      count: Math.max(1, Math.round(baseVolume * 0.01)),
-      percentage: 1,
-      avgCost: 9.80,
-      transitHours: 72,
-      carriers: ["BRT / DPDgroup", "CTT"],
-      intensity: "baixo",
-      hubCoords: { x: 360, y: 490 },
-    },
-    {
-      code: "BE",
-      name: "Bélgica & Holanda",
-      flag: "🇧🇪",
-      count: Math.max(1, Math.round(baseVolume * 0.005)),
-      percentage: 0.5,
-      avgCost: 8.90,
-      transitHours: 48,
-      carriers: ["DPD PostNL"],
-      intensity: "baixo",
-      hubCoords: { x: 270, y: 340 },
-    },
-  ]
-
-  const portugalRegions: RelatoriosData["portugalRegions"] = [
-    { name: "Porto & Grande Porto (Sede Linke)", code: "OPO", count: Math.round(baseVolume * 0.38), percentage: 38, transitHours: 18, hubCoords: { x: 130, y: 200 } },
-    { name: "Lisboa & Vale do Tejo", code: "LIS", count: Math.round(baseVolume * 0.32), percentage: 32, transitHours: 20, hubCoords: { x: 120, y: 350 } },
-    { name: "Braga & Minho", code: "BG", count: Math.round(baseVolume * 0.14), percentage: 14, transitHours: 18, hubCoords: { x: 140, y: 150 } },
-    { name: "Aveiro & Coimbra (Centro)", code: "CBR", count: Math.round(baseVolume * 0.08), percentage: 8, transitHours: 22, hubCoords: { x: 135, y: 270 } },
-    { name: "Algarve (Faro)", code: "FAO", count: Math.round(baseVolume * 0.04), percentage: 4, transitHours: 24, hubCoords: { x: 145, y: 460 } },
-    { name: "Madeira (Funchal)", code: "FNC", count: Math.max(1, Math.round(baseVolume * 0.02)), percentage: 2, transitHours: 48, hubCoords: { x: 50, y: 470 } },
-    { name: "Açores (Ponta Delgada)", code: "PDL", count: Math.max(1, Math.round(baseVolume * 0.02)), percentage: 2, transitHours: 72, hubCoords: { x: 40, y: 380 } },
-  ]
-
-  // 5. Causas de Incidência
-  const incidentBreakdown: RelatoriosData["incidentBreakdown"] = [
-    { reason: "Destinatário Ausente na Morada", count: 14, percentage: 48, severity: "media" },
-    { reason: "Morada Incompleta ou Código Postal Incorreto", count: 8, percentage: 28, severity: "alta" },
-    { reason: "Contacto Telefónico Inacessível / Desligado", count: 4, percentage: 14, severity: "baixa" },
-    { reason: "Recusa de Recebimento pelo Destinatário", count: 3, percentage: 10, severity: "alta" },
-  ]
-
-  // 6. Clientes: Crescimento 🔥 vs Risco de Churn ❄️
-  const knownClientNames = [
-    { name: "Urban Chic Boutique", code: "CLI001", base: 28, prev: 18, daysAgo: 1, spent: 158.40 },
-    { name: "TechNova Soluções", code: "CLI002", base: 22, prev: 14, daysAgo: 2, spent: 126.90 },
-    { name: "Calçados do Norte Lda", code: "CLI003", base: 19, prev: 19, daysAgo: 3, spent: 98.70 },
-    { name: "Moda & Estilo Store", code: "CLI004", base: 12, prev: 13, daysAgo: 5, spent: 68.20 },
-    { name: "BioVitta Cosméticos", code: "CLI005", base: 3, prev: 16, daysAgo: 12, spent: 19.50 }, // Churn alert
-    { name: "Gourmet Flavors Online", code: "CLI006", base: 1, prev: 11, daysAgo: 18, spent: 6.80 }, // Churn alert
-  ]
-
-  const clientGrowthStats: RelatoriosData["clientGrowthStats"] = knownClientNames.map((c, idx) => {
-    const growth = c.prev > 0 ? Math.round(((c.base - c.prev) / c.prev) * 100) : 0
-    let status: "em_alta" | "estavel" | "risco_churn" = "estavel"
-    if (growth >= 15) status = "em_alta"
-    else if (c.daysAgo >= 10 || growth <= -30) status = "risco_churn"
-
-    const date = new Date(now.getTime() - c.daysAgo * 24 * 60 * 60 * 1000).toLocaleDateString("pt-PT")
-
-    return {
-      id: `client-${idx + 1}`,
-      name: c.name,
-      code: c.code,
-      recentVolume: c.base,
-      previousVolume: c.prev,
-      growthRate: growth,
-      status,
-      lastShipmentDate: date,
-      totalSpent: c.spent,
+    carrierGroups[cName].volume++
+    if (s.status === "entregue") {
+      carrierGroups[cName].delivered++
+      carrierGroups[cName].totalHours += 24
     }
   })
 
+  const carriersPerformance: RelatoriosData["carriersPerformance"] = Object.keys(carrierGroups).map(cName => {
+    const stat = carrierGroups[cName]
+    const deliveredRate = stat.volume > 0 ? Math.round((stat.delivered / stat.volume) * 100) : 0
+    let logo = ""
+    const c = cName.toLowerCase()
+    if (c.includes("ctt")) logo = "/logo_transportadoras/ctt_express_logo.svg"
+    else if (c.includes("dpd")) logo = "/logo_transportadoras/dpd_logo.svg"
+    else if (c.includes("correos")) logo = "/logo_transportadoras/correos_logo.jpeg"
+
+    let slaStatus: "Excelente" | "Bom" | "Atenção" = "Bom"
+    if (deliveredRate > 95) slaStatus = "Excelente"
+    else if (deliveredRate < 90) slaStatus = "Atenção"
+
+    return {
+      code: cName,
+      name: cName,
+      logo,
+      volume: stat.volume,
+      deliveredRate,
+      onTimeRate: deliveredRate, // mock for now
+      avgHours: stat.delivered > 0 ? Math.round(stat.totalHours / stat.delivered) : 0,
+      slaStatus
+    }
+  }).sort((a,b) => b.volume - a.volume)
+
+  // 4. Destinos & Heatmap Regional
+  const districtGroups: Record<string, { count: number, cost: number }> = {}
+  filteredShipments.forEach(s => {
+    const d = s.recipient_city || "Desconhecido"
+    if (!districtGroups[d]) districtGroups[d] = { count: 0, cost: 0 }
+    districtGroups[d].count++
+    districtGroups[d].cost += Number(s.cost_price) || 0
+  })
+
+  const destinationStats: RelatoriosData["destinationStats"] = Object.keys(districtGroups).map(d => {
+    const g = districtGroups[d]
+    return {
+      district: d,
+      zone: "Portugal",
+      count: g.count,
+      percentage: baseVolume > 0 ? Math.round((g.count / baseVolume) * 100) : 0,
+      avgCost: g.count > 0 ? g.cost / g.count : 0
+    }
+  }).sort((a,b) => b.count - a.count).slice(0, 10)
+
+  // 4.1 Destinos Europeus
+  const countryGroups: Record<string, { count: number, cost: number }> = {}
+  filteredShipments.forEach(s => {
+    // If we have recipient_country, use it. Otherwise, assume PT.
+    const c = (s.recipient_country || "PT").toUpperCase()
+    if (!countryGroups[c]) countryGroups[c] = { count: 0, cost: 0 }
+    countryGroups[c].count++
+    countryGroups[c].cost += Number(s.cost_price) || 0
+  })
+
+  const countryMeta: Record<string, { name: string, flag: string, lat: number, lng: number }> = {
+    "PT": { name: "Portugal", flag: "🇵🇹", lat: 39.3999, lng: -8.2245 },
+    "ES": { name: "Espanha", flag: "🇪🇸", lat: 40.4637, lng: -3.7492 },
+    "FR": { name: "França", flag: "🇫🇷", lat: 46.2276, lng: 2.2137 },
+    "DE": { name: "Alemanha", flag: "🇩🇪", lat: 51.1657, lng: 10.4515 },
+    "UK": { name: "Reino Unido", flag: "🇬🇧", lat: 55.3781, lng: -3.4360 },
+    "GB": { name: "Reino Unido", flag: "🇬🇧", lat: 55.3781, lng: -3.4360 },
+    "IT": { name: "Itália", flag: "🇮🇹", lat: 41.8719, lng: 12.5674 },
+    "BE": { name: "Bélgica", flag: "🇧🇪", lat: 50.5039, lng: 4.4699 },
+    "NL": { name: "Países Baixos", flag: "🇳🇱", lat: 52.1326, lng: 5.2913 }
+  }
+
+  const europeanDestinations: RelatoriosData["europeanDestinations"] = Object.keys(countryGroups).map(cCode => {
+    const g = countryGroups[cCode]
+    const meta = countryMeta[cCode] || { name: cCode, flag: "🇪🇺", lat: 48.0, lng: 9.0 }
+    const percentage = baseVolume > 0 ? Math.round((g.count / baseVolume) * 100) : 0
+    let intensity: "muito_alto" | "alto" | "medio" | "baixo" = "baixo"
+    if (percentage > 50) intensity = "muito_alto"
+    else if (percentage >= 10) intensity = "alto"
+    else if (percentage >= 3) intensity = "medio"
+
+    return {
+      code: cCode,
+      name: meta.name,
+      flag: meta.flag,
+      count: g.count,
+      percentage,
+      avgCost: g.count > 0 ? g.cost / g.count : 0,
+      transitHours: cCode === "PT" ? 24 : 48,
+      carriers: Object.keys(carrierGroups),
+      intensity,
+      lat: meta.lat,
+      lng: meta.lng,
+    }
+  }).sort((a, b) => b.count - a.count)
+
+  const portugalRegions: RelatoriosData["portugalRegions"] = [] // Skipped mapping specific cities to coords for simplicity unless needed
+
+  // 5. Causas de Incidência
+  const incidentBreakdown: RelatoriosData["incidentBreakdown"] = []
+
+  // 6. Clientes: Crescimento 🔥 vs Risco de Churn ❄️
+  const clientData: Record<string, { recent: number, prev: number, spent: number, lastDate: string }> = {}
+  
+  shipments.forEach(s => {
+    if (!s.client_id) return
+    const isRecent = filteredShipments.some(fs => fs.id === s.id)
+    const dDate = new Date(s.created_at)
+    const isPrev = dDate >= prevPeriodStart && dDate < prevPeriodEnd
+
+    if (!clientData[s.client_id]) {
+      clientData[s.client_id] = { recent: 0, prev: 0, spent: 0, lastDate: s.created_at }
+    }
+    
+    if (isRecent) {
+      clientData[s.client_id].recent++
+      clientData[s.client_id].spent += Number(s.sell_price) || 0
+    }
+    if (isPrev) {
+      clientData[s.client_id].prev++
+    }
+    if (new Date(s.created_at) > new Date(clientData[s.client_id].lastDate)) {
+      clientData[s.client_id].lastDate = s.created_at
+    }
+  })
+
+  const clientGrowthStats: RelatoriosData["clientGrowthStats"] = Object.keys(clientData).map(cid => {
+    const c = clientData[cid]
+    const growth = c.prev > 0 ? Math.round(((c.recent - c.prev) / c.prev) * 100) : (c.recent > 0 ? 100 : 0)
+    let status: "em_alta" | "estavel" | "risco_churn" = "estavel"
+    if (growth >= 15) status = "em_alta"
+    else if (growth <= -30 || (c.recent === 0 && c.prev > 0)) status = "risco_churn"
+
+    const daysAgo = Math.round((now.getTime() - new Date(c.lastDate).getTime()) / (1000 * 3600 * 24))
+
+    return {
+      id: cid,
+      name: clientMap.get(cid) || "Cliente",
+      code: cid.slice(0, 8),
+      recentVolume: c.recent,
+      previousVolume: c.prev,
+      growthRate: growth,
+      status,
+      lastShipmentDate: new Date(c.lastDate).toLocaleDateString("pt-PT"),
+      totalSpent: c.spent,
+    }
+  }).filter(c => c.recentVolume > 0 || c.previousVolume > 0).sort((a,b) => b.recentVolume - a.recentVolume)
+
   // 7. Timeline dos últimos 7 dias para mini-gráfico
-  const timeline: RelatoriosData["timeline"] = [
-    { label: "Seg", envios: Math.round(baseVolume * 0.16), entregues: Math.round(baseVolume * 0.15), margem: Math.round(totalGrossMargin * 0.16) },
-    { label: "Ter", envios: Math.round(baseVolume * 0.20), entregues: Math.round(baseVolume * 0.19), margem: Math.round(totalGrossMargin * 0.20) },
-    { label: "Qua", envios: Math.round(baseVolume * 0.18), entregues: Math.round(baseVolume * 0.17), margem: Math.round(totalGrossMargin * 0.18) },
-    { label: "Qui", envios: Math.round(baseVolume * 0.22), entregues: Math.round(baseVolume * 0.21), margem: Math.round(totalGrossMargin * 0.22) },
-    { label: "Sex", envios: Math.round(baseVolume * 0.19), entregues: Math.round(baseVolume * 0.18), margem: Math.round(totalGrossMargin * 0.19) },
-    { label: "Sáb", envios: Math.round(baseVolume * 0.04), entregues: Math.round(baseVolume * 0.04), margem: Math.round(totalGrossMargin * 0.04) },
-    { label: "Dom", envios: Math.round(baseVolume * 0.01), entregues: Math.round(baseVolume * 0.01), margem: Math.round(totalGrossMargin * 0.01) },
-  ]
+  const timelineMap: Record<string, any> = {}
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
+    const dayName = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][d.getDay()]
+    timelineMap[d.toISOString().slice(0, 10)] = { label: dayName, envios: 0, entregues: 0, margem: 0 }
+  }
+
+  filteredShipments.forEach(s => {
+    if (!s.created_at) return
+    const key = s.created_at.slice(0, 10)
+    if (timelineMap[key]) {
+      timelineMap[key].envios++
+      if (s.status === "entregue") timelineMap[key].entregues++
+      timelineMap[key].margem += (Number(s.sell_price) || 0) - (Number(s.cost_price) || 0)
+    }
+  })
+
+  const timeline: RelatoriosData["timeline"] = Object.values(timelineMap)
 
   return {
     period: periodFilter,
