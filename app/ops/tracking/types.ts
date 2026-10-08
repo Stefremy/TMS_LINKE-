@@ -39,6 +39,7 @@ export interface TrackingShipment {
   displayId: string
   trackingNumber: string
   status: ShipmentStatus
+  rawStatus?: string
   statusLabel: string
   carrier: string
   serviceType: string

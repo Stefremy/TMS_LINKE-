@@ -15,6 +15,7 @@ import {
   Truck
 } from "lucide-react"
 import Image from "next/image"
+import { getShipmentStatusConfig } from "@/lib/status-helpers"
 
 interface ShipmentCardProps {
   shipment: TrackingShipment
@@ -36,6 +37,16 @@ export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardPro
 
   // Status pill styling
   const getStatusBadge = () => {
+    if (shipment.rawStatus) {
+      const cfg = getShipmentStatusConfig(shipment.rawStatus)
+      return {
+        bg: `${cfg.color} shadow-2xs`,
+        dot: cfg.dotColor,
+        label: cfg.label
+      }
+    }
+    
+    // Fallback if rawStatus is somehow missing
     switch (shipment.status) {
       case "active":
         return {

@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useEffect } from "react"
 import dynamic from "next/dynamic"
+import { useRouter, useSearchParams } from "next/navigation"
 import { TrackingShipment, ShipmentStatus } from "../types"
 import { ShipmentCard } from "./ShipmentCard"
 import { MapSummaryBar } from "./MapSummaryBar"
@@ -38,13 +39,35 @@ interface DeliveryTrackingClientProps {
 }
 
 export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingClientProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const urlSearch = searchParams.get("search") || ""
+  
   const allShipments = useMemo(() => {
     return initialShipments && initialShipments.length > 0 ? initialShipments : DEMO_TRACKING_SHIPMENTS
   }, [initialShipments])
 
   const [selectedShipmentId, setSelectedShipmentId] = useState<string>(allShipments[0]?.id || "LTK-8921-PT")
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searchQuery, setSearchQuery] = useState(urlSearch)
   const [statusFilter, setStatusFilter] = useState<"all" | ShipmentStatus>("all")
+
+  // Sync search input to URL after typing
+  useEffect(() => {
+    // Skip on initial render if searchQuery is equal to urlSearch
+    if (searchQuery === urlSearch) return
+
+    const timer = setTimeout(() => {
+      const currentParams = new URLSearchParams(window.location.search)
+      if (searchQuery.trim()) {
+        currentParams.set("search", searchQuery.trim())
+      } else {
+        currentParams.delete("search")
+      }
+      const newUrl = currentParams.toString() ? `?${currentParams.toString()}` : "/ops/tracking"
+      router.push(newUrl)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
   const [isDocModalOpen, setIsDocModalOpen] = useState(false)
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false)
 

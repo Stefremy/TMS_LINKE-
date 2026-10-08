@@ -2,16 +2,16 @@
 
 import React, { useState } from "react"
 import { TrackingShipment } from "../types"
-import { 
-  RefreshCw, 
-  CheckCircle2, 
-  Circle, 
-  Clock, 
-  MapPin, 
-  ScanLine, 
-  Package, 
-  Building2, 
-  ShieldCheck, 
+import {
+  RefreshCw,
+  CheckCircle2,
+  Circle,
+  Clock,
+  MapPin,
+  ScanLine,
+  Package,
+  Building2,
+  ShieldCheck,
   ArrowRight,
   Truck
 } from "lucide-react"
@@ -73,7 +73,7 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
           </div>
 
           <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-            <div 
+            <div
               className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-500"
               style={{ width: `${metrics.progressPercent}%` }}
             />
@@ -108,10 +108,9 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
               <div key={p.id} className="relative flex items-start gap-3 text-xs">
                 {/* Connecting Vertical Line */}
                 {idx !== pickagens.length - 1 && (
-                  <div 
-                    className={`absolute left-[9px] top-5 bottom-[-16px] w-0.5 ${
-                      isCompleted ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-800"
-                    }`}
+                  <div
+                    className={`absolute left-[9px] top-5 bottom-[-16px] w-0.5 ${isCompleted ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-800"
+                      }`}
                   />
                 )}
 
@@ -135,18 +134,16 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
                 {/* Step Text Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
-                    <span className={`font-semibold text-xs truncate ${
-                      isCurrent 
-                        ? "text-emerald-600 dark:text-emerald-400 font-bold" 
-                        : isCompleted 
-                        ? "text-[var(--text-primary)]" 
-                        : "text-[var(--text-tertiary)]"
-                    }`}>
+                    <span className={`font-semibold text-xs truncate ${isCurrent
+                        ? "text-emerald-600 dark:text-emerald-400 font-bold"
+                        : isCompleted
+                          ? "text-[var(--text-primary)]"
+                          : "text-[var(--text-tertiary)]"
+                      }`}>
                       {p.title}
                     </span>
-                    <span className={`font-mono text-[11px] shrink-0 ${
-                      isCurrent ? "font-bold text-emerald-600 dark:text-emerald-400" : "text-[var(--text-tertiary)]"
-                    }`}>
+                    <span className={`font-mono text-[11px] shrink-0 ${isCurrent ? "font-bold text-emerald-600 dark:text-emerald-400" : "text-[var(--text-tertiary)]"
+                      }`}>
                       {p.formattedTime}
                     </span>
                   </div>
