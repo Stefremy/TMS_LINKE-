@@ -4,6 +4,7 @@ import { DeliveryTrackingClient } from "./components/DeliveryTrackingClient"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { createAdminClient } from "@/lib/supabase/server"
 import { resolveLocationCoordinate } from "@/lib/services/geo/coordinates"
+import { resolveCoordinates } from "@/lib/services/geo/geocoder"
 import { TrackingShipment, ShipmentPickagem } from "./types"
 
 export const metadata: Metadata = {
@@ -39,17 +40,34 @@ export default async function OpsTrackingPage() {
       }
     }
 
-    realShipmentsMapped = activeShipments.map((s: any) => {
-      const isArriving = s.status === "em_distribuicao"
-      
-      const senderZip = s.sender_zip4 && s.sender_zip3 ? `${s.sender_zip4}-${s.sender_zip3}` : s.sender_postal_code
-      const recipientZip = s.recipient_zip4 && s.recipient_zip3 ? `${s.recipient_zip4}-${s.recipient_zip3}` : s.recipient_postal_code
-      
-      const senderLocationName = s.sender_city || s.sender_address || "Local Desconhecido"
-      const recipientLocationName = s.recipient_city || s.recipient_address || "Local Desconhecido"
-      
-      const originCoord = resolveLocationCoordinate(senderLocationName, senderZip)
-      const destCoord = resolveLocationCoordinate(recipientLocationName, recipientZip)
+    realShipmentsMapped = await Promise.all(
+      activeShipments.map(async (s: any) => {
+        const isArriving = s.status === "em_distribuicao"
+        
+        const senderZip = s.sender_zip4 && s.sender_zip3 ? `${s.sender_zip4}-${s.sender_zip3}` : s.sender_postal_code
+        const recipientZip = s.recipient_zip4 && s.recipient_zip3 ? `${s.recipient_zip4}-${s.recipient_zip3}` : s.recipient_postal_code
+        
+        const senderLocationName = s.sender_city || s.sender_address || "Local Desconhecido"
+        const recipientLocationName = s.recipient_city || s.recipient_address || "Local Desconhecido"
+
+        // Resolve origin + destination in parallel using the smart geocoder
+        // (postal code SQLite DB + known CTT hubs/cities)
+        const [originCoord, destCoord] = await Promise.all([
+          resolveCoordinates({
+            address: s.sender_address,
+            city: s.sender_city,
+            postalCode: senderZip,
+            country: "PT",
+            useApi: false,
+          }),
+          resolveCoordinates({
+            address: s.recipient_address,
+            city: s.recipient_city,
+            postalCode: recipientZip,
+            country: "PT",
+            useApi: false,
+          }),
+        ])
 
       const dbEvts = eventsByShipment[s.id] || []
       
@@ -58,16 +76,26 @@ export default async function OpsTrackingPage() {
 
       // Real scans from tracking_events table
       dbEvts.forEach((e: any, idx: number) => {
-        const evtCoord = resolveLocationCoordinate(e.description || senderLocationName, null)
+        // Try location_name first, then description, then sender city
+        const rawLocation = e.location_name || e.description || senderLocationName
+        const evtCoord = resolveLocationCoordinate(rawLocation, null)
+        // If geo lookup returned the generic fallback, inherit last known checkpoint position (or origin if first)
+        const isGenericFallback = evtCoord.lat === 39.5 && evtCoord.lng === -8.5
+        const lastKnown = pickagens.length > 0 
+          ? { lat: pickagens[pickagens.length - 1].lat, lng: pickagens[pickagens.length - 1].lng, name: pickagens[pickagens.length - 1].locationName, district: pickagens[pickagens.length - 1].city }
+          : originCoord
+
+        const finalLat = isGenericFallback ? lastKnown.lat : evtCoord.lat
+        const finalLng = isGenericFallback ? lastKnown.lng : evtCoord.lng
         const isLast = idx === dbEvts.length - 1
         pickagens.push({
           id: `pick-${e.id || idx}`,
           code: e.event_code || "TRN",
           title: e.description || "Passagem em Ponto de Controlo",
-          locationName: evtCoord.name,
-          city: evtCoord.district || s.sender_city || "Portugal",
-          lat: evtCoord.lat + (idx * 0.05), // slight offset if identical coords
-          lng: evtCoord.lng + (idx * 0.03),
+          locationName: isGenericFallback ? (rawLocation || lastKnown.name) : evtCoord.name,
+          city: isGenericFallback ? (lastKnown.district || s.sender_city || "Portugal") : (evtCoord.district || s.sender_city || "Portugal"),
+          lat: finalLat,
+          lng: finalLng,
           timestamp: e.timestamp || e.created_at,
           formattedTime: e.timestamp ? new Date(e.timestamp).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) : "11:30",
           status: isLast && s.status !== "entregue" ? "current" : "completed",
@@ -148,7 +176,7 @@ export default async function OpsTrackingPage() {
           insuredValueEur: Number(s.sell_price) || 250
         }
       }
-    })
+    }))
   } catch (err) {
     console.warn("Could not fetch real shipments for tracking screen:", err)
   }

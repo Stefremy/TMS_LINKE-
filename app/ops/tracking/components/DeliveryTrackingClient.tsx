@@ -7,6 +7,7 @@ import { ShipmentCard } from "./ShipmentCard"
 import { MapSummaryBar } from "./MapSummaryBar"
 import { DeliveryProgressPanel } from "./DeliveryProgressPanel"
 import { DocumentationModal } from "./DocumentationModal"
+import { DEMO_TRACKING_SHIPMENTS } from "../mockData"
 
 const RealLeafletMap = dynamic(
   () => import("./RealLeafletMap").then((m) => m.RealLeafletMap),
@@ -38,7 +39,7 @@ interface DeliveryTrackingClientProps {
 
 export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingClientProps) {
   const allShipments = useMemo(() => {
-    return initialShipments || []
+    return initialShipments && initialShipments.length > 0 ? initialShipments : DEMO_TRACKING_SHIPMENTS
   }, [initialShipments])
 
   const [selectedShipmentId, setSelectedShipmentId] = useState<string>(allShipments[0]?.id || "LTK-8921-PT")
