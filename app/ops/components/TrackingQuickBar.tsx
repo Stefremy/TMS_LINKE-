@@ -13,10 +13,10 @@ export function TrackingQuickBar() {
       <Link
         href="/ops/tracking"
         className="flex items-center gap-2 px-3 py-1.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-semibold text-[var(--text-primary)] hover:text-blue-600 transition-colors cursor-pointer"
-        title="Posto de Controlo de Frotas e Tracking em Tempo Real"
+        title="Tracking e Mapa em Tempo Real"
       >
         <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-        <span className="hidden sm:inline">Tracking & Frotas</span>
+        <span className="hidden sm:inline">Tracking & Mapa</span>
       </Link>
       <Link
         href="/tracking"

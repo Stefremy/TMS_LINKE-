@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { User as SupabaseUser } from "@supabase/supabase-js"
@@ -32,21 +32,8 @@ type CalendarEvent = {
   year: number 
 }
 
-// Calculate Portuguese holidays for a given year
-function getPortugueseHolidays(year: number) {
-  const holidays = [
-    { date: 1, month: 0, title: "Ano Novo" },
-    { date: 25, month: 3, title: "Dia da Liberdade" },
-    { date: 1, month: 4, title: "Dia do Trabalhador" },
-    { date: 10, month: 5, title: "Dia de Portugal" },
-    { date: 15, month: 7, title: "Assunção de N. Sra." },
-    { date: 5, month: 9, title: "Implantação da República" },
-    { date: 1, month: 10, title: "Todos os Santos" },
-    { date: 1, month: 11, title: "Restauração da Indep." },
-    { date: 8, month: 11, title: "Imaculada Conceição" },
-    { date: 25, month: 11, title: "Natal" }
-  ]
-
+// Helper to calculate Easter date for a given year
+function getEasterDate(year: number): Date {
   const a = year % 19
   const b = Math.floor(year / 100)
   const c = year % 100
@@ -61,18 +48,73 @@ function getPortugueseHolidays(year: number) {
   const m = Math.floor((a + 11 * h + 22 * l) / 451)
   const month = Math.floor((h + l - 7 * m + 114) / 31) - 1
   const day = ((h + l - 7 * m + 114) % 31) + 1
-  
-  const easterDate = new Date(year, month, day)
-  holidays.push({ date: day, month: month, title: "Páscoa" })
-  
+  return new Date(year, month, day)
+}
+
+export interface CalendarHoliday {
+  date: number
+  month: number
+  title: string
+  country: "PT" | "ES"
+}
+
+// Calculate Portuguese national holidays
+function getPortugueseHolidays(year: number): CalendarHoliday[] {
+  const holidays: CalendarHoliday[] = [
+    { date: 1, month: 0, title: "Ano Novo", country: "PT" },
+    { date: 25, month: 3, title: "Dia da Liberdade", country: "PT" },
+    { date: 1, month: 4, title: "Dia do Trabalhador", country: "PT" },
+    { date: 10, month: 5, title: "Dia de Portugal", country: "PT" },
+    { date: 15, month: 7, title: "Assunção de N. Sra.", country: "PT" },
+    { date: 5, month: 9, title: "Implantação da República", country: "PT" },
+    { date: 1, month: 10, title: "Todos os Santos", country: "PT" },
+    { date: 1, month: 11, title: "Restauração da Indep.", country: "PT" },
+    { date: 8, month: 11, title: "Imaculada Conceição", country: "PT" },
+    { date: 25, month: 11, title: "Natal", country: "PT" }
+  ]
+
+  const easterDate = getEasterDate(year)
+  holidays.push({ date: easterDate.getDate(), month: easterDate.getMonth(), title: "Páscoa", country: "PT" })
+
   const goodFriday = new Date(easterDate.getTime() - 2 * 24 * 60 * 60 * 1000)
-  holidays.push({ date: goodFriday.getDate(), month: goodFriday.getMonth(), title: "Sexta-feira Santa" })
-  
+  holidays.push({ date: goodFriday.getDate(), month: goodFriday.getMonth(), title: "Sexta-feira Santa", country: "PT" })
+
   const corpusChristi = new Date(easterDate.getTime() + 60 * 24 * 60 * 60 * 1000)
-  holidays.push({ date: corpusChristi.getDate(), month: corpusChristi.getMonth(), title: "Corpo de Deus" })
-  
+  holidays.push({ date: corpusChristi.getDate(), month: corpusChristi.getMonth(), title: "Corpo de Deus", country: "PT" })
+
   const carnaval = new Date(easterDate.getTime() - 47 * 24 * 60 * 60 * 1000)
-  holidays.push({ date: carnaval.getDate(), month: carnaval.getMonth(), title: "Carnaval" })
+  holidays.push({ date: carnaval.getDate(), month: carnaval.getMonth(), title: "Carnaval", country: "PT" })
+
+  return holidays
+}
+
+// Calculate Spanish national & regional logistics-critical holidays
+function getSpanishHolidays(year: number): CalendarHoliday[] {
+  const holidays: CalendarHoliday[] = [
+    { date: 1, month: 0, title: "Año Nuevo", country: "ES" },
+    { date: 6, month: 0, title: "Día de Reyes (Epifanía)", country: "ES" },
+    { date: 1, month: 4, title: "Fiesta del Trabajo", country: "ES" },
+    { date: 15, month: 7, title: "Asunción de la Virgen", country: "ES" },
+    { date: 12, month: 9, title: "Fiesta Nacional de España (Hispanidad)", country: "ES" },
+    { date: 1, month: 10, title: "Todos los Santos", country: "ES" },
+    { date: 6, month: 11, title: "Día de la Constitución", country: "ES" },
+    { date: 8, month: 11, title: "Inmaculada Concepción", country: "ES" },
+    { date: 25, month: 11, title: "Navidad", country: "ES" }
+  ]
+
+  const easterDate = getEasterDate(year)
+
+  // Jueves Santo (Quinta-feira Santa) - Feriado em quase todas as comunidades espanholas
+  const juevesSanto = new Date(easterDate.getTime() - 3 * 24 * 60 * 60 * 1000)
+  holidays.push({ date: juevesSanto.getDate(), month: juevesSanto.getMonth(), title: "Jueves Santo", country: "ES" })
+
+  // Viernes Santo (Sexta-feira Santa) - Feriado Nacional em Espanha
+  const viernesSanto = new Date(easterDate.getTime() - 2 * 24 * 60 * 60 * 1000)
+  holidays.push({ date: viernesSanto.getDate(), month: viernesSanto.getMonth(), title: "Viernes Santo", country: "ES" })
+
+  // Lunes de Pascua (Segunda-feira de Páscoa - feriado em Catalunha, Valência, País Basco)
+  const lunesPascua = new Date(easterDate.getTime() + 1 * 24 * 60 * 60 * 1000)
+  holidays.push({ date: lunesPascua.getDate(), month: lunesPascua.getMonth(), title: "Lunes de Pascua (Hubs ES)", country: "ES" })
 
   return holidays
 }
@@ -89,6 +131,8 @@ export function TeamCalendar() {
   const [formData, setFormData] = useState({ title: "", description: "", time: "" })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [collaborators, setCollaborators] = useState<any[]>([])
+  const [showPtHolidays, setShowPtHolidays] = useState(true)
+  const [showEsHolidays, setShowEsHolidays] = useState(true)
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -173,15 +217,15 @@ export function TeamCalendar() {
       })
       
       // Holidays 3 days before (Trigger at 10:00 AM)
-      const holidays = getPortugueseHolidays(now.getFullYear())
-      holidays.forEach(h => {
+      const allUpcoming = [...getPortugueseHolidays(now.getFullYear()), ...getSpanishHolidays(now.getFullYear())]
+      allUpcoming.forEach(h => {
         const holidayTime = new Date(now.getFullYear(), h.month, h.date)
         const diffDays = Math.round((holidayTime.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
         
         if (diffDays === 3 && now.getHours() === 10 && now.getMinutes() === 0) {
           if (Notification.permission === "granted") {
-            new Notification("Feriado a aproximar-se!", {
-              body: `O feriado de ${h.title} é daqui a 3 dias.`,
+            new Notification(`Feriado a aproximar-se (${h.country === 'PT' ? 'Portugal 🇵🇹' : 'Espanha 🇪🇸'})!`, {
+              body: `O feriado de ${h.title} é daqui a 3 dias. Verifique trânsito e expedições.`,
               icon: "/favicon.png"
             })
           }
@@ -258,7 +302,12 @@ export function TeamCalendar() {
   const today = new Date()
   const isToday = (d: number) => today.getDate() === d && today.getMonth() === month && today.getFullYear() === year
 
-  const holidaysThisYear = getPortugueseHolidays(year)
+  const holidaysThisYear = useMemo(() => {
+    const list: CalendarHoliday[] = []
+    if (showPtHolidays) list.push(...getPortugueseHolidays(year))
+    if (showEsHolidays) list.push(...getSpanishHolidays(year))
+    return list
+  }, [year, showPtHolidays, showEsHolidays])
 
   return (
     <>
@@ -271,13 +320,44 @@ export function TeamCalendar() {
             </div>
             <div>
               <h2 className="text-lg font-bold text-[var(--text-primary)]">Calendário de Equipa</h2>
-              <p className="text-xs text-[var(--text-tertiary)]">Apontamentos e notas (Codificado por cor)</p>
+              <p className="text-xs text-[var(--text-tertiary)]">Apontamentos, notas e feriados ibéricos (PT & ES)</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Holiday filter toggles */}
+            <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] shadow-xs text-xs">
+              <span className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider font-semibold mr-1">Feriados:</span>
+              <button
+                type="button"
+                onClick={() => setShowPtHolidays(!showPtHolidays)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-all border cursor-pointer ${
+                  showPtHolidays 
+                    ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 shadow-2xs" 
+                    : "opacity-40 text-neutral-400 border-transparent hover:opacity-70"
+                }`}
+                title="Mostrar/ocultar feriados de Portugal"
+              >
+                <span>🇵🇹</span>
+                <span>PT</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEsHolidays(!showEsHolidays)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-all border cursor-pointer ${
+                  showEsHolidays 
+                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 shadow-2xs" 
+                    : "opacity-40 text-neutral-400 border-transparent hover:opacity-70"
+                }`}
+                title="Mostrar/ocultar feriados de Espanha (Atenção a expedições e trânsito)"
+              >
+                <span>🇪🇸</span>
+                <span>ES</span>
+              </button>
+            </div>
+
             {/* Legend with dynamic names */}
-            <div className="hidden md:flex items-center gap-3 mr-4 bg-[var(--surface-bg)] px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] shadow-xs">
+            <div className="hidden lg:flex items-center gap-3 bg-[var(--surface-bg)] px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] shadow-xs">
               <span className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider font-semibold mr-1">Equipa:</span>
               {collaborators.map(c => (
                 <div key={c.id} className="flex items-center gap-1.5 cursor-pointer hover:scale-105 transition-transform" title={c.name}>
@@ -325,22 +405,52 @@ export function TeamCalendar() {
               }
 
               const dayEvents = events.filter(e => e.date === d.day && e.month === month && e.year === year)
-              const dayHoliday = holidaysThisYear.find(h => h.date === d.day && h.month === month)
+              const dayHolidays = holidaysThisYear.filter(h => h.date === d.day && h.month === month)
+              const hasPt = dayHolidays.some(h => h.country === "PT")
+              const hasEs = dayHolidays.some(h => h.country === "ES")
               const isCurrDay = isToday(d.day!)
 
               return (
                 <div 
                   key={`day-${d.day}`} 
                   onClick={() => openAddEvent(d.day!)}
-                  className={`bg-[var(--surface-bg)] min-h-[120px] p-2 transition-colors hover:bg-[var(--surface-muted)] group relative cursor-pointer ${isCurrDay ? 'ring-1 ring-inset ring-[var(--accent)] bg-[var(--accent)]/5' : ''} ${dayHoliday ? 'bg-red-500/5' : ''}`}
+                  className={`bg-[var(--surface-bg)] min-h-[120px] p-2 transition-colors hover:bg-[var(--surface-muted)] group relative cursor-pointer ${
+                    isCurrDay ? 'ring-1 ring-inset ring-[var(--accent)] bg-[var(--accent)]/5' : ''
+                  } ${hasPt && hasEs ? 'bg-amber-500/[0.04]' : hasPt ? 'bg-rose-500/[0.04]' : hasEs ? 'bg-amber-500/[0.03]' : ''}`}
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex flex-col gap-0.5">
-                      <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${isCurrDay ? 'bg-[var(--accent)] text-white shadow-sm' : dayHoliday ? 'text-red-500 bg-red-500/10' : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]'}`}>
-                        {d.day}
-                      </span>
-                      {dayHoliday && (
-                        <span className="text-[9px] font-bold text-red-500/80 leading-tight uppercase tracking-tight line-clamp-2 pr-1">{dayHoliday.title}</span>
+                  <div className="flex items-start justify-between mb-1.5">
+                    <div className="flex flex-col gap-0.5 w-full pr-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full shrink-0 ${
+                          isCurrDay 
+                            ? 'bg-[var(--accent)] text-white shadow-sm' 
+                            : hasPt 
+                            ? 'text-rose-600 bg-rose-500/15 font-extrabold' 
+                            : hasEs 
+                            ? 'text-amber-700 dark:text-amber-400 bg-amber-500/15 font-extrabold' 
+                            : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]'
+                        }`}>
+                          {d.day}
+                        </span>
+                      </div>
+
+                      {dayHolidays.length > 0 && (
+                        <div className="flex flex-col gap-0.5 mt-0.5 w-full">
+                          {dayHolidays.map((h, hIdx) => (
+                            <div 
+                              key={hIdx} 
+                              title={`${h.country === "PT" ? "Feriado Portugal" : "Feriado Espanha (Atenção a Trânsito e Entregas)"}: ${h.title}`}
+                              className={`text-[8.5px] font-bold leading-tight px-1 py-0.5 rounded border flex items-center gap-1 truncate ${
+                                h.country === "PT" 
+                                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20" 
+                                  : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                              }`}
+                            >
+                              <span className="shrink-0">{h.country === "PT" ? "🇵🇹" : "🇪🇸"}</span>
+                              <span className="truncate">{h.title}</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                     <button className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-tertiary)] hover:text-[var(--text-primary)] shrink-0 mt-0.5">
