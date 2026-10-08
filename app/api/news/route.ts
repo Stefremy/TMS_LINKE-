@@ -12,9 +12,9 @@ interface NewsItem {
   timeAgo: string
 }
 
-// In-memory cache for 5 minutes
+// In-memory cache for 3 hours (aligned with client auto-refresh)
 const cache = new Map<string, { items: NewsItem[]; timestamp: number }>()
-const CACHE_TTL_MS = 5 * 60 * 1000
+const CACHE_TTL_MS = 3 * 60 * 60 * 1000
 
 const FALLBACK_NEWS: NewsItem[] = [
   {

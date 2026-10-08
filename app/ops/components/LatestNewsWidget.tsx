@@ -17,20 +17,32 @@ interface NewsItem {
   timeAgo: string
 }
 
+const REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000 // 3 hours
+const DAYTIME_START = 7  // 07:00
+const DAYTIME_END   = 22 // 22:00
+
+function isDaytime() {
+  const hour = new Date().getHours()
+  return hour >= DAYTIME_START && hour < DAYTIME_END
+}
+
 export function LatestNewsWidget() {
   const [news, setNews] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [category, setCategory] = useState<"geral" | "ctt" | "combustivel">("geral")
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const lastFetchRef = React.useRef<number>(0)
 
-  const fetchNews = async (cat: string) => {
+  const fetchNews = async (cat: string, silent = false) => {
     try {
-      setLoading(true)
-      const res = await fetch(`/api/news?category=${cat}`)
+      if (!silent) setLoading(true)
+      else setIsRefreshing(true)
+      const res = await fetch(`/api/news?category=${cat}&bust=${Date.now()}`)
       if (!res.ok) throw new Error("Erro ao carregar notícias")
       const data = await res.json()
       if (data?.items && Array.isArray(data.items)) {
         setNews(data.items)
+        lastFetchRef.current = Date.now()
       }
     } catch (err) {
       console.warn("Failed to fetch news:", err)
@@ -40,13 +52,38 @@ export function LatestNewsWidget() {
     }
   }
 
+  // Fetch on mount (always — handles "começo do dia")
   useEffect(() => {
     fetchNews(category)
   }, [category])
 
+  // Auto-refresh every 3h, but only during daytime (07:00–22:00 PT)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isDaytime()) {
+        fetchNews(category, true)
+      }
+    }, REFRESH_INTERVAL_MS)
+
+    return () => clearInterval(interval)
+  }, [category])
+
+  // When user returns to tab after being away, re-fetch if >3h passed and it's daytime
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        const elapsed = Date.now() - lastFetchRef.current
+        if (elapsed >= REFRESH_INTERVAL_MS && isDaytime()) {
+          fetchNews(category, true)
+        }
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => document.removeEventListener("visibilitychange", handleVisibility)
+  }, [category])
+
   const handleRefresh = () => {
-    setIsRefreshing(true)
-    fetchNews(category)
+    fetchNews(category, true)
   }
 
   return (

@@ -21,11 +21,12 @@ export function ClockStef({ size = "full", onClose, showCloseButton = false }: C
     return () => clearInterval(interval)
   }, [])
 
-  const now = time || new Date()
-  const seconds = now.getSeconds()
-  const minutes = now.getMinutes()
-  const hours = now.getHours()
-  const milliseconds = now.getMilliseconds()
+  // Use null-safe values: render static hands on server (time is null until useEffect)
+  const seconds = time ? time.getSeconds() : 0
+  const minutes = time ? time.getMinutes() : 0
+  const hours = time ? time.getHours() : 0
+  const milliseconds = time ? time.getMilliseconds() : 0
+  const now = time || new Date(0)
 
   // Smooth or discrete second angle
   const secondDegrees = (seconds / 60) * 360
@@ -111,7 +112,7 @@ export function ClockStef({ size = "full", onClose, showCloseButton = false }: C
             stroke="#0f172a" 
             strokeWidth="2.2" 
             strokeLinecap="round"
-            
+            suppressHydrationWarning
             transform={`rotate(${hourDegrees} 50 50)`} 
           />
           {/* Minute hand */}
@@ -123,7 +124,7 @@ export function ClockStef({ size = "full", onClose, showCloseButton = false }: C
             stroke="#334155" 
             strokeWidth="1.6" 
             strokeLinecap="round"
-            
+            suppressHydrationWarning
             transform={`rotate(${minuteDegrees} 50 50)`} 
           />
           {/* Second hand needle */}
@@ -134,6 +135,7 @@ export function ClockStef({ size = "full", onClose, showCloseButton = false }: C
             y2="14" 
             stroke="#10b981" 
             strokeWidth="0.9" 
+            suppressHydrationWarning
             transform={`rotate(${secondDegrees} 50 50)`} 
           />
           {/* Center cap */}
