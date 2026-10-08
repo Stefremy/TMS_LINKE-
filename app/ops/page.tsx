@@ -23,6 +23,7 @@ import { OpsDashboardClientSync } from "./components/OpsDashboardClientSync"
 import { ProfitComparisonChart } from "./components/ProfitComparisonChart"
 import { DateRangePicker } from "./components/DateRangePicker"
 import { DashboardWidgets } from "./components/DashboardWidgets"
+import { FloatingCalculatorWidget } from "./components/FloatingCalculatorWidget"
 
 function getMonthName(date: Date) {
   return date.toLocaleString('pt-PT', { month: 'long', year: 'numeric' })
@@ -627,6 +628,9 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
         </div>
         
       </div>
+
+      {/* Floating Neumorphic Calculator Widget */}
+      <FloatingCalculatorWidget />
     </div>
   )
 }

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react"
 import { Plus, X, RefreshCw, SlidersHorizontal, TrendingUp, TrendingDown } from "lucide-react"
+import { ClockStef } from "./ClockStef"
 
 export interface LinkeMetrics {
   revenue: number
@@ -33,8 +34,6 @@ const DEFAULT_SYMBOLS = [
   "BTC-USD",
   "CTT.LS",
 ]
-
-import { ClockStef } from "./ClockStef"
 
 export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
   const [mounted, setMounted] = useState(false)
@@ -227,7 +226,7 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
         </div>
       </div>
 
-      {/* Digital LED Stock Ticker Bar (Fast Scrolling, LED Matrix Style) */}
+      {/* Digital LED Stock Ticker Bar (Smoother, Slower Scrolling, LED Matrix Style) */}
       <div className="group relative hidden sm:flex items-center bg-[#07080a] dark:bg-[#030405] border border-neutral-800 rounded-lg pl-3 pr-2 py-1.5 shadow-[inset_0_2px_6px_rgba(0,0,0,0.9),0_1px_2px_rgba(255,255,255,0.05)] max-w-[800px] w-full overflow-hidden">
         {/* Subtle LED dot pattern overlay */}
         <div 
@@ -238,9 +237,9 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
           }}
         />
 
-        {/* Marquee area with faster scroll (15s) and seamless loop */}
+        {/* Marquee area with slightly slower, comfortable speed (38s) and seamless loop */}
         <div className="overflow-hidden w-full relative z-10 flex">
-          <div className="flex w-max animate-[ticker_15s_linear_infinite] group-hover:[animation-play-state:paused]">
+          <div className="flex w-max animate-[ticker_38s_linear_infinite] group-hover:[animation-play-state:paused]">
             <div className="flex items-center gap-5 pr-5 shrink-0">
               {renderTickerItems("item1")}
             </div>
