@@ -24,6 +24,7 @@ import { ProfitComparisonChart } from "./components/ProfitComparisonChart"
 import { DateRangePicker } from "./components/DateRangePicker"
 import { DashboardWidgets } from "./components/DashboardWidgets"
 import { FloatingCalculatorWidget } from "./components/FloatingCalculatorWidget"
+import { LatestNewsWidget } from "./components/LatestNewsWidget"
 
 function getMonthName(date: Date) {
   return date.toLocaleString('pt-PT', { month: 'long', year: 'numeric' })
@@ -327,64 +328,75 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ProfitComparisonChart data={chartData} targetMonth={targetDate.getMonth()} />
-        {/* Breakdown Row */}
-        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Estado Atual ({getMonthName(targetDate)})</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {[
-          { 
-            label: "Pendentes", 
-            value: statusCounts.pendente, 
-            dot: "bg-slate-400",
-            href: "/ops/envios?status=Pendente"
-          },
-          { 
-            label: "Em Trânsito", 
-            value: statusCounts.em_transito, 
-            dot: "bg-blue-500",
-            href: "/ops/envios?status=Em Trânsito"
-          },
-          { 
-            label: "Em Distrib.", 
-            value: statusCounts.em_distribuicao, 
-            dot: "bg-amber-500",
-            href: "/ops/envios?status=Em Distribuição"
-          },
-          { 
-            label: "Incidências", 
-            value: statusCounts.incidencia, 
-            dot: statusCounts.incidencia > 0 ? "bg-rose-500 animate-pulse" : "bg-neutral-300",
-            href: "/ops/incidencias"
-          },
-          { 
-            label: "Entregues", 
-            value: statusCounts.entregue, 
-            dot: "bg-emerald-500",
-            href: "/ops/envios?status=Entregue"
-          }
-        ].map((s, i) => (
-          <Link
-            key={i}
-            href={s.href}
-            className="group bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-3.5 flex flex-col justify-between shadow-2xs hover:border-[var(--border-strong)] hover:shadow-xs transition-all duration-150"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-medium text-[var(--text-secondary)] tracking-wide">
-                {s.label}
-              </span>
-              <span className={`w-2 h-2 rounded-full ${s.dot} shrink-0`} />
+        {/* Breakdown Row & Live News */}
+        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs flex flex-col justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Estado Atual ({getMonthName(targetDate)})</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {[
+                { 
+                  label: "Pendentes", 
+                  value: statusCounts.pendente, 
+                  dot: "bg-slate-400",
+                  href: "/ops/envios?status=Pendente"
+                },
+                { 
+                  label: "Em Trânsito", 
+                  value: statusCounts.em_transito, 
+                  dot: "bg-blue-500",
+                  href: "/ops/envios?status=Em Trânsito"
+                },
+                { 
+                  label: "Em Distrib.", 
+                  value: statusCounts.em_distribuicao, 
+                  dot: "bg-amber-500",
+                  href: "/ops/envios?status=Em Distribuição"
+                },
+                { 
+                  label: "Incidências", 
+                  value: statusCounts.incidencia, 
+                  dot: statusCounts.incidencia > 0 ? "bg-rose-500 animate-pulse" : "bg-neutral-300",
+                  href: "/ops/incidencias"
+                },
+                { 
+                  label: "Entregues", 
+                  value: statusCounts.entregue, 
+                  dot: "bg-emerald-500",
+                  href: "/ops/envios?status=Entregue"
+                },
+                { 
+                  label: "Total no Mês", 
+                  value: totalShipments, 
+                  dot: "bg-indigo-500",
+                  href: "/ops/envios"
+                }
+              ].map((s, i) => (
+                <Link
+                  key={i}
+                  href={s.href}
+                  className="group bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-3.5 flex flex-col justify-between shadow-2xs hover:border-[var(--border-strong)] hover:shadow-xs transition-all duration-150"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-[var(--text-secondary)] tracking-wide">
+                      {s.label}
+                    </span>
+                    <span className={`w-2 h-2 rounded-full ${s.dot} shrink-0`} />
+                  </div>
+                  <div className="mt-2 flex items-baseline justify-between">
+                    <span className="text-xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
+                      {s.value}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity">
+                      Ver &rarr;
+                    </span>
+                  </div>
+                </Link>
+              ))}
             </div>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
-                {s.value}
-              </span>
-              <span className="text-[10px] text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity">
-                Ver &rarr;
-              </span>
-            </div>
-          </Link>
-        ))}
           </div>
+
+          {/* Live Sector & Transport News Feed */}
+          <LatestNewsWidget />
         </div>
       </div>
 

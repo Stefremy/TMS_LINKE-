@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from "react"
 import { Plus, X, RefreshCw, SlidersHorizontal, TrendingUp, TrendingDown } from "lucide-react"
 import { ClockStef } from "./ClockStef"
+import { NeumorphicCalculator } from "./NeumorphicCalculator"
 
 export interface LinkeMetrics {
   revenue: number

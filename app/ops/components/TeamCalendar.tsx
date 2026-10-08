@@ -58,6 +58,31 @@ export interface CalendarHoliday {
   country: "PT" | "ES"
 }
 
+// Minimal vector flag indicator (clean, subtle, non-AI)
+function MinimalFlag({ country }: { country: "PT" | "ES" }) {
+  if (country === "PT") {
+    return (
+      <span 
+        aria-hidden="true"
+        className="inline-flex items-stretch w-3.5 h-2.5 rounded-[2px] overflow-hidden border border-black/20 dark:border-white/20 shrink-0 shadow-2xs"
+      >
+        <span className="w-[40%] h-full bg-[#006600]" />
+        <span className="w-[60%] h-full bg-[#d00000]" />
+      </span>
+    )
+  }
+  return (
+    <span 
+      aria-hidden="true"
+      className="inline-flex flex-col items-stretch w-3.5 h-2.5 rounded-[2px] overflow-hidden border border-black/20 dark:border-white/20 shrink-0 shadow-2xs"
+    >
+      <span className="w-full h-[28%] bg-[#aa151b]" />
+      <span className="w-full h-[44%] bg-[#f1bf00]" />
+      <span className="w-full h-[28%] bg-[#aa151b]" />
+    </span>
+  )
+}
+
 // Calculate Portuguese national holidays
 function getPortugueseHolidays(year: number): CalendarHoliday[] {
   const holidays: CalendarHoliday[] = [
@@ -331,28 +356,28 @@ export function TeamCalendar() {
               <button
                 type="button"
                 onClick={() => setShowPtHolidays(!showPtHolidays)}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-all border cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold transition-all border cursor-pointer ${
                   showPtHolidays 
-                    ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 shadow-2xs" 
+                    ? "bg-[var(--surface-bg)] text-[var(--text-primary)] border-[var(--border-strong)] shadow-2xs" 
                     : "opacity-40 text-neutral-400 border-transparent hover:opacity-70"
                 }`}
                 title="Mostrar/ocultar feriados de Portugal"
               >
-                <span>🇵🇹</span>
-                <span>PT</span>
+                <MinimalFlag country="PT" />
+                <span className="font-mono text-[10px] font-bold">PT</span>
               </button>
               <button
                 type="button"
                 onClick={() => setShowEsHolidays(!showEsHolidays)}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-all border cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold transition-all border cursor-pointer ${
                   showEsHolidays 
-                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 shadow-2xs" 
+                    ? "bg-[var(--surface-bg)] text-[var(--text-primary)] border-[var(--border-strong)] shadow-2xs" 
                     : "opacity-40 text-neutral-400 border-transparent hover:opacity-70"
                 }`}
                 title="Mostrar/ocultar feriados de Espanha (Atenção a expedições e trânsito)"
               >
-                <span>🇪🇸</span>
-                <span>ES</span>
+                <MinimalFlag country="ES" />
+                <span className="font-mono text-[10px] font-bold">ES</span>
               </button>
             </div>
 
@@ -440,13 +465,13 @@ export function TeamCalendar() {
                             <div 
                               key={hIdx} 
                               title={`${h.country === "PT" ? "Feriado Portugal" : "Feriado Espanha (Atenção a Trânsito e Entregas)"}: ${h.title}`}
-                              className={`text-[8.5px] font-bold leading-tight px-1 py-0.5 rounded border flex items-center gap-1 truncate ${
+                              className={`text-[8.5px] font-medium leading-tight px-1.5 py-0.5 rounded-md border flex items-center gap-1.5 truncate ${
                                 h.country === "PT" 
-                                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20" 
-                                  : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                                  ? "bg-slate-500/5 text-[var(--text-primary)] border-slate-300/40 dark:border-slate-700/60" 
+                                  : "bg-amber-500/5 text-[var(--text-primary)] border-amber-300/40 dark:border-amber-700/50"
                               }`}
                             >
-                              <span className="shrink-0">{h.country === "PT" ? "🇵🇹" : "🇪🇸"}</span>
+                              <MinimalFlag country={h.country} />
                               <span className="truncate">{h.title}</span>
                             </div>
                           ))}
