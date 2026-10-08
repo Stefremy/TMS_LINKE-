@@ -126,8 +126,13 @@ export async function resolveCoordinates(
 
   // 4. Nominatim with full address
   if (useApi && (address || city)) {
-    const q = [address, city].filter(Boolean).join(", ") + ", Portugal"
-    const apiR = await nominatimGeocode(q, country.toLowerCase())
+    const qParts = [address, city].filter(Boolean)
+    if (country === "PT") qParts.push("Portugal")
+    else if (country === "ES") qParts.push("España")
+    // If country is empty string, we search globally without appending country
+    
+    const q = qParts.join(", ")
+    const apiR = await nominatimGeocode(q, country ? country.toLowerCase() : "")
     if (apiR) {
       if (cacheKey) toCache(cacheKey, apiR)
       return apiR

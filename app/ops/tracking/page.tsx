@@ -75,10 +75,27 @@ export default async function OpsTrackingPage() {
       const pickagens: ShipmentPickagem[] = []
 
       // Real scans from tracking_events table
-      dbEvts.forEach((e: any, idx: number) => {
+      for (let idx = 0; idx < dbEvts.length; idx++) {
+        const e = dbEvts[idx]
         // Try location_name first, then description, then sender city
         const rawLocation = e.location_name || e.description || senderLocationName
-        const evtCoord = resolveLocationCoordinate(rawLocation, null)
+        
+        const parenMatch = rawLocation.match(/\(([^)]+)\)[^()]*$/)
+        let candidateCity = parenMatch && parenMatch[1] ? parenMatch[1].trim() : rawLocation
+        candidateCity = candidateCity.replace(/^(c\.?\s*o\.?|co|ctc|cd|cdp|hub|centro operacional|centro de tratamento|plataforma|cais|delegação|delegacion|delegación|correos express|posto)\s+/i, "").trim()
+
+        let countryCode = "PT"
+        if (s.provider === "correos_express") {
+          // For Correos Express, it might be Portugal, Spain or International (Europe)
+          countryCode = "" 
+        }
+
+        const evtCoord = await resolveCoordinates({
+          city: candidateCity,
+          country: countryCode,
+          useApi: true
+        })
+
         // If geo lookup returned the generic fallback, inherit last known checkpoint position (or origin if first)
         const isGenericFallback = evtCoord.lat === 39.5 && evtCoord.lng === -8.5
         const lastKnown = pickagens.length > 0 
@@ -102,7 +119,7 @@ export default async function OpsTrackingPage() {
           isCurrentPosition: isLast,
           description: e.description
         })
-      })
+      }
 
       const completedScans = pickagens.filter(p => p.status === "completed" || p.status === "current").length
       const progressPercent = pickagens.length > 0 ? Math.round((completedScans / pickagens.length) * 100) : 0
