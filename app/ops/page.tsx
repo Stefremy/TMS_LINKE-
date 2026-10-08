@@ -20,8 +20,16 @@ import { getClientesAction } from "@/app/actions/clientes"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 
 import { OpsDashboardClientSync } from "./components/OpsDashboardClientSync"
+import { ProfitComparisonChart } from "./components/ProfitComparisonChart"
+import { DateRangePicker } from "./components/DateRangePicker"
+import { DashboardWidgets } from "./components/DashboardWidgets"
 
-export default async function OpsDashboardPage() {
+function getMonthName(date: Date) {
+  return date.toLocaleString('pt-PT', { month: 'long', year: 'numeric' })
+}
+
+export default async function OpsDashboardPage(props: { searchParams?: Promise<{ month?: string, year?: string, from?: string, to?: string }> }) {
+  const searchParams = await props.searchParams || {}
   const supabase = createAdminClient()
 
   // Fetch real data from DB & persistent actions
@@ -44,12 +52,86 @@ export default async function OpsDashboardPage() {
     if (c.code) clientMap.set(c.code, c.short_name || c.legal_name)
   })
 
-  // Real KPI calculations
-  const totalShipments = shipments.length
-  const pendingRecolhas = recolhas.filter((r: any) => r.status === "pendente" || r.status === "rascunho").length
-  const totalRevenue = shipments.reduce((acc: number, s: any) => acc + (Number(s.sell_price) || 0), 0)
+  // Date bounds for selected or current month
+  const now = new Date()
+  let targetMonth = now.getMonth()
+  let targetYear = now.getFullYear()
   
-  const deliveredShipments = shipments.filter((s: any) => s.status === "entregue")
+  let currentMonthStart = new Date(targetYear, targetMonth, 1)
+  let currentMonthEnd = new Date(targetYear, targetMonth + 1, 0)
+  
+  if (searchParams.month && searchParams.year) {
+    const m = parseInt(searchParams.month, 10)
+    const y = parseInt(searchParams.year, 10)
+    if (!isNaN(m) && !isNaN(y)) {
+      targetMonth = m
+      targetYear = y
+      currentMonthStart = new Date(targetYear, targetMonth, 1)
+      currentMonthEnd = new Date(targetYear, targetMonth + 1, 0)
+    }
+  }
+
+  const isCustomRange = Boolean(searchParams.from && searchParams.to)
+  if (isCustomRange) {
+    currentMonthStart = new Date(searchParams.from!)
+    currentMonthEnd = new Date(searchParams.to!)
+    currentMonthEnd.setHours(23, 59, 59, 999) // end of the day
+  }
+  
+  const targetDate = new Date(targetYear, targetMonth, 1)
+  
+  // Filter shipments for KPIs to ONLY the target month/range
+  const currentMonthShipments = shipments.filter((s: any) => {
+    const d = new Date(s.created_at)
+    return d >= currentMonthStart && d <= currentMonthEnd
+  })
+  
+  const motherAccountId = clients.find((c: any) => c.code === "CL001")?.id
+  const clientShipments = motherAccountId 
+    ? shipments.filter((s: any) => s.client_id !== motherAccountId)
+    : shipments
+    
+  const currentMonthClientShipments = clientShipments.filter((s: any) => {
+    const d = new Date(s.created_at)
+    return d >= currentMonthStart && d <= currentMonthEnd
+  })
+
+  const totalShipments = currentMonthShipments.length
+  const pendingRecolhas = recolhas.filter((r: any) => r.status === "pendente" || r.status === "rascunho").length
+  
+  const clientRevenue = currentMonthClientShipments.reduce((acc: number, s: any) => acc + (Number(s.sell_price) || 0), 0)
+  const clientCost = currentMonthClientShipments.reduce((acc: number, s: any) => acc + (Number(s.buy_price) || 0), 0)
+  const clientMargin = clientRevenue - clientCost
+
+  // Compare revenue with prior equivalent period for Linke software metrics
+  let prevPeriodStart: Date
+  let prevPeriodEnd: Date
+  if (isCustomRange) {
+    const rangeDuration = currentMonthEnd.getTime() - currentMonthStart.getTime()
+    prevPeriodStart = new Date(currentMonthStart.getTime() - rangeDuration)
+    prevPeriodEnd = new Date(currentMonthStart.getTime() - 1)
+  } else {
+    prevPeriodStart = new Date(targetYear, targetMonth - 1, 1)
+    prevPeriodEnd = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999)
+  }
+
+  const prevPeriodClientShipments = clientShipments.filter((s: any) => {
+    const d = new Date(s.created_at)
+    return d >= prevPeriodStart && d <= prevPeriodEnd
+  })
+  const prevClientRevenue = prevPeriodClientShipments.reduce((acc: number, s: any) => acc + (Number(s.sell_price) || 0), 0)
+  const revenueGrowthPercent = prevClientRevenue > 0
+    ? ((clientRevenue - prevClientRevenue) / prevClientRevenue) * 100
+    : clientRevenue > 0 ? 100 : 0
+
+  const linkeMetrics = {
+    revenue: clientRevenue,
+    prevRevenue: prevClientRevenue,
+    growthPercent: Number(revenueGrowthPercent.toFixed(1)),
+    profit: clientMargin,
+  }
+
+  const deliveredShipments = currentMonthShipments.filter((s: any) => s.status === "entregue")
   const deliveredCount = deliveredShipments.length
   const deliveryRate = totalShipments > 0 ? Math.round((deliveredCount / totalShipments) * 100) : 0
 
@@ -97,13 +179,56 @@ export default async function OpsDashboardPage() {
     entregue: deliveredCount,
     devolvido: 0
   }
-  shipments.forEach((s: any) => {
+  currentMonthShipments.forEach((s: any) => {
     if (s.status === "pendente" || s.status === "rascunho") statusCounts.pendente++
     else if (s.status === "em transito" || s.status === "em_transito") statusCounts.em_transito++
     else if (s.status === "em_distribuicao") statusCounts.em_distribuicao++
     else if (s.status === "incidencia") statusCounts.incidencia++
     else if (s.status === "devolvido") statusCounts.devolvido++
   })
+
+  // Profit Chart Data (Accumulated by Day for 4 months)
+  const chartData: any[] = []
+  const monthData: Record<number, number[]> = {}
+  
+  for (let i = 0; i < 4; i++) {
+    monthData[i] = new Array(31).fill(0)
+    const mStart = new Date(targetDate.getFullYear(), targetDate.getMonth() - i, 1)
+    const mEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() - i + 1, 0)
+    
+    // Group client shipments by day for this month
+    const mShipments = clientShipments.filter((s: any) => {
+      const d = new Date(s.created_at)
+      return d >= mStart && d <= mEnd
+    })
+    
+    mShipments.forEach((s: any) => {
+      const day = new Date(s.created_at).getDate()
+      const profit = (Number(s.sell_price) || 0) - (Number(s.buy_price) || 0)
+      monthData[i][day - 1] += profit
+    })
+    
+    // Accumulate
+    let sum = 0
+    for (let day = 0; day < 31; day++) {
+      sum += monthData[i][day]
+      monthData[i][day] = sum
+    }
+  }
+  
+  // If target is current month, only show actual up to today. Otherwise, show full month.
+  const isCurrentMonth = targetMonth === now.getMonth() && targetYear === now.getFullYear()
+  const cutoffDay = isCurrentMonth ? now.getDate() : 31
+  
+  for (let day = 1; day <= 31; day++) {
+    chartData.push({
+      day,
+      actual: day <= cutoffDay ? monthData[0][day - 1] : null,
+      prev1: monthData[1][day - 1],
+      prev2: monthData[2][day - 1],
+      prev3: monthData[3][day - 1]
+    })
+  }
 
   const stats = [
     { 
@@ -130,6 +255,18 @@ export default async function OpsDashboardPage() {
       icon: PieChart, 
       subtext: totalShipments > 0 ? `${deliveredCount} de ${totalShipments} envios` : "Sem envios finalizados" 
     },
+    {
+      label: "Receitas",
+      value: `${clientRevenue.toFixed(2)}€`,
+      icon: ReceiptEuro,
+      subtext: "Total faturado"
+    },
+    {
+      label: "Margem",
+      value: `${clientMargin.toFixed(2)}€`,
+      icon: TrendingUp,
+      subtext: "Lucro estimado"
+    },
   ]
 
   const recentShipments = shipments.slice(0, 5)
@@ -143,8 +280,24 @@ export default async function OpsDashboardPage() {
     <div className="flex flex-col gap-6">
       <OpsDashboardClientSync activeIds={activeIds} />
       
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <DashboardWidgets linkeMetrics={linkeMetrics} />
+          <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight capitalize">
+            {isCustomRange ? "Período Personalizado" : getMonthName(targetDate)}
+          </h2>
+          <DateRangePicker 
+            defaultFrom={isCustomRange ? searchParams.from! : currentMonthStart.toISOString().split('T')[0]} 
+            defaultTo={isCustomRange ? searchParams.to! : currentMonthEnd.toISOString().split('T')[0]} 
+          />
+        </div>
+        <Badge variant="neutral" className="font-medium bg-[var(--surface-bg)] text-[var(--text-secondary)]">
+          Atualizado hoje
+        </Badge>
+      </div>
+
       {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {stats.map((stat, idx) => (
           <div 
             key={idx} 
@@ -171,26 +324,30 @@ export default async function OpsDashboardPage() {
         ))}
       </div>
 
-      {/* Breakdown Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ProfitComparisonChart data={chartData} />
+        {/* Breakdown Row */}
+        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Estado Atual ({getMonthName(targetDate)})</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
           { 
             label: "Pendentes", 
             value: statusCounts.pendente, 
             dot: "bg-slate-400",
-            href: "/ops/envios?search=pendente"
+            href: "/ops/envios?status=Pendente"
           },
           { 
             label: "Em Trânsito", 
             value: statusCounts.em_transito, 
             dot: "bg-blue-500",
-            href: "/ops/envios?search=transito"
+            href: "/ops/envios?status=Em Trânsito"
           },
           { 
             label: "Em Distrib.", 
             value: statusCounts.em_distribuicao, 
             dot: "bg-amber-500",
-            href: "/ops/envios?search=distribuicao"
+            href: "/ops/envios?status=Em Distribuição"
           },
           { 
             label: "Incidências", 
@@ -202,7 +359,7 @@ export default async function OpsDashboardPage() {
             label: "Entregues", 
             value: statusCounts.entregue, 
             dot: "bg-emerald-500",
-            href: "/ops/envios?search=entregue"
+            href: "/ops/envios?status=Entregue"
           }
         ].map((s, i) => (
           <Link
@@ -226,6 +383,8 @@ export default async function OpsDashboardPage() {
             </div>
           </Link>
         ))}
+          </div>
+        </div>
       </div>
 
 

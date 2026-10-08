@@ -43,12 +43,13 @@ interface EnviosClientProps {
     total: number
   }
   initialSearch?: string
+  initialStatus?: string
 }
 
-export function EnviosClient({ envios, recolhas, clients, pagination, initialSearch }: EnviosClientProps) {
+export function EnviosClient({ envios, recolhas, clients, pagination, initialSearch, initialStatus }: EnviosClientProps) {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = React.useState(initialSearch || "")
-  const [statusFilter, setStatusFilter] = React.useState("Todos")
+  const [statusFilter, setStatusFilter] = React.useState(initialStatus || "Todos")
   const [showFilters, setShowFilters] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
   const [showRecolhaModal, setShowRecolhaModal] = React.useState(false)

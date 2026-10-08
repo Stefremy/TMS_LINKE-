@@ -5,16 +5,17 @@ import { EnviosClient } from "./components/EnviosClient"
 
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 
-export default async function EnviosPage(props: { searchParams?: Promise<{ page?: string, search?: string }> }) {
+export default async function EnviosPage(props: { searchParams?: Promise<{ page?: string, search?: string, status?: string }> }) {
   const searchParams = await props.searchParams || {}
   const supabase = createAdminClient()
   
   const page = parseInt(searchParams.page || "1", 10)
   const search = searchParams.search || ""
+  const status = searchParams.status || undefined
 
   // Fetch real data from DB & persistent actions
   const [paginatedResult, recolhasResult, clients] = await Promise.all([
-    fetchPaginatedShipments({ page, search }),
+    fetchPaginatedShipments({ page, search, status }),
     supabase
       .from("recolhas")
       .select("*")
@@ -173,6 +174,7 @@ const mappedRecolhas = recolhas.map((r: any) => ({
         total: paginatedResult.total
       }}
       initialSearch={search}
+      initialStatus={status}
     />
   )
 }

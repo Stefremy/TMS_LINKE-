@@ -135,6 +135,7 @@ export async function fetchPaginatedShipments(options: {
   pageSize?: number
   includeLabels?: boolean 
   search?: string
+  status?: string
 } = {}) {
   const ctx = await requireUser()
   const supabase = createAdminClient()
@@ -158,6 +159,17 @@ export async function fetchPaginatedShipments(options: {
       const term = options.search.replace(/[,()]/g, " ")
       q = q.or(`tracking_number.ilike.%${term}%,recipient_name.ilike.%${term}%,sender_name.ilike.%${term}%`)
     }
+
+    if (options.status) {
+      const sLabel = options.status.toLowerCase()
+      if (sLabel === "pendente" || sLabel === "pendentes") q = q.in("status", ["pendente", "rascunho"])
+      else if (sLabel === "em trânsito") q = q.in("status", ["entrada_rede", "recolhido"])
+      else if (sLabel === "em distribuição" || sLabel === "em distrib.") q = q.eq("status", "em_distribuicao")
+      else if (sLabel === "entregue" || sLabel === "entregues") q = q.eq("status", "entregue")
+      else if (sLabel === "incidências" || sLabel === "incidência") q = q.eq("status", "incidencia")
+      else q = q.eq("status", options.status) // fallback
+    }
+
     return q.range(from, to)
   }
 
