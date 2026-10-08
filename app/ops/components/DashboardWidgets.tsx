@@ -34,6 +34,8 @@ const DEFAULT_SYMBOLS = [
   "CTT.LS",
 ]
 
+import { ClockStef } from "./ClockStef"
+
 export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
   const [mounted, setMounted] = useState(false)
   const [time, setTime] = useState<Date | null>(null)
@@ -42,6 +44,7 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
   const [customSymbols, setCustomSymbols] = useState<string[]>([])
   const [newSymbolInput, setNewSymbolInput] = useState("")
   const [showSettings, setShowSettings] = useState(false)
+  const [showClockModal, setShowClockModal] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -142,43 +145,35 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
     } catch {}
   }
 
-  // Clock calculations
-  const now = time || new Date()
-  const seconds = now.getSeconds()
-  const minutes = now.getMinutes()
-  const hours = now.getHours()
-  const secondDegrees = (seconds / 60) * 360
-  const minuteDegrees = ((minutes + seconds / 60) / 60) * 360
-  const hourDegrees = (((hours % 12) + minutes / 60) / 12) * 360
-
   const linkeGrowth = linkeMetrics?.growthPercent ?? 0
   const isLinkePositive = linkeGrowth >= 0
 
   const renderTickerItems = (keyPrefix: string) => (
-    <div key={keyPrefix} className="flex items-center gap-6 shrink-0">
-      {/* Live Badge */}
-      <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase text-neutral-400 bg-neutral-100 dark:bg-neutral-800/60 px-2 py-0.5 rounded-full">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-        Mercados
+    <div key={keyPrefix} className="flex items-center gap-5 shrink-0">
+      {/* LED Live Badge */}
+      <span className="flex items-center gap-1.5 text-[9px] font-mono font-bold tracking-widest uppercase text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded shadow-[0_0_8px_rgba(16,185,129,0.3)]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] shadow-[0_0_6px_#00FF66] animate-pulse" />
+        LIVE LED
       </span>
 
-      {/* Real Linke Revenue Comparison */}
+      {/* Real Linke Revenue LED Comparison */}
       <div 
         title={`Receita Período: €${(linkeMetrics?.revenue || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2 })} | Anterior: €${(linkeMetrics?.prevRevenue || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2 })} | Lucro: €${(linkeMetrics?.profit || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2 })}`}
-        className="flex items-center gap-2 font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-xs shadow-xs cursor-help transition-transform hover:scale-105"
+        className="flex items-center gap-1.5 font-mono text-xs px-2 py-0.5 rounded bg-black/60 border border-emerald-500/30 text-emerald-400 cursor-help transition-all hover:border-emerald-400 shadow-[0_0_8px_rgba(0,255,102,0.15)]"
       >
-        <span className="tracking-tight">GO LINKE</span>
-        <span className="font-mono text-[11px] bg-white/60 dark:bg-neutral-900/60 px-1.5 py-0.2 rounded border border-emerald-500/20 text-neutral-800 dark:text-neutral-200">
+        <span className="font-bold tracking-tight text-white drop-shadow-[0_0_4px_rgba(255,255,255,0.4)]">GO LINKE</span>
+        <span className="text-[#00FF66] font-bold drop-shadow-[0_0_6px_rgba(0,255,102,0.6)]">
           €{linkeMetrics ? (linkeMetrics.revenue >= 1000 ? `${(linkeMetrics.revenue / 1000).toFixed(1)}k` : linkeMetrics.revenue.toFixed(0)) : "0"}
         </span>
-        <span className={`text-[11px] font-semibold flex items-center gap-0.5 ${isLinkePositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500"}`}>
+        <span className={`text-[11px] font-bold flex items-center ${isLinkePositive ? "text-[#00FF66] drop-shadow-[0_0_6px_rgba(0,255,102,0.8)]" : "text-[#FF3838] drop-shadow-[0_0_6px_rgba(255,56,56,0.8)]"}`}>
           {isLinkePositive ? "▲ +" : "▼ "}
           {Math.abs(linkeGrowth)}%
         </span>
-        <span className="text-xs">{isLinkePositive ? "🚀" : "📊"}</span>
       </div>
 
-      {/* Official Stock Quotes */}
+      <span className="text-neutral-700 font-mono select-none">|</span>
+
+      {/* Official Stock Quotes with glowing LED styling */}
       {quotes.map((q) => {
         const isPositive = q.changePercent >= 0
         const currSymbol = q.currency === "EUR" ? "€" : "$"
@@ -187,66 +182,98 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
           : q.price
 
         return (
-          <div key={q.symbol} className="flex items-center gap-1.5 text-xs font-medium">
-            <span className="font-bold text-[var(--text-secondary)]">{q.label}</span>
-            <span className="font-mono text-[11px] text-[var(--text-tertiary)]">
+          <div key={q.symbol} className="flex items-center gap-1.5 font-mono text-xs">
+            <span className="font-bold text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.5)]">
+              {q.label}
+            </span>
+            <span className="text-neutral-300 font-medium">
               {currSymbol}{formattedPrice}
             </span>
-            <span className={`text-[11px] font-semibold flex items-center ${isPositive ? "text-emerald-500" : "text-rose-500"}`}>
-              {isPositive ? "▲ +" : "▼ "}
-              {Math.abs(q.changePercent).toFixed(2)}%
+            <span className={`font-bold flex items-center text-[11px] ${
+              isPositive 
+                ? "text-[#00FF66] drop-shadow-[0_0_6px_rgba(0,255,102,0.7)]" 
+                : "text-[#FF3838] drop-shadow-[0_0_6px_rgba(255,56,56,0.7)]"
+            }`}>
+              {isPositive ? "▲" : "▼"}{isPositive ? "+" : ""}{q.changePercent.toFixed(2)}%
             </span>
+            <span className="text-neutral-700 font-mono select-none ml-2">|</span>
           </div>
         )
       })}
     </div>
   )
 
+  const now = time || new Date()
+  const formattedDigital = mounted 
+    ? now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) 
+    : "12:00:00"
+
   return (
     <div className="flex items-center gap-3 relative">
-      {/* Cute Analog Clock */}
+      {/* Figma 'Clock Stef' (Meridian) Trigger */}
       <div 
-        title={mounted ? now.toLocaleTimeString("pt-PT") : "Relógio"}
-        className="relative w-10 h-10 rounded-full bg-[var(--surface-bg)] border-2 border-[var(--border-strong)] shadow-xs flex items-center justify-center shrink-0 cursor-default"
+        onClick={() => setShowClockModal(true)}
+        title="Abrir Relógio Meridian (Clock Stef)"
+        className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white dark:bg-[#111318] border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group"
       >
-        <div className="absolute w-1.5 h-1.5 bg-neutral-800 dark:bg-neutral-200 rounded-full z-10" />
-        
-        {/* Hour Hand */}
-        <div 
-          className="absolute w-0.5 h-2.5 bg-neutral-800 dark:bg-neutral-200 rounded-full origin-bottom"
-          style={{ transform: `translateY(-50%) rotate(${hourDegrees}deg)` }}
-        />
-        {/* Minute Hand */}
-        <div 
-          className="absolute w-0.5 h-3.5 bg-neutral-600 dark:bg-neutral-400 rounded-full origin-bottom"
-          style={{ transform: `translateY(-50%) rotate(${minuteDegrees}deg)` }}
-        />
-        {/* Second Hand */}
-        <div 
-          className="absolute w-px h-4 bg-rose-500 origin-bottom"
-          style={{ transform: `translateY(-50%) rotate(${secondDegrees}deg)` }}
-        />
+        <ClockStef size="compact" />
+        <div className="flex flex-col">
+          <span className="font-mono text-xs font-semibold tracking-tight text-slate-800 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+            {formattedDigital}
+          </span>
+          <span className="text-[9px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-bold -mt-0.5">
+            MERIDIAN
+          </span>
+        </div>
       </div>
 
-      {/* Stock Ticker Bar */}
-      <div className="group relative hidden sm:flex items-center bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-full pl-3 pr-2 py-1 shadow-inner max-w-[480px] overflow-hidden">
-        {/* Marquee area */}
-        <div className="overflow-hidden w-full">
-          <div className="flex animate-[ticker_35s_linear_infinite] group-hover:[animation-play-state:paused] whitespace-nowrap gap-6">
-            {renderTickerItems("item1")}
-            {renderTickerItems("item2")}
+      {/* Digital LED Stock Ticker Bar (Fast Scrolling, LED Matrix Style) */}
+      <div className="group relative hidden sm:flex items-center bg-[#07080a] dark:bg-[#030405] border border-neutral-800 rounded-lg pl-3 pr-2 py-1.5 shadow-[inset_0_2px_6px_rgba(0,0,0,0.9),0_1px_2px_rgba(255,255,255,0.05)] max-w-[800px] w-full overflow-hidden">
+        {/* Subtle LED dot pattern overlay */}
+        <div 
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage: "radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px)",
+            backgroundSize: "3px 3px"
+          }}
+        />
+
+        {/* Marquee area with faster scroll (15s) and seamless loop */}
+        <div className="overflow-hidden w-full relative z-10 flex">
+          <div className="flex w-max animate-[ticker_15s_linear_infinite] group-hover:[animation-play-state:paused]">
+            <div className="flex items-center gap-5 pr-5 shrink-0">
+              {renderTickerItems("item1")}
+            </div>
+            <div className="flex items-center gap-5 pr-5 shrink-0" aria-hidden="true">
+              {renderTickerItems("item2")}
+            </div>
           </div>
         </div>
 
         {/* Action button to customize stocks */}
         <button
           onClick={() => setShowSettings(!showSettings)}
-          title="Adicionar ações ao ticker"
-          className="ml-2 p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded-full hover:bg-neutral-200/50 dark:hover:bg-neutral-800 transition-colors shrink-0"
+          title="Personalizar ações no ticker LED"
+          className="ml-2.5 p-1 text-neutral-400 hover:text-emerald-400 rounded hover:bg-neutral-800/80 transition-colors shrink-0 relative z-10"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* Full Meridian Clock Modal (matching Figma 'clock stef' exactly) */}
+      {showClockModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200"
+          onClick={() => setShowClockModal(false)}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="animate-in zoom-in-95 duration-200"
+          >
+            <ClockStef size="full" showCloseButton onClose={() => setShowClockModal(false)} />
+          </div>
+        </div>
+      )}
 
       {/* Settings Popover */}
       {showSettings && (

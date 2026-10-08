@@ -325,7 +325,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ProfitComparisonChart data={chartData} />
+        <ProfitComparisonChart data={chartData} targetMonth={targetDate.getMonth()} />
         {/* Breakdown Row */}
         <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs">
           <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Estado Atual ({getMonthName(targetDate)})</h3>

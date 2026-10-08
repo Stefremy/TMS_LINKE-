@@ -8,6 +8,7 @@ import {
   Package, 
   PackagePlus,
   CalendarCheck, 
+  CalendarDays,
   AlertTriangle, 
   Building2, 
   FileText, 
@@ -18,7 +19,8 @@ import {
   ChevronDown,
   Users,
   Receipt,
-  Euro
+  Euro,
+  Navigation
 } from "lucide-react"
 
 type NavItem = {
@@ -41,7 +43,9 @@ const navConfig: NavSection[] = [
       { title: "Visão geral", href: "/ops", icon: LayoutDashboard },
       { title: "Novo Envio", href: "/ops/envios/novo", icon: PackagePlus },
       { title: "Envios", href: "/ops/envios", icon: Package },
+      { title: "Tracking & Frotas", href: "/ops/tracking", icon: Navigation },
       { title: "Recolhas", href: "/ops/envios/recolhas", icon: CalendarCheck },
+      { title: "Calendário", href: "/ops/calendario", icon: CalendarDays },
       { title: "Incidências", href: "/ops/incidencias", icon: AlertTriangle },
     ]
   },
