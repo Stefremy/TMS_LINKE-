@@ -167,6 +167,12 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
     }
   }, [initialData, servicosLinke])
 
+  React.useEffect(() => {
+    if (formData.billing_type === "pay_as_you_go" && formData.payment_terms !== "Pronto Pagamento") {
+      setFormData(prev => ({ ...prev, payment_terms: "Pronto Pagamento" }))
+    }
+  }, [formData.billing_type, formData.payment_terms])
+
   // Handlers for Product Services Pricing
   const handleProductPriceChange = (index: number, field: keyof ClientServicePrice, value: any) => {
     setFormData((prev) => {
@@ -871,9 +877,14 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                 <div>
                   <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Condição de Pagamento</label>
                   <select
-                    value={formData.payment_terms || "A 30 dias"}
+                    value={formData.billing_type === "pay_as_you_go" ? "Pronto Pagamento" : (formData.payment_terms || "A 30 dias")}
                     onChange={(e) => setFormData({ ...formData, payment_terms: e.target.value })}
-                    className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs font-semibold text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all cursor-pointer"
+                    disabled={formData.billing_type === "pay_as_you_go"}
+                    className={`w-full border border-[var(--border-subtle)] rounded-md px-3 py-2 text-xs font-semibold focus:outline-none transition-all ${
+                      formData.billing_type === "pay_as_you_go"
+                        ? "bg-slate-100 text-slate-400 cursor-not-allowed opacity-75"
+                        : "bg-[var(--surface-muted)] text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] cursor-pointer"
+                    }`}
                   >
                     <option value="Pronto Pagamento">Pronto Pagamento</option>
                     <option value="A 7 dias">A 7 dias (Semanal)</option>

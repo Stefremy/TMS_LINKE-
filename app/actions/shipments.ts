@@ -58,8 +58,32 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
     // Removed fallback that exposed all shipments when a client had none
   }
 
+  const { getBillingStatementsAction } = await import("@/app/actions/moloni")
+  const allStatements = await getBillingStatementsAction()
+  
+  let totalDebt = 0
+  
+  // 1. Envios pendentes de faturação (billing_statement_id === null)
+  clientShipments.forEach((s: any) => {
+    if (!s.billing_statement_id) {
+      totalDebt += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
+    }
+  })
+
+  // 2. Extratos faturados mas não pagos (sem recibo)
+  allStatements.forEach((stmt: any) => {
+    if (effectiveClientId && stmt.client_id === effectiveClientId) {
+      if (stmt.moloni_document_id && !stmt.moloni_receipt_pdf) {
+        totalDebt += Number(stmt.total_value || 0)
+      } else if (!stmt.is_pro_forma && !stmt.moloni_document_id) {
+        totalDebt += Number(stmt.total_value || 0)
+      }
+    }
+  })
+
   const totalCount = clientShipments.length
-  const totalRevenue = clientShipments.reduce((acc: number, s: any) => acc + (Number(s.sell_price) || 0), 0)
+  // Change totalRevenue to reflect the real Debt (Used Balance)
+  const totalRevenue = totalDebt
   const deliveredCount = clientShipments.filter((s: any) => s.status === "entregue").length
   const deliveryRate = totalCount > 0 ? Math.round((deliveredCount / totalCount) * 100) : 0
 

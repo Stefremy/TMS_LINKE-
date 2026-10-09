@@ -314,16 +314,28 @@ export function ClientDashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={() => setIsTopUpOpen(true)}
-            className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-2 transition-colors cursor-pointer"
-          >
-            <CreditCard className="w-4 h-4 text-slate-500" />
-            <span>Carregar Saldo</span>
-          </button>
+          {currentClient?.billing_type !== 'conta_corrente' ? (
+            <button
+              type="button"
+              onClick={() => setIsTopUpOpen(true)}
+              className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <CreditCard className="w-4 h-4 text-slate-500" />
+              <span>Carregar Saldo</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="Não aplicável a clientes com Conta Corrente"
+              className="px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-400 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-2 cursor-not-allowed opacity-60"
+            >
+              <CreditCard className="w-4 h-4 text-slate-400" />
+              <span>Carregar Saldo</span>
+            </button>
+          )}
           
-          {currentClient && (currentClient.credit_limit ?? 0) <= 0 ? (
+          {currentClient && currentClient.billing_type === 'pay_as_you_go' && (currentClient.credit_limit ?? 0) <= 0 ? (
             <button
               type="button"
               onClick={() => {
