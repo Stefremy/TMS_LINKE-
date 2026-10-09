@@ -388,7 +388,7 @@ export default function ContasCorrenteClient({
                               const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
                               const { emitInvoiceAction } = await import("@/app/actions/moloni")
                               
-                              const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, false);
+                              const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, false) as any;
                               setIsLoading(false);
                               if (res?.success && res.statementNumber) {
                                 const stmtNum = res.statementNumber

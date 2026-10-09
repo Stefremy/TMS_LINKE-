@@ -13,22 +13,12 @@ const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[
 /**
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
-export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = false, isProForma: boolean = false) {
-  await requireEmployee()
-  try {
-    const supabase = createAdminClient()
-    
-    // 1. Obter Cliente do TMS
-    const allClients = await getClientesAction(clientId)
-    const client = allClients[0]
-      
-    if (!client) {
-      throw new Error("Cliente não encontrado.")
-    }
+export async function internalEmitInvoice(client: any, shipments: any[], skipMoloni: boolean = false, groupShipments: boolean = false, isProForma: boolean = false) {
+  const supabase = createAdminClient()
+  if (!client) throw new Error("Cliente não encontrado.")
+  if (!shipments || shipments.length === 0) throw new Error("Envios não encontrados.")
 
-    // 2. Obter Envios do TMS
-    const { data: dbShipments } = await supabase.from("shipments").select("*").in("id", shipmentIds)
-    const shipments = dbShipments || []
+  
 
     if (!shipments || shipments.length === 0) {
       throw new Error("Envios não encontrados.")
@@ -279,7 +269,8 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
     // 3. Criar Registo de Extrato no audit_log (sem necessidade de tabela separada)
     const statementNumber = `EXT-${new Date().getFullYear()}/${String(new Date().getMonth()+1).padStart(2,'0')}-${Math.floor(Math.random() * 9000 + 1000)}`
     const statementId = crypto.randomUUID()
-    const tenantId = isValidUuid((client as any).tenant_id) ? (client as any).tenant_id : (await getTenantId())
+    const tenantId = isValidUuid((client as any).tenant_id) ? (client as any).tenant_id : "11111111-1111-1111-1111-111111111111"
+    const shipmentIds = shipments.map((s: any) => s.id)
 
     const { error: statementErr } = await supabase.from('audit_log').insert({
       tenant_id: tenantId,
@@ -340,13 +331,11 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
       moloniDocumentNumber,
       url: `/api/statements/${encodeURIComponent(statementNumber)}/pdf`,
       moloniDocumentPdf: moloniDocumentUrl ? localMoloniPdfUrl : null,
+      rawMoloniUrl: moloniDocumentUrl,
       moloniError: moloniEmissionError
     }
 
-  } catch (error: any) {
-    console.error("emitInvoiceAction error:", error)
-    return { success: false, error: error.message }
-  }
+
 }
 
 /**
@@ -1583,3 +1572,31 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
   }
 }
 
+
+
+/**
+ * Criação da Fatura no Moloni (Action para ser chamada a partir da UI)
+ */
+export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = false, isProForma: boolean = false) {
+  await requireEmployee()
+  try {
+    const supabase = createAdminClient()
+    
+    // 1. Obter Cliente do TMS
+    const allClients = await getClientesAction(clientId)
+    const client = allClients[0]
+      
+    if (!client) {
+      throw new Error("Cliente não encontrado.")
+    }
+
+    // 2. Obter Envios do TMS
+    const { data: dbShipments } = await supabase.from("shipments").select("*").in("id", shipmentIds)
+    const shipments = dbShipments || []
+
+    return await internalEmitInvoice(client, shipments, skipMoloni, groupShipments, isProForma)
+  } catch (err: any) {
+    console.error("Emit Invoice Error:", err)
+    return { success: false, error: err?.message || "Failed to emit invoice" }
+  }
+}

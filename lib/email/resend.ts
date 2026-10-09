@@ -10,10 +10,12 @@ export async function sendEmail({
   to,
   subject,
   html,
+  attachments,
 }: {
   to: string | string[];
   subject: string;
   html: string;
+  attachments?: any[];
 }) {
   if (!resendClient) {
     console.warn("RESEND_API_KEY not configured. Skipping email send to:", to);
@@ -28,6 +30,7 @@ export async function sendEmail({
       to: Array.isArray(to) ? to : [to],
       subject,
       html,
+      attachments,
     });
 
     if (error) {
