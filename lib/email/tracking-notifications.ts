@@ -82,7 +82,14 @@ export async function sendTrackingEmailNotification(
       console.warn("[Tracking Notifications] Aviso na verificação de deduplicação:", dedupErr)
     }
 
+    const { data: dbTemplate } = await supabase
+      .from("email_templates")
+      .select("html_content")
+      .eq("id", type)
+      .single()
+
     const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
+    const htmlTemplate = dbTemplate?.html_content || emailTemplates[type]
     
     let html = ""
     let subject = ""
@@ -107,14 +114,14 @@ export async function sendTrackingEmailNotification(
 
     if (type === "tracking") {
       subject = "Linke | Guia de Transporte Emitida"
-      html = compileTemplate(emailTemplates.tracking, {
+      html = compileTemplate(htmlTemplate, {
         receiver_name: shipment.recipient_name || "Cliente",
         tracking_code: trackingCode,
         tracking_url
       })
     } else if (type === "in_transit") {
       subject = "A sua encomenda está a caminho! 🚚"
-      html = compileTemplate(emailTemplates.in_transit, {
+      html = compileTemplate(htmlTemplate, {
         receiver_name: shipment.recipient_name || "Estimado(a) Cliente",
         sender_name: shipment.sender_name || "Linke Logistics",
         tracking_code: trackingCode,
@@ -123,7 +130,7 @@ export async function sendTrackingEmailNotification(
       })
     } else if (type === "incident") {
       subject = "Atenção: Problema na Entrega ⚠️"
-      html = compileTemplate(emailTemplates.incident, {
+      html = compileTemplate(htmlTemplate, {
         tracking_code: trackingCode,
         incident_reason: extra?.reason || "Ocorreu uma anomalia durante a tentativa de entrega.",
         incident_date: new Date().toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
