@@ -56,7 +56,26 @@ export async function createShipment(formData: FormData) {
       getClientesAction(),
       getServicosLinkeAction(true),
     ])
-    const matchedClient = allClients.find((c: any) => c.id === client_id) || {}
+    const matchedClient: any = allClients.find((c: any) => c.id === client_id) || {}
+    
+    // SECURITY WALLET CHECK: Block creation if pay_as_you_go client has no balance
+    if (matchedClient.billing_type === "pay_as_you_go") {
+      const { data: pastShipments } = await supabase.from("shipments").select("sell_price, fuel_tax_amount, status").eq("client_id", client_id)
+      let totalSpent = 0
+      ;(pastShipments || []).forEach((s: any) => {
+        if (s.status !== "anulado") {
+          totalSpent += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
+        }
+      })
+      const availableCredit = Math.max((matchedClient.credit_limit || 0) - totalSpent, 0)
+      if (availableCredit <= 0) {
+        return {
+          success: false,
+          error: "Saldo Insuficiente: A sua Wallet tem saldo nulo ou negativo. Efetue um carregamento para criar envios."
+        }
+      }
+    }
+
     const recipientCountry = (formData.get("recipient_country") as string) || "PT"
     const priceResult = calculateShipmentPrice(weightKg, matchedClient, allServicos, recipientCountry, recipient_zip)
     if (priceResult.isBlocked) {

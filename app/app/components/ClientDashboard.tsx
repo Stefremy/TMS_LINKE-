@@ -335,7 +335,7 @@ export function ClientDashboard() {
             </button>
           )}
           
-          {currentClient && currentClient.billing_type === 'pay_as_you_go' && (currentClient.credit_limit ?? 0) <= 0 ? (
+          {currentClient && currentClient.billing_type === 'pay_as_you_go' && availableCredit <= 0 ? (
             <button
               type="button"
               onClick={() => {
@@ -432,13 +432,27 @@ export function ClientDashboard() {
         {/* KPI 4: Crédito (Saldo Disponível) */}
         <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--border-strong)] transition-all duration-150">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Saldo Disponível</span>
+            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
+              {currentClient?.billing_type === 'pay_as_you_go' ? 'Saldo Disponível' : 'Crédito Disponível'}
+            </span>
             <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0">
               <ShieldCheck className="w-4 h-4" strokeWidth={1.75} />
             </div>
           </div>
           <div>
             {creditLimit > 0 ? (
+              currentClient?.billing_type === 'pay_as_you_go' ? (
+                <>
+                  <div className="flex items-baseline justify-between mb-1.5 mt-2">
+                    <span className="text-4xl font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
+                      {availableCredit.toFixed(2)}€
+                    </span>
+                  </div>
+                  <div className="flex items-center text-[11px] text-[var(--text-tertiary)] mt-4">
+                    <span>O seu saldo é utilizado automaticamente ao criar novos envios.</span>
+                  </div>
+                </>
+              ) : (
               <>
                 <div className="flex items-baseline justify-between mb-1.5">
                   <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
@@ -471,6 +485,7 @@ export function ClientDashboard() {
                   <span>Usado: <strong className="text-[var(--text-secondary)] font-mono font-semibold">{stats.totalRevenue.toFixed(2)}€</strong></span>
                 </div>
               </>
+              )
             ) : (
               <>
                 <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono">Sem Limite</span>

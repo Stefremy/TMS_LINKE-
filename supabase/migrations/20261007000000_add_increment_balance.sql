@@ -2,8 +2,12 @@
 CREATE OR REPLACE FUNCTION increment_client_balance(client_id uuid, amount numeric)
 RETURNS void AS $$
 BEGIN
-  UPDATE clients
-  SET credit_limit = COALESCE(credit_limit, 0) + amount
-  WHERE id = client_id;
+  UPDATE audit_log
+  SET details = jsonb_set(
+    details,
+    '{credit_limit}',
+    to_jsonb(COALESCE((details->>'credit_limit')::numeric, 0) + amount)
+  )
+  WHERE action = 'client_data' AND details->>'id' = client_id::text;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

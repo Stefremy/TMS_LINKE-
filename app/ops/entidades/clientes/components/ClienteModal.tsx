@@ -899,16 +899,18 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Crédito (€)</label>
-                    <button 
-                      type="button" 
-                      onClick={() => setIsEditingCredit(!isEditingCredit)}
-                      className="text-[10px] text-[var(--accent)] font-semibold hover:underline cursor-pointer"
-                    >
-                      {isEditingCredit ? "Bloquear edição" : "Editar manualmente"}
-                    </button>
+                    {formData.billing_type !== "pay_as_you_go" && (
+                      <button 
+                        type="button" 
+                        onClick={() => setIsEditingCredit(!isEditingCredit)}
+                        className="text-[10px] text-[var(--accent)] font-semibold hover:underline cursor-pointer"
+                      >
+                        {isEditingCredit ? "Bloquear edição" : "Editar manualmente"}
+                      </button>
+                    )}
                   </div>
                   
-                  {isEditingCredit ? (
+                  {isEditingCredit && formData.billing_type !== "pay_as_you_go" ? (
                     <input
                       type="number"
                       value={formData.credit_limit ?? 5000}
@@ -917,12 +919,44 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                       placeholder="5000"
                     />
                   ) : (
-                    <div className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs font-mono font-bold text-[var(--text-primary)] flex items-center justify-between">
+                    <div className={`w-full border border-[var(--border-subtle)] rounded-md px-3 py-2 text-xs font-mono font-bold text-[var(--text-primary)] flex items-center justify-between ${formData.billing_type === "pay_as_you_go" ? "bg-slate-100 text-slate-500 opacity-80 cursor-not-allowed" : "bg-[var(--surface-muted)]"}`}>
                       <span>{Number(formData.credit_limit || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
-                      <span className="text-[10px] text-[var(--text-tertiary)] font-normal">Saldo (Pre-Pago)</span>
+                      <span className="text-[10px] text-[var(--text-tertiary)] font-normal font-sans">
+                        {formData.billing_type === "pay_as_you_go" ? "Carregamentos Acumulados (Bloqueado)" : "Limite Base"}
+                      </span>
                     </div>
                   )}
                 </div>
+
+                {formData.billing_type === "pay_as_you_go" && (
+                  <div className="mt-1 p-3 rounded-md bg-[var(--accent-soft)] border border-[rgba(18,138,71,0.2)] col-span-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Gestão de Saldo (Wallet)</span>
+                      <span className="text-[9px] bg-white px-1.5 py-0.5 rounded text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)]">Privilégio Admin</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] text-[var(--text-tertiary)] mb-0.5">Saldo Disponível (Projetado)</div>
+                        <div className="text-lg font-bold font-mono text-[var(--text-primary)]">
+                          {((initialData?.available_credit || 0) + ((formData.credit_limit || 0) - (initialData?.credit_limit || 0))).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = window.prompt("Introduza o valor a carregar (ex: 50.00). Use valores negativos para remover saldo:");
+                          if (val && !isNaN(Number(val))) {
+                            setFormData(prev => ({ ...prev, credit_limit: (prev.credit_limit || 0) + Number(val) }));
+                          }
+                        }}
+                        className="bg-white hover:bg-slate-50 text-[var(--text-primary)] text-[11px] font-semibold py-1.5 px-3 rounded-md border border-[var(--border-strong)] shadow-2xs flex items-center gap-1.5 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Injetar Saldo
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Comercial / Gestor de Conta</label>

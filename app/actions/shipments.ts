@@ -61,25 +61,45 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   const { getBillingStatementsAction } = await import("@/app/actions/moloni")
   const allStatements = await getBillingStatementsAction()
   
+  const { getClienteByIdAction } = await import("@/app/actions/clientes")
+  let clientBillingType = "conta_corrente"
+  if (effectiveClientId) {
+    const client = await getClienteByIdAction(effectiveClientId)
+    if (client) {
+      clientBillingType = client.billing_type || "conta_corrente"
+    }
+  }
+
   let totalDebt = 0
   
-  // 1. Envios pendentes de faturação (billing_statement_id === null)
-  clientShipments.forEach((s: any) => {
-    if (!s.billing_statement_id) {
-      totalDebt += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
-    }
-  })
-
-  // 2. Extratos faturados mas não pagos (sem recibo)
-  allStatements.forEach((stmt: any) => {
-    if (effectiveClientId && stmt.client_id === effectiveClientId) {
-      if (stmt.moloni_document_id && !stmt.moloni_receipt_pdf) {
-        totalDebt += Number(stmt.total_value || 0)
-      } else if (!stmt.is_pro_forma && !stmt.moloni_document_id) {
-        totalDebt += Number(stmt.total_value || 0)
+  if (clientBillingType === "pay_as_you_go") {
+    // Para contas Pré-Pagas, TODOS os envios não anulados descontam do saldo da Wallet (credit_limit = Top-Ups),
+    // independentemente de terem sido faturados ou não (as faturas não restituem o saldo).
+    clientShipments.forEach((s: any) => {
+      if (s.status !== "anulado") {
+        totalDebt += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
       }
-    }
-  })
+    })
+  } else {
+    // Para Conta Corrente, a dívida é calculada com base nos envios pendentes + extratos não pagos.
+    // 1. Envios pendentes de faturação (billing_statement_id === null)
+    clientShipments.forEach((s: any) => {
+      if (!s.billing_statement_id && s.status !== "anulado") {
+        totalDebt += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
+      }
+    })
+
+    // 2. Extratos faturados mas não pagos (sem recibo)
+    allStatements.forEach((stmt: any) => {
+      if (effectiveClientId && stmt.client_id === effectiveClientId) {
+        if (stmt.moloni_document_id && !stmt.moloni_receipt_pdf) {
+          totalDebt += Number(stmt.total_value || 0)
+        } else if (!stmt.is_pro_forma && !stmt.moloni_document_id) {
+          totalDebt += Number(stmt.total_value || 0)
+        }
+      }
+    })
+  }
 
   const totalCount = clientShipments.length
   // Change totalRevenue to reflect the real Debt (Used Balance)

@@ -423,14 +423,22 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                     {/* Crédito */}
                     <td className="py-3 px-3 text-right font-mono text-[11px] text-[var(--text-primary)]">
                       {item.credit_limit ? (
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className={`font-semibold ${item.available_credit !== undefined && item.available_credit < item.credit_limit * 0.2 ? 'text-[var(--status-critical)]' : ''}`}>
-                            {item.available_credit !== undefined ? item.available_credit.toLocaleString("pt-PT") : item.credit_limit.toLocaleString("pt-PT")}€
-                          </span>
-                          <span className="text-[9px] text-[var(--text-tertiary)]">
-                            de {item.credit_limit.toLocaleString("pt-PT")}€
-                          </span>
-                        </div>
+                        item.billing_type === 'pay_as_you_go' ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="font-semibold">
+                              {item.available_credit !== undefined ? item.available_credit.toLocaleString("pt-PT") : item.credit_limit.toLocaleString("pt-PT")}€
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className={`font-semibold ${item.available_credit !== undefined && item.available_credit < item.credit_limit * 0.2 ? 'text-[var(--status-critical)]' : ''}`}>
+                              {item.available_credit !== undefined ? item.available_credit.toLocaleString("pt-PT") : item.credit_limit.toLocaleString("pt-PT")}€
+                            </span>
+                            <span className="text-[9px] text-[var(--text-tertiary)]">
+                              de {item.credit_limit.toLocaleString("pt-PT")}€
+                            </span>
+                          </div>
+                        )
                       ) : <span className="text-[var(--text-tertiary)]">—</span>}
                     </td>
 
