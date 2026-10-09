@@ -28,7 +28,7 @@ type NavItem = {
   href: string
   icon: React.ElementType
   badge?: number | string
-  subItems?: { title: string; href: string }[]
+  subItems?: { title: string; href?: string; isSeparator?: boolean }[]
 }
 
 type NavSection = {
@@ -105,7 +105,8 @@ const navConfig: NavSection[] = [
           { title: "Taxas Adicionais", href: "/ops/configuracao/taxas" },
           { title: "Zonas de Preço", href: "/ops/configuracao/zonas" },
           { title: "Estados de Envio", href: "/ops/configuracao/estados" },
-          { title: "Email e Notificações", href: "/ops/configuracao/notificacoes" },
+          { title: "Comunicações", isSeparator: true },
+          { title: "Email Templates", href: "/ops/configuracao/notificacoes" },
         ]
       },
     ]
@@ -130,7 +131,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
       section.items.forEach((item) => {
         if (item.subItems) {
           const isChildActive = item.subItems.some((sub) => {
-             return pathname === sub.href || pathname.startsWith(sub.href + "/")
+             return sub.href && (pathname === sub.href || pathname.startsWith(sub.href + "/"))
           })
           if (isChildActive && !newOpenItems[item.title]) {
             newOpenItems[item.title] = true
@@ -168,7 +169,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                   : pathname.startsWith(item.href)
 
                 const isGroupActive = hasSubItems && item.subItems!.some(sub =>
-                  pathname === sub.href || pathname.startsWith(sub.href + "/")
+                  sub.href && (pathname === sub.href || pathname.startsWith(sub.href + "/"))
                 )
 
                 if (hasSubItems) {
@@ -190,12 +191,19 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                         <div className="px-2.5 py-1 text-[11px] font-bold text-[var(--text-primary)] border-b border-[var(--border-subtle)] mb-1">
                           {item.title}
                         </div>
-                        {item.subItems!.map((sub) => {
+                        {item.subItems!.map((sub, sIdx) => {
+                          if (sub.isSeparator) {
+                            return (
+                              <div key={`sep-${sIdx}`} className="px-2 py-1.5 mt-2 mb-1 text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider border-t border-[var(--border-subtle)]">
+                                {sub.title}
+                              </div>
+                            )
+                          }
                           const isSubActive = pathname === sub.href
                           return (
                             <Link
                               key={sub.title}
-                              href={sub.href}
+                              href={sub.href!}
                               className={`block py-1.5 px-2 rounded-md text-[12px] transition-colors ${
                                 isSubActive
                                   ? "text-[var(--accent)] font-bold bg-[var(--accent-soft)]/70"
@@ -262,7 +270,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
               if (hasSubItems) {
                 const isOpen = openItems[item.title] || false
                 const isGroupActive = item.subItems!.some(sub => 
-                  pathname === sub.href || pathname.startsWith(sub.href + "/")
+                  sub.href && (pathname === sub.href || pathname.startsWith(sub.href + "/"))
                 )
 
                 return (
@@ -295,12 +303,19 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                     {/* Sub Items */}
                     {isOpen && (
                       <div className="flex flex-col space-y-0.5 pl-6 pr-1 mt-0.5 mb-1.5 border-l-2 border-[var(--border-subtle)] ml-4">
-                        {item.subItems!.map((sub) => {
+                        {item.subItems!.map((sub, sIdx) => {
+                          if (sub.isSeparator) {
+                            return (
+                              <div key={`sep-exp-${sIdx}`} className="px-2 py-1.5 mt-2 mb-1 text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider border-t border-[var(--border-subtle)]">
+                                {sub.title}
+                              </div>
+                            )
+                          }
                           const isSubActive = pathname === sub.href
                           return (
                             <Link
                               key={sub.title}
-                              href={sub.href}
+                              href={sub.href!}
                               className={`block py-1.5 px-2 rounded-md text-[12px] transition-colors ${
                                 isSubActive
                                   ? "text-[var(--accent)] font-bold bg-[var(--accent-soft)]/70"

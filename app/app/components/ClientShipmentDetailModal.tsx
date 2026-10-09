@@ -410,37 +410,6 @@ export function ClientShipmentDetailModal({
               <span>Descarregar PDF</span>
             </button>
 
-            {/* Criar Devolução */}
-            <button
-              type="button"
-              onClick={handleCreateReturn}
-              disabled={isCreatingReturn}
-              className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-              title="Criar guia de devolução (inverte remetente/destinatário)"
-            >
-              {isCreatingReturn ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />
-              ) : (
-                <Undo2 className="w-3.5 h-3.5 text-slate-500" />
-              )}
-              <span>Devolução</span>
-            </button>
-
-            {/* Eliminar Envio */}
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="px-3 py-1.5 bg-white border border-slate-200 hover:border-red-200 hover:bg-red-50/60 text-slate-600 hover:text-red-700 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-              title="Eliminar envio permanentemente"
-            >
-              {isDeleting ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />
-              ) : (
-                <Trash2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-600" />
-              )}
-              <span>Eliminar</span>
-            </button>
 
             <button 
               type="button"

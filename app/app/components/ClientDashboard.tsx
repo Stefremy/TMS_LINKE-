@@ -761,49 +761,6 @@ export function ClientDashboard() {
                                 <span>Ver Detalhes</span>
                               </button>
 
-                              <div className="h-px bg-[var(--border-subtle)] my-1" />
-
-                              {/* Criar Devolução */}
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  setOpenDropdownId(null)
-                                  const confirmed = window.confirm(`Deseja criar uma guia de DEVOLUÇÃO para o envio ${tracking}?\n\nO Remetente e Destinatário serão invertidos automaticamente.`)
-                                  if (!confirmed) return
-                                  const res = await createReturnShipmentAction(shipment.id)
-                                  if (res.success) {
-                                    alert(`✅ Devolução criada com sucesso!\n\nNovo Tracking: ${res.newTrackingNumber}`)
-                                    window.location.reload()
-                                  } else {
-                                    alert("Erro ao criar devolução: " + (res.error || "Erro desconhecido"))
-                                  }
-                                }}
-                                className="w-full px-3 py-2 text-xs font-semibold text-[var(--status-warning)] hover:bg-[var(--status-warning-soft)] flex items-center gap-2 transition-colors cursor-pointer"
-                              >
-                                <Undo2 className="w-3.5 h-3.5 text-[var(--status-warning)]" />
-                                <span>Criar Devolução</span>
-                              </button>
-
-                              {/* Eliminar Envio */}
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  setOpenDropdownId(null)
-                                  const confirmed = window.confirm(`⚠️ Tem a certeza que deseja ELIMINAR permanentemente o envio ${tracking}?`)
-                                  if (!confirmed) return
-                                  const res = await deleteShipmentAction(shipment.id)
-                                  if (res.success) {
-                                    alert(`🗑️ Envio ${tracking} eliminado com sucesso!`)
-                                    window.location.reload()
-                                  } else {
-                                    alert("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"))
-                                  }
-                                }}
-                                className="w-full px-3 py-2 text-xs font-semibold text-[var(--status-critical)] hover:bg-[var(--status-critical-soft)] flex items-center gap-2 transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5 text-[var(--status-critical)]" />
-                                <span>Eliminar Envio</span>
-                              </button>
                             </div>
                           )}
                         </div>

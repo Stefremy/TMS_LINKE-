@@ -21,6 +21,9 @@ export function TemplatesClient() {
             <p className="text-[11px] font-medium text-[var(--text-secondary)] mt-0.5">Gerir mensagens automáticas enviadas para os clientes.</p>
           </div>
         </div>
+        <button className="px-3 py-1.5 bg-[var(--text-primary)] text-[var(--surface-bg)] text-[11px] font-semibold rounded-md hover:opacity-90 transition-opacity">
+          + Criar Template
+        </button>
       </div>
       
       <div className="p-5">
@@ -116,12 +119,12 @@ function TemplateRow({ id, title, desc, onPreview, isError }: { id: string, titl
           Preview
         </button>
         <button 
-          className={`px-3 py-1.5 text-[11px] font-semibold rounded-md transition-colors cursor-not-allowed opacity-50 ${
-            isError ? "text-[var(--status-critical)]" : "text-[var(--accent)]"
+          className={`px-3 py-1.5 text-[11px] font-semibold rounded-md transition-colors cursor-pointer ${
+            isError ? "text-[var(--status-critical)] hover:bg-[var(--status-critical-soft)]" : "text-[var(--accent)] hover:bg-[var(--accent-soft)]"
           }`}
-          disabled
+          onClick={() => alert("O editor de templates será ativado numa futura atualização.")}
         >
-          Editar
+          Editar (Brevemente)
         </button>
       </div>
     </div>

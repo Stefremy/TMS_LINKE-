@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro, Download, FileText, ExternalLink } from "lucide-react"
+import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro, Download, FileText, ExternalLink, Check, Printer } from "lucide-react"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
 
@@ -9,7 +9,7 @@ import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { Button } from "@/components/ui/button"
 import { resolveInternationalZone, OFFICIAL_LINKE_ZONES } from "@/lib/services/geo/international-zones"
-import { downloadCttLabel } from "@/lib/label-utils"
+import { downloadCttLabel, printCttLabel } from "@/lib/label-utils"
 
 export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: Cliente[], servicosLinke?: ServicoLinke[] }) {
   // Lock to "GO Linke" for operation purposes
@@ -44,6 +44,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   } | null>(null)
   const [emitMoloniGt, setEmitMoloniGt] = React.useState(false)
   const [emittingMoloni, setEmittingMoloni] = React.useState(false)
+  const formRef = React.useRef<HTMLFormElement>(null)
   const [errorMsg, setErrorMsg] = React.useState("")
   const [selectedClientId, setSelectedClientId] = React.useState(displayClients[0]?.id || "")
   const [selectedServiceId, setSelectedServiceId] = React.useState("")
@@ -253,11 +254,18 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
       setShipmentResult(newResult)
       setSuccess(true)
+      
+      // Auto-download da etiqueta assim que o envio é criado
       if ((res as any).labelBase64) {
         setTimeout(() => {
           downloadCttLabel((res as any).labelBase64, `etiqueta_${(res as any).guia || "envio"}.pdf`)
         }, 150);
       }
+
+      // Reset the form so they can type a new shipment immediately
+      formRef.current?.reset()
+      setWeightKg(1)
+      
     } catch (err: any) {
       setErrorMsg(err.message || "Erro ao criar envio.")
       setLoading(false)
@@ -309,282 +317,83 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         </div>
 
         {/* Content */}
-        {success && shipmentResult ? (
-          <>
-            {/* Modal Backdrop Layer */}
-            <div className="fixed inset-0 top-[56px] md:left-[220px] bg-[var(--text-primary)]/45 backdrop-blur-[2px] z-50 flex items-center justify-center p-6 overflow-y-auto">
-              {/* Modal Card */}
-              <div aria-labelledby="modal-title" aria-modal="true" className="w-full max-w-4xl bg-[var(--surface-bg)] rounded-xl shadow-[0_20px_50px_rgba(20,23,20,0.22)] overflow-hidden flex flex-col my-auto transition-all animate-in fade-in zoom-in-95 duration-150 border border-[var(--border-strong)]" role="dialog">
-                
-                {/* Top Status Header Strip */}
-                <div className="px-8 pt-8 pb-6 bg-[var(--surface-bg)] relative flex items-start justify-between">
-                  <div className="flex items-start gap-4 pr-8">
-                    {/* Green Success Instrument Badge */}
-                    <div className="w-12 h-12 rounded-full bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] shrink-0 shadow-sm border border-[rgba(18,138,71,0.2)]">
-                      <CheckCircle2 className="w-7 h-7" />
+        <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="p-6 overflow-y-auto flex-1 space-y-8">
+            
+            {success && shipmentResult && (
+              <div className="bg-white border border-slate-200 border-l-4 border-l-emerald-600 rounded-lg p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-9 h-9 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                      <Check className="w-5 h-5" />
                     </div>
-                    <div className="flex flex-col space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="text-[24px] font-bold text-[var(--text-primary)] tracking-tight" id="modal-title">
-                          Envio emitido com sucesso!
-                        </h2>
-                        <span className="font-mono text-[11px] px-2 py-0.5 bg-[var(--accent-soft)] text-[var(--accent)] rounded font-semibold tracking-wide uppercase border border-[rgba(18,138,71,0.2)]">
-                          {shipmentResult.guia || "LK-PENDENTE"}
+                    <div>
+                      <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                        <span>Guia Emitida com Sucesso!</span>
+                        <span className="font-mono text-xs bg-slate-100 border border-slate-200 text-slate-900 px-2 py-0.5 rounded-md font-semibold">
+                          {shipmentResult.guia}
                         </span>
-                        {shipmentResult.moloniDoc?.number ? (
-                          <span className="text-[11px] font-semibold px-2 py-0.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 rounded border border-emerald-500/20 flex items-center gap-1">
-                            <FileText className="w-3 h-3 text-emerald-600" />
-                            <span>{shipmentResult.moloniDoc.number}</span>
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-semibold px-2 py-0.5 bg-[var(--surface-muted)] text-[var(--text-secondary)] rounded border border-[var(--border-subtle)]">
-                            Doc. Transporte ({shipmentResult.carrierName || "Operacional"})
-                          </span>
-                        )}
                       </div>
-                      <p className="text-[14px] text-[var(--text-secondary)] max-w-2xl leading-relaxed mt-1">
-                        A expedição foi registada no sistema{shipmentResult.moloniDoc ? ", emitida no Moloni e comunicada à AT" : " e comunicada à transportadora"} e a ordem de recolha foi confirmada pela <strong className="text-[var(--text-primary)] font-medium">{shipmentResult.carrierName || "transportadora"}</strong>.
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        O envio foi registado com o serviço <strong>{shipmentResult.serviceName}</strong>.
                       </p>
-                      {(shipmentResult as any).dbWarning && (
-                        <div className="mt-2 p-3 bg-[var(--status-warning-soft)] text-[var(--status-warning)] text-xs font-medium rounded-md border border-[var(--status-warning)]">
-                          <strong>Aviso de Sistema:</strong> O envio foi gerado na transportadora, mas houve um erro ao guardar na base de dados: {(shipmentResult as any).dbWarning}. Por favor verifique ou crie novamente para que apareça na lista.
-                        </div>
-                      )}
                     </div>
                   </div>
-                  {/* Dismiss Icon Button */}
-                  <button 
-                    onClick={() => window.location.href = "/ops/envios"}
-                    className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] hover:bg-[var(--surface-container)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors shrink-0" 
-                    title="Fechar" 
-                    type="button"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  {(shipmentResult as any).dbWarning && (
+                    <div className="mt-2 p-3 bg-amber-50 text-amber-700 text-xs font-medium rounded-md border border-amber-200">
+                      <strong>Aviso de Sistema:</strong> O envio foi gerado na transportadora, mas houve um erro ao guardar na base de dados: {(shipmentResult as any).dbWarning}. Por favor verifique ou crie novamente para que apareça na lista.
+                    </div>
+                  )}
                 </div>
 
-                {/* Scrollable Operational Matrix */}
-                <div className="px-8 pb-6 space-y-4 overflow-y-auto max-h-[calc(88vh-140px)]">
-                  
-                  {/* 1. Dominant Verification Card: Fiscal & Official Carrier Credentials */}
-                  <div className="bg-[var(--surface-muted)] rounded-xl p-6 space-y-4 border border-[var(--border-subtle)]">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Package className="text-[var(--accent)] w-5 h-5" />
-                        <span className="text-[11px] text-[var(--text-primary)] uppercase tracking-wider font-bold">Credenciais Fiscais & Rastreio ({shipmentResult.carrierName || "Operacional"})</span>
-                      </div>
-                      <span className="font-mono text-[11px] text-[var(--text-tertiary)] font-medium">Protocolo SAF-T PT v1.04_01 · Webservice AT</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Fiscal Box (AT / Moloni) */}
-                      <div className="bg-[var(--surface-bg)] rounded-lg p-4 shadow-sm border border-[var(--border-subtle)] flex flex-col justify-between space-y-2">
-                        <div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase flex items-center gap-1.5">
-                              <FileText className="w-3.5 h-3.5 text-[var(--accent)]" />
-                              <span>{shipmentResult.moloniDoc ? "Guia de Transporte Moloni" : "Código AT Oficial (Guia)"}</span>
-                            </span>
-                            {shipmentResult.moloniDoc ? (
-                              <span className="inline-flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Moloni GT Emitida
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] font-bold border border-[rgba(18,138,71,0.2)]">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse"></span>
-                                Validado AT
-                              </span>
-                            )}
-                          </div>
-                          
-                          <div className="pt-2">
-                            {shipmentResult.moloniDoc ? (
-                              <div>
-                                <span className="font-mono text-[20px] text-[var(--text-primary)] font-bold tracking-tight">
-                                  {shipmentResult.moloniDoc.number || `GT 2026/${shipmentResult.moloniDoc.id}`}
-                                </span>
-                                <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-                                  Guia oficial registada no Moloni com comunicação à AT
-                                </p>
-                              </div>
-                            ) : (
-                              <div>
-                                <span className="font-mono text-[20px] text-[var(--text-primary)] font-semibold tracking-tight" style={{ fontVariantNumeric: "tabular-nums" }}>
-                                  {shipmentResult.atCode || `AT.2026.${Math.floor(1000000 + Math.random() * 9000000)}`}
-                                </span>
-                                <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-                                  Guia simplificada da transportadora ({shipmentResult.carrierName || "CTT"})
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Card Action Strip */}
-                        <div className="pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2 flex-wrap">
-                          {/* Botão de CTT Etiqueta (Sempre vísivel) */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (shipmentResult.labelBase64) {
-                                downloadCttLabel(shipmentResult.labelBase64, `etiqueta_ctt_${shipmentResult.guia || "AT"}.pdf`)
-                              }
-                            }}
-                            className="text-[11px] font-bold text-[var(--accent)] hover:underline flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Descarregar Etiqueta CTT (.pdf)</span>
-                          </button>
-
-                          {/* Botão de Moloni Guia (Apenas se existir Moloni) */}
-                          {shipmentResult.moloniDoc?.pdfUrl && (
-                            <a
-                              href={shipmentResult.moloniDoc.pdfUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[11px] font-bold text-emerald-600 hover:underline flex items-center gap-1.5"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Descarregar Guia Moloni (.pdf)</span>
-                            </a>
-                          )}
-
-                          {!shipmentResult.moloniDoc && (
-                            <button
-                              type="button"
-                              disabled={emittingMoloni}
-                              onClick={handleEmitMoloniNow}
-                              className="text-[10px] font-bold px-2 py-1 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-strong)] transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                              title="Criar Guia de Transporte na conta Moloni da GO Linke"
-                            >
-                              {emittingMoloni ? (
-                                <>
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                  <span>A emitir...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <FileText className="w-3 h-3" />
-                                  <span>+ Emitir no Moloni</span>
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Carrier AWB Box - Interactive download / view */}
+                <div className="flex items-center gap-2.5">
+                  <a
+                    href="/ops/envios"
+                    className="bg-slate-900 hover:opacity-90 text-white px-3.5 py-2 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <span>Ver no Painel</span>
+                  </a>
+                  <a
+                    href="/ops/envios"
+                    className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-md text-xs font-semibold transition-colors"
+                  >
+                    <span>Ver no Histórico</span>
+                  </a>
+                  {shipmentResult.labelBase64 ? (
+                    <>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (shipmentResult.labelBase64) {
-                            downloadCttLabel(shipmentResult.labelBase64, `etiqueta_${shipmentResult.guia || "envio"}.pdf`)
-                          }
-                        }}
-                        className="bg-[var(--surface-bg)] hover:bg-[var(--surface-container)] hover:border-[var(--accent)] text-left rounded-lg p-4 shadow-sm border border-[var(--border-subtle)] space-y-1 transition-all group cursor-pointer relative focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30"
-                        title="Descarregar Etiqueta Oficial de Transporte (PDF)"
+                        onClick={() => printCttLabel(shipmentResult.labelBase64!)}
+                        className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-[var(--text-tertiary)] group-hover:text-[var(--text-primary)] transition-colors uppercase">AWB {shipmentResult.carrierName || "Transportadora"} (Tracking)</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] font-bold border border-[rgba(18,138,71,0.2)]">
-                            Pronto para Recolha
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <div className="flex flex-col">
-                            <span className="font-mono text-[20px] text-[var(--accent)] tracking-tight font-semibold" style={{ fontVariantNumeric: "tabular-nums" }}>
-                              {shipmentResult.guia}
-                            </span>
-                            <span className="text-[12px] font-medium text-[var(--text-tertiary)] flex items-center gap-1">
-                              <span>Serviço: {shipmentResult.serviceName}</span>
-                              <span className="text-[var(--accent)] font-medium text-[10px] ml-1">· Descarregar Etiqueta</span>
-                            </span>
-                          </div>
-                          <div className="w-8 h-8 rounded-md bg-[var(--surface-muted)] group-hover:bg-[var(--accent-soft)] flex items-center justify-center text-[var(--text-secondary)] group-hover:text-[var(--accent)] transition-all">
-                            <Download className="w-4 h-4" />
-                          </div>
-                        </div>
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>Imprimir Etiqueta</span>
                       </button>
-                    </div>
-                  </div>
-
-                  {/* 3. Resumo da Expedição (Compact Breakdown Strip) */}
-                  <div className="bg-[var(--surface-bg)] rounded-lg p-4 shadow-sm space-y-3 border border-[var(--border-subtle)]">
-                    <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
-                      <span className="text-[11px] text-[var(--text-tertiary)] uppercase tracking-wider font-bold">Resumo do Manifesto de Carga</span>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {/* Col 1: Expedidor */}
-                      <div className="space-y-0.5">
-                        <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase block">Expedidor (Origem)</span>
-                        <p className="text-[13px] text-[var(--text-primary)] font-semibold truncate">{shipmentResult.clientName}</p>
-                      </div>
-                      
-                      {/* Col 2: Destinatário */}
-                      <div className="space-y-0.5">
-                        <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase block">Destinatário (Destino)</span>
-                        <p className="text-[13px] text-[var(--text-primary)] font-semibold truncate">{shipmentResult.recipientName}</p>
-                        <p className="text-[12px] text-[var(--text-secondary)] truncate">{shipmentResult.recipientCity}</p>
-                      </div>
-                      
-                      {/* Col 3: Carga & Pesagem */}
-                      <div className="space-y-0.5">
-                        <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase block">Volumes & Peso</span>
-                        <p className="text-[13px] text-[var(--text-primary)] font-semibold" style={{ fontVariantNumeric: "tabular-nums" }}>{shipmentResult.volumes} Volume(s)</p>
-                        <p className="font-mono text-[11px] text-[var(--text-secondary)]" style={{ fontVariantNumeric: "tabular-nums" }}>
-                          Total: {shipmentResult.weightKg} kg
-                        </p>
-                      </div>
-                      
-                      {/* Col 4: Custo Faturado */}
-                      <div className="space-y-0.5">
-                        <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase block">Custo Faturado ({shipmentResult.carrierName || "Envio"})</span>
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-[16px] text-[var(--text-primary)] font-bold" style={{ fontVariantNumeric: "tabular-nums" }}>{shipmentResult.sellPrice?.toFixed(2)} €</span>
-                          <span className="text-[12px] font-medium text-[var(--text-tertiary)]">+ IVA</span>
-                        </div>
-                        <p className="font-mono text-[10px] text-[var(--accent)] font-medium truncate">Débito conta corrente OK</p>
-                      </div>
-                    </div>
-                  </div>
-
+                      <button
+                        type="button"
+                        onClick={() => downloadCttLabel(shipmentResult.labelBase64!, `etiqueta_${shipmentResult.guia}.pdf`)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Descarregar Etiqueta CTT</span>
+                        <span className="sm:hidden">Etiqueta CTT</span>
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl font-semibold">
+                      Sem etiqueta gerada — usa "Solicitar" no detalhe do envio
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSuccess(false)}
+                    className="text-emerald-700 hover:text-emerald-950 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Fechar
+                  </button>
                 </div>
-
-                {/* Action Footer Strip */}
-                <div className="px-8 py-4 bg-[var(--surface-muted)] flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[var(--border-subtle)]">
-                  <a className="text-[13px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors" href="/ops/envios">
-                    ← <span>Ver detalhe na tabela de Envios</span>
-                  </a>
-                  
-                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                    <button 
-                      onClick={() => setSuccess(false)}
-                      className="h-8 px-4 bg-[var(--surface-bg)] hover:bg-[var(--surface-container)] border border-[var(--border-strong)] text-[var(--text-primary)] rounded-md text-[13px] font-bold flex items-center gap-1.5 transition-colors shadow-xs" 
-                      type="button"
-                    >
-                      Criar Novo Envio
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (shipmentResult.labelBase64) {
-                          downloadCttLabel(shipmentResult.labelBase64, `etiqueta_${shipmentResult.guia}.pdf`)
-                        }
-                      }}
-                      className="h-8 px-4 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-[13px] font-bold flex items-center gap-1.5 transition-colors shadow-xs" 
-                      type="button"
-                    >
-                      Descarregar Etiquetas (.pdf)
-                    </button>
-                  </div>
-                </div>
-
               </div>
-            </div>
-          </>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-            <div className="p-6 overflow-y-auto flex-1 space-y-8">
+            )}
               
               {errorMsg && (
                 <div className="p-3 bg-[var(--status-critical-soft)] text-[var(--status-critical)] text-xs font-medium rounded-md border border-[rgba(220,38,38,0.2)]">
@@ -1158,7 +967,6 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
               </Button>
             </div>
           </form>
-        )}
       </div>
     </div>
   )

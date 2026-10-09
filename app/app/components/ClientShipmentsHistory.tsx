@@ -474,47 +474,6 @@ export function ClientShipmentsHistory() {
                             Rastreio em Tempo Real
                           </button>
 
-                          <div className="h-px bg-slate-100 my-1" />
-
-                          {/* Criar Devolução */}
-                          <button
-                            onClick={async () => {
-                              setOpenDropdownId(null);
-                              const confirmed = window.confirm(`Deseja criar uma guia de DEVOLUÇÃO para o envio ${envio.tracking_number || envio.id}?\n\nO Remetente e Destinatário serão invertidos automaticamente.`);
-                              if (!confirmed) return;
-                              const res = await createReturnShipmentAction(envio.id);
-                              if (res.success) {
-                                alert(`✅ Devolução criada com sucesso!\n\nNovo Tracking: ${res.newTrackingNumber}`);
-                                window.location.reload();
-                              } else {
-                                alert("Erro ao criar devolução: " + (res.error || "Erro desconhecido"));
-                              }
-                            }}
-                            className="w-full px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-50 flex items-center gap-2 transition-colors cursor-pointer"
-                          >
-                            <Undo2 className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Criar Devolução</span>
-                          </button>
-
-                          {/* Eliminar Envio */}
-                          <button
-                            onClick={async () => {
-                              setOpenDropdownId(null);
-                              const confirmed = window.confirm(`⚠️ Tem a certeza que deseja ELIMINAR permanentemente o envio ${envio.tracking_number || envio.id}?`);
-                              if (!confirmed) return;
-                              const res = await deleteShipmentAction(envio.id);
-                              if (res.success) {
-                                alert(`🗑️ Envio ${envio.tracking_number || envio.id} eliminado com sucesso!`);
-                                window.location.reload();
-                              } else {
-                                alert("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"));
-                              }
-                            }}
-                            className="w-full px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                            <span>Eliminar Envio</span>
-                          </button>
                         </div>
                       )}
                     </td>

@@ -567,6 +567,27 @@ export async function emitClientGuiaAction(data: {
         console.warn("Failed to decrement client credit:", e.message)
       }
     }
+    
+    // ─── STEP 4: Send Tracking Email Notification ───────────────────────────────
+    if (data.recipientEmail && !dbErrorMessage) {
+      try {
+        const { sendTrackingEmailNotification } = await import("@/lib/email/tracking-notifications")
+        // Run in background without awaiting to prevent UI blocking or timeout
+        sendTrackingEmailNotification(shipmentId, "tracking", {
+          shipment: {
+            ...shipmentData,
+            id: shipmentId,
+            recipient_email: data.recipientEmail,
+            carrier_tracking_number: realGuia,
+            carrier_code: data.serviceName?.toLowerCase().includes("correos") ? "correos" : "ctt"
+          }
+        }).catch(err => {
+          console.warn("Failed to trigger tracking email in background:", err)
+        })
+      } catch (err) {
+        console.warn("Failed to trigger tracking email on creation:", err)
+      }
+    }
 
     try {
       revalidatePath("/app")

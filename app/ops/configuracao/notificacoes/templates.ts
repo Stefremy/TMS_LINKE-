@@ -18,7 +18,7 @@ export const emailTemplates: Record<string, string> = {
 </head>
 <body>
   <div class="container">
-    <img src="http://localhost:3000/Linke-logo.png" alt="Linke" style="height: 32px; display: block; margin-bottom: 24px;" />
+    <img src="https://tms.linke.pt/Linke-logo.png" alt="Linke" style="height: 32px; display: block; margin-bottom: 24px;" />
     <h1 class="title">Recolha Agendada</h1>
     <p class="text">A sua recolha foi agendada com sucesso. A transportadora irá passar no local indicado no período selecionado.</p>
     <div class="box">
@@ -52,7 +52,7 @@ export const emailTemplates: Record<string, string> = {
 </head>
 <body>
   <div class="container">
-    <img src="http://localhost:3000/Linke-logo.png" alt="Linke" style="height: 32px; display: block; margin-bottom: 24px;" />
+    <img src="https://tms.linke.pt/Linke-logo.png" alt="Linke" style="height: 32px; display: block; margin-bottom: 24px;" />
     <h1 class="title">Aviso de Saldo Baixo</h1>
     <p class="text">O saldo da sua conta atingiu o limite mínimo. Por favor, carregue a sua carteira para garantir que os seus próximos envios e recolhas não são interrompidos.</p>
     <p class="text">Saldo atual: <span class="highlight">{{current_balance}}€</span></p>
@@ -84,7 +84,7 @@ export const emailTemplates: Record<string, string> = {
 </head>
 <body>
   <div class="container">
-    <img src="http://localhost:3000/Linke-logo.png" alt="Linke" style="height: 32px; display: block; margin-bottom: 24px;" />
+    <img src="https://tms.linke.pt/Linke-logo.png" alt="Linke" style="height: 32px; display: block; margin-bottom: 24px;" />
     <h1 class="title">A sua encomenda está a caminho! 🚚</h1>
     <p class="text">Olá {{receiver_name}}, a sua encomenda enviada por <strong>{{sender_name}}</strong> já se encontra em trânsito e deverá ser entregue em breve.</p>
     <div class="box">
@@ -117,7 +117,7 @@ export const emailTemplates: Record<string, string> = {
 </head>
 <body>
   <div class="container">
-    <img src="http://localhost:3000/Linke-logo.png" alt="Linke" style="height: 32px; display: block; margin-bottom: 24px;" />
+    <img src="https://tms.linke.pt/Linke-logo.png" alt="Linke" style="height: 32px; display: block; margin-bottom: 24px;" />
     <h1 class="title">Guia de Transporte Emitida</h1>
     <p class="text">Olá {{receiver_name}}, foi emitida uma guia de transporte para a sua encomenda. Pode usar o código abaixo para seguir o estado do envio.</p>
     <div class="box">
@@ -153,7 +153,7 @@ export const emailTemplates: Record<string, string> = {
 </head>
 <body>
   <div class="container">
-    <img src="http://localhost:3000/Linke-logo.png" alt="Linke" style="height: 32px; display: block; margin-bottom: 24px;" />
+    <img src="https://tms.linke.pt/Linke-logo.png" alt="Linke" style="height: 32px; display: block; margin-bottom: 24px;" />
     <h1 class="title">Atenção: Problema na Entrega ⚠️</h1>
     <p class="text">Verificou-se uma incidência durante a tentativa de entrega da encomenda com o código <strong>{{tracking_code}}</strong>.</p>
     <div class="box">

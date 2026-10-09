@@ -96,13 +96,14 @@ export async function sendTrackingEmailNotification(
 
     const carrier_name = isCorreos ? "Correos Express" : "CTT Expresso"
 
-    const trackingCode =
-      (shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null) ||
-      shipment.carrier_tracking_number ||
-      shipment.tracking_number ||
-      effectiveShipmentId
+    const linkeCode = shipment.tracking_number?.startsWith("LKT") ? shipment.tracking_number : (shipment.tracking_number || effectiveShipmentId)
+    const carrierCode = shipment.carrier_tracking_number
 
-    const tracking_url = `https://tms.linke.pt/tracking?trk=${encodeURIComponent(trackingCode)}`
+    const trackingCode = carrierCode && carrierCode !== linkeCode
+      ? `${linkeCode} / ${carrierCode}`
+      : linkeCode
+
+    const tracking_url = `https://tms.linke.pt/tracking?trk=${encodeURIComponent(linkeCode)}`
 
     if (type === "tracking") {
       subject = "Linke | Guia de Transporte Emitida"
