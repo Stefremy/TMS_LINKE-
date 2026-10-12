@@ -17,7 +17,8 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  Trash2
+  Trash2,
+  Lock
 } from "lucide-react"
 
 import { ActionMenu } from "./ActionMenu"
@@ -613,11 +614,25 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                   {(() => {
                     const statusVal = envio.rawShipment?.status || envio.status?.raw || envio.status?.label
                     const cfg = getShipmentStatusConfig(statusVal)
+                    const isBilled = Boolean(
+                      envio.rawShipment?.billing_statement_id || 
+                      envio.billing_statement_id || 
+                      envio.is_invoiced
+                    )
                     return (
                       <div className="flex flex-col gap-1 items-start">
                         <Badge variant={cfg.badgeVariant}>
                           {cfg.label}
                         </Badge>
+                        {isBilled && (
+                          <span 
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#fbf7f2] text-[#6e4e2e] border border-[#d8c5b2] shadow-2xs" 
+                            title="🔒 Envio Faturado - Eliminação Bloqueada"
+                          >
+                            <Lock className="w-2.5 h-2.5 text-[#8f5d30] shrink-0" />
+                            Faturado
+                          </span>
+                        )}
                         {envio.status?.subCode && (
                           <span className="text-[var(--text-tertiary)] font-semibold text-[9px] tracking-wider ml-1 uppercase">
                             {envio.status?.subCode}

@@ -8,8 +8,19 @@ export async function deleteShipment(shipmentId: string) {
   const supabase = createAdminClient()
   try {
     // 0. Verificar se o envio pode ser apagado
-    const { data: shipment } = await supabase.from("shipments").select("status").eq("id", shipmentId).single()
+    const { data: shipment } = await supabase
+      .from("shipments")
+      .select("status, billing_statement_id")
+      .eq("id", shipmentId)
+      .single()
+
     if (!shipment) return { success: false, error: "Envio não encontrado" }
+
+    // Bloquear eliminação se o envio já foi faturado
+    if (shipment.billing_statement_id) {
+      return { success: false, error: "Erro: Este envio já foi faturado e não pode ser eliminado." }
+    }
+
     if (shipment.status !== "pendente" && shipment.status !== "cancelado") {
       return { success: false, error: "Apenas envios pendentes podem ser eliminados." }
     }
@@ -52,13 +63,28 @@ export async function deleteShipmentsBulk(shipmentIds: string[]) {
   try {
     if (!shipmentIds || shipmentIds.length === 0) return { success: true }
     
-    // 0. Filter to only allow 'pendente' or 'cancelado' shipments
-    const { data: shipments } = await supabase.from("shipments").select("id, status").in("id", shipmentIds)
+    // 0. Filter to only allow unbilled 'pendente' or 'cancelado' shipments
+    const { data: shipments } = await supabase
+      .from("shipments")
+      .select("id, status, billing_statement_id")
+      .in("id", shipmentIds)
+
     if (!shipments) return { success: false, error: "Envios não encontrados" }
+
+    const billedShipments = shipments.filter((s: any) => Boolean(s.billing_statement_id))
+    if (billedShipments.length > 0) {
+      return { 
+        success: false, 
+        error: `Erro: ${billedShipments.length} envio(s) selecionado(s) já foram faturados e não podem ser eliminados.` 
+      }
+    }
     
-    const validIds = shipments.filter((s: any) => s.status === "pendente" || s.status === "cancelado").map((s: any) => s.id)
+    const validIds = shipments
+      .filter((s: any) => (s.status === "pendente" || s.status === "cancelado") && !s.billing_statement_id)
+      .map((s: any) => s.id)
+
     if (validIds.length === 0) {
-      return { success: false, error: "Nenhum dos envios selecionados pode ser eliminado (apenas pendentes)." }
+      return { success: false, error: "Nenhum dos envios selecionados pode ser eliminado (apenas pendentes e não faturados)." }
     }
 
     // 1. Apagar volumes associados

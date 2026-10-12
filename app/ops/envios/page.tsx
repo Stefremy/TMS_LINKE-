@@ -63,6 +63,7 @@ export default async function EnviosPage(props: { searchParams?: Promise<{ page?
     return {
       rawId: s.id,
       rawShipment: s,
+      billing_statement_id: s.billing_statement_id,
       trk: { 
         id: carrierCode, 
         date: new Date(s.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }), 

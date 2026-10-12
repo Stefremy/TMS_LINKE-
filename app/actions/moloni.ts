@@ -310,12 +310,24 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
     // 4. Marcar Envios como faturados (guardar referência ao extrato) - Apenas se não for Pró-Forma
     if (!isProForma) {
       try {
+        await supabase.from('billing_statements').upsert({
+          id: statementId,
+          tenant_id: tenantId,
+          client_id: client.id,
+          statement_number: statementNumber,
+          moloni_document_id: moloniDocumentId ? String(moloniDocumentId) : null,
+          moloni_document_pdf: moloniDocumentUrl || null,
+          total_value: totalValue,
+          shipments_count: shipments.length,
+          created_at: new Date().toISOString()
+        }, { onConflict: 'id' })
+
         await supabase
           .from('shipments')
           .update({ billing_statement_id: statementId } as any)
           .in('id', shipmentIds)
-      } catch {
-        console.warn("billing_statement_id column may not exist yet - extrato registado no audit_log")
+      } catch (e) {
+        console.warn("billing_statement_id update error:", e)
       }
     }
 
@@ -813,9 +825,22 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     // Se passou de Pró-Forma para Fatura definitiva, marcamos também na tabela de shipments
     if (stmt.is_pro_forma && stmt.shipment_ids && Array.isArray(stmt.shipment_ids) && stmt.shipment_ids.length > 0) {
       try {
+        const stmtId = stmt.id || match.id
+        await supabase.from('billing_statements').upsert({
+          id: stmtId,
+          tenant_id: match.tenant_id || "11111111-1111-1111-1111-111111111111",
+          client_id: stmt.client_id,
+          statement_number: stmt.statement_number || `EXT-${stmtId.slice(0, 8)}`,
+          moloni_document_id: moloniDocId ? String(moloniDocId) : null,
+          moloni_document_pdf: moloniDocPdf || null,
+          total_value: Number(stmt.total_value || 0),
+          shipments_count: Number(stmt.shipments_count || stmt.shipment_ids.length),
+          created_at: stmt.created_at || new Date().toISOString()
+        }, { onConflict: 'id' })
+
         await supabase
           .from('shipments')
-          .update({ billing_statement_id: match.id } as any)
+          .update({ billing_statement_id: stmtId } as any)
           .in('id', stmt.shipment_ids)
       } catch (e) {
         console.warn("Could not update shipments billing_statement_id", e)
