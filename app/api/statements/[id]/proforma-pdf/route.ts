@@ -51,11 +51,11 @@ export async function GET(
 
     // Tentar obter o service_type da DB se estiver em falta no log
     let enrichedShipments = details.shipments || []
-    const shipmentIds = enrichedShipments.map((s: any) => s.id).filter(Boolean)
+    const shipmentIds = (details.shipment_ids || enrichedShipments.map((s: any) => s.id)).filter(Boolean)
     if (shipmentIds.length > 0) {
       const { data: dbShipments } = await supabase
         .from("shipments")
-        .select("id, service_type, sell_price, base_price, fuel_tax_amount, special_fees_amount, special_fees_description")
+        .select("id, service_type, sell_price, recipient_name, created_at")
         .in("id", shipmentIds)
         
       if (dbShipments && dbShipments.length > 0) {

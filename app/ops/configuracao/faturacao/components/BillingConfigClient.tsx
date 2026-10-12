@@ -499,10 +499,10 @@ export function BillingConfigClient({ initialConfig, moloniDetails }: BillingCon
                     <select
                       value={config.defaultGrouping}
                       onChange={(e) => updateConfig({ defaultGrouping: e.target.value as any })}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded text-slate-900 shadow-2xs"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded text-slate-900 shadow-2xs font-medium"
                     >
-                      <option value="detailed">Detalhada (1 a 1)</option>
-                      <option value="grouped">Agrupada (por serviço)</option>
+                      <option value="grouped">Agrupada por serviço (Fatura compacta 1 pág.)</option>
+                      <option value="detailed">Detalhada (1 linha por envio)</option>
                     </select>
                   </div>
 

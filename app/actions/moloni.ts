@@ -13,7 +13,7 @@ const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[
 /**
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
-export async function internalEmitInvoice(client: any, shipments: any[], skipMoloni: boolean = false, groupShipments: boolean = false, isProForma: boolean = false) {
+export async function internalEmitInvoice(client: any, shipments: any[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false) {
   const supabase = createAdminClient()
   if (!client) throw new Error("Cliente não encontrado.")
   if (!shipments || shipments.length === 0) throw new Error("Envios não encontrados.")
@@ -107,54 +107,32 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
         // C. Preparar Linhas da Fatura
         let products: any[] = []
         
-        if (groupShipments) {
-          // Simplificada: Agrupadas por serviço para evitar faturas com muitas páginas
-          const groupedShipments: Record<string, { qty: number, basePrice: number, fuelTax: number, specialFees: number }> = {}
+        const shouldGroup = typeof groupShipments === "boolean"
+          ? groupShipments
+          : (billingConfig.defaultGrouping === "grouped")
+
+        if (shouldGroup) {
+          // Simplificada: Agrupadas por serviço e soma total para evitar faturas com muitas páginas
+          const groupedShipments: Record<string, { qty: number, totalSell: number }> = {}
           for (const s of shipments) {
-            const serviceName = s.service_type || "Transporte / Logística"
+            const rawName = (s.service_type || "").trim() || billingConfig.articleDesignation || "Transporte / Logística"
+            const serviceName = rawName.toLowerCase().startsWith("serviço") ? rawName : `Serviço ${rawName}`
             if (!groupedShipments[serviceName]) {
-              groupedShipments[serviceName] = { qty: 0, basePrice: 0, fuelTax: 0, specialFees: 0 }
+              groupedShipments[serviceName] = { qty: 0, totalSell: 0 }
             }
             groupedShipments[serviceName].qty += 1
-            
-            const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
-            if (hasFuelTax) {
-              groupedShipments[serviceName].basePrice += Number(s.base_price || 0)
-              groupedShipments[serviceName].fuelTax += Number(s.fuel_tax_amount || 0)
-            } else {
-              groupedShipments[serviceName].basePrice += Number(s.sell_price || 0) - Number(s.special_fees_amount || 0)
-            }
-            groupedShipments[serviceName].specialFees += Number(s.special_fees_amount || 0)
+            groupedShipments[serviceName].totalSell += Number(s.sell_price || 0)
           }
 
           for (const [serviceName, data] of Object.entries(groupedShipments)) {
-            if (data.basePrice > 0) {
+            const totalPrice = Math.round(data.totalSell * 100) / 100
+            if (totalPrice > 0) {
               products.push({
                 productId: productId,
-                name: `Serviço ${serviceName} (${data.qty} envios)`,
-                summary: billingConfig.articleSummary || `Faturação de envios no período.`,
+                name: `${serviceName} (${data.qty} envios)`,
+                summary: billingConfig.articleSummary || `Consolidação de ${data.qty} envios realizados no período.`,
                 qty: 1, 
-                price: data.basePrice,
-                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-              })
-            }
-            if (data.fuelTax > 0) {
-              products.push({
-                productId: productId,
-                name: `Taxa de Combustível (${data.qty} envios)`,
-                summary: `Taxa suplementar aplicável ao serviço.`,
-                qty: 1,
-                price: data.fuelTax,
-                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-              })
-            }
-            if (data.specialFees > 0) {
-              products.push({
-                productId: productId,
-                name: `Serviços Suplementares (${data.qty} envios)`,
-                summary: `Taxas especiais selecionadas aplicadas ao serviço.`,
-                qty: 1,
-                price: data.specialFees,
+                price: totalPrice,
                 taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
               })
             }
@@ -294,6 +272,11 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
           reference: s.reference,
           service_type: s.service_type,
           sell_price: Number(s.sell_price || 0),
+          base_price: s.base_price != null ? Number(s.base_price) : undefined,
+          fuel_tax_amount: s.fuel_tax_amount != null ? Number(s.fuel_tax_amount) : undefined,
+          special_fees_amount: s.special_fees_amount != null ? Number(s.special_fees_amount) : undefined,
+          special_fees_description: s.special_fees_description || undefined,
+          weight_kg: s.weight_kg != null ? Number(s.weight_kg) : undefined,
           created_at: s.created_at,
           recipient_name: s.recipient_name,
           recipient_city: s.recipient_city
@@ -510,7 +493,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
 /**
  * Emite a fatura oficial no Moloni para um extrato previamente criado
  */
-export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string, groupShipments: boolean = false, isProForma: boolean = false) {
+export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string, groupShipments: boolean = true, isProForma: boolean = false) {
   await requireEmployee()
   try {
     const supabase = createAdminClient()
@@ -633,56 +616,33 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     const shipments = stmt.shipments || []
     let products: any[] = []
     
-    if (groupShipments) {
-      // Simplificada: Agrupadas por serviço
-      const groupedShipments: Record<string, { qty: number, basePrice: number, fuelTax: number, specialFees: number }> = {}
+    const shouldGroup = typeof groupShipments === "boolean"
+      ? groupShipments
+      : (billingConfig.defaultGrouping === "grouped")
+
+    if (shouldGroup) {
+      // Simplificada: Agrupadas por serviço e soma total
+      const groupedShipments: Record<string, { qty: number, totalSell: number }> = {}
       
       for (const s of shipments) {
-        const serviceName = s.service_type || "Transporte / Logística"
+        const rawName = (s.service_type || "").trim() || billingConfig.articleDesignation || "Transporte / Logística"
+        const serviceName = rawName.toLowerCase().startsWith("serviço") ? rawName : `Serviço ${rawName}`
         if (!groupedShipments[serviceName]) {
-          groupedShipments[serviceName] = { qty: 0, basePrice: 0, fuelTax: 0, specialFees: 0 }
+          groupedShipments[serviceName] = { qty: 0, totalSell: 0 }
         }
         groupedShipments[serviceName].qty += 1
-        
-        const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
-        if (hasFuelTax) {
-          groupedShipments[serviceName].basePrice += Number(s.base_price || 0)
-          groupedShipments[serviceName].fuelTax += Number(s.fuel_tax_amount || 0)
-        } else {
-          groupedShipments[serviceName].basePrice += Number(s.sell_price || 0) - Number(s.special_fees_amount || 0)
-        }
-
-        groupedShipments[serviceName].specialFees += Number(s.special_fees_amount || 0)
+        groupedShipments[serviceName].totalSell += Number(s.sell_price || 0)
       }
 
       for (const [serviceName, data] of Object.entries(groupedShipments)) {
-        if (data.basePrice > 0) {
+        const totalPrice = Math.round(data.totalSell * 100) / 100
+        if (totalPrice > 0) {
           products.push({
             productId: productId,
-            name: `Serviço ${serviceName} (${data.qty} envios)`,
-            summary: billingConfig.articleSummary || `Faturação de envios no período.`,
+            name: `${serviceName} (${data.qty} envios)`,
+            summary: billingConfig.articleSummary || `Consolidação de ${data.qty} envios realizados no período.`,
             qty: 1, 
-            price: data.basePrice,
-            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-          })
-        }
-        if (data.fuelTax > 0) {
-          products.push({
-            productId: productId,
-            name: `Taxa de Combustível (${data.qty} envios)`,
-            summary: `Taxa suplementar aplicável ao serviço.`,
-            qty: 1,
-            price: data.fuelTax,
-            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-          })
-        }
-        if (data.specialFees > 0) {
-          products.push({
-            productId: productId,
-            name: `Serviços Suplementares (${data.qty} envios)`,
-            summary: `Taxas especiais selecionadas aplicadas ao serviço.`,
-            qty: 1,
-            price: data.specialFees,
+            price: totalPrice,
             taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
           })
         }
@@ -1602,7 +1562,7 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
 /**
  * Criação da Fatura no Moloni (Action para ser chamada a partir da UI)
  */
-export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = false, isProForma: boolean = false) {
+export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false) {
   await requireEmployee()
   try {
     const supabase = createAdminClient()
@@ -1625,3 +1585,261 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
     return { success: false, error: err?.message || "Failed to emit invoice" }
   }
 }
+
+/**
+ * Envia ou Reenvia a Fatura e o Extrato por Email ao Cliente com anexos PDF
+ */
+export async function sendStatementInvoiceEmailAction(params: {
+  statementIdOrNumber: string
+  recipientEmail?: string
+  includeMoloniPdf?: boolean
+  includeStatementPdf?: boolean
+}) {
+  await requireEmployee()
+  try {
+    const supabase = createAdminClient()
+    const { statementIdOrNumber, recipientEmail, includeMoloniPdf = true, includeStatementPdf = true } = params
+
+    // 1. Procurar extrato em audit_log
+    const { data: logs, error } = await supabase
+      .from('audit_log')
+      .select('*')
+      .eq('action', 'billing_statement')
+      .order('created_at', { ascending: false })
+
+    if (error || !logs || logs.length === 0) {
+      throw new Error("Extrato não encontrado.")
+    }
+
+    const match = logs.find((l: any) => 
+      l.id === statementIdOrNumber || 
+      l.details?.id === statementIdOrNumber ||
+      l.details?.statement_number === statementIdOrNumber
+    )
+
+    if (!match || !match.details) {
+      throw new Error("Extrato não encontrado.")
+    }
+
+    const stmt = match.details
+
+    // 2. Procurar cliente para obter nome e email padrão
+    const allClients = await getClientesAction()
+    const client: any = allClients.find((c: any) => c.id === stmt.client_id)
+
+    const targetEmail = (recipientEmail || client?.billing_email || client?.email || "").trim()
+
+    if (!targetEmail || !targetEmail.includes("@")) {
+      throw new Error("Endereço de email do destinatário não configurado ou inválido.")
+    }
+
+    const clientName = client?.legal_name || client?.short_name || stmt.client_name || "Estimado Cliente"
+    const ftNumber = stmt.moloni_document_number 
+      ? (String(stmt.moloni_document_number).includes("/") ? stmt.moloni_document_number : `FT ${new Date().getFullYear()}/${stmt.moloni_document_number}`)
+      : null
+    const docTitle = ftNumber || stmt.statement_number
+    const totalStr = Number(stmt.total_value || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const shipmentsCount = stmt.shipments_count || stmt.shipments?.length || 0
+
+    // 3. Preparar anexos PDF
+    const attachments: Array<{ filename: string; content: Buffer }> = []
+
+    // A. Fatura Moloni (se emitida)
+    if (includeMoloniPdf && (stmt.moloni_document_pdf || stmt.moloni_document_id)) {
+      let pdfUrl = stmt.moloni_document_pdf
+      if (pdfUrl && pdfUrl.includes("/downloads/?h=") && stmt.moloni_document_id) {
+        pdfUrl = pdfUrl.replace("/downloads/?h=", "/downloads/index.php?action=getDownload&h=") + `&d=${stmt.moloni_document_id}&e=&i=1`
+      }
+      if (!pdfUrl && stmt.moloni_document_id) {
+        let moloniConfig: any = null
+        if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
+          moloniConfig = {
+            refreshToken: process.env.MOLONI_REFRESH_TOKEN,
+            companyId: process.env.MOLONI_COMPANY_ID,
+          }
+        }
+        if (moloniConfig) {
+          try {
+            const moloni = new MoloniClient(moloniConfig)
+            pdfUrl = await moloni.getDocumentPDFLink(Number(stmt.moloni_document_id))
+          } catch {}
+        }
+      }
+
+      if (pdfUrl) {
+        try {
+          const res = await fetch(pdfUrl, { cache: "no-store" })
+          if (res.ok) {
+            const buf = Buffer.from(await res.arrayBuffer())
+            attachments.push({
+              filename: `Fatura_Oficial_${docTitle.replace(/[\/\\]/g, "_")}.pdf`,
+              content: buf,
+            })
+          }
+        } catch (fetchErr) {
+          console.warn("Could not download Moloni PDF attachment:", fetchErr)
+        }
+      }
+    }
+
+    // B. Extrato TMS Interno
+    if (includeStatementPdf) {
+      try {
+        const { generateStatementPdfBuffer } = await import("@/lib/services/billing/statement-pdf")
+        
+        let enrichedShipments = stmt.shipments || []
+        const shipmentIds = (stmt.shipment_ids || enrichedShipments.map((s: any) => s.id)).filter(Boolean)
+        if (shipmentIds.length > 0) {
+          const { data: dbShipments } = await supabase
+            .from("shipments")
+            .select("id, tracking_number, service_type, recipient_name, recipient_city, recipient_address, sell_price, created_at")
+            .in("id", shipmentIds)
+          
+          if (dbShipments && dbShipments.length > 0) {
+            enrichedShipments = enrichedShipments.map((s: any) => {
+              const dbS = dbShipments.find((d: any) => d.id === s.id)
+              return {
+                ...s,
+                tracking_number: s.tracking_number || dbS?.tracking_number,
+                service_type: s.service_type || dbS?.service_type,
+                recipient_name: s.recipient_name || dbS?.recipient_name,
+                recipient_city: s.recipient_city || dbS?.recipient_city,
+                recipient_address: s.recipient_address || dbS?.recipient_address,
+                sell_price: s.sell_price != null ? Number(s.sell_price) : (dbS?.sell_price != null ? Number(dbS.sell_price) : 0),
+                base_price: s.base_price,
+                fuel_tax_amount: s.fuel_tax_amount,
+                special_fees_amount: s.special_fees_amount,
+                special_fees_description: s.special_fees_description,
+                weight_kg: s.weight_kg,
+                created_at: s.created_at || dbS?.created_at
+              }
+            })
+          }
+        }
+
+        const pdfData = {
+          statementNumber: stmt.statement_number,
+          clientName: clientName,
+          clientNif: client?.nif || "",
+          clientAddress: client?.address || "",
+          clientCity: client?.city || "",
+          clientEmail: targetEmail,
+          dateStr: new Date(stmt.created_at || Date.now()).toLocaleDateString("pt-PT"),
+          totalValue: Number(stmt.total_value || 0),
+          shipments: enrichedShipments
+        }
+        const stmtBuf = await generateStatementPdfBuffer(pdfData)
+        if (stmtBuf) {
+          attachments.push({
+            filename: `Extrato_TMS_${stmt.statement_number.replace(/[\/\\]/g, "_")}.pdf`,
+            content: stmtBuf,
+          })
+        }
+      } catch (pdfErr) {
+        console.warn("Could not generate statement PDF attachment:", pdfErr)
+      }
+    }
+
+    // 4. HTML Branded Template
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 30px 15px; color: #1e293b; }
+    .card { max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .header { background: #0f172a; padding: 24px 32px; text-align: left; border-bottom: 3px solid #16a34a; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+    .header p { color: #94a3b8; margin: 4px 0 0; font-size: 13px; }
+    .body { padding: 32px; }
+    .greeting { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #0f172a; }
+    .intro { font-size: 14px; line-height: 1.6; color: #475569; margin-bottom: 24px; }
+    .summary-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; margin-bottom: 24px; }
+    .note { font-size: 12px; color: #64748b; line-height: 1.5; margin-top: 20px; }
+    .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 32px; text-align: center; font-size: 11px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>Linke TMS • Faturação</h1>
+      <p>Documento de Faturação de Serviços Logísticos</p>
+    </div>
+    <div class="body">
+      <div class="greeting">Olá, ${clientName}</div>
+      <div class="intro">
+        Encontra-se disponível a fatura relativa aos serviços de logística e transporte prestados. Os respetivos documentos oficiais encontram-se em anexo em formato PDF.
+      </div>
+      <div class="summary-box">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr style="border-bottom: 1px solid #edf2f7;">
+            <td style="padding: 6px 0; color: #64748b;">Documento:</td>
+            <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a;">${docTitle}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #edf2f7;">
+            <td style="padding: 6px 0; color: #64748b;">Nº Extrato TMS:</td>
+            <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${stmt.statement_number}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #edf2f7;">
+            <td style="padding: 6px 0; color: #64748b;">Envios Faturados:</td>
+            <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${shipmentsCount} envio(s)</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0 0; font-size: 15px; font-weight: 700; color: #16a34a;">Valor Total:</td>
+            <td style="padding: 10px 0 0; text-align: right; font-size: 16px; font-weight: 800; color: #16a34a;">${totalStr} €</td>
+          </tr>
+        </table>
+      </div>
+      <div class="note">
+        Os ficheiros PDF da <strong>Fatura Oficial Certificada (AT)</strong> e do <strong>Extrato Detalhado</strong> encontram-se anexados a esta mensagem.
+      </div>
+    </div>
+    <div class="footer">
+      Linke Distribuição & Logística • Suporte: geral@linke.pt<br/>
+      Este é um email automático de faturação.
+    </div>
+  </div>
+</body>
+</html>
+`
+
+    // 5. Enviar via Resend
+    const { sendEmail } = await import("@/lib/email/resend")
+    const sendResult = await sendEmail({
+      to: targetEmail,
+      subject: `Linke | Fatura de Envios ${docTitle}`,
+      html,
+      attachments: attachments.length > 0 ? attachments : undefined,
+    })
+
+    if (!sendResult.success) {
+      throw new Error(`Falha no envio de email: ${JSON.stringify(sendResult.error)}`)
+    }
+
+    // 6. Registar em audit_log
+    const tenantId = await getTenantId().catch(() => null)
+    await supabase.from("audit_log").insert({
+      tenant_id: tenantId,
+      action: "billing_invoice_email_sent",
+      details: {
+        statement_number: stmt.statement_number,
+        moloni_document_number: stmt.moloni_document_number,
+        recipient_email: targetEmail,
+        attachments_count: attachments.length,
+        sent_at: new Date().toISOString(),
+      }
+    })
+
+    return { 
+      success: true, 
+      recipient: targetEmail,
+      attachmentsCount: attachments.length,
+      message: `Fatura enviada com sucesso para ${targetEmail}` 
+    }
+  } catch (err: any) {
+    console.error("sendStatementInvoiceEmailAction error:", err)
+    return { success: false, error: err?.message || "Erro desconhecido ao enviar fatura por email" }
+  }
+}
+

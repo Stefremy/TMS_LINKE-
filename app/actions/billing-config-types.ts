@@ -27,7 +27,7 @@ export const DEFAULT_BILLING_CONFIG: BillingConfig = {
   includeTrackingInName: true,
   includeWeightInName: true,
   includeServiceNameInName: true,
-  defaultGrouping: "detailed",
+  defaultGrouping: "grouped",
   defaultVatRate: 23,
   defaultPaymentDays: 30,
   defaultDocumentSetId: null,

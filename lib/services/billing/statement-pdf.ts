@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -8,12 +8,14 @@ export interface BillingStatementPdfShipment {
   reference?: string
   recipient_name?: string
   recipient_city?: string
+  recipient_address?: string
   created_at?: string
   sell_price?: number
   service_type?: string
   weight_kg?: number
   base_price?: number
   fuel_tax_amount?: number
+  fuel_rate_pct?: number
   special_fees_amount?: number
   special_fees_description?: string
 }
@@ -32,171 +34,397 @@ export interface BillingStatementPdfData {
 
 const c = (r: number, g: number, b: number) => rgb(r, g, b)
 
+const safeStr = (str?: string) => {
+  if (!str) return ""
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]/g, " ")
+    .trim()
+}
+
+const fmtCurrency = (val: number) => {
+  return (Number(val) || 0).toFixed(2).replace(".", ",") + " EUR"
+}
+
 export async function generateStatementPdfBuffer(data: BillingStatementPdfData): Promise<Buffer> {
   const doc = await PDFDocument.create()
   const fontNormal = await doc.embedFont(StandardFonts.Helvetica)
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
   
-  const logoBytes = fs.readFileSync(path.join(process.cwd(), 'public/Linke-logo.png'))
-  const logo = await doc.embedPng(logoBytes)
+  let logo: any = null
+  try {
+    const logoPath = path.join(process.cwd(), 'public/Linke-logo.png')
+    if (fs.existsSync(logoPath)) {
+      const logoBytes = fs.readFileSync(logoPath)
+      logo = await doc.embedPng(logoBytes)
+    }
+  } catch (err) {
+    console.warn("Logo not embedded in statement PDF:", err)
+  }
 
   const statementNum = data.statementNumber || `EXT-${new Date().getFullYear()}/${String(new Date().getMonth()+1).padStart(2,'0')}-${Math.floor(1000 + Math.random() * 9000)}`
   const dateStr = data.dateStr || new Date().toLocaleDateString("pt-PT")
   const shipments = data.shipments || []
-  
   const totalShipments = shipments.length
-  const subtotal = Number(data.totalValue || 0)
-  const iva = subtotal * 0.23
-  const totalWithIva = subtotal + iva
 
-  const fmtCurrency = (val: number) => {
-    return val.toFixed(2).replace(".", ",") + " EUR"
-  }
-
-  const expandedRows: any[] = []
-  shipments.forEach(s => {
+  // Breakdown normalization for every shipment
+  const items = shipments.map((s, idx) => {
+    const sellPrice = Number(s.sell_price || 0)
     const specialFees = Number(s.special_fees_amount || 0)
-    const baseDisplay = `[Base] ${s.tracking_number || s.reference || s.id.slice(0,8)} ${s.weight_kg ? `(${s.weight_kg}kg)` : ''}`
-    
-    if (s.fuel_tax_amount && Number(s.fuel_tax_amount) > 0) {
-      expandedRows.push({
-        ...s,
-        isBase: true,
-        sell_price: Number(s.base_price || 0),
-        display_tracking: baseDisplay
-      })
-      expandedRows.push({
-        ...s,
-        isFuel: true,
-        sell_price: Number(s.fuel_tax_amount),
-        display_tracking: `[Taxa Combustível] ${s.tracking_number || s.reference || s.id.slice(0,8)}`
-      })
-    } else {
-      expandedRows.push({
-        ...s,
-        sell_price: Number(s.sell_price || 0) - specialFees,
-        display_tracking: s.tracking_number || s.reference || `ENV-${s.id.slice(0, 8).toUpperCase()}`
-      })
+    let basePrice = s.base_price != null ? Number(s.base_price) : 0
+    let fuelTax = s.fuel_tax_amount != null ? Number(s.fuel_tax_amount) : 0
+
+    // Extract special fees description
+    let specialDesc = ""
+    if (s.special_fees_description) {
+      if (typeof s.special_fees_description === "string" && s.special_fees_description.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(s.special_fees_description)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            specialDesc = parsed.map((p: any) => p.name || p.service || "Extra").join(", ")
+          }
+        } catch {
+          specialDesc = s.special_fees_description
+        }
+      } else {
+        specialDesc = s.special_fees_description
+      }
+    }
+    if (specialFees > 0 && !specialDesc) {
+      specialDesc = "Taxa Especial"
     }
 
-    if (specialFees > 0) {
-      const desc = s.special_fees_description || "Serviços Especiais"
-      expandedRows.push({
-        ...s,
-        isSpecial: true,
-        sell_price: specialFees,
-        display_tracking: `[Taxa Especial: ${desc}] ${s.tracking_number || s.reference || s.id.slice(0,8)}`
-      })
+    // Fallback: reverse engineer base price and fuel tax from sell_price if not explicitly stored
+    if ((basePrice === 0 || fuelTax === 0) && sellPrice > 0) {
+      const fuelRate = (s.fuel_rate_pct != null && s.fuel_rate_pct > 0 ? s.fuel_rate_pct : 12.5) / 100
+      const netBaseFuel = Math.max(0, sellPrice - specialFees)
+      if (basePrice === 0 && fuelTax === 0) {
+        basePrice = Math.round((netBaseFuel / (1 + fuelRate)) * 100) / 100
+        fuelTax = Math.round((netBaseFuel - basePrice) * 100) / 100
+      } else if (basePrice === 0) {
+        basePrice = Math.max(0, Math.round((netBaseFuel - fuelTax) * 100) / 100)
+      } else if (fuelTax === 0) {
+        fuelTax = Math.max(0, Math.round((netBaseFuel - basePrice) * 100) / 100)
+      }
+    }
+
+    return {
+      index: idx + 1,
+      id: s.id,
+      date: s.created_at ? new Date(s.created_at).toLocaleDateString("pt-PT") : dateStr,
+      tracking: safeStr(s.tracking_number || s.reference || `ENV-${(s.id || "").slice(0, 8).toUpperCase()}`),
+      service: safeStr(s.service_type || "Transporte"),
+      weightKg: s.weight_kg ? Number(s.weight_kg) : undefined,
+      recipientName: safeStr((s.recipient_name || "Destinatario").slice(0, 22)),
+      recipientCity: safeStr((s.recipient_city || "").slice(0, 16)),
+      basePrice,
+      fuelTax,
+      specialFees,
+      specialDesc: safeStr(specialDesc.slice(0, 20)),
+      sellPrice
     }
   })
 
-  // Calculate dynamic height
-  const baseHeight = 841.89
-  const rowHeight = 22
-  const maxRowsBase = 16
-  const extraHeight = Math.max(0, (expandedRows.length - maxRowsBase) * rowHeight)
-  const height = baseHeight + extraHeight
-  const width = 595.28
+  // Totals calculations
+  const totalBase = Math.round(items.reduce((sum, item) => sum + item.basePrice, 0) * 100) / 100
+  const totalFuel = Math.round(items.reduce((sum, item) => sum + item.fuelTax, 0) * 100) / 100
+  const totalSpecial = Math.round(items.reduce((sum, item) => sum + item.specialFees, 0) * 100) / 100
+  const subtotalNet = Number(data.totalValue || (totalBase + totalFuel + totalSpecial))
+  const iva = Math.round(subtotalNet * 0.23 * 100) / 100
+  const totalWithIva = Math.round((subtotalNet + iva) * 100) / 100
 
-  const page = doc.addPage([width, height])
-  
-  // Helpers
-  const y = (val: number) => val + extraHeight
-  
-  // Top Banner
-  page.drawRectangle({ x: 25, y: y(780), width: 545.28, height: 42, color: c(0.06, 0.09, 0.16) })
-  
-  // Logo in Banner
-  const desiredLogoHeight = 32
-  const logoScale = desiredLogoHeight / logo.height
-  const logoDims = logo.scale(logoScale)
-  page.drawImage(logo, { x: 35, y: y(780) + (42 - logoDims.height) / 2, width: logoDims.width, height: logoDims.height })
-  
-  page.drawText("SISTEMA DE GESTAO DE TRANSPORTES | LISTAGEM DE SERVICOS", { x: 190, y: y(796), size: 9, font: fontNormal, color: c(1, 1, 1) })
+  // Page geometry
+  const pageWidth = 595.28
+  const pageHeight = 841.89
+  const rowHeight = 23
+  const tableHeaderHeight = 20
+  const summaryBoxHeight = 100
+  const footerReservedHeight = 45
 
-  // Document Info Card
-  page.drawRectangle({ x: 25, y: y(690), width: 545.28, height: 78, color: c(0.96, 0.97, 0.98), borderColor: c(0.85, 0.87, 0.90), borderWidth: 1 })
-  
-  page.drawText("LISTAGEM DE SERVICOS / ENVIOS", { x: 35, y: y(748), size: 11, font: fontBold, color: c(0,0,0) })
-  page.drawText("Documento:", { x: 35, y: y(730), size: 9, font: fontBold, color: c(0,0,0) })
-  page.drawText(statementNum, { x: 95, y: y(730), size: 9, font: fontNormal, color: c(0,0,0) })
-  
-  page.drawText("Data de Emissao:", { x: 35, y: y(712), size: 9, font: fontBold, color: c(0,0,0) })
-  page.drawText(dateStr, { x: 115, y: y(712), size: 9, font: fontNormal, color: c(0,0,0) })
-  
-  page.drawText("Total de Envios:", { x: 35, y: y(696), size: 9, font: fontBold, color: c(0,0,0) })
-  page.drawText(`${totalShipments} objeto(s)`, { x: 115, y: y(696), size: 9, font: fontNormal, color: c(0,0,0) })
+  // Helper for right-aligned text
+  const drawRightText = (page: PDFPage, text: string, rightX: number, textY: number, size: number, font: any, color: any) => {
+    const textWidth = font.widthOfTextAtSize(text, size)
+    page.drawText(text, { x: rightX - textWidth, y: textY, size, font, color })
+  }
 
-  // Client Info
-  page.drawText("DADOS DO CLIENTE:", { x: 310, y: y(748), size: 10, font: fontBold, color: c(0,0,0) })
-  page.drawText(data.clientName || "Cliente Linke", { x: 310, y: y(730), size: 9, font: fontBold, color: c(0,0,0) })
-  page.drawText(`NIF: ${data.clientNif || "Consumidor Final"}`, { x: 310, y: y(712), size: 9, font: fontNormal, color: c(0,0,0) })
-  page.drawText(data.clientAddress || data.clientCity || "Portugal", { x: 310, y: y(696), size: 8, font: fontNormal, color: c(0,0,0) })
-
-  // Table Header
-  page.drawRectangle({ x: 25, y: y(600), width: 545.28, height: 20, color: c(0.15, 0.20, 0.28) })
-  const thY = y(606)
-  const headerOpts = { size: 8, font: fontBold, color: c(1,1,1) }
-  page.drawText("#", { x: 32, y: thY, ...headerOpts })
-  page.drawText("DATA", { x: 52, y: thY, ...headerOpts })
-  page.drawText("TRACKING / REFERENCIA", { x: 115, y: thY, ...headerOpts })
-  page.drawText("DESTINATARIO / DESTINO", { x: 245, y: thY, ...headerOpts })
-  page.drawText("VALOR C/ TAXAS", { x: 505, y: thY, ...headerOpts })
-
-  // Table Rows
-  let currentY = y(575)
-  expandedRows.forEach((item, index) => {
-    const isEven = index % 2 === 0
+  // Draw table header
+  const drawTableHeader = (page: PDFPage, yPos: number) => {
     page.drawRectangle({
-      x: 25, y: currentY - 3, width: 545.28, height: rowHeight,
-      color: isEven ? c(0.98, 0.98, 0.99) : c(1,1,1),
-      borderColor: c(0.90, 0.90, 0.92),
+      x: 25,
+      y: yPos,
+      width: 545.28,
+      height: tableHeaderHeight,
+      color: c(0.06, 0.09, 0.16)
+    })
+    const thY = yPos + 6
+    const opts = { size: 7.5, font: fontBold, color: c(1, 1, 1) }
+
+    page.drawText("#", { x: 30, y: thY, ...opts })
+    page.drawText("DATA", { x: 48, y: thY, ...opts })
+    page.drawText("TRACKING / SERVICO", { x: 96, y: thY, ...opts })
+    page.drawText("DESTINATARIO / LOCAL", { x: 236, y: thY, ...opts })
+    drawRightText(page, "BASE TABELA", 395, thY, 7.5, fontBold, c(1, 1, 1))
+    drawRightText(page, "TAXA COMB.", 450, thY, 7.5, fontBold, c(1, 1, 1))
+    drawRightText(page, "EXTRAS", 502, thY, 7.5, fontBold, c(1, 1, 1))
+    drawRightText(page, "TOTAL LIQ.", 562, thY, 7.5, fontBold, c(1, 1, 1))
+  }
+
+  // Helper to draw Page 1 full header
+  const drawPage1Header = (page: PDFPage) => {
+    // 1. Top Banner
+    page.drawRectangle({ x: 25, y: 785, width: 545.28, height: 42, color: c(0.06, 0.09, 0.16) })
+    if (logo) {
+      const desiredLogoHeight = 30
+      const logoScale = desiredLogoHeight / logo.height
+      const logoDims = logo.scale(logoScale)
+      page.drawImage(logo, { x: 35, y: 785 + (42 - logoDims.height) / 2, width: logoDims.width, height: logoDims.height })
+    } else {
+      page.drawText("LINKE TMS", { x: 35, y: 800, size: 12, font: fontBold, color: c(1, 1, 1) })
+    }
+    page.drawText("SISTEMA DE GESTAO DE TRANSPORTES | EXTRATO DISCRIMINATIVO", {
+      x: 185,
+      y: 801,
+      size: 8.5,
+      font: fontNormal,
+      color: c(1, 1, 1)
+    })
+
+    // 2. Info Cards Block
+    page.drawRectangle({
+      x: 25,
+      y: 700,
+      width: 545.28,
+      height: 75,
+      color: c(0.97, 0.98, 0.99),
+      borderColor: c(0.85, 0.88, 0.92),
+      borderWidth: 1
+    })
+
+    // Left card details
+    page.drawText("DOCUMENTO:", { x: 35, y: 756, size: 8, font: fontBold, color: c(0.35, 0.40, 0.48) })
+    page.drawText(statementNum, { x: 100, y: 756, size: 9, font: fontBold, color: c(0.06, 0.09, 0.16) })
+
+    page.drawText("EMISSAO:", { x: 35, y: 738, size: 8, font: fontBold, color: c(0.35, 0.40, 0.48) })
+    page.drawText(dateStr, { x: 100, y: 738, size: 8.5, font: fontNormal, color: c(0.06, 0.09, 0.16) })
+
+    page.drawText("TOTAL ENVIOS:", { x: 35, y: 720, size: 8, font: fontBold, color: c(0.35, 0.40, 0.48) })
+    page.drawText(`${totalShipments} objeto(s)`, { x: 110, y: 720, size: 8.5, font: fontBold, color: c(0.06, 0.09, 0.16) })
+
+    // Right card details (client)
+    page.drawText("DADOS DO CLIENTE:", { x: 320, y: 756, size: 8, font: fontBold, color: c(0.35, 0.40, 0.48) })
+    page.drawText(safeStr((data.clientName || "Cliente Linke").slice(0, 36)), { x: 320, y: 740, size: 9.5, font: fontBold, color: c(0.06, 0.09, 0.16) })
+    page.drawText(`NIF: ${safeStr(data.clientNif || "Consumidor Final")}`, { x: 320, y: 726, size: 8, font: fontNormal, color: c(0.20, 0.24, 0.30) })
+    const addr = safeStr([data.clientAddress, data.clientCity].filter(Boolean).join(", "))
+    page.drawText(addr.slice(0, 48) || "Portugal", { x: 320, y: 712, size: 7.5, font: fontNormal, color: c(0.40, 0.44, 0.50) })
+  }
+
+  // Helper to draw subsequent page header
+  const drawSubsequentPageHeader = (page: PDFPage) => {
+    page.drawRectangle({ x: 25, y: 795, width: 545.28, height: 32, color: c(0.06, 0.09, 0.16) })
+    if (logo) {
+      const desiredLogoHeight = 22
+      const logoScale = desiredLogoHeight / logo.height
+      const logoDims = logo.scale(logoScale)
+      page.drawImage(logo, { x: 35, y: 795 + (32 - logoDims.height) / 2, width: logoDims.width, height: logoDims.height })
+    }
+    page.drawText(`EXTRATO DISCRIMINATIVO ${statementNum}  |  ${safeStr((data.clientName || "").slice(0, 30))}`, {
+      x: 160,
+      y: 806,
+      size: 8,
+      font: fontBold,
+      color: c(1, 1, 1)
+    })
+  }
+
+  // Draw Summary & Totals Box
+  const drawSummaryBox = (page: PDFPage, bottomY: number) => {
+    // 1. Left Card: Breakdown dos Custos
+    page.drawRectangle({
+      x: 25,
+      y: bottomY,
+      width: 285,
+      height: summaryBoxHeight,
+      color: c(0.97, 0.98, 0.99),
+      borderColor: c(0.85, 0.88, 0.92),
+      borderWidth: 1
+    })
+
+    page.drawText("DISCRIMINACAO DOS CUSTOS (RESUMO)", {
+      x: 35,
+      y: bottomY + 82,
+      size: 8.5,
+      font: fontBold,
+      color: c(0.06, 0.09, 0.16)
+    })
+
+    const rowY1 = bottomY + 64
+    page.drawText("Custo Base Tabela (Servicos):", { x: 35, y: rowY1, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
+    drawRightText(page, fmtCurrency(totalBase), 295, rowY1, 8, fontBold, c(0.06, 0.09, 0.16))
+
+    const rowY2 = bottomY + 47
+    page.drawText("Taxa de Combustivel:", { x: 35, y: rowY2, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
+    drawRightText(page, fmtCurrency(totalFuel), 295, rowY2, 8, fontBold, c(0.06, 0.09, 0.16))
+
+    const rowY3 = bottomY + 30
+    page.drawText("Extras & Servicos Adicionais:", { x: 35, y: rowY3, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
+    drawRightText(page, fmtCurrency(totalSpecial), 295, rowY3, 8, fontBold, c(0.06, 0.09, 0.16))
+
+    const rowY4 = bottomY + 13
+    page.drawText("Total de Objetos / Envios:", { x: 35, y: rowY4, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
+    drawRightText(page, `${totalShipments} objeto(s)`, 295, rowY4, 8, fontBold, c(0.06, 0.09, 0.16))
+
+    // 2. Right Card: Totais de Faturação
+    page.drawRectangle({
+      x: 320,
+      y: bottomY,
+      width: 250.28,
+      height: summaryBoxHeight,
+      color: c(0.97, 0.98, 0.99),
+      borderColor: c(0.85, 0.88, 0.92),
+      borderWidth: 1
+    })
+
+    page.drawText("TOTAIS DE FATURACAO", {
+      x: 332,
+      y: bottomY + 82,
+      size: 8.5,
+      font: fontBold,
+      color: c(0.06, 0.09, 0.16)
+    })
+
+    const rTotY1 = bottomY + 64
+    page.drawText("Subtotal Liquido s/ IVA:", { x: 332, y: rTotY1, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
+    drawRightText(page, fmtCurrency(subtotalNet), 558, rTotY1, 8.5, fontBold, c(0.06, 0.09, 0.16))
+
+    const rTotY2 = bottomY + 47
+    page.drawText("IVA (23%):", { x: 332, y: rTotY2, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
+    drawRightText(page, fmtCurrency(iva), 558, rTotY2, 8.5, fontBold, c(0.06, 0.09, 0.16))
+
+    // Dark Bottom Banner
+    page.drawRectangle({
+      x: 326,
+      y: bottomY + 8,
+      width: 238,
+      height: 28,
+      color: c(0.06, 0.09, 0.16)
+    })
+    page.drawText("TOTAL A PAGAR:", { x: 336, y: bottomY + 18, size: 9.5, font: fontBold, color: c(1, 1, 1) })
+    drawRightText(page, fmtCurrency(totalWithIva), 556, bottomY + 18, 10.5, fontBold, c(1, 1, 1))
+  }
+
+  // Build Pages Dynamically
+  const pages: PDFPage[] = []
+
+  // Page 1
+  let currentPage = doc.addPage([pageWidth, pageHeight])
+  pages.push(currentPage)
+  drawPage1Header(currentPage)
+
+  let tableTopY = 668
+  drawTableHeader(currentPage, tableTopY)
+
+  let currentY = tableTopY - rowHeight
+
+  // Minimum bottom boundary when summary is on this page vs not on this page
+  const minBoundaryWithSummary = summaryBoxHeight + footerReservedHeight + 15
+  const minBoundaryWithoutSummary = footerReservedHeight + 10
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    const remainingItems = items.length - i
+    const neededSpaceForSummary = remainingItems <= 1 ? minBoundaryWithSummary : minBoundaryWithoutSummary
+
+    // Need new page?
+    if (currentY < neededSpaceForSummary) {
+      currentPage = doc.addPage([pageWidth, pageHeight])
+      pages.push(currentPage)
+      drawSubsequentPageHeader(currentPage)
+      tableTopY = 765
+      drawTableHeader(currentPage, tableTopY)
+      currentY = tableTopY - rowHeight
+    }
+
+    // Draw Row Background
+    const isEven = i % 2 === 0
+    currentPage.drawRectangle({
+      x: 25,
+      y: currentY,
+      width: 545.28,
+      height: rowHeight,
+      color: isEven ? c(1, 1, 1) : c(0.97, 0.98, 0.99),
+      borderColor: c(0.90, 0.92, 0.94),
       borderWidth: 0.5
     })
 
-    const itemDate = item.created_at ? new Date(item.created_at).toLocaleDateString("pt-PT") : dateStr
-    const tracking = item.service_type && !item.isFuel && !item.isSpecial ? `[${item.service_type.slice(0, 15)}] ${item.display_tracking}` : item.display_tracking
-    const destName = item.isFuel || item.isSpecial ? "" : (item.recipient_name || "Destinatario").slice(0, 22)
-    const destCity = item.isFuel || item.isSpecial ? "" : (item.recipient_city ? ` (${item.recipient_city.slice(0, 14)})` : "")
-    const destFull = `${destName}${destCity}`
-    
-    const priceWithIva = Number(item.sell_price || 0) * 1.23
-    const priceStr = fmtCurrency(priceWithIva)
+    const line1Y = currentY + 12
+    const line2Y = currentY + 3.5
+    const midY = currentY + 7.5
 
-    const trY = currentY + 4
-    page.drawText(String(index + 1), { x: 32, y: trY, size: 8, font: fontBold, color: c(0,0,0) })
-    if (!item.isFuel && !item.isSpecial) {
-      page.drawText(itemDate, { x: 52, y: trY, size: 8, font: fontNormal, color: c(0,0,0) })
+    // Col 1: #
+    currentPage.drawText(String(item.index), { x: 29, y: midY, size: 7.5, font: fontBold, color: c(0.06, 0.09, 0.16) })
+
+    // Col 2: Date
+    currentPage.drawText(item.date, { x: 48, y: midY, size: 7, font: fontNormal, color: c(0.35, 0.40, 0.48) })
+
+    // Col 3: Tracking / Service
+    currentPage.drawText(item.tracking, { x: 96, y: line1Y, size: 7.5, font: fontBold, color: c(0.06, 0.09, 0.16) })
+    const servWithWeight = `${item.service}${item.weightKg ? ` (${item.weightKg}kg)` : ""}`
+    currentPage.drawText(servWithWeight.slice(0, 26), { x: 96, y: line2Y, size: 6.5, font: fontNormal, color: c(0.48, 0.52, 0.58) })
+
+    // Col 4: Recipient / Destination
+    currentPage.drawText(item.recipientName, { x: 236, y: line1Y, size: 7.5, font: fontNormal, color: c(0.12, 0.15, 0.20) })
+    if (item.recipientCity) {
+      currentPage.drawText(item.recipientCity, { x: 236, y: line2Y, size: 6.5, font: fontNormal, color: c(0.48, 0.52, 0.58) })
     }
-    page.drawText(tracking, { x: 115, y: trY, size: (item.isFuel || item.isSpecial) ? 7 : 8, font: (item.isFuel || item.isSpecial) ? fontNormal : fontBold, color: c(0,0,0) })
-    page.drawText(destFull, { x: 245, y: trY, size: 8, font: fontNormal, color: c(0,0,0) })
-    page.drawText(priceStr, { x: 505, y: trY, size: 8, font: fontBold, color: c(0,0,0) })
-    
+
+    // Col 5: Base Tabela
+    drawRightText(currentPage, fmtCurrency(item.basePrice), 395, midY, 7.5, fontNormal, c(0.15, 0.18, 0.22))
+
+    // Col 6: Taxa Combustível
+    drawRightText(currentPage, fmtCurrency(item.fuelTax), 450, midY, 7.5, fontNormal, c(0.15, 0.18, 0.22))
+
+    // Col 7: Extras
+    if (item.specialFees > 0) {
+      drawRightText(currentPage, fmtCurrency(item.specialFees), 502, line1Y, 7.5, fontBold, c(0.15, 0.18, 0.22))
+      if (item.specialDesc) {
+        drawRightText(currentPage, item.specialDesc, 502, line2Y, 6, fontNormal, c(0.45, 0.50, 0.56))
+      }
+    } else {
+      drawRightText(currentPage, "-", 502, midY, 7.5, fontNormal, c(0.55, 0.58, 0.62))
+    }
+
+    // Col 8: Total Líquido
+    drawRightText(currentPage, fmtCurrency(item.sellPrice), 562, midY, 8, fontBold, c(0.06, 0.09, 0.16))
+
     currentY -= rowHeight
+  }
+
+  // Draw Summary Box
+  // Check if summary box fits on current page
+  if (currentY - summaryBoxHeight < footerReservedHeight + 10) {
+    currentPage = doc.addPage([pageWidth, pageHeight])
+    pages.push(currentPage)
+    drawSubsequentPageHeader(currentPage)
+    currentY = 740
+  }
+
+  // Render Summary Box at bottom of the last page
+  const summaryBottomY = Math.max(footerReservedHeight + 10, currentY - summaryBoxHeight - 15)
+  drawSummaryBox(currentPage, summaryBottomY)
+
+  // Draw Footer on all pages
+  const totalPages = pages.length
+  pages.forEach((p, idx) => {
+    p.drawText("Processado por computador - TMS LINKE Logistics Software. Todos os direitos reservados.", {
+      x: 25,
+      y: 28,
+      size: 7,
+      font: fontNormal,
+      color: c(0.50, 0.54, 0.60)
+    })
+    drawRightText(p, `Pagina ${idx + 1} de ${totalPages}`, 570, 28, 7, fontNormal, c(0.50, 0.54, 0.60))
   })
-
-  // Summary Box
-  page.drawRectangle({ x: 320, y: 85, width: 250.28, height: 90, color: c(0.97, 0.98, 0.99), borderColor: c(0.80, 0.82, 0.86), borderWidth: 1 })
-  page.drawText("Subtotal s/ Taxas:", { x: 335, y: 155, size: 9, font: fontNormal, color: c(0,0,0) })
-  page.drawText(fmtCurrency(subtotal), { x: 470, y: 155, size: 9, font: fontBold, color: c(0,0,0) })
-  page.drawText("Taxas / IVA:", { x: 335, y: 137, size: 9, font: fontNormal, color: c(0,0,0) })
-  page.drawText(fmtCurrency(iva), { x: 470, y: 137, size: 9, font: fontBold, color: c(0,0,0) })
-  
-  page.drawRectangle({ x: 325, y: 100, width: 240, height: 20, color: c(0.06, 0.09, 0.16) })
-  page.drawText("VALOR TOTAL:", { x: 335, y: 105, size: 10, font: fontBold, color: c(1,1,1) })
-  page.drawText(fmtCurrency(totalWithIva), { x: 465, y: 105, size: 11, font: fontBold, color: c(1,1,1) })
-
-  // Notes Box
-  page.drawRectangle({ x: 25, y: 85, width: 285, height: 90, color: c(0.97, 0.98, 0.99), borderColor: c(0.80, 0.82, 0.86), borderWidth: 1 })
-  page.drawText("TERMOS DE LISTAGEM:", { x: 35, y: 155, size: 8, font: fontBold, color: c(0,0,0) })
-  page.drawText("- Este documento demonstra os servicos e respetivos precos.", { x: 35, y: 140, size: 8, font: fontNormal, color: c(0,0,0) })
-  page.drawText("- Nao substitui a Fatura Oficial AT com validade fiscal.", { x: 35, y: 126, size: 8, font: fontNormal, color: c(0,0,0) })
-  page.drawText("- Para liquidacao via transferencia bancaria ou debito em conta.", { x: 35, y: 112, size: 8, font: fontNormal, color: c(0,0,0) })
-  page.drawText("- Para esclarecimentos: geral@linke.pt", { x: 35, y: 98, size: 8, font: fontNormal, color: c(0,0,0) })
-
-  // Footer
-  page.drawText("Processado por computador - TMS LINKE Logistics Software. Todos os direitos reservados.", { x: 25, y: 35, size: 8, font: fontNormal, color: c(0.5, 0.5, 0.5) })
-  page.drawText("Pagina 1 de 1", { x: 490, y: 35, size: 8, font: fontNormal, color: c(0.5, 0.5, 0.5) })
 
   const pdfBytes = await doc.save()
   return Buffer.from(pdfBytes)

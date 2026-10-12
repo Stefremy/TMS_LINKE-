@@ -49,13 +49,13 @@ export async function GET(
     const clients = await getClientesAction()
     const client = clients.find((c: any) => c.id === details.client_id)
 
-    // Tentar obter o service_type da DB se estiver em falta no log
+    // Obter dados adicionais da DB para enriquecer o extrato
     let enrichedShipments = details.shipments || []
-    const shipmentIds = enrichedShipments.map((s: any) => s.id).filter(Boolean)
+    const shipmentIds = (details.shipment_ids || enrichedShipments.map((s: any) => s.id)).filter(Boolean)
     if (shipmentIds.length > 0) {
       const { data: dbShipments } = await supabase
         .from("shipments")
-        .select("id, service_type, base_price, fuel_tax_amount, special_fees_amount, special_fees_description")
+        .select("id, tracking_number, service_type, recipient_name, recipient_city, recipient_address, sell_price, created_at")
         .in("id", shipmentIds)
         
       if (dbShipments && dbShipments.length > 0) {
@@ -63,11 +63,18 @@ export async function GET(
           const dbS = dbShipments.find((d: any) => d.id === s.id)
           return {
             ...s,
+            tracking_number: s.tracking_number || dbS?.tracking_number,
             service_type: s.service_type || dbS?.service_type,
-            base_price: s.base_price ?? dbS?.base_price,
-            fuel_tax_amount: s.fuel_tax_amount ?? dbS?.fuel_tax_amount,
-            special_fees_amount: s.special_fees_amount ?? dbS?.special_fees_amount,
-            special_fees_description: s.special_fees_description ?? dbS?.special_fees_description
+            recipient_name: s.recipient_name || dbS?.recipient_name,
+            recipient_city: s.recipient_city || dbS?.recipient_city,
+            recipient_address: s.recipient_address || dbS?.recipient_address,
+            sell_price: s.sell_price != null ? Number(s.sell_price) : (dbS?.sell_price != null ? Number(dbS.sell_price) : 0),
+            base_price: s.base_price,
+            fuel_tax_amount: s.fuel_tax_amount,
+            special_fees_amount: s.special_fees_amount,
+            special_fees_description: s.special_fees_description,
+            weight_kg: s.weight_kg,
+            created_at: s.created_at || dbS?.created_at
           }
         })
       }

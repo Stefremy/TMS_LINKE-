@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Building, FileText, ChevronDown, ChevronRight, Euro, Cloud, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X, Sparkles } from "lucide-react"
+import { Building, FileText, ChevronDown, ChevronRight, Euro, Cloud, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X, Sparkles, Mail, Send } from "lucide-react"
 import { MoloniConnectModal } from "./MoloniConnectModal"
 
 export default function ContasCorrenteClient({ 
@@ -62,6 +62,62 @@ export default function ContasCorrenteClient({
   
   // Envios excluídos manualmente pelo utilizador
   const [excludedShipmentIds, setExcludedShipmentIds] = React.useState<Set<string>>(new Set())
+
+  // Modo de agrupamento da fatura Moloni (Agrupada por serviço e soma total vs Detalhada)
+  const [groupInvoicesByService, setGroupInvoicesByService] = React.useState<boolean>(true)
+
+  // Modal de envio de fatura por email
+  const [emailModalStmt, setEmailModalStmt] = React.useState<any | null>(null)
+  const [emailRecipient, setEmailRecipient] = React.useState<string>("")
+  const [emailIncludeMoloni, setEmailIncludeMoloni] = React.useState<boolean>(true)
+  const [emailIncludeStatement, setEmailIncludeStatement] = React.useState<boolean>(true)
+  const [isSendingEmail, setIsSendingEmail] = React.useState<boolean>(false)
+  const [emailFeedback, setEmailFeedback] = React.useState<{ type: "success" | "error"; message: string } | null>(null)
+
+  const handleOpenEmailModal = (stmt: any) => {
+    setOpenActionMenuId(null)
+    setEmailModalStmt(stmt)
+    const client = clients.find((c: any) => c.id === stmt.client_id || (c.legal_name || c.short_name) === stmt.client_name)
+    setEmailRecipient(client?.billing_email || client?.email || "")
+    setEmailIncludeMoloni(Boolean(stmt.moloni_document_pdf || stmt.moloni_document_id))
+    setEmailIncludeStatement(true)
+    setEmailFeedback(null)
+  }
+
+  const handleSendInvoiceEmail = async () => {
+    if (!emailModalStmt) return
+    if (!emailRecipient || !emailRecipient.includes("@")) {
+      setEmailFeedback({ type: "error", message: "Por favor introduza um endereço de email válido." })
+      return
+    }
+
+    setIsSendingEmail(true)
+    setEmailFeedback(null)
+
+    try {
+      const { sendStatementInvoiceEmailAction } = await import("@/app/actions/moloni")
+      const res = await sendStatementInvoiceEmailAction({
+        statementIdOrNumber: emailModalStmt.statement_number || emailModalStmt.id,
+        recipientEmail: emailRecipient,
+        includeMoloniPdf: emailIncludeMoloni,
+        includeStatementPdf: emailIncludeStatement,
+      })
+
+      if (res.success) {
+        setEmailFeedback({ type: "success", message: res.message || `Fatura enviada para ${emailRecipient}!` })
+        setTimeout(() => {
+          setEmailModalStmt(null)
+          setEmailFeedback(null)
+        }, 2200)
+      } else {
+        setEmailFeedback({ type: "error", message: res.error || "Não foi possível enviar o email." })
+      }
+    } catch (err: any) {
+      setEmailFeedback({ type: "error", message: err.message || "Erro inesperado ao enviar email." })
+    } finally {
+      setIsSendingEmail(false)
+    }
+  }
 
   const toggleExclusion = (shipmentId: string) => {
     setExcludedShipmentIds(prev => {
@@ -271,32 +327,59 @@ export default function ContasCorrenteClient({
         </div>
       )}
 
-      {/* Barra de Filtros */}
-      <div className="flex items-center gap-4 bg-[var(--surface-bg)] p-3 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
-        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-          <Filter className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
-          <span className="text-[11px] font-bold uppercase tracking-wider">Filtros</span>
-        </div>
-        <div className="h-5 w-px bg-[var(--border-subtle)] mx-1" />
+      {/* Barra de Filtros e Modo de Faturação */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-bg)] p-3 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
         <div className="flex items-center gap-3">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-0.5">Data Inicial</span>
-            <input 
-              type="date" 
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="text-xs bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-colors"
-            />
+          <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+            <Filter className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+            <span className="text-[11px] font-bold uppercase tracking-wider">Filtros</span>
           </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-0.5">Data Final</span>
-            <input 
-              type="date" 
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="text-xs bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-colors"
-            />
+          <div className="h-5 w-px bg-[var(--border-subtle)] mx-1" />
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-0.5">Data Inicial</span>
+              <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="text-xs bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-colors"
+              />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-0.5">Data Final</span>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="text-xs bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-colors"
+              />
+            </div>
           </div>
+        </div>
+
+        {/* Opção de Agrupamento por Serviço (Fatura Compacta) */}
+        <div className="flex items-center gap-2 bg-[var(--surface-muted)] px-3 py-1.5 rounded-lg border border-[var(--border-subtle)]">
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <input 
+              type="checkbox"
+              checked={groupInvoicesByService}
+              onChange={(e) => setGroupInvoicesByService(e.target.checked)}
+              className="w-4 h-4 rounded text-[var(--accent)] accent-[var(--accent)] cursor-pointer"
+            />
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                Agrupar por Serviço (Fatura Compacta)
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)]">
+                  {groupInvoicesByService ? "1 Página" : "Detalhada"}
+                </span>
+              </span>
+              <span className="text-[10px] text-[var(--text-tertiary)]">
+                {groupInvoicesByService 
+                  ? "Soma total dos envios com o mesmo serviço (evita faturas com dezenas de páginas)" 
+                  : "Lista 1 linha por cada envio individual"}
+              </span>
+            </div>
+          </label>
         </div>
       </div>
 
@@ -382,13 +465,14 @@ export default function ContasCorrenteClient({
                             disabled={activeCount === 0 || isLoading}
                             onClick={async (e) => { 
                               e.stopPropagation(); 
-                              if (!confirm(`Emitir Fatura Oficial Moloni para ${activeCount} envios selecionados (Total: ${totalValue.toLocaleString('pt-PT')}€)?`)) return;
+                              const modeStr = groupInvoicesByService ? "Agrupada por Serviço (Fatura Compacta - 1 página)" : "Detalhada (1 linha por envio)"
+                              if (!confirm(`Emitir Fatura Oficial Moloni para ${activeCount} envios selecionados?\n\nTotal: ${totalValue.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€\nModo: ${modeStr}`)) return;
                               
                               setIsLoading(true);
                               const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
                               const { emitInvoiceAction } = await import("@/app/actions/moloni")
                               
-                              const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, false) as any;
+                              const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, groupInvoicesByService) as any;
                               setIsLoading(false);
                               if (res?.success && res.statementNumber) {
                                 const stmtNum = res.statementNumber
@@ -715,11 +799,12 @@ export default function ContasCorrenteClient({
                                       setIsMoloniModalOpen(true)
                                       return
                                     }
-                                    const ok = confirm(`Deseja comunicar e emitir a fatura oficial no Moloni para o extrato ${stmt.statement_number}?`)
+                                    const modeStr = groupInvoicesByService ? "Agrupada por Serviço (Fatura Compacta - 1 página)" : "Detalhada (1 linha por envio)"
+                                    const ok = confirm(`Deseja comunicar e emitir a fatura oficial no Moloni para o extrato ${stmt.statement_number}?\n\nModo: ${modeStr}`)
                                     if (!ok) return
                                     
                                     const { emitMoloniInvoiceForStatementAction } = await import("@/app/actions/moloni")
-                                    const res = await emitMoloniInvoiceForStatementAction(stmt.statement_number || stmt.id)
+                                    const res = await emitMoloniInvoiceForStatementAction(stmt.statement_number || stmt.id, groupInvoicesByService)
                                     if (res.success) {
                                       const dlUrl = `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`
                                       try {
@@ -765,7 +850,32 @@ export default function ContasCorrenteClient({
                                     Descarregar Fatura (AT)
                                   </a>
                                 )}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleOpenEmailModal(stmt)
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
+                                >
+                                  <Mail className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                  Enviar Fatura por Email
+                                </button>
                               </>
+                            )}
+
+                            {!(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOpenEmailModal(stmt)
+                                }}
+                                className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
+                              >
+                                <Mail className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                Enviar Extrato por Email
+                              </button>
                             )}
 
                             <div className="h-px bg-[var(--border-subtle)] my-1 mx-2" />
@@ -887,6 +997,26 @@ export default function ContasCorrenteClient({
                   <Download className="w-4 h-4" />
                   Descarregar Extrato Detalhado TMS (PDF)
                 </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const stmt = statements.find((s: any) => s.statement_number === issuedStatement.statementNumber || s.id === issuedStatement.statementNumber) || {
+                      statement_number: issuedStatement.statementNumber,
+                      client_name: issuedStatement.clientName,
+                      total_value: issuedStatement.totalValue,
+                      moloni_document_number: issuedStatement.moloniDocumentNumber,
+                      moloni_document_pdf: issuedStatement.moloniPdf,
+                      client_id: clients.find((c: any) => (c.legal_name || c.short_name) === issuedStatement.clientName)?.id
+                    }
+                    setIssuedStatement(null)
+                    handleOpenEmailModal(stmt)
+                  }}
+                  className="w-full py-2.5 bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-primary)] font-semibold text-xs border border-[var(--border-subtle)] rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                >
+                  <Mail className="w-4 h-4 text-[var(--accent)]" />
+                  ✉️ Enviar Fatura por Email ao Cliente
+                </button>
 
                 {!issuedStatement.moloniPdf && (
                   <div className="p-3 bg-[var(--status-warning-soft)] rounded-lg border border-[rgba(217,119,6,0.2)] text-[11px] text-[var(--text-primary)] flex items-start gap-2.5">
@@ -1016,6 +1146,166 @@ export default function ContasCorrenteClient({
                 style={{ background: 'var(--accent)', color: '#fff' }}
               >
                 {isLoading ? 'A emitir…' : 'Emitir Recibo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Enviar Fatura por Email ── */}
+      {emailModalStmt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-md rounded-2xl animate-in fade-in zoom-in-95 duration-150" style={{ background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-layer)' }}>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}>
+                  <Mail className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Enviar Fatura por Email</h3>
+                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    {formatFTNumber(emailModalStmt.moloni_document_number) || emailModalStmt.statement_number}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setEmailModalStmt(null)
+                  setEmailFeedback(null)
+                }} 
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-70 transition-opacity cursor-pointer" 
+                style={{ background: 'var(--surface-muted)', border: '1px solid var(--border-subtle)' }}
+              >
+                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Resumo do Documento */}
+              <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: 'var(--accent-soft)', border: '1px solid rgba(18,138,71,0.15)' }}>
+                <div>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider block" style={{ color: 'var(--text-secondary)' }}>
+                    {emailModalStmt.client_name}
+                  </span>
+                  <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                    {emailModalStmt.shipments_count || emailModalStmt.shipments?.length || 0} envios incluídos
+                  </span>
+                </div>
+                <span className="text-base font-bold font-mono" style={{ color: 'var(--accent)' }}>
+                  {Number(emailModalStmt.total_value || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                </span>
+              </div>
+
+              {/* Email Destinatário */}
+              <div>
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--text-primary)' }}>
+                  Email de Destino
+                </label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={emailRecipient}
+                    onChange={e => setEmailRecipient(e.target.value)}
+                    placeholder="exemplo@empresa.pt"
+                    className="w-full rounded-xl px-4 py-2.5 text-sm outline-none transition-all pl-10"
+                    style={{ background: 'var(--surface-muted)', border: '1px solid var(--border-strong)', color: 'var(--text-primary)' }}
+                  />
+                  <Mail className="w-4 h-4 absolute left-3.5 top-3 text-[var(--text-tertiary)] pointer-events-none" />
+                </div>
+                <p className="text-[11px] text-[var(--text-tertiary)] mt-1">
+                  Pode alterar ou introduzir outro email para o reenvio da fatura.
+                </p>
+              </div>
+
+              {/* Opções de Anexo */}
+              <div className="space-y-2 pt-1">
+                <span className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-tertiary)]">
+                  Ficheiros Anexados
+                </span>
+                
+                {(emailModalStmt.moloni_document_pdf || emailModalStmt.moloni_document_id) && (
+                  <label className="flex items-center gap-2.5 p-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={emailIncludeMoloni}
+                      onChange={e => setEmailIncludeMoloni(e.target.checked)}
+                      className="w-4 h-4 rounded text-[var(--accent)] accent-[var(--accent)] cursor-pointer"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Download className="w-3.5 h-3.5 text-[var(--status-success)]" />
+                      <span className="text-xs font-medium text-[var(--text-primary)]">
+                        Fatura Oficial Certificada AT (PDF)
+                      </span>
+                    </div>
+                  </label>
+                )}
+
+                <label className="flex items-center gap-2.5 p-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={emailIncludeStatement}
+                    onChange={e => setEmailIncludeStatement(e.target.checked)}
+                    className="w-4 h-4 rounded text-[var(--accent)] accent-[var(--accent)] cursor-pointer"
+                  />
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+                    <span className="text-xs font-medium text-[var(--text-primary)]">
+                      Extrato Detalhado Linke TMS (PDF)
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Feedback Alert */}
+              {emailFeedback && (
+                <div className={`p-3 rounded-xl border text-xs flex items-center gap-2.5 ${
+                  emailFeedback.type === "success"
+                    ? "bg-[var(--status-success-soft)] border-[rgba(18,138,71,0.2)] text-[var(--status-success)]"
+                    : "bg-[var(--status-error-soft)] border-[rgba(239,68,68,0.2)] text-[var(--status-error)]"
+                }`}>
+                  {emailFeedback.type === "success" ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--status-success)]" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 text-[var(--status-error)]" />
+                  )}
+                  <span>{emailFeedback.message}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center gap-3 px-6 pb-5" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
+              <button
+                onClick={() => {
+                  setEmailModalStmt(null)
+                  setEmailFeedback(null)
+                }}
+                disabled={isSendingEmail}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-70 cursor-pointer disabled:opacity-40"
+                style={{ background: 'var(--surface-muted)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSendInvoiceEmail}
+                disabled={isSendingEmail || !emailRecipient}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-40 flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                style={{ background: 'var(--accent)', color: '#fff' }}
+              >
+                {isSendingEmail ? (
+                  <>
+                    <Cloud className="w-4 h-4 animate-spin" />
+                    A enviar...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    Enviar Email
+                  </>
+                )}
               </button>
             </div>
           </div>
