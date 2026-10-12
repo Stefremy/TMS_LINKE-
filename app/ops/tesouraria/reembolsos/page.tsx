@@ -1,10 +1,15 @@
 import * as React from "react"
+import { getReembolsoBatchesAction } from "@/app/actions/reembolsos"
+import ReembolsosClient from "./ReembolsosClient"
 
-export default function ReembolsosPage() {
+export const dynamic = "force-dynamic"
+
+export default async function ReembolsosPage() {
+  const batches = await getReembolsoBatchesAction()
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 h-[calc(100vh-8rem)]">
-      <h1 className="text-2xl font-bold text-slate-800 mb-2">Reembolsos</h1>
-      <p className="text-slate-500">Este módulo está em desenvolvimento.</p>
+    <div className="space-y-6">
+      <ReembolsosClient initialBatches={batches} />
     </div>
   )
 }
