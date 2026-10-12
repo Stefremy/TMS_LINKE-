@@ -19,8 +19,13 @@ export interface Destinatario {
   country: string
   phone?: string
   email?: string
+  nif?: string
+  observations?: string
   client_id?: string
   client_name: string
+  is_saved?: boolean
+  created_at?: string
+  created_by_role?: "employee" | "client"
   total_shipments: number
   last_shipment_date: string
   last_tracking_number: string

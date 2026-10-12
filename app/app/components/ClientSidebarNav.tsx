@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, FileText, Search, Plus } from "lucide-react"
+import { Home, FileText, Search, Plus, UserCheck } from "lucide-react"
 
 export function ClientSidebarNav() {
   const pathname = usePathname()
@@ -10,6 +10,7 @@ export function ClientSidebarNav() {
   const navItems = [
     { href: "/app", label: "Painel Principal", icon: Home },
     { href: "/app/criar-guia", label: "Novo Envio", icon: Plus },
+    { href: "/app/destinatarios", label: "Destinatários", icon: UserCheck },
     { href: "/app/envios", label: "Histórico & Envios", icon: Search },
     { href: "/app/faturas", label: "Faturas e Extratos", icon: FileText },
   ]

@@ -199,7 +199,7 @@ export function DestinatarioDetailsModal({
               </p>
             </div>
 
-            {(destinatario.phone || destinatario.email) && (
+            {(destinatario.phone || destinatario.email || destinatario.nif) && (
               <div className="pt-2.5 border-t border-[var(--border-subtle)] flex flex-wrap gap-4 text-xs font-mono text-[var(--text-secondary)]">
                 {destinatario.phone && (
                   <div className="flex items-center gap-1.5">
@@ -213,6 +213,19 @@ export function DestinatarioDetailsModal({
                     <span>{destinatario.email}</span>
                   </div>
                 )}
+                {destinatario.nif && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-[var(--text-tertiary)] font-bold uppercase">NIF:</span>
+                    <span>{destinatario.nif}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {destinatario.observations && (
+              <div className="pt-2.5 border-t border-[var(--border-subtle)] text-xs text-[var(--text-secondary)]">
+                <span className="text-[10px] text-[var(--text-tertiary)] font-bold uppercase block mb-0.5">Observações:</span>
+                <p className="bg-[var(--surface-muted)]/50 p-2 rounded border border-[var(--border-subtle)]">{destinatario.observations}</p>
               </div>
             )}
           </div>

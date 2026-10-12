@@ -15,36 +15,44 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
-  Phone,
-  Mail,
-  Filter,
+  Plus,
+  Edit2,
+  Trash2,
+  BookmarkCheck,
 } from "lucide-react"
 import { Destinatario } from "../types"
 import { DestinatarioDetailsModal } from "./DestinatarioDetailsModal"
-import { getDestinatariosAction } from "@/app/actions/destinatarios"
+import { NovoDestinatarioModal } from "./NovoDestinatarioModal"
+import { getDestinatariosAction, deleteDestinatarioAction } from "@/app/actions/destinatarios"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { Button } from "@/components/ui/button"
 
 interface DestinatariosClientProps {
   initialDestinatarios: Destinatario[]
   clients: Cliente[]
+  lockedClientId?: string
 }
 
 export function DestinatariosClient({
   initialDestinatarios,
   clients,
+  lockedClientId,
 }: DestinatariosClientProps) {
   const [destinatarios, setDestinatarios] = React.useState<Destinatario[]>(initialDestinatarios || [])
   const [isRefreshing, setIsRefreshing] = React.useState(false)
 
   // Filters
   const [searchQuery, setSearchQuery] = React.useState("")
-  const [clientFilter, setClientFilter] = React.useState<string>("todos")
+  const [clientFilter, setClientFilter] = React.useState<string>(lockedClientId || "todos")
   const [cityFilter, setCityFilter] = React.useState<string>("todos")
+  const [originFilter, setOriginFilter] = React.useState<"todos" | "agenda" | "historico">("todos")
 
-  // Modal
+  // Modals
   const [selectedDest, setSelectedDest] = React.useState<Destinatario | null>(null)
-  const [isModalOpen, setIsModalOpen] = React.useState(false)
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false)
+
+  const [editingDest, setEditingDest] = React.useState<Destinatario | null>(null)
+  const [isNovoModalOpen, setIsNovoModalOpen] = React.useState(false)
 
   // Pagination
   const [currentPage, setCurrentPage] = React.useState(1)
@@ -61,17 +69,20 @@ export function DestinatariosClient({
   // Stats
   const stats = React.useMemo(() => {
     let totalShipments = 0
+    let savedCount = 0
     const uniqueClientsSet = new Set<string>()
     const uniqueCitiesSet = new Set<string>()
 
     destinatarios.forEach((d) => {
       totalShipments += d.total_shipments
+      if (d.is_saved) savedCount++
       if (d.client_name) uniqueClientsSet.add(d.client_name)
       if (d.city) uniqueCitiesSet.add(d.city.toUpperCase().trim())
     })
 
     return {
       totalDestinatarios: destinatarios.length,
+      savedCount,
       totalShipments,
       totalClients: uniqueClientsSet.size,
       totalCities: uniqueCitiesSet.size,
@@ -106,12 +117,44 @@ export function DestinatariosClient({
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      const data = await getDestinatariosAction()
+      const data = await getDestinatariosAction(lockedClientId)
       setDestinatarios(data || [])
     } catch (err) {
       console.error("Error refreshing destinatarios:", err)
     } finally {
       setIsRefreshing(false)
+    }
+  }
+
+  // Handle saved destinatario
+  const handleDestinatarioSaved = (saved: Destinatario) => {
+    setDestinatarios((prev) => {
+      const idx = prev.findIndex((d) => d.id === saved.id)
+      if (idx >= 0) {
+        const copy = [...prev]
+        copy[idx] = { ...copy[idx], ...saved, is_saved: true }
+        return copy
+      }
+      return [saved, ...prev]
+    })
+  }
+
+  // Handle delete
+  const handleDelete = async (id: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm(`Tem a certeza que deseja remover "${name}" da lista de destinatários?`)) {
+      return
+    }
+
+    try {
+      const res = await deleteDestinatarioAction(id)
+      if (res.success) {
+        setDestinatarios((prev) => prev.filter((d) => d.id !== id))
+      } else {
+        alert(res.error || "Não foi possível remover o destinatário.")
+      }
+    } catch (err: any) {
+      alert("Erro ao remover: " + (err?.message || err))
     }
   }
 
@@ -132,6 +175,10 @@ export function DestinatariosClient({
         }
       }
 
+      // Origin filter (Agenda vs Histórico)
+      if (originFilter === "agenda" && !d.is_saved) return false
+      if (originFilter === "historico" && d.is_saved) return false
+
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim()
@@ -143,6 +190,7 @@ export function DestinatariosClient({
         const matchTracking = d.last_tracking_number.toLowerCase().includes(q)
         const matchPhone = d.phone?.toLowerCase().includes(q)
         const matchEmail = d.email?.toLowerCase().includes(q)
+        const matchNif = d.nif?.toLowerCase().includes(q)
 
         if (
           !matchName &&
@@ -152,7 +200,8 @@ export function DestinatariosClient({
           !matchClient &&
           !matchTracking &&
           !matchPhone &&
-          !matchEmail
+          !matchEmail &&
+          !matchNif
         ) {
           return false
         }
@@ -160,19 +209,30 @@ export function DestinatariosClient({
 
       return true
     })
-  }, [destinatarios, clientFilter, cityFilter, searchQuery])
+  }, [destinatarios, clientFilter, cityFilter, originFilter, searchQuery])
 
   // Reset page when filter changes
   React.useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery, clientFilter, cityFilter, pageSize])
+  }, [searchQuery, clientFilter, cityFilter, originFilter, pageSize])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   const handleOpenDetails = (d: Destinatario) => {
     setSelectedDest(d)
-    setIsModalOpen(true)
+    setIsDetailsModalOpen(true)
+  }
+
+  const handleOpenNewModal = () => {
+    setEditingDest(null)
+    setIsNovoModalOpen(true)
+  }
+
+  const handleOpenEditModal = (d: Destinatario, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingDest(d)
+    setIsNovoModalOpen(true)
   }
 
   const handleCopyTracking = (tracking: string, e: React.MouseEvent) => {
@@ -187,12 +247,14 @@ export function DestinatariosClient({
     const headers = [
       "Nome Destinatário",
       "Cliente Linke",
+      "Origem",
       "Morada",
       "Código Postal",
       "Localidade",
       "País",
       "Telefone",
       "Email",
+      "NIF",
       "Total Envios",
       "Último Envio Data",
       "Último Tracking",
@@ -200,12 +262,14 @@ export function DestinatariosClient({
     const rows = filtered.map((d) => [
       `"${d.name.replace(/"/g, '""')}"`,
       `"${d.client_name.replace(/"/g, '""')}"`,
+      `"${d.is_saved ? "Agenda Guardada" : "Histórico de Envios"}"`,
       `"${d.address.replace(/"/g, '""')}"`,
       `"${d.postal_code}"`,
       `"${d.city.replace(/"/g, '""')}"`,
       `"${d.country}"`,
       `"${d.phone || ""}"`,
       `"${d.email || ""}"`,
+      `"${d.nif || ""}"`,
       `"${d.total_shipments}"`,
       `"${new Date(d.last_shipment_date).toLocaleDateString("pt-PT")}"`,
       `"${d.last_tracking_number}"`,
@@ -239,15 +303,26 @@ export function DestinatariosClient({
               Destinatários
             </h1>
             <p className="text-xs text-[var(--text-secondary)]">
-              Diretório consolidado de destinatários e histórico de entregas dos clientes
+              Agenda consolidada de destinatários, contactos e histórico de entregas
             </p>
           </div>
         </div>
 
-        <div className="text-[10px] font-semibold text-[var(--text-tertiary)] flex items-center gap-1.5 uppercase tracking-wide">
-          <span>Entidades</span>
-          <span className="text-[var(--border-strong)]">&gt;</span>
-          <span className="text-[var(--text-secondary)]">Destinatários</span>
+        <div className="flex items-center gap-3">
+          <Button
+            size="sm"
+            onClick={handleOpenNewModal}
+            className="px-3.5 py-1.5 h-auto text-xs font-semibold shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Novo Destinatário
+          </Button>
+
+          <div className="hidden sm:flex text-[10px] font-semibold text-[var(--text-tertiary)] items-center gap-1.5 uppercase tracking-wide">
+            <span>{lockedClientId ? "Portal" : "Entidades"}</span>
+            <span className="text-[var(--border-strong)]">&gt;</span>
+            <span className="text-[var(--text-secondary)]">Destinatários</span>
+          </div>
         </div>
       </div>
 
@@ -256,7 +331,7 @@ export function DestinatariosClient({
         <div className="bg-[var(--surface-bg)] rounded-md p-3 border border-[var(--border-subtle)] shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
-              Destinatários Únicos
+              Total Contactos
             </span>
             <Users className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
           </div>
@@ -264,7 +339,22 @@ export function DestinatariosClient({
             <span className="text-lg font-bold font-mono text-[var(--text-primary)]">
               {stats.totalDestinatarios}
             </span>
-            <span className="text-[11px] text-[var(--text-tertiary)]">registados</span>
+            <span className="text-[11px] text-[var(--text-tertiary)]">na base</span>
+          </div>
+        </div>
+
+        <div className="bg-[var(--surface-bg)] rounded-md p-3 border border-[var(--border-subtle)] shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
+              Guardados na Agenda
+            </span>
+            <BookmarkCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-lg font-bold font-mono text-[var(--accent)]">
+              {stats.savedCount}
+            </span>
+            <span className="text-[11px] text-[var(--text-tertiary)]">contactos fixos</span>
           </div>
         </div>
 
@@ -286,22 +376,7 @@ export function DestinatariosClient({
         <div className="bg-[var(--surface-bg)] rounded-md p-3 border border-[var(--border-subtle)] shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
-              Clientes de Origem
-            </span>
-            <Building2 className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-lg font-bold font-mono text-[var(--text-primary)]">
-              {stats.totalClients}
-            </span>
-            <span className="text-[11px] text-[var(--text-tertiary)]">remetentes</span>
-          </div>
-        </div>
-
-        <div className="bg-[var(--surface-bg)] rounded-md p-3 border border-[var(--border-subtle)] shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
-              Localidades Cobertas
+              Localidades
             </span>
             <MapPin className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
           </div>
@@ -341,22 +416,37 @@ export function DestinatariosClient({
 
           <div className="h-4 w-px bg-[var(--border-subtle)] mx-1" />
 
-          {/* Filtro Cliente */}
+          {/* Filtro Origem (Todos / Agenda / Histórico) */}
           <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 shadow-2xs">
-            <Building2 className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
             <select
-              value={clientFilter}
-              onChange={(e) => setClientFilter(e.target.value)}
-              className="text-[11px] font-medium text-[var(--text-primary)] bg-transparent focus:outline-none cursor-pointer max-w-[180px] truncate"
+              value={originFilter}
+              onChange={(e) => setOriginFilter(e.target.value as any)}
+              className="text-[11px] font-medium text-[var(--text-primary)] bg-transparent focus:outline-none cursor-pointer"
             >
-              <option value="todos">Todos os Clientes</option>
-              {uniqueClientOptions.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
+              <option value="todos">Todos os Registos</option>
+              <option value="agenda">Apenas Agenda Guardada</option>
+              <option value="historico">Apenas Histórico de Envios</option>
             </select>
           </div>
+
+          {/* Filtro Cliente (se não estiver bloqueado na área de cliente) */}
+          {!lockedClientId && (
+            <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 shadow-2xs">
+              <Building2 className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+              <select
+                value={clientFilter}
+                onChange={(e) => setClientFilter(e.target.value)}
+                className="text-[11px] font-medium text-[var(--text-primary)] bg-transparent focus:outline-none cursor-pointer max-w-[180px] truncate"
+              >
+                <option value="todos">Todos os Clientes</option>
+                {uniqueClientOptions.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Filtro Cidade */}
           <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 shadow-2xs">
@@ -375,12 +465,13 @@ export function DestinatariosClient({
             </select>
           </div>
 
-          {(searchQuery || clientFilter !== "todos" || cityFilter !== "todos") && (
+          {(searchQuery || clientFilter !== (lockedClientId || "todos") || cityFilter !== "todos" || originFilter !== "todos") && (
             <button
               onClick={() => {
                 setSearchQuery("")
-                setClientFilter("todos")
+                setClientFilter(lockedClientId || "todos")
                 setCityFilter("todos")
+                setOriginFilter("todos")
               }}
               className="text-[11px] text-[var(--accent)] hover:underline font-medium px-2 py-1"
             >
@@ -395,7 +486,7 @@ export function DestinatariosClient({
             <Search className="w-3.5 h-3.5 text-[var(--text-tertiary)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Pesquisar destinatário, morada, tracking..."
+              placeholder="Pesquisar nome, morada, NIF..."
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value)
@@ -430,21 +521,22 @@ export function DestinatariosClient({
           <thead>
             <tr className="border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-secondary)] font-semibold uppercase tracking-wider text-[10px]">
               <th className="py-2.5 px-4 min-w-[200px]">Destinatário</th>
-              <th className="py-2.5 px-3 min-w-[160px]">Cliente de Origem</th>
+              {!lockedClientId && <th className="py-2.5 px-3 min-w-[150px]">Cliente de Origem</th>}
               <th className="py-2.5 px-3 min-w-[240px]">Morada & Localidade</th>
+              <th className="py-2.5 px-3 w-28 text-center">Tipo / Estado</th>
               <th className="py-2.5 px-3 w-28 text-center">Total Envios</th>
               <th className="py-2.5 px-3 min-w-[160px]">Última Expedição</th>
-              <th className="py-2.5 px-4 w-24 text-right"></th>
+              <th className="py-2.5 px-4 w-32 text-right"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border-subtle)] text-[12px] bg-[var(--surface-bg)]">
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-12 text-center text-[var(--text-secondary)]">
+                <td colSpan={lockedClientId ? 6 : 7} className="py-12 text-center text-[var(--text-secondary)]">
                   <UserCheck className="w-8 h-8 text-[var(--text-tertiary)] mx-auto mb-2 opacity-50" />
                   <span className="font-semibold text-sm">Nenhum destinatário encontrado</span>
                   <p className="text-[11px] text-[var(--text-tertiary)] mt-1">
-                    Os destinatários são consolidamos automaticamente a partir dos envios dos clientes.
+                    Crie um novo destinatário ou aguarde a emissão de envios para povoar a lista.
                   </p>
                 </td>
               </tr>
@@ -457,23 +549,38 @@ export function DestinatariosClient({
                 >
                   {/* Name & Contact */}
                   <td className="py-2.5 px-4">
-                    <div className="font-medium text-[var(--text-primary)]">{d.name}</div>
-                    {(d.phone || d.email) && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-[var(--text-primary)]">{d.name}</span>
+                      {d.is_saved && (
+                        <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)]">
+                          Agenda
+                        </span>
+                      )}
+                    </div>
+                    {(d.phone || d.email || d.nif) && (
                       <div className="text-[11px] text-[var(--text-tertiary)] font-mono flex items-center gap-2 mt-0.5">
                         {d.phone && <span>{d.phone}</span>}
                         {d.phone && d.email && <span>&bull;</span>}
-                        {d.email && <span className="truncate max-w-[180px]">{d.email}</span>}
+                        {d.email && <span className="truncate max-w-[160px]">{d.email}</span>}
+                        {d.nif && (
+                          <>
+                            <span>&bull;</span>
+                            <span>NIF: {d.nif}</span>
+                          </>
+                        )}
                       </div>
                     )}
                   </td>
 
-                  {/* Associated Client */}
-                  <td className="py-2.5 px-3">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
-                      <Building2 className="w-3 h-3 mr-1 text-[var(--text-tertiary)]" />
-                      {d.client_name}
-                    </span>
-                  </td>
+                  {/* Associated Client (OPS only) */}
+                  {!lockedClientId && (
+                    <td className="py-2.5 px-3">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
+                        <Building2 className="w-3 h-3 mr-1 text-[var(--text-tertiary)]" />
+                        {d.client_name}
+                      </span>
+                    </td>
+                  )}
 
                   {/* Address & City */}
                   <td className="py-2.5 px-3 max-w-xs">
@@ -483,6 +590,20 @@ export function DestinatariosClient({
                     <div className="text-[11px] text-[var(--text-tertiary)] font-mono mt-0.5">
                       {d.postal_code} <strong className="font-medium text-[var(--text-primary)]">{d.city}</strong>
                     </div>
+                  </td>
+
+                  {/* Tipo / Estado */}
+                  <td className="py-2.5 px-3 text-center">
+                    {d.is_saved ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                        <BookmarkCheck className="w-3 h-3 mr-1 text-[var(--accent)]" />
+                        Guardado
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-[var(--surface-muted)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]">
+                        Histórico
+                      </span>
+                    )}
                   </td>
 
                   {/* Total Shipments */}
@@ -496,34 +617,59 @@ export function DestinatariosClient({
                   <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-1.5 font-mono text-[11px] font-medium text-[var(--text-primary)]">
                       <span>{d.last_tracking_number}</span>
-                      <button
-                        onClick={(e) => handleCopyTracking(d.last_tracking_number, e)}
-                        className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] p-0.5 rounded hover:bg-[var(--surface-muted)]"
-                        title="Copiar tracking"
-                      >
-                        {copiedTracking === d.last_tracking_number ? (
-                          <Check className="w-3 h-3 text-[var(--accent)]" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                      </button>
+                      {d.last_tracking_number !== "—" && (
+                        <button
+                          onClick={(e) => handleCopyTracking(d.last_tracking_number, e)}
+                          className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] p-0.5 rounded hover:bg-[var(--surface-muted)]"
+                          title="Copiar tracking"
+                        >
+                          {copiedTracking === d.last_tracking_number ? (
+                            <Check className="w-3 h-3 text-[var(--accent)]" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      )}
                     </div>
                     <div className="text-[10px] text-[var(--text-tertiary)] font-mono mt-0.5">
-                      {new Date(d.last_shipment_date).toLocaleDateString("pt-PT")}
+                      {d.last_shipment_date ? new Date(d.last_shipment_date).toLocaleDateString("pt-PT") : "—"}
                     </div>
                   </td>
 
                   {/* Actions */}
                   <td className="py-2.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleOpenDetails(d)}
-                      className="px-2 py-1 h-auto text-[11px] font-medium shadow-2xs"
-                    >
-                      <Eye className="w-3 h-3 mr-1 opacity-70" />
-                      Histórico
-                    </Button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenDetails(d)}
+                        className="px-2 py-1 h-auto text-[11px] font-medium shadow-2xs"
+                        title="Ver detalhes e histórico"
+                      >
+                        <Eye className="w-3 h-3 mr-1 opacity-70" />
+                        Histórico
+                      </Button>
+
+                      {d.is_saved && (
+                        <>
+                          <button
+                            onClick={(e) => handleOpenEditModal(d, e)}
+                            className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors"
+                            title="Editar contacto"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+
+                          <button
+                            onClick={(e) => handleDelete(d.id, d.name, e)}
+                            className="p-1 rounded text-[var(--text-tertiary)] hover:text-[var(--status-critical)] hover:bg-[var(--surface-muted)] transition-colors"
+                            title="Eliminar destinatário"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -575,9 +721,19 @@ export function DestinatariosClient({
 
       {/* Details Modal */}
       <DestinatarioDetailsModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={isDetailsModalOpen}
+        onClose={() => setIsDetailsModalOpen(false)}
         destinatario={selectedDest}
+      />
+
+      {/* Novo / Editar Destinatário Modal */}
+      <NovoDestinatarioModal
+        isOpen={isNovoModalOpen}
+        onClose={() => setIsNovoModalOpen(false)}
+        onSaved={handleDestinatarioSaved}
+        clients={clients}
+        initialData={editingDest}
+        lockedClientId={lockedClientId}
       />
     </div>
   )

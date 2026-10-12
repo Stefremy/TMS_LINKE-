@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro, Download, FileText, ExternalLink, Check, Printer } from "lucide-react"
+import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro, Download, FileText, ExternalLink, Check, Printer, BookmarkCheck } from "lucide-react"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
 
@@ -66,6 +66,33 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   const [recipientCity, setRecipientCity] = React.useState("")
   const [recipientPhone, setRecipientPhone] = React.useState("")
   const [recipientEmail, setRecipientEmail] = React.useState("")
+
+  // Agenda de Destinatários
+  const [savedRecipients, setSavedRecipients] = React.useState<any[]>([])
+  const [saveToAgenda, setSaveToAgenda] = React.useState(false)
+  const [showAgendaDropdown, setShowAgendaDropdown] = React.useState(false)
+
+  React.useEffect(() => {
+    if (selectedClientId) {
+      import("@/app/actions/destinatarios")
+        .then((m) => m.getDestinatariosAction(selectedClientId))
+        .then((list) => setSavedRecipients(list || []))
+        .catch(() => {})
+    } else {
+      setSavedRecipients([])
+    }
+  }, [selectedClientId])
+
+  const handleSelectRecipient = (r: any) => {
+    setRecipientName(r.name || "")
+    setRecipientAddress(r.address || "")
+    setRecipientZip(r.postal_code || "")
+    setRecipientCity(r.city || "")
+    setRecipientCountry(r.country || "PT")
+    setRecipientPhone(r.phone || "")
+    setRecipientEmail(r.email || "")
+    setShowAgendaDropdown(false)
+  }
 
   const currentClient = clients.find(c => c.id === selectedClientId)
 
@@ -254,6 +281,23 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
       setShipmentResult(newResult)
       setSuccess(true)
+
+      // Guardar na Agenda se selecionado
+      if (saveToAgenda && selectedClientId) {
+        import("@/app/actions/destinatarios").then(m => {
+          m.saveDestinatarioAction({
+            client_id: selectedClientId,
+            name: (formData.get("recipient_name") as string) || recipientName,
+            address: (formData.get("recipient_address") as string) || recipientAddress,
+            postal_code: (formData.get("recipient_zip") as string) || recipientZip,
+            city: (formData.get("recipient_city") as string) || recipientCity,
+            country: recipientCountry || "PT",
+            phone: (formData.get("recipient_phone") as string) || recipientPhone || undefined,
+            email: (formData.get("recipient_email") as string) || recipientEmail || undefined,
+            observations: "Criado via Envio OPS"
+          }).catch(() => {})
+        }).catch(() => {})
+      }
       
       // Auto-download da etiqueta assim que o envio é criado
       if ((res as any).labelBase64) {
@@ -631,10 +675,51 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
                 {/* Destinatário */}
                 <div>
-                  <h3 className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-[var(--accent)]" />
-                    Destinatário
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-[var(--accent)]" />
+                      Destinatário
+                    </h3>
+                    {savedRecipients.length > 0 && (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setShowAgendaDropdown(!showAgendaDropdown)}
+                          className="text-[10px] font-semibold text-[var(--accent)] hover:underline flex items-center gap-1 cursor-pointer bg-[var(--accent-soft)] px-2 py-0.5 rounded border border-[var(--accent-subtle)]"
+                        >
+                          <BookmarkCheck className="w-3.5 h-3.5" />
+                          Agenda ({savedRecipients.length})
+                        </button>
+
+                        {showAgendaDropdown && (
+                          <div className="absolute right-0 top-7 z-40 w-72 max-h-56 overflow-y-auto bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-lg shadow-xl p-1 text-xs">
+                            <div className="p-1.5 border-b border-[var(--border-subtle)] text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider flex justify-between items-center">
+                              <span>Contactos da Agenda</span>
+                              <button
+                                type="button"
+                                onClick={() => setShowAgendaDropdown(false)}
+                                className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] cursor-pointer"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            {savedRecipients.map((r) => (
+                              <div
+                                key={r.id}
+                                onClick={() => handleSelectRecipient(r)}
+                                className="p-2 hover:bg-[var(--surface-muted)] rounded cursor-pointer transition-colors border-b border-[var(--border-subtle)] last:border-0"
+                              >
+                                <div className="font-semibold text-[var(--text-primary)] text-[11px] truncate">{r.name}</div>
+                                <div className="text-[10px] text-[var(--text-secondary)] font-mono truncate">
+                                  {r.address}, {r.postal_code} {r.city}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-2 space-y-1.5">
@@ -867,6 +952,18 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                           className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
                         />
                       </div>
+                    </div>
+
+                    <div className="pt-1">
+                      <label className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={saveToAgenda}
+                          onChange={(e) => setSaveToAgenda(e.target.checked)}
+                          className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-[var(--accent)]"
+                        />
+                        <span>Guardar destinatário na lista de contactos da empresa</span>
+                      </label>
                     </div>
                   </div>
                 </div>

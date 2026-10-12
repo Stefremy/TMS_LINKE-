@@ -19,7 +19,8 @@ import {
   Sparkles,
   Download,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  BookmarkCheck
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
@@ -53,6 +54,33 @@ export function ClientCreateGuia() {
   const [recipientPhone, setRecipientPhone] = React.useState("")
   const [recipientEmail, setRecipientEmail] = React.useState("")
   const [weight, setWeight] = React.useState("1.50")
+
+  // Agenda de Destinatários states
+  const [savedRecipients, setSavedRecipients] = React.useState<any[]>([])
+  const [saveToAgenda, setSaveToAgenda] = React.useState(false)
+  const [showAgendaDropdown, setShowAgendaDropdown] = React.useState(false)
+
+  React.useEffect(() => {
+    if (currentClient?.id) {
+      import("@/app/actions/destinatarios")
+        .then((m) => m.getDestinatariosAction(currentClient.id))
+        .then((list) => {
+          setSavedRecipients(list || [])
+        })
+        .catch(() => {})
+    }
+  }, [currentClient?.id])
+
+  const handleSelectRecipient = (r: any) => {
+    setRecipientName(r.name || "")
+    setRecipientAddress(r.address || "")
+    setRecipientPostal(r.postal_code || "")
+    setRecipientCity(r.city || "")
+    setRecipientCountry(r.country || "PT")
+    setRecipientPhone(r.phone || "")
+    setRecipientEmail(r.email || "")
+    setShowAgendaDropdown(false)
+  }
   const [selectedCarrierCode, setSelectedCarrierCode] = React.useState<string>("ctt_expresso")
   const [selectedServiceId, setSelectedServiceId] = React.useState<string>("")
   const [volumesCount, setVolumesCount] = React.useState("1")
@@ -328,6 +356,23 @@ export function ClientCreateGuia() {
         }
       }
 
+      if (saveToAgenda && recipientName && recipientAddress && recipientPostal) {
+        import("@/app/actions/destinatarios")
+          .then((m) =>
+            m.saveDestinatarioAction({
+              name: recipientName,
+              address: recipientAddress,
+              postal_code: recipientPostal,
+              city: recipientCity,
+              country: recipientCountry,
+              phone: recipientPhone,
+              email: recipientEmail,
+              client_id: currentClient?.id,
+            })
+          )
+          .catch(() => {})
+      }
+
       setRecipientName("")
       setRecipientAddress("")
       setRecipientCity("")
@@ -584,8 +629,48 @@ export function ClientCreateGuia() {
 
             {/* Destinatário Name & Country */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="md:col-span-2 space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700">Nome do Destinatário *</label>
+              <div className="md:col-span-2 space-y-1.5 relative">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700">Nome do Destinatário *</label>
+                  {savedRecipients.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAgendaDropdown(!showAgendaDropdown)}
+                      className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <BookmarkCheck className="w-3.5 h-3.5" />
+                      Agenda ({savedRecipients.length})
+                    </button>
+                  )}
+                </div>
+
+                {showAgendaDropdown && (
+                  <div className="absolute z-30 left-0 top-16 w-full max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl p-1 text-xs">
+                    <div className="p-2 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                      <span>Contactos da Agenda</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAgendaDropdown(false)}
+                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {savedRecipients.map((r) => (
+                      <div
+                        key={r.id}
+                        onClick={() => handleSelectRecipient(r)}
+                        className="p-2 hover:bg-emerald-50/60 rounded-lg cursor-pointer transition-colors border-b border-slate-50 last:border-0"
+                      >
+                        <div className="font-semibold text-slate-800">{r.name}</div>
+                        <div className="text-[10px] text-slate-500 font-mono truncate">
+                          {r.address}, {r.postal_code} {r.city}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <input 
                   id="field-recipient-name"
                   type="text" 
@@ -757,6 +842,20 @@ export function ClientCreateGuia() {
                 className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
               />
             </div>
+          </div>
+
+          {/* Checkbox para guardar destinatário na agenda */}
+          <div className="flex items-center gap-2 pt-1 pb-2">
+            <input
+              type="checkbox"
+              id="save_to_agenda"
+              checked={saveToAgenda}
+              onChange={(e) => setSaveToAgenda(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+            />
+            <label htmlFor="save_to_agenda" className="text-xs text-slate-600 cursor-pointer select-none">
+              Guardar este destinatário na lista de contactos da empresa para envios futuros
+            </label>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
