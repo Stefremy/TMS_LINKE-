@@ -621,10 +621,12 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
 
 
 /**
- * Agenda uma recolha junto dos CTT
+ * Agenda uma recolha junto da transportadora (CTT Expresso ou Correos Express)
  */
 export async function scheduleCttPickupAction(input: {
   connection_id?: string
+  carrier_code?: string
+  client_id?: string
   date: string
   startHour: string
   endHour: string
@@ -634,37 +636,114 @@ export async function scheduleCttPickupAction(input: {
   observations?: string
 }) {
   await requireEmployee()
-  const creds = await getCttCredentials()
-  const provider = new CttProvider()
-  await provider.initialize(creds)
+  const supabase = createAdminClient()
+  const tenantId = await getTenantId()
 
-  const result = await provider.createPickup({
-    date: input.date,
-    startHour: input.startHour,
-    endHour: input.endHour,
-    volumes: input.volumes,
-    weightKg: input.weightKg,
-    sender: {
-      name: input.sender.name,
-      address: input.sender.address,
-      zip: input.sender.zip,
-      city: input.sender.city,
-      phone: input.sender.phone,
-      email: input.sender.email,
-    },
-    observations: input.observations,
-  })
+  // 1. Detetar operadora através da ligação selecionada
+  let carrierCode = input.carrier_code || "ctt_expresso"
+  if (input.connection_id) {
+    try {
+      const { data: conn } = await supabase
+        .from("carrier_connections")
+        .select("carrier_code")
+        .eq("id", input.connection_id)
+        .single()
+      if (conn?.carrier_code) {
+        carrierCode = conn.carrier_code
+      }
+    } catch {}
+  }
 
-  if (result.success) {
-    const supabase = createAdminClient()
-    await supabase.from("recolhas").insert({
-      tenant_id: (await getTenantId()),
-      status: "Agendado",
-      scheduled_date: input.date,
-      ctt_pickup_id: result.pickupNumber,
-    })
+  let result: { success: boolean; pickupNumber?: string; error?: string } = { success: false }
+  let carrierName = carrierCode === "correos_express" ? "Correos Express" : "CTT Expresso"
 
-    // Trigger Notification Email to Sender
+  // 2. Chamar o webservice da transportadora correta
+  if (carrierCode === "correos_express") {
+    try {
+      const { resolveCorreosCredentials } = await import("@/lib/services/carriers/credentials")
+      const { CorreosPickupService } = await import("@/lib/services/correos")
+
+      const correosCreds = await resolveCorreosCredentials(input.connection_id)
+      const pickupService = new CorreosPickupService()
+      result = await pickupService.createPickup(correosCreds, {
+        date: input.date,
+        startHour: input.startHour,
+        endHour: input.endHour,
+        volumes: input.volumes,
+        weightKg: input.weightKg,
+        sender: input.sender,
+        observations: input.observations,
+      })
+    } catch (cexErr: any) {
+      return { success: false, error: cexErr.message || "Erro na comunicação com a Correos Express" }
+    }
+  } else {
+    try {
+      const creds = await getCttCredentials()
+      const provider = new CttProvider()
+      await provider.initialize(creds)
+
+      result = await provider.createPickup({
+        date: input.date,
+        startHour: input.startHour,
+        endHour: input.endHour,
+        volumes: input.volumes,
+        weightKg: input.weightKg,
+        sender: {
+          name: input.sender.name,
+          address: input.sender.address,
+          zip: input.sender.zip,
+          city: input.sender.city,
+          phone: input.sender.phone,
+          email: input.sender.email,
+        },
+        observations: input.observations,
+      })
+    } catch (cttErr: any) {
+      return { success: false, error: cttErr.message || "Erro na comunicação com os CTT Expresso" }
+    }
+  }
+
+  if (result.success && result.pickupNumber) {
+    let recolhaId = ""
+    try {
+      const { data: ins } = await supabase.from("recolhas").insert({
+        tenant_id: tenantId,
+        status: "Agendado",
+        scheduled_date: input.date,
+        ctt_pickup_id: result.pickupNumber,
+      }).select("id").single()
+      recolhaId = ins?.id || ""
+    } catch (dbErr: any) {
+      console.warn("Could not insert into recolhas table:", dbErr?.message)
+    }
+
+    // Guardar metadados enriquecidos no audit_log para permitir histórico detalhado unificado
+    try {
+      await supabase.from("audit_log").insert({
+        tenant_id: tenantId,
+        action: "recolha_data",
+        details: {
+          recolha_id: recolhaId,
+          pickup_id: result.pickupNumber,
+          carrier_code: carrierCode,
+          carrier_name: carrierName,
+          client_id: input.client_id || null,
+          sender_name: input.sender.name,
+          sender_address: input.sender.address,
+          sender_city: input.sender.city,
+          volumes: input.volumes,
+          weight_kg: input.weightKg,
+          period: `${input.startHour}-${input.endHour}`,
+          observations: input.observations,
+          created_at: new Date().toISOString(),
+        }
+      })
+    } catch (auditErr: any) {
+      console.warn("Could not save recolha metadata to audit_log:", auditErr?.message)
+    }
+
+    // Disparar email de confirmação se fornecido
     if (input.sender.email) {
       const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
       const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
@@ -677,19 +756,25 @@ export async function scheduleCttPickupAction(input: {
         tracking_url: "https://tms.linke.pt/ops/envios/recolhas"
       })
 
-      // Send asynchronously without blocking the request
       sendEmail({
         to: input.sender.email,
-        subject: "Linke | Recolha Agendada com Sucesso",
+        subject: `Linke | Recolha ${carrierName} Agendada com Sucesso (${result.pickupNumber})`,
         html,
       }).catch(err => console.error("Error sending pickup email:", err))
     }
 
+    revalidatePath("/ops/envios/recolhas")
     revalidatePath("/ops/envios")
   }
 
-  return result
+  return {
+    ...result,
+    carrier_code: carrierCode,
+    carrier_name: carrierName,
+  }
 }
+
+export const scheduleCarrierPickupAction = scheduleCttPickupAction
 
 /**
  * Consulta a lista oficial de produtos/subprodutos ativados nos CTT via RecolhasWS (GetProdutosRecolha)

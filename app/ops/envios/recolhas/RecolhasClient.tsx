@@ -21,8 +21,14 @@ import {
   Building2,
   ChevronDown,
   Wifi,
+  Copy,
+  Check,
+  Search,
+  Filter,
+  ArrowRight,
 } from "lucide-react"
 import { scheduleCttPickupAction } from "@/app/actions/ctt"
+import { getCarrierLogo } from "@/lib/carrier-logos"
 
 interface MappedClient {
   id: string
@@ -32,6 +38,7 @@ interface MappedClient {
   city: string
   postal_code: string
   phone: string
+  email?: string
 }
 
 interface CarrierConnection {
@@ -46,6 +53,8 @@ interface CarrierConnection {
 interface Recolha {
   id: string
   ctt_pickup_id?: string
+  carrier_code?: string
+  carrier_name?: string
   status: string
   scheduled_date?: string
   created_at: string
@@ -54,6 +63,7 @@ interface Recolha {
   sender_name?: string
   sender_address?: string
   sender_city?: string
+  period?: string
   observations?: string
   client_id?: string
 }
@@ -86,12 +96,43 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
   const [view, setView] = React.useState<"list" | "form">("list")
   const [loading, setLoading] = React.useState(false)
   const [result, setResult] = React.useState<any>(null)
+  const [copiedId, setCopiedId] = React.useState<string | null>(null)
 
-  // Client & Carrier account
+  // List filters
+  const [searchQuery, setSearchQuery] = React.useState("")
+  const [carrierFilter, setCarrierFilter] = React.useState<"all" | "ctt_expresso" | "correos_express">("all")
+  const [statusFilter, setStatusFilter] = React.useState<string>("all")
+
+  // Carrier Selection
+  // Find first CTT and first Correos connection
+  const firstCtt = carrierConnections.find(c => c.carrier_code === "ctt_expresso")
+  const firstCorreos = carrierConnections.find(c => c.carrier_code === "correos_express")
+  
+  const [selectedCarrierCode, setSelectedCarrierCode] = React.useState<"ctt_expresso" | "correos_express">(
+    (carrierConnections[0]?.carrier_code === "correos_express" ? "correos_express" : "ctt_expresso")
+  )
+
+  const [selectedCarrierId, setSelectedCarrierId] = React.useState(
+    carrierConnections[0]?.id || ""
+  )
+
+  // Switch carrier code and update connection ID to match
+  const handleSelectCarrierTab = (code: "ctt_expresso" | "correos_express") => {
+    setSelectedCarrierCode(code)
+    const matchingConn = carrierConnections.find(c => c.carrier_code === code)
+    if (matchingConn) {
+      setSelectedCarrierId(matchingConn.id)
+    } else {
+      // If no connection in DB for this carrier, pick first or empty
+      setSelectedCarrierId("")
+    }
+  }
+
+  // Filter connections matching currently chosen carrier tab
+  const availableConnectionsForCarrier = carrierConnections.filter(c => c.carrier_code === selectedCarrierCode)
+
+  // Client & Form fields
   const [selectedClientId, setSelectedClientId] = React.useState("")
-  const [selectedCarrierId, setSelectedCarrierId] = React.useState(carrierConnections[0]?.id || "")
-
-  // Form fields
   const [date, setDate] = React.useState(tomorrowDate())
   const [period, setPeriod] = React.useState("09:00-19:00")
   const [volumes, setVolumes] = React.useState(1)
@@ -114,14 +155,14 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
   const [senderMobile, setSenderMobile] = React.useState("")
   const [observations, setObservations] = React.useState("")
 
-  // When client is selected, auto-fill address fields
+  // Auto-fill address fields when a client is chosen
   const handleClientChange = (clientId: string) => {
     setSelectedClientId(clientId)
     const client = clients.find(c => c.id === clientId)
     if (client) {
       setSenderName(client.name)
       setSenderContact(client.name)
-      setSenderEmail((client as any).email || "")
+      setSenderEmail(client.email || "")
       setSenderAddress(client.address || senderAddress)
       setSenderZip(client.postal_code || senderZip)
       setSenderCity(client.city || senderCity)
@@ -129,7 +170,14 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
     }
   }
 
-  const selectedCarrier = carrierConnections.find(c => c.id === selectedCarrierId)
+  const selectedCarrier = carrierConnections.find(c => c.id === selectedCarrierId) || availableConnectionsForCarrier[0]
+
+  const handleCopy = (text: string) => {
+    if (!text) return
+    navigator.clipboard.writeText(text)
+    setCopiedId(text)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -147,7 +195,9 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
       const [startHour, endHour] = period.split("-")
 
       const res = await scheduleCttPickupAction({
-        connection_id: selectedCarrierId,
+        connection_id: selectedCarrier?.id || selectedCarrierId,
+        carrier_code: selectedCarrierCode,
+        client_id: selectedClientId || undefined,
         date,
         startHour,
         endHour,
@@ -166,11 +216,6 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
         observations: finalObs || undefined,
       })
       setResult(res)
-      if (res.success) {
-        setTimeout(() => {
-          window.location.reload()
-        }, 2800)
-      }
     } catch (err: any) {
       setResult({ success: false, error: err.message })
     } finally {
@@ -178,19 +223,59 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
     }
   }
 
+  // Filter recolhas list
+  const filteredRecolhas = recolhas.filter((r) => {
+    if (carrierFilter !== "all") {
+      const matchesCarrier = r.carrier_code === carrierFilter || 
+        (carrierFilter === "correos_express" && (r.ctt_pickup_id || "").startsWith("CEX")) ||
+        (carrierFilter === "ctt_expresso" && !(r.ctt_pickup_id || "").startsWith("CEX"))
+      if (!matchesCarrier) return false
+    }
+
+    if (statusFilter !== "all" && r.status !== statusFilter) {
+      return false
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim()
+      const client = clients.find(c => c.id === r.client_id)
+      const matchesQuery = 
+        (r.ctt_pickup_id || "").toLowerCase().includes(q) ||
+        (r.sender_name || "").toLowerCase().includes(q) ||
+        (r.sender_city || "").toLowerCase().includes(q) ||
+        (client?.name || "").toLowerCase().includes(q) ||
+        (client?.code || "").toLowerCase().includes(q)
+      if (!matchesQuery) return false
+    }
+
+    return true
+  })
+
+  // Counts for quick filter tabs
+  const cttCount = recolhas.filter(r => r.carrier_code === "ctt_expresso" || !String(r.ctt_pickup_id || "").startsWith("CEX")).length
+  const correosCount = recolhas.filter(r => r.carrier_code === "correos_express" || String(r.ctt_pickup_id || "").startsWith("CEX")).length
+
+  const isCttActive = selectedCarrierCode === "ctt_expresso"
+  const isCorreosActive = selectedCarrierCode === "correos_express"
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] bg-[var(--surface-bg)] rounded-xl shadow-sm border border-[var(--border-subtle)] overflow-hidden">
 
       {/* Header */}
       <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0 bg-[var(--surface-muted)]">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] border border-[rgba(18,138,71,0.1)]">
-            <Truck className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/10 to-emerald-500/10 border border-[var(--border-subtle)] flex items-center justify-center text-[var(--accent)] shadow-xs">
+            <Truck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-[var(--text-primary)]">Pedidos de Recolha</h1>
-            <p className="text-xs text-[var(--text-secondary)]">
-              Agendamento direto via CTT Expresso WebServices (RecolhasWS)
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-[var(--text-primary)]">Pedidos de Recolha</h1>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                Multi-Operadora
+              </span>
+            </div>
+            <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+              Agendamento centralizado via WebServices • CTT Expresso & Correos Express
             </p>
           </div>
         </div>
@@ -198,23 +283,26 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setView("list"); setResult(null) }}
-            className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 ${
               view === "list"
-                ? "bg-[var(--text-primary)] text-[var(--surface-bg)] border-[var(--text-primary)]"
+                ? "bg-[var(--text-primary)] text-[var(--surface-bg)] border-[var(--text-primary)] shadow-xs"
                 : "bg-[var(--surface-bg)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)]"
             }`}
           >
-            Lista
+            Lista de Recolhas
+            <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/60 dark:bg-slate-700 font-mono">
+              {recolhas.length}
+            </span>
           </button>
           <button
             onClick={() => { setView("form"); setResult(null) }}
-            className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 shadow-xs ${
               view === "form"
                 ? "bg-[var(--accent)] text-white border-[var(--accent)]"
                 : "bg-[var(--surface-bg)] text-[var(--accent)] border-[rgba(18,138,71,0.3)] hover:bg-[var(--accent-soft)]"
             }`}
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             Nova Recolha
           </button>
         </div>
@@ -222,136 +310,312 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
 
       {view === "list" ? (
         /* ───── LIST VIEW ───── */
-        <div className="flex-1 overflow-auto">
-          {recolhas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-4 py-16 text-center px-8">
-              <div className="w-16 h-16 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-strong)] flex items-center justify-center text-[var(--text-tertiary)]">
-                <Package className="w-8 h-8" />
-              </div>
-              <div>
-                <p className="text-base font-bold text-[var(--text-primary)]">Nenhuma recolha agendada</p>
-                <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-sm">
-                  Agende a primeira recolha CTT Expresso diretamente a partir deste painel, sem precisar da App CTT.
-                </p>
-              </div>
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          
+          {/* Filter Bar */}
+          <div className="px-6 py-3 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)] flex flex-wrap items-center justify-between gap-3 shrink-0">
+            {/* Search */}
+            <div className="relative w-72">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
+              <input
+                type="text"
+                placeholder="Pesquisar por PickUp ID, cliente, morada..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Carrier Filter Tabs */}
+            <div className="flex items-center gap-1.5 bg-[var(--surface-muted)] p-1 rounded-lg border border-[var(--border-subtle)]">
               <button
-                onClick={() => setView("form")}
-                className="mt-2 flex items-center gap-2 px-5 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-sm font-bold shadow-sm transition-colors"
+                onClick={() => setCarrierFilter("all")}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+                  carrierFilter === "all"
+                    ? "bg-[var(--surface-bg)] text-[var(--text-primary)] shadow-xs"
+                    : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                }`}
               >
-                <Plus className="w-4 h-4" />
-                Agendar Primeira Recolha
+                Todas ({recolhas.length})
+              </button>
+              <button
+                onClick={() => setCarrierFilter("ctt_expresso")}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                  carrierFilter === "ctt_expresso"
+                    ? "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 shadow-xs"
+                    : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-red-500" />
+                CTT Expresso ({cttCount})
+              </button>
+              <button
+                onClick={() => setCarrierFilter("correos_express")}
+                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                  carrierFilter === "correos_express"
+                    ? "bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 shadow-xs"
+                    : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                Correos Express ({correosCount})
               </button>
             </div>
-          ) : (
-            <table className="w-full text-left text-[13px]">
-              <thead className="bg-[var(--surface-bg)] sticky top-0 z-10 shadow-[0_1px_0_0_var(--border-subtle)]">
-                <tr>
-                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">PickUp ID</th>
-                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Cliente</th>
-                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Data / Horário</th>
-                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Morada</th>
-                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Vol / Peso</th>
-                  <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-subtle)]">
-                {recolhas.map((r) => {
-                  const cfg = getStatusCfg(r.status)
-                  const client = clients.find(c => c.id === r.client_id)
-                  return (
-                    <tr key={r.id} className="hover:bg-[var(--surface-muted)] transition-colors">
-                      <td className="px-5 py-4">
-                        <span className="font-mono font-bold text-[var(--accent)] text-[13px]">
-                          {r.ctt_pickup_id || "—"}
-                        </span>
-                        <div className="text-[11px] text-[var(--text-tertiary)] font-mono mt-0.5">
-                          {r.id.slice(0, 8).toUpperCase()}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        {client ? (
-                          <div>
-                            <div className="font-semibold text-[var(--text-primary)]">{client.name}</div>
-                            <div className="text-[11px] text-[var(--text-tertiary)]">{client.code}</div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-2">
+              <Filter className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="text-xs font-semibold bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-lg px-2.5 py-1.5 text-[var(--text-secondary)] focus:outline-none"
+              >
+                <option value="all">Todos os Estados</option>
+                <option value="Agendado">Agendado</option>
+                <option value="Realizado">Realizado</option>
+                <option value="Cancelado">Cancelado</option>
+                <option value="pendente">Pendente</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="flex-1 overflow-auto">
+            {filteredRecolhas.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full gap-4 py-16 text-center px-8">
+                <div className="w-16 h-16 rounded-2xl bg-[var(--surface-muted)] border border-[var(--border-strong)] flex items-center justify-center text-[var(--text-tertiary)]">
+                  <Package className="w-8 h-8" />
+                </div>
+                <div>
+                  <p className="text-base font-bold text-[var(--text-primary)]">Nenhuma recolha encontrada</p>
+                  <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-sm">
+                    {searchQuery || carrierFilter !== "all" || statusFilter !== "all"
+                      ? "Nenhum agendamento coincide com os filtros aplicados."
+                      : "Agende recolhas CTT Expresso ou Correos Express diretamente a partir deste painel."}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setView("form")}
+                  className="mt-2 flex items-center gap-2 px-5 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-sm font-bold shadow-sm transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Agendar Nova Recolha
+                </button>
+              </div>
+            ) : (
+              <table className="w-full text-left text-[13px]">
+                <thead className="bg-[var(--surface-bg)] sticky top-0 z-10 shadow-[0_1px_0_0_var(--border-subtle)]">
+                  <tr>
+                    <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Operadora</th>
+                    <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">PickUp ID</th>
+                    <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Cliente</th>
+                    <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Data / Janela</th>
+                    <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Local de Recolha</th>
+                    <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Volumes / Peso</th>
+                    <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-subtle)]">
+                  {filteredRecolhas.map((r) => {
+                    const cfg = getStatusCfg(r.status)
+                    const client = clients.find(c => c.id === r.client_id)
+                    const isCorreos = r.carrier_code === "correos_express" || String(r.ctt_pickup_id || "").startsWith("CEX")
+                    const carrierLogo = getCarrierLogo(isCorreos ? "correos_express" : "ctt_expresso")
+
+                    return (
+                      <tr key={r.id} className="hover:bg-[var(--surface-muted)] transition-colors">
+                        {/* Carrier Badge */}
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2">
+                            {carrierLogo ? (
+                              <div className="w-7 h-7 rounded-md bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                                <img
+                                  src={carrierLogo}
+                                  alt={isCorreos ? "Correos Express" : "CTT Expresso"}
+                                  className="w-full h-full object-contain"
+                                />
+                              </div>
+                            ) : null}
+                            <div>
+                              <div className="font-bold text-[12px] text-[var(--text-primary)]">
+                                {isCorreos ? "Correos Express" : "CTT Expresso"}
+                              </div>
+                              <span className="text-[10px] text-[var(--text-tertiary)] font-mono">
+                                {isCorreos ? "CEX WebService" : "RecolhasWS"}
+                              </span>
+                            </div>
                           </div>
-                        ) : (
-                          <span className="text-[var(--text-tertiary)] text-[12px]">—</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
-                          <Calendar className="w-3.5 h-3.5 text-[var(--text-tertiary)] shrink-0" />
-                          {r.scheduled_date || "—"}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="font-semibold text-[var(--text-primary)]">{r.sender_name || "Armazém Principal"}</div>
-                        <div className="text-[11px] text-[var(--text-tertiary)]">{r.sender_address || "—"}</div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="text-[var(--text-primary)] font-semibold">{r.volumes ?? "—"} vol.</div>
-                        <div className="text-[11px] text-[var(--text-tertiary)]">{r.weight_kg ?? "—"} kg</div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${cfg.color}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
-                          {cfg.label}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
+                        </td>
+
+                        {/* PickUp ID */}
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-[var(--accent)] text-[13px]">
+                              {r.ctt_pickup_id || "—"}
+                            </span>
+                            {r.ctt_pickup_id && (
+                              <button
+                                onClick={() => handleCopy(r.ctt_pickup_id!)}
+                                title="Copiar PickUp ID"
+                                className="text-slate-400 hover:text-slate-700 transition-colors p-1"
+                              >
+                                {copiedId === r.ctt_pickup_id ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-[var(--text-tertiary)] font-mono mt-0.5">
+                            REF: {r.id.slice(0, 8).toUpperCase()}
+                          </div>
+                        </td>
+
+                        {/* Client */}
+                        <td className="px-5 py-4">
+                          {client ? (
+                            <div>
+                              <div className="font-semibold text-[var(--text-primary)]">{client.name}</div>
+                              <div className="text-[11px] text-[var(--text-tertiary)]">{client.code}</div>
+                            </div>
+                          ) : (
+                            <span className="text-[var(--text-tertiary)] text-[12px]">Interno / Sem Cliente</span>
+                          )}
+                        </td>
+
+                        {/* Date / Time */}
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)]">
+                            <Calendar className="w-3.5 h-3.5 text-[var(--text-tertiary)] shrink-0" />
+                            {r.scheduled_date || "—"}
+                          </div>
+                          {r.period && (
+                            <div className="flex items-center gap-1 text-[11px] text-[var(--text-tertiary)] mt-0.5 font-mono">
+                              <Clock className="w-3 h-3 shrink-0" />
+                              {r.period}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Location */}
+                        <td className="px-5 py-4 max-w-xs">
+                          <div className="font-semibold text-[var(--text-primary)] truncate">{r.sender_name || "Armazém Principal"}</div>
+                          <div className="text-[11px] text-[var(--text-tertiary)] truncate">{r.sender_address || "—"}</div>
+                        </td>
+
+                        {/* Volumes / Weight */}
+                        <td className="px-5 py-4">
+                          <div className="text-[var(--text-primary)] font-semibold">{r.volumes ?? 1} vol.</div>
+                          <div className="text-[11px] text-[var(--text-tertiary)]">{r.weight_kg ?? 1} kg</div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${cfg.color}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+                            {cfg.label}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       ) : (
         /* ───── FORM VIEW ───── */
         <div className="flex-1 overflow-auto">
           <div className="max-w-3xl mx-auto p-6">
 
-            {result?.Success ? (
+            {result && (result.success || result.Success) ? (
               /* ── Success State ── */
               <div className="space-y-4">
-                <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <div className="p-6 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
                     <CheckCircle2 className="w-7 h-7" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-emerald-800">Recolha Agendada com Sucesso!</h3>
-                    <p className="text-sm text-emerald-700 mt-1">
-                      O pedido de recolha foi registado nos CTT Expresso. Um estafeta passará no endereço indicado.
+                    <h3 className="text-base font-bold text-emerald-800 dark:text-emerald-300">
+                      Recolha Agendada com Sucesso!
+                    </h3>
+                    <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-1">
+                      O pedido de recolha foi confirmado nos WebServices da {result.carrier_name || (selectedCarrierCode === "correos_express" ? "Correos Express" : "CTT Expresso")}.
+                      O estafeta passará na morada indicada na janela horária estabelecida.
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Detalhes do Agendamento</p>
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <span className="text-sm text-slate-500 flex items-center gap-2"><Hash className="w-4 h-4" /> PickUp ID CTT</span>
-                    <span className="font-mono font-black text-blue-700 text-lg tracking-wider">{result.pickupNumber}</span>
+                <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl p-5 space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Detalhes da Confirmação</span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      {result.carrier_name || (selectedCarrierCode === "correos_express" ? "Correos Express" : "CTT Expresso")}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <span className="text-sm text-slate-500 flex items-center gap-2"><Calendar className="w-4 h-4" /> Data</span>
-                    <span className="font-semibold text-slate-800">{date}</span>
+
+                  <div className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]">
+                    <span className="text-sm text-slate-500 flex items-center gap-2">
+                      <Hash className="w-4 h-4 text-indigo-500" />
+                      PickUp ID ({result.carrier_name || (selectedCarrierCode === "correos_express" ? "Correos" : "CTT")})
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-black text-indigo-700 dark:text-indigo-400 text-lg tracking-wider">
+                        {result.pickupNumber || result.PickUpID}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(result.pickupNumber || result.PickUpID)}
+                        className="p-1 text-slate-400 hover:text-slate-700 transition-colors"
+                        title="Copiar PickUp ID"
+                      >
+                        {copiedId === (result.pickupNumber || result.PickUpID) ? (
+                          <Check className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-slate-100">
-                    <span className="text-sm text-slate-500 flex items-center gap-2"><Clock className="w-4 h-4" /> Janela</span>
-                    <span className="font-semibold text-slate-800">{period}</span>
+
+                  <div className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]">
+                    <span className="text-sm text-slate-500 flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /> Data de Recolha</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">{date}</span>
                   </div>
+
+                  <div className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]">
+                    <span className="text-sm text-slate-500 flex items-center gap-2"><Clock className="w-4 h-4 text-slate-400" /> Período Previsto</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200">{period}</span>
+                  </div>
+
                   <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-slate-500 flex items-center gap-2"><MapPin className="w-4 h-4" /> Morada</span>
-                    <span className="font-semibold text-slate-800 text-right">
+                    <span className="text-sm text-slate-500 flex items-center gap-2"><MapPin className="w-4 h-4 text-slate-400" /> Morada de Recolha</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-right">
                       {senderAddress}<br />
                       <span className="text-slate-400 font-normal text-xs">{senderZip} {senderCity}</span>
                     </span>
                   </div>
                 </div>
 
-                <p className="text-center text-xs text-slate-400 flex items-center justify-center gap-1.5">
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  A atualizar lista de recolhas…
-                </p>
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setView("list"); setResult(null); window.location.reload() }}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors border border-[var(--border-subtle)]"
+                  >
+                    Ver Lista de Recolhas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setResult(null); setVolumes(1); setWeightKg(1) }}
+                    className="flex items-center gap-2 px-5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-bold rounded-xl shadow-xs transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Agendar Outra Recolha
+                  </button>
+                </div>
               </div>
             ) : (
               /* ── Form ── */
@@ -359,34 +623,137 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
 
                 {/* Error */}
                 {result && !result.success && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+                  <div className="p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-bold text-red-700">Falha ao agendar recolha</p>
-                      <p className="text-xs text-red-600 mt-0.5">{result.error || "Erro na comunicação com os CTT."}</p>
+                      <p className="text-sm font-bold text-red-700 dark:text-red-300">Falha ao agendar recolha</p>
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">{result.error || "Erro na comunicação com o webservice da operadora."}</p>
                     </div>
                   </div>
                 )}
 
-                {/* ── Section 0: Cliente & Conta CTT ── */}
-                <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-5">
-                  <h2 className="text-sm font-bold text-indigo-800 mb-4 flex items-center gap-2">
-                    <Building2 className="w-4 h-4" />
-                    Quem — Cliente e Conta CTT Expresso
-                  </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* ── Section 0: Transportadora & Conta ── */}
+                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-[var(--border-subtle)] p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      1. Selecionar Operadora de Transporte
+                    </h2>
+                    <span className="text-xs text-[var(--text-tertiary)]">
+                      Escolha com que transportadora pretende agendar
+                    </span>
+                  </div>
 
-                    {/* Client selector */}
+                  {/* Carrier Segmented Switcher */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    {/* CTT Expresso Card */}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCarrierTab("ctt_expresso")}
+                      className={`relative flex items-center gap-3 p-3.5 rounded-xl border-2 text-left transition-all ${
+                        isCttActive
+                          ? "border-red-500 bg-red-50/70 dark:bg-red-950/30 shadow-xs"
+                          : "border-slate-200 dark:border-slate-800 bg-[var(--surface-bg)] hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 shadow-2xs">
+                        <img
+                          src={getCarrierLogo("ctt_expresso") || ""}
+                          alt="CTT Expresso"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-slate-900 dark:text-slate-100">CTT Expresso</span>
+                          {isCttActive && (
+                            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500 truncate">RecolhasWS • Directo CTT</p>
+                      </div>
+                    </button>
+
+                    {/* Correos Express Card */}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCarrierTab("correos_express")}
+                      className={`relative flex items-center gap-3 p-3.5 rounded-xl border-2 text-left transition-all ${
+                        isCorreosActive
+                          ? "border-amber-500 bg-amber-50/70 dark:bg-amber-950/30 shadow-xs"
+                          : "border-slate-200 dark:border-slate-800 bg-[var(--surface-bg)] hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 shadow-2xs">
+                        <img
+                          src={getCarrierLogo("correos_express") || ""}
+                          alt="Correos Express"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Correos Express</span>
+                          {isCorreosActive && (
+                            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500 truncate">WebServices • CEX API</p>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Account / Connection Selection & Client Association */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    {/* Carrier Account */}
                     <div>
-                      <label className="block text-xs font-semibold text-indigo-700 mb-1">
-                        Cliente Associado
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Conta / Contrato {isCorreosActive ? "Correos Express" : "CTT Expresso"}
+                      </label>
+                      {availableConnectionsForCarrier.length === 0 ? (
+                        <div className="flex items-center gap-2 px-3 py-2 border border-slate-300 bg-white dark:bg-slate-800 rounded-lg text-xs text-slate-600 dark:text-slate-300">
+                          <Wifi className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>Conta padrão configurada no sistema</span>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <Wifi className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                          <select
+                            value={selectedCarrierId}
+                            onChange={e => setSelectedCarrierId(e.target.value)}
+                            className="w-full pl-9 pr-8 border border-slate-300 dark:border-slate-700 rounded-lg py-2 text-xs font-medium text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          >
+                            {availableConnectionsForCarrier.map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </div>
+                      )}
+                      {selectedCarrier && (
+                        <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-500 font-mono">
+                          <span>Contrato: {selectedCarrier.contract_number}</span>
+                          <span>•</span>
+                          <span className={selectedCarrier.environment === "production" ? "text-emerald-600 font-bold" : "text-amber-600 font-bold"}>
+                            {selectedCarrier.environment === "production" ? "Produção" : "Sandbox/QA"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Client Selector */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Cliente Associado (Preenche Morada)
                       </label>
                       <div className="relative">
                         <Building2 className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <select
                           value={selectedClientId}
                           onChange={e => handleClientChange(e.target.value)}
-                          className="w-full pl-9 pr-8 border border-slate-300 rounded-lg py-2 text-sm text-slate-800 bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className="w-full pl-9 pr-8 border border-slate-300 dark:border-slate-700 rounded-lg py-2 text-xs font-medium text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >
                           <option value="">— Recolha Interna / Sem Cliente —</option>
                           {clients.map(c => (
@@ -398,100 +765,63 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                         <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                       </div>
                       {selectedClientId && (
-                        <p className="text-[11px] text-indigo-600 mt-1.5 font-medium">
-                          ✓ Dados de endereço preenchidos automaticamente
+                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1.5 font-medium flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Dados de morada preenchidos automaticamente
                         </p>
-                      )}
-                    </div>
-
-                    {/* Carrier Account selector */}
-                    <div>
-                      <label className="block text-xs font-semibold text-indigo-700 mb-1">
-                        Conta de Transporte / Operadora
-                      </label>
-                      {carrierConnections.length === 0 ? (
-                        <div className="flex items-center gap-2 px-3 py-2 border border-amber-200 bg-amber-50 rounded-lg text-xs text-amber-700 font-medium">
-                          <AlertCircle className="w-4 h-4 shrink-0" />
-                          Nenhuma conta de transporte configurada.
-                          <a href="/ops/configuracao/webservices" className="underline ml-1">Configurar</a>
-                        </div>
-                      ) : (
-                        <div className="relative">
-                          <Wifi className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                          <select
-                            value={selectedCarrierId}
-                            onChange={e => setSelectedCarrierId(e.target.value)}
-                            className="w-full pl-9 pr-8 border border-slate-300 rounded-lg py-2 text-sm text-slate-800 bg-white appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          >
-                            {carrierConnections.map(c => (
-                              <option key={c.id} value={c.id}>
-                                {c.label}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                        </div>
-                      )}
-                      {selectedCarrier && (
-                        <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-500 font-medium">
-                          <span className="flex items-center gap-1"><Hash className="w-3 h-3" /> Contrato {selectedCarrier.contract_number}</span>
-                          <span>•</span>
-                          <span className={selectedCarrier.environment === "production" ? "text-emerald-600 font-bold" : "text-amber-600 font-bold"}>
-                            {selectedCarrier.environment === "production" ? "● Produção" : "● QA"}
-                          </span>
-                        </div>
                       )}
                     </div>
                   </div>
                 </div>
 
                 {/* ── Section 1: Quando ── */}
-                <div className="bg-slate-50 rounded-xl border border-slate-200 p-5">
-                  <h2 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-blue-600" />
-                    Quando — Data e Horário
+                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-[var(--border-subtle)] p-5">
+                  <h2 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    2. Quando — Data e Janela Horária
                   </h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Data *</label>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Data da Recolha *</label>
                       <input
                         required
                         type="date"
                         value={date}
                         min={tomorrowDate()}
                         onChange={e => setDate(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Período pretendido de Recolha *</label>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Período de Recolha *</label>
                       <select
                         value={period}
                         onChange={e => setPeriod(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                       >
-                        <option value="09:00-19:00">09h00-19h00</option>
-                        <option value="09:00-13:00">09h00-13h00</option>
-                        <option value="14:00-19:00">14h00-19h00</option>
+                        <option value="09:00-19:00">Dia Inteiro (09h00 - 19h00)</option>
+                        <option value="09:00-13:00">Manhã (09h00 - 13h00)</option>
+                        <option value="14:00-19:00">Tarde (14h00 - 19h00)</option>
                       </select>
                     </div>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-3 flex items-center gap-1">
-                    <Info className="w-3 h-3" />
-                    O estafeta CTT passará dentro da janela horária indicada. Recomendado: 09:00 – 18:00.
+                  <p className="text-[11px] text-slate-400 mt-3 flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    {isCorreosActive
+                      ? "O estafeta da Correos Express passará na morada do remetente na data indicada."
+                      : "O estafeta dos CTT Expresso passará no endereço indicado dentro da janela selecionada."}
                   </p>
                 </div>
 
                 {/* ── Section 2: Morada ── */}
-                <div className="bg-slate-50 rounded-xl border border-slate-200 p-5">
-                  <h2 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-blue-600" />
-                    Onde — Morada de Recolha
+                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-[var(--border-subtle)] p-5">
+                  <h2 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    3. Onde — Morada de Recolha
                   </h2>
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Nome / Empresa *</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Nome / Empresa *</label>
                         <div className="relative">
                           <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
@@ -500,83 +830,84 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                             value={senderName}
                             onChange={e => setSenderName(e.target.value)}
                             placeholder="Armazém / Empresa"
-                            className="w-full pl-9 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            className="w-full pl-9 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Nome de Contacto</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Pessoa de Contacto</label>
                         <input
                           type="text"
                           value={senderContact}
                           onChange={e => setSenderContact(e.target.value)}
-                          placeholder="Pessoa a contactar"
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          placeholder="Nome de quem entrega"
+                          className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">País</label>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">País</label>
                       <select
                         value={senderCountry}
                         onChange={e => setSenderCountry(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                       >
-                        <option value="PT">PORTUGAL</option>
-                        <option value="ES">ESPANHA</option>
+                        <option value="PT">Portugal</option>
+                        <option value="ES">Espanha</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Morada (Rua, Nº) *</label>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Morada (Rua, Nº, Andar) *</label>
                       <input
                         required
                         type="text"
                         value={senderAddress}
                         onChange={e => setSenderAddress(e.target.value)}
                         placeholder="Rua Principal, 100"
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                       />
                     </div>
                     
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Código Postal *</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Código Postal *</label>
                         <input
                           required
                           type="text"
                           value={senderZip}
                           onChange={e => setSenderZip(e.target.value)}
                           placeholder="0000-000"
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Localidade *</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Localidade *</label>
                         <input
                           required
                           type="text"
                           value={senderCity}
                           onChange={e => setSenderCity(e.target.value)}
                           placeholder="Porto"
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Email</label>
                         <input
                           type="email"
                           value={senderEmail}
                           onChange={e => setSenderEmail(e.target.value)}
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          placeholder="contacto@empresa.pt"
+                          className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Telefone *</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Telefone Principal *</label>
                         <div className="relative">
                           <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
@@ -584,19 +915,19 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                             type="tel"
                             value={senderPhone}
                             onChange={e => setSenderPhone(e.target.value)}
-                            className="w-full pl-9 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            className="w-full pl-9 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Telemóvel</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Telemóvel Alternativo</label>
                         <div className="relative">
                           <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
                             type="tel"
                             value={senderMobile}
                             onChange={e => setSenderMobile(e.target.value)}
-                            className="w-full pl-9 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            className="w-full pl-9 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                           />
                         </div>
                       </div>
@@ -605,20 +936,20 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                 </div>
 
                 {/* ── Section 3: Volumes e Dimensões ── */}
-                <div className="bg-slate-50 rounded-xl border border-slate-200 p-5">
-                  <h2 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                    <Weight className="w-4 h-4 text-blue-600" />
-                    O Quê — Dados de Recolha
+                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-[var(--border-subtle)] p-5">
+                  <h2 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+                    <Weight className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    4. O Quê — Dados dos Volumes
                   </h2>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Nº de Volumes *</label>
-                      <div className="flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Nº de Volumes *</label>
+                      <div className="flex items-center border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500">
                         <button
                           type="button"
                           onClick={() => setVolumes(v => Math.max(1, v - 1))}
-                          className="px-3 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-bold text-lg leading-none transition-colors"
+                          className="px-3 py-2 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold text-lg leading-none transition-colors"
                         >−</button>
                         <input
                           required
@@ -626,17 +957,17 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                           min={1}
                           value={volumes}
                           onChange={e => setVolumes(parseInt(e.target.value) || 1)}
-                          className="flex-1 text-center text-sm font-bold text-slate-800 py-2 focus:outline-none bg-white"
+                          className="flex-1 text-center text-sm font-bold text-slate-800 dark:text-slate-200 py-2 focus:outline-none bg-white dark:bg-slate-800"
                         />
                         <button
                           type="button"
                           onClick={() => setVolumes(v => v + 1)}
-                          className="px-3 py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-50 font-bold text-lg leading-none transition-colors"
+                          className="px-3 py-2 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold text-lg leading-none transition-colors"
                         >+</button>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Peso Total (kg) *</label>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Peso Total (kg) *</label>
                       <div className="relative">
                         <input
                           required
@@ -645,13 +976,13 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                           step={0.1}
                           value={weightKg}
                           onChange={e => setWeightKg(parseFloat(e.target.value) || 1)}
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 pr-10 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 pr-10 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">kg</span>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Peso + Pesado (kg)</label>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Peso do + Pesado (kg)</label>
                       <div className="relative">
                         <input
                           type="number"
@@ -660,7 +991,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                           value={heaviestWeight}
                           onChange={e => setHeaviestWeight(e.target.value)}
                           placeholder="(Opcional)"
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                          className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                         />
                       </div>
                     </div>
@@ -668,85 +999,91 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Guia de transporte:</label>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Guia de Transporte:</label>
                       <select
                         value={guideStatus}
                         onChange={e => setGuideStatus(e.target.value)}
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                       >
-                        <option value="Disponível no local">Guia de transporte disponível no local de Recolha</option>
+                        <option value="Disponível no local">Guia disponível no local de Recolha</option>
                         <option value="Necessário levar">Necessário levar guia de transporte</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Dimensões do Objeto Maior (cm)</label>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Dimensões do Maior Volume (cm)</label>
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1 w-1/3">
-                          <span className="text-xs text-slate-500">Comp:</span>
-                          <input type="number" value={dimLength} onChange={e => setDimLength(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                          <span className="text-xs text-slate-500">C:</span>
+                          <input type="number" placeholder="Comp" value={dimLength} onChange={e => setDimLength(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800" />
                         </div>
                         <div className="flex items-center gap-1 w-1/3">
-                          <span className="text-xs text-slate-500">Larg:</span>
-                          <input type="number" value={dimWidth} onChange={e => setDimWidth(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                          <span className="text-xs text-slate-500">L:</span>
+                          <input type="number" placeholder="Larg" value={dimWidth} onChange={e => setDimWidth(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800" />
                         </div>
                         <div className="flex items-center gap-1 w-1/3">
-                          <span className="text-xs text-slate-500">Alt:</span>
-                          <input type="number" value={dimHeight} onChange={e => setDimHeight(e.target.value)} className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                          <span className="text-xs text-slate-500">A:</span>
+                          <input type="number" placeholder="Alt" value={dimHeight} onChange={e => setDimHeight(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800" />
                         </div>
                       </div>
                     </div>
                   </div>
 
                   <div className="w-1/2 pr-2">
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Destino</label>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Destino Previsto</label>
                     <select
                       value={destination}
                       onChange={e => setDestination(e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                      className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                     >
-                      <option value="PT">Portugal</option>
-                      <option value="ES">Espanha</option>
-                      <option value="ROW">Resto do Mundo</option>
+                      <option value="PT">Portugal Continental e Ilhas</option>
+                      <option value="ES">Espanha Peninsular</option>
+                      <option value="ROW">Resto do Mundo / Internacional</option>
                     </select>
                   </div>
                 </div>
 
                 {/* Observations */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Observações (Opcional)</label>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+                    Instruções ou Observações para o Motorista
+                  </label>
                   <textarea
-                    rows={3}
+                    rows={2}
                     value={observations}
                     onChange={e => setObservations(e.target.value)}
-                    placeholder="Ex: Chamar número xxxxxx na chegada, portão azul…"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ex: Tocar ao portão azul, recolher na secção de expedição 2…"
+                    className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                   />
                 </div>
 
-                {/* Submit */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                {/* Submit Bar */}
+                <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
                   <button
                     type="button"
                     onClick={() => { setView("list"); setResult(null) }}
-                    className="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+                    className="px-5 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    disabled={loading || carrierConnections.length === 0}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-sm transition-colors text-sm"
+                    disabled={loading}
+                    className={`flex items-center gap-2 px-6 py-2.5 text-white font-bold rounded-xl shadow-xs transition-all text-sm disabled:opacity-60 disabled:cursor-not-allowed ${
+                      isCorreosActive
+                        ? "bg-amber-600 hover:bg-amber-700 focus:ring-2 focus:ring-amber-500"
+                        : "bg-red-600 hover:bg-red-700 focus:ring-2 focus:ring-red-500"
+                    }`}
                   >
                     {loading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        A comunicar com CTT…
+                        A comunicar com {isCorreosActive ? "Correos Express" : "CTT Expresso"}…
                       </>
                     ) : (
                       <>
                         <Truck className="w-4 h-4" />
-                        Agendar Recolha CTT
+                        Agendar Recolha {isCorreosActive ? "Correos Express" : "CTT Expresso"}
                         <ChevronRight className="w-4 h-4" />
                       </>
                     )}
