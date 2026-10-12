@@ -82,6 +82,7 @@ const navConfig: NavSection[] = [
         icon: Euro,
         subItems: [
           { title: "Reembolsos", href: "/ops/tesouraria/reembolsos" },
+          { title: "Reconciliação CTT", href: "/ops/tesouraria/reconciliacao" },
           { title: "Salários", href: "/ops/tesouraria/salarios" },
         ]
       },

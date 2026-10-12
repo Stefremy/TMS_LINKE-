@@ -28,6 +28,7 @@
     "recharts": "^3.10.1",
     "resend": "^6.28.1",
     "stripe": "^22.6.2",
+    "xlsx": "^0.18.5",
     "yahoo-finance2": "^4.0.3"
   },
   "devDependencies": {
