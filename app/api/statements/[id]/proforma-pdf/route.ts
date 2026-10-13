@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server"
-import { createAdminClient } from "@/lib/supabase/server"
+import { loadFinancialDocument, financialPdfResponse } from "@/lib/services/billing/document-access"
 import { getClientesAction } from "@/app/actions/clientes"
 import { generateProFormaPdfBuffer } from "@/lib/services/billing/proforma-pdf"
+import type { BillingStatementPdfShipment } from "@/lib/services/billing/proforma-pdf"
 
 export const dynamic = "force-dynamic"
 
@@ -11,56 +12,28 @@ export async function GET(
 ) {
   try {
     const resolvedParams = await params
-    const rawId = decodeURIComponent(resolvedParams.id || "").trim()
-
-    if (!rawId) {
-      return new Response("ID de extrato não fornecido", { status: 400 })
-    }
-
-    const supabase = createAdminClient()
-
-    // Procurar em audit_log
-    const { data: logs, error } = await supabase
-      .from("audit_log")
-      .select("*")
-      .eq("action", "billing_statement")
-      .order("created_at", { ascending: false })
-
-    if (error || !logs || logs.length === 0) {
-      return new Response("Nenhum extrato encontrado no sistema", { status: 404 })
-    }
-
-    // Encontrar por audit_log.id, details.id ou details.statement_number
-    const match = logs.find((l: any) => {
-      const d = l.details || {}
-      return (
-        l.id === rawId ||
-        d.id === rawId ||
-        d.statement_number === rawId ||
-        d.statement_number?.toLowerCase() === rawId.toLowerCase()
-      )
-    })
-
-    if (!match) {
-      return new Response(`Extrato "${rawId}" não encontrado`, { status: 404 })
-    }
+    const access = await loadFinancialDocument(resolvedParams.id || "", "billing_statement")
+    if (!access) return financialPdfResponse("Documento não encontrado", { status: 404 })
+    const { supabase, document: match, ctx } = access
 
     const details = match.details || {}
-    const clients = await getClientesAction()
-    const client = clients.find((c: any) => c.id === details.client_id)
+    const clients = await getClientesAction(details.client_id)
+    const client = clients.find(c => c.id === details.client_id)
 
     // Tentar obter o service_type da DB se estiver em falta no log
-    let enrichedShipments = details.shipments || []
-    const shipmentIds = (details.shipment_ids || enrichedShipments.map((s: any) => s.id)).filter(Boolean)
+    let enrichedShipments: BillingStatementPdfShipment[] = details.shipments || []
+    const shipmentIds = (details.shipment_ids || enrichedShipments.map(s => s.id)).filter(Boolean)
     if (shipmentIds.length > 0) {
       const { data: dbShipments } = await supabase
         .from("shipments")
         .select("id, service_type, sell_price, recipient_name, created_at")
+        .eq("tenant_id", ctx.tenant_id)
+        .eq("client_id", details.client_id)
         .in("id", shipmentIds)
         
       if (dbShipments && dbShipments.length > 0) {
-        enrichedShipments = enrichedShipments.map((s: any) => {
-          const dbS = dbShipments.find((d: any) => d.id === s.id)
+        enrichedShipments = enrichedShipments.map(s => {
+          const dbS = dbShipments.find((d: BillingStatementPdfShipment) => d.id === s.id)
           let base = s.base_price ?? dbS?.base_price ?? null
           let fuel = s.fuel_tax_amount ?? dbS?.fuel_tax_amount ?? null
           const special = s.special_fees_amount ?? dbS?.special_fees_amount ?? 0
@@ -106,16 +79,15 @@ export async function GET(
     const isInline = request.nextUrl.searchParams.get("inline") === "1" || request.nextUrl.searchParams.get("inline") === "true"
     const disposition = isInline ? "inline" : "attachment"
 
-    return new Response(new Uint8Array(pdfBuffer), {
+    return financialPdfResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `${disposition}; filename="Extrato_${safeFilename}.pdf"`,
-        "Cache-Control": "public, max-age=3600",
       },
     })
-  } catch (err: any) {
-    console.error("Erro ao gerar PDF do extrato:", err)
-    return new Response(`Erro ao processar PDF: ${err?.message || "Erro interno"}`, { status: 500 })
+  } catch {
+    console.error("Erro ao gerar PDF da pró-forma")
+    return financialPdfResponse("Erro ao processar PDF", { status: 500 })
   }
 }

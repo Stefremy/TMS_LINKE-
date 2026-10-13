@@ -23,3 +23,5 @@ Configurar `CTT_WEBHOOK_SECRET` com um valor aleatório forte no ambiente de pro
 ## Verificação
 
 `npx tsc --noEmit` verifica os tipos; `npm run build` verifica a compilação. `npm run lint` assinala problemas preexistentes que devem ser corrigidos por módulos.
+
+`npm run test:security` executa testes isolados de autorização de PDFs financeiros e tarifação de envios, sem chamadas às integrações reais. Ver [alterações de segurança de 13-10-2026](docs/SECURITY_HARDENING_2026-10-13.md) para impacto, verificações antes do deploy e trabalho restante.

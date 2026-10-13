@@ -2,9 +2,8 @@
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { getClientesAction } from "@/app/actions/clientes"
-import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
-import { calculateShipmentPrice, resolveZoneCode, isZoneAllowedByService } from "@/lib/pricing/calculate-shipment-price"
+import { calculateShipmentPrice } from "@/lib/pricing/calculate-shipment-price"
+import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
 import { getAuthContext, requireUser, requireEmployee, requireClientAccess, getTenantId } from "@/lib/auth/context"
 import { CTT_TRACKING_EVENTS, CTT_INCIDENT_CODES } from "@/lib/services/ctt/ctt-types"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
@@ -12,7 +11,7 @@ import { CorreosShipmentService } from "@/lib/services/correos/correos-shipment.
 import { resolveCttCredentials, resolveCorreosCredentials } from "@/lib/services/carriers/credentials"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
 import { applyLinkeLogoToCorreosLabel } from "@/lib/services/correos/correos-label-customizer"
-import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId, ensureTenantAndClient } from "@/lib/services/shipments/shipment-utils"
+import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "@/lib/services/shipments/shipment-utils"
 import { fetchShipments, fetchShipmentLabel, fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
 import { syncShipmentTracking, mapCorreosStatus } from "@/lib/services/tracking"
 
@@ -207,7 +206,6 @@ export async function emitClientGuiaAction(data: {
     const ctx = await requireUser()
 
     const finalClientId = ctx.role === "client" ? ctx.client_id! : data.clientId
-    const finalClientName = ctx.role === "client" ? undefined : data.clientName
 
     const supabase = createAdminClient()
     const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
@@ -221,8 +219,8 @@ export async function emitClientGuiaAction(data: {
     const recipientZip4 = data.recipientPostal?.split("-")[0] || ""
     const recipientZip3 = data.recipientPostal?.split("-")[1] || ""
 
-    // Ensure DB foreign keys are valid
-    const validatedClientId = await ensureTenantAndClient(supabase, finalClientId, finalClientName)
+    // The pricing lookup verifies the existing client without creating fallback records.
+    const validatedClientId = finalClientId
 
     if (validatedClientId) {
       const { data: clientCheck } = await supabase
@@ -237,42 +235,40 @@ export async function emitClientGuiaAction(data: {
     }
 
     // Server-side price recalculation — never trust the frontend value
-    let computedSellPrice = Number(data.calculatedPrice) || 5.50
+    let computedSellPrice: number
     let computedBuyPrice = 0
     let computedSpecialAmount = 0
     let computedFuelAmount = 0
-    let computedBasePrice = computedSellPrice
+    let computedBasePrice: number
     let computedSpecialDesc: string | null = null
     let matchedClient: any = {}
+    let carrierCode: "ctt" | "correos"
     try {
-      const [allClients, allServicos] = await Promise.all([
-        getClientesAction(),
-        getServicosLinkeAction(),
-      ])
-      matchedClient = allClients.find(
-        (c) => c.id === finalClientId || (finalClientName && c.short_name === finalClientName)
-      ) || {} as any
+      validateShipmentPricingInput(data)
+      const pricing = await loadShipmentPricingContext(supabase, ctx, finalClientId, data)
+      matchedClient = pricing.client
+      const chosenService = pricing.service
+      const carrierName = (chosenService.preferred_carrier_name || chosenService.name).toLowerCase()
+      if (carrierName.includes("correos")) carrierCode = "correos"
+      else if (carrierName.includes("ctt") || /ers|d\+/.test(carrierName)) carrierCode = "ctt"
+      else throw new ShipmentPricingError("Transportadora não suportada para este serviço.")
+      if (!chosenService.webservice_service_code?.trim()) {
+        throw new ShipmentPricingError("Serviço sem configuração de transportadora. Contacte o suporte.")
+      }
       const recipientCountry = data.recipientCountry || "PT"
       const recipientPostal = data.recipientPostal || ""
-      const targetZone = resolveZoneCode(recipientCountry, recipientPostal)
-
-      // Check if user's selected service permits this zone
-      const chosenService = allServicos.find(s => (data.serviceId && s.id === data.serviceId) || s.name === data.serviceName)
-      if (chosenService && !isZoneAllowedByService(chosenService.allowed_zones, targetZone)) {
-        throw new Error(`Destino não autorizado: O serviço '${chosenService.name}' não permite envios para ${targetZone} (${recipientCountry}). Por favor selecione um serviço com cobertura para este destino.`)
-      }
-
       const priceResult = calculateShipmentPrice(
-        data.weightKg || 1,
-        chosenService ? { ...matchedClient, default_linke_table_id: chosenService.id } : matchedClient,
-        allServicos,
+        data.weightKg,
+        { ...matchedClient, default_linke_table_id: chosenService.id },
+        [chosenService],
         recipientCountry,
-        recipientPostal
+        recipientPostal,
+        { requireConfiguredTariff: true }
       )
 
-      if (priceResult.isBlocked) {
-        throw new Error(`Destino bloqueado: O serviço '${priceResult.tableUsed}' não cobre o destino ${priceResult.zoneName} (${recipientCountry}).`)
-      }
+      // Carrier routing and credentials come from the verified service, not the request.
+      data = { ...data, serviceName: chosenService.name, subProductId: chosenService.webservice_service_code,
+        webserviceConnectionId: chosenService.webservice_connection_id }
 
       computedSellPrice = priceResult.sellPrice
       computedBuyPrice = priceResult.buyPrice
@@ -301,7 +297,19 @@ export async function emitClientGuiaAction(data: {
 
       if (data.selectedSpecialServices && data.selectedSpecialServices.length > 0) {
         data.selectedSpecialServices.forEach(code => {
+          if (code.startsWith("correos_") !== (carrierCode === "correos")) {
+            throw new ShipmentPricingError("Serviço especial não autorizado para esta transportadora.")
+          }
           const feeConfig = clientSpecialFees.find((f: any) => f.special_service_code === code && f.is_enabled)
+          if (!feeConfig) throw new ShipmentPricingError("Serviço especial inexistente ou desativado.")
+          for (const amount of [feeConfig.fixed_value, feeConfig.percentage_value, feeConfig.min_value]) {
+            if (amount !== undefined && amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+              throw new ShipmentPricingError("Tarifa de serviço especial inválida.")
+            }
+          }
+          if (!["fixed", "percentage"].includes(feeConfig.fee_type)) {
+            throw new ShipmentPricingError("Tarifa de serviço especial inválida.")
+          }
           if (feeConfig) {
             let feeAmt = 0
             if (feeConfig.fee_type === "fixed") {
@@ -319,6 +327,10 @@ export async function emitClientGuiaAction(data: {
                 feeAmt = feeConfig.min_value
               }
             }
+            feeAmt = Number(feeAmt.toFixed(2))
+            if (!Number.isSafeInteger(Math.round(feeAmt * 100))) {
+              throw new ShipmentPricingError("Tarifa de serviço especial inválida.")
+            }
             specialFeesTotal += feeAmt
             specialFeesDetails.push({
               name: feeConfig.special_service_name,
@@ -329,14 +341,19 @@ export async function emitClientGuiaAction(data: {
       }
       
       // Add Special Services to final DB price
-      computedSellPrice += specialFeesTotal
+      computedSellPrice = Number((computedSellPrice + specialFeesTotal).toFixed(2))
+      if (!Number.isFinite(computedSellPrice) || computedSellPrice <= 0 ||
+          !Number.isSafeInteger(Math.round(computedSellPrice * 100))) {
+        throw new ShipmentPricingError("Tarifa inválida. Contacte o suporte.")
+      }
 
       // Define data to pass into DB. Save JSON string for PDF rendering.
-      computedSpecialAmount = specialFeesTotal
+      computedSpecialAmount = Number(specialFeesTotal.toFixed(2))
       computedSpecialDesc = specialFeesDetails.length > 0 ? JSON.stringify(specialFeesDetails) : null
 
-    } catch (pricingErr: any) {
-      console.warn("Client pricing engine fallback:", pricingErr?.message)
+    } catch (pricingErr) {
+      return { success: false, error: pricingErr instanceof ShipmentPricingError || pricingErr instanceof ShipmentPricingUnavailableError
+        ? pricingErr.message : "Não foi possível validar a tarifa. Tente novamente ou contacte o suporte." }
     }
 
     const shipmentData = {
@@ -376,7 +393,7 @@ export async function emitClientGuiaAction(data: {
     let realGuia = trackingNumber
     let labelBase64: string | null = null
 
-    if (data.serviceName?.toLowerCase().includes("correos")) {
+    if (carrierCode === "correos") {
       // ── CORREOS EXPRESS ──────────────────────────────────────────────────────────
       try {
         const cleanPostal = (zip?: string) => (zip || "").trim()
@@ -447,7 +464,7 @@ export async function emitClientGuiaAction(data: {
         throw new Error("Erro Correos Express: " + (e?.message || "Tente novamente."))
       }
 
-    } else if (data.serviceName?.toLowerCase().includes("ctt") || data.serviceName?.includes("ERS") || data.serviceName?.includes("D+")) {
+    } else if (carrierCode === "ctt") {
       // ── CTT EXPRESSO ─────────────────────────────────────────────────────────────
       try {
         const cttCreds = await resolveCttCredentials(data.webserviceConnectionId)
@@ -522,7 +539,7 @@ export async function emitClientGuiaAction(data: {
         client_id: shipmentData.client_id,
         tracking_number: trackingNumber,
         carrier_tracking_number: realGuia,
-        carrier_code: data.serviceName?.toLowerCase().includes("correos") ? "correos" : "ctt",
+        carrier_code: carrierCode,
         service_type: shipmentData.service_type,
         status: "pendente",
         ops_substatus: null,
@@ -561,7 +578,7 @@ export async function emitClientGuiaAction(data: {
           id: shipmentId,
           ctt_label_base64: labelBase64,
           carrier_tracking_number: realGuia,
-          carrier_code: data.serviceName?.toLowerCase().includes("correos") ? "correos" : "ctt"
+          carrier_code: carrierCode
         },
         created_at: now
       })
@@ -629,7 +646,7 @@ export async function emitClientGuiaAction(data: {
             id: shipmentId,
             recipient_email: data.recipientEmail,
             carrier_tracking_number: realGuia,
-            carrier_code: data.serviceName?.toLowerCase().includes("correos") ? "correos" : "ctt"
+            carrier_code: carrierCode
           }
         }).catch(err => {
           console.warn("Failed to trigger tracking email in background:", err)

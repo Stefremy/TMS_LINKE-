@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/server"
+import { NextRequest } from "next/server"
+import { loadFinancialDocument, financialPdfResponse } from "@/lib/services/billing/document-access"
 import { MoloniClient } from "@/lib/moloni/moloni-client"
 import { getMoloniConfigAction } from "@/app/actions/moloni"
 import { generateCustomInvoicePdfBuffer } from "@/lib/services/billing/custom-invoice-pdf"
@@ -12,26 +12,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-    const decodedId = decodeURIComponent(id)
-
-    const supabase = createAdminClient()
-    const { data: logs, error } = await supabase
-      .from("audit_log")
-      .select("id, details")
-      .eq("action", "custom_invoice")
-      .order("created_at", { ascending: false })
-
-    if (error || !logs || logs.length === 0) {
-      return new NextResponse("Fatura não encontrada", { status: 404 })
-    }
-
-    const match = logs.find(
-      (l: any) => l.details?.invoice_number === decodedId || l.details?.id === decodedId || l.id === decodedId
-    )
-
-    if (!match || !match.details) {
-      return new NextResponse("Documento de fatura não encontrado", { status: 404 })
-    }
+    const access = await loadFinancialDocument(id, "custom_invoice")
+    if (!access) return financialPdfResponse("Documento não encontrado", { status: 404 })
+    const { document: match } = access
 
     const invoice = match.details
     let pdfUrl = invoice.moloni_document_pdf
@@ -64,7 +47,7 @@ export async function GET(
           if (config.isConnected && config.companyId) {
             const moloni = new MoloniClient({
               companyId: config.companyId,
-              refreshToken: (config as any).refreshToken
+              refreshToken: (config as { refreshToken?: string }).refreshToken
             })
             const freshUrl = await moloni.getDocumentPDFLink(docId)
             if (freshUrl) {
@@ -85,7 +68,7 @@ export async function GET(
         const headers = new Headers()
         headers.set("Content-Type", "application/pdf")
         headers.set("Content-Disposition", `${disposition}; filename="${safeFilename}"`)
-        return new NextResponse(new Uint8Array(arrayBuffer), {
+        return financialPdfResponse(new Uint8Array(arrayBuffer), {
           status: 200,
           headers
         })
@@ -120,12 +103,12 @@ export async function GET(
     headers.set("Content-Type", "application/pdf")
     headers.set("Content-Disposition", `${disposition}; filename="${safeFilename}"`)
 
-    return new NextResponse(new Uint8Array(pdfBuffer), {
+    return financialPdfResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers
     })
-  } catch (err: any) {
-    console.error("Custom invoice PDF streaming error:", err)
-    return new NextResponse(`Erro ao gerar PDF da fatura: ${err?.message}`, { status: 500 })
+  } catch {
+    console.error("Custom invoice PDF streaming error")
+    return financialPdfResponse("Erro ao processar PDF", { status: 500 })
   }
 }

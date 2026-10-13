@@ -6,7 +6,8 @@
     "dev": "NODE_OPTIONS='--max-http-header-size=1048576' next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:security": "node --test tests/security.test.cjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.6",

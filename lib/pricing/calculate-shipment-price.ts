@@ -15,6 +15,7 @@
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "@/app/ops/configuracao/servicos/types"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { resolveInternationalZone } from "@/lib/services/geo/international-zones"
+import { ShipmentPricingError } from "./shipment-pricing-errors"
 
 export interface PriceResult {
   /** Price charged to the client (Linke's sell price) */
@@ -197,10 +198,37 @@ export function calculateShipmentPrice(
   client: Partial<Cliente>,
   allServicos: ServicoLinke[],
   recipientCountry: string = "PT",
-  recipientPostal?: string
+  recipientPostal?: string,
+  options: { requireConfiguredTariff?: boolean } = {}
 ): PriceResult {
   const zoneCode = resolveZoneCode(recipientCountry, recipientPostal)
   const clientTable = resolveClientTable(client, allServicos)
+
+  if (options.requireConfiguredTariff) {
+    if (!Number.isFinite(weightKg) || weightKg <= 0) throw new ShipmentPricingError("Peso inválido.")
+    if (!clientTable || !isZoneAllowedByService(clientTable.allowed_zones, zoneCode)) {
+      throw new ShipmentPricingError("Serviço indisponível para este destino.")
+    }
+    const configuredZone = findExactZone(clientTable.zones, zoneCode)
+    const tier = configuredZone?.tiers?.filter(t => t.enabled !== false)
+      .sort((a, b) => a.weight_max - b.weight_max)
+      .find(t => Number.isFinite(t.weight_max) && weightKg <= t.weight_max)
+    if (!configuredZone || !tier) throw new ShipmentPricingError("Tarifa não configurada para este destino e peso.")
+    const fuelPercentage = Number(clientTable.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5)
+    if (!Number.isFinite(Number(tier.cost_price)) || Number(tier.cost_price) < 0 ||
+        !Number.isFinite(Number(tier.sell_price)) || Number(tier.sell_price) < 0 ||
+        !Number.isFinite(Number(tier.margin_pct ?? 20)) ||
+        !Number.isFinite(fuelPercentage) || fuelPercentage < 0) {
+      throw new ShipmentPricingError("Tarifa inválida. Contacte o suporte.")
+    }
+    const result = calculateFromZone({ ...configuredZone, tiers: [tier] }, weightKg, clientTable, client, false)
+    if (!Number.isFinite(result.sellPrice) || result.sellPrice <= 0 ||
+        !Number.isFinite(result.buyPrice) || result.buyPrice < 0 || !Number.isFinite(result.fuelSurchargeAmount) ||
+        ![result.sellPrice, result.buyPrice, result.fuelSurchargeAmount].every(value => Number.isSafeInteger(Math.round(value * 100)))) {
+      throw new ShipmentPricingError("Tarifa inválida. Contacte o suporte.")
+    }
+    return result
+  }
 
   // 1. Try to find the zone in the client's assigned table, verifying allowed_zones
   let effectiveTable: ServicoLinke | null = null

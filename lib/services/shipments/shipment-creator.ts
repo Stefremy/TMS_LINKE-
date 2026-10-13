@@ -1,10 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
-import { getClientesAction } from "@/app/actions/clientes"
-import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { calculateShipmentPrice } from "@/lib/pricing/calculate-shipment-price"
-import { ensureTenantAndClient } from "./shipment-utils"
+import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
@@ -16,7 +14,7 @@ export async function createShipment(formData: FormData) {
   const supabase = createAdminClient()
   
   const rawClientId = ctx.role === "client" ? ctx.client_id! : (formData.get("client_id") as string)
-  const service_type = (formData.get("service_type") as string) || "CTT Expresso 24H"
+  let service_type = (formData.get("service_type") as string) || "CTT Expresso 24H"
   
   // Sender
   const sender_name = (formData.get("sender_name") as string) || "Remetente"
@@ -38,29 +36,32 @@ export async function createShipment(formData: FormData) {
   const recipient_zip4 = recipient_zip?.split("-")[0] || recipient_zip || ""
   const recipient_zip3 = recipient_zip?.split("-")[1] || ""
 
-  const client_id = await ensureTenantAndClient(supabase, rawClientId, sender_name)
+  const client_id = rawClientId
   const shipmentId = crypto.randomUUID()
   const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
   const now = new Date().toISOString()
 
   // Lookup client + all Linke tables to compute the correct price
-  let computedSellPrice = 5.50
-  let computedBuyPrice = 2.85
+  let computedSellPrice: number
+  let computedBuyPrice: number
   let computedFuelAmount = 0
-  let computedBasePrice = computedSellPrice
+  let computedBasePrice: number
   let computedTierLabel = "Standard"
-  const weightKg = Number(formData.get("weight_kg")) || 1
+  const weightKg = Number(formData.get("weight_kg"))
 
   try {
-    const [allClients, allServicos] = await Promise.all([
-      getClientesAction(),
-      getServicosLinkeAction(true),
-    ])
-    const matchedClient: any = allClients.find((c: any) => c.id === client_id) || {}
+    validateShipmentPricingInput({ weightKg })
+    const { client: matchedClient, service } = await loadShipmentPricingContext(supabase, ctx, client_id, {
+      serviceId: (formData.get("service_id") as string) || undefined,
+      serviceName: (formData.get("service_type") as string) || undefined,
+    })
+    service_type = service.name
     
     // SECURITY WALLET CHECK: Block creation if pay_as_you_go client has no balance
     if (matchedClient.billing_type === "pay_as_you_go") {
-      const { data: pastShipments } = await supabase.from("shipments").select("sell_price, fuel_tax_amount, status").eq("client_id", client_id)
+      const { data: pastShipments, error: walletError } = await supabase.from("shipments").select("sell_price, fuel_tax_amount, status")
+        .eq("tenant_id", ctx.tenant_id).eq("client_id", client_id)
+      if (walletError) throw new ShipmentPricingUnavailableError()
       let totalSpent = 0
       ;(pastShipments || []).forEach((s: any) => {
         if (s.status !== "anulado") {
@@ -77,20 +78,16 @@ export async function createShipment(formData: FormData) {
     }
 
     const recipientCountry = (formData.get("recipient_country") as string) || "PT"
-    const priceResult = calculateShipmentPrice(weightKg, matchedClient, allServicos, recipientCountry, recipient_zip)
-    if (priceResult.isBlocked) {
-      return {
-        success: false,
-        error: `Destino não autorizado: O serviço '${priceResult.tableUsed}' não cobre o destino ${priceResult.zoneName} (${recipientCountry}). Contacte o suporte para ativar este destino.`
-      }
-    }
+    const priceResult = calculateShipmentPrice(weightKg, { ...matchedClient, default_linke_table_id: service.id },
+      [service], recipientCountry, recipient_zip, { requireConfiguredTariff: true })
     computedSellPrice = priceResult.sellPrice
     computedBuyPrice = priceResult.buyPrice
     computedFuelAmount = priceResult.fuelSurchargeAmount || 0
     computedBasePrice = Number((computedSellPrice - computedFuelAmount).toFixed(2))
     computedTierLabel = priceResult.tierLabel || "Standard"
-  } catch (pricingErr: any) {
-    console.warn("Pricing engine fallback:", pricingErr?.message)
+  } catch (pricingErr) {
+    return { success: false, error: pricingErr instanceof ShipmentPricingError || pricingErr instanceof ShipmentPricingUnavailableError
+      ? pricingErr.message : "Não foi possível validar a tarifa. Tente novamente ou contacte o suporte." }
   }
 
   const shipmentData = {
