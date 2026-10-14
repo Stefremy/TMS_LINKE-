@@ -20,7 +20,8 @@ import {
   Users,
   Receipt,
   Euro,
-  Navigation
+  Navigation,
+  Tags
 } from "lucide-react"
 
 type NavItem = {
@@ -64,6 +65,7 @@ const navConfig: NavSection[] = [
           { title: "Colaboradores", href: "/ops/entidades/colaboradores" },
         ]
       },
+      { title: "Serviços & Tabelas de Preço", href: "/ops/configuracao/servicos", icon: Tags },
       { 
         title: "Faturação", 
         href: "/ops/faturacao", 
@@ -102,7 +104,6 @@ const navConfig: NavSection[] = [
           { title: "Faturação & Moloni", href: "/ops/configuracao/faturacao" },
           { title: "Transportadoras & Logótipos", href: "/ops/configuracao/transportadoras" },
           { title: "Webservices Globais", href: "/ops/configuracao/webservices" },
-          { title: "Serviços & Tabelas de Preço", href: "/ops/configuracao/servicos" },
           { title: "Taxas Adicionais", href: "/ops/configuracao/taxas" },
           { title: "Zonas de Preço", href: "/ops/configuracao/zonas" },
           { title: "Estados de Envio", href: "/ops/configuracao/estados" },
