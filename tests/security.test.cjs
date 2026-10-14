@@ -116,6 +116,7 @@ function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = cl
     '@/lib/auth/context': { requireUser: async () => ctx, getTenantId: async () => ctx.tenant_id },
     '@/lib/supabase/server': { createAdminClient: () => db.createAdminClient() },
     'next/cache': { revalidatePath() {} },
+    '@/app/actions/fornecedores': {}, '@/app/actions/ctt': {},
     '@/lib/services/ctt/ctt-types': {},
     '@/lib/services/carriers/ctt-provider': { CttProvider: class {
       async initialize() {}
@@ -141,6 +142,51 @@ function shipmentInput(extra = {}) {
     weightKg: 1, volumesCount: 1, calculatedPrice: 0.01, subProductId: 'forged-code', webserviceConnectionId: 'forged-connection', ...extra }
 }
 async function emit(h, extra) { return h.load('app/actions/shipments.ts').emitClientGuiaAction(shipmentInput(extra)) }
+
+test('the withdrawn point/Locky table stays out of persisted and legacy catalogs for every role', async () => {
+  for (const role of ['client', 'employee', 'admin']) {
+    for (const fallback of [false, true]) {
+      const h = shipmentHarness({ ctx: { ...clientContext, role },
+        failure: fallback ? q => q.table === 'servicos_linke' ? { code: '42P01' } : null : undefined,
+        adjust: t => {
+          const point = { ...service(), id: 'point-uuid', code: 'LK-PONTO', name: 'Renamed pickup table' }
+          t.servicos_linke.push(point)
+          t.audit_log.push({ tenant_id: TENANT, action: 'servicos_linke_data', details: point })
+          t.audit_log.push({ tenant_id: TENANT, action: 'servicos_linke_data',
+            details: { ...point, id: 'srv_linke_ponto_ctt', code: 'RENAMED' } })
+        },
+      })
+      const result = await h.load('app/actions/servicos-linke.ts').getServicosLinkeAction()
+      assert.ok(result.length > 0)
+      assert.ok(result.every(s => s.id !== 'srv_linke_ponto_ctt' && s.code !== 'LK-PONTO'))
+      assert.ok(result.some(s => s.id === (fallback ? 'srv_linke_dd_std' : 'service-a')))
+      assert.equal(h.db.writes.length, 0)
+    }
+  }
+})
+
+test('withdrawn tables cannot emit labels or create drafts even from stale client or staff requests', async () => {
+  for (const role of ['client', 'employee', 'admin']) {
+    for (const target of [{ id: 'srv_linke_ponto_ctt', code: 'RENAMED' }, { id: 'point-uuid', code: 'LK-PONTO' }]) {
+      const h = shipmentHarness({ ctx: { ...clientContext, role }, adjust: t => {
+        const point = { ...service(), ...target }
+        t.servicos_linke.push(point)
+        t.audit_log[0].details.default_linke_table_id = target.id
+        t.audit_log[0].details.assigned_linke_service_ids = [target.id]
+      } })
+      const result = await emit(h, { clientId: CLIENT, serviceId: target.id })
+      assert.equal(result.success, false)
+      const form = new FormData()
+      form.set('client_id', CLIENT)
+      form.set('weight_kg', '1')
+      form.set('service_id', target.id)
+      assert.equal((await h.load('lib/services/shipments/shipment-creator.ts').createShipment(form)).success, false)
+      assert.equal(h.providerCalls.length, 0)
+      assert.equal(h.credentials.length, 0)
+      assert.equal(h.db.writes.length, 0)
+    }
+  }
+})
 
 for (const carrier of ['CTT', 'Correos']) {
   test(`${carrier}: no assigned tables denies emission and drafts even with a saved default or forged browser assignments`, async () => {

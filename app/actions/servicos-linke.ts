@@ -8,6 +8,7 @@ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
 import { getTenantId, getAuthContext, requireUser, requireEmployee } from "@/lib/auth/context"
 import { buildOfficialLinkeInternationalZones } from "@/lib/services/geo/international-zones"
+import { isTemporarilyWithdrawnService } from "@/lib/services/service-availability"
 
 const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   // ─────────────────────────────────────────────────────────────────────────
@@ -542,7 +543,7 @@ export async function getServicosLinkeAction(skipRedaction: boolean = false): Pr
 
     if (!error && data && data.length > 0) {
       return data
-        .filter((s: any) => !deletedIds.has(s.id))
+        .filter((s: any) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
         .map((s: any) => ({
           ...s,
           is_primordial: isPrimordialServico(s),
@@ -600,7 +601,7 @@ export async function getServicosLinkeAction(skipRedaction: boolean = false): Pr
   // 3. Converter map para array e filtrar os apagados
   const merged = Array.from(servicosMap.values())
   return merged
-    .filter((s) => !deletedIds.has(s.id))
+    .filter((s) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
     .map((s) => ({
       ...s,
       is_primordial: isPrimordialServico(s),

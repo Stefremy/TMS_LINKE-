@@ -4,6 +4,7 @@ import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { resolveClientTable } from "./calculate-shipment-price"
 import { ShipmentPricingError, ShipmentPricingUnavailableError } from "./shipment-pricing-errors"
+import { isTemporarilyWithdrawnService } from "@/lib/services/service-availability"
 export { ShipmentPricingError, ShipmentPricingUnavailableError } from "./shipment-pricing-errors"
 
 export function validateShipmentPricingInput(input: {
@@ -84,7 +85,7 @@ export async function loadShipmentPricingContext(
     }
   }
   for (const log of deletedServiceResult.data || []) services.delete(log.details?.id)
-  const available = [...services.values()].filter(service => service.is_active !== false &&
+  const available = [...services.values()].filter(service => service.is_active !== false && !isTemporarilyWithdrawnService(service) &&
     (!service.client_id || service.client_id === clientId))
   const service = selection.serviceId ? available.find(s => s.id === selection.serviceId)
     : selection.serviceName ? available.find(s => s.name === selection.serviceName)

@@ -332,6 +332,8 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   }
 
   const specialFeesList = formData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES
+  const visibleAssignedTablesCount = servicosLinke.filter(service =>
+    (formData.assigned_linke_service_ids || []).includes(service.id)).length
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
@@ -411,7 +413,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
             { id: "faturacao", label: "Moradas & Faturação", icon: MapPin },
             { id: "contactos", label: "Contactos", icon: Phone },
             { id: "comercial", label: "Condições & Crédito", icon: Euro },
-            { id: "precario", label: "Tabelas de Preço & Serviços", icon: Percent, badge: `${(formData.assigned_linke_service_ids || []).length} Tabelas` },
+            { id: "precario", label: "Tabelas de Preço & Serviços", icon: Percent, badge: `${visibleAssignedTablesCount} Tabelas` },
           ].map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -1152,7 +1154,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                       <div>
                         <h4 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
                           <ShieldCheck className="w-4 h-4 text-[var(--accent)]" />
-                          Serviços Linke Autorizados para este Cliente ({formData.assigned_linke_service_ids?.length || 0} de {servicosLinke.length})
+                          Serviços Linke Autorizados para este Cliente ({visibleAssignedTablesCount} de {servicosLinke.length})
                         </h4>
                         <p className="text-[11px] text-[var(--text-secondary)]">
                           Marque os serviços e parceiros que este cliente tem permissão para usar ao criar envios.
