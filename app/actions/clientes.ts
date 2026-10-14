@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { DEFAULT_CLIENT_PRICING, SYSTEM_AVAILABLE_WEBSERVICES } from "@/app/ops/entidades/clientes/types"
 import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
+import { normalizeStoreSlug } from "@/lib/client-portal/paths"
 
 
 const DEFAULT_CLIENTES: Cliente[] = [
@@ -152,68 +153,40 @@ export async function getClientesAction(selectedClientId?: string): Promise<Clie
 
   const supabase = createAdminClient()
 
-  let dbClients: any[] = []
-  try {
-    let clientsQuery = supabase
-      .from("clients")
-      .select("*")
-      .eq("tenant_id", (await getTenantId()))
-      .order("created_at", { ascending: false })
-      .limit(50)
-    if (scopedId) clientsQuery = clientsQuery.eq("id", scopedId)
-    const { data, error } = await clientsQuery
-
-    if (!error && data) {
-      dbClients = data
+  // Read every page for the signed-in company. Never filter by the staff creator,
+  // truncate older clients, or turn a failed read into an apparently empty list.
+  const loadRegistry = async () => {
+    const rows = []
+    for (let offset = 0; ; offset += 1000) {
+      let query = supabase.from("clients").select("*").eq("tenant_id", ctx.tenant_id)
+        .order("created_at", { ascending: false }).order("id").range(offset, offset + 999)
+      if (scopedId) query = query.eq("id", scopedId)
+      const { data, error } = await query
+      if (error || !data) throw new Error("Não foi possível carregar os clientes da empresa. Tente novamente.")
+      rows.push(...data)
+      if (data.length < 1000) return rows
     }
-  } catch (err: any) {
-    console.warn("Could not query clients table:", err?.message)
   }
-
-  // Obter detalhes ricos de audit_log
-  let auditClients: Record<string, Cliente> = {}
-  try {
-    let auditQuery = supabase
-      .from("audit_log")
-      .select("details")
-      .eq("action", "client_data")
-      .order("created_at", { ascending: false })
-      .limit(100)
-    if (scopedId) auditQuery = auditQuery.eq("details->>id", scopedId)
-    const { data: logs, error } = await auditQuery
-
-    if (!error && logs) {
-      logs.forEach((log: any) => {
-        const d = log.details as Cliente
-        if (d && d.id && !auditClients[d.id]) {
-          auditClients[d.id] = d
-        }
-      })
+  const loadProfiles = async () => {
+    const rows = []
+    for (let offset = 0; ; offset += 1000) {
+      let query = supabase.from("audit_log").select("id, action, details")
+        .eq("tenant_id", ctx.tenant_id).in("action", ["client_data", "deleted_client"])
+        .order("created_at", { ascending: false }).order("id").range(offset, offset + 999)
+      if (scopedId) query = query.eq("details->>id", scopedId)
+      const { data, error } = await query
+      if (error || !data) throw new Error("Não foi possível carregar os clientes da empresa. Tente novamente.")
+      rows.push(...data)
+      if (data.length < 1000) return rows
     }
-  } catch (err: any) {
-    console.warn("Could not query audit_log for clients:", err?.message)
   }
-
-  // 0. Obter lista de IDs eliminados (tombstones) para nunca ressurgirem
+  const [dbClients, profiles] = await Promise.all([loadRegistry(), loadProfiles()])
+  const auditClients: Record<string, Cliente> = {}
   const deletedIds = new Set<string>()
-  try {
-    let deletedQuery = supabase
-      .from("audit_log")
-      .select("details")
-      .eq("action", "deleted_client")
-      .limit(100)
-    if (scopedId) deletedQuery = deletedQuery.eq("details->>id", scopedId)
-    const { data: deletedLogs } = await deletedQuery
-
-    if (deletedLogs) {
-      deletedLogs.forEach((log: any) => {
-        if (log.details?.id) {
-          deletedIds.add(log.details.id)
-        }
-      })
-    }
-  } catch (err: any) {
-    console.warn("Could not query deleted_client tombstones:", err?.message)
+  for (const log of profiles) {
+    if (!log.details?.id) continue
+    if (log.action === "deleted_client") deletedIds.add(log.details.id)
+    else if (!auditClients[log.details.id]) auditClients[log.details.id] = log.details as Cliente
   }
 
   // Mapa final combinando defaults, base de dados e logs
@@ -290,14 +263,27 @@ export async function getClienteByIdAction(id: string): Promise<Cliente | null> 
  * Grava ou atualiza um cliente
  */
 export async function saveClienteAction(cliente: Partial<Cliente>) {
-  await requireEmployee()
-  await requireEmployee()
+  const ctx = await requireEmployee()
 
   const supabase = createAdminClient()
 
   const id = cliente.id && cliente.id.trim().length > 0 ? cliente.id : crypto.randomUUID()
+  // An update cannot claim an existing primary key from a different company.
+  const { data: registered, error: registryError } = await supabase.from("clients").select("tenant_id")
+    .eq("id", id).maybeSingle()
+  if (registryError || (registered && registered.tenant_id !== ctx.tenant_id)) {
+    throw new Error("Não foi possível verificar a loja para gravação.")
+  }
+  // Keep an existing URL when editing the store's display name.
+  const { data: previous, error: previousError } = await supabase.from("audit_log").select("details")
+    .eq("tenant_id", ctx.tenant_id).eq("action", "client_data").eq("details->>id", id)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle()
+  if (previousError) throw new Error("Não foi possível verificar o endereço atual da loja.")
+  const slugName = cliente.portal_slug || previous?.details?.portal_slug || previous?.details?.short_name
+    || previous?.details?.legal_name || cliente.short_name || cliente.legal_name || "loja"
   const fullRecord: Cliente = {
     id,
+    portal_slug: normalizeStoreSlug(slugName),
     code: cliente.code?.trim().toUpperCase() || `CL${Math.floor(100 + Math.random() * 900)}`,
     short_name: cliente.short_name?.trim() || cliente.legal_name?.trim() || "Novo Cliente",
     legal_name: cliente.legal_name?.trim() || cliente.short_name?.trim() || "Novo Cliente, Lda",
@@ -333,60 +319,32 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     custom_tier_overrides: cliente.custom_tier_overrides || {},
   }
 
-  // Se o cliente estava marcado como eliminado, remover o tombstone
-  try {
-    const { data: delLogs } = await supabase
-      .from("audit_log")
-      .select("id, details")
-      .eq("action", "deleted_client")
-
-    if (delLogs) {
-      for (const d of delLogs) {
-        if (d.details?.id === id) {
-          await supabase.from("audit_log").delete().eq("id", d.id)
-        }
-      }
-    }
-  } catch {}
-
-  // 1. Tentar gravar na tabela de clients (inserção de chave primária para integridade referencial)
-  try {
-    await supabase.from("clients").upsert({
-      id,
-      tenant_id: (await getTenantId()),
-      name: fullRecord.short_name,
-    })
-  } catch (err: any) {
-    console.warn("Could not upsert into clients table:", err?.message)
+  // Check every write before the UI can invite a client to a supposedly saved store.
+  const { data: oldProfiles, error: oldProfilesError } = await supabase.from("audit_log").select("id")
+    .eq("tenant_id", ctx.tenant_id).eq("action", "client_data").eq("details->>id", id)
+  if (oldProfilesError) throw new Error("Não foi possível verificar os detalhes anteriores da loja.")
+  const registryWrite = registered
+    ? supabase.from("clients").update({ name: fullRecord.short_name }).eq("id", id).eq("tenant_id", ctx.tenant_id).select("id").maybeSingle()
+    : supabase.from("clients").insert({ id, tenant_id: ctx.tenant_id, name: fullRecord.short_name })
+  const { data: savedRegistry, error: saveError } = await registryWrite
+  if (saveError || (registered && !savedRegistry)) throw new Error("Não foi possível gravar a loja.")
+  // Keep previous snapshots until the new profile has been persisted successfully.
+  const { error: profileSaveError } = await supabase.from("audit_log").insert({
+    tenant_id: ctx.tenant_id, action: "client_data", details: fullRecord,
+  })
+  if (profileSaveError) throw new Error("Não foi possível gravar os detalhes da loja. Tente novamente.")
+  if (oldProfiles?.length) {
+    const { error: cleanupError } = await supabase.from("audit_log").delete()
+      .eq("tenant_id", ctx.tenant_id).eq("action", "client_data").in("id", oldProfiles.map((p: { id: string }) => p.id))
+    if (cleanupError) throw new Error("Não foi possível concluir a gravação da loja. Tente novamente.")
   }
-
-  // 2. Gravar detalhes ricos em audit_log
-  try {
-    const { data: existing } = await supabase
-      .from("audit_log")
-      .select("id, details")
-      .eq("action", "client_data")
-
-    if (existing) {
-      for (const item of existing) {
-        if (item.details?.id === id) {
-          await supabase.from("audit_log").delete().eq("id", item.id)
-        }
-      }
-    }
-
-    await supabase.from("audit_log").insert({
-      tenant_id: (await getTenantId()),
-      action: "client_data",
-      details: fullRecord,
-    })
-  } catch (err: any) {
-    console.warn("Could not save to audit_log:", err?.message)
-  }
+  const { error: restoreError } = await supabase.from("audit_log").delete()
+    .eq("tenant_id", ctx.tenant_id).eq("action", "deleted_client").eq("details->>id", id)
+  if (restoreError) throw new Error("Não foi possível repor a loja. Tente novamente.")
 
   revalidatePath("/ops/entidades/clientes")
   revalidatePath("/ops/clientes")
-  revalidatePath("/app")
+  revalidatePath("/app", "layout")
   return { success: true, data: fullRecord }
 }
 
@@ -497,7 +455,7 @@ export async function deleteClienteAction(id: string) {
 
   revalidatePath("/ops/entidades/clientes")
   revalidatePath("/ops/clientes")
-  revalidatePath("/app")
+  revalidatePath("/app", "layout")
   return { success: true }
 }
 

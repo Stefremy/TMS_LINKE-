@@ -2,29 +2,23 @@
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { requireAdmin } from "@/lib/auth/context"
+import { assertClientEmail, findClientUser, loadInvitationStore, normalizeInvitationEmail } from "@/lib/client-portal/invitations"
 
 export async function setClientPasswordAction(clientId: string, email: string, password?: string) {
-  await requireAdmin()
+  const ctx = await requireAdmin()
   const supabaseAdmin = createAdminClient()
-
-  if (!email) {
-    throw new Error("O email é obrigatório para o login.")
+  email = normalizeInvitationEmail(email)
+  if (password && (password.length < 12 || password.length > 128)) {
+    throw new Error("A palavra-passe deve ter entre 12 e 128 caracteres.")
   }
-
-  // Check if a user with this email already exists
-  const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
-  
-  if (usersError) {
-    throw new Error("Erro ao verificar utilizadores: " + usersError.message)
-  }
-
-  const existingUser = usersData.users.find((u: any) => u.email === email)
+  await loadInvitationStore(supabaseAdmin, clientId, ctx.tenant_id)
+  await assertClientEmail(supabaseAdmin, email)
+  const existingUser = await findClientUser(supabaseAdmin, email, clientId, ctx.tenant_id)
 
   if (existingUser) {
     // Update the existing user's password and metadata
-    const updateData: any = {
-      app_metadata: { ...existingUser.app_metadata, role: 'client', client_id: clientId },
-      user_metadata: { ...existingUser.user_metadata, role: 'client', client_id: clientId }, // Fallback
+    const updateData: { app_metadata: Record<string, unknown>; password?: string } = {
+      app_metadata: { ...existingUser.app_metadata, role: 'client', client_id: clientId, tenant_id: ctx.tenant_id },
     }
     if (password) {
       updateData.password = password
@@ -36,7 +30,7 @@ export async function setClientPasswordAction(clientId: string, email: string, p
     )
 
     if (updateError) {
-      throw new Error("Erro ao atualizar password do cliente: " + updateError.message)
+      throw new Error("Não foi possível atualizar a palavra-passe do cliente.")
     }
 
     return { success: true, message: "Acesso atualizado com sucesso." }
@@ -50,12 +44,11 @@ export async function setClientPasswordAction(clientId: string, email: string, p
       email: email,
       password: password,
       email_confirm: true,
-      app_metadata: { role: 'client', client_id: clientId },
-      user_metadata: { role: 'client', client_id: clientId }
+      app_metadata: { role: 'client', client_id: clientId, tenant_id: ctx.tenant_id },
     })
 
     if (createError) {
-      throw new Error("Erro ao criar acesso do cliente: " + createError.message)
+      throw new Error("Não foi possível criar o acesso do cliente.")
     }
 
     return { success: true, message: "Acesso criado com sucesso." }

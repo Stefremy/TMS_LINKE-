@@ -1,5 +1,5 @@
 /**
- * Server-side shipment price calculator.
+ * Shared shipment price calculator (server authority and form previews).
  *
  * Resolves the correct sell_price and buy_price for a shipment by:
  *  1. Looking up the client's assigned Linke service table (by default_linke_table_id or pricing_profile)
@@ -18,6 +18,8 @@ import { resolveInternationalZone } from "@/lib/services/geo/international-zones
 import { ShipmentPricingError } from "./shipment-pricing-errors"
 
 export interface PriceResult {
+  /** Base transport price before fuel and special services. */
+  basePrice: number
   /** Price charged to the client (Linke's sell price) */
   sellPrice: number
   /** Cost Linke pays to the carrier (partner cost price) */
@@ -123,7 +125,7 @@ export function isZoneAllowedByService(allowedZones: string[] | undefined, zoneC
 /**
  * Finds the correct weight tier for a given weight in kg.
  * Tiers are sorted by weight_max ascending; first tier where weightKg <= weight_max wins.
- * The last tier (weight_max: 999) acts as a catch-all.
+ * The tier with weight_max: 999 charges additional kilograms above the preceding tier.
  */
 function findTier(tiers: PriceTierLinke[], weightKg: number): PriceTierLinke | null {
   const enabled = tiers.filter((t) => t.enabled !== false)
@@ -221,7 +223,9 @@ export function calculateShipmentPrice(
         !Number.isFinite(fuelPercentage) || fuelPercentage < 0) {
       throw new ShipmentPricingError("Tarifa inválida. Contacte o suporte.")
     }
-    const result = calculateFromZone({ ...configuredZone, tiers: [tier] }, weightKg, clientTable, client, false)
+    // Preserve the complete zone and original tier indexes for saved client prices
+    // and the base tier needed when charging additional kilograms.
+    const result = calculateFromZone(configuredZone, weightKg, clientTable, client, false)
     if (!Number.isFinite(result.sellPrice) || result.sellPrice <= 0 ||
         !Number.isFinite(result.buyPrice) || result.buyPrice < 0 || !Number.isFinite(result.fuelSurchargeAmount) ||
         ![result.sellPrice, result.buyPrice, result.fuelSurchargeAmount].every(value => Number.isSafeInteger(Math.round(value * 100)))) {
@@ -263,6 +267,7 @@ export function calculateShipmentPrice(
     const isExplicitlyBlocked = clientTable?.allowed_zones && clientTable.allowed_zones.length > 0 && !isZoneAllowedByService(clientTable.allowed_zones, zoneCode)
     if (isExplicitlyBlocked) {
       return {
+        basePrice: 0,
         sellPrice: 0,
         buyPrice: 0,
         tierLabel: `Destino Bloqueado (${zoneCode})`,
@@ -290,6 +295,7 @@ export function calculateShipmentPrice(
       }
     }
     return {
+      basePrice: FALLBACK_SELL_PRICE,
       sellPrice: FALLBACK_SELL_PRICE,
       buyPrice: FALLBACK_BUY_PRICE,
       tierLabel: "Fallback Continental",
@@ -308,6 +314,7 @@ export function calculateShipmentPrice(
   const buyPrice = isIsland ? ILHAS_FALLBACK_BUY : isSpain ? ES_FALLBACK_BUY : INTL_FALLBACK_BUY
 
   return {
+    basePrice: sellPrice,
     sellPrice,
     buyPrice,
     tierLabel: `Zona ${zoneCode} não configurada`,
@@ -329,6 +336,7 @@ function calculateFromZone(
 
   if (!tier) {
     return {
+      basePrice: FALLBACK_SELL_PRICE,
       sellPrice: FALLBACK_SELL_PRICE,
       buyPrice: FALLBACK_BUY_PRICE,
       tierLabel: "Escalão não encontrado",
@@ -339,13 +347,41 @@ function calculateFromZone(
     }
   }
 
-  const baseSell = Number(tier.sell_price) || Number((tier.cost_price * (1 + (tier.margin_pct || 20) / 100)).toFixed(2))
-  const fuelPct = (table.fuel_surcharge_pct ?? (client as any).pricing?.fuel_surcharge_pct ?? 12.5) / 100
+  // The existing customer editor only customizes table.zones[0]. Applying its
+  // positional array to another zone would overwrite unrelated destination prices.
+  const customPrices = table.zones?.[0]?.zone_code === zone.zone_code ? client.custom_tier_overrides?.[table.id] : undefined
+  if (customPrices !== undefined && !Array.isArray(customPrices)) throw new ShipmentPricingError("Preços personalizados inválidos. Reveja a tabela do cliente.")
+  const amounts = (matched: PriceTierLinke) => {
+    const custom = customPrices?.[zone.tiers.indexOf(matched)]
+    if (custom !== undefined && (typeof custom !== "number" || !Number.isFinite(custom) || custom <= 0)) {
+      throw new ShipmentPricingError("Preço personalizado inválido. Reveja o escalão do cliente.")
+    }
+    const sell = custom ?? (Number(matched.sell_price) || Number((matched.cost_price * (1 + (matched.margin_pct || 20) / 100)).toFixed(2)))
+    const buy = Number(matched.cost_price)
+    if (!Number.isFinite(sell) || sell <= 0 || !Number.isFinite(buy) || buy < 0
+      || ![sell, buy].every(value => Number.isSafeInteger(Math.round(value * 100)))) {
+      throw new ShipmentPricingError("Tarifa inválida. Contacte o suporte.")
+    }
+    return { sell: Number(sell.toFixed(2)), buy: Number(buy.toFixed(2)) }
+  }
+  let { sell: baseSell, buy: buyPrice } = amounts(tier)
+  if (tier.weight_max === 999) {
+    const anchor = zone.tiers.filter(t => t.enabled !== false && Number.isFinite(t.weight_max) && t.weight_max > 0 && t.weight_max < 999)
+      .sort((a, b) => b.weight_max - a.weight_max)[0]
+    if (!anchor) throw new ShipmentPricingError("Falta o escalão base para calcular os quilos adicionais.")
+    const base = amounts(anchor)
+    const step = tier.additional_weight_step ?? (tier.id?.startsWith("intl_") && tier.id.endsWith("_extra") && anchor.weight_max === 10.5 ? 0.5 : 1)
+    if (!Number.isFinite(step) || step <= 0) throw new ShipmentPricingError("Escalão de peso adicional inválido.")
+    const extraKg = Math.ceil((weightKg - anchor.weight_max) / step) * step
+    baseSell = Number((base.sell + extraKg * baseSell).toFixed(2))
+    buyPrice = Number((base.buy + extraKg * buyPrice).toFixed(2))
+  }
+  const fuelPct = (table.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5) / 100
   const fuelAmount = Number((baseSell * fuelPct).toFixed(2))
   const finalSell = Number((baseSell + fuelAmount).toFixed(2))
-  const buyPrice = Number(tier.cost_price) || FALLBACK_BUY_PRICE
 
   return {
+    basePrice: baseSell,
     sellPrice: finalSell,
     buyPrice,
     tierLabel: tier.label,

@@ -1,5 +1,6 @@
+import "server-only"
 import { createAdminClient } from "@/lib/supabase/server"
-import { getClientesAction } from "@/app/actions/clientes"
+import { loadScopedClientProfiles } from "@/lib/services/clients/scoped-client-profiles"
 import type { ReembolsoRawItem, ReembolsoMatchedItem, ClientReembolsoSummary, ReembolsoBatch, ReconcileStatus } from "./types"
 
 export async function reconcileReembolsoItems(
@@ -10,15 +11,11 @@ export async function reconcileReembolsoItems(
     carrierAccount?: string
     carrierContract?: string
     destinationIban?: string
-  }
+  },
+  tenantId: string
 ): Promise<ReembolsoBatch> {
+  if (!tenantId) throw new Error("Company access is missing")
   const supabase = createAdminClient()
-  const clients = await getClientesAction()
-
-  const clientMap = new Map<string, any>()
-  clients.forEach((c) => {
-    clientMap.set(c.id, c)
-  })
 
   // 1. Gather all tracking identifiers to search in the database
   const trackingSet = new Set<string>()
@@ -34,10 +31,13 @@ export async function reconcileReembolsoItems(
 
   if (trackingArray.length > 0) {
     // Query by carrier_tracking_number
-    const { data: byCarrier } = await supabase
+    const { data: byCarrier, error: carrierError } = await supabase
       .from("shipments")
       .select("id, client_id, tracking_number, carrier_tracking_number, recipient_name, status, sell_price")
+      .eq("tenant_id", tenantId)
       .in("carrier_tracking_number", trackingArray)
+
+    if (carrierError) throw new Error("Shipment lookup failed")
 
     if (byCarrier) {
       byCarrier.forEach((s: any) => {
@@ -48,10 +48,13 @@ export async function reconcileReembolsoItems(
     }
 
     // Query by tracking_number
-    const { data: byTracking } = await supabase
+    const { data: byTracking, error: trackingError } = await supabase
       .from("shipments")
       .select("id, client_id, tracking_number, carrier_tracking_number, recipient_name, status, sell_price")
+      .eq("tenant_id", tenantId)
       .in("tracking_number", trackingArray)
+
+    if (trackingError) throw new Error("Shipment lookup failed")
 
     if (byTracking) {
       byTracking.forEach((s: any) => {
@@ -64,6 +67,9 @@ export async function reconcileReembolsoItems(
       })
     }
   }
+
+  const clientMap = await loadScopedClientProfiles(supabase, tenantId,
+    [...matchedShipmentsMap.values()].map(s => s.client_id).filter(Boolean))
 
   // 3. Match each item
   const reconciledItems: ReembolsoMatchedItem[] = []
@@ -90,7 +96,7 @@ export async function reconcileReembolsoItems(
       clientId = shipment.client_id
       const client = clientId ? clientMap.get(clientId) : null
 
-      clientName = client?.short_name || client?.legal_name || "Cliente Desconhecido"
+      clientName = client?.short_name || client?.legal_name || client?.name || "Cliente Desconhecido"
       clientIban = client?.iban || "Sem IBAN configurado"
       clientEmail = client?.billing_email || client?.email || ""
 

@@ -6,7 +6,7 @@ import { Calendar, Truck, CheckCircle2, Building2, Clock, MapPin, Package, Arrow
 import { useClientScope } from "./ClientScope"
 
 export function ClientRequestPickup() {
-  const { client: currentClient } = useClientScope()
+  const { client: currentClient, basePath } = useClientScope()
   const [pickupDate, setPickupDate] = React.useState(new Date().toISOString().split("T")[0])
   const [pickupVolumes, setPickupVolumes] = React.useState("2")
   const [pickupWeight, setPickupWeight] = React.useState("5.0")
@@ -15,7 +15,6 @@ export function ClientRequestPickup() {
   const [pickupSuccess, setPickupSuccess] = React.useState(false)
   const [pickupId, setPickupId] = React.useState<string | null>(null)
 
-  const querySuffix = ""
 
   const senderAddress = currentClient?.address 
     ? `${currentClient.address}, ${currentClient.postal_code} ${currentClient.city}` 
@@ -35,7 +34,7 @@ export function ClientRequestPickup() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <Link href={`/app${querySuffix}`} className="hover:text-emerald-700">Painel Principal</Link>
+            <Link href={basePath} className="hover:text-emerald-700">Painel Principal</Link>
             <span>&gt;</span>
             <span className="text-indigo-600 font-bold">Pedir Recolha CTT</span>
           </div>
@@ -158,7 +157,7 @@ export function ClientRequestPickup() {
 
           <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
             <Link
-              href={`/app${querySuffix}`}
+              href={basePath}
               className="text-xs font-bold text-slate-500 hover:text-slate-800"
             >
               Cancelar

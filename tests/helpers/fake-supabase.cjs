@@ -21,34 +21,47 @@ function fakeSupabase(tables, failure) {
   function from(table) {
     const state = { table, filters: [], limit: Infinity, single: false }
     const query = {
-      select() { return query },
+      select() { if (state.write) state.returnRows = true; return query },
       eq(field, value) { state.filters.push({ field, value, kind: 'eq' }); return query },
       ilike(field, value) { state.filters.push({ field, value, kind: 'ilike' }); return query },
       in(field, value) { state.filters.push({ field, value, kind: 'in' }); return query },
-      order(field, options) { state.order = { field, ...options }; return query },
+      order(field, options) { (state.orders ||= []).push({ field, ...options }); return query },
       limit(value) { state.limit = value; return query },
+      range(start, end) { state.range = [start, end]; return query },
       maybeSingle() { state.single = true; return query },
       single() { state.single = true; return query },
       insert(value) { state.write = { table, kind: 'insert', value }; return query },
       update(value) { state.write = { table, kind: 'update', value }; return query },
+      delete() { state.write = { table, kind: 'delete' }; return query },
       upsert(value) { state.write = { table, kind: 'upsert', value }; return query },
       then(resolve, reject) {
         return Promise.resolve().then(() => {
           queries.push(state)
           const error = failure?.(state)
           if (error) return { data: null, error }
-          if (state.write) { writes.push(state.write); return { data: null, error: null } }
           let rows = (tables[table] || []).filter(row => state.filters.every(filter => {
             const value = readField(row, filter.field)
             return filter.kind === 'ilike' ? matchesLike(value, filter.value)
               : filter.kind === 'in' ? filter.value.includes(value) : value === filter.value
           }))
-          if (state.order) rows = [...rows].sort((a, b) => {
-            const comparison = String(a[state.order.field] || '').localeCompare(String(b[state.order.field] || ''))
-            return state.order.ascending === false ? -comparison : comparison
+          if (state.write) {
+            writes.push(state.write)
+            if (state.write.kind === 'delete') tables[table] = (tables[table] || []).filter(row => !rows.includes(row))
+            else if (state.write.kind === 'update') rows.forEach(row => Object.assign(row, structuredClone(state.write.value)))
+            // Existing insert/upsert fixtures record payloads without emulating defaults or constraints.
+            if (!state.returnRows) return { data: null, error: null }
+          }
+          if (state.orders) rows = [...rows].sort((a, b) => {
+            for (const order of state.orders) {
+              const comparison = String(a[order.field] || '').localeCompare(String(b[order.field] || ''))
+              if (comparison) return order.ascending === false ? -comparison : comparison
+            }
+            return 0
           })
           rows = rows.slice(0, state.limit)
-          return { data: state.single ? rows[0] || null : rows, error: null }
+          if (state.range) rows = rows.slice(state.range[0], state.range[1] + 1)
+          if (state.single && rows.length > 1) return { data: null, error: { message: 'Expected at most one row' } }
+          return { data: structuredClone(state.single ? rows[0] || null : rows), error: null }
         }).then(resolve, reject)
       },
     }

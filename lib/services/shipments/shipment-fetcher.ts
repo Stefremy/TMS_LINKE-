@@ -9,12 +9,14 @@ import { convertZplToPdfBase64 } from "@/lib/label-utils"
  */
 export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
   const ctx = await requireUser()
+  if (!ctx.tenant_id) throw new Error("Conta sem empresa associada.")
   const supabase = createAdminClient()
 
   try {
     let shipmentsQuery = supabase
       .from("shipments")
       .select("*")
+      .eq("tenant_id", ctx.tenant_id)
       .order("created_at", { ascending: false })
       
     if (ctx.role === "client") {

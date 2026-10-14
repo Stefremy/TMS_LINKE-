@@ -3,16 +3,18 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Home, FileText, Search, Plus, UserCheck } from "lucide-react"
+import { useClientScope } from "./ClientScope"
 
 export function ClientSidebarNav() {
   const pathname = usePathname()
+  const { basePath } = useClientScope()
 
   const navItems = [
-    { href: "/app", label: "Painel Principal", icon: Home },
-    { href: "/app/criar-guia", label: "Novo Envio", icon: Plus },
-    { href: "/app/destinatarios", label: "Destinatários", icon: UserCheck },
-    { href: "/app/envios", label: "Histórico & Envios", icon: Search },
-    { href: "/app/faturas", label: "Faturas e Extratos", icon: FileText },
+    { href: basePath, label: "Painel Principal", icon: Home },
+    { href: `${basePath}/criar-guia`, label: "Novo Envio", icon: Plus },
+    { href: `${basePath}/destinatarios`, label: "Destinatários", icon: UserCheck },
+    { href: `${basePath}/envios`, label: "Histórico & Envios", icon: Search },
+    { href: `${basePath}/faturas`, label: "Faturas e Extratos", icon: FileText },
   ]
 
   return (
@@ -43,11 +45,12 @@ export function ClientSidebarNav() {
 import { TrackingQuickBar } from "@/app/ops/components/TrackingQuickBar"
 
 export function ClientTopHeaderAction() {
+  const { basePath, isEmployee } = useClientScope()
   return (
     <div className="flex items-center gap-2">
-      <TrackingQuickBar />
+      {isEmployee && <TrackingQuickBar />}
       <Link
-        href="/app/criar-guia"
+        href={`${basePath}/criar-guia`}
         className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.99] text-white px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
       >
         <Plus className="w-3.5 h-3.5" />

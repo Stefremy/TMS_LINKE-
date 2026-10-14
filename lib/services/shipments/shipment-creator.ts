@@ -83,7 +83,7 @@ export async function createShipment(formData: FormData) {
     computedSellPrice = priceResult.sellPrice
     computedBuyPrice = priceResult.buyPrice
     computedFuelAmount = priceResult.fuelSurchargeAmount || 0
-    computedBasePrice = Number((computedSellPrice - computedFuelAmount).toFixed(2))
+    computedBasePrice = priceResult.basePrice
     computedTierLabel = priceResult.tierLabel || "Standard"
   } catch (pricingErr) {
     return { success: false, error: pricingErr instanceof ShipmentPricingError || pricingErr instanceof ShipmentPricingUnavailableError
@@ -145,8 +145,8 @@ export async function createShipment(formData: FormData) {
   try {
     revalidatePath("/ops/envios")
     revalidatePath("/ops")
-    revalidatePath("/app")
-    revalidatePath("/app/envios")
+    revalidatePath("/app", "layout")
+    revalidatePath("/app/[storeSlug]/envios", "page")
   } catch {}
 
   return { success: true, id: shipmentId, guia: trackingNumber }

@@ -68,6 +68,7 @@ export interface CustomTierOverride {
 
 export interface Cliente {
   id: string
+  portal_slug?: string
   code: string
   short_name: string
   legal_name: string

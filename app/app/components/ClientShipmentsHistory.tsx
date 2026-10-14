@@ -13,7 +13,7 @@ import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { useClientScope } from "./ClientScope"
 
 export function ClientShipmentsHistory() {
-  const { client: currentClient } = useClientScope()
+  const { client: currentClient, basePath } = useClientScope()
   const [shipments, setShipments] = React.useState<any[]>([])
   const [searchTerm, setSearchTerm] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("todos")
@@ -123,7 +123,6 @@ export function ClientShipmentsHistory() {
     return () => { active = false }
   }, [currentClient.id, currentClient.short_name])
 
-  const querySuffix = ""
 
   const filteredShipments = React.useMemo(() => {
     return shipments.filter((item) => {
@@ -209,7 +208,7 @@ export function ClientShipmentsHistory() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <Link href={`/app${querySuffix}`} className="hover:text-emerald-700">Painel Principal</Link>
+            <Link href={basePath} className="hover:text-emerald-700">Painel Principal</Link>
             <span>&gt;</span>
             <span className="text-emerald-600 font-bold">Histórico & Envios</span>
           </div>
@@ -230,7 +229,7 @@ export function ClientShipmentsHistory() {
             </button>
           )}
           <Link
-            href={`/app/criar-guia${querySuffix}`}
+            href={`${basePath}/criar-guia`}
             className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
           >
             <PlusCircle className="w-4 h-4" />
@@ -318,7 +317,7 @@ export function ClientShipmentsHistory() {
               Assim que criar novos envios na plataforma, eles ficarão disponíveis aqui com rastreamento detalhado em tempo real.
             </p>
             <Link 
-              href={`/app/criar-guia${querySuffix}`}
+              href={`${basePath}/criar-guia`}
               className="mt-4 inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-xs transition-colors"
             >
               <PlusCircle className="w-4 h-4" />

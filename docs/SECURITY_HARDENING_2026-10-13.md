@@ -123,7 +123,7 @@ versions were not changed. No database migrations or deployments were performed.
 | Non-atomic invoice/shipment association | Confirmed; transactional reservation and reconciliation after external emission still needed. |
 | Receipt document ID and amount supplied by caller | Confirmed; authoritative document and outstanding-balance validation still needed. |
 | Non-atomic credit reservation | Confirmed; clarify prepaid versus account-credit semantics before adding reservation and compensation. |
-| Reconciliation authorization | Confirmed; financial permission checks and tenant filters still needed. |
+| Reconciliation authorization | Addressed on 14-10-2026: financial permission checks and tenant-scoped reads. See [step 1 notes](SECURITY_STEP_1_RECONCILIATION_2026-10-14.md); pagination and upload validation remain separate work. |
 | Stripe credit recovery | Transaction is marked paid before balance RPC succeeds; failed credit can be skipped on retry. Atomic settlement/recovery still needed. |
 
 This pass does not change the existing wallet-debit logic, issue or modify fiscal

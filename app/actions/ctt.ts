@@ -586,7 +586,7 @@ export async function closeCttShipmentsAction(shipmentIds?: string[]) {
 
   revalidatePath("/ops/envios")
   revalidatePath("/ops")
-  revalidatePath("/app/envios")
+  revalidatePath("/app/[storeSlug]/envios", "page")
 
   return {
     success: true,
@@ -614,7 +614,7 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
 
   revalidatePath("/ops/envios")
   revalidatePath("/ops")
-  revalidatePath("/app/envios")
+  revalidatePath("/app/[storeSlug]/envios", "page")
 
   return res
 }

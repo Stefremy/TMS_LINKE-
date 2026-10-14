@@ -315,8 +315,8 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
     }
 
     revalidatePath("/ops/faturacao/contas-corrente")
-    revalidatePath("/app/faturas")
-    revalidatePath("/app")
+    revalidatePath("/app/[storeSlug]/faturas", "page")
+    revalidatePath("/app", "layout")
     
     const localMoloniPdfUrl = `/api/statements/${encodeURIComponent(statementNumber)}/moloni-pdf`
     
@@ -348,6 +348,7 @@ export async function getBillingStatementsAction(clientId?: string) {
     const { data, error } = await supabase
       .from('audit_log')
       .select('details, created_at')
+      .eq('tenant_id', ctx.tenant_id)
       .eq('action', 'billing_statement')
       .order('created_at', { ascending: false })
 
@@ -808,7 +809,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     }
 
     revalidatePath("/ops/faturacao/contas-corrente")
-    revalidatePath("/app/faturas")
+    revalidatePath("/app/[storeSlug]/faturas", "page")
 
     return {
       success: true,

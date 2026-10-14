@@ -33,9 +33,10 @@ import { Button } from "@/components/ui/button"
 interface ClientesClientProps {
   initialClientes: Cliente[]
   initialServicosLinke?: ServicoLinke[]
+  canManageAccess?: boolean
 }
 
-export function ClientesClient({ initialClientes, initialServicosLinke = [] }: ClientesClientProps) {
+export function ClientesClient({ initialClientes, initialServicosLinke = [], canManageAccess = false }: ClientesClientProps) {
   const [clientes, setClientes] = React.useState<Cliente[]>(initialClientes || [])
   const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>(initialServicosLinke || [])
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -481,7 +482,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
 
                             <div className="my-1 border-t border-[var(--border-subtle)]" />
 
-                            <button
+                            {canManageAccess && <button
                               type="button"
                               onClick={() => {
                                 setOpenActionId(null)
@@ -491,7 +492,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
                             >
                               <UserCheck className="w-3.5 h-3.5" />
                               Definir Acesso Portal
-                            </button>
+                            </button>}
 
                             <div className="my-1 border-t border-[var(--border-subtle)]" />
 
@@ -564,13 +565,15 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [] }: C
         <ClienteModal
           initialData={editingCliente}
           servicosLinke={servicosLinke}
+          canManageAccess={canManageAccess}
+          onManageAccess={() => { if (editingCliente) setAuthModalCliente(editingCliente) }}
           onClose={() => setIsModalOpen(false)}
           onSaved={handleSaved}
         />
       )}
 
       {/* Auth Modal */}
-      {authModalCliente && (
+      {canManageAccess && authModalCliente && (
         <ClientAuthModal
           clientId={authModalCliente.id}
           clientName={authModalCliente.short_name}

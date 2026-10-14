@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { calculateShipmentPrice } from "@/lib/pricing/calculate-shipment-price"
+import { calculateShipmentSpecialFees, resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
 import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
 import { getAuthContext, requireUser, requireEmployee, requireClientAccess, getTenantId } from "@/lib/auth/context"
 import { CTT_TRACKING_EVENTS, CTT_INCIDENT_CODES } from "@/lib/services/ctt/ctt-types"
@@ -248,10 +249,7 @@ export async function emitClientGuiaAction(data: {
       const pricing = await loadShipmentPricingContext(supabase, ctx, finalClientId, data)
       matchedClient = pricing.client
       const chosenService = pricing.service
-      const carrierName = (chosenService.preferred_carrier_name || chosenService.name).toLowerCase()
-      if (carrierName.includes("correos")) carrierCode = "correos"
-      else if (carrierName.includes("ctt") || /ers|d\+/.test(carrierName)) carrierCode = "ctt"
-      else throw new ShipmentPricingError("Transportadora não suportada para este serviço.")
+      carrierCode = resolveServiceCarrier(chosenService)
       if (!chosenService.webservice_service_code?.trim()) {
         throw new ShipmentPricingError("Serviço sem configuração de transportadora. Contacte o suporte.")
       }
@@ -273,83 +271,12 @@ export async function emitClientGuiaAction(data: {
       computedSellPrice = priceResult.sellPrice
       computedBuyPrice = priceResult.buyPrice
       computedFuelAmount = priceResult.fuelSurchargeAmount
-      computedBasePrice = Number((computedSellPrice - computedFuelAmount).toFixed(2))
-
-      // Calculate Special Services
-      let specialFeesTotal = 0
-      let specialFeesDetails: Array<{ name: string, amount: number }> = []
-      
-      // Import DEFAULT_CTT_SPECIAL_SERVICES_FEES inside the function or file
-      const defaultSpecials = [
-        { special_service_code: "cod", special_service_name: "Cobrança (COD)", api_type_code: 1, fee_type: "percentage", percentage_value: 2.0, min_value: 1.80, description: "", is_enabled: true },
-        { special_service_code: "fragil", special_service_name: "Tratamento Frágil", api_type_code: 2, fee_type: "fixed", fixed_value: 1.50, description: "", is_enabled: true },
-        { special_service_code: "sms_tracking", special_service_name: "Alerta SMS & Tracking", api_type_code: 3, fee_type: "fixed", fixed_value: 0.15, description: "", is_enabled: true },
-        { special_service_code: "auth_return", special_service_name: "Logística Inversa (Retorno)", api_type_code: 4, fee_type: "fixed", fixed_value: 3.85, description: "", is_enabled: true },
-        { special_service_code: "correos_cod", special_service_name: "AgainstReimbursement (Cobrança)", api_type_code: 2, fee_type: "percentage", percentage_value: 2.0, min_value: 1.80, description: "", is_enabled: true },
-        { special_service_code: "correos_saturday", special_service_name: "Saturday (Sábado)", api_type_code: 4, fee_type: "fixed", fixed_value: 8.50, description: "", is_enabled: true },
-        { special_service_code: "correos_insurance", special_service_name: "SpecialInsurance (Seguro)", api_type_code: 6, fee_type: "percentage", percentage_value: 1.0, min_value: 3.50, description: "", is_enabled: true },
-        { special_service_code: "correos_fragil", special_service_name: "Fragil", api_type_code: 7, fee_type: "fixed", fixed_value: 1.50, description: "", is_enabled: true },
-      ]
-
-      const clientSpecialFees = matchedClient.pricing?.special_services_fees && matchedClient.pricing.special_services_fees.length > 0 
-        ? matchedClient.pricing.special_services_fees 
-        : defaultSpecials
-
-      if (data.selectedSpecialServices && data.selectedSpecialServices.length > 0) {
-        data.selectedSpecialServices.forEach(code => {
-          if (code.startsWith("correos_") !== (carrierCode === "correos")) {
-            throw new ShipmentPricingError("Serviço especial não autorizado para esta transportadora.")
-          }
-          const feeConfig = clientSpecialFees.find((f: any) => f.special_service_code === code && f.is_enabled)
-          if (!feeConfig) throw new ShipmentPricingError("Serviço especial inexistente ou desativado.")
-          for (const amount of [feeConfig.fixed_value, feeConfig.percentage_value, feeConfig.min_value]) {
-            if (amount !== undefined && amount !== null && (!Number.isFinite(amount) || amount < 0)) {
-              throw new ShipmentPricingError("Tarifa de serviço especial inválida.")
-            }
-          }
-          if (!["fixed", "percentage"].includes(feeConfig.fee_type)) {
-            throw new ShipmentPricingError("Tarifa de serviço especial inválida.")
-          }
-          if (feeConfig) {
-            let feeAmt = 0
-            if (feeConfig.fee_type === "fixed") {
-              feeAmt = feeConfig.fixed_value || 0
-            } else if (feeConfig.fee_type === "percentage") {
-              if ((code === "cod" || code === "correos_cod") && data.codValue) {
-                 // COD percentage is calculated on the COD value!
-                 feeAmt = data.codValue * ((feeConfig.percentage_value || 0) / 100)
-              } else {
-                 // Apply percentage on base sell price (before special fees, includes fuel)
-                 feeAmt = computedSellPrice * ((feeConfig.percentage_value || 0) / 100)
-              }
-              
-              if (feeConfig.min_value && feeAmt < feeConfig.min_value) {
-                feeAmt = feeConfig.min_value
-              }
-            }
-            feeAmt = Number(feeAmt.toFixed(2))
-            if (!Number.isSafeInteger(Math.round(feeAmt * 100))) {
-              throw new ShipmentPricingError("Tarifa de serviço especial inválida.")
-            }
-            specialFeesTotal += feeAmt
-            specialFeesDetails.push({
-              name: feeConfig.special_service_name,
-              amount: feeAmt
-            })
-          }
-        })
-      }
-      
-      // Add Special Services to final DB price
-      computedSellPrice = Number((computedSellPrice + specialFeesTotal).toFixed(2))
-      if (!Number.isFinite(computedSellPrice) || computedSellPrice <= 0 ||
-          !Number.isSafeInteger(Math.round(computedSellPrice * 100))) {
-        throw new ShipmentPricingError("Tarifa inválida. Contacte o suporte.")
-      }
-
-      // Define data to pass into DB. Save JSON string for PDF rendering.
-      computedSpecialAmount = Number(specialFeesTotal.toFixed(2))
-      computedSpecialDesc = specialFeesDetails.length > 0 ? JSON.stringify(specialFeesDetails) : null
+      computedBasePrice = priceResult.basePrice
+      const specials = calculateShipmentSpecialFees(computedSellPrice, matchedClient, carrierCode,
+        data.selectedSpecialServices, data.codValue)
+      computedSellPrice = specials.totalPrice
+      computedSpecialAmount = specials.amount
+      computedSpecialDesc = specials.items.length > 0 ? JSON.stringify(specials.items) : null
 
     } catch (pricingErr) {
       return { success: false, error: pricingErr instanceof ShipmentPricingError || pricingErr instanceof ShipmentPricingUnavailableError
@@ -657,9 +584,9 @@ export async function emitClientGuiaAction(data: {
     }
 
     try {
-      revalidatePath("/app")
-      revalidatePath("/app/criar-guia")
-      revalidatePath("/app/envios")
+      revalidatePath("/app", "layout")
+      revalidatePath("/app/[storeSlug]/criar-guia", "page")
+      revalidatePath("/app/[storeSlug]/envios", "page")
       revalidatePath("/ops/envios")
       revalidatePath("/ops")
     } catch {}
@@ -670,6 +597,7 @@ export async function emitClientGuiaAction(data: {
       id: shipmentId,
       labelBase64,
       cttError: null,
+      sellPrice: computedSellPrice,
       dbWarning: dbErrorMessage
     }
   } catch (err: any) {
@@ -775,8 +703,8 @@ export async function regenerateCttLabelAction(shipmentId: string) {
   }
 
   try {
-    revalidatePath("/app")
-    revalidatePath("/app/envios")
+    revalidatePath("/app", "layout")
+    revalidatePath("/app/[storeSlug]/envios", "page")
     revalidatePath("/ops/envios")
   } catch {}
 
@@ -879,8 +807,8 @@ export async function updateShipmentStatusAction(
 
   revalidatePath("/ops/envios")
   revalidatePath("/ops")
-  revalidatePath("/app")
-  revalidatePath("/app/envios")
+  revalidatePath("/app", "layout")
+  revalidatePath("/app/[storeSlug]/envios", "page")
 
   return { success: true, status: newStatus }
 }
@@ -1127,7 +1055,7 @@ export async function syncShipmentTrackingAction(trackingNumber: string, shipmen
 
   revalidatePath("/ops/envios")
   revalidatePath("/ops")
-  revalidatePath("/app/envios")
+  revalidatePath("/app/[storeSlug]/envios", "page")
 
   return res
 }
@@ -1208,8 +1136,8 @@ export async function syncActiveShipmentsBatchAction(shipmentIds: string[]) {
   if (updatedCount > 0) {
     revalidatePath("/ops/envios")
     revalidatePath("/ops")
-    revalidatePath("/app")
-    revalidatePath("/app/envios")
+    revalidatePath("/app", "layout")
+    revalidatePath("/app/[storeSlug]/envios", "page")
   }
 
   return { updatedCount }
@@ -1300,9 +1228,9 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
     } catch {}
 
     revalidatePath("/ops/envios")
-    revalidatePath("/app/envios")
+    revalidatePath("/app/[storeSlug]/envios", "page")
     revalidatePath("/ops")
-    revalidatePath("/app")
+    revalidatePath("/app", "layout")
 
     return { 
       success: true, 
@@ -1513,7 +1441,7 @@ export async function resolveShipmentIncidentAction(params: {
     revalidatePath("/ops/incidencias")
     revalidatePath("/ops/envios")
     revalidatePath("/ops")
-    revalidatePath("/app")
+    revalidatePath("/app", "layout")
 
     return { success: true, message: "Incidência tratada com sucesso" }
   } catch (err: any) {

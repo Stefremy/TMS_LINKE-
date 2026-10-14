@@ -13,7 +13,8 @@ function createLoader(mocks) {
     const loadedModule = { exports: {} }
     cache.set(absolute, loadedModule)
     const source = ts.transpileModule(fs.readFileSync(absolute, 'utf8'), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+      fileName: absolute,
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX },
     }).outputText
     function localRequire(id) {
       if (Object.hasOwn(mocks, id)) return mocks[id]

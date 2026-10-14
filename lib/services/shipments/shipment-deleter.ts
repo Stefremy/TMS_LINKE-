@@ -45,9 +45,9 @@ export async function deleteShipment(shipmentId: string) {
     })
 
     revalidatePath("/ops/envios")
-    revalidatePath("/app/envios")
+    revalidatePath("/app/[storeSlug]/envios", "page")
     revalidatePath("/ops")
-    revalidatePath("/app")
+    revalidatePath("/app", "layout")
 
     return { success: true }
   } catch (err: any) {
@@ -107,9 +107,9 @@ export async function deleteShipmentsBulk(shipmentIds: string[]) {
     })
 
     revalidatePath("/ops/envios")
-    revalidatePath("/app/envios")
+    revalidatePath("/app/[storeSlug]/envios", "page")
     revalidatePath("/ops")
-    revalidatePath("/app")
+    revalidatePath("/app", "layout")
 
     return { success: true, count: validIds.length }
   } catch (err: any) {

@@ -456,6 +456,7 @@ export function buildOfficialLinkeInternationalZones(markupPct: number = 22): Zo
       id: `intl_${zCode.toLowerCase().replace(/\s+/g, "_")}_extra`,
       label: "Kg Extra (+10.5kg)",
       weight_max: 999,
+      additional_weight_step: 0.5,
       cost_price: extraCostPerKg,
       margin_pct: markupPct,
       sell_price: extraSellPerKg,

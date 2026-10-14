@@ -133,7 +133,7 @@ function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = cl
     '@/lib/services/tracking': {}, '@/lib/services/shipments/shipment-creator': {},
     '@/lib/services/shipments/shipment-deleter': {},
   })
-  return { db, load, providerCalls, credentials }
+  return { db, load, providerCalls, credentials, tables }
 }
 function shipmentInput(extra = {}) {
   return { clientId: OTHER, serviceId: 'service-a', serviceName: 'forged service name',
@@ -250,4 +250,169 @@ test('legacy FormData creation: valid configured tariff still creates a draft', 
   assert.equal(result.success, true)
   assert.equal(h.db.writes.find(w => w.table === 'shipments').value.sell_price, 9)
   assert.equal(h.providerCalls.length, 0)
+})
+
+
+function setCustomPrices(tables, prices) {
+  tables.audit_log[0].details.custom_tier_overrides = { 'service-a': prices }
+}
+function fixtureQuote(h, input = {}) {
+  const data = shipmentInput(input)
+  return h.load('lib/pricing/calculate-shipment-quote.ts').calculateShipmentQuote(
+    data.weightKg, h.tables.audit_log[0].details, h.tables.servicos_linke[0],
+    data.recipientCountry, data.recipientPostal, data.selectedSpecialServices, data.codValue)
+}
+for (const carrier of ['CTT', 'Correos']) {
+  test(`${carrier}: persisted custom prices match the preview, returned total and recorded breakdown without discount`, async () => {
+    const h = shipmentHarness({ carrier, adjust: t => {
+      setCustomPrices(t, [6])
+      t.audit_log[0].details.pricing = { discount_pct: 50 }
+      t.audit_log.push({ tenant_id: OTHER, action: 'client_data', details: {
+        id: CLIENT, custom_tier_overrides: { 'service-a': [1] },
+      } })
+      t.audit_log.push({ tenant_id: TENANT, action: 'client_data', details: {
+        id: OTHER, custom_tier_overrides: { 'service-a': [2] },
+      } })
+    } })
+    const input = { selectedSpecialServices: carrier === 'CTT' ? ['cod', 'fragil'] : ['correos_cod', 'correos_saturday'], codValue: 100,
+      custom_tier_overrides: { 'service-a': [0.01] }, calculatedPrice: 0.01 }
+    const preview = fixtureQuote(h, input)
+    assert.equal(preview.basePrice, 6)
+    assert.equal(preview.fuelSurchargeAmount, 0.75)
+    assert.equal(preview.buyPrice, 3)
+    assert.equal(preview.totalPrice, carrier === 'CTT' ? 10.25 : 17.25)
+    const result = await emit(h, input)
+    assert.equal(result.success, true)
+    assert.equal(result.sellPrice, preview.totalPrice)
+    const stored = h.db.writes.find(w => w.table === 'shipments').value
+    const audit = h.db.writes.find(w => w.table === 'audit_log').value.details
+    assert.equal(stored.sell_price, preview.totalPrice)
+    assert.equal(stored.buy_price, preview.buyPrice)
+    assert.equal(audit.base_price, preview.basePrice)
+    assert.equal(audit.fuel_tax_amount, preview.fuelSurchargeAmount)
+    assert.equal(audit.special_fees_amount, preview.specialFeesAmount)
+    assert.deepEqual(JSON.parse(audit.special_fees_description), preview.specialItems)
+    assert.equal(h.tables.servicos_linke[0].zones[0].tiers[0].sell_price, 8)
+  })
+  test(`${carrier}: invalid negotiated prices stop every provider call and database write`, async () => {
+    for (const prices of [[0], [-1], [NaN], [Infinity], ['6'], [null], [Number.MAX_VALUE], null, 6, { 0: 6 }]) {
+      const h = shipmentHarness({ carrier, adjust: t => setCustomPrices(t, prices) })
+      assert.throws(() => fixtureQuote(h), /personalizado|Tarifa/)
+      const result = await emit(h)
+      assert.equal(result.success, false)
+      assert.equal(h.providerCalls.length, 0)
+      assert.equal(h.credentials.length, 0)
+      assert.equal(h.db.writes.length, 0)
+    }
+  })
+  test(`${carrier}: sorting and disabled tiers preserve saved override indexes`, async () => {
+    const h = shipmentHarness({ carrier, adjust: t => {
+      const tier = t.servicos_linke[0].zones[0].tiers[0]
+      t.servicos_linke[0].zones[0].tiers = [tier,
+        { ...tier, weight_max: 0.5, enabled: false, sell_price: 2 },
+        { ...tier, weight_max: 1, sell_price: 4, cost_price: 1 }]
+      setCustomPrices(t, [6, 0, 3])
+    } })
+    const preview = fixtureQuote(h)
+    assert.equal(preview.basePrice, 3)
+    assert.equal(preview.buyPrice, 1)
+    const result = await emit(h)
+    assert.equal(result.success, true)
+    assert.equal(result.sellPrice, 3.38)
+    assert.equal(h.db.writes.find(w => w.table === 'shipments').value.sell_price, preview.totalPrice)
+  })
+  test(`${carrier}: mainland customized prices cannot overwrite Spain or island tariffs`, async () => {
+    for (const [country, postal, zone] of [['ES', '28001', 'ES-PENIN'], ['PT', '9500-001', 'PT-ILHAS']]) {
+      const h = shipmentHarness({ carrier, adjust: t => {
+        const srv = t.servicos_linke[0]
+        srv.allowed_zones.push(zone)
+        srv.zones.push({ zone_code: zone, zone_name: zone, tiers: [{ ...srv.zones[0].tiers[0], sell_price: 20 }] })
+        setCustomPrices(t, [6])
+      } })
+      const input = { recipientCountry: country, recipientPostal: postal }
+      const preview = fixtureQuote(h, input)
+      assert.equal(preview.basePrice, 20)
+      assert.equal(preview.totalPrice, 22.5)
+      assert.equal((await emit(h, input)).sellPrice, preview.totalPrice)
+    }
+  })
+}
+
+test('additional kilograms use the configured anchor, rounded increments and negotiated per-kg price', async () => {
+  for (const [weight, basePrice, buyPrice, totalPrice] of [[30, 9, 8, 10.13], [30.01, 9.4, 8.2, 10.58], [31.2, 9.8, 8.4, 11.03]]) {
+    const h = shipmentHarness({ adjust: t => {
+      const tier = t.servicos_linke[0].zones[0].tiers[0]
+      t.servicos_linke[0].zones[0].tiers = [
+        { ...tier, weight_max: 30, sell_price: 10, cost_price: 8 },
+        { ...tier, weight_max: 999, sell_price: 0.5, cost_price: 0.2, label: 'Kg adicional' },
+      ]
+      setCustomPrices(t, [9, 0.4])
+    } })
+    const preview = fixtureQuote(h, { weightKg: weight })
+    assert.equal(preview.basePrice, basePrice)
+    assert.equal(preview.buyPrice, buyPrice)
+    assert.equal(preview.totalPrice, totalPrice)
+    const result = await emit(h, { weightKg: weight })
+    assert.equal(result.success, true)
+    assert.equal(result.sellPrice, preview.totalPrice)
+    assert.equal(h.db.writes.find(w => w.table === 'shipments').value.buy_price, buyPrice)
+  }
+})
+
+test('international extra kilograms preserve half-kg increments in generated and existing official tables', () => {
+  const load = createLoader({})
+  const { buildOfficialLinkeInternationalZones } = load('lib/services/geo/international-zones.ts')
+  const { calculateShipmentQuote } = load('lib/pricing/calculate-shipment-quote.ts')
+  const srv = { ...service(), zones: buildOfficialLinkeInternationalZones(0), allowed_zones: ['EU 1'], fuel_surcharge_pct: 0 }
+  const zone = srv.zones[0]
+  const anchor = zone.tiers.find(t => t.weight_max === 10.5)
+  const extra = zone.tiers.find(t => t.weight_max === 999)
+  for (const legacy of [false, true]) {
+    if (legacy) delete extra.additional_weight_step
+    for (const [weight, extraKg] of [[10.5, 0], [10.51, 0.5], [11, 0.5], [11.01, 1]]) {
+      const result = calculateShipmentQuote(weight, {}, srv, 'FR', '')
+      assert.equal(result.basePrice, Number((anchor.sell_price + extraKg * extra.sell_price).toFixed(2)))
+      assert.equal(result.buyPrice, result.basePrice)
+    }
+  }
+})
+
+test('missing additional-kg anchor and uncovered weights fail before dispatch', async () => {
+  for (const weight of [6, 1000]) {
+    const h = shipmentHarness({ adjust: t => { t.servicos_linke[0].zones[0].tiers[0].weight_max = 999 } })
+    assert.equal((await emit(h, { weightKg: weight })).success, false)
+    assert.equal(h.providerCalls.length, 0)
+    assert.equal(h.db.writes.length, 0)
+  }
+})
+
+test('draft creation honors persisted negotiated tariffs rather than submitted amounts', async () => {
+  const h = shipmentHarness({ adjust: t => setCustomPrices(t, [6]) })
+  const form = new FormData()
+  form.set('weight_kg', '1')
+  form.set('service_id', 'service-a')
+  form.set('sell_price', '0.01')
+  form.set('client_id', OTHER)
+  const result = await h.load('lib/services/shipments/shipment-creator.ts').createShipment(form)
+  assert.equal(result.success, true)
+  const stored = h.db.writes.find(w => w.table === 'shipments').value
+  assert.equal(stored.sell_price, 6.75)
+  assert.equal(stored.client_id, CLIENT)
+  assert.equal(stored.buy_price, 3)
+  assert.equal(h.providerCalls.length, 0)
+})
+
+test('preview percentage supplements use the same COD base, transport base and cent rounding as emission', async () => {
+  const h = shipmentHarness({ carrier: 'Correos', adjust: t => {
+    setCustomPrices(t, [6])
+    t.audit_log[0].details.pricing = { discount_pct: 80, special_services_fees: [
+      { special_service_code: 'correos_cod', special_service_name: 'COD', fee_type: 'percentage', percentage_value: 2, min_value: 1.8, is_enabled: true },
+      { special_service_code: 'correos_insurance', special_service_name: 'Seguro', fee_type: 'percentage', percentage_value: 10, min_value: 0.1, is_enabled: true },
+    ] }
+  } })
+  const input = { selectedSpecialServices: ['correos_cod', 'correos_insurance'], codValue: 150.3 }
+  const preview = fixtureQuote(h, input)
+  assert.deepEqual(preview.specialItems, [{ name: 'COD', amount: 3.01 }, { name: 'Seguro', amount: 0.68 }])
+  assert.equal(preview.totalPrice, 10.44)
+  assert.equal((await emit(h, input)).sellPrice, preview.totalPrice)
 })

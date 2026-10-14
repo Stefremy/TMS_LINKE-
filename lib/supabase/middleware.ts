@@ -1,5 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { PORTAL_SECTIONS } from '@/lib/client-portal/paths'
+import { clientLoginPath } from '@/lib/client-portal/login-paths'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -61,51 +63,43 @@ export async function updateSession(request: NextRequest) {
   const isProtectedOps = pathname.startsWith('/ops')
 
   // Enforce login for protected routes
-  if (!user && (isProtectedApp || isProtectedOps)) {
+  if (!user && ((isProtectedApp && pathname !== '/app/login' && pathname !== '/app/ativar') || isProtectedOps)) {
     const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
+    const destination = isProtectedApp ? clientLoginPath(pathname) : '/login'
+    const res = NextResponse.redirect(new URL(destination, url))
+    supabaseResponse.cookies.getAll().forEach(cookie => res.cookies.set(cookie))
+    return res
   }
 
   if (user) {
     const role = user.app_metadata?.role
 
-    // Redirect away from login page if already logged in
-    if (pathname === '/login') {
-      const url = request.nextUrl.clone()
-      url.pathname = role === 'client' ? '/app' : '/ops'
-      return NextResponse.redirect(url)
-    }
+    // Login pages resolve the existing session on the server using the auth context.
+    if (pathname === '/login' || pathname === '/app/login' || pathname === '/app/ativar') return supabaseResponse
 
     // Secure Impersonation Logic
     if (role === 'employee' || role === 'admin') {
       if (isProtectedApp && pathname !== '/app/selecionar' && request.nextUrl.searchParams.has('clientId')) {
         const clientId = request.nextUrl.searchParams.get('clientId')
         const url = request.nextUrl.clone()
-        url.searchParams.delete('clientId') // Remove sensitive param from URL
-        url.searchParams.delete('clientName')
-        
+        const section = PORTAL_SECTIONS.find(s => pathname === `/app/${s}`)
+        const topup = url.searchParams.get('topup')
+        url.pathname = '/app/selecionar'
+        url.search = ''
+        if (clientId) url.searchParams.set('clientId', clientId)
+        if (section) url.searchParams.set('section', section)
+        if (topup === 'success' || topup === 'cancelled') url.searchParams.set('topup', topup)
+
+        // The selection route validates the company/store before writing a cookie.
         const res = NextResponse.redirect(url)
-        if (clientId) {
-          res.cookies.set('impersonated_client_id', clientId, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            path: '/'
-          })
-        }
+        supabaseResponse.cookies.getAll().forEach(cookie => res.cookies.set(cookie))
         return res
       }
 
       // Clear impersonation cookie when returning to ops
       if (isProtectedOps && request.cookies.has('impersonated_client_id')) {
-        const res = NextResponse.next({
-          request: {
-            headers: request.headers,
-          },
-        })
-        res.cookies.delete('impersonated_client_id')
-        return res
+        supabaseResponse.cookies.delete('impersonated_client_id')
+        return supabaseResponse
       }
     }
 

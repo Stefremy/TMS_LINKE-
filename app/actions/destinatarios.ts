@@ -2,10 +2,18 @@
 
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
-import { getClientesAction } from "./clientes"
 import { Destinatario } from "@/app/ops/entidades/destinatarios/types"
-import { requireUser, getTenantId } from "@/lib/auth/context"
+import { requireUser } from "@/lib/auth/context"
+import { loadScopedClientProfiles } from "@/lib/services/clients/scoped-client-profiles"
 import { lookupPostalCode } from "@/lib/services/geo/postal-code.service"
+
+async function requireRecipientAccess() {
+  const ctx = await requireUser()
+  if (!ctx.tenant_id || !["client", "employee", "admin"].includes(ctx.role || "") || (ctx.role === "client" && !ctx.client_id)) {
+    throw new Error("Acesso negado. Conta sem acesso válido.")
+  }
+  return ctx
+}
 
 /**
  * Obtém os destinatários consolidados (guardados na agenda + histórico de envios).
@@ -13,23 +21,19 @@ import { lookupPostalCode } from "@/lib/services/geo/postal-code.service"
  * - Se for operador/admin no OPS, pode filtrar por targetClientId ou ver todos.
  */
 export async function getDestinatariosAction(targetClientId?: string): Promise<Destinatario[]> {
+  const ctx = await requireRecipientAccess()
   try {
-    const ctx = await requireUser()
     const supabase = createAdminClient()
-    const tenantId = await getTenantId()
+    const tenantId = ctx.tenant_id
 
     // Resolução do âmbito de cliente (se for utilizador tipo client, restringe automaticamente)
     const effectiveClientId = ctx.role === "client" ? ctx.client_id : targetClientId
-
-    // 1. Obter clientes para mapeamento de nomes
-    const clients = await getClientesAction(effectiveClientId || undefined)
-    const clientMap = new Map<string, any>()
-    clients.forEach((c) => clientMap.set(c.id, c))
 
     // 2. Obter destinatários guardados explicitamente na agenda (audit_log: saved_recipient)
     let savedQuery = supabase
       .from("audit_log")
       .select("id, details, created_at")
+      .eq("tenant_id", tenantId)
       .eq("action", "saved_recipient")
       .order("created_at", { ascending: false })
       .limit(1000)
@@ -49,6 +53,7 @@ export async function getDestinatariosAction(targetClientId?: string): Promise<D
       .select(
         "id, created_at, client_id, recipient_name, recipient_phone, recipient_email, recipient_address, recipient_zip4, recipient_zip3, sender_name, carrier_tracking_number, tracking_number, status, sell_price, buy_price, service_type"
       )
+      .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
       .limit(3000)
 
@@ -62,6 +67,11 @@ export async function getDestinatariosAction(targetClientId?: string): Promise<D
     }
 
     const shipments = dbShipments || []
+    const clientIds = [
+      ...(savedLogs || []).map((log: { details: { client_id?: string } | null }) => log.details?.client_id),
+      ...shipments.map((s: { client_id: string | null }) => s.client_id),
+    ].filter((id): id is string => typeof id === "string" && Boolean(id))
+    const clientMap = await loadScopedClientProfiles(supabase, tenantId, clientIds)
     const destMap = new Map<string, Destinatario>()
 
     // Função auxiliar para gerar chave de normalização
@@ -84,7 +94,7 @@ export async function getDestinatariosAction(targetClientId?: string): Promise<D
         const key = makeKey(d.name, zip, clientId)
 
         const client = clientId ? clientMap.get(clientId) : null
-        const clientName = client?.short_name || client?.legal_name || d.client_name || "Cliente Linke"
+        const clientName = client?.short_name || client?.legal_name || client?.name || d.client_name || "Cliente Linke"
 
         destMap.set(key, {
           id,
@@ -137,7 +147,7 @@ export async function getDestinatariosAction(targetClientId?: string): Promise<D
       const key = makeKey(rawName, zip, clientId)
 
       const client = clientId ? clientMap.get(clientId) : null
-      const clientName = client?.short_name || client?.legal_name || s.sender_name || "Cliente Linke"
+      const clientName = client?.short_name || client?.legal_name || client?.name || s.sender_name || "Cliente Linke"
       const trackingCode = s.carrier_tracking_number || s.tracking_number || "—"
 
       if (!destMap.has(key)) {
@@ -236,10 +246,10 @@ export async function saveDestinatarioAction(data: {
   observations?: string
   client_id?: string
 }): Promise<{ success: boolean; destinatario?: Destinatario; error?: string }> {
+  const ctx = await requireRecipientAccess()
   try {
-    const ctx = await requireUser()
     const supabase = createAdminClient()
-    const tenantId = await getTenantId()
+    const tenantId = ctx.tenant_id
 
     if (!data.name || !data.name.trim()) {
       return { success: false, error: "O nome do destinatário é obrigatório." }
@@ -260,14 +270,16 @@ export async function saveDestinatarioAction(data: {
     // Obter nome do cliente
     let clientName = "Cliente Linke"
     if (assignedClientId) {
-      const clients = await getClientesAction(assignedClientId)
-      const c = clients.find((item) => item.id === assignedClientId)
-      if (c) {
-        clientName = c.short_name || c.legal_name
-      }
+      const clients = await loadScopedClientProfiles(supabase, tenantId, [assignedClientId])
+      const c = clients.get(assignedClientId)
+      if (!c) return { success: false, error: "Cliente não disponível." }
+      clientName = c.short_name || c.legal_name || c.name || "Cliente Linke"
     }
 
-    const id = data.id && data.id.trim() ? data.id : crypto.randomUUID()
+    // History entries have a synthetic dest_ ID; saving one creates a fresh agenda record.
+    const requestedId = data.id?.trim()
+    const isUpdate = Boolean(requestedId && !requestedId.startsWith("dest_"))
+    const id = isUpdate ? requestedId! : crypto.randomUUID()
     const now = new Date().toISOString()
 
     const destinatarioData: Destinatario = {
@@ -293,23 +305,26 @@ export async function saveDestinatarioAction(data: {
       shipments_history: [],
     }
 
-    // Se já existia um registo em audit_log com este ID, atualiza; caso contrário, insere
-    const { data: existing } = await supabase
-      .from("audit_log")
-      .select("id")
-      .eq("action", "saved_recipient")
-      .eq("details->>id", id)
-      .limit(1)
+    if (isUpdate) {
+      let existingQuery = supabase.from("audit_log").select("id, details")
+        .eq("tenant_id", tenantId).eq("action", "saved_recipient").eq("details->>id", id)
+      if (ctx.role === "client") existingQuery = existingQuery.eq("details->>client_id", ctx.client_id!)
+      const { data: existing, error } = await existingQuery.maybeSingle()
+      if (error || !existing) return { success: false, error: "Destinatário não disponível." }
 
-    if (existing && existing.length > 0) {
-      const { error: updErr } = await supabase
+      let updateQuery = supabase
         .from("audit_log")
         .update({
           details: destinatarioData,
         })
-        .eq("id", existing[0].id)
+        .eq("tenant_id", tenantId)
+        .eq("action", "saved_recipient")
+        .eq("details->>id", id)
+        .eq("id", existing.id)
+      if (ctx.role === "client") updateQuery = updateQuery.eq("details->>client_id", ctx.client_id!)
+      const { data: updated, error: updErr } = await updateQuery.select("id").maybeSingle()
 
-      if (updErr) throw updErr
+      if (updErr || !updated) throw new Error("Recipient update failed")
     } else {
       const { error: insErr } = await supabase.from("audit_log").insert({
         tenant_id: tenantId,
@@ -321,14 +336,14 @@ export async function saveDestinatarioAction(data: {
     }
 
     revalidatePath("/ops/entidades/destinatarios")
-    revalidatePath("/app/destinatarios")
-    revalidatePath("/app/criar-guia")
+    revalidatePath("/app/[storeSlug]/destinatarios", "page")
+    revalidatePath("/app/[storeSlug]/criar-guia", "page")
     revalidatePath("/ops/envios/novo")
 
     return { success: true, destinatario: destinatarioData }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[saveDestinatarioAction] Erro ao gravar destinatário:", err)
-    return { success: false, error: err?.message || "Erro ao gravar destinatário." }
+    return { success: false, error: "Erro ao gravar destinatário." }
   }
 }
 
@@ -336,27 +351,31 @@ export async function saveDestinatarioAction(data: {
  * Remove um destinatário guardado da agenda.
  */
 export async function deleteDestinatarioAction(id: string): Promise<{ success: boolean; error?: string }> {
+  const ctx = await requireRecipientAccess()
+  if (typeof id !== "string" || !id.trim()) return { success: false, error: "Pedido inválido." }
   try {
-    const ctx = await requireUser()
     const supabase = createAdminClient()
 
     // Procurar e apagar registo em audit_log
-    const { error: delErr } = await supabase
+    let deleteQuery = supabase
       .from("audit_log")
       .delete()
+      .eq("tenant_id", ctx.tenant_id)
       .eq("action", "saved_recipient")
       .eq("details->>id", id)
+    if (ctx.role === "client") deleteQuery = deleteQuery.eq("details->>client_id", ctx.client_id!)
+    const { data: deleted, error: delErr } = await deleteQuery.select("id").maybeSingle()
 
-    if (delErr) throw delErr
+    if (delErr || !deleted) return { success: false, error: "Destinatário não disponível." }
 
     revalidatePath("/ops/entidades/destinatarios")
-    revalidatePath("/app/destinatarios")
-    revalidatePath("/app/criar-guia")
+    revalidatePath("/app/[storeSlug]/destinatarios", "page")
+    revalidatePath("/app/[storeSlug]/criar-guia", "page")
     revalidatePath("/ops/envios/novo")
 
     return { success: true }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[deleteDestinatarioAction] Erro ao eliminar:", err)
-    return { success: false, error: err?.message || "Erro ao eliminar destinatário." }
+    return { success: false, error: "Erro ao eliminar destinatário." }
   }
 }

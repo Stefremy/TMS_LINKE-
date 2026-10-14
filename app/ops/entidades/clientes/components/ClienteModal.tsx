@@ -17,7 +17,6 @@ import {
   User, 
   ShieldAlert, 
   ExternalLink, 
-  Truck,
   Layers,
   Percent,
   Check,
@@ -44,6 +43,8 @@ import {
   ChevronUp,
 } from "lucide-react"
 import { saveClienteAction } from "@/app/actions/clientes"
+import { inviteClientAccessAction } from "@/app/actions/client-invitations"
+import { normalizeStoreSlug } from "@/lib/client-portal/paths"
 import type { ServicoLinke, PriceTierLinke } from "@/app/ops/configuracao/servicos/types"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { 
@@ -51,35 +52,41 @@ import {
   DEFAULT_CLIENT_CATEGORIES, 
   CLIENT_COLOR_OPTIONS,
   DEFAULT_CLIENT_PRICING,
-  DEFAULT_CTT_SERVICES_PRICING,
   DEFAULT_CTT_SPECIAL_SERVICES_FEES,
   DEFAULT_CORREOS_SPECIAL_SERVICES_FEES,
   ClientPricingConfig,
-  ClientServicePrice,
   ClientSpecialServiceFee
 } from "../types"
 
 interface ClienteModalProps {
   initialData?: Cliente | null
   servicosLinke?: ServicoLinke[]
+  canManageAccess?: boolean
+  onManageAccess?: () => void
   onClose: () => void
   onSaved: (saved: Cliente) => void
 }
 
 type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario"
-type PrecarioSubTab = "servicos_linke" | "produtos" | "suplementares" | "geral"
+type PrecarioSubTab = "servicos_linke" | "suplementares" | "geral"
 
-export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved }: ClienteModalProps) {
+export function ClienteModal({ initialData, servicosLinke = [], canManageAccess = false, onManageAccess, onClose, onSaved }: ClienteModalProps) {
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
   const [specialProviderTab, setSpecialProviderTab] = React.useState<"ctt" | "correos">("ctt")
   const [saveSuccessMsg, setSaveSuccessMsg] = React.useState(false)
+  const [draftId] = React.useState(() => initialData?.id || crypto.randomUUID())
+  const [sendInvitation, setSendInvitation] = React.useState(false)
+  const [invitationEmail, setInvitationEmail] = React.useState("")
+  const [invitationMessage, setInvitationMessage] = React.useState("")
+  const [saveError, setSaveError] = React.useState("")
 
   // Initialize form data with rich pricing and webservices
   const [formData, setFormData] = React.useState<Partial<Cliente>>({
     code: initialData?.code || `CL${Math.floor(100 + Math.random() * 900)}`,
     short_name: initialData?.short_name || "",
+    portal_slug: initialData?.portal_slug || "",
     legal_name: initialData?.legal_name || "",
     color: initialData?.color || "#10b981",
     logo_url: initialData?.logo_url || "",
@@ -121,6 +128,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
         id: initialData.id,
         code: initialData.code || "",
         short_name: initialData.short_name || "",
+        portal_slug: initialData.portal_slug || "",
         legal_name: initialData.legal_name || "",
         color: initialData.color || "#10b981",
         logo_url: initialData.logo_url || "",
@@ -153,7 +161,6 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
         pricing: {
           ...DEFAULT_CLIENT_PRICING,
           ...initialData.pricing,
-          services_pricing: initialData.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING,
           special_services_fees: [
             ...(initialData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES),
             ...DEFAULT_CORREOS_SPECIAL_SERVICES_FEES.filter(
@@ -172,45 +179,6 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
       setFormData(prev => ({ ...prev, payment_terms: "Pronto Pagamento" }))
     }
   }, [formData.billing_type, formData.payment_terms])
-
-  // Handlers for Product Services Pricing
-  const handleProductPriceChange = (index: number, field: keyof ClientServicePrice, value: any) => {
-    setFormData((prev) => {
-      const currentPricing = prev.pricing || DEFAULT_CLIENT_PRICING
-      const currentList = currentPricing.services_pricing || DEFAULT_CTT_SERVICES_PRICING
-      const updated = [...currentList]
-      updated[index] = {
-        ...updated[index],
-        [field]: typeof value === "number" ? value : parseFloat(value) || 0,
-      }
-      return {
-        ...prev,
-        pricing: {
-          ...currentPricing,
-          services_pricing: updated,
-        },
-      }
-    })
-  }
-
-  const handleToggleProductService = (index: number) => {
-    setFormData((prev) => {
-      const currentPricing = prev.pricing || DEFAULT_CLIENT_PRICING
-      const currentList = currentPricing.services_pricing || DEFAULT_CTT_SERVICES_PRICING
-      const updated = [...currentList]
-      updated[index] = {
-        ...updated[index],
-        is_enabled: !updated[index].is_enabled,
-      }
-      return {
-        ...prev,
-        pricing: {
-          ...currentPricing,
-          services_pricing: updated,
-        },
-      }
-    })
-  }
 
   // Handlers for Special Services Fees
   const handleSpecialFeeChange = (index: number, field: keyof ClientSpecialServiceFee, value: any) => {
@@ -284,10 +252,13 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
   }
 
   const handleResetPricing = () => {
-    if (confirm("Deseja repor todos os preços de produtos CTT, serviços especiais e tabelas personalizadas para os valores padrão oficiais?")) {
+    if (confirm("Deseja repor os serviços especiais e os preços personalizados das tabelas Linke para os valores padrão oficiais?")) {
       setFormData((prev) => ({
         ...prev,
-        pricing: DEFAULT_CLIENT_PRICING,
+        pricing: {
+          ...DEFAULT_CLIENT_PRICING,
+          services_pricing: prev.pricing?.services_pricing ?? DEFAULT_CLIENT_PRICING.services_pricing,
+        },
         custom_tier_overrides: {},
       }))
     }
@@ -314,34 +285,50 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
+    if (isSaving) return
     if (!formData.short_name?.trim()) {
       alert("Por favor preencha a Designação Curta / Nome do Cliente.")
       setActiveTab("geral")
       return
     }
 
+    if (sendInvitation && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invitationEmail.trim())) {
+      setSaveError("Indique o email do cliente para enviar o convite.")
+      setActiveTab("geral")
+      return
+    }
+    setSaveError("")
+    setInvitationMessage("")
     setIsSaving(true)
+    let persisted = false
     try {
       const res = await saveClienteAction({
         ...formData,
-        id: initialData?.id,
+        id: initialData?.id || draftId,
       })
 
       if (res.success && res.data) {
+        persisted = true
         setSaveSuccessMsg(true)
         onSaved(res.data)
+        if (sendInvitation) {
+          const invitation = await inviteClientAccessAction(res.data.id, invitationEmail)
+          setInvitationMessage(invitation.message)
+          setSendInvitation(false)
+          return // Keep the delivery result visible; do not immediately close the dialog.
+        }
         setTimeout(() => {
           onClose()
         }, 300)
       }
-    } catch (err: any) {
-      alert("Erro ao gravar cliente: " + err.message)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Tente novamente."
+      setSaveError(`${persisted ? "Loja gravada, mas o convite não foi enviado: " : "Erro ao gravar cliente: "}${message}`)
     } finally {
       setIsSaving(false)
     }
   }
 
-  const servicesList = formData.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING
   const specialFeesList = formData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES
 
   return (
@@ -453,10 +440,35 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
 
         {/* ===================== FORM CONTENT ===================== */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[var(--canvas-bg)]">
+          {initialData && canManageAccess && onManageAccess && <div className="mb-5 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-emerald-900">Acesso à Área do Cliente</h2>
+              <p className="mt-1 text-xs leading-5 text-emerald-800">Envie um link para o cliente definir ou alterar a própria palavra-passe. A atual continua válida até ele guardar uma nova.</p>
+            </div>
+            <button type="button" disabled={isSaving} onClick={onManageAccess} className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">
+              <Mail className="h-4 w-4" />Enviar email de palavra-passe
+            </button>
+          </div>}
+          {saveError && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{saveError}</p>}
+          {invitationMessage && <p role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{invitationMessage}</p>}
           
           {/* TAB 1: IDENTIDADE & GERAL */}
           {activeTab === "geral" && (
             <div className="space-y-5 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
+              {!initialData && canManageAccess && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                <label className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
+                  <input type="checkbox" checked={sendInvitation} disabled={isSaving} onChange={e => {
+                    setSendInvitation(e.target.checked)
+                    if (!invitationEmail) setInvitationEmail(formData.email || "")
+                  }} />
+                  Enviar convite de acesso ao criar a loja
+                </label>
+                <p className="mt-2 text-xs leading-5 text-emerald-800">O cliente recebe um email e escolhe a própria palavra-passe. Usa este acesso apenas para esta loja.</p>
+                {sendInvitation && <div className="mt-3">
+                  <label htmlFor="invitation-email" className="mb-1 block text-xs font-semibold text-emerald-900">Email de acesso do cliente</label>
+                  <input id="invitation-email" type="email" required maxLength={254} disabled={isSaving} value={invitationEmail} onChange={e => setInvitationEmail(e.target.value)} placeholder="nome@loja.pt" className="w-full rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-900" />
+                </div>}
+              </div>}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Código Cliente *</label>
@@ -481,6 +493,23 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                     placeholder="Ex: CACTO ou DETAILER"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="client-portal-slug" className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Endereço da área do cliente</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[var(--text-tertiary)]">/app/</span>
+                  <input
+                    id="client-portal-slug"
+                    type="text"
+                    maxLength={70}
+                    value={formData.portal_slug || ""}
+                    onChange={(e) => setFormData({ ...formData, portal_slug: e.target.value })}
+                    placeholder={normalizeStoreSlug(formData.short_name || formData.legal_name || "loja")}
+                    className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)]"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">Pode escolher um nome como stef-store. Alterar este campo muda a ligação da loja; nomes iguais recebem um identificador para distinguir as lojas.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -983,7 +1012,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
             </div>
           )}
 
-          {/* TAB 5: PREÇÁRIO DE ENVIO (PRODUTOS & SERVIÇOS ESPECIAIS CTT) */}
+          {/* TAB 5: PREÇÁRIO DE ENVIO */}
           {activeTab === "precario" && (
             <div className="space-y-4">
               
@@ -1000,20 +1029,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                     }`}
                   >
                     <Package className="w-3.5 h-3.5" />
-                    <span>1. Atribuição de Tabelas Linke ({servicosLinke.length})</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPrecarioSubTab("produtos")}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-                      precarioSubTab === "produtos"
-                        ? "bg-[var(--surface-bg)] text-[var(--text-primary)] shadow-xs border border-[var(--border-subtle)]"
-                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                    }`}
-                  >
-                    <Truck className="w-3.5 h-3.5 text-[var(--accent)]" />
-                    <span>2. Tarifas por Escalão ({servicesList.length})</span>
+                    <span>1. Tabelas de envio ativas ({servicosLinke.length})</span>
                   </button>
 
                   <button
@@ -1026,7 +1042,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                     }`}
                   >
                     <Zap className="w-3.5 h-3.5 text-amber-500" />
-                    <span>3. Taxas Especiais ({specialFeesList.length})</span>
+                    <span>2. Taxas Especiais ({specialFeesList.length})</span>
                   </button>
 
                   <button
@@ -1039,7 +1055,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                     }`}
                   >
                     <Sliders className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
-                    <span>4. Combustível & Descontos</span>
+                    <span>3. Combustível & Descontos</span>
                   </button>
                 </div>
 
@@ -1055,7 +1071,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                 </div>
               </div>
 
-              {/* SUBTAB 0: TABELAS LINKE & SERVIÇOS AUTORIZADOS */}
+              {/* SUBTAB 1: TABELAS LINKE & SERVIÇOS AUTORIZADOS */}
               {precarioSubTab === "servicos_linke" && (
                 <div className="space-y-4">
                   {/* Caixa Select de Tabela Linke Principal */}
@@ -1320,7 +1336,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                                         Personalização dos Escalões de Peso: {servico.name}
                                       </span>
                                       <p className="text-[11px] text-[var(--text-secondary)]">
-                                        Altere diretamente o PVP Cliente (€) em cada escalão. Se deixar o valor padrão, a tarifa segue a tabela Linke.
+                                        Preços para {firstZone?.zone_name || firstZone?.zone_code}, antes de combustível e extras. As outras zonas usam a tabela Linke.
                                       </p>
                                     </div>
                                   </div>
@@ -1433,151 +1449,6 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
                         </div>
                       )}
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SUBTAB 1: PRODUTOS & SUB-PRODUTOS CTT */}
-              {precarioSubTab === "produtos" && (
-                <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)] overflow-hidden">
-                  <div className="px-5 py-3 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] flex items-center justify-between">
-                    <div>
-                      <h2 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <Truck className="w-4 h-4 text-[var(--accent)]" />
-                        Tabela de Preços por Produto & Sub-Produto de Transporte (Valores em € sem IVA)
-                      </h2>
-                      <p className="text-[11px] text-[var(--text-secondary)]">Defina a tarifa por escalão de peso para cada serviço contratado pelo cliente.</p>
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
-                      <thead>
-                        <tr className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] text-[var(--text-secondary)] font-bold text-[11px]">
-                          <th className="py-2.5 px-3 w-8 text-center">Ativo</th>
-                          <th className="py-2.5 px-3 min-w-[220px]">Produto / Serviço (SubProductId)</th>
-                          <th className="py-2.5 px-2 text-center w-20">Até 1kg</th>
-                          <th className="py-2.5 px-2 text-center w-20">1 - 2kg</th>
-                          <th className="py-2.5 px-2 text-center w-20">2 - 5kg</th>
-                          <th className="py-2.5 px-2 text-center w-20">5 - 10kg</th>
-                          <th className="py-2.5 px-2 text-center w-20">10 - 20kg</th>
-                          <th className="py-2.5 px-2 text-center w-20">20 - 30kg</th>
-                          <th className="py-2.5 px-2 text-center w-24">Kg Extra (€)</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--border-subtle)] font-mono">
-                        {servicesList.map((srv, idx) => (
-                          <tr 
-                            key={srv.service_code} 
-                            className={`transition-colors ${srv.is_enabled ? "hover:bg-[var(--surface-muted)]/60" : "bg-[var(--surface-muted)]/30 opacity-60"}`}
-                          >
-                            <td className="py-2 px-3 text-center">
-                              <input
-                                type="checkbox"
-                                checked={srv.is_enabled}
-                                onChange={() => handleToggleProductService(idx)}
-                                className="w-4 h-4 rounded border-[var(--border-strong)] accent-[var(--accent)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
-                              />
-                            </td>
-
-                            <td className="py-2.5 px-3 font-sans">
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-[var(--text-primary)]">{srv.service_name}</span>
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full font-sans ${
-                                    srv.category === "Nacional" ? "bg-blue-50 text-blue-700 border border-blue-200" :
-                                    srv.category === "Ilhas" ? "bg-amber-50 text-amber-700 border border-amber-200" :
-                                    srv.category === "Espanha" ? "bg-rose-50 text-rose-700 border border-rose-200" :
-                                    srv.category === "Postal" ? "bg-purple-50 text-purple-700 border border-purple-200" :
-                                    "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/30"
-                                  }`}>
-                                    {srv.category}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] text-[var(--text-tertiary)] font-normal line-clamp-1">{srv.description}</span>
-                              </div>
-                            </td>
-
-                            <td className="py-2 px-1.5">
-                              <input
-                                type="number"
-                                step="0.01"
-                                disabled={!srv.is_enabled}
-                                value={srv.w_0_1}
-                                onChange={(e) => handleProductPriceChange(idx, "w_0_1", e.target.value)}
-                                className="w-full text-center border border-[var(--border-subtle)] rounded px-1.5 py-1 text-xs font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
-                              />
-                            </td>
-
-                            <td className="py-2 px-1.5">
-                              <input
-                                type="number"
-                                step="0.01"
-                                disabled={!srv.is_enabled}
-                                value={srv.w_1_2}
-                                onChange={(e) => handleProductPriceChange(idx, "w_1_2", e.target.value)}
-                                className="w-full text-center border border-[var(--border-subtle)] rounded px-1.5 py-1 text-xs font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
-                              />
-                            </td>
-
-                            <td className="py-2 px-1.5">
-                              <input
-                                type="number"
-                                step="0.01"
-                                disabled={!srv.is_enabled}
-                                value={srv.w_2_5}
-                                onChange={(e) => handleProductPriceChange(idx, "w_2_5", e.target.value)}
-                                className="w-full text-center border border-[var(--border-subtle)] rounded px-1.5 py-1 text-xs font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
-                              />
-                            </td>
-
-                            <td className="py-2 px-1.5">
-                              <input
-                                type="number"
-                                step="0.01"
-                                disabled={!srv.is_enabled}
-                                value={srv.w_5_10}
-                                onChange={(e) => handleProductPriceChange(idx, "w_5_10", e.target.value)}
-                                className="w-full text-center border border-[var(--border-subtle)] rounded px-1.5 py-1 text-xs font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
-                              />
-                            </td>
-
-                            <td className="py-2 px-1.5">
-                              <input
-                                type="number"
-                                step="0.01"
-                                disabled={!srv.is_enabled}
-                                value={srv.w_10_20}
-                                onChange={(e) => handleProductPriceChange(idx, "w_10_20", e.target.value)}
-                                className="w-full text-center border border-[var(--border-subtle)] rounded px-1.5 py-1 text-xs font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
-                              />
-                            </td>
-
-                            <td className="py-2 px-1.5">
-                              <input
-                                type="number"
-                                step="0.01"
-                                disabled={!srv.is_enabled}
-                                value={srv.w_20_30}
-                                onChange={(e) => handleProductPriceChange(idx, "w_20_30", e.target.value)}
-                                className="w-full text-center border border-[var(--border-subtle)] rounded px-1.5 py-1 text-xs font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
-                              />
-                            </td>
-
-                            <td className="py-2 px-1.5">
-                              <input
-                                type="number"
-                                step="0.01"
-                                disabled={!srv.is_enabled}
-                                value={srv.kg_extra}
-                                onChange={(e) => handleProductPriceChange(idx, "kg_extra", e.target.value)}
-                                className="w-full text-center border border-[var(--border-subtle)] rounded px-1.5 py-1 text-xs font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
-                              />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   </div>
                 </div>
               )}
@@ -1781,7 +1652,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
               disabled={isSaving}
               className="px-4 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg transition-colors cursor-pointer"
             >
-              Cancelar
+              {saveSuccessMsg ? "Fechar" : "Cancelar"}
             </button>
 
             <button
@@ -1798,7 +1669,7 @@ export function ClienteModal({ initialData, servicosLinke = [], onClose, onSaved
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  <span>Gravar Cliente</span>
+                  <span>{sendInvitation ? "Gravar e enviar convite" : "Gravar Cliente"}</span>
                 </>
               )}
             </button>

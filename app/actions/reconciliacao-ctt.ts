@@ -4,8 +4,7 @@ import fs from "fs"
 import path from "path"
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
-import { requireUser, getTenantId } from "@/lib/auth/context"
-import { getClientesAction } from "./clientes"
+import { requirePermission } from "@/lib/auth/context"
 import * as XLSX from "xlsx"
 import type { 
   ReconcileItem, 
@@ -20,6 +19,47 @@ import {
 } from "@/app/ops/tesouraria/reconciliacao/parser"
 
 const TOLERANCE = 0.005
+const FINANCE_PERMISSION = "Faturação & Contas Correntes"
+
+async function requireReconciliationAccess() {
+  const ctx = await requirePermission(FINANCE_PERMISSION)
+  if (!ctx.tenant_id) throw new Error("Acesso negado. Tenant não identificado.")
+  return ctx
+}
+
+/** Read only the clients referenced by the tenant's selected shipments. */
+async function loadClientNames(
+  supabase: ReturnType<typeof createAdminClient>,
+  tenantId: string,
+  clientIds: string[]
+) {
+  const names = new Map<string, string>()
+  const uniqueIds = [...new Set(clientIds)]
+  // Bound .in() filters so a large reconciliation cannot produce oversized URLs.
+  for (let offset = 0; offset < uniqueIds.length; offset += 200) {
+    const ids = uniqueIds.slice(offset, offset + 200)
+    const [clients, logs] = await Promise.all([
+      supabase.from("clients").select("id, name").eq("tenant_id", tenantId).in("id", ids),
+      supabase.from("audit_log").select("details").eq("tenant_id", tenantId)
+        .eq("action", "client_data").in("details->>id", ids)
+        .order("created_at", { ascending: false }),
+    ])
+    if (clients.error || logs.error) throw new Error("Client-name lookup failed")
+    for (const client of clients.data || []) {
+      if (client.name) names.set(client.id, client.name)
+    }
+    const seen = new Set<string>()
+    for (const log of logs.data || []) {
+      const details = log.details
+      if (details?.id && !seen.has(details.id)) {
+        const name = details.short_name || details.legal_name
+        if (name) names.set(details.id, name)
+        seen.add(details.id)
+      }
+    }
+  }
+  return names
+}
 
 function isPickupCollectionId(parcelId: string): boolean {
   const id = normalizeParcelId(parcelId)
@@ -41,10 +81,10 @@ async function executeReconciliationCore(
   dateFrom?: string,
   dateTo?: string
 ): Promise<{ success: boolean; result?: ReconcileRunResult; error?: string }> {
+  const ctx = await requireReconciliationAccess()
   try {
-    await requireUser()
     const supabase = createAdminClient()
-    const tenantId = await getTenantId()
+    const tenantId = ctx.tenant_id
 
     if (!cttItems.length) {
       return { success: false, error: "Nenhum registo de objetos válido para reconciliar." }
@@ -56,6 +96,7 @@ async function executeReconciliationCore(
       .select(
         "id, tracking_number, carrier_tracking_number, buy_price, sell_price, client_id, sender_name, recipient_name, service_type, created_at, status"
       )
+      .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
       .limit(25000)
 
@@ -68,13 +109,13 @@ async function executeReconciliationCore(
 
     const { data: dbShipments, error: shipErr } = await shipmentsQuery
     if (shipErr) {
-      return { success: false, error: `Erro ao consultar envios do TMS: ${shipErr.message}` }
+      return { success: false, error: "Erro ao consultar envios do TMS. Tente novamente." }
     }
 
     // 2. Mapeamento de clientes
-    const clients = await getClientesAction()
-    const clientMap = new Map<string, any>()
-    clients.forEach((c) => clientMap.set(c.id, c))
+    const clientIds = (dbShipments || []).map((s: { client_id: string | null }) => s.client_id)
+      .filter((id: string | null): id is string => Boolean(id))
+    const clientNames = await loadClientNames(supabase, tenantId, clientIds)
 
     // 3. Indexar envios internos por carrier_tracking_number e tracking_number
     const shipmentMap = new Map<string, any>()
@@ -123,8 +164,7 @@ async function executeReconciliationCore(
       }
 
       const diff = +(cttPrice - lnkPrice).toFixed(4)
-      const client = shipment?.client_id ? clientMap.get(shipment.client_id) : null
-      const clientName = client?.short_name || client?.legal_name || shipment?.sender_name || "—"
+      const clientName = (shipment?.client_id ? clientNames.get(shipment.client_id) : null) || shipment?.sender_name || "—"
 
       items.push({
         id: cttId,
@@ -184,33 +224,30 @@ async function executeReconciliationCore(
     }
 
     // 6. Gravar histórico no audit_log
-    try {
-      const effectiveTenantId = tenantId || "11111111-1111-1111-1111-111111111111"
-      await supabase.from("audit_log").insert({
-        tenant_id: effectiveTenantId,
-        action: "ctt_reconciliation_audit",
-        details: {
-          entity: "tesouraria",
-          runId,
-          filename,
-          comparisonMode,
-          stats,
-          totalItems,
-          topMismatchesCount: mismatchItems.length,
-          underchargedCount: underchargedItems.length,
-          unknownCount: unknownItems.length
-        }
-      })
-    } catch (logErr: any) {
-      console.warn("Could not save audit to audit_log:", logErr?.message)
-    }
+    const { error: auditError } = await supabase.from("audit_log").insert({
+      tenant_id: tenantId,
+      action: "ctt_reconciliation_audit",
+      details: {
+        entity: "tesouraria",
+        actor_user_id: ctx.user.id,
+        runId,
+        filename,
+        comparisonMode,
+        stats,
+        totalItems,
+        topMismatchesCount: mismatchItems.length,
+        underchargedCount: underchargedItems.length,
+        unknownCount: unknownItems.length
+      }
+    })
+    if (auditError) return { success: false, error: "Não foi possível guardar o histórico da reconciliação. Tente novamente." }
 
     revalidatePath("/ops/tesouraria/reconciliacao")
 
     return { success: true, result }
-  } catch (err: any) {
-    console.error("[executeReconciliationCore] Erro fatal:", err)
-    return { success: false, error: err.message || "Erro inesperado ao processar reconciliação." }
+  } catch {
+    console.error("[executeReconciliationCore] Falha ao processar reconciliação")
+    return { success: false, error: "Não foi possível processar a reconciliação. Tente novamente." }
   }
 }
 
@@ -224,6 +261,7 @@ export async function reconcileCttParsedItemsAction(payload: {
   dateFrom?: string
   dateTo?: string
 }): Promise<{ success: boolean; result?: ReconcileRunResult; error?: string }> {
+  await requireReconciliationAccess()
   return executeReconciliationCore(
     payload.items,
     payload.filename,
@@ -241,6 +279,7 @@ export async function reconcileCttSampleAction(payload?: {
   dateFrom?: string
   dateTo?: string
 }): Promise<{ success: boolean; result?: ReconcileRunResult; error?: string }> {
+  await requireReconciliationAccess()
   try {
     const samplePath = path.join(process.cwd(), "public", "Discriminativo 6.xls")
     if (!fs.existsSync(samplePath)) {
@@ -270,6 +309,7 @@ export async function reconcileCttSampleAction(payload?: {
 export async function reconcileCttInvoiceAction(
   formData: FormData
 ): Promise<{ success: boolean; result?: ReconcileRunResult; error?: string }> {
+  await requireReconciliationAccess()
   try {
     const comparisonMode = (formData.get("comparison_mode") as "buy_price" | "sell_price") || "buy_price"
     const dateFrom = (formData.get("date_from") as string) || undefined
@@ -314,13 +354,14 @@ export async function reconcileCttInvoiceAction(
  * Obtém o histórico de auditorias anteriores guardadas.
  */
 export async function getReconciliacaoHistoryAction(): Promise<AuditHistoryEntry[]> {
+  const ctx = await requireReconciliationAccess()
   try {
-    await requireUser()
     const supabase = createAdminClient()
 
     const { data, error } = await supabase
       .from("audit_log")
       .select("id, created_at, details")
+      .eq("tenant_id", ctx.tenant_id)
       .eq("action", "ctt_reconciliation_audit")
       .order("created_at", { ascending: false })
       .limit(20)

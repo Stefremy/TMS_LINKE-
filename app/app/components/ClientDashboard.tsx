@@ -41,7 +41,7 @@ import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 import { useClientScope } from "./ClientScope"
 
 export function ClientDashboard() {
-  const { client: currentClient } = useClientScope()
+  const { client: currentClient, basePath } = useClientScope()
   const [loadingStats, setLoadingStats] = React.useState(true)
   const [statsError, setStatsError] = React.useState(false)
   const [stats, setStats] = React.useState<{
@@ -135,7 +135,6 @@ export function ClientDashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const querySuffix = ""
 
   // Filtered shipments
   const filteredShipments = React.useMemo(() => {
@@ -349,7 +348,7 @@ export function ClientDashboard() {
             </button>
           ) : (
             <Link
-              href={`/app/criar-guia${querySuffix}`}
+              href={`${basePath}/criar-guia`}
               className="px-5 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-2 transition-colors cursor-pointer"
             >
               <PlusCircle className="w-4 h-4 text-white" />
@@ -605,7 +604,7 @@ export function ClientDashboard() {
                 : "Ainda não existem envios emitidos para esta conta de cliente."}
             </p>
             <Link
-              href={`/app/criar-guia${querySuffix}`}
+              href={`${basePath}/criar-guia`}
               className="mt-4 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold transition-all shadow-xs"
             >
               Criar Novo Envio

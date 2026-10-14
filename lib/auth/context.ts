@@ -6,7 +6,7 @@ import { redirect } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase/server"
 import { DEFAULT_COLABORADORES } from "@/app/ops/entidades/colaboradores/types"
 
-const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
+export const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 export type AuthContext = {
   user: any

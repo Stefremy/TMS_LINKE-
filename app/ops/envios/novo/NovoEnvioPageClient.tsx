@@ -8,7 +8,9 @@ import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { Button } from "@/components/ui/button"
-import { resolveInternationalZone, OFFICIAL_LINKE_ZONES } from "@/lib/services/geo/international-zones"
+import { OFFICIAL_LINKE_ZONES } from "@/lib/services/geo/international-zones"
+import { resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
+import { calculateShipmentQuote, getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
 import { downloadCttLabel, printCttLabel } from "@/lib/label-utils"
 
 export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: Cliente[], servicosLinke?: ServicoLinke[] }) {
@@ -127,11 +129,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
     }
   })
 
-  const resolvedDestinationZone = React.useMemo(() => {
-    if (recipientCountry === "PT") return "PT-CONT"
-    if (recipientCountry === "ES") return "ES-PENIN"
-    return resolveInternationalZone(recipientCountry) || "INTL"
-  }, [recipientCountry])
+  const resolvedDestinationZone = React.useMemo(() => resolveZoneCode(recipientCountry, recipientZip),
+    [recipientCountry, recipientZip])
 
   const availableServicos = React.useMemo(() => {
     let active = servicosLinke.filter((s) => s.is_active !== false)
@@ -160,55 +159,36 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   }, [servicosLinke, currentClient, resolvedDestinationZone])
 
   const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
-  const isCorreos = activeLinkeService?.name?.toLowerCase().includes("correos") || (activeLinkeService as any)?.carrier_code === "correos"
+  const isCorreos = (activeLinkeService?.preferred_carrier_name || activeLinkeService?.name || "").toLowerCase().includes("correos")
   const carrierDisplayName = activeLinkeService ? (isCorreos ? "Correos Express" : "CTT Expresso") : "Transportadora"
 
   const specialServicesAvailable = React.useMemo(() => {
-    if (!currentClient?.pricing?.special_services_fees) return []
-    const isCorreos = activeLinkeService?.name?.toLowerCase().includes("correos")
-    return currentClient.pricing.special_services_fees.filter((f) => {
-      if (!f.is_enabled) return false
-      if (isCorreos) return f.special_service_code.startsWith("correos_")
-      return !f.special_service_code.startsWith("correos_")
-    })
-  }, [currentClient, activeLinkeService])
+    if (!currentClient) return []
+    return getClientSpecialFees(currentClient).filter(f => f.is_enabled &&
+      f.special_service_code.startsWith("correos_") === isCorreos)
+  }, [currentClient, isCorreos])
 
-  // Client-side weight-based estimate (display only; server recalculates using assigned table)
-  const estimatedTier = (() => {
-    const targetZone = activeLinkeService?.zones?.find(
-      (z) => z.zone_code === resolvedDestinationZone || 
-             (resolvedDestinationZone && z.zone_name.toLowerCase().includes(resolvedDestinationZone.toLowerCase())) ||
-             (resolvedDestinationZone === "PT-CONT" && z.zone_code === "PT-CONT")
-    ) || activeLinkeService?.zones?.[0]
+  const activeSpecialServices = React.useMemo(() => selectedSpecialServices.filter(code =>
+    specialServicesAvailable.some(f => f.special_service_code === code)), [selectedSpecialServices, specialServicesAvailable])
 
-    if (targetZone?.tiers?.length) {
-      const origTiers = targetZone.tiers || []
-      const tiers = origTiers.filter(t => t.enabled !== false).sort((a, b) => a.weight_max - b.weight_max)
-      const tierIndex = tiers.findIndex(t => weightKg <= t.weight_max)
-      const matchedTier = tierIndex !== -1 ? tiers[tierIndex] : tiers[tiers.length - 1]
-      if (matchedTier) {
-        const origIndex = origTiers.indexOf(matchedTier)
-        const customPrice = currentClient?.custom_tier_overrides?.[activeLinkeService.id]?.[origIndex]
-        const effectiveSell = customPrice !== undefined ? customPrice : matchedTier.sell_price
-        return {
-          label: matchedTier.label || `Até ${matchedTier.weight_max} Kg`,
-          sell: effectiveSell,
-          buy: matchedTier.cost_price,
-          zoneName: targetZone.zone_name,
-        }
-      }
+  const estimatedTier = React.useMemo(() => {
+    try {
+      if (!currentClient || !activeLinkeService) throw new Error("Selecione um cliente e um serviço disponível.")
+      const quote = calculateShipmentQuote(weightKg, currentClient, activeLinkeService,
+        recipientCountry, recipientZip, activeSpecialServices, codValue)
+      return { label: quote.tierLabel, sell: quote.totalPrice, buy: quote.buyPrice, error: null }
+    } catch (error) {
+      return { label: "Preço indisponível", sell: 0, buy: 0,
+        error: error instanceof Error ? error.message : "Não foi possível calcular a tarifa." }
     }
-    if (weightKg <= 1)  return { label: "Até 1 Kg",  sell: 3.56, buy: 2.85 }
-    if (weightKg <= 2)  return { label: "Até 2 Kg",  sell: 3.94, buy: 3.15 }
-    if (weightKg <= 5)  return { label: "Até 5 Kg",  sell: 4.58, buy: 3.75 }
-    if (weightKg <= 10) return { label: "Até 10 Kg", sell: 5.61, buy: 4.60 }
-    if (weightKg <= 20) return { label: "Até 20 Kg", sell: 7.44, buy: 6.20 }
-    if (weightKg <= 30) return { label: "Até 30 Kg", sell: 9.48, buy: 7.90 }
-    return { label: "+30 Kg", sell: +(9.48 + (weightKg - 30) * 0.35).toFixed(2), buy: +(7.90 + (weightKg - 30) * 0.28).toFixed(2) }
-  })()
+  }, [weightKg, currentClient, activeLinkeService, recipientCountry, recipientZip, activeSpecialServices, codValue])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (estimatedTier.error) {
+      setErrorMsg(estimatedTier.error)
+      return
+    }
     setLoading(true)
     setErrorMsg("")
     
@@ -237,8 +217,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         subProductId: activeLinkeService?.webservice_service_code,
         webserviceConnectionId: activeLinkeService?.webservice_connection_id,
         calculatedPrice: estimatedTier.sell,
-        selectedSpecialServices: selectedSpecialServices,
-        codValue: selectedSpecialServices.includes("cod") ? codValue : undefined
+        selectedSpecialServices: activeSpecialServices,
+        codValue: activeSpecialServices.some(code => code === "cod" || code === "correos_cod") ? codValue : undefined
       })
       
       if (!res.success) {
@@ -256,7 +236,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         carrierName: carrierDisplayName,
         weightKg: Number(formData.get("weight_kg")) || 1,
         volumes: Number(formData.get("volumes")) || 1,
-        sellPrice: estimatedTier.sell,
+        sellPrice: res.sellPrice,
         atCode: `AT.2026.${Math.floor(1000000 + Math.random() * 9000000)}`
       }
 
@@ -445,16 +425,19 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 </div>
               )}
 
+              {estimatedTier.error && (
+                <p className="text-xs text-amber-700" role="status">{estimatedTier.error}</p>
+              )}
               {/* Price Preview Banner */}
               <div className="bg-[var(--accent-soft)] border border-[rgba(18,138,71,0.2)] rounded-lg p-3 flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-2 text-[var(--accent)]">
                   <Euro className="w-4 h-4" />
                   <span className="text-[11px] font-bold uppercase tracking-wide">Preço estimado</span>
-                  <span className="text-[11px] font-medium opacity-80">({estimatedTier.label} · tabela padrão)</span>
+                  <span className="text-[11px] font-medium opacity-80">({estimatedTier.label} · inclui combustível e extras)</span>
                 </div>
                 <div className="flex items-center gap-4 text-xs font-mono">
                   <span className="text-[var(--text-secondary)] font-medium">Custo: <span className="font-bold text-[var(--text-primary)]">{estimatedTier.buy.toFixed(2)}€</span></span>
-                  <span className="text-[var(--accent)] font-extrabold text-sm">{estimatedTier.sell.toFixed(2)}€</span>
+                  <span className="text-[var(--accent)] font-extrabold text-sm">{estimatedTier.error ? "Indisponível" : `${estimatedTier.sell.toFixed(2)}€`}</span>
                 </div>
               </div>
 

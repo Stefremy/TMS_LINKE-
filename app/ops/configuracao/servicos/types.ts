@@ -7,6 +7,7 @@ export interface PriceTierLinke {
   sell_price: number // Preço imposto pela Linke ao cliente (€)
   delivery_time: string
   enabled: boolean
+  additional_weight_step?: number // Billing increment in kg for the additional-kg tier; defaults to 1.
 }
 
 export interface ZonePriceMatrix {

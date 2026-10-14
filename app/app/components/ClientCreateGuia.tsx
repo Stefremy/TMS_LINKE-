@@ -27,14 +27,11 @@ import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { resolveZoneCode, isZoneAllowedByService } from "@/lib/pricing/calculate-shipment-price"
+import { calculateShipmentQuote, getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { 
-  DEFAULT_CLIENT_PRICING, 
   SYSTEM_AVAILABLE_WEBSERVICES, 
-  DEFAULT_CTT_SERVICES_PRICING, 
-  DEFAULT_CTT_SPECIAL_SERVICES_FEES,
-  ClientServicePrice,
   ClientSpecialServiceFee
 } from "@/app/ops/entidades/clientes/types"
 import { getCarrierLogo } from "@/lib/carrier-logos"
@@ -42,7 +39,7 @@ import { useClientScope } from "./ClientScope"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
 
 export function ClientCreateGuia() {
-  const { client: currentClient } = useClientScope()
+  const { client: currentClient, basePath } = useClientScope()
   const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>([])
   const [loadingClient, setLoadingClient] = React.useState(true)
 
@@ -174,102 +171,35 @@ export function ClientCreateGuia() {
 
   // Available special services fees
   const specialFeesList: ClientSpecialServiceFee[] = React.useMemo(() => {
-    return currentClient?.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES
+    return getClientSpecialFees(currentClient)
   }, [currentClient])
+
+  const isCorreosService = (activeLinkeService?.preferred_carrier_name || activeLinkeService?.name || "").toLowerCase().includes("correos")
+  const activeSpecialServices = React.useMemo(() => selectedSpecialServices.filter(code =>
+    specialFeesList.some(f => f.is_enabled && f.special_service_code === code &&
+      code.startsWith("correos_") === isCorreosService)), [selectedSpecialServices, specialFeesList, isCorreosService])
 
   // Compute live simulated price using exact Linke Table tiers & client special services
   const calculatedPrice = React.useMemo(() => {
-    const pricing = currentClient?.pricing || DEFAULT_CLIENT_PRICING
-    const srv = activeLinkeService
-    const w = parseFloat(weight) || 1.0
     const destinationZone = resolveZoneCode(recipientCountry, recipientPostal)
-    const isAllowed = isZoneAllowedByService(srv?.allowed_zones, destinationZone)
-
-    let base = 5.50
-    if (srv && srv.zones && srv.zones.length > 0) {
-      const zone = srv.zones.find((z) => z.zone_code === destinationZone) || srv.zones[0]
-      const origTiers = zone?.tiers || []
-      const tiers = origTiers.filter((t) => t.enabled !== false).sort((a, b) => a.weight_max - b.weight_max)
-      const matchedTierIndex = tiers.findIndex((t) => w <= t.weight_max)
-      const matchedTier = matchedTierIndex !== -1 ? tiers[matchedTierIndex] : tiers[tiers.length - 1]
-      if (matchedTier) {
-        const origIndex = origTiers.indexOf(matchedTier)
-        const customOverride = currentClient?.custom_tier_overrides?.[srv.id]?.[origIndex]
-        const effectiveSellPrice = customOverride !== undefined ? customOverride : matchedTier.sell_price
-
-        if (w > 30 && matchedTier.weight_max >= 999) {
-          const tier30 = tiers.find((t) => t.weight_max === 30)
-          const origIndex30 = tier30 ? origTiers.indexOf(tier30) : -1
-          const custom30 = origIndex30 !== -1 ? currentClient?.custom_tier_overrides?.[srv.id]?.[origIndex30] : undefined
-          const base30 = custom30 !== undefined ? custom30 : (tier30 ? tier30.sell_price : effectiveSellPrice)
-          const extraKg = Math.ceil(w - 30)
-          base = base30 + extraKg * effectiveSellPrice
-        } else {
-          base = effectiveSellPrice
-        }
+    try {
+      if (!activeLinkeService) throw new Error("Selecione um serviço disponível.")
+      const quote = calculateShipmentQuote(Number(weight), currentClient, activeLinkeService,
+        recipientCountry, recipientPostal, activeSpecialServices, Number(codAmount))
+      return {
+        base: quote.basePrice.toFixed(2), fuel: quote.fuelSurchargeAmount.toFixed(2),
+        fuelPct: activeLinkeService.fuel_surcharge_pct ?? currentClient.pricing?.fuel_surcharge_pct ?? 12.5,
+        specialTotal: quote.specialFeesAmount.toFixed(2), specialItems: quote.specialItems,
+        total: quote.totalPrice.toFixed(2), destinationZone, isBlocked: false, blockedReason: null,
+      }
+    } catch (error) {
+      return {
+        base: "0.00", fuel: "0.00", fuelPct: 0, specialTotal: "0.00", specialItems: [], total: "0.00",
+        destinationZone, isBlocked: true,
+        blockedReason: error instanceof Error ? error.message : "Não foi possível calcular a tarifa.",
       }
     }
-
-    // Fuel Surcharge %
-    const fuelPct = srv?.fuel_surcharge_pct ?? pricing.fuel_surcharge_pct ?? 12.5
-    const fuelVal = base * (fuelPct / 100)
-
-    // Special Services calculations
-    let specialTotal = 0
-    const activeSpecialItems: { name: string; amount: number }[] = []
-
-    selectedSpecialServices.forEach(serviceCode => {
-      const feeCfg = specialFeesList.find(f => f.special_service_code === serviceCode)
-      if (feeCfg) {
-        let fee = 0
-        if (feeCfg.fee_type === "percentage") {
-          const pct = feeCfg.percentage_value ?? 0
-          const minVal = feeCfg.min_value ?? 0
-          
-          if (serviceCode === "cod") {
-            const codVal = parseFloat(codAmount) || 0
-            fee = Math.max(codVal * (pct / 100), minVal)
-          } else {
-            fee = minVal
-          }
-        } else {
-          fee = feeCfg.fixed_value ?? 0
-        }
-        
-        specialTotal += fee
-        activeSpecialItems.push({ name: feeCfg.special_service_name, amount: fee })
-      }
-    })
-
-    // Subtotal and Discount
-    const subtotal = base + fuelVal + specialTotal
-    const discPct = pricing.discount_pct || 0
-    const discountVal = subtotal * (discPct / 100)
-    const finalTotal = Math.max(subtotal - discountVal, 0)
-
-    return {
-      base: base.toFixed(2),
-      fuel: fuelVal.toFixed(2),
-      fuelPct,
-      specialTotal: specialTotal.toFixed(2),
-      specialItems: activeSpecialItems,
-      discount: discountVal.toFixed(2),
-      discountPct: discPct,
-      total: isAllowed ? finalTotal.toFixed(2) : "0.00",
-      destinationZone,
-      isBlocked: !isAllowed,
-      blockedReason: !isAllowed ? `O serviço '${srv?.name || "selecionado"}' não permite envios para ${destinationZone} (${recipientCountry}). Por favor selecione um serviço alternativo.` : null,
-    }
-  }, [
-    currentClient,
-    activeLinkeService,
-    weight,
-    recipientCountry,
-    recipientPostal,
-    specialFeesList,
-    selectedSpecialServices,
-    codAmount,
-  ])
+  }, [currentClient, activeLinkeService, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount])
 
   const handleCreateShipment = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -316,10 +246,13 @@ export function ClientCreateGuia() {
         webserviceConnectionId: activeLinkeService?.webservice_connection_id,
         calculatedPrice: numericVal,
         codValue: parseFloat(codAmount) || 0,
-        selectedSpecialServices,
+        selectedSpecialServices: activeSpecialServices,
         observations,
       })
 
+      if (!res.success) throw new Error(res.error || "Não foi possível criar o envio.")
+      const confirmedPrice = res.sellPrice
+      if (typeof confirmedPrice !== "number") throw new Error("Não foi possível obter o preço final do envio.")
       const newCode = res.guia || ""
 
       const newShipment = {
@@ -329,8 +262,8 @@ export function ClientCreateGuia() {
         servico: chosenService,
         estado: "pendente",
         data: new Date().toLocaleDateString("pt-PT"),
-        valor: `${calculatedPrice.total}€`,
-        numericValue: numericVal,
+        valor: `${confirmedPrice.toFixed(2)}€`,
+        numericValue: confirmedPrice,
       }
 
       setSessionShipments((prev) => [newShipment, ...prev])
@@ -401,7 +334,6 @@ export function ClientCreateGuia() {
     }
   }
 
-  const querySuffix = ""
 
   const defaultSenderName = currentClient?.legal_name || currentClient?.short_name || "Empresa Cliente"
   const defaultSenderAddressStr = currentClient?.address 
@@ -415,7 +347,7 @@ export function ClientCreateGuia() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <Link href={`/app${querySuffix}`} className="hover:text-emerald-700">Painel Principal</Link>
+            <Link href={basePath} className="hover:text-emerald-700">Painel Principal</Link>
             <span>&gt;</span>
             <span className="text-emerald-600 font-bold">Novo Envio</span>
           </div>
@@ -475,13 +407,13 @@ export function ClientCreateGuia() {
 
           <div className="flex items-center gap-2.5">
             <Link
-              href={`/app${querySuffix}`}
+              href={basePath}
               className="bg-[var(--text-primary)] hover:opacity-90 text-white px-3.5 py-2 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors"
             >
               <span>Ver no Painel</span>
             </Link>
             <Link
-              href={`/app/envios${querySuffix}`}
+              href={`${basePath}/envios`}
               className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-md text-xs font-semibold transition-colors"
             >
               <span>Ver no Histórico</span>
@@ -962,7 +894,7 @@ export function ClientCreateGuia() {
               <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs">
                 <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
                 <div className="flex-1">
-                  <div className="font-bold">Destino não coberto por este serviço</div>
+                  <div className="font-bold">Preço indisponível para este envio</div>
                   <div className="text-[11px] text-amber-800 mt-0.5">{calculatedPrice.blockedReason}</div>
                 </div>
               </div>
@@ -978,7 +910,7 @@ export function ClientCreateGuia() {
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <label className="block text-xs font-bold text-slate-900 flex items-center gap-2">
                 <Zap className="w-4 h-4 text-amber-500" />
-                <span>Serviços Especiais & Suplementares {activeLinkeService?.name?.toLowerCase().includes("correos") ? "Correos Express" : "CTT"} (SpecialServices)</span>
+                <span>Serviços Especiais & Suplementares {isCorreosService ? "Correos Express" : "CTT"} (SpecialServices)</span>
               </label>
               <span className="text-[11px] text-slate-400">Opcionais por envio</span>
             </div>
@@ -986,7 +918,7 @@ export function ClientCreateGuia() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
               {specialFeesList
                 .filter(f => f.is_enabled)
-                .filter(f => activeLinkeService?.name?.toLowerCase().includes("correos") ? f.special_service_code.startsWith("correos_") : !f.special_service_code.startsWith("correos_"))
+                .filter(f => (activeLinkeService?.preferred_carrier_name || activeLinkeService?.name || "").toLowerCase().includes("correos") ? f.special_service_code.startsWith("correos_") : !f.special_service_code.startsWith("correos_"))
                 .map(fee => {
                 const isSelected = selectedSpecialServices.includes(fee.special_service_code)
                 return (
@@ -1047,7 +979,7 @@ export function ClientCreateGuia() {
                   <span className="text-[11px] text-slate-500">
                     (Base: <strong>{calculatedPrice.base}€</strong> + Comb. {calculatedPrice.fuelPct}%: <strong>{calculatedPrice.fuel}€</strong>
                     {parseFloat(calculatedPrice.specialTotal) > 0 ? ` + Supl.: ${calculatedPrice.specialTotal}€` : ""}
-                    {calculatedPrice.discountPct > 0 ? ` - Desc: ${calculatedPrice.discountPct}%` : ""})
+)
                   </span>
                 </div>
               </div>

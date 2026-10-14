@@ -3,6 +3,7 @@
 import * as React from "react"
 import { X, Key } from "lucide-react"
 import { setClientPasswordAction } from "@/app/actions/auth"
+import { inviteClientAccessAction } from "@/app/actions/client-invitations"
 
 interface ClientAuthModalProps {
   clientId: string
@@ -14,6 +15,7 @@ interface ClientAuthModalProps {
 export function ClientAuthModal({ clientId, clientName, clientEmail, onClose }: ClientAuthModalProps) {
   const [email, setEmail] = React.useState(clientEmail || "")
   const [password, setPassword] = React.useState("")
+  const [manualPassword, setManualPassword] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState("")
   const [success, setSuccess] = React.useState("")
@@ -25,21 +27,20 @@ export function ClientAuthModal({ clientId, clientName, clientEmail, onClose }: 
     setSuccess("")
 
     try {
-      const res = await setClientPasswordAction(clientId, email, password)
+      const res = manualPassword
+        ? await setClientPasswordAction(clientId, email, password)
+        : await inviteClientAccessAction(clientId, email)
       setSuccess(res.message)
-      setTimeout(() => {
-        onClose()
-      }, 2000)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível configurar o acesso.")
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div role="dialog" aria-modal="true" aria-labelledby="client-access-title" className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[94vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
@@ -48,12 +49,14 @@ export function ClientAuthModal({ clientId, clientName, clientEmail, onClose }: 
               <Key className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-800">Acesso Portal</h2>
+              <h2 id="client-access-title" className="text-lg font-bold text-slate-800">Acesso à Área do Cliente</h2>
               <p className="text-xs text-slate-500">{clientName}</p>
             </div>
           </div>
           <button 
             onClick={onClose}
+            disabled={isLoading}
+            aria-label="Fechar"
             className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
@@ -62,48 +65,61 @@ export function ClientAuthModal({ clientId, clientName, clientEmail, onClose }: 
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="p-6">
+          <p className="mb-5 text-sm leading-6 text-slate-600">Confirme o email de acesso e envie um link para o cliente definir ou alterar a própria palavra-passe. A atual só muda quando ele guardar uma nova.</p>
           <div className="space-y-4">
             
             {error && (
-              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg">
+              <div role="alert" className="p-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg">
                 {error}
               </div>
             )}
 
             {success && (
-              <div className="p-3 text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg">
+              <div role="status" className="p-3 text-sm text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg">
                 {success}
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">
+              <label htmlFor="client-access-email" className="block text-sm font-semibold text-slate-700 mb-1">
                 Email de Login
               </label>
               <input
                 type="email"
+                id="client-access-email"
+                autoFocus
+                maxLength={254}
+                disabled={isLoading || !!success}
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                 placeholder="email@empresa.pt"
               />
-              <p className="text-[11px] text-slate-500 mt-1">Este email será usado para entrar no portal de cliente.</p>
+              <p className="text-[11px] text-slate-500 mt-1">Para alterar a palavra-passe, indique o mesmo email que o cliente usa para entrar na loja.</p>
             </div>
 
-            <div>
+            <label className="flex items-center gap-2 text-xs text-slate-500">
+              <input type="checkbox" checked={manualPassword} disabled={isLoading || !!success} onChange={e => setManualPassword(e.target.checked)} />
+              Definir palavra-passe manualmente
+            </label>
+
+            {manualPassword && <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
                 Password
               </label>
               <input
                 type="password"
+                autoComplete="new-password"
+                minLength={12}
+                maxLength={128}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                 placeholder="Deixar em branco para manter a atual..."
               />
-              <p className="text-[11px] text-slate-500 mt-1">Preencha apenas se quiser definir/alterar a password do cliente.</p>
-            </div>
+              <p className="text-[11px] text-slate-500 mt-1">Use pelo menos 12 caracteres. Deixe em branco para manter a atual.</p>
+            </div>}
 
           </div>
 
@@ -111,16 +127,17 @@ export function ClientAuthModal({ clientId, clientName, clientEmail, onClose }: 
             <button
               type="button"
               onClick={onClose}
+              disabled={isLoading}
               className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors"
             >
-              Cancelar
+              {success ? "Fechar" : "Cancelar"}
             </button>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !!success}
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              {isLoading ? "A Guardar..." : "Guardar Acesso"}
+              {isLoading ? (manualPassword ? "A guardar…" : "A enviar…") : manualPassword ? "Guardar acesso" : "Enviar email de palavra-passe"}
             </button>
           </div>
         </form>
