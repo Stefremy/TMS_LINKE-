@@ -103,6 +103,19 @@ test('anonymous visitors cannot list company clients or save a client', async ()
   assert.equal(h.db.writes.length, 0)
 })
 
+test('a new store persists no table assignments until the team explicitly chooses them', async () => {
+  const h = harness()
+  const saved = await h.actions.saveClienteAction({
+    id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', short_name: 'Unconfigured store',
+  })
+  assert.equal(saved.success, true)
+  assert.deepEqual(saved.data.assigned_linke_service_ids, [])
+  assert.equal(saved.data.default_linke_table_id, '')
+  const profile = h.db.writes.find(w => w.table === 'audit_log' && w.kind === 'insert').value.details
+  assert.deepEqual(profile.assigned_linke_service_ids, [])
+  assert.equal(profile.default_linke_table_id, '')
+})
+
 test('every colleague sees older clients beyond the former row limits and all database pages', async () => {
   const h = harness()
   for (let i = 0; i < 1050; i++) {

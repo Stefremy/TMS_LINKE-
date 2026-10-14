@@ -31,6 +31,7 @@ import {
   Tag
 } from "lucide-react"
 import { PortugalFlag, SpainFlag, EuFlag, DestinationBadge } from "./DestinationIcons"
+import { CttServiceBadge } from "@/components/ctt-service-badge"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "../types"
 import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
@@ -972,6 +973,10 @@ export function ServicoModal({
                       className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-900 focus:ring-1 focus:ring-slate-900 shadow-2xs"
                     />
                   </div>
+                </div>
+
+                <div aria-live="polite">
+                  <CttServiceBadge service={formData} />
                 </div>
 
                 {/* Subproduct Quick Click Cards with Visual Distinction */}

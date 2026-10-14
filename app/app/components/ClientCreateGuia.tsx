@@ -34,6 +34,7 @@ import {
   SYSTEM_AVAILABLE_WEBSERVICES, 
   ClientSpecialServiceFee
 } from "@/app/ops/entidades/clientes/types"
+import { getServiceDisplayLabel } from "@/lib/services/ctt/service-identity"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { useClientScope } from "./ClientScope"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
@@ -153,8 +154,8 @@ export function ClientCreateGuia() {
   // Available Linke services
   const availableServicos = React.useMemo(() => {
     let active = servicosLinke.filter((s) => s.is_active !== false)
-    if (currentClient?.assigned_linke_service_ids && currentClient.assigned_linke_service_ids.length > 0) {
-      active = active.filter(s => currentClient.assigned_linke_service_ids!.includes(s.id))
+    if (Array.isArray(currentClient?.assigned_linke_service_ids)) {
+      active = active.filter(s => currentClient!.assigned_linke_service_ids!.includes(s.id))
     }
     if (active.length === 0) return []
     if (currentClient?.default_linke_table_id) {
@@ -882,7 +883,7 @@ export function ClientCreateGuia() {
                   const coversZone = isZoneAllowedByService(service.allowed_zones, destZone)
                   return (
                     <option key={service.id} value={service.id}>
-                      {coversZone ? "✅" : "⚠️"} [{service.category}] {service.name} — ({service.transit_time_label || "24h"}) {!coversZone ? `(Sem cobertura para ${destZone})` : ""}
+                      {coversZone ? "✅" : "⚠️"} [{service.category}] {getServiceDisplayLabel(service)} — ({service.transit_time_label || "24h"}) {!coversZone ? `(Sem cobertura para ${destZone})` : ""}
                     </option>
                   )
                 })}

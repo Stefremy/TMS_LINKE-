@@ -143,6 +143,23 @@ function shipmentInput(extra = {}) {
 async function emit(h, extra) { return h.load('app/actions/shipments.ts').emitClientGuiaAction(shipmentInput(extra)) }
 
 for (const carrier of ['CTT', 'Correos']) {
+  test(`${carrier}: no assigned tables denies emission and drafts even with a saved default or forged browser assignments`, async () => {
+    const h = shipmentHarness({ carrier, adjust: t => {
+      t.audit_log[0].details.assigned_linke_service_ids = []
+      t.audit_log[0].details.default_linke_table_id = 'service-a'
+    } })
+    const result = await emit(h, { assigned_linke_service_ids: ['service-a'] })
+    assert.equal(result.success, false)
+    assert.match(result.error, /não autorizado/)
+    const form = new FormData()
+    form.set('weight_kg', '1')
+    form.set('service_id', 'service-a')
+    form.set('assigned_linke_service_ids', '["service-a"]')
+    assert.equal((await h.load('lib/services/shipments/shipment-creator.ts').createShipment(form)).success, false)
+    assert.equal(h.providerCalls.length, 0)
+    assert.equal(h.credentials.length, 0)
+    assert.equal(h.db.writes.length, 0)
+  })
   test(`${carrier}: submitted prices cannot determine the stored price or carrier configuration`, async () => {
     for (const calculatedPrice of [0, -10, 0.01, 1e12, NaN, Infinity]) {
       const h = shipmentHarness({ carrier })

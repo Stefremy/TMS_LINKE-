@@ -46,6 +46,8 @@ import { saveClienteAction } from "@/app/actions/clientes"
 import { inviteClientAccessAction } from "@/app/actions/client-invitations"
 import { normalizeStoreSlug } from "@/lib/client-portal/paths"
 import type { ServicoLinke, PriceTierLinke } from "@/app/ops/configuracao/servicos/types"
+import { CttServiceBadge } from "@/components/ctt-service-badge"
+import { getServiceDisplayLabel } from "@/lib/services/ctt/service-identity"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { 
   Cliente, 
@@ -111,8 +113,8 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     observations: initialData?.observations || "",
     is_active: initialData?.is_active ?? true,
     created_at: initialData?.created_at || new Date().toISOString(),
-    default_linke_table_id: initialData?.default_linke_table_id || servicosLinke[0]?.id || "",
-    assigned_linke_service_ids: initialData?.assigned_linke_service_ids || servicosLinke.map((s) => s.id),
+    default_linke_table_id: initialData?.default_linke_table_id || "",
+    assigned_linke_service_ids: initialData?.assigned_linke_service_ids ?? (initialData ? servicosLinke.map((s) => s.id) : []),
     assigned_linke_profile: initialData?.assigned_linke_profile || "Standard / Geral",
     volume_discount_pct: initialData?.volume_discount_pct ?? 0,
     pricing: initialData?.pricing || DEFAULT_CLIENT_PRICING,
@@ -153,7 +155,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         observations: initialData.observations || "",
         is_active: initialData.is_active ?? true,
         created_at: initialData.created_at || new Date().toISOString(),
-        default_linke_table_id: initialData.default_linke_table_id || servicosLinke[0]?.id || "",
+        default_linke_table_id: initialData.default_linke_table_id || "",
         assigned_linke_service_ids: initialData.assigned_linke_service_ids || servicosLinke.map((s) => s.id),
         assigned_linke_profile: initialData.assigned_linke_profile || "Standard / Geral",
         volume_discount_pct: initialData.volume_discount_pct ?? 0,
@@ -409,7 +411,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
             { id: "faturacao", label: "Moradas & Faturação", icon: MapPin },
             { id: "contactos", label: "Contactos", icon: Phone },
             { id: "comercial", label: "Condições & Crédito", icon: Euro },
-            { id: "precario", label: "Tabelas de Preço & Serviços", icon: Percent, badge: `${(formData.assigned_linke_service_ids || []).length || servicosLinke.length} Tabelas` },
+            { id: "precario", label: "Tabelas de Preço & Serviços", icon: Percent, badge: `${(formData.assigned_linke_service_ids || []).length} Tabelas` },
           ].map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -1099,6 +1101,9 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                             setFormData((prev) => ({
                               ...prev,
                               default_linke_table_id: tableId,
+                              assigned_linke_service_ids: tableId && !(prev.assigned_linke_service_ids || []).includes(tableId)
+                                ? [...(prev.assigned_linke_service_ids || []), tableId]
+                                : prev.assigned_linke_service_ids || [],
                               assigned_linke_profile: table?.pricing_profile || "Standard / Geral",
                               volume_discount_pct: table?.discount_vs_standard_pct || 0,
                             }))
@@ -1108,7 +1113,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                           <option value="">-- Selecione a Tabela Linke --</option>
                           {servicosLinke.map((s) => (
                             <option key={s.id} value={s.id}>
-                              {s.name} ({s.pricing_profile}) - {s.preferred_carrier_name}
+                              {getServiceDisplayLabel(s)} ({s.pricing_profile}) - {s.preferred_carrier_name}
                             </option>
                           ))}
                         </select>
@@ -1178,7 +1183,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                         </button>
                         <button
                           type="button"
-                          onClick={() => setFormData({ ...formData, assigned_linke_service_ids: [] })}
+                          onClick={() => setFormData({ ...formData, assigned_linke_service_ids: [], default_linke_table_id: "" })}
                           className="px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded-md transition-colors cursor-pointer"
                         >
                           Desmarcar Todos
@@ -1217,7 +1222,9 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                                 const next = isAssigned
                                   ? current.filter((id) => id !== servico.id)
                                   : [...current, servico.id]
-                                setFormData({ ...formData, assigned_linke_service_ids: next })
+                                setFormData({ ...formData, assigned_linke_service_ids: next,
+                                  default_linke_table_id: isAssigned && formData.default_linke_table_id === servico.id
+                                    ? "" : formData.default_linke_table_id })
                               }}
                               className="p-3.5 flex items-start justify-between gap-3 cursor-pointer select-none"
                             >
@@ -1238,6 +1245,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                                       </div>
                                     ) : null}
                                     <span className="font-bold text-xs text-[var(--text-primary)]">{servico.name}</span>
+                                    <CttServiceBadge service={servico} />
                                     {hasCustomPrices && (
                                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                                         <Edit3 className="w-2.5 h-2.5" />

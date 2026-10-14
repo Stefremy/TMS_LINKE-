@@ -16,6 +16,8 @@ import {
   DollarSign
 } from "lucide-react"
 import { DestinationBadge } from "./DestinationIcons"
+import { CttServiceBadge } from "@/components/ctt-service-badge"
+import { getCttServiceIdentity } from "@/lib/services/ctt/service-identity"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import type { ServicoLinke } from "../types"
 import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
@@ -62,13 +64,12 @@ export function TabelasLinkeTab({
       return false
     }
 
-    const matchesSearch = 
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.preferred_carrier_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.target_client_name && s.target_client_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (s.webservice_service_code && s.webservice_service_code.toLowerCase().includes(searchTerm.toLowerCase()))
-    
+    const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    const identity = getCttServiceIdentity(s)
+    const query = normalizeSearch(searchTerm)
+    const matchesSearch = [s.name, s.code, s.preferred_carrier_name, s.target_client_name,
+      s.webservice_service_code, identity?.label].some(value => value && normalizeSearch(value).includes(query))
+
     const matchesCategory = selectedCategory === "Todas" || s.category === selectedCategory
     const matchesProfile = selectedProfile === "Todos os Perfis" || s.pricing_profile === selectedProfile
 
@@ -78,7 +79,7 @@ export function TabelasLinkeTab({
   const ogServicos = filteredServicos.filter((s) => Boolean(s.is_primordial))
   const customServicos = filteredServicos.filter((s) => !s.is_primordial)
 
-  const currentServico = servicos.find((s) => s.id === activeServicoId) || filteredServicos[0]
+  const currentServico = filteredServicos.find((s) => s.id === activeServicoId) || filteredServicos[0]
   const [quickMarkupInput, setQuickMarkupInput] = React.useState<number>(currentServico?.global_markup_pct || 22)
 
   React.useEffect(() => {
@@ -148,6 +149,7 @@ export function TabelasLinkeTab({
 
         {/* Tags */}
         <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+          <CttServiceBadge service={servico} />
           {isOg ? (
             <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
               Base Oficial
@@ -206,7 +208,7 @@ export function TabelasLinkeTab({
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Pesquisar tabela, subproduto ou transportador..."
+              placeholder="Pesquisar tabela, EQ / DD / DB ou transportador..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 transition-all"
@@ -371,6 +373,7 @@ export function TabelasLinkeTab({
                         <span className="px-2 py-0.5 bg-slate-100 text-slate-600 font-mono text-xs font-medium rounded border border-slate-200/80">
                           {currentServico.code}
                         </span>
+                        <CttServiceBadge service={currentServico} />
                         {currentServico.is_primordial ? (
                           <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200/80 text-xs font-medium rounded flex items-center gap-1">
                             <Lock className="w-3 h-3 text-slate-400" /> Tabela Base

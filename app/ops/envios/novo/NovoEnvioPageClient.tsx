@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { OFFICIAL_LINKE_ZONES } from "@/lib/services/geo/international-zones"
 import { resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
 import { calculateShipmentQuote, getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
+import { getServiceDisplayLabel } from "@/lib/services/ctt/service-identity"
 import { downloadCttLabel, printCttLabel } from "@/lib/label-utils"
 
 export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: Cliente[], servicosLinke?: ServicoLinke[] }) {
@@ -134,8 +135,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
   const availableServicos = React.useMemo(() => {
     let active = servicosLinke.filter((s) => s.is_active !== false)
-    if (currentClient?.assigned_linke_service_ids && currentClient.assigned_linke_service_ids.length > 0) {
-      active = active.filter(s => currentClient.assigned_linke_service_ids!.includes(s.id))
+    if (Array.isArray(currentClient?.assigned_linke_service_ids)) {
+      active = active.filter(s => currentClient!.assigned_linke_service_ids!.includes(s.id))
     }
     if (active.length === 0) return []
 
@@ -467,7 +468,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] font-medium focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors cursor-pointer shadow-2xs"
                     >
                       {availableServicos.map(s => (
-                        <option key={s.id} value={s.id}>[{s.category}] {s.name}</option>
+                        <option key={s.id} value={s.id}>[{s.category}] {getServiceDisplayLabel(s)}</option>
                       ))}
                     </select>
                   </div>

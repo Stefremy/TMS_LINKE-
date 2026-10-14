@@ -90,7 +90,7 @@ export async function loadShipmentPricingContext(
     : selection.serviceName ? available.find(s => s.name === selection.serviceName)
     : client.default_linke_table_id ? available.find(s => s.id === client.default_linke_table_id)
     : resolveClientTable(client, available)
-  if (!service || (ctx.role === "client" && client.assigned_linke_service_ids?.length &&
+  if (!service || (ctx.role === "client" && Array.isArray(client.assigned_linke_service_ids) &&
       !client.assigned_linke_service_ids.includes(service.id))) {
     throw new ShipmentPricingError("Serviço inexistente ou não autorizado para este cliente.")
   }
