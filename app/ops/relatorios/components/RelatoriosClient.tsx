@@ -2,713 +2,171 @@
 
 import * as React from "react"
 import Link from "next/link"
-import Image from "next/image"
-import {
-  Package,
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  MapPin,
-  Flame,
-  Snowflake,
-  Download,
-  Printer,
-  RefreshCw,
-  Truck,
-  ShieldCheck,
-  ChevronRight,
-  ExternalLink,
-  Percent,
-  Calendar,
-  Layers,
-  ArrowUpRight,
-  BarChart3,
-  Sparkles,
-  PieChart
-} from "lucide-react"
-import { RelatoriosData, getRelatoriosDataAction } from "@/app/actions/relatorios"
-import { InteractiveEuropeHeatmap } from "./InteractiveEuropeHeatmap"
+import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, Lightbulb, Package, Printer, RefreshCw, Truck } from "lucide-react"
+import { getRelatoriosDataAction } from "@/app/actions/relatorios"
+import { REPORT_PERIODS } from "@/lib/reports/operational-reports"
+import type { OperationalReport, ReportFilters, ReportGroup } from "@/lib/reports/operational-reports"
+import { reportCsv } from "@/lib/reports/report-csv"
 
-interface RelatoriosClientProps {
-  initialData: RelatoriosData
+const euro = (value: number) => new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(value)
+const timestamp = (value: string) => new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "short", timeStyle: "short" }).format(new Date(value))
+const dateOnly = (value: string) => new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "short" }).format(new Date(value))
+const panel = "rounded-2xl border border-slate-200 bg-white shadow-xs"
+const button = "inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+const tabs = [
+  { id: "overview", label: "Visão geral" }, { id: "carriers", label: "Transportadoras" },
+  { id: "clients", label: "Clientes" }, { id: "services", label: "Serviços" }, { id: "finance", label: "Financeiro" },
+] as const
+
+type Tab = typeof tabs[number]["id"]
+
+function GroupTable({ groups, title, clients = false }: { groups: ReportGroup[]; title: string; clients?: boolean }) {
+  return <section className={panel}>
+    <div className="border-b border-slate-100 p-5">
+      <h2 className="font-bold text-slate-900">{title}</h2>
+      <p className="mt-1 text-xs text-slate-500">Comparação de volume com a mesma duração no período anterior. Margem estimada com os preços guardados.</p>
+    </div>
+    {groups.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">Sem envios para estes filtros.</p> :
+      <div className="overflow-x-auto"><table className="w-full text-left text-xs">
+        <thead className="bg-slate-50 text-slate-500"><tr>
+          <th className="px-5 py-3">{clients ? "Cliente" : "Designação"}</th><th className="p-3">Envios</th>
+          <th className="p-3">Anterior</th><th className="p-3">Variação</th><th className="p-3">Entregues</th>
+          <th className="p-3">Em incidência</th><th className="p-3">Valor de venda</th><th className="p-3">Margem estimada</th><th className="p-3">Cobertura da margem</th>
+        </tr></thead>
+        <tbody className="divide-y divide-slate-100">{groups.map(group => {
+          const growth = group.previousVolume ? Math.round((group.volume - group.previousVolume) / group.previousVolume * 100) : null
+          return <tr key={group.id} className="hover:bg-slate-50">
+            <td className="px-5 py-4 font-semibold text-slate-800">{clients && group.id !== "unassigned" ?
+              <Link className="hover:text-emerald-700" href={`/ops/entidades/clientes?search=${encodeURIComponent(group.name)}`}>{group.name}</Link> : group.name}</td>
+            <td className="p-3 font-semibold">{group.volume}</td><td className="p-3">{group.previousVolume}</td>
+            <td className="p-3 whitespace-nowrap">{growth === null ? (group.volume ? "Sem base anterior" : "—") : `${growth > 0 ? "+" : ""}${growth}%`}</td>
+            <td className="p-3">{group.delivered}</td><td className="p-3">{group.incidents}</td>
+            <td className="p-3 whitespace-nowrap">{euro(group.revenue)}</td>
+            <td className={`p-3 whitespace-nowrap font-semibold ${group.margin < 0 ? "text-rose-700" : "text-emerald-700"}`}>{group.pricedCount ? euro(group.margin) : "Sem dados"}</td>
+            <td className="p-3 text-slate-500">{group.pricedCount} de {group.volume} envios</td>
+          </tr>
+        })}</tbody>
+      </table></div>}
+  </section>
 }
 
-export function RelatoriosClient({ initialData }: RelatoriosClientProps) {
-  const [data, setData] = React.useState<RelatoriosData>(initialData)
-  const [period, setPeriod] = React.useState<string>(initialData.period || "este_mes")
-  const [activeTab, setActiveTab] = React.useState<"todos" | "sla" | "margem" | "destinos" | "incidencias" | "churn">("todos")
-  const [isLoading, setIsLoading] = React.useState(false)
-
-  // Handle period change
-  const handlePeriodChange = async (newPeriod: string) => {
-    setPeriod(newPeriod)
-    setIsLoading(true)
+export function RelatoriosClient({ initialData }: { initialData: OperationalReport }) {
+  const [data, setData] = React.useState(initialData)
+  const [tab, setTab] = React.useState<Tab>("overview")
+  const [loading, setLoading] = React.useState(false)
+  const [error, setError] = React.useState("")
+  const requestId = React.useRef(0)
+  const refresh = async (filters = data.filters) => {
+    const id = ++requestId.current
+    setLoading(true); setError("")
     try {
-      const refreshed = await getRelatoriosDataAction(newPeriod)
-      setData(refreshed)
-    } catch (err) {
-      console.error("Erro ao carregar relatórios:", err)
-    } finally {
-      setIsLoading(false)
-    }
+      const updated = await getRelatoriosDataAction(filters.period, { clientId: filters.clientId, carrier: filters.carrier, service: filters.service })
+      if (id === requestId.current) setData(updated)
+    } catch {
+      if (id === requestId.current) setError("Não foi possível atualizar. Os dados abaixo mantêm o período e os filtros da última consulta concluída.")
+    } finally { if (id === requestId.current) setLoading(false) }
   }
-
-  // Refresh
-  const handleRefresh = async () => {
-    setIsLoading(true)
-    try {
-      const refreshed = await getRelatoriosDataAction(period)
-      setData(refreshed)
-    } catch (err) {
-      console.error("Erro ao atualizar dados:", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Export CSV
-  const handleExportCSV = () => {
-    const rows = [
-      ["Relatório", "Métrica", "Valor"],
-      ["Geral", "Período", period],
-      ["Geral", "Total Envios", data.totalShipments],
-      ["Geral", "Entregues", data.deliveredShipments],
-      ["Geral", "SLA No Prazo (%)", `${data.slaOnTimeRate}%`],
-      ["Geral", "1ª Tentativa (%)", `${data.firstAttemptRate}%`],
-      ["Financeiro", "Faturação Total (€)", data.totalRevenue.toFixed(2)],
-      ["Financeiro", "Custo Total (€)", data.totalCost.toFixed(2)],
-      ["Financeiro", "Margem Bruta (€)", data.totalGrossMargin.toFixed(2)],
-      ["Financeiro", "Margem Média por Guia (€)", data.avgMarginPerShipment.toFixed(2)],
-      ["", "", ""],
-      ["Transportadora", "Volume", "SLA (%)"],
-      ...data.carriersPerformance.map(c => [c.name, c.volume, `${c.onTimeRate}%`]),
-      ["", "", ""],
-      ["Destino", "Volume", "% Total"],
-      ...data.destinationStats.map(d => [d.district, d.count, `${d.percentage}%`]),
-      ["", "", ""],
-      ["Cliente", "Volume Recente", "Status"],
-      ...data.clientGrowthStats.map(cl => [cl.name, cl.recentVolume, cl.status])
-    ]
-
-    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(";")).join("\n")
-    const encodedUri = encodeURI(csvContent)
+  const changeFilter = (key: "clientId" | "carrier" | "service", value: string) => refresh({ ...data.filters, [key]: value || undefined })
+  const exportCsv = () => {
+    const url = URL.createObjectURL(new Blob(["\uFEFF", reportCsv(data)], { type: "text/csv;charset=utf-8" }))
     const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `relatorio_tms_linke_${period}_${new Date().toISOString().slice(0, 10)}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    link.href = url; link.download = `relatorios_linke_${data.filters.period}_${data.updatedAt.slice(0, 10)}.csv`
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url)
   }
-
-  // Print / PDF
-  const handlePrint = () => {
-    window.print()
-  }
-
-  return (
-    <div className="space-y-6 pb-20">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[var(--border-subtle)] pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">
-              Relatórios & Inteligência Operacional
-            </h1>
-            <span className="px-2 py-0.5 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full">
-              Live BI
-            </span>
-          </div>
-          <p className="text-xs text-[var(--text-secondary)] mt-1">
-            Métricas de desempenho das transportadoras, margens financeiras, destinos e monitorização de clientes.
-          </p>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 print:hidden">
-          <button
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-muted)] transition-colors shadow-xs"
-            title="Atualizar Dados"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-blue-600" : ""}`} />
-          </button>
-
-          <button
-            onClick={handleExportCSV}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[var(--text-primary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-muted)] transition-colors shadow-xs"
-            title="Exportar como folha de cálculo"
-          >
-            <Download className="w-4 h-4 text-[var(--text-secondary)]" />
-            <span>Exportar CSV</span>
-          </button>
-
-          <button
-            onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs"
-            title="Imprimir ou Guardar em PDF"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Imprimir Relatório</span>
-          </button>
-        </div>
+  const t = data.totals
+  const coverage = t.volume ? Math.round(t.pricedCount / t.volume * 100) : 0
+  const show = (section: Tab) => tab === "overview" || tab === section
+  const maxVolume = Math.max(1, ...data.timeline.map(day => day.volume))
+  const filters: { key: "clientId" | "carrier" | "service"; label: string; options: { id: string; name: string }[] }[] = [
+    { key: "clientId", label: "Cliente", options: data.options.clients },
+    { key: "carrier", label: "Transportadora", options: data.options.carriers.map(name => ({ id: name, name })) },
+    { key: "service", label: "Serviço", options: data.options.services.map(name => ({ id: name, name })) },
+  ]
+  return <div className="space-y-5 pb-12">
+    <header className="flex flex-wrap items-start justify-between gap-4">
+      <div><h1 className="text-2xl font-bold tracking-tight text-slate-900">Relatórios da operação</h1>
+        <p className="mt-1 text-sm text-slate-500">Envios, clientes e margem estimada a partir dos registos do TMS.</p>
+        <p className="mt-2 text-xs text-slate-500">Atualizado em {timestamp(data.updatedAt)} · Hora de Lisboa</p></div>
+      <div className="flex flex-wrap gap-2 print:hidden">
+        <button className={button} disabled={loading} onClick={() => refresh()}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />{loading ? "A atualizar…" : "Atualizar"}</button>
+        <button className={button} disabled={loading} onClick={exportCsv}><Download className="h-4 w-4" />Exportar CSV</button>
+        <button className={button} disabled={loading} onClick={() => window.print()}><Printer className="h-4 w-4" />Imprimir</button>
       </div>
-
-      {/* Period Filter Pills */}
-      <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <div className="flex items-center gap-1.5 bg-[var(--surface-muted)]/80 p-1 rounded-xl border border-[var(--border-subtle)]/80 text-xs">
-          {[
-            { id: "hoje", label: "Hoje" },
-            { id: "esta_semana", label: "Esta Semana" },
-            { id: "este_mes", label: "Este Mês" },
-            { id: "ultimos_30", label: "Últimos 30 Dias" },
-          ].map((item) => {
-            const active = period === item.id
-            return (
-              <button
-                key={item.id}
-                onClick={() => handlePeriodChange(item.id)}
-                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                  active
-                    ? "bg-[var(--surface-bg)] text-[var(--text-primary)] shadow-xs"
-                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-slate-200/50"
-                }`}
-              >
-                {item.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Tab Filters */}
-        <div className="flex items-center gap-1 overflow-x-auto text-xs">
-          {[
-            { id: "todos", label: "Visão Geral", icon: Layers },
-            { id: "sla", label: "Raio-X & SLA", icon: Package },
-            { id: "margem", label: "Margem Real", icon: DollarSign },
-            { id: "destinos", label: "Destinos", icon: MapPin },
-            { id: "incidencias", label: "Incidências", icon: AlertTriangle },
-            { id: "churn", label: "Clientes", icon: PieChart },
-          ].map((tab) => {
-            const active = activeTab === tab.id
-            const Icon = tab.icon
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                  active
-                    ? "bg-blue-50 text-blue-700 font-bold border border-blue-200"
-                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${active ? "text-blue-600" : "text-[var(--text-tertiary)]"}`} />
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
+    </header>
+    <div className={`${panel} space-y-4 p-4 print:hidden`}>
+      <div className="flex flex-wrap gap-2" aria-label="Período do relatório">{REPORT_PERIODS.map(period =>
+        <button key={period.id} disabled={loading} aria-pressed={data.filters.period === period.id}
+          className={`${button} ${data.filters.period === period.id ? "border-emerald-700 bg-emerald-50 text-emerald-800" : ""}`}
+          onClick={() => refresh({ period: period.id })}>{period.label}</button>)}</div>
+      <div className="grid gap-3 sm:grid-cols-3">{filters.map(filter => <label key={filter.key} className="space-y-1.5 text-xs font-semibold text-slate-600">
+        <span>{filter.label}</span><select aria-label={filter.label} disabled={loading} value={data.filters[filter.key] || ""}
+          onChange={event => changeFilter(filter.key, event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-slate-800">
+          <option value="">Todos</option>{filter.options.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+        </select></label>)}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <span>Envios criados de {timestamp(data.range.start)} até {timestamp(data.range.end)}.</span>
+        <button className="font-semibold text-emerald-700 disabled:opacity-50" disabled={loading} onClick={() => refresh({ period: data.filters.period })}>Limpar filtros</button>
       </div>
-
-      {/* HIGHLIGHT EXECUTIVE CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Total Envios */}
-        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Volume Total</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Package className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-[var(--text-primary)]">{data.totalShipments}</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-emerald-600 font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>{data.deliveredShipments} entregues</span>
-            </div>
-          </div>
-        </div>
-
-        {/* SLA No Prazo */}
-        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">SLA no Prazo</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-emerald-600">{data.slaOnTimeRate}%</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[var(--text-secondary)]">
-              <span>Trânsito médio: <strong>{data.avgTransitHours}h</strong></span>
-            </div>
-          </div>
-        </div>
-
-        {/* Faturação Bruta */}
-        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Faturação Bruta</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <DollarSign className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-[var(--text-primary)]">{data.totalRevenue.toFixed(2)} €</div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[var(--text-secondary)]">
-              <span>Custo: {data.totalCost.toFixed(2)} €</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Margem Líquida */}
-        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-4 shadow-xs flex flex-col justify-between bg-gradient-to-br from-white to-emerald-50/40">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Margem Bruta</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-emerald-700">+{data.totalGrossMargin.toFixed(2)} €</div>
-            <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-emerald-600">
-              <span>{data.marginPercentage.toFixed(1)}% ({data.avgMarginPerShipment.toFixed(2)} €/guia)</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 1. RELATÓRIO 1: RAIO-X DE ENTREGAS & SLA DAS TRANSPORTADORAS */}
-      {/* ========================================================================= */}
-      {(activeTab === "todos" || activeTab === "sla") && (
-        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--border-subtle)] pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                <Truck className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">
-                  1. Raio-X de Entregas & SLA das Transportadoras
-                </h2>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  Comparativo de cumprimento de prazos, tempo de trânsito e sucesso à primeira tentativa.
-                </p>
-              </div>
-            </div>
-
-            {/* SLA Badge */}
-            <div className="flex items-center gap-2">
-              <div className="text-right">
-                <span className="text-xs font-semibold text-[var(--text-secondary)] block">Saúde Operacional Global</span>
-                <span className="text-sm font-bold text-emerald-700">{data.slaOnTimeRate}% Entregas no Prazo</span>
-              </div>
-              <div className="w-10 h-10 rounded-full border-4 border-emerald-500 flex items-center justify-center text-xs font-bold text-emerald-700">
-                A+
-              </div>
-            </div>
-          </div>
-
-          {/* Cards por Transportadora */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {data.carriersPerformance.map((carrier) => (
-              <div
-                key={carrier.code}
-                className="bg-[var(--surface-muted)] border border-[var(--border-subtle)]/90 rounded-xl p-4 flex flex-col justify-between hover:bg-[var(--surface-muted)]/60 transition-colors"
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-[var(--text-primary)]">{carrier.name}</span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        carrier.slaStatus === "Excelente"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : carrier.slaStatus === "Bom"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-amber-100 text-amber-800"
-                      }`}
-                    >
-                      {carrier.slaStatus}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-[var(--text-primary)]">{carrier.volume}</span>
-                    <span className="text-xs text-[var(--text-secondary)] font-medium">envios ({Math.round((carrier.volume / data.totalShipments) * 100)}%)</span>
-                  </div>
-
-                  {/* SLA Progress Bar */}
-                  <div className="mt-3 space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-[var(--text-secondary)] font-medium">Cumprimento SLA</span>
-                      <span className="font-bold text-[var(--text-primary)]">{carrier.onTimeRate}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-emerald-500 rounded-full"
-                        style={{ width: `${carrier.onTimeRate}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-[var(--border-subtle)]/60 flex items-center justify-between text-xs text-[var(--text-secondary)]">
-                  <span>Trânsito médio</span>
-                  <span className="font-semibold text-[var(--text-primary)]">{carrier.avgHours} horas</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-blue-50/50 border border-blue-100 rounded-xl p-3 text-xs">
-            <div className="flex items-center gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span><strong>{data.firstAttemptRate}%</strong> entregues com sucesso logo na <strong>1ª tentativa</strong>.</span>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <Clock className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>Tempo de trânsito em Portugal Continental: <strong>21.6h</strong> (SLA &lt; 24h).</span>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
-              <span>Taxa de perdas/sinistros: <strong>0.00%</strong> no período selecionado.</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 2. RELATÓRIO 2: MARGEM & RENTABILIDADE REAL */}
-      {/* ========================================================================= */}
-      {(activeTab === "todos" || activeTab === "margem") && (
-        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--border-subtle)] pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                <DollarSign className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">
-                  2. Margem & Rentabilidade Real
-                </h2>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  Diferença entre o preço faturado aos clientes e o custo pago às transportadoras.
-                </p>
-              </div>
-            </div>
-
-            <Link
-              href="/ops/faturacao"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
-            >
-              <span>Ver Módulo de Faturação</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {/* Gráfico Visual Comparativo / Mini Timeline */}
-          <div className="bg-[var(--surface-muted)] border border-[var(--border-subtle)]/80 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
-                Evolução Diária de Margem (€)
-              </h3>
-              <div className="flex items-center gap-4 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm bg-blue-500" />
-                  <span className="text-[var(--text-secondary)]">Volume de Envios</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded-sm bg-emerald-500" />
-                  <span className="text-[var(--text-secondary)]">Margem Bruta (€)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Simple Visual SVG Bar Chart */}
-            <div className="grid grid-cols-7 gap-2 pt-4 border-t border-[var(--border-subtle)] items-end h-32">
-              {data.timeline.map((day) => {
-                const maxMargin = Math.max(...data.timeline.map(t => t.margem), 1)
-                const heightPercent = Math.max(15, Math.round((day.margem / maxMargin) * 100))
-
-                return (
-                  <div key={day.label} className="flex flex-col items-center gap-2 h-full justify-end group">
-                    <div className="text-[11px] font-bold text-emerald-700 opacity-80 group-hover:opacity-100">
-                      +{day.margem}€
-                    </div>
-                    <div className="w-full max-w-[36px] bg-slate-200 rounded-t-lg overflow-hidden flex flex-col justify-end h-full">
-                      <div
-                        className="w-full bg-emerald-500 hover:bg-emerald-600 transition-all rounded-t-lg"
-                        style={{ height: `${heightPercent}%` }}
-                      />
-                    </div>
-                    <span className="text-xs font-semibold text-[var(--text-secondary)]">{day.label}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Radar de Pesos & Discrepâncias */}
-          <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl flex items-start gap-3 text-xs">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <span className="font-bold text-amber-900 block">
-                Radar de Discrepâncias de Peso & Auditoria de Faturas
-              </span>
-              <p className="text-amber-800 leading-relaxed">
-                No período analisado, <strong>3 expedições</strong> apresentaram peso volumétrico taxado pela transportadora superior ao declarado pelo cliente. O sistema reteve preventivamente estas guias para conferência antes da faturação mensal.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 3. RELATÓRIO 3: MAPA DE CALOR & DESTINOS ESTRELA */}
-      {/* ========================================================================= */}
-      {(activeTab === "todos" || activeTab === "destinos") && (
-        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--border-subtle)] pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
-                <MapPin className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">
-                  3. Mapa de Calor Europeu Interativo (Ibéria & Europa)
-                </h2>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  Densidade de expedições, rotas trans-europeias ativas e tarifas médias por país e região.
-                </p>
-              </div>
-            </div>
-
-            <span className="text-xs font-semibold text-purple-700 bg-purple-50 px-3 py-1 rounded-full border border-purple-200">
-              Rotas Trans-Europeias Ativas
-            </span>
-          </div>
-
-          {/* Interactive European Heatmap Component */}
-          <InteractiveEuropeHeatmap
-            destinations={data.europeanDestinations || []}
-            portugalRegions={data.portugalRegions || []}
-            totalShipments={data.totalShipments}
-          />
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 4. RELATÓRIO 4: BARÓMETRO DE INCIDÊNCIAS & DEVOLUÇÕES */}
-      {/* ========================================================================= */}
-      {(activeTab === "todos" || activeTab === "incidencias") && (
-        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--border-subtle)] pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">
-                  4. Barómetro de Incidências & Devoluções
-                </h2>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  Diagnóstico das causas de retenção e tempo médio de desbloqueio pelo suporte.
-                </p>
-              </div>
-            </div>
-
-            <Link
-              href="/ops/incidencias"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-rose-700 hover:text-rose-800"
-            >
-              <span>Gestão Ativa de Incidências</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* KPI 1 */}
-            <div className="p-4 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl">
-              <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase block">Taxa de Incidência</span>
-              <div className="text-2xl font-bold text-[var(--text-primary)] mt-1">3.1%</div>
-              <span className="text-[11px] text-emerald-600 font-medium mt-1 block">Abaixo do benchmark de 4.5%</span>
-            </div>
-
-            {/* KPI 2 */}
-            <div className="p-4 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl">
-              <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase block">Tempo de Resolução</span>
-              <div className="text-2xl font-bold text-[var(--text-primary)] mt-1">{data.avgResolutionHours}h</div>
-              <span className="text-[11px] text-[var(--text-secondary)] mt-1 block">Tempo médio até reencaminhar</span>
-            </div>
-
-            {/* KPI 3 */}
-            <div className="p-4 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl">
-              <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase block">Taxa de Devolução Definitiva</span>
-              <div className="text-2xl font-bold text-emerald-700 mt-1">0.8%</div>
-              <span className="text-[11px] text-[var(--text-secondary)] mt-1 block">Menos de 1 por cada 100 envios</span>
-            </div>
-          </div>
-
-          {/* Breakdown de Causas */}
-          <div className="space-y-3 pt-2">
-            <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
-              Principais Motivos de Retenção
-            </h3>
-
-            {data.incidentBreakdown.map((item) => (
-              <div
-                key={item.reason}
-                className="p-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)]/80 rounded-xl flex items-center justify-between text-xs"
-              >
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      item.severity === "alta"
-                        ? "bg-rose-500"
-                        : item.severity === "media"
-                        ? "bg-amber-500"
-                        : "bg-blue-500"
-                    }`}
-                  />
-                  <span className="font-semibold text-[var(--text-primary)]">{item.reason}</span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <span className="text-[var(--text-secondary)] font-medium">{item.count} casos</span>
-                  <span className="px-2 py-0.5 rounded-md font-bold text-[11px] bg-slate-200 text-[var(--text-primary)]">
-                    {item.percentage}%
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* 5. RELATÓRIO 5: DETECTOR DE CLIENTES (CRESCIMENTO VS CHURN) */}
-      {/* ========================================================================= */}
-      {(activeTab === "todos" || activeTab === "churn") && (
-        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--border-subtle)] pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-bold">
-                <Flame className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-[var(--text-primary)]">
-                  5. Detector de Clientes (Crescimento 🔥 vs Risco de Churn ❄️)
-                </h2>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  Identifique clientes com forte subida no volume e clientes habituais que deixaram de expedir.
-                </p>
-              </div>
-            </div>
-
-            <Link
-              href="/ops/clientes"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-orange-700 hover:text-orange-800"
-            >
-              <span>Ver Todos os Clientes</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {/* Tabela de Clientes com Status */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-[var(--border-subtle)] text-[var(--text-tertiary)] font-semibold uppercase text-[11px]">
-                  <th className="py-3 px-3">Cliente</th>
-                  <th className="py-3 px-3">Volume Período</th>
-                  <th className="py-3 px-3">Variação</th>
-                  <th className="py-3 px-3">Último Envio</th>
-                  <th className="py-3 px-3">Faturação</th>
-                  <th className="py-3 px-3 text-right">Diagnóstico & Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.clientGrowthStats.map((client) => {
-                  const isHot = client.status === "em_alta"
-                  const isChurn = client.status === "risco_churn"
-
-                  return (
-                    <tr key={client.id} className="hover:bg-[var(--surface-muted)]/80 transition-colors">
-                      <td className="py-3.5 px-3">
-                        <div className="font-bold text-[var(--text-primary)]">{client.name}</div>
-                        <div className="font-mono text-[11px] text-[var(--text-tertiary)]">{client.code}</div>
-                      </td>
-
-                      <td className="py-3.5 px-3">
-                        <span className="font-bold text-[var(--text-primary)]">{client.recentVolume} envios</span>
-                        <span className="text-[11px] text-[var(--text-tertiary)] block">ant: {client.previousVolume}</span>
-                      </td>
-
-                      <td className="py-3.5 px-3">
-                        {client.growthRate > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
-                            <TrendingUp className="w-3.5 h-3.5" />
-                            +{client.growthRate}%
-                          </span>
-                        ) : client.growthRate < 0 ? (
-                          <span className="inline-flex items-center gap-1 text-rose-600 font-bold">
-                            <TrendingDown className="w-3.5 h-3.5" />
-                            {client.growthRate}%
-                          </span>
-                        ) : (
-                          <span className="text-[var(--text-tertiary)] font-semibold">0%</span>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-3 text-[var(--text-secondary)] font-medium">
-                        {client.lastShipmentDate}
-                      </td>
-
-                      <td className="py-3.5 px-3 font-bold text-[var(--text-primary)]">
-                        {client.totalSpent.toFixed(2)} €
-                      </td>
-
-                      <td className="py-3.5 px-3 text-right">
-                        {isHot && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
-                            <Flame className="w-3.5 h-3.5 text-orange-600" />
-                            Em Alta 🔥
-                          </span>
-                        )}
-                        {isChurn && (
-                          <div className="inline-flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                              <Snowflake className="w-3.5 h-3.5 text-blue-600" />
-                              Alerta Churn ❄️
-                            </span>
-                            <Link
-                              href={`/ops/clientes?search=${encodeURIComponent(client.name)}`}
-                              className="px-2 py-1 text-[11px] font-semibold text-[var(--text-primary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] hover:bg-[var(--surface-muted)] rounded-lg transition-colors"
-                              title="Contactar Cliente"
-                            >
-                              Contactar
-                            </Link>
-                          </div>
-                        )}
-                        {!isHot && !isChurn && (
-                          <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--surface-muted)] text-[var(--text-secondary)]">
-                            Estável
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
-  )
+    {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</div>}
+    <main aria-busy={loading} className={`space-y-5 ${loading ? "opacity-60" : ""}`}>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Envios no período", value: String(t.volume), detail: `${t.delivered} entregues · ${t.inTransit} em trânsito`, icon: Package },
+          { label: "Valor de venda dos envios", value: t.volume > t.missingSellCount ? euro(t.revenue) : "Sem dados", detail: `${t.volume - t.missingSellCount} de ${t.volume} com preço válido`, icon: Truck },
+          { label: "Custo previsto guardado", value: t.volume > t.missingCostCount ? euro(t.cost) : "Sem dados", detail: `${t.volume - t.missingCostCount} de ${t.volume} com custo válido`, icon: CheckCircle2 },
+          { label: "Margem estimada", value: t.pricedCount ? euro(t.margin) : "Sem dados", detail: `${t.pricedCount} de ${t.volume} envios · ${coverage}% de cobertura`, icon: Lightbulb },
+        ].map(card => <section key={card.label} className={`${panel} p-5`}>
+          <div className="flex items-center justify-between gap-2"><h2 className="text-xs font-semibold text-slate-500">{card.label}</h2><card.icon className="h-4 w-4 text-emerald-700" /></div>
+          <p className={`mt-3 text-2xl font-bold ${card.label === "Margem estimada" && t.margin < 0 ? "text-rose-700" : "text-slate-900"}`}>{card.value}</p>
+          <p className="mt-2 text-xs text-slate-500">{card.detail}</p>
+        </section>)}
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
+        <strong className="text-slate-800">Como ler estes números:</strong> excluímos {data.excluded.drafts} rascunhos e {data.excluded.cancelled} envios anulados/cancelados.
+        O valor de venda não confirma faturação nem recebimento. A margem usa apenas envios com venda e custo válidos, incluindo perdas, e ainda depende da conferência das faturas das transportadoras.
+      </div>
+      <section className={`${panel} p-5`}>
+        <div className="flex items-center gap-2"><Lightbulb className="h-5 w-5 text-amber-600" /><h2 className="font-bold text-slate-900">Sugestões para a operação</h2></div>
+        <p className="mt-1 text-xs text-slate-500">Baseadas no período e nos filtros selecionados. As decisões continuam contigo.</p>
+        {data.suggestions.length === 0 ? <p className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">{t.volume ? "Nenhum alerta pelas regras atuais. Isto não substitui a revisão dos envios e dos custos." : "Sem envios neste período para gerar sugestões."}</p> :
+          <div className="mt-4 grid gap-3 md:grid-cols-2">{data.suggestions.map(s => <article key={s.id} className={`rounded-xl border p-4 ${s.priority === "atenção" ? "border-amber-200 bg-amber-50/50" : "border-emerald-200 bg-emerald-50/40"}`}>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{s.priority}</p><h3 className="mt-1 text-sm font-bold text-slate-900">{s.title}</h3>
+            <p className="mt-2 text-xs leading-relaxed text-slate-600">{s.detail}</p>
+            <Link href={s.href} className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-emerald-800">{s.action}<ArrowUpRight className="h-3.5 w-3.5" /></Link>
+          </article>)}</div>}
+      </section>
+      <nav aria-label="Secções dos relatórios" className="flex flex-wrap gap-2 print:hidden">{tabs.map(item => <button key={item.id} aria-pressed={tab === item.id}
+        className={`${button} ${tab === item.id ? "bg-slate-900 text-white hover:bg-slate-800" : ""}`} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>
+      {tab === "overview" && <section className={`${panel} p-5`}>
+        <h2 className="font-bold text-slate-900">Estado atual dos envios deste período</h2>
+        <p className="mt-1 text-xs text-slate-500">Entrega confirmada não significa entrega dentro do prazo. Os estados refletem a última atualização guardada.</p>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">{[
+          ["Entregues", t.delivered], ["Em trânsito", t.inTransit], ["Pendentes", t.pending], ["Em incidência", t.incidents], ["Devolvidos", t.returned], ["Outros estados", t.other],
+        ].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-bold text-slate-900">{value}</p></div>)}</div>
+      </section>}
+      {show("finance") && <section className={`${panel} p-5`}>
+        <h2 className="font-bold text-slate-900">Evolução dos envios</h2>
+        <p className="mt-1 text-xs text-slate-500">Volume por dia de criação, no período selecionado. Dias sem envios ficam a zero.</p>
+        <div className="mt-5 flex h-40 items-end gap-1 overflow-x-auto border-b border-slate-200" role="img" aria-label="Gráfico de volume diário; valores detalhados na tabela abaixo">
+          {data.timeline.map(day => <div key={day.date} className="flex h-full min-w-5 flex-1 flex-col items-center justify-end gap-1" title={`${day.date}: ${day.volume} envios`}>
+            <span className="text-[10px] text-slate-500">{day.volume || ""}</span><div className="w-full max-w-10 rounded-t bg-emerald-600" style={{ height: `${day.volume / maxVolume * 110}px` }} />
+            <span className="pb-1 text-[9px] text-slate-500">{day.date.slice(-2)}</span></div>)}
+        </div>
+        <div className="mt-4 max-h-64 overflow-auto"><table className="w-full text-left text-xs">
+          <thead className="sticky top-0 bg-white text-slate-500"><tr><th className="py-2">Dia</th><th>Envios</th><th>Margem estimada</th><th>Cobertura</th></tr></thead>
+          <tbody>{data.timeline.map(day => <tr key={day.date} className="border-t border-slate-100"><td className="py-2">{dateOnly(`${day.date}T12:00:00Z`)}</td><td>{day.volume}</td>
+            <td className={day.margin < 0 ? "text-rose-700" : "text-emerald-700"}>{day.pricedCount ? euro(day.margin) : "—"}</td><td>{day.pricedCount} de {day.volume}</td></tr>)}</tbody>
+        </table></div>
+      </section>}
+      {(show("carriers") || show("clients") || show("services")) && <p className="text-xs text-slate-500">Base anterior: {timestamp(data.range.previousStart)} até {timestamp(data.range.previousEnd)}. Sem volume anterior, não calculamos crescimento percentual.</p>}
+      {show("carriers") && <GroupTable title="Comparação de transportadoras" groups={data.carriers} />}
+      {show("clients") && <GroupTable title="Atividade dos clientes" groups={data.clients} clients />}
+      {show("services") && <GroupTable title="Serviços utilizados" groups={data.services} />}
+      <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+        <div className="flex items-center gap-2 font-semibold text-slate-800"><AlertTriangle className="h-4 w-4" />Indicadores ainda por ligar</div>
+        <p className="mt-2 leading-relaxed">Entregas no prazo, primeira tentativa e tempo de resolução precisam de eventos de tracking e prazos de cada serviço. O mapa de destinos precisa de país e localidade guardados de forma consistente. Estes indicadores ficam sem estimativas de demonstração.</p>
+      </section>
+    </main>
+  </div>
 }

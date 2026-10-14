@@ -21,8 +21,10 @@ function fakeSupabase(tables, failure) {
   function from(table) {
     const state = { table, filters: [], limit: Infinity, single: false }
     const query = {
-      select() { if (state.write) state.returnRows = true; return query },
+      select(projection) { state.projection = projection; if (state.write) state.returnRows = true; return query },
       eq(field, value) { state.filters.push({ field, value, kind: 'eq' }); return query },
+      gte(field, value) { state.filters.push({ field, value, kind: 'gte' }); return query },
+      lte(field, value) { state.filters.push({ field, value, kind: 'lte' }); return query },
       ilike(field, value) { state.filters.push({ field, value, kind: 'ilike' }); return query },
       in(field, value) { state.filters.push({ field, value, kind: 'in' }); return query },
       order(field, options) { (state.orders ||= []).push({ field, ...options }); return query },
@@ -42,6 +44,8 @@ function fakeSupabase(tables, failure) {
           let rows = (tables[table] || []).filter(row => state.filters.every(filter => {
             const value = readField(row, filter.field)
             return filter.kind === 'ilike' ? matchesLike(value, filter.value)
+              : filter.kind === 'gte' ? value >= filter.value
+              : filter.kind === 'lte' ? value <= filter.value
               : filter.kind === 'in' ? filter.value.includes(value) : value === filter.value
           }))
           if (state.write) {

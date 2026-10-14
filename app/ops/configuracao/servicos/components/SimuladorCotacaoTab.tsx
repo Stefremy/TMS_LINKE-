@@ -1,23 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { 
-  Calculator, 
-  ArrowRight, 
-  CheckCircle2, 
-  Sparkles, 
-  Truck, 
-  Clock, 
-  Euro, 
-  Percent, 
-  HelpCircle,
-  TrendingUp,
-  Package,
-  ShieldCheck,
-  UserCheck,
-  TrendingDown
-} from "lucide-react"
+import { Calculator, Package, ShieldCheck } from "lucide-react"
 import { getCarrierLogo } from "@/lib/carrier-logos"
+import { findSimulationZone, getSimulationZoneName } from "@/lib/pricing/simulation-zone"
 import type { ServicoLinke, CotacaoSimulacaoResult } from "../types"
 
 interface SimuladorCotacaoTabProps {
@@ -65,15 +51,9 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
       .filter((s) => selectedClientProfile === "Todos" || s.pricing_profile === selectedClientProfile)
       .forEach((servico) => {
         // Find matching zone in service
-        const zone = servico.zones.find(
-          (z) => z.zone_code === selectedDestinationZone || 
-                 z.zone_name.toLowerCase().includes(selectedDestinationZone.toLowerCase()) ||
-                 (selectedDestinationZone === "EU 1" && (z.zone_code === "EU-Z1" || z.zone_code === "EU-ZONA1" || z.zone_code === "EU 1")) ||
-                 (selectedDestinationZone === "EU 2" && (z.zone_code === "EU-Z2" || z.zone_code === "EU-ZONA2" || z.zone_code === "EU 2")) ||
-                 (selectedDestinationZone === "EU 3" && (z.zone_code === "EU-Z3" || z.zone_code === "EU-ZONA3" || z.zone_code === "EU 3"))
-        )
+        const zone = findSimulationZone(servico.zones, selectedDestinationZone)
 
-        if (!zone) return
+        if (!zone || !Array.isArray(zone.tiers)) return
 
         // Sort tiers by weight_max ascending
         const sortedTiers = [...zone.tiers].sort((a, b) => a.weight_max - b.weight_max)
@@ -116,7 +96,7 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
             targetClient: servico.target_client_name || "Clientes Gerais",
             carrierName: servico.preferred_carrier_name,
             carrierColor: servico.color || "#059669",
-            zoneName: zone.zone_name,
+            zoneName: getSimulationZoneName(zone) || selectedDestinationZone,
             weight: chargeableWeight,
             transitTime: matchedTier.delivery_time || servico.transit_time_label,
             costPrice,
