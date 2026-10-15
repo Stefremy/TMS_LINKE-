@@ -4,12 +4,27 @@ import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.PUBLIC_SITE_ORIGIN || process.env.OPS_ORIGIN || process.env.CLIENT_PORTAL_ORIGIN || 'http://localhost:3000'),
   title: 'TMS LINKE',
   description: 'Sistema de Gestão de Transportes',
+  openGraph: {
+    type: 'website',
+    locale: 'pt_PT',
+    siteName: 'Linke',
+    title: 'TMS LINKE',
+    description: 'Sistema de Gestão de Transportes',
+    images: [{ url: '/linke-social.png', width: 1200, height: 630, alt: 'Linke — conexões que transformam' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'TMS LINKE',
+    description: 'Sistema de Gestão de Transportes',
+    images: ['/linke-social.png'],
+  },
   icons: {
-    icon: '/favicon.png',
-    shortcut: '/favicon.png',
-    apple: '/favicon.png',
+    icon: '/favicon.png?v=2',
+    shortcut: '/favicon.png?v=2',
+    apple: '/favicon.png?v=2',
   },
 }
 
