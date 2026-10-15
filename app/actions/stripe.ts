@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import Stripe from "stripe"
 import { headers } from "next/headers"
 import { requireUser } from "@/lib/auth/context"
+import { checkoutReturnOrigin } from "@/lib/config/public-origins"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_dummy", {
   apiVersion: "2026-08-26.dahlia" as any,
@@ -12,6 +13,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_dummy", {
 export async function createTopUpCheckoutSession(clientId: string, amountEuro: number) {
   try {
     const ctx = await requireUser()
+    const headersList = await headers()
+    const origin = checkoutReturnOrigin(headersList.get("origin"))
     if (ctx.role === "client" && ctx.client_id !== clientId) {
       throw new Error("Não autorizado a carregar esta conta.")
     }
@@ -54,9 +57,6 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
     }
 
     // 3. Create Stripe Checkout Session
-    const headersList = await headers()
-    const origin = headersList.get("origin") || "http://localhost:3000"
-
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card', 'mb_way', 'multibanco'],
       // payment_method_types: ['mb_way', 'card'],

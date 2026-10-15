@@ -1,5 +1,7 @@
 "use server"
 
+import { publicUrl } from "@/lib/config/public-origins"
+
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
@@ -745,6 +747,7 @@ export async function scheduleCttPickupAction(input: {
 
     // Disparar email de confirmação se fornecido
     if (input.sender.email) {
+      try {
       const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
       const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
       
@@ -753,7 +756,7 @@ export async function scheduleCttPickupAction(input: {
         time_period: `${input.startHour}h - ${input.endHour}h`,
         address: `${input.sender.address}, ${input.sender.zip} ${input.sender.city}`,
         volumes: input.volumes,
-        tracking_url: "https://tms.linke.pt/ops/envios/recolhas"
+        tracking_url: publicUrl("/app/recolhas", "portal")
       })
 
       sendEmail({
@@ -761,6 +764,10 @@ export async function scheduleCttPickupAction(input: {
         subject: `Linke | Recolha ${carrierName} Agendada com Sucesso (${result.pickupNumber})`,
         html,
       }).catch(err => console.error("Error sending pickup email:", err))
+      } catch {
+        // A missing public email URL must not turn an accepted pickup into a failed booking.
+        console.warn("A recolha foi aceite, mas não foi possível preparar o email de confirmação.")
+      }
     }
 
     revalidatePath("/ops/envios/recolhas")

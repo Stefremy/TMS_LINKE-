@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { sendEmail, compileTemplate } from "@/lib/email/resend"
+import { publicUrl } from "@/lib/config/public-origins"
 
 export interface TrackingNotificationExtra {
   reason?: string
@@ -110,7 +111,7 @@ export async function sendTrackingEmailNotification(
       ? `${linkeCode} / ${carrierCode}`
       : linkeCode
 
-    const tracking_url = `https://tms.linke.pt/tracking?trk=${encodeURIComponent(linkeCode)}`
+    const tracking_url = publicUrl(`/tracking?trk=${encodeURIComponent(linkeCode)}`, "site")
 
     if (type === "tracking") {
       subject = "Linke | Guia de Transporte Emitida"

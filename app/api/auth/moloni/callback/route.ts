@@ -5,6 +5,7 @@ import fs from "fs"
 import path from "path"
 
 import { getTenantId } from "@/lib/auth/context"
+import { moloniRedirectUri } from "@/lib/config/public-origins"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const redirectUri = `${new URL(request.url).origin}/api/auth/moloni/callback`
+    const redirectUri = moloniRedirectUri(new URL(request.url).origin)!
     const { refreshToken, companies } = await MoloniClient.exchangeAuthCode(code, redirectUri)
 
     const selectedCompany = companies[0] || { company_id: 0, name: "Empresa Moloni" }

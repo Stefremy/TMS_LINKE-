@@ -15,6 +15,7 @@ import { applyLinkeLogoToCorreosLabel } from "@/lib/services/correos/correos-lab
 import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "@/lib/services/shipments/shipment-utils"
 import { fetchShipments, fetchShipmentLabel, fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
 import { syncShipmentTracking, mapCorreosStatus } from "@/lib/services/tracking"
+import { publicUrl } from "@/lib/config/public-origins"
 
 export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
   return fetchShipments(options)
@@ -545,7 +546,7 @@ export async function emitClientGuiaAction(data: {
               const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
               const html = compileTemplate(emailTemplates.low_balance, {
                 current_balance: newCredit.toFixed(2),
-                topup_url: "https://tms.linke.pt/app"
+                topup_url: publicUrl("/app", "portal")
               })
               sendEmail({
                 to: clientData.email,

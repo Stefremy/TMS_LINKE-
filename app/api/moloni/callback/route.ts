@@ -5,6 +5,7 @@ import fs from "fs"
 import path from "path"
 
 import { getTenantId } from "@/lib/auth/context"
+import { moloniRedirectUri } from "@/lib/config/public-origins"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -24,18 +25,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Note: Moloni requires the exact redirect_uri registered in the developer portal:
-    // https://linke-store-ten.vercel.app/api/moloni/callback
-    const redirectUri = "https://linke-store-ten.vercel.app/api/moloni/callback"
-    
-    let tokenData
-    try {
-      tokenData = await MoloniClient.exchangeAuthCode(code, redirectUri)
-    } catch (exchangeErr: any) {
-      // Fallback: try origin redirectUri in case developer configured localhost
-      const localUri = `${new URL(request.url).origin}/api/moloni/callback`
-      tokenData = await MoloniClient.exchangeAuthCode(code, localUri)
-    }
+    const redirectUri = moloniRedirectUri(new URL(request.url).origin)!
+    const tokenData = await MoloniClient.exchangeAuthCode(code, redirectUri)
 
     const { refreshToken, companies } = tokenData
     const selectedCompany = (companies || []).find((c: any) => !c.name?.toLowerCase().includes("demonstração")) || companies?.[0] || { company_id: 393993, name: "Linke" }

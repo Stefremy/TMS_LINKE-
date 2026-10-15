@@ -13,6 +13,7 @@ interface MoloniConnectModalProps {
     companyName?: string
     companyId?: string
     clientId?: string
+    redirectUri?: string
   }
 }
 
@@ -47,8 +48,8 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
 
   const clientId = config?.clientId || "518600300"
   const currentOrigin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"
-  // Moloni developer portal registered callback:
-  const registeredCallbackUri = "https://linke-store-ten.vercel.app/api/moloni/callback"
+  // The server derives the public callback from OPS_ORIGIN.
+  const registeredCallbackUri = config?.redirectUri || `${currentOrigin}/api/moloni/callback`
   // Correct Moloni OAuth authorization endpoint
   const oauthAuthUrl = `https://www.moloni.pt/ac/root/oauth/?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(registeredCallbackUri)}&state=${encodeURIComponent(currentOrigin)}`
 

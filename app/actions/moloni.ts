@@ -7,6 +7,7 @@ import { getClientesAction } from "@/app/actions/clientes"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
 import { getBillingConfigAction } from "@/app/actions/billing-config"
+import { moloniRedirectUri } from "@/lib/config/public-origins"
 
 const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 
@@ -376,12 +377,14 @@ export async function getBillingStatementsAction(clientId?: string) {
  */
 export async function getMoloniConfigAction() {
   await requireEmployee()
+  const redirectUri = moloniRedirectUri()
   const supabase = createAdminClient()
   try {
     if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
       return {
         isConnected: true,
         companyId: process.env.MOLONI_COMPANY_ID,
+        redirectUri,
         clientId: process.env.MOLONI_CLIENT_ID || "518600300"
       }
     }
@@ -398,12 +401,14 @@ export async function getMoloniConfigAction() {
         isConnected: true,
         companyId: logs[0].details.company_id,
         companyName: logs[0].details.company_name,
+        redirectUri,
         clientId: process.env.MOLONI_CLIENT_ID || "518600300"
       }
     }
 
     return {
       isConnected: false,
+      redirectUri,
       clientId: process.env.MOLONI_CLIENT_ID || "518600300"
     }
   } catch {
