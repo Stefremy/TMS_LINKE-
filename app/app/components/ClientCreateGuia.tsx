@@ -485,7 +485,7 @@ export function ClientCreateGuia() {
       )}
 
       {/* Main Creation Card Form */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 sm:p-8">
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 p-4 sm:p-6 md:p-8">
         <form onSubmit={handleCreateShipment} className="space-y-6">
           
           {/* Remetente e Destinatário */}
@@ -966,18 +966,18 @@ export function ClientCreateGuia() {
           </div>
 
           {/* SIMULAÇÃO DE PREÇO & BOTÃO DE EMISSÃO */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-200 bg-slate-50/80 p-5 rounded-2xl">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
-                <Euro className="w-6 h-6" />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-4 border-t border-slate-200 bg-slate-50/80 p-4 sm:p-5 rounded-2xl">
+            <div className="flex items-center gap-3.5 sm:gap-4">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+                <Euro className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <div className="text-xs text-slate-500 font-medium">Preço Total Estimado do Envio (sem IVA):</div>
+              <div className="min-w-0">
+                <div className="text-[11px] sm:text-xs text-slate-500 font-medium">Preço Total Estimado do Envio (sem IVA):</div>
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-3xl font-black text-slate-900 font-mono">
+                  <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
                     {calculatedPrice.total}€
                   </span>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[10px] sm:text-[11px] text-slate-500">
                     (Base: <strong>{calculatedPrice.base}€</strong> + Comb. {calculatedPrice.fuelPct}%: <strong>{calculatedPrice.fuel}€</strong>
                     {parseFloat(calculatedPrice.specialTotal) > 0 ? ` + Supl.: ${calculatedPrice.specialTotal}€` : ""}
 )
@@ -988,7 +988,7 @@ export function ClientCreateGuia() {
 
             <button 
               type="submit" 
-              className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white px-7 py-3.5 rounded-2xl text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+              className="w-full sm:w-auto justify-center bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white px-7 py-3.5 rounded-2xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
             >
               <FileText className="w-4 h-4" />
               <span>Criar Envio</span>
@@ -1021,15 +1021,45 @@ export function ClientCreateGuia() {
 
       {/* Tabela de Envios Criados na Sessão */}
       {sessionShipments.length > 0 && (
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-slate-900">Envios Criados Nesta Sessão</h3>
-            <span className="text-xs font-semibold text-[var(--text-primary)] bg-[var(--surface-muted)] border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">
+            <h3 className="text-sm sm:text-base font-bold text-slate-900">Envios Criados Nesta Sessão</h3>
+            <span className="text-xs font-semibold text-[var(--text-primary)] bg-[var(--surface-muted)] border border-[var(--border-subtle)] px-2.5 py-0.5 rounded-md">
               {sessionShipments.length} envios
             </span>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile cards view */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {sessionShipments.map((item, idx) => (
+              <div key={idx} className="py-3 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-emerald-700">{item.guia}</span>
+                  <span className="font-mono font-bold text-slate-900">{item.valor}</span>
+                </div>
+                <div className="text-slate-800 font-semibold">{item.destinatario}</div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                  <div className="flex items-center gap-1.5">
+                    {getCarrierLogo(item.servico || item.transportadora || "ctt") ? (
+                      <div className="w-4 h-4 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                          src={getCarrierLogo(item.servico || item.transportadora || "ctt")!} 
+                          alt="Logo" 
+                          className="max-w-full max-h-full object-contain" 
+                        />
+                      </div>
+                    ) : null}
+                    <span>{item.servico}</span>
+                  </div>
+                  <span>{item.data}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table view */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-600 font-bold">

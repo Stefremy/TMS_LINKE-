@@ -616,8 +616,131 @@ export function ClientDashboard() {
             </Link>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-[var(--text-secondary)]">
+          <div>
+            {/* ─── MOBILE CARDS VIEW (md:hidden) ─── */}
+            <div className="md:hidden divide-y divide-[var(--border-subtle)]">
+              {paginatedShipments.map((shipment) => {
+                const dateStr = shipment.created_at ? new Date(shipment.created_at).toLocaleDateString("pt-PT", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                }) : "Hoje"
+
+                const tracking = shipment.tracking_number || shipment.id
+
+                const linkeRef =
+                  (shipment.reference?.startsWith("LTK") ? shipment.reference : null) ||
+                  (shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null) ||
+                  (shipment.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1]) ||
+                  shipment.reference ||
+                  null
+
+                const isCorreos = shipment.carrier_code === "correos" ||
+                  shipment.carrier_code === "correos_express" ||
+                  (typeof shipment.service_type === "string" && shipment.service_type.toLowerCase().includes("correos")) ||
+                  /^\d{16}$/.test(shipment.carrier_tracking_number || "")
+
+                const carrierRef =
+                  shipment.carrier_tracking_number ||
+                  (!isCorreos ? shipment.ctt_object_id : null) ||
+                  (!shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null)
+
+                const primaryDisplay = linkeRef || carrierRef || shipment.id
+                const secondaryDisplay = (linkeRef && carrierRef && carrierRef !== linkeRef) ? carrierRef : null
+                const statusCfg = getShipmentStatusConfig(shipment.status)
+                const carrierLogo = getCarrierLogo(shipment.service_type || shipment.carrier || "ctt")
+
+                return (
+                  <div key={shipment.id} className="p-3.5 space-y-2.5 hover:bg-[var(--surface-muted)] transition-colors">
+                    {/* Top Row: Ref/Tracking + Status */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedShipment(shipment)}
+                          className="font-mono font-bold text-xs text-[var(--accent)] hover:underline truncate text-left block"
+                        >
+                          {primaryDisplay}
+                        </button>
+                        {secondaryDisplay && (
+                          <div className="font-mono text-[10px] text-[var(--text-tertiary)] truncate">
+                            {isCorreos ? "CORREOS: " : "CTT: "}
+                            <span className="font-semibold text-[var(--text-secondary)]">{secondaryDisplay}</span>
+                          </div>
+                        )}
+                      </div>
+                      <Badge variant={statusCfg.badgeVariant} className="shrink-0 text-[10px]">
+                        {statusCfg.label}
+                      </Badge>
+                    </div>
+
+                    {/* Middle Row: Recipient & Carrier */}
+                    <div className="flex items-center justify-between text-xs gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-[var(--text-primary)] truncate">
+                          {shipment.recipient_name || "Sem nome"}
+                        </div>
+                        <div className="text-[11px] text-[var(--text-tertiary)] truncate">
+                          {shipment.recipient_city || shipment.recipient_postal || shipment.recipient_address || "Portugal"}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {carrierLogo ? (
+                          <div className="w-5 h-5 rounded bg-[var(--surface-bg)] border border-[var(--border-subtle)] p-0.5 flex items-center justify-center overflow-hidden shadow-2xs">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={carrierLogo} alt="Carrier" className="max-w-full max-h-full object-contain" />
+                          </div>
+                        ) : null}
+                        <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                          {shipment.service_type || "CTT Expresso"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Date, Price & Quick Actions */}
+                    <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)]/60 text-xs">
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-bold font-mono text-[var(--text-primary)]">
+                          {shipment.sell_price ? `${Number(shipment.sell_price).toFixed(2)}€` : "0.00€"}
+                        </span>
+                        <span className="text-[10px] text-[var(--text-tertiary)]">{dateStr}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedShipment(shipment)}
+                          className="px-2.5 py-1 text-[11px] font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] hover:bg-[var(--border-subtle)] rounded-md transition-colors"
+                        >
+                          Ver
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => printLabel(shipment)}
+                          className="p-1.5 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-md border border-[var(--border-subtle)] transition-colors"
+                          title="Imprimir Etiqueta"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => downloadLabel(shipment, tracking)}
+                          className="p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] rounded-md border border-[var(--border-subtle)] transition-colors"
+                          title="Descarregar PDF"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* ─── DESKTOP TABLE VIEW (hidden md:block) ─── */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs text-[var(--text-secondary)]">
               <thead className="bg-[var(--surface-muted)] text-[var(--text-tertiary)] font-bold uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
                 <tr>
                   <th className="py-3.5 px-5">Guia / Rastreio</th>
@@ -802,7 +925,8 @@ export function ClientDashboard() {
               </tbody>
             </table>
           </div>
-        )}
+        </div>
+      )}
 
         {/* Pagination Footer (15 per page) */}
         {filteredShipments.length > 0 && (

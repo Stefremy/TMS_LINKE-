@@ -435,8 +435,87 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
               </Link>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm whitespace-nowrap">
+            <div>
+              {/* Mobile Cards View */}
+              <div className="md:hidden divide-y divide-[var(--border-subtle)]">
+                {recentShipments.map((envio: any) => {
+                  const clientName = envio.sender_name || (envio.client_id && clientMap.get(envio.client_id)) || "Cliente Direto"
+                  const isRealCtt = (val?: string) => val && /^(DA|DB|DD|EA|EQ|EG)/i.test(val.trim())
+                  
+                  const cttCode = isRealCtt(envio.ctt_object_id) 
+                    ? envio.ctt_object_id 
+                    : isRealCtt(envio.tracking_number) 
+                    ? envio.tracking_number 
+                    : envio.ctt_object_id
+
+                  const linkeRef = (envio.reference?.startsWith("LTK") ? envio.reference : null)
+                    || (envio.tracking_number?.startsWith("LTK") ? envio.tracking_number : null)
+                    || (envio.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1])
+                    || envio.reference
+                    || null
+
+                  const displayRef = linkeRef || envio.tracking_number || envio.id
+                  const secondaryCode = cttCode && cttCode !== displayRef ? cttCode : null
+                  const carrierLogo = getCarrierLogo(envio.service_type || "ctt")
+
+                  return (
+                    <div key={envio.id} className="py-3 space-y-2 text-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="font-mono font-bold text-xs text-[var(--accent)] block truncate">
+                            {displayRef}
+                          </span>
+                          {secondaryCode && (
+                            <span className="text-[10px] text-[var(--text-tertiary)] block truncate">
+                              CTT: {secondaryCode}
+                            </span>
+                          )}
+                        </div>
+                        <Badge variant={
+                          envio.status === "entregue" ? "success" :
+                          envio.status === "pendente" ? "warning" : "info"
+                        } className="shrink-0 text-[10px]">
+                          {envio.status === "em transito" ? "Em Trânsito" : 
+                           envio.status.charAt(0).toUpperCase() + envio.status.slice(1)}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px]">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-[var(--text-primary)] truncate">{clientName}</div>
+                          <div className="text-[var(--text-tertiary)] truncate">Para: {envio.recipient_name || "Destinatário"}</div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {carrierLogo ? (
+                            <div className="w-4 h-4 rounded bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center overflow-hidden shadow-2xs">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={carrierLogo} alt="Carrier" className="max-w-full max-h-full object-contain" />
+                            </div>
+                          ) : null}
+                          <span className="font-medium text-[var(--text-secondary)]">{envio.service_type || "CTT Expresso"}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)]/60 text-[11px]">
+                        <span className="font-mono font-bold text-[var(--text-primary)]">
+                          {envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
+                        </span>
+                        <Link 
+                          href={`/ops/envios?q=${encodeURIComponent(displayRef)}`}
+                          className="font-bold text-[var(--accent)] hover:underline flex items-center gap-1"
+                        >
+                          Ver no Ops <ArrowRight className="w-3 h-3" />
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-[var(--border-subtle)] text-[11px] text-[var(--text-tertiary)] font-semibold uppercase tracking-wider">
                     <th className="pb-2.5">Guia / Ref</th>
@@ -518,7 +597,8 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
                 </tbody>
               </table>
             </div>
-          )}
+          </div>
+        )}
         </div>
 
         {/* Right side - Rastreamento Widget */}

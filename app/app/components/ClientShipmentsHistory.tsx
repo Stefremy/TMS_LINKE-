@@ -216,7 +216,7 @@ export function ClientShipmentsHistory() {
             <span>&gt;</span>
             <span className="text-emerald-600 font-bold">Histórico & Envios</span>
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Histórico de Envios & Rastreamento</h1>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Histórico de Envios & Rastreamento</h1>
           <p className="text-xs text-slate-500 mt-0.5">
             Acompanhe o estado de entrega e comprovativos de receção de todas as guias emitidas.
           </p>
@@ -313,7 +313,7 @@ export function ClientShipmentsHistory() {
       </div>
 
       {/* Shipments List Table / Clean State */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 p-3.5 sm:p-6">
         {filteredShipments.length === 0 ? (
           <div className="py-12 px-4 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
             <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
@@ -330,8 +330,121 @@ export function ClientShipmentsHistory() {
             </Link>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs whitespace-nowrap">
+          <div>
+            {/* ─── MOBILE CARDS VIEW (md:hidden) ─── */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filteredShipments.map((envio) => {
+                const linkeRef =
+                  (envio.reference?.startsWith("LTK") ? envio.reference : null) ||
+                  (envio.tracking_number?.startsWith("LTK") ? envio.tracking_number : null) ||
+                  (envio.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1]) ||
+                  envio.reference ||
+                  null
+
+                const isCorreos = envio.carrier_code === "correos" ||
+                  envio.carrier_code === "correos_express" ||
+                  (typeof envio.service_type === "string" && envio.service_type.toLowerCase().includes("correos")) ||
+                  /^\d{16}$/.test(envio.carrier_tracking_number || "")
+
+                const carrierRef =
+                  envio.carrier_tracking_number ||
+                  (!isCorreos ? envio.ctt_object_id : null) ||
+                  (!envio.tracking_number?.startsWith("LTK") ? envio.tracking_number : null)
+
+                const primaryDisplay = linkeRef || carrierRef || envio.id
+                const secondaryDisplay = (linkeRef && carrierRef && carrierRef !== linkeRef) ? carrierRef : null
+                const statusCfg = getShipmentStatusConfig(envio.status)
+                const carrierLogo = getCarrierLogo(envio.service_type || envio.carrier || "ctt")
+                const tracking = envio.tracking_number || envio.id
+
+                return (
+                  <div key={envio.id} className="p-3.5 space-y-2.5 hover:bg-slate-50/80 transition-colors">
+                    {/* Top Row: Ref/Tracking + Status */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedShipment(envio)}
+                          className="font-mono font-bold text-xs text-emerald-700 hover:underline truncate text-left block"
+                        >
+                          {primaryDisplay}
+                        </button>
+                        {secondaryDisplay && (
+                          <div className="font-mono text-[10px] text-slate-500 truncate">
+                            {isCorreos ? "CORREOS: " : "CTT: "}
+                            <span className="font-semibold text-slate-800">{secondaryDisplay}</span>
+                          </div>
+                        )}
+                      </div>
+                      <Badge variant={statusCfg.badgeVariant} className="shrink-0 text-[10px]">
+                        {statusCfg.label}
+                      </Badge>
+                    </div>
+
+                    {/* Middle Row: Recipient & Carrier */}
+                    <div className="flex items-center justify-between text-xs gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-slate-800 truncate">
+                          {envio.recipient_name || "Sem nome"}
+                        </div>
+                        <div className="text-[11px] text-slate-500 truncate">
+                          {envio.recipient_city || envio.recipient_postal || envio.recipient_address || "Portugal"}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {carrierLogo ? (
+                          <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center overflow-hidden shadow-2xs">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={carrierLogo} alt="Carrier" className="max-w-full max-h-full object-contain" />
+                          </div>
+                        ) : null}
+                        <span className="text-[11px] font-semibold text-slate-700">
+                          {envio.service_type || "CTT Expresso"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Value & Action Buttons */}
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                      <div className="font-bold font-mono text-slate-900">
+                        {envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedShipment(envio)}
+                          className="px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Ver
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => printLabel(envio)}
+                          className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                          title="Imprimir Etiqueta"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => downloadLabel(envio, tracking)}
+                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                          title="Descarregar PDF"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* ─── DESKTOP TABLE VIEW (hidden md:block) ─── */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-600 font-bold">
                   <th className="pb-3">Guia</th>
@@ -486,7 +599,8 @@ export function ClientShipmentsHistory() {
               </tbody>
             </table>
           </div>
-        )}
+        </div>
+      )}
       </div>
 
     </div>

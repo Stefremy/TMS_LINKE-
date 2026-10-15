@@ -224,9 +224,9 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
       </div>
 
       {/* Toolbar Area */}
-      <div className="px-5 py-3 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-bg)] shrink-0 gap-3 text-[11px]">
+      <div className="px-3.5 sm:px-5 py-2.5 border-b border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between bg-[var(--surface-bg)] shrink-0 gap-2.5 text-[11px]">
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Button
             size="sm"
             onClick={(e) => {
@@ -237,7 +237,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                 router.push('/ops/envios/novo')
               }
             }}
-            className="font-semibold px-3 py-1.5 h-auto text-xs shadow-xs"
+            className="font-semibold px-2.5 sm:px-3 py-1.5 h-auto text-xs shadow-xs"
           >
             <Plus className="w-3.5 h-3.5 mr-1" strokeWidth={3} />
             Novo
@@ -247,7 +247,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             variant="outline"
             size="sm"
             onClick={() => setViewMode(viewMode === "envios" ? "recolhas" : "envios")}
-            className={`px-3 py-1.5 h-auto text-xs font-semibold shadow-xs ${
+            className={`px-2.5 sm:px-3 py-1.5 h-auto text-xs font-semibold shadow-xs ${
               viewMode === "recolhas" 
                 ? "bg-[var(--surface-dim)] border-[var(--border-strong)] text-[var(--text-primary)]" 
                 : ""
@@ -257,7 +257,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             {viewMode === "envios" ? "Recolhas" : "Envios"}
           </Button>
           
-          <Button variant="outline" size="sm" className="px-3 py-1.5 h-auto text-[11px] font-medium shadow-xs">
+          <Button variant="outline" size="sm" className="hidden xs:flex px-2.5 sm:px-3 py-1.5 h-auto text-[11px] font-medium shadow-xs">
             <MapPin className="w-3.5 h-3.5 mr-1.5" />
             Localizar
           </Button>
@@ -268,24 +268,24 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
-            className={`px-3 py-1.5 h-auto text-[11px] font-medium shadow-xs ${
+            className={`px-2.5 sm:px-3 py-1.5 h-auto text-[11px] font-medium shadow-xs ${
               showFilters 
                 ? "bg-[var(--surface-dim)] border-[var(--border-strong)] text-[var(--text-primary)]" 
                 : ""
             }`}
           >
-            <Filter className="w-3.5 h-3.5 mr-1.5" />
+            <Filter className="w-3.5 h-3.5 mr-1" />
             Filtrar
-            <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showFilters ? "rotate-180" : ""}`} />
+            <ChevronDown className={`w-3 h-3 ml-0.5 transition-transform ${showFilters ? "rotate-180" : ""}`} />
           </Button>
 
-          <div className="flex items-center ml-2 border-l border-[var(--border-subtle)] pl-4">
-            <span className="text-[11px] font-semibold text-[var(--text-secondary)] mr-2">Estado</span>
+          <div className="flex items-center ml-1 sm:ml-2 border-l border-[var(--border-subtle)] pl-2 sm:pl-4">
+            <span className="hidden sm:inline text-[11px] font-semibold text-[var(--text-secondary)] mr-2">Estado</span>
             <div className="relative">
               <select 
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none bg-[var(--surface-bg)] border border-[var(--border-strong)] text-[var(--text-primary)] text-[11px] font-medium rounded-md px-2.5 py-1.5 pr-7 focus:outline-none focus:border-[var(--accent)] shadow-2xs"
+                className="appearance-none bg-[var(--surface-bg)] border border-[var(--border-strong)] text-[var(--text-primary)] text-[11px] font-medium rounded-md px-2 py-1 sm:px-2.5 sm:py-1.5 pr-6 sm:pr-7 focus:outline-none focus:border-[var(--accent)] shadow-2xs"
               >
                 <option value="Todos">Todos</option>
                 <option value="Pendente">Pendente</option>
@@ -297,28 +297,20 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                 <option value="Devolvido">Devolvido</option>
                 <option value="Cancelado">Cancelado</option>
               </select>
-              <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
-            <input 
-              type="text" 
-              placeholder="Q TRK" 
-              className="w-28 pl-8 pr-3 py-1.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-[11px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors"
-            />
-          </div>
-          <div className="relative">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:flex-initial">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
             <input 
               type="text" 
               placeholder="Pesquisar..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-56 pl-8 pr-3 py-1.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-[11px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors"
+              className="w-full sm:w-56 pl-8 pr-3 py-1.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-[11px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors"
             />
           </div>
         </div>
@@ -436,41 +428,159 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
         </div>
       )}
 
-      {/* Table Area */}
+      {/* Table Area (Desktop Table + Mobile Card View) */}
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-left text-xs whitespace-nowrap pb-32">
-          <thead className="bg-[var(--surface-muted)] sticky top-0 z-10">
-            <tr className="border-b border-[var(--border-subtle)] text-[10px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">
-              <th className="px-4 py-2.5 w-10">
-                <input 
-                  type="checkbox" 
-                  checked={filteredEnvios.length > 0 && selectedIds.length === filteredEnvios.length}
-                  onChange={handleSelectAll}
-                  className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-[var(--accent-active)] cursor-pointer" 
-                  title="Selecionar Todos"
-                />
-              </th>
-              <th className="px-3 py-2.5">TRK</th>
-              <th className="px-3 py-2.5">Remetente</th>
-              <th className="px-3 py-2.5">Destinatário</th>
-              <th className="px-3 py-2.5">Serviço</th>
-              <th className="px-3 py-2.5">Remessa</th>
-              <th className="px-3 py-2.5">Entrega</th>
-              <th className="px-3 py-2.5">Estado</th>
-              <th className="px-3 py-2.5">Valor</th>
-              <th className="px-4 py-2.5 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--border-subtle)] bg-[var(--surface-bg)] text-[11px]">
-            {filteredEnvios.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-[var(--text-secondary)]">
-                  Nenhum envio encontrado com a pesquisa atual.
-                </td>
-              </tr>
-            ) : filteredEnvios.map((envio, idx) => {
-              const rowId = envio.rawId || envio.rawShipment?.id || envio.trk?.id
-              const isSelected = selectedIds.includes(rowId)
+        {filteredEnvios.length === 0 ? (
+          <div className="px-4 py-12 text-center text-[var(--text-secondary)]">
+            Nenhum envio encontrado com a pesquisa atual.
+          </div>
+        ) : (
+          <>
+            {/* ─── MOBILE CARD VIEW (md:hidden) ─────────────────────────────────── */}
+            <div className="md:hidden divide-y divide-[var(--border-subtle)] bg-[var(--surface-bg)]">
+              {filteredEnvios.map((envio, idx) => {
+                const rowId = envio.rawId || envio.rawShipment?.id || envio.trk?.id
+                const isSelected = selectedIds.includes(rowId)
+                const statusVal = envio.rawShipment?.status || envio.status?.raw || envio.status?.label
+                const cfg = getShipmentStatusConfig(statusVal)
+                const isBilled = Boolean(
+                  envio.rawShipment?.billing_statement_id || 
+                  envio.billing_statement_id || 
+                  envio.is_invoiced
+                )
+
+                return (
+                  <div 
+                    key={`mob-${idx}`}
+                    className={`p-3.5 space-y-2.5 transition-colors ${
+                      isSelected ? "bg-[var(--accent-soft)]/40" : "hover:bg-[var(--surface-muted)]/50"
+                    }`}
+                  >
+                    {/* Top Row: Checkbox + TRK + Status Badge */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected}
+                          onChange={() => handleToggleRow(rowId)}
+                          aria-label={`Selecionar envio ${envio.trk?.id || ""}`}
+                          className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-[var(--accent-active)] cursor-pointer shrink-0" 
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const target = envio.rawShipment ? { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id } : envio;
+                            setDrawerShipment(target)
+                          }}
+                          className="font-mono font-bold text-[var(--status-info)] text-xs truncate text-left"
+                        >
+                          {envio.trk?.id || "N/A"}
+                        </button>
+                        <span className="px-1.5 py-0.2 bg-[var(--accent)] text-white text-[8px] font-bold rounded uppercase">
+                          {envio.trk?.tag || "A01"}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Badge variant={cfg.badgeVariant}>
+                          {cfg.label}
+                        </Badge>
+                        {isBilled && (
+                          <span className="p-0.5 rounded bg-[#fbf7f2] text-[#8f5d30] border border-[#d8c5b2]" title="Faturado">
+                            <Lock className="w-2.5 h-2.5" />
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Middle: Remetente ➔ Destinatário */}
+                    <div className="grid grid-cols-2 gap-2 text-[11px] bg-[var(--surface-muted)]/60 p-2.5 rounded-lg border border-[var(--border-subtle)]">
+                      <div className="min-w-0">
+                        <span className="text-[9px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider block">De</span>
+                        <p className="font-semibold text-[var(--text-primary)] truncate">{envio.sender?.name || "-"}</p>
+                        <p className="text-[10px] text-[var(--text-secondary)] truncate">
+                          {envio.sender?.flag === 'PT' ? '🇵🇹' : '🇪🇸'} {envio.sender?.city || ""}
+                        </p>
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[9px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider block">Para</span>
+                        <p className="font-semibold text-[var(--text-primary)] truncate">{envio.recipient?.name || "-"}</p>
+                        <p className="text-[10px] text-[var(--text-secondary)] truncate">
+                          {envio.recipient?.flag === 'PT' ? '🇵🇹' : '🇪🇸'} {envio.recipient?.city || ""}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Service + Price + Actions */}
+                    <div className="flex items-center justify-between pt-0.5 text-xs">
+                      <div className="flex items-center gap-2">
+                        {getCarrierLogo(envio.service?.name || envio.service?.code || envio.rawShipment?.carrier_name || "ctt") && (
+                          <div className="w-4 h-4 rounded bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img 
+                              src={getCarrierLogo(envio.service?.name || envio.service?.code || envio.rawShipment?.carrier_name || "ctt")!} 
+                              alt="Logo" 
+                              className="max-w-full max-h-full object-contain" 
+                            />
+                          </div>
+                        )}
+                        <span className="text-[10px] font-medium text-[var(--text-secondary)]">{envio.service?.name || envio.service?.code || "Expresso"}</span>
+                        <span className="font-bold text-[var(--text-primary)] font-mono">{envio.value?.amount || "0,00€"}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = envio.rawShipment ? { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id } : envio;
+                            setDrawerShipment(target)
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-semibold bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md transition-colors"
+                        >
+                          Ver
+                        </button>
+                        <ActionMenu 
+                          shipment={envio.rawShipment || envio}
+                          shipmentId={envio.rawId} 
+                          trackingRef={envio.trk?.ref || envio.trk?.id} 
+                          isCtt={envio.service?.code?.includes('CTT')}
+                          onOpenDetails={() => setSelectedShipment(envio.rawShipment || envio)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* ─── DESKTOP TABLE (hidden md:table) ─────────────────────────────── */}
+            <table className="hidden md:table w-full text-left text-xs whitespace-nowrap pb-32">
+              <thead className="bg-[var(--surface-muted)] sticky top-0 z-10">
+                <tr className="border-b border-[var(--border-subtle)] text-[10px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">
+                  <th className="px-4 py-2.5 w-10">
+                    <input 
+                      type="checkbox" 
+                      checked={filteredEnvios.length > 0 && selectedIds.length === filteredEnvios.length}
+                      onChange={handleSelectAll}
+                      className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-[var(--accent-active)] cursor-pointer" 
+                      title="Selecionar Todos"
+                    />
+                  </th>
+                  <th className="px-3 py-2.5">TRK</th>
+                  <th className="px-3 py-2.5">Remetente</th>
+                  <th className="px-3 py-2.5">Destinatário</th>
+                  <th className="px-3 py-2.5">Serviço</th>
+                  <th className="px-3 py-2.5">Remessa</th>
+                  <th className="px-3 py-2.5">Entrega</th>
+                  <th className="px-3 py-2.5">Estado</th>
+                  <th className="px-3 py-2.5">Valor</th>
+                  <th className="px-4 py-2.5 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border-subtle)] bg-[var(--surface-bg)] text-[11px]">
+                {filteredEnvios.map((envio, idx) => {
+                  const rowId = envio.rawId || envio.rawShipment?.id || envio.trk?.id
+                  const isSelected = selectedIds.includes(rowId)
               const isDrawerActive = drawerShipment && (
                 (drawerShipment.id && (drawerShipment.id === envio.rawId || drawerShipment.id === envio.rawShipment?.id)) ||
                 (drawerShipment.tracking_number && (drawerShipment.tracking_number === envio.trk?.id || drawerShipment.tracking_number === envio.trk?.carrierRef)) ||
@@ -669,6 +779,8 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             })}
           </tbody>
         </table>
+        </>
+        )}
       </div>
       
       {pagination && viewMode === "envios" && (

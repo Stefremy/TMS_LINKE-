@@ -13,6 +13,7 @@ import { ClientSidebarNav, ClientTopHeaderAction } from "./ClientSidebarNav"
 import { signout } from "@/app/login/actions"
 import type { requirePortalStore } from "@/lib/client-portal/access"
 import { ClientScopeProvider } from "./ClientScope"
+import { ClientMobileNav } from "./ClientMobileNav"
 
 export function ClientPortalShell({ children, store }: {
   children: React.ReactNode
@@ -27,9 +28,14 @@ export function ClientPortalShell({ children, store }: {
         <ClientImpersonationBanner />
       </Suspense>
 
+      {/* Mobile Topbar, Drawer & Bottom Navigation */}
+      <Suspense fallback={null}>
+        <ClientMobileNav />
+      </Suspense>
+
       <div className="flex-1 flex flex-col md:flex-row min-w-0">
-        {/* Sidebar */}
-        <aside className="w-full md:w-60 bg-[var(--surface-bg)] border-r border-[var(--border-subtle)] flex flex-col shrink-0">
+        {/* Desktop Sidebar */}
+        <aside className="hidden md:flex md:w-60 bg-[var(--surface-bg)] border-r border-[var(--border-subtle)] flex-col shrink-0">
           
           {/* Logo Area */}
           <div className="pt-7 pb-5 px-5">
@@ -80,8 +86,8 @@ export function ClientPortalShell({ children, store }: {
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Topbar / Header */}
-          <header className="h-12 flex items-center justify-between px-5 sm:px-6 shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+          {/* Desktop Topbar / Header */}
+          <header className="hidden md:flex h-12 items-center justify-between px-5 sm:px-6 shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)]">
             <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-tertiary)] font-medium">
               <Home className="w-3 h-3" />
               <span className="text-[var(--border-strong)]">&gt;</span>
@@ -96,7 +102,7 @@ export function ClientPortalShell({ children, store }: {
           </header>
 
           {/* Page Content */}
-          <main className="flex-1 overflow-y-auto p-5 sm:p-6">
+          <main className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-6 pb-20 md:pb-6">
             {children}
           </main>
         </div>
