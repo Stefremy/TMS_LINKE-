@@ -1,6 +1,6 @@
 {
   "name": "tms-linke",
-  "version": "2.8.9",
+  "version": "2.8.10",
   "private": true,
   "scripts": {
     "version:bump": "node scripts/bump-version.js",
@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:security": "node --test tests/security.test.cjs tests/reconciliation-security.test.cjs tests/client-action-security.test.cjs tests/portal-slug-security.test.cjs tests/client-login-security.test.cjs tests/client-invitation-security.test.cjs tests/staff-client-sharing.test.cjs",
-    "test:billing": "node --test tests/moloni-invoicing.test.cjs",
+    "test:billing": "node --test tests/moloni-invoicing.test.cjs tests/invoice-archive.test.cjs",
     "test:reports": "node --test tests/operational-reports.test.cjs",
     "test:domains": "node --test tests/domain-routing.test.cjs",
     "test:manifests": "node --test tests/ctt-manifest.test.cjs tests/ctt-close-protocol.test.cjs"

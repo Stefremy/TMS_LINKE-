@@ -3,7 +3,8 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Building, FileText, ChevronDown, ChevronRight, Euro, Cloud, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X, Sparkles, Mail, Send } from "lucide-react"
+import { Building, FolderOpen, FileText, ChevronDown, ChevronRight, Euro, Cloud, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X, Sparkles, Mail, Send } from "lucide-react"
+import { groupInvoiceArchive, isInvoicePaid } from "@/lib/billing/invoice-archive"
 import { InvoiceIssueButton } from "./InvoiceIssueButton"
 import { MoloniConnectModal } from "./MoloniConnectModal"
 
@@ -33,6 +34,8 @@ export default function ContasCorrenteClient({
 
   const [expandedClient, setExpandedClient] = React.useState<string | null>(null)
   const [showHistory, setShowHistory] = React.useState<boolean>(true)
+  const [archiveSearch, setArchiveSearch] = React.useState("")
+  const [expandedArchiveStores, setExpandedArchiveStores] = React.useState<Set<string>>(new Set())
   const [openActionMenuId, setOpenActionMenuId] = React.useState<string | null>(null)
   const [isMoloniModalOpen, setIsMoloniModalOpen] = React.useState<boolean>(false)
   const [issuedStatement, setIssuedStatement] = React.useState<{
@@ -132,8 +135,10 @@ export default function ContasCorrenteClient({
     })
   }
 
-  // Define unpaid and paid statements (only official Moloni invoices, no pro-formas)
-  const paidStatements = React.useMemo(() => statements?.filter((s: any) => s.status === 'paid' || Boolean(s.moloni_receipt_pdf) || Boolean(s.moloni_receipt_id)) || [], [statements])
+  // Archive issued invoices by store and keep outstanding invoices available for receipt issuance.
+  const archiveGroups = React.useMemo(() => groupInvoiceArchive(clients, statements, archiveSearch), [clients, statements, archiveSearch])
+  const archiveDocumentCount = archiveGroups.reduce((count, group) => count + group.statements.length, 0)
+  const hasArchiveDocuments = statements.some(stmt => !stmt.is_pro_forma && (stmt.moloni_document_id || stmt.moloni_document_pdf || isInvoicePaid(stmt)))
   const unpaidStatements = React.useMemo(() => statements?.filter((s: any) => s.status !== 'paid' && !s.moloni_receipt_pdf && !s.moloni_receipt_id && !s.is_pro_forma && Boolean(s.moloni_document_id)) || [], [statements])
 
   const handleEmitReceipt = (stmt: any) => {
@@ -187,7 +192,7 @@ export default function ContasCorrenteClient({
             console.error("Auto download failed", err)
           }
         }
-        alert("Recibo emitido com sucesso! A conta foi liquidada e passou para o Histórico de Contas Pagas.")
+        alert("Recibo emitido com sucesso! A conta foi liquidada e está disponível no arquivo da loja.")
         window.location.reload()
       } else {
         alert(`Erro ao emitir recibo: ${res.error}`)
@@ -210,11 +215,9 @@ export default function ContasCorrenteClient({
       unpaidTotal: number
     }>()
     
+    const unpaidByStore = new Map(groupInvoiceArchive(clients, unpaidStatements).map(group => [group.key, group.statements]))
     clients.forEach(c => {
-      const clientUnpaid = unpaidStatements.filter((s: any) => 
-        (s.client_id && s.client_id === c.id) || 
-        (s.client_name === c.legal_name || s.client_name === c.short_name)
-      )
+      const clientUnpaid = unpaidByStore.get(`store:${c.id}`) || []
       const unpaidTotal = clientUnpaid.reduce((acc: number, s: any) => acc + Number(s.total_value || 0), 0)
 
       map.set(c.id, { 
@@ -271,7 +274,12 @@ export default function ContasCorrenteClient({
         </div>
         
         <div className="flex items-center gap-3">
-          <button 
+          {hasArchiveDocuments && (
+            <a href="#invoice-archive" onClick={() => setShowHistory(true)} className="flex items-center gap-2 px-3.5 py-2 rounded-md text-xs font-bold text-[var(--accent)] bg-[var(--accent-soft)] border border-[var(--border-subtle)]">
+              <FolderOpen className="w-4 h-4" /> Arquivo por loja
+            </a>
+          )}
+          <button
             onClick={() => setIsMoloniModalOpen(true)}
             className={`flex items-center gap-2 px-3.5 py-2 border rounded-md font-bold text-xs transition-colors cursor-pointer shadow-2xs ${
               moloniConfig?.isConnected 
@@ -618,7 +626,7 @@ export default function ContasCorrenteClient({
                             <span className="text-xs font-bold text-[var(--status-warning)]">Contas a Receber (Faturas Moloni Emitidas - Aguardando Recibo)</span>
                           </div>
                           <span className="text-[10px] text-[var(--status-warning)] font-semibold">
-                            A conta só passa para o Histórico de Contas Pagas após emitir o Recibo
+                            Após emitir o recibo, a conta fica marcada como paga no arquivo da loja
                           </span>
                         </div>
                         <div className="divide-y divide-[var(--border-subtle)]">
@@ -690,248 +698,290 @@ export default function ContasCorrenteClient({
           </div>
         </div>
 
-        {/* Histórico de Extratos Emitidos (Pagos) */}
-        {paidStatements && paidStatements.length > 0 && (
-          <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] shadow-2xs rounded-xl mb-32">
-            <div 
-              className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] px-6 py-3.5 flex items-center justify-between cursor-pointer select-none rounded-t-xl"
+        {/* Arquivo dos documentos emitidos, organizado por loja */}
+        {hasArchiveDocuments && (
+          <div id="invoice-archive" className="scroll-mt-6 bg-[var(--surface-bg)] border border-[var(--border-subtle)] shadow-2xs rounded-xl mb-32">
+            <button
+              type="button"
+              aria-expanded={showHistory}
+              className="w-full text-left bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] px-6 py-3.5 flex items-center justify-between cursor-pointer select-none rounded-t-xl"
               onClick={() => setShowHistory(!showHistory)}
             >
-              <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-md bg-[var(--status-success-soft)] border border-[rgba(18,138,71,0.2)] flex items-center justify-center text-[var(--status-success)]">
-                  <CheckCircle2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-xs font-bold text-[var(--text-primary)]">Histórico de Contas Pagas</h2>
-                  <p className="text-[11px] text-[var(--text-tertiary)]">{paidStatements.length} extrato(s) pago(s)</p>
-                </div>
-              </div>
-              <div className="text-[var(--text-tertiary)]">
+              <span className="flex items-center gap-3">
+                <span className="w-7 h-7 rounded-md bg-[var(--status-success-soft)] border border-[rgba(18,138,71,0.2)] flex items-center justify-center text-[var(--status-success)]">
+                  <FolderOpen className="w-4 h-4" />
+                </span>
+                <span>
+                  <span role="heading" aria-level={2} className="block text-xs font-bold text-[var(--text-primary)]">Arquivo de Faturas por Loja</span>
+                  <span className="block text-[11px] text-[var(--text-tertiary)]">{archiveDocumentCount} documento(s) · Mais recentes primeiro dentro de cada loja</span>
+                </span>
+              </span>
+              <span className="text-[var(--text-tertiary)]">
                 {showHistory ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              </div>
-            </div>
+              </span>
+            </button>
 
             {showHistory && (
-              <div className="divide-y divide-[var(--border-subtle)]">
-                {paidStatements.map((stmt: any, index: number) => (
-                <div key={stmt.id} className={`px-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[var(--surface-muted)]/50 transition-colors ${index === paidStatements.length - 1 ? 'rounded-b-xl' : ''}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-secondary)] shrink-0">
-                      <FileText className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
-                      {formatFTNumber(stmt.moloni_document_number) && (
-                        <p className="text-[10px] font-bold text-[var(--accent)] font-mono mt-0.5 flex items-center gap-1">
-                          <Cloud className="w-3 h-3 shrink-0" />
-                          {formatFTNumber(stmt.moloni_document_number)}
-                        </p>
-                      )}
-                      <p className="text-[11px] text-[var(--text-tertiary)] flex items-center gap-2 mt-0.5">
-                        <span className="font-semibold text-[var(--text-secondary)]">{stmt.client_name}</span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Package className="w-3 h-3 text-[var(--text-tertiary)]" />
-                          {stmt.shipments_count || stmt.shipment_ids?.length || 0} envios
+              <div>
+                <div className="px-6 py-3 border-b border-[var(--border-subtle)]">
+                  <label htmlFor="invoice-archive-search" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">Procurar no arquivo</label>
+                  <input id="invoice-archive-search" type="search" value={archiveSearch} onChange={event => {
+                    const value = event.target.value
+                    setArchiveSearch(value)
+                    setExpandedArchiveStores(new Set(value.trim() ? groupInvoiceArchive(clients, statements, value).map(group => group.key) : []))
+                  }}
+                    placeholder="Loja, NIF ou número de fatura"
+                    className="w-full max-w-md px-3 py-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] text-sm text-[var(--text-primary)]" />
+                </div>
+                {archiveGroups.length === 0 && <p className="px-6 py-6 text-sm text-[var(--text-tertiary)]">Nenhum documento encontrado.</p>}
+                {archiveGroups.map(group => (
+                  <div key={group.key} className="border-b last:border-b-0 border-[var(--border-subtle)]">
+                    <button type="button" aria-expanded={expandedArchiveStores.has(group.key)}
+                      className="w-full flex items-center justify-between gap-3 px-6 py-4 text-left hover:bg-[var(--surface-muted)]/50 cursor-pointer"
+                      onClick={() => setExpandedArchiveStores(previous => {
+                        const next = new Set(previous)
+                        if (next.has(group.key)) next.delete(group.key)
+                        else next.add(group.key)
+                        return next
+                      })}>
+                      <span className="flex items-center gap-3">
+                        <Building className="w-5 h-5 text-[var(--accent)] shrink-0" />
+                        <span>
+                          <span className="block text-sm font-bold text-[var(--text-primary)]">{group.name}</span>
+                          <span className="block text-xs text-[var(--text-tertiary)] mt-0.5">
+                            {group.nif && `NIF: ${group.nif} · `}{group.statements.length} documento(s) · {group.paidCount} pago(s) · {group.awaitingReceiptCount} a aguardar recibo
+                          </span>
+                          {group.associationMissing && <span className="block text-xs text-[var(--status-warning)] mt-1">Loja por associar</span>}
                         </span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-[var(--text-tertiary)]" />
-                          {new Date(stmt.created_at).toLocaleDateString("pt-PT")}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 self-end sm:self-center">
-                    {/* Status Badge */}
-                    <div className="flex items-center">
-                      {stmt.moloni_receipt_pdf ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)] text-[10px] font-bold uppercase tracking-wider">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Paga
-                        </span>
-                      ) : (stmt.moloni_document_pdf || stmt.moloni_document_id) ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(217,119,6,0.2)] text-[10px] font-bold uppercase tracking-wider">
-                          <AlertCircle className="w-3 h-3" />
-                          Pendente
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] text-[10px] font-bold uppercase tracking-wider">
-                          Por Emitir
-                        </span>
-                      )}
-                    </div>
-
-                    <span className="text-xs font-black text-[var(--text-primary)] font-mono mr-2">
-                      {Number(stmt.total_value || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
-                    </span>
-
-                    {/* Actions Dropdown */}
-                    <div className="relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setOpenActionMenuId(openActionMenuId === stmt.id ? null : stmt.id)
-                        }}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md text-xs font-bold transition-colors shadow-2xs cursor-pointer"
-                      >
-                        Opções <ChevronDown className="w-3.5 h-3.5" />
-                      </button>
-
-                      {openActionMenuId === stmt.id && (
-                        <>
-                          <div 
-                            className="fixed inset-0 z-10"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setOpenActionMenuId(null)
-                            }}
-                          />
-                          <div className="absolute right-0 top-full mt-1.5 w-56 bg-[var(--surface-bg)] rounded-xl shadow-[var(--shadow-layer)] border border-[var(--border-subtle)] py-1.5 z-20 animate-in fade-in zoom-in-95 duration-100">
-                            {/* Emitir no Moloni */}
-                            {!(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation()
-                                    setOpenActionMenuId(null)
-                                    if (!moloniConfig?.isConnected) {
-                                      setIsMoloniModalOpen(true)
-                                      return
-                                    }
-                                    const modeStr = groupInvoicesByService ? "Agrupada por Serviço (Fatura Compacta - 1 página)" : "Detalhada (1 linha por envio)"
-                                    const ok = confirm(`Deseja comunicar e emitir a fatura oficial no Moloni para o extrato ${stmt.statement_number}?\n\nModo: ${modeStr}`)
-                                    if (!ok) return
-                                    
-                                    const { emitMoloniInvoiceForStatementAction } = await import("@/app/actions/moloni")
-                                    const res = await emitMoloniInvoiceForStatementAction(stmt.statement_number || stmt.id, groupInvoicesByService)
-                                    if (res.success) {
-                                      const dlUrl = `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`
-                                      try {
-                                        const link = document.createElement("a")
-                                        link.href = dlUrl
-                                        link.setAttribute("download", `Fatura_Oficial_${stmt.statement_number.replace(/[\/\\]/g, "_")}.pdf`)
-                                        document.body.appendChild(link)
-                                        link.click()
-                                        document.body.removeChild(link)
-                                      } catch {}
-
-                                      setIssuedStatement({
-                                        statementNumber: stmt.statement_number,
-                                        url: `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`,
-                                        clientName: stmt.client_name,
-                                        totalValue: Number(stmt.total_value || 0),
-                                        moloniPdf: dlUrl
-                                      })
-                                      router.refresh()
-                                    } else {
-                                      alert(`Erro: ${res.error || "Não foi possível emitir no Moloni"}`)
-                                    }
-                                  }}
-                                  className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
-                                >
-                                  <Cloud className="w-3.5 h-3.5 text-[var(--accent)]" />
-                                  Emitir Fatura no Moloni
-                                </button>
-                            )}
-
-                            {/* Fatura Moloni (If emitted) */}
-                            {(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
-                              <>
-                                {!stmt.is_pro_forma && (
-                                  <a 
-                                    href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`}
-                                    download={`Fatura_Oficial_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[var(--status-success)] hover:bg-[var(--status-success-soft)] transition-colors"
-                                  >
-                                    <Download className="w-3.5 h-3.5 text-[var(--status-success)]" />
-                                    Descarregar Fatura (AT)
-                                  </a>
+                      </span>
+                      {expandedArchiveStores.has(group.key) ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
+                    </button>
+                    {expandedArchiveStores.has(group.key) && (
+                      <div className="border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/20 divide-y divide-[var(--border-subtle)]">
+                        {group.statements.map((stmt: any) => (
+                          <div key={stmt.id || stmt.statement_number} className="px-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[var(--surface-muted)]/50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-secondary)] shrink-0">
+                                <FileText className="w-3.5 h-3.5" />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
+                                {formatFTNumber(stmt.moloni_document_number) && (
+                                  <p className="text-[10px] font-bold text-[var(--accent)] font-mono mt-0.5 flex items-center gap-1">
+                                    <Cloud className="w-3 h-3 shrink-0" />
+                                    {formatFTNumber(stmt.moloni_document_number)}
+                                  </p>
                                 )}
+                                <p className="text-[11px] text-[var(--text-tertiary)] flex items-center gap-2 mt-0.5">
+                                  <span className="font-semibold text-[var(--text-secondary)]">{stmt.client_name}</span>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1">
+                                    <Package className="w-3 h-3 text-[var(--text-tertiary)]" />
+                                    {stmt.shipments_count || stmt.shipment_ids?.length || 0} envios
+                                  </span>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="w-3 h-3 text-[var(--text-tertiary)]" />
+                                    {new Date(stmt.created_at).toLocaleDateString("pt-PT")}
+                                  </span>
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 self-end sm:self-center">
+                              {/* Status Badge */}
+                              <div className="flex items-center">
+                                {isInvoicePaid(stmt) ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)] text-[10px] font-bold uppercase tracking-wider">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    Paga
+                                  </span>
+                                ) : (stmt.moloni_document_pdf || stmt.moloni_document_id) ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(217,119,6,0.2)] text-[10px] font-bold uppercase tracking-wider">
+                                    <AlertCircle className="w-3 h-3" />
+                                    Pendente
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] text-[10px] font-bold uppercase tracking-wider">
+                                    Por Emitir
+                                  </span>
+                                )}
+                              </div>
+
+                              <span className="text-xs font-black text-[var(--text-primary)] font-mono mr-2">
+                                {Number(stmt.total_value || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                              </span>
+
+                              {/* Actions Dropdown */}
+                              <div className="relative">
                                 <button
-                                  type="button"
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    handleOpenEmailModal(stmt)
+                                    setOpenActionMenuId(openActionMenuId === stmt.id ? null : stmt.id)
                                   }}
-                                  className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md text-xs font-bold transition-colors shadow-2xs cursor-pointer"
                                 >
-                                  <Mail className="w-3.5 h-3.5 text-[var(--accent)]" />
-                                  Enviar Fatura por Email
+                                  Opções <ChevronDown className="w-3.5 h-3.5" />
                                 </button>
-                              </>
-                            )}
 
-                            {!(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleOpenEmailModal(stmt)
-                                }}
-                                className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
-                              >
-                                <Mail className="w-3.5 h-3.5 text-[var(--accent)]" />
-                                Enviar Extrato por Email
-                              </button>
-                            )}
+                                {openActionMenuId === stmt.id && (
+                                  <>
+                                    <div
+                                      className="fixed inset-0 z-10"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setOpenActionMenuId(null)
+                                      }}
+                                    />
+                                    <div className="absolute right-0 top-full mt-1.5 w-56 bg-[var(--surface-bg)] rounded-xl shadow-[var(--shadow-layer)] border border-[var(--border-subtle)] py-1.5 z-20 animate-in fade-in zoom-in-95 duration-100">
+                                      {/* Emitir no Moloni */}
+                                      {!(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation()
+                                              setOpenActionMenuId(null)
+                                              if (!moloniConfig?.isConnected) {
+                                                setIsMoloniModalOpen(true)
+                                                return
+                                              }
+                                              const modeStr = groupInvoicesByService ? "Agrupada por Serviço (Fatura Compacta - 1 página)" : "Detalhada (1 linha por envio)"
+                                              const ok = confirm(`Deseja comunicar e emitir a fatura oficial no Moloni para o extrato ${stmt.statement_number}?\n\nModo: ${modeStr}`)
+                                              if (!ok) return
 
-                            <div className="h-px bg-[var(--border-subtle)] my-1 mx-2" />
+                                              const { emitMoloniInvoiceForStatementAction } = await import("@/app/actions/moloni")
+                                              const res = await emitMoloniInvoiceForStatementAction(stmt.statement_number || stmt.id, groupInvoicesByService)
+                                              if (res.success) {
+                                                const dlUrl = `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`
+                                                try {
+                                                  const link = document.createElement("a")
+                                                  link.href = dlUrl
+                                                  link.setAttribute("download", `Fatura_Oficial_${stmt.statement_number.replace(/[\/\\]/g, "_")}.pdf`)
+                                                  document.body.appendChild(link)
+                                                  link.click()
+                                                  document.body.removeChild(link)
+                                                } catch {}
 
-                            {stmt.moloni_receipt_pdf ? (
-                              <a 
-                                href={stmt.moloni_receipt_pdf}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
-                              >
-                                <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
-                                Descarregar Recibo
-                              </a>
-                            ) : (stmt.moloni_document_id && !stmt.is_pro_forma) ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setOpenActionMenuId(null)
-                                  handleEmitReceipt(stmt)
-                                }}
-                                className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
-                              >
-                                <Cloud className="w-3.5 h-3.5 text-[var(--accent)]" />
-                                Emitir Recibo
-                              </button>
-                            ) : (
-                              <div className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[var(--text-tertiary)] cursor-not-allowed opacity-60" title="O recibo estará disponível após a fatura ser emitida">
-                                <Download className="w-3.5 h-3.5" />
-                                Recibo (Pendente)
+                                                setIssuedStatement({
+                                                  statementNumber: stmt.statement_number,
+                                                  url: `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`,
+                                                  clientName: stmt.client_name,
+                                                  totalValue: Number(stmt.total_value || 0),
+                                                  moloniPdf: dlUrl
+                                                })
+                                                router.refresh()
+                                              } else {
+                                                alert(`Erro: ${res.error || "Não foi possível emitir no Moloni"}`)
+                                              }
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+                                          >
+                                            <Cloud className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                            Emitir Fatura no Moloni
+                                          </button>
+                                      )}
+
+                                      {/* Fatura Moloni (If emitted) */}
+                                      {(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
+                                        <>
+                                          {!stmt.is_pro_forma && (
+                                            <a
+                                              href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`}
+                                              download={`Fatura_Oficial_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[var(--status-success)] hover:bg-[var(--status-success-soft)] transition-colors"
+                                            >
+                                              <Download className="w-3.5 h-3.5 text-[var(--status-success)]" />
+                                              Descarregar Fatura (AT)
+                                            </a>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              handleOpenEmailModal(stmt)
+                                            }}
+                                            className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
+                                          >
+                                            <Mail className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                            Enviar Fatura por Email
+                                          </button>
+                                        </>
+                                      )}
+
+                                      {!(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleOpenEmailModal(stmt)
+                                          }}
+                                          className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
+                                        >
+                                          <Mail className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                          Enviar Extrato por Email
+                                        </button>
+                                      )}
+
+                                      <div className="h-px bg-[var(--border-subtle)] my-1 mx-2" />
+
+                                      {stmt.moloni_receipt_pdf ? (
+                                        <a
+                                          href={stmt.moloni_receipt_pdf}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+                                        >
+                                          <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                          Descarregar Recibo
+                                        </a>
+                                      ) : (stmt.moloni_document_id && !stmt.is_pro_forma) ? (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setOpenActionMenuId(null)
+                                            handleEmitReceipt(stmt)
+                                          }}
+                                          className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
+                                        >
+                                          <Cloud className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                          Emitir Recibo
+                                        </button>
+                                      ) : (
+                                        <div className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[var(--text-tertiary)] cursor-not-allowed opacity-60" title="O recibo estará disponível após a fatura ser emitida">
+                                          <Download className="w-3.5 h-3.5" />
+                                          Recibo (Pendente)
+                                        </div>
+                                      )}
+
+
+                                      {/* Extrato TMS Interno (Always visible) */}
+                                      <a
+                                        href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
+                                        download={`Extrato_TMS_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] transition-colors"
+                                      >
+                                        <FileText className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+                                        Ver Extrato TMS Interno
+                                      </a>
+                                    </div>
+                                  </>
+                                )}
                               </div>
-                            )}
-
-
-                            {/* Extrato TMS Interno (Always visible) */}
-                            <a 
-                              href={`/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`}
-                              download={`Extrato_TMS_${(stmt.statement_number || stmt.id).replace(/[\/\\]/g, "_")}.pdf`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] transition-colors"
-                            >
-                              <FileText className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
-                              Ver Extrato TMS Interno
-                            </a>
+                            </div>
                           </div>
-                        </>
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
 
       {/* Modal de Sucesso com Botão Direto de Download */}
       {issuedStatement && (
