@@ -108,9 +108,9 @@ export function ClientAccountDetailsModal({
   ]
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+    <div className="tms-modal-overlay fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
       <div 
-        className="bg-[var(--surface-bg)] rounded-2xl shadow-[var(--shadow-layer)] w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden border border-[var(--border-subtle)]"
+        className="tms-modal-fit bg-[var(--surface-bg)] rounded-2xl shadow-[var(--shadow-layer)] w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden border border-[var(--border-subtle)]"
         onClick={(e) => e.stopPropagation()}
       >
         

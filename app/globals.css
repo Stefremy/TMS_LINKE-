@@ -51,3 +51,114 @@ body {
   background: var(--accent-soft);
   color: var(--accent-hover);
 }
+
+/* Shared portal layout: a wide but short phone must keep its mobile navigation. */
+.tms-shell {
+  --mobile-nav-height: 3.5rem;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.tms-mobile-only { display: flex; }
+.tms-desktop-only, .tms-wide-list, .tms-wide-table, .tms-wide-grid { display: none; }
+.tms-compact-list { display: block; }
+.tms-main {
+  min-width: 0;
+  padding: 1rem max(0.875rem, env(safe-area-inset-right, 0px))
+    calc(var(--mobile-nav-height) + 1rem + env(safe-area-inset-bottom, 0px))
+    max(0.875rem, env(safe-area-inset-left, 0px));
+}
+.tms-mobile-topbar {
+  gap: 0.5rem;
+  padding: calc(0.375rem + env(safe-area-inset-top, 0px)) max(0.875rem, env(safe-area-inset-right, 0px))
+    0.375rem max(0.875rem, env(safe-area-inset-left, 0px));
+}
+.tms-bottom-nav {
+  height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+  padding: 0 max(0.5rem, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px)
+    max(0.5rem, env(safe-area-inset-left, 0px));
+}
+.tms-bottom-nav > a, .tms-bottom-nav > button { min-height: 2.75rem; min-width: 0; }
+.tms-mobile-dialog {
+  position: fixed;
+  inset: 0 auto 0 0;
+  margin: 0;
+  border: 0;
+  border-right: 1px solid var(--border-subtle);
+  padding: 0;
+  width: min(20rem, 90vw);
+  max-width: none;
+  max-height: none;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--surface-bg);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-layer);
+}
+.tms-mobile-dialog[open] { display: flex; flex-direction: column; }
+.tms-mobile-dialog::backdrop { background: rgb(0 0 0 / 0.55); }
+.tms-drawer-header { padding-top: max(0.75rem, env(safe-area-inset-top, 0px)); padding-left: max(1rem, env(safe-area-inset-left, 0px)); }
+.tms-drawer-scroll { padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px); }
+.tms-drawer-scroll nav { overflow: visible; }
+.tms-drawer-scroll a, .tms-drawer-scroll button { min-height: 2.75rem; }
+.tms-mobile-dialog :focus-visible, .tms-bottom-nav :focus-visible, .tms-mobile-topbar :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.tms-modal-overlay {
+  padding: max(0.75rem, env(safe-area-inset-top, 0px)) max(0.75rem, env(safe-area-inset-right, 0px))
+    max(0.75rem, env(safe-area-inset-bottom, 0px)) max(0.75rem, env(safe-area-inset-left, 0px));
+}
+.tms-modal-fit, .tms-modal-scroll {
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - max(0.75rem, env(safe-area-inset-top, 0px)) - max(0.75rem, env(safe-area-inset-bottom, 0px)));
+}
+.tms-modal-scroll { overflow-y: auto; overscroll-behavior: contain; }
+.tms-modal-fit > .overflow-y-auto { min-height: 0; }
+.tms-billing-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.tms-billing-client, .tms-billing-actions { grid-column: 1 / -1; min-width: 0; }
+.tms-billing-count, .tms-billing-total { min-width: 0; }
+
+@media (pointer: coarse) {
+  .tms-main :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]), select, textarea) { font-size: 1rem; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .tms-shell { --mobile-nav-height: 3rem; }
+  .tms-bottom-nav > a, .tms-bottom-nav > button { flex-direction: row; gap: 0.375rem; }
+  .tms-bottom-nav svg { margin-bottom: 0; }
+  .tms-bottom-nav .tms-nav-create { margin-top: 0; }
+  .tms-nav-create > div { width: 2rem; height: 2rem; }
+  .tms-nav-create > span { margin-top: 0; }
+}
+@media (min-width: 1024px) and (min-height: 500px) {
+  .tms-workspace { flex-direction: row; }
+  .tms-mobile-only { display: none; }
+  .tms-desktop-only { display: flex; }
+  .tms-compact-list { display: none; }
+  .tms-wide-list { display: block; }
+  .tms-wide-table { display: table; }
+  .tms-wide-grid { display: grid; }
+  .tms-main { padding: 1.5rem; }
+  .tms-billing-row { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .tms-billing-client { grid-column: span 5 / span 5; }
+  .tms-billing-count { grid-column: span 3 / span 3; }
+  .tms-billing-total, .tms-billing-actions { grid-column: span 2 / span 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tms-shell *, .tms-mobile-dialog * { scroll-behavior: auto; transition-duration: 0.01ms; animation-duration: 0.01ms; animation-iteration-count: 1; }
+}
+@media (min-width: 1024px) and (min-height: 500px) {
+  .tms-sidebar { position: sticky; top: 0; height: 100dvh; min-height: 0; }
+  .tms-sidebar > nav { min-height: 0; }
+}
+/* One natural page scroll for shipment cards; a contained table on desktop. */
+.tms-shipment-workspace > .overflow-auto { overflow: visible; }
+@media (min-width: 1024px) and (min-height: 500px) {
+  .tms-shipment-workspace { height: calc(100dvh - 8rem); }
+  .tms-shipment-workspace > .overflow-auto { overflow: auto; }
+}
+
+.tms-impersonation-banner {
+  padding-top: max(0.375rem, env(safe-area-inset-top, 0px));
+  padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
+}

@@ -332,7 +332,7 @@ export function ClientShipmentsHistory() {
         ) : (
           <div>
             {/* ─── MOBILE CARDS VIEW (md:hidden) ─── */}
-            <div className="md:hidden divide-y divide-slate-100">
+            <div className="tms-compact-list divide-y divide-slate-100">
               {filteredShipments.map((envio) => {
                 const linkeRef =
                   (envio.reference?.startsWith("LTK") ? envio.reference : null) ||
@@ -443,7 +443,7 @@ export function ClientShipmentsHistory() {
             </div>
 
             {/* ─── DESKTOP TABLE VIEW (hidden md:block) ─── */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="tms-wide-list overflow-x-auto">
               <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-600 font-bold">

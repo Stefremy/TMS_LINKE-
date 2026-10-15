@@ -47,8 +47,8 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="bg-[var(--surface-bg)] rounded-xl shadow-xl w-full max-w-md overflow-hidden relative border border-[var(--border-subtle)]">
+    <div className="tms-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+      <div className="tms-modal-scroll bg-[var(--surface-bg)] rounded-xl shadow-xl w-full max-w-md overflow-hidden relative border border-[var(--border-subtle)]">
         
         {/* Top 1px Accent Line */}
         <div className="h-1 w-full bg-[var(--accent)]" />

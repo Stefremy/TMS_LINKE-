@@ -1,3 +1,4 @@
+import type { Viewport } from "next"
 import * as React from "react"
 import Link from "next/link"
 import { OpsSidebar } from "./components/OpsSidebar"
@@ -14,6 +15,8 @@ import {
   LogOut
 } from "lucide-react"
 
+export const viewport: Viewport = { viewportFit: "cover" }
+
 export default async function OpsLayout({
   children,
 }: {
@@ -28,14 +31,14 @@ export default async function OpsLayout({
   const userName = profile?.name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || "Operador"
 
   return (
-    <div className="min-h-screen bg-[var(--canvas-bg)] flex flex-col md:flex-row text-[var(--text-primary)]">
+    <div className="tms-shell tms-workspace bg-[var(--canvas-bg)] flex flex-col text-[var(--text-primary)]">
       {/* Interactive Collapsible Sidebar */}
       <OpsSidebar />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar / Header (Desktop only - Mobile has dedicated topbar in OpsSidebar) */}
-        <header className="hidden md:flex h-[56px] items-center justify-between px-6 shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+        <header className="tms-desktop-only h-[56px] items-center justify-between px-6 shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)]">
           <div className="flex items-center gap-3">
             <TrackingQuickBar />
           </div>
@@ -82,7 +85,7 @@ export default async function OpsLayout({
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto bg-[var(--canvas-bg)] p-3.5 sm:p-5 md:p-6 pb-20 md:pb-6">
+        <main className="tms-main flex-1 bg-[var(--canvas-bg)]">
           {children}
         </main>
       </div>

@@ -207,10 +207,10 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
   })
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] bg-[var(--surface-bg)] rounded-lg shadow-sm border border-[var(--border-subtle)] overflow-hidden">
+    <div className="tms-shipment-workspace flex flex-col bg-[var(--surface-bg)] rounded-lg shadow-sm border border-[var(--border-subtle)] overflow-hidden">
       
       {/* Header Area */}
-      <div className="px-5 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0">
+      <div className="px-4 sm:px-5 py-4 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2 shrink-0">
         <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
           {viewMode === "envios" ? "Envios e Serviços" : "Pedidos de Recolha"}
         </h1>
@@ -437,7 +437,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
         ) : (
           <>
             {/* ─── MOBILE CARD VIEW (md:hidden) ─────────────────────────────────── */}
-            <div className="md:hidden divide-y divide-[var(--border-subtle)] bg-[var(--surface-bg)]">
+            <div className="tms-compact-list divide-y divide-[var(--border-subtle)] bg-[var(--surface-bg)]">
               {filteredEnvios.map((envio, idx) => {
                 const rowId = envio.rawId || envio.rawShipment?.id || envio.trk?.id
                 const isSelected = selectedIds.includes(rowId)
@@ -554,7 +554,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             </div>
 
             {/* ─── DESKTOP TABLE (hidden md:table) ─────────────────────────────── */}
-            <table className="hidden md:table w-full text-left text-xs whitespace-nowrap pb-32">
+            <table className="tms-wide-table w-full text-left text-xs whitespace-nowrap pb-32">
               <thead className="bg-[var(--surface-muted)] sticky top-0 z-10">
                 <tr className="border-b border-[var(--border-subtle)] text-[10px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">
                   <th className="px-4 py-2.5 w-10">

@@ -543,9 +543,9 @@ export function ClientDashboard() {
       {/* TABELA PRINCIPAL DE ENVIOS (15 POR PÁGINA) */}
       <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-2xs overflow-hidden flex flex-col">
         {/* Table Header & Controls */}
-        <div className="p-5 sm:p-6 border-b border-[var(--border-subtle)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="p-5 sm:p-6 border-b border-[var(--border-subtle)] flex flex-col md:flex-row flex-wrap md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
               <Package className="w-5 h-5 text-[var(--accent)]" />
               <h2 className="text-lg font-bold text-[var(--text-primary)]">Envios & Guias de Transporte</h2>
               <span className="text-xs font-bold text-[var(--text-secondary)] bg-[var(--surface-dim)] border border-[var(--border-strong)] px-2.5 py-0.5 rounded-md font-mono">
@@ -618,7 +618,7 @@ export function ClientDashboard() {
         ) : (
           <div>
             {/* ─── MOBILE CARDS VIEW (md:hidden) ─── */}
-            <div className="md:hidden divide-y divide-[var(--border-subtle)]">
+            <div className="tms-compact-list divide-y divide-[var(--border-subtle)]">
               {paginatedShipments.map((shipment) => {
                 const dateStr = shipment.created_at ? new Date(shipment.created_at).toLocaleDateString("pt-PT", {
                   day: "2-digit",
@@ -739,7 +739,7 @@ export function ClientDashboard() {
             </div>
 
             {/* ─── DESKTOP TABLE VIEW (hidden md:block) ─── */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="tms-wide-list overflow-x-auto">
               <table className="w-full text-left text-xs text-[var(--text-secondary)]">
               <thead className="bg-[var(--surface-muted)] text-[var(--text-tertiary)] font-bold uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
                 <tr>

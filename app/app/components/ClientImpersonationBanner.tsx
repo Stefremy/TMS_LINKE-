@@ -11,7 +11,7 @@ export function ClientImpersonationBanner() {
   const displayName = client.short_name
 
   return (
-    <div className="bg-[#141714] text-white px-5 py-1.5 text-[11px] flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-[rgba(255,255,255,0.08)]">
+    <div className="tms-impersonation-banner bg-[#141714] text-white px-5 py-1.5 text-[11px] flex flex-wrap items-center justify-between gap-2 shrink-0 border-b border-[rgba(255,255,255,0.08)]">
       <div className="flex items-center gap-2">
         <span className="bg-[var(--accent-active)] text-[#141714] text-[9px] font-bold uppercase px-1.5 py-0.5 rounded tracking-wider">
           Sessão Operador TMS
@@ -34,7 +34,7 @@ export function ClientImpersonationBanner() {
 
 import { ClientAccountDetailsModal } from "./ClientAccountDetailsModal"
 
-export function ClientProfileSidebar() {
+export function ClientProfileSidebar({ onOpenDetails }: { onOpenDetails?: () => void } = {}) {
   const { client } = useClientScope()
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
   const displayName = client.short_name
@@ -50,7 +50,7 @@ export function ClientProfileSidebar() {
     <>
       <div className="px-3 mb-4">
         <div 
-          onClick={() => setIsDetailsOpen(true)}
+          onClick={() => onOpenDetails ? onOpenDetails() : setIsDetailsOpen(true)}
           className="w-full flex items-center justify-between p-2 bg-[var(--accent-soft)] hover:bg-[var(--accent-soft)]/90 rounded-md border border-[rgba(18,138,71,0.18)] hover:border-[rgba(18,138,71,0.35)] transition-all cursor-pointer group shadow-2xs"
           title="Clique para ver todos os detalhes da sua conta"
         >

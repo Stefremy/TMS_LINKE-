@@ -54,9 +54,9 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
   const oauthAuthUrl = `https://www.moloni.pt/ac/root/oauth/?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(registeredCallbackUri)}&state=${encodeURIComponent(currentOrigin)}`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+    <div className="tms-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
       <div 
-        className="relative w-full max-w-md bg-[var(--surface-bg)] rounded-xl shadow-[var(--shadow-layer)] border border-[var(--border-subtle)] overflow-hidden"
+        className="tms-modal-scroll relative w-full max-w-md bg-[var(--surface-bg)] rounded-xl shadow-[var(--shadow-layer)] border border-[var(--border-subtle)] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Cabeçalho */}

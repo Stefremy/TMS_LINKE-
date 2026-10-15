@@ -273,7 +273,7 @@ export default function ContasCorrenteClient({
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {hasArchiveDocuments && (
             <a href="#invoice-archive" onClick={() => setShowHistory(true)} className="flex items-center gap-2 px-3.5 py-2 rounded-md text-xs font-bold text-[var(--accent)] bg-[var(--accent-soft)] border border-[var(--border-subtle)]">
               <FolderOpen className="w-4 h-4" /> Arquivo por loja
@@ -341,13 +341,13 @@ export default function ContasCorrenteClient({
 
       {/* Barra de Filtros e Modo de Faturação */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-bg)] p-3 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-[var(--text-secondary)]">
             <Filter className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
             <span className="text-[11px] font-bold uppercase tracking-wider">Filtros</span>
           </div>
           <div className="h-5 w-px bg-[var(--border-subtle)] mx-1" />
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-0.5">Data Inicial</span>
               <input 
@@ -396,7 +396,7 @@ export default function ContasCorrenteClient({
       </div>
 
       <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] shadow-2xs rounded-xl overflow-hidden mb-8">
-        <div className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] px-6 py-3.5 grid grid-cols-12 gap-4 items-center">
+        <div className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] px-6 py-3.5 tms-wide-grid grid-cols-12 gap-4 items-center">
           <div className="col-span-5 text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">Cliente</div>
           <div className="col-span-3 text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider text-center">Envios (Selecionados)</div>
           <div className="col-span-2 text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider text-right">Valor A Faturar</div>
@@ -416,22 +416,22 @@ export default function ContasCorrenteClient({
               return (
                 <div key={client.id} className="flex flex-col transition-colors hover:bg-[var(--surface-muted)]/50">
                   <div 
-                    className="px-6 py-4 grid grid-cols-12 gap-4 items-center cursor-pointer select-none group"
+                    className="px-3 sm:px-5 py-4 tms-billing-row grid gap-3 items-center cursor-pointer select-none group"
                     onClick={() => setExpandedClient(isExpanded ? null : client.id)}
                   >
-                    <div className="col-span-5 flex items-center gap-3">
+                    <div className="tms-billing-client flex items-center gap-3">
                       <div className="w-9 h-9 rounded-lg bg-[var(--surface-muted)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0 text-[var(--text-secondary)] group-hover:text-[var(--accent)] group-hover:border-[rgba(18,138,71,0.2)] transition-colors">
                         <Building className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="font-bold text-[var(--text-primary)] text-sm group-hover:text-[var(--accent)] transition-colors">
+                        <p className="font-bold break-words text-[var(--text-primary)] text-sm group-hover:text-[var(--accent)] transition-colors">
                           {client.legal_name || client.short_name}
                         </p>
                         <p className="text-xs text-[var(--text-tertiary)] font-medium font-mono">NIF: {client.nif || "N/A"}</p>
                       </div>
                     </div>
                     
-                    <div className="col-span-3 text-center flex flex-col items-center justify-center gap-1">
+                    <div className="tms-billing-count text-center flex flex-col items-center justify-center gap-1">
                       {shipments.length > 0 && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.15)] text-[11px] font-bold font-mono">
                           {activeCount} / {shipments.length} envios novos
@@ -445,7 +445,7 @@ export default function ContasCorrenteClient({
                       )}
                     </div>
                     
-                    <div className="col-span-2 text-right">
+                    <div className="tms-billing-total text-right">
                       {shipments.length > 0 ? (
                         <>
                           <p className="font-black text-[var(--text-primary)] font-mono text-sm">
@@ -469,7 +469,7 @@ export default function ContasCorrenteClient({
                       )}
                     </div>
                     
-                    <div className="col-span-2 flex items-center justify-end gap-2">
+                    <div className="tms-billing-actions flex items-center justify-end gap-2">
                       {shipments.length > 0 ? (
                         <>
                           <InvoiceIssueButton
@@ -618,7 +618,7 @@ export default function ContasCorrenteClient({
                     
                   {/* Unpaid Statements for this client */}
                   {isExpanded && clientUnpaid.length > 0 && (
-                    <div className="bg-[var(--surface-muted)]/40 px-6 pb-4 pl-14">
+                    <div className="bg-[var(--surface-muted)]/40 px-3 sm:px-5 pb-4">
                       <div className="bg-[var(--surface-bg)] rounded-lg border border-[rgba(217,119,6,0.25)] overflow-hidden shadow-2xs">
                         <div className="bg-[var(--status-warning-soft)]/50 border-b border-[rgba(217,119,6,0.2)] px-4 py-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -631,7 +631,7 @@ export default function ContasCorrenteClient({
                         </div>
                         <div className="divide-y divide-[var(--border-subtle)]">
                           {clientUnpaid.map(stmt => (
-                            <div key={stmt.id} className="px-4 py-2.5 flex items-center justify-between hover:bg-[var(--surface-muted)]/50 transition-colors">
+                            <div key={stmt.id} className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 hover:bg-[var(--surface-muted)]/50 transition-colors">
                               <div>
                                 <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
                                 {formatFTNumber(stmt.moloni_document_number) && (
@@ -985,8 +985,8 @@ export default function ContasCorrenteClient({
 
       {/* Modal de Sucesso com Botão Direto de Download */}
       {issuedStatement && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="relative w-full max-w-lg bg-[var(--surface-bg)] rounded-2xl shadow-[var(--shadow-layer)] border border-[var(--border-subtle)] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="tms-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div className="tms-modal-scroll relative w-full max-w-lg bg-[var(--surface-bg)] rounded-2xl shadow-[var(--shadow-layer)] border border-[var(--border-subtle)] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-[var(--accent)] p-6 text-white text-center relative">
               <button 
                 onClick={() => setIssuedStatement(null)}
@@ -1102,8 +1102,8 @@ export default function ContasCorrenteClient({
 
       {/* ── Modal Emitir Recibo ── */}
       {receiptModalStmt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-full max-w-md rounded-2xl" style={{ background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-layer)' }}>
+        <div className="tms-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
+          <div className="tms-modal-scroll w-full max-w-md rounded-2xl" style={{ background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-layer)' }}>
 
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -1204,8 +1204,8 @@ export default function ContasCorrenteClient({
 
       {/* ── Modal Enviar Fatura por Email ── */}
       {emailModalStmt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-full max-w-md rounded-2xl animate-in fade-in zoom-in-95 duration-150" style={{ background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-layer)' }}>
+        <div className="tms-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
+          <div className="tms-modal-scroll w-full max-w-md rounded-2xl animate-in fade-in zoom-in-95 duration-150" style={{ background: 'var(--surface-bg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-layer)' }}>
 
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>

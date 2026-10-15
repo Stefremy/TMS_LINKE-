@@ -1,17 +1,18 @@
 "use client"
 
 import * as React from "react"
+import { MobileDrawer } from "@/components/ui/mobile-drawer"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { 
-  ChevronsLeft, 
-  ChevronsRight, 
-  Menu, 
-  X, 
-  Plus, 
-  MapPin, 
-  User, 
+import {
+  ChevronsLeft,
+  ChevronsRight,
+  Menu,
+  X,
+  Plus,
+  MapPin,
+  User,
   LogOut,
   LayoutDashboard,
   Package
@@ -30,17 +31,7 @@ export function OpsSidebar() {
     setIsMobileOpen(false)
   }, [pathname])
 
-  // Prevent background scroll when mobile drawer is open
-  React.useEffect(() => {
-    if (isMobileOpen) {
-      document.body.style.overflow = "hidden"
-    } else {
-      document.body.style.overflow = ""
-    }
-    return () => {
-      document.body.style.overflow = ""
-    }
-  }, [isMobileOpen])
+  const closeMobileMenu = React.useCallback(() => setIsMobileOpen(false), [])
 
   // Load persistence from localStorage safely on mount
   React.useEffect(() => {
@@ -68,29 +59,31 @@ export function OpsSidebar() {
 
   return (
     <>
-      {/* ─── MOBILE TOPBAR (md:hidden) ────────────────────────────────────────── */}
-      <div className="md:hidden sticky top-0 z-40 bg-[var(--surface-bg)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] px-3.5 py-2.5 flex items-center justify-between shadow-2xs">
+      {/* ─── MOBILE TOPBAR (compact layout) ────────────────────────────────────────── */}
+      <div className="tms-mobile-only tms-mobile-topbar sticky top-0 z-40 bg-[var(--surface-bg)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] px-3.5 py-2.5 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => setIsMobileOpen(true)}
             aria-label="Abrir menu de navegação"
-            className="p-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-primary)] hover:bg-[rgba(0,0,0,0.05)] active:scale-95 transition-all cursor-pointer"
+            aria-controls="ops-mobile-menu"
+            aria-expanded={isMobileOpen}
+            className="min-h-11 min-w-11 flex items-center justify-center p-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-primary)] hover:bg-[rgba(0,0,0,0.05)] active:scale-95 transition-all cursor-pointer"
           >
             <Menu className="w-5 h-5" />
           </button>
 
           <Link href="/ops" className="flex items-center gap-2">
-            <Image 
-              src="/Linke-logo.png" 
-              alt="Linke TMS" 
-              width={95} 
-              height={24} 
-              className="object-contain" 
+            <Image
+              src="/Linke-logo.png"
+              alt="Linke TMS"
+              width={95}
+              height={24}
+              className="object-contain"
               style={{ height: "auto" }}
-              priority 
+              priority
             />
-            <span className="text-[10px] font-semibold text-[var(--text-tertiary)] bg-[var(--surface-muted)] px-1.5 py-0.5 rounded border border-[var(--border-subtle)]">
+            <span className="hidden min-[380px]:inline-flex text-[10px] font-semibold text-[var(--text-tertiary)] bg-[var(--surface-muted)] px-1.5 py-0.5 rounded border border-[var(--border-subtle)]">
               {APP_VERSION}
             </span>
           </Link>
@@ -99,14 +92,14 @@ export function OpsSidebar() {
         <div className="flex items-center gap-2">
           <Link
             href="/ops/tracking"
-            className="p-2 rounded-lg text-[var(--text-secondary)] hover:text-blue-600 hover:bg-blue-50 transition-colors"
+            className="min-h-11 min-w-11 flex items-center justify-center p-2 rounded-lg text-[var(--text-secondary)] hover:text-blue-600 hover:bg-blue-50 transition-colors"
             title="Tracking & Mapa"
           >
             <MapPin className="w-4 h-4" />
           </Link>
           <Link
             href="/ops/envios/novo"
-            className="flex items-center gap-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 transition-all"
+            className="min-h-11 flex items-center gap-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 transition-all"
           >
             <Plus className="w-3.5 h-3.5" strokeWidth={3} />
             <span>Novo</span>
@@ -114,37 +107,17 @@ export function OpsSidebar() {
         </div>
       </div>
 
-      {/* ─── MOBILE DRAWER & BACKDROP (md:hidden) ─────────────────────────────── */}
-      <div 
-        className={`fixed inset-0 z-50 md:hidden flex transition-[visibility] duration-300 ${
-          isMobileOpen ? "visible pointer-events-auto" : "invisible pointer-events-none delay-300"
-        }`}
-        aria-hidden={!isMobileOpen}
-      >
-        {/* Backdrop */}
-        <div 
-          className={`fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300 ease-out ${
-            isMobileOpen ? "opacity-100" : "opacity-0"
-          }`}
-          onClick={() => setIsMobileOpen(false)}
-          aria-hidden="true"
-        />
-
-        {/* Drawer Sheet */}
-        <div 
-          className={`relative w-[285px] max-w-[85vw] h-full bg-[var(--surface-bg)] shadow-2xl flex flex-col z-10 border-r border-[var(--border-subtle)] transform transition-transform duration-300 ease-out ${
-            isMobileOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
-        >
+      {/* ─── MOBILE DRAWER & BACKDROP (compact layout) ─────────────────────────────── */}
+      <MobileDrawer open={isMobileOpen} onClose={closeMobileMenu} label="Menu de operações" id="ops-mobile-menu">
           {/* Drawer Header */}
-          <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-muted)]/50">
+          <div className="tms-drawer-header shrink-0 p-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-muted)]/50">
             <Link href="/ops" className="flex items-center gap-2" onClick={() => setIsMobileOpen(false)}>
-              <Image 
-                src="/Linke-logo.png" 
-                alt="Linke TMS" 
-                width={110} 
-                height={28} 
-                className="object-contain" 
+              <Image
+                src="/Linke-logo.png"
+                alt="Linke TMS"
+                width={110}
+                height={28}
+                className="object-contain"
                 style={{ height: "auto" }}
               />
               <span className="text-[10px] font-medium text-[var(--text-tertiary)] bg-[var(--surface-bg)] px-1.5 py-0.5 rounded border border-[var(--border-subtle)]">
@@ -153,46 +126,48 @@ export function OpsSidebar() {
             </Link>
             <button
               type="button"
-              onClick={() => setIsMobileOpen(false)}
-              className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
+              onClick={closeMobileMenu}
+              data-drawer-close
+              className="min-h-11 min-w-11 flex items-center justify-center p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
               aria-label="Fechar menu"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Scrollable Navigation */}
-          <div className="flex-1 overflow-y-auto py-2">
-            <SidebarNav collapsed={false} />
-          </div>
+          <div className="tms-drawer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {/* Scrollable Navigation */}
+            <div className="py-2">
+              <SidebarNav collapsed={false} />
+            </div>
 
-          {/* Drawer Footer Actions */}
-          <div className="p-3 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/50 space-y-1.5 text-xs">
-            <Link
-              href="/ops/perfil"
-              onClick={() => setIsMobileOpen(false)}
-              className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] font-medium transition-colors"
-            >
-              <User className="w-4 h-4 text-[var(--accent)]" />
-              <span>O meu perfil</span>
-            </Link>
-
-            <form action={signout}>
-              <button
-                type="submit"
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
+            {/* Drawer Footer Actions */}
+            <div className="p-3 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/50 space-y-1.5 text-xs">
+              <Link
+                href="/ops/perfil"
+                onClick={() => setIsMobileOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] font-medium transition-colors"
               >
-                <LogOut className="w-4 h-4" />
-                <span>Terminar Sessão</span>
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
+                <User className="w-4 h-4 text-[var(--accent)]" />
+                <span>O meu perfil</span>
+              </Link>
 
-      {/* ─── DESKTOP SIDEBAR (hidden md:flex) ─────────────────────────────────── */}
-      <aside 
-        className={`hidden md:flex bg-[var(--surface-bg)] border-r border-[var(--border-subtle)] flex-col shrink-0 transition-all duration-200 select-none ${
+              <form action={signout}>
+                <button
+                  type="submit"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Terminar Sessão</span>
+                </button>
+              </form>
+            </div>
+          </div>
+      </MobileDrawer>
+
+      {/* ─── DESKTOP SIDEBAR (desktop layout) ─────────────────────────────────── */}
+      <aside
+        className={`tms-desktop-only tms-sidebar bg-[var(--surface-bg)] border-r border-[var(--border-subtle)] flex-col shrink-0 transition-all duration-200 select-none ${
           isCollapsed ? "w-[68px]" : "w-[220px]"
         }`}
       >
@@ -200,29 +175,29 @@ export function OpsSidebar() {
         <div className={`pt-6 pb-2 ${isCollapsed ? "px-2 flex flex-col items-center" : "px-6"}`}>
           <Link href="/ops" className="block">
             {isCollapsed ? (
-              <div 
+              <div
                 title="Linke TMS"
                 className="w-10 h-10 rounded-xl flex items-center justify-center transition-transform hover:scale-105"
               >
-                <Image 
-                  src="/favicon.png" 
-                  alt="Linke TMS" 
-                  width={36} 
-                  height={36} 
-                  className="object-contain rounded-lg" 
-                  priority 
+                <Image
+                  src="/favicon.png"
+                  alt="Linke TMS"
+                  width={36}
+                  height={36}
+                  className="object-contain rounded-lg"
+                  priority
                 />
               </div>
             ) : (
               <>
-                <Image 
-                  src="/Linke-logo.png" 
-                  alt="Linke TMS" 
-                  width={130} 
-                  height={32} 
-                  className="object-contain" 
+                <Image
+                  src="/Linke-logo.png"
+                  alt="Linke TMS"
+                  width={130}
+                  height={32}
+                  className="object-contain"
                   style={{ height: "auto" }}
-                  priority 
+                  priority
                 />
                 <div className="text-[11px] text-[var(--text-tertiary)] font-medium mt-2">
                   {APP_VERSION}
@@ -242,8 +217,8 @@ export function OpsSidebar() {
             onClick={toggleCollapsed}
             title={isCollapsed ? "Expandir painel" : "Recolher painel"}
             className={`w-full flex items-center rounded-lg bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[rgba(0,0,0,0.04)] transition-all cursor-pointer ${
-              isCollapsed 
-                ? "h-10 justify-center p-0" 
+              isCollapsed
+                ? "h-10 justify-center p-0"
                 : "px-3 py-2 justify-between"
             }`}
           >
@@ -259,13 +234,14 @@ export function OpsSidebar() {
         </div>
       </aside>
 
-      {/* ─── MOBILE BOTTOM NAVIGATION BAR (md:hidden) ─────────────────────────── */}
-      <nav 
+      {/* ─── MOBILE BOTTOM NAVIGATION BAR (compact layout) ─────────────────────────── */}
+      <nav
         aria-label="Navegação inferior de operações"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface-bg)]/95 backdrop-blur-md border-t border-[var(--border-subtle)] h-14 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-lg"
+        className="tms-mobile-only tms-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-[var(--surface-bg)]/95 backdrop-blur-md border-t border-[var(--border-subtle)] flex items-center justify-around px-2 shadow-lg"
       >
         <Link
           href="/ops"
+          aria-current={pathname === "/ops" ? "page" : undefined}
           className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
             pathname === "/ops"
               ? "text-[var(--accent)] font-bold"
@@ -273,11 +249,12 @@ export function OpsSidebar() {
           }`}
         >
           <LayoutDashboard className={`w-5 h-5 mb-0.5 ${pathname === "/ops" ? "text-[var(--accent)] stroke-[2.5]" : ""}`} />
-          <span className="text-[9px] tracking-tight">Painel</span>
+          <span className="text-[11px] tracking-tight">Painel</span>
         </Link>
 
         <Link
           href="/ops/envios"
+          aria-current={pathname.startsWith("/ops/envios") && pathname !== "/ops/envios/novo" ? "page" : undefined}
           className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
             pathname.startsWith("/ops/envios") && pathname !== "/ops/envios/novo"
               ? "text-[var(--accent)] font-bold"
@@ -285,12 +262,12 @@ export function OpsSidebar() {
           }`}
         >
           <Package className={`w-5 h-5 mb-0.5 ${pathname.startsWith("/ops/envios") && pathname !== "/ops/envios/novo" ? "text-[var(--accent)] stroke-[2.5]" : ""}`} />
-          <span className="text-[9px] tracking-tight">Envios</span>
+          <span className="text-[11px] tracking-tight">Envios</span>
         </Link>
 
         <Link
           href="/ops/envios/novo"
-          className="flex flex-col items-center justify-center -mt-3 shrink-0"
+          className="tms-nav-create flex flex-col items-center justify-center -mt-3 shrink-0"
         >
           <div className="w-11 h-11 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white flex items-center justify-center shadow-md active:scale-95 transition-all">
             <Plus className="w-6 h-6" strokeWidth={3} />
@@ -300,6 +277,7 @@ export function OpsSidebar() {
 
         <Link
           href="/ops/tracking"
+          aria-current={pathname.startsWith("/ops/tracking") ? "page" : undefined}
           className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
             pathname.startsWith("/ops/tracking")
               ? "text-[var(--accent)] font-bold"
@@ -307,16 +285,18 @@ export function OpsSidebar() {
           }`}
         >
           <MapPin className={`w-5 h-5 mb-0.5 ${pathname.startsWith("/ops/tracking") ? "text-[var(--accent)] stroke-[2.5]" : ""}`} />
-          <span className="text-[9px] tracking-tight">Tracking</span>
+          <span className="text-[11px] tracking-tight">Tracking</span>
         </Link>
 
         <button
           type="button"
           onClick={() => setIsMobileOpen(true)}
+          aria-controls="ops-mobile-menu"
+          aria-expanded={isMobileOpen}
           className="flex flex-col items-center justify-center flex-1 py-1 rounded-lg text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-all cursor-pointer"
         >
           <Menu className="w-5 h-5 mb-0.5" />
-          <span className="text-[9px] tracking-tight">Mais</span>
+          <span className="text-[11px] tracking-tight">Mais</span>
         </button>
       </nav>
     </>
