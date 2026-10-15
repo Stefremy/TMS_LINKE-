@@ -262,7 +262,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             Localizar
           </Button>
 
-          <FerramentasMenu />
+          <FerramentasMenu selectedShipmentIds={selectedIds} onManifestClosed={() => { setSelectedIds([]); router.refresh() }} />
           
           <Button 
             variant="outline"
@@ -742,6 +742,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
           deliveryNoteId={manifestData.deliveryNoteId}
           shipmentsCount={manifestData.count}
           manifestPdfBase64={manifestData.manifestPdfBase64}
+          warning={manifestData.warning}
         />
       )}
     </div>

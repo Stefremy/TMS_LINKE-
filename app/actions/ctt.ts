@@ -19,7 +19,7 @@ import {
   CTTSpecialService
 } from "@/lib/services/ctt"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
-import { generateManifestPdfBase64, ManifestPdfShipment } from "@/lib/services/ctt/manifest-pdf"
+import { closeCttManifest } from "@/lib/services/ctt/close-manifest"
 
 
 /**
@@ -444,159 +444,25 @@ export async function emitCttShipmentAction(shipmentInput: {
   }
 }
 
-/**
- * Fecha a expedição de envios CTT, atualiza estados e gera a Guia de Transporte / Manifesto de Carga
- */
+/** Fecha o manifesto confirmado pelos CTT, sem alterar o estado de transporte. */
 export async function closeCttShipmentsAction(shipmentIds?: string[]) {
   const ctx = await requireUser()
-  const supabase = createAdminClient()
-  const creds = await getCttCredentials()
-  const shipmentService = new CTTShipmentService()
-
-  // 1. Procurar envios a fechar
-  let shipmentsToClose: any[] = []
-  if (shipmentIds && shipmentIds.length > 0) {
-    const { data: byId } = await supabase
-      .from("shipments")
-      .select("*")
-      .in("id", shipmentIds)
-    if (byId && byId.length > 0) {
-      shipmentsToClose = byId
-    } else {
-      const { data: byTrk } = await supabase
-        .from("shipments")
-        .select("*")
-        .in("tracking_number", shipmentIds)
-      shipmentsToClose = byTrk || []
+  let result
+  try {
+    result = await closeCttManifest(ctx.tenant_id, shipmentIds, ctx.role === 'client' ? ctx.client_id! : undefined)
+  } catch {
+    return { success: false, count: 0, error: "Não foi possível concluir o pedido de manifesto. Confirme o resultado com os CTT antes de repetir." }
+  }
+  if (result.success) {
+    try {
+      revalidatePath("/ops/envios")
+      revalidatePath("/ops")
+      revalidatePath("/app/[storeSlug]/envios", "page")
+    } catch {
+      // The carrier confirmation must not turn into an apparent failed close.
     }
   }
-
-  // Se nenhum id foi indicado ou encontrado, selecionar envios pendentes
-  if (shipmentsToClose.length === 0) {
-    const { data: dbPending } = await supabase
-      .from("shipments")
-      .select("*")
-      .eq("status", "pendente")
-      .order("created_at", { ascending: false })
-      .limit(20)
-    shipmentsToClose = dbPending || []
-  }
-
-  if (ctx.role === 'client') {
-    shipmentsToClose = shipmentsToClose.filter(s => s.client_id === ctx.client_id)
-  }
-
-  if (shipmentsToClose.length === 0) {
-    return {
-      success: false,
-      error: "Nenhum envio disponível para fecho de expedição.",
-      count: 0,
-    }
-  }
-
-  // 2. Chamar o serviço WebService CTT CloseShipment se existirem números de objeto CTT
-  let cttResult: any = null
-  try {
-    const cttTrackingNumbers = shipmentsToClose
-      .map(s => s.tracking_number)
-      .filter(t => t && /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/i.test(t))
-
-    if (cttTrackingNumbers.length > 0) {
-      cttResult = await shipmentService.closeShipment(creds, { shipmentIds: cttTrackingNumbers })
-    }
-  } catch (err: any) {
-    console.warn("Aviso na chamada CloseShipment CTT:", err?.message)
-  }
-
-  // 3. Obter ou gerar identificador de Manifesto / Guia CTT
-  const deliveryNoteId = cttResult?.DeliveryNoteId 
-    || `MAN-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`
-
-  // 4. Obter PDF oficial CTT ou gerar Manifesto em PDF A4
-  let manifestPdfBase64 = ""
-  if (cttResult?.DocumentsList && cttResult.DocumentsList.length > 0) {
-    manifestPdfBase64 = cttResult.DocumentsList[0].DocumentData || ""
-  }
-
-  if (!manifestPdfBase64) {
-    const manifestItems: ManifestPdfShipment[] = shipmentsToClose.map(s => ({
-      id: s.id,
-      trackingNumber: s.tracking_number || "N/A",
-      reference: (s.tracking_number?.startsWith("LTK") ? s.tracking_number : null) || `LTK-${s.id.slice(0, 7).toUpperCase()}`,
-      senderName: s.sender_name || "TMS LINKE Logística",
-      recipientName: s.recipient_name || "Destinatário",
-      destinationCity: s.recipient_address || "Portugal",
-      serviceType: s.service_type || "CTT Expresso 24H",
-      weightKg: 1.2,
-      volumesCount: 1,
-    }))
-
-    manifestPdfBase64 = generateManifestPdfBase64({
-      deliveryNoteId,
-      carrierName: "CTT Expresso - Serviços Postais e Logística, S.A.",
-      shipments: manifestItems,
-      dateStr: new Date().toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" }),
-    })
-  }
-
-  // 5. Atualizar o estado dos envios para "em_transito" com ops_substatus "expedido"
-  const targetIds = shipmentsToClose.map(s => s.id)
-  try {
-    await supabase
-      .from("shipments")
-      .update({
-        status: "em_transito",
-        ops_substatus: "expedido",
-        updated_at: new Date().toISOString(),
-      })
-      .in("id", targetIds)
-  } catch (e: any) {
-    console.warn("Aviso ao atualizar envios após fecho:", e?.message)
-  }
-
-  // 6. Registar evento de tracking de expedição
-  try {
-    const now = new Date().toISOString()
-    const tenantId = await getTenantId()
-    const eventRows = targetIds.map(id => ({
-      tenant_id: tenantId,
-      shipment_id: id,
-      event_code: "EMF",
-      description: `Expedição Fechada - Manifesto ${deliveryNoteId} entregue ao motorista CTT`,
-      created_at: now,
-    }))
-    await supabase.from("tracking_events").insert(eventRows)
-  } catch (e: any) {
-    console.warn("Aviso ao registar tracking events:", e?.message)
-  }
-
-  // 7. Registar no audit_log para arquivo e consulta histórica
-  try {
-    await supabase.from("audit_log").insert({
-      tenant_id: (await getTenantId()),
-      action: "manifest_closed",
-      details: {
-        delivery_note_id: deliveryNoteId,
-        shipment_ids: targetIds,
-        shipments_count: shipmentsToClose.length,
-        carrier: "ctt_expresso",
-        manifest_pdf_base64: manifestPdfBase64,
-        created_at: new Date().toISOString(),
-      }
-    })
-  } catch {}
-
-  revalidatePath("/ops/envios")
-  revalidatePath("/ops")
-  revalidatePath("/app/[storeSlug]/envios", "page")
-
-  return {
-    success: true,
-    deliveryNoteId,
-    count: shipmentsToClose.length,
-    manifestPdfBase64,
-    documents: [{ DocumentType: "Manifesto", DocumentData: manifestPdfBase64 }],
-  }
+  return result
 }
 
 /**

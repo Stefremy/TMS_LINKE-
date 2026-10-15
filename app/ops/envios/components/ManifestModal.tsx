@@ -18,6 +18,7 @@ interface ManifestModalProps {
   deliveryNoteId: string
   shipmentsCount: number
   manifestPdfBase64?: string
+  warning?: string
   dateStr?: string
 }
 
@@ -27,6 +28,7 @@ export function ManifestModal({
   deliveryNoteId,
   shipmentsCount,
   manifestPdfBase64,
+  warning,
   dateStr
 }: ManifestModalProps) {
   if (!isOpen) return null
@@ -85,7 +87,7 @@ export function ManifestModal({
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Envios Expedidos:</span>
+              <span className="text-xs font-semibold text-slate-500">Envios no Manifesto:</span>
               <span className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
                 <Package className="w-4 h-4 text-green-600" />
                 {shipmentsCount} envio(s)
@@ -95,7 +97,7 @@ export function ManifestModal({
               <span className="text-xs font-semibold text-slate-500">Transportadora:</span>
               <span className="font-bold text-xs text-red-600 flex items-center gap-1">
                 <Truck className="w-3.5 h-3.5" />
-                Várias
+                CTT Expresso
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -110,9 +112,11 @@ export function ManifestModal({
           <div className="p-3 bg-amber-50 border border-amber-200/70 rounded-xl flex items-start gap-2.5 text-xs text-amber-900">
             <FileText className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
             <p>
-              Imprima este documento ou descarregue em PDF para assinatura conjunta no ato de recolha pelo motorista da <strong>Transportadora</strong>. Os envios passaram automaticamente ao estado <strong>Em Trânsito</strong>.
+              O manifesto foi fechado pelos CTT. Imprima o PDF para acompanhar a recolha. O estado de transporte dos envios mantém-se até à confirmação da transportadora.
             </p>
           </div>
+
+          {warning && <p role="status" className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3">{warning}</p>}
 
           {/* PDF Preview Frame (if base64 available) */}
           {manifestPdfBase64 && (

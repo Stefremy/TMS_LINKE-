@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
+import { requireEmployee } from "@/lib/auth/context"
 export interface OperationalNotification {
   id: string
   type: "shipment" | "batch" | "client" | "system" | "warning" | "success"
@@ -16,6 +17,7 @@ export interface OperationalNotification {
 }
 
 export async function getOperationalNotificationsAction(): Promise<OperationalNotification[]> {
+  const ctx = await requireEmployee()
   const notifications: OperationalNotification[] = []
   const now = new Date()
 
@@ -24,18 +26,23 @@ export async function getOperationalNotificationsAction(): Promise<OperationalNo
 
     // Run highly optimized direct queries instead of downloading all table data to memory
     const [
-      { data: pendingShipments },
+      { data: pendingRows },
       { data: recentShipments },
       clients,
       connections
     ] = await Promise.all([
-      supabase.from("shipments").select("id, created_at").eq("status", "pendente"),
-      supabase.from("shipments").select("id, tracking_number, sender_name, recipient_name, service_type, created_at, status").order("created_at", { ascending: false }).limit(5),
+      supabase.from("shipments").select("id, created_at, ops_substatus, ctt_manifest_pdf")
+        .eq("tenant_id", ctx.tenant_id).eq("status", "pendente").in("carrier_code", ["ctt", "ctt_expresso"])
+        .order("created_at", { ascending: true }),
+      supabase.from("shipments").select("id, tracking_number, sender_name, recipient_name, service_type, created_at, status")
+        .eq("tenant_id", ctx.tenant_id).order("created_at", { ascending: false }).limit(5),
       getClientesAction().catch(() => []),
       getCarrierConnectionsAction().catch(() => []),
     ])
 
-    // 1. Check Pending Shipments for Batch Closing
+    const pendingShipments = pendingRows?.filter((s: { ctt_manifest_pdf?: string; ops_substatus?: string }) =>
+      !s.ctt_manifest_pdf && !["manifesto_fechado", "expedido"].includes(s.ops_substatus || ""))
+    // Manifest closure and physical shipment status are independent.
     if (pendingShipments && pendingShipments.length > 0) {
       notifications.push({
         id: `batch-pending-${pendingShipments.length}`,

@@ -166,30 +166,31 @@ export function ClientDashboard() {
   }, [filteredShipments, currentPage, pageSize])
 
   const pendingShipments = React.useMemo(() => {
-    return shipments.filter(s => s.status === "pendente")
+    return shipments.filter(s => s.status === "pendente" && ["ctt", "ctt_expresso"].includes(s.carrier_code) && !s.ctt_manifest_pdf && !["manifesto_fechado", "expedido"].includes(s.ops_substatus))
   }, [shipments])
 
   const handleCloseBatch = async () => {
     if (pendingShipments.length === 0) return
-    const idsToClose = pendingShipments.map(s => s.tracking_number || s.id).filter(Boolean)
+    const idsToClose = pendingShipments.map(s => s.id).filter(Boolean)
     if (idsToClose.length === 0) return
 
     setClosingBatch(true)
     try {
       const res = await closeCttShipmentsAction(idsToClose)
-      if (res.success && res.documents && res.documents.length > 0) {
-        setManifestData({
+      if (res.success) {
+        if (res.manifestPdfBase64) setManifestData({
           fileName: "Manifesto_CTT.pdf",
-          base64: res.documents[0].DocumentData
+          base64: res.manifestPdfBase64
         })
+        if (res.warning) alert(res.warning)
         setShipments(prev => prev.map(s => {
           if (idsToClose.includes(s.tracking_number) || idsToClose.includes(s.id)) {
-            return { ...s, status: "em_transito" }
+            return { ...s, ops_substatus: "manifesto_fechado", ctt_delivery_note_id: res.deliveryNoteId }
           }
           return s
         }))
       } else {
-        alert("Erro ao fechar lote de envios CTT.")
+        alert(res.error || "Não foi possível confirmar o fecho do manifesto CTT.")
       }
     } catch (e: any) {
       alert("Erro ao fechar lote: " + e.message)

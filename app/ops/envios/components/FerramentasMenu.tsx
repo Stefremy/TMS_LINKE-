@@ -22,7 +22,7 @@ import {
 import { emitCttShipmentAction, closeCttShipmentsAction } from "@/app/actions/ctt"
 import { syncAllActiveShipmentsTrackingAction } from "@/app/actions/shipments"
 
-export function FerramentasMenu() {
+export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { selectedShipmentIds: string[]; onManifestClosed: () => void }) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [activeModal, setActiveModal] = React.useState<"none" | "emit_ctt" | "close_cert" | "sync_tracking">("none")
   const [loading, setLoading] = React.useState(false)
@@ -86,8 +86,9 @@ export function FerramentasMenu() {
     setModalResult(null)
 
     try {
-      const res = await closeCttShipmentsAction()
+      const res = await closeCttShipmentsAction(selectedShipmentIds)
       setModalResult(res)
+      if (res.success) onManifestClosed()
     } catch (err: any) {
       setModalResult({ success: false, errors: [{ Message: err.message }] })
     } finally {
@@ -224,10 +225,12 @@ export function FerramentasMenu() {
               </button>
               <button 
                 onClick={handleCloseManifest}
+                disabled={selectedShipmentIds.length === 0}
+                title={selectedShipmentIds.length === 0 ? "Selecione os envios na lista para fechar o manifesto" : "Fechar o manifesto dos envios selecionados"}
                 className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-red-50 hover:text-red-700 rounded text-[13px] text-slate-700 font-medium transition-colors"
               >
                 <Check className="w-4 h-4 text-red-600" />
-                Certificados de Aceitação
+                Fechar Manifesto CTT ({selectedShipmentIds.length})
               </button>
             </div>
 
@@ -349,6 +352,10 @@ export function FerramentasMenu() {
                   <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
                   <div className="text-sm font-semibold text-slate-700">A fechar lote e a gerar Certificado de Aceitação...</div>
                 </div>
+              ) : !modalResult?.success ? (
+                <p role="alert" className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg p-4">
+                  {modalResult?.error || "Não foi possível confirmar o fecho. Verifique a ligação CTT antes de repetir."}
+                </p>
               ) : (
                 <div className="space-y-4">
                   <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start gap-3">
@@ -359,12 +366,15 @@ export function FerramentasMenu() {
                         Manifesto: <strong>{modalResult?.deliveryNoteId || "N/A"}</strong> ({modalResult?.count || 0} envio(s) fechado(s)).
                       </p>
                       <p className="text-xs text-emerald-600 mt-0.5">
-                        O Certificado de Aceitação está pronto para assinatura pelo motorista da Transportadora na recolha.
+                        O fecho do manifesto não altera o estado de transporte dos envios.
                       </p>
                     </div>
                   </div>
 
+                  {modalResult?.warning && <p role="status" className="text-sm text-amber-900 bg-amber-50 rounded-lg p-3">{modalResult.warning}</p>}
+
                   <button 
+                    disabled={!modalResult?.manifestPdfBase64}
                     onClick={() => {
                       if (modalResult?.manifestPdfBase64) {
                         const link = document.createElement("a")

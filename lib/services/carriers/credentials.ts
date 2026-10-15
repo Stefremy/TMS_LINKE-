@@ -9,87 +9,56 @@ import { CorreosCredentials } from "@/lib/services/correos/types"
 
 // ─── CTT ────────────────────────────────────────────────────────────────────
 
-let cttCredentialsCache: CTTConnectionCredentials | null = null
-let cttCredentialsCacheTime = 0
+const cttCredentialsCache = new Map<string, { credentials: CTTConnectionCredentials; time: number }>()
 
 export async function resolveCttCredentials(connectionId?: string): Promise<CTTConnectionCredentials> {
-  if (!connectionId && cttCredentialsCache && Date.now() - cttCredentialsCacheTime < 60000) {
-    return cttCredentialsCache
-  }
+  const tenantId = await getTenantId()
+  const cacheKey = `${tenantId}:${connectionId || "default"}`
+  const cached = cttCredentialsCache.get(cacheKey)
+  if (cached && Date.now() - cached.time < 60000) return cached.credentials
 
   const supabase = createAdminClient()
-  let result: CTTConnectionCredentials | null = null
-
+  let connection: (Partial<CTTConnectionCredentials> & { client_id?: string; is_active?: boolean }) | null = null
   try {
-    let query = supabase
-      .from("carrier_connections")
-      .select("*")
-      .eq("tenant_id", (await getTenantId()))
-      
-    if (connectionId) {
-      query = query.eq("id", connectionId)
-    } else {
-      query = query.eq("carrier_code", "ctt_expresso")
-    }
-
-    const { data: conn } = await query.single()
-
-    if (conn) {
-      result = {
-        contract_number: conn.contract_number,
-        client_number: conn.client_id,
-        auth_id: conn.auth_id,
-        user_id: conn.user_id || undefined,
-        distribution_channel: conn.distribution_channel || 99,
-        environment: (conn.environment as "qa" | "production") || "production",
-        default_subproduct: conn.default_subproduct || "EMSF056.01",
-      }
-    }
+    let query = supabase.from("carrier_connections").select("*").eq("tenant_id", tenantId)
+      .in("carrier_code", ["ctt_expresso", "ctt"])
+    if (connectionId) query = query.eq("id", connectionId)
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle()
+    if (!error) connection = data
   } catch {}
 
-  if (!result) {
+  if (!connection) {
     try {
-      const { data: logs } = await supabase
-        .from("audit_log")
-        .select("*")
-        .eq("action", "carrier_connection_config")
-        .order("created_at", { ascending: false })
-        .limit(10) // Limit to avoid fetching thousands of unrelated logs
-
-    // CRITICAL: filter by carrier_code to avoid picking up Correos/other configs
-    const cttLog = logs?.find((l: any) => l.details?.carrier_code === "ctt_expresso")
-    if (cttLog?.details) {
-      const d = cttLog.details
-      result = {
-        contract_number: d.contract_number,
-        client_number: d.client_id,
-        auth_id: d.auth_id,
-        user_id: d.user_id || undefined,
-        distribution_channel: d.distribution_channel || 99,
-        environment: (d.environment as "qa" | "production") || "production",
-        default_subproduct: d.default_subproduct || "EMSF056.01",
-      }
-    }
+      let query = supabase.from("audit_log").select("details").eq("tenant_id", tenantId)
+        .eq("action", "carrier_connection_config").in("details->>carrier_code", ["ctt_expresso", "ctt"])
+      if (connectionId) query = query.eq("id", connectionId)
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle()
+      if (!error) connection = data?.details || null
     } catch {}
   }
+  if (connection?.is_active === false) throw new Error("A ligação CTT está desativada.")
+  if (connectionId && !connection) throw new Error("A ligação CTT selecionada não está disponível.")
 
-  if (!result) {
-    result = {
-      contract_number: process.env.CTT_CONTRACT_ID || "",
-      client_number: process.env.CTT_CLIENT_ID || "",
-      auth_id: process.env.CTT_AUTHENTICATION_ID || "",
-      user_id: process.env.CTT_USER_ID || undefined,
-      distribution_channel: Number(process.env.CTT_DISTRIBUTION_CHANNEL) || 99,
-      environment: (process.env.CTT_ENVIRONMENT as "qa" | "production") || "production",
-      default_subproduct: process.env.CTT_DEFAULT_SUBPRODUCT || "EMSF056.01",
-    }
+  const result: CTTConnectionCredentials = connection ? {
+    contract_number: connection.contract_number || "",
+    client_number: connection.client_id || connection.client_number || "",
+    auth_id: connection.auth_id || "",
+    user_id: connection.user_id || undefined,
+    distribution_channel: connection.distribution_channel || 99,
+    environment: connection.environment === "qa" ? "qa" : "production",
+    default_subproduct: connection.default_subproduct || "EMSF056.01",
+  } : {
+    contract_number: process.env.CTT_CONTRACT_ID || "",
+    client_number: process.env.CTT_CLIENT_ID || "",
+    auth_id: process.env.CTT_AUTHENTICATION_ID || "",
+    user_id: process.env.CTT_USER_ID || undefined,
+    distribution_channel: Number(process.env.CTT_DISTRIBUTION_CHANNEL) || 99,
+    environment: process.env.CTT_ENVIRONMENT === "qa" ? "qa" : "production",
+    default_subproduct: process.env.CTT_DEFAULT_SUBPRODUCT || "EMSF056.01",
   }
-  
-  if (!connectionId) {
-    cttCredentialsCache = result
-    cttCredentialsCacheTime = Date.now()
+  if (result.auth_id && result.client_number && result.contract_number) {
+    cttCredentialsCache.set(cacheKey, { credentials: result, time: Date.now() })
   }
-
   return result
 }
 
