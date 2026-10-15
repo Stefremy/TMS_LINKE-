@@ -114,7 +114,10 @@ export async function closeCttManifest(tenantId: string, shipmentIds?: string[],
   }
   if (response.Status !== 1 || response.ErrorsList?.length) {
     const codes = response.ErrorsList?.map(e => e.Code).filter(code => code !== undefined).join(', ')
-    return fail(`Os CTT não confirmaram o fecho${codes ? ` (código ${codes})` : ''}. Verifique os envios e a ligação CTT. O estado dos envios foi mantido.`)
+    const messages = (response.ErrorsList || []).map(e => String((e as { Message?: string }).Message || '').trim())
+      .filter(Boolean).map(m => m.slice(0, 200)).join(' | ')
+    console.error('[CTT_MANIFEST_CLOSE_REJECTED]', { status: response.Status, codes, messages, environment: credentials.environment || 'production' })
+    return fail(`Os CTT não confirmaram o fecho${codes ? ` (código ${codes})` : ''}${messages ? `: ${messages}` : ''}. Verifique os envios e a ligação CTT. O estado dos envios foi mantido.`)
   }
   // CloseShipmentOutput has Status/DocumentsList/ErrorsList, not DeliveryNoteId.
   // This is a Linke archive reference, never presented as an official CTT number.

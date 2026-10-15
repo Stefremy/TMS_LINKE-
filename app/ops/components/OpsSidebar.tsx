@@ -5,6 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { ChevronsLeft, ChevronsRight } from "lucide-react"
 import { SidebarNav } from "./SidebarNav"
+import { APP_VERSION } from "@/lib/config/version"
 
 export function OpsSidebar() {
   const [isCollapsed, setIsCollapsed] = React.useState(false)
@@ -68,7 +69,7 @@ export function OpsSidebar() {
                 priority 
               />
               <div className="text-[11px] text-[var(--text-tertiary)] font-medium mt-2">
-                v2.8.4 Enterprise
+                {APP_VERSION}
               </div>
             </>
           )}

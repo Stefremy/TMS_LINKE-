@@ -29,15 +29,23 @@ export async function resolveCttCredentials(connectionId?: string): Promise<CTTC
 
   if (!connection) {
     try {
-      let query = supabase.from("audit_log").select("details").eq("tenant_id", tenantId)
+      const base = () => supabase.from("audit_log").select("details").eq("tenant_id", tenantId)
         .eq("action", "carrier_connection_config").in("details->>carrier_code", ["ctt_expresso", "ctt"])
-      if (connectionId) query = query.eq("id", connectionId)
-      const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle()
-      if (!error) connection = data?.details || null
+      let data: { details?: any } | null = null
+      if (connectionId) {
+        const exact = await base().eq("id", connectionId).order("created_at", { ascending: false }).limit(1).maybeSingle()
+        if (!exact.error) data = exact.data
+      }
+      // The selected id may be stale or point to a record that does not exist here:
+      // use the company's configured CTT connection instead of blocking the shipment.
+      if (!data) {
+        const latest = await base().order("created_at", { ascending: false }).limit(1).maybeSingle()
+        if (!latest.error) data = latest.data
+      }
+      connection = data?.details || null
     } catch {}
   }
   if (connection?.is_active === false) throw new Error("A ligação CTT está desativada.")
-  if (connectionId && !connection) throw new Error("A ligação CTT selecionada não está disponível.")
 
   const result: CTTConnectionCredentials = connection ? {
     contract_number: connection.contract_number || "",

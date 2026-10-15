@@ -52,11 +52,11 @@ export function domainDestination(requestUrl: string, origins: PublicOrigins = g
   const isApp = url.pathname === "/app" || url.pathname.startsWith("/app/")
   const isOps = url.pathname === "/ops" || url.pathname.startsWith("/ops/")
   let origin: string | undefined, path = url.pathname
-  if (url.origin === origins.portal && origins.portal !== origins.ops) {
+  if (url.origin === origins.portal && origins.ops && origins.portal !== origins.ops) {
     if (path === "/") path = "/app"
     if (path === "/login") path = "/app/login"
     origin = isOps ? origins.ops : origins.portal
-  } else if (url.origin === origins.ops && origins.ops !== origins.portal) {
+  } else if (url.origin === origins.ops && origins.portal && origins.ops !== origins.portal) {
     if (path === "/") path = "/ops"
     // Staff support previews stay on Ops, with host-only staff/impersonation cookies.
     origin = ["/app/login", "/app/ativar"].includes(path) ? origins.portal : origins.ops
