@@ -99,39 +99,66 @@ test('Another tenant/company session is never used for authentication',async()=>
   assert.equal(h.db.writes.length,0)
 })
 
-test('Only the selected client shows loading, and a refused invoice never downloads a statement',async()=>{
-  const slots=[];let cursor=0,resolveAction;const alerts=[]
+test('Each mounted invoice button owns its loading state, from either row and after errors or cancellation',async()=>{
+  const stores=new Map();let frame,resolveAction,rejectAction;const alerts=[],calls=[]
   const react={
-    useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},
-    useRef(initial){const i=cursor++;return slots[i]||=( {current:initial} )},
+    useState(initial){const {slots}=frame,i=frame.cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},
+    useRef(initial){const {slots}=frame,i=frame.cursor++;return slots[i]||={current:initial}},
     useMemo(fn){return fn()},
   }
-  const jsx=(type,props)=>({type,props:props||{}})
+  const jsx=(type,props,key)=>({type,props:props||{},key})
+  // Render every actual function component with its own persistent hook store.
+  function renderNode(node,path='root') {
+    if(Array.isArray(node))return node.map((child,i)=>renderNode(child,path+'/'+(child?.key??i)))
+    if(!node||typeof node!=='object')return node
+    if(typeof node.type==='function'){
+      const previous=frame
+      const slots=stores.get(path)||[];stores.set(path,slots);frame={slots,cursor:0}
+      let output
+      try{output=node.type(node.props)}finally{frame=previous}
+      return renderNode(output,path+'/view')
+    }
+    return {...node,props:{...node.props,children:renderNode(node.props.children,path+'/children')}}
+  }
   const load=createLoader({
     react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
     'next/link':{default:'link'},'next/navigation':{useRouter:()=>({refresh(){}})},
     'lucide-react':new Proxy({},{get:(_,name)=>String(name)}),
     './MoloniConnectModal':{MoloniConnectModal:'modal'},
-    '@/app/actions/moloni':{emitInvoiceAction:()=>new Promise(resolve=>{resolveAction=resolve})},
+    '@/app/actions/moloni':{emitInvoiceAction:clientId=>{calls.push(clientId);return new Promise((resolve,reject)=>{resolveAction=resolve;rejectAction=reject})}},
   })
   const Component=load('app/ops/faturacao/contas-corrente/ContasCorrenteClient.tsx').default
   const clients=[{id:'a',legal_name:'Store A'},{id:'b',legal_name:'Store B'}]
   const props={clients,shipments:clients.map(c=>({id:c.id,client_id:c.id,sell_price:3.91,created_at:'2026-10-15'})),moloniConfig:{isConnected:true}}
-  const render=()=>{cursor=0;return Component(props)}
+  const render=()=>renderNode(jsx(Component,props))
   const flatten=node=>Array.isArray(node)?node.flatMap(flatten):node&&typeof node==='object'?[node,...flatten(node.props?.children)]:[]
   const text=node=>Array.isArray(node)?node.map(text).join(''):node&&typeof node==='object'?text(node.props?.children):String(node??'')
-  const buttons=tree=>flatten(tree).filter(n=>n.type==='button'&&/Emitir Fatura Moloni|A emitir\.\.\./.test(text(n)))
+  const buttons=()=>flatten(render()).filter(n=>n.type==='button'&&/Emitir Fatura Moloni|A emitir\.\.\./.test(text(n)))
   const oldConfirm=global.confirm,oldAlert=global.alert
   global.confirm=()=>true;global.alert=msg=>alerts.push(msg)
   try{
-    const pending=buttons(render())[0].props.onClick({stopPropagation(){}})
-    await new Promise(resolve=>setImmediate(resolve))
-    assert.deepEqual(buttons(render()).map(text),['A emitir...','Emitir Fatura Moloni'])
-    resolveAction({success:false,error:'Sessão expirada'})
-    await pending
+    for(const selected of [0,1]){
+      const pending=buttons()[selected].props.onClick({stopPropagation(){}})
+      await new Promise(resolve=>setImmediate(resolve))
+      const active=buttons()
+      assert.deepEqual(active.map(text),selected===0?['A emitir...','Emitir Fatura Moloni']:['Emitir Fatura Moloni','A emitir...'])
+      assert.deepEqual(active.map(b=>b.props['aria-busy']),[selected===0,selected===1])
+      const before=calls.length
+      await active[1-selected].props.onClick({stopPropagation(){}})
+      assert.equal(calls.length,before,'Disabled other row must not issue another invoice')
+      if(selected===0)resolveAction({success:false,error:'Sessão expirada'})
+      else rejectAction(new Error('Network unavailable'))
+      await pending
+      assert.deepEqual(buttons().map(text),['Emitir Fatura Moloni','Emitir Fatura Moloni'])
+      assert.deepEqual(buttons().map(b=>b.props['aria-busy']),[false,false])
+    }
     assert.match(alerts[0],/Sessão expirada/)
-    assert.deepEqual(buttons(render()).map(text),['Emitir Fatura Moloni','Emitir Fatura Moloni'])
-    // No document/browser APIs are mocked: any automatic fallback download would fail this test.
+    assert.match(alerts[1],/confirmar o resultado/)
+    global.confirm=()=>false
+    const before=calls.length
+    await buttons()[0].props.onClick({stopPropagation(){}})
+    assert.equal(calls.length,before)
+    assert.deepEqual(buttons().map(b=>b.props['aria-busy']),[false,false])
   }finally{global.confirm=oldConfirm;global.alert=oldAlert}
 })
 

@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Building, FileText, ChevronDown, ChevronRight, Euro, Cloud, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X, Sparkles, Mail, Send } from "lucide-react"
+import { InvoiceIssueButton } from "./InvoiceIssueButton"
 import { MoloniConnectModal } from "./MoloniConnectModal"
 
 export default function ContasCorrenteClient({ 
@@ -48,7 +49,7 @@ export default function ContasCorrenteClient({
   const [startDate, setStartDate] = React.useState<string>("")
   const [endDate, setEndDate] = React.useState<string>("")
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
-  const [issuingClientId, setIssuingClientId] = React.useState<string | null>(null)
+  const [isIssuingInvoice, setIsIssuingInvoice] = React.useState(false)
   const invoiceInFlight = React.useRef(false)
 
   // Modal emissão de recibo
@@ -463,17 +464,16 @@ export default function ContasCorrenteClient({
                     <div className="col-span-2 flex items-center justify-end gap-2">
                       {shipments.length > 0 ? (
                         <>
-                          <button 
-                            className="flex items-center justify-center px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-xs rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs cursor-pointer"
-                            disabled={activeCount === 0 || issuingClientId !== null}
-                            onClick={async (e) => { 
-                              e.stopPropagation(); 
+                          <InvoiceIssueButton
+                            clientName={client.legal_name || client.short_name}
+                            disabled={activeCount === 0 || isIssuingInvoice}
+                            onIssue={async () => {
                               const modeStr = groupInvoicesByService ? "Agrupada por Serviço (Fatura Compacta - 1 página)" : "Detalhada (1 linha por envio)"
                               if (!confirm(`Emitir Fatura Oficial Moloni para ${activeCount} envios selecionados?\n\nTotal: ${totalValue.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€\nModo: ${modeStr}`)) return;
                               
                               if (invoiceInFlight.current) return
                               invoiceInFlight.current = true
-                              setIssuingClientId(client.id)
+                              setIsIssuingInvoice(true)
                               try {
                                 const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
                                 const { emitInvoiceAction } = await import("@/app/actions/moloni")
@@ -510,12 +510,10 @@ export default function ContasCorrenteClient({
                                 alert("Não foi possível confirmar o resultado da emissão. Consulte o Moloni antes de repetir para evitar uma fatura duplicada.")
                               } finally {
                                 invoiceInFlight.current = false
-                                setIssuingClientId(null)
+                                setIsIssuingInvoice(false)
                               }
                             }}
-                          >
-                            {issuingClientId === client.id ? "A emitir..." : "Emitir Fatura Moloni"}
-                          </button>
+                          />
                         </>
                       ) : clientUnpaid.length > 0 ? (
                         <>
