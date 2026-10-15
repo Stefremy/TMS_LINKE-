@@ -120,7 +120,12 @@ function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = cl
     '@/lib/services/ctt/ctt-types': {},
     '@/lib/services/carriers/ctt-provider': { CttProvider: class {
       async initialize() {}
-      async createShipment(payload) { providerCalls.push({ carrier: 'CTT', payload }); return { success: true, trackingNumber: 'DB123456789PT' } }
+      async createShipment(payload) {
+        providerCalls.push({ carrier: 'CTT', payload })
+        return { success: true, trackingNumber: 'DD123456789PT', rawResponse: {
+          Status: 1, ShipmentData: [{ FirstObject: 'DD123456789PT', LastObject: 'DD123456790PT' }],
+        } }
+      }
     } },
     '@/lib/services/correos/correos-shipment.service': { CorreosShipmentService: class {
       async createShipment(creds, payload) { providerCalls.push({ carrier: 'Correos', payload }); return { codigoRetorno: 0, datosResultado: '1234567890123456' } }
@@ -315,6 +320,19 @@ test('legacy FormData creation: valid configured tariff still creates a draft', 
   assert.equal(h.providerCalls.length, 0)
 })
 
+
+test('CTT emission preserves authoritative product, connection and object range for later manifest closing', async () => {
+  const h = shipmentHarness()
+  assert.equal((await emit(h)).success, true)
+  const saved = h.db.writes.find(w => w.table === 'audit_log').value.details
+  assert.deepEqual(saved.ctt_close_data, {
+    shipmentId: saved.id,
+    connectionId: 'verified-connection',
+    FirstObjectCode: 'DD123456789PT',
+    LastObjectCode: 'DD123456790PT',
+    SubProductCode: 'EMSF056.01',
+  })
+})
 
 function setCustomPrices(tables, prices) {
   tables.audit_log[0].details.custom_tier_overrides = { 'service-a': prices }

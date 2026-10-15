@@ -146,15 +146,22 @@ export interface CTTCompleteShipmentOutput {
 
 export interface CTTCloseShipmentInput {
   AuthenticationID: string
-  RequestID?: string
-  UserId?: string
-  DeliveryNoteId?: string
-  ShipmentIdList?: string[]
+  ClientId: string
+  ContractId: string
+  DistributionChannel: number
+  ListOfShipmentToClose: CTTShipment2Close[]
+  RequestID: string
+  UserID?: string
+}
+
+export interface CTTShipment2Close {
+  FirstObjectCode: string
+  LastObjectCode: string
+  SubProductCode: string
 }
 
 export interface CTTCloseShipmentOutput {
   Status: 0 | 1
-  DeliveryNoteId?: string
   ErrorsList?: CTTErrorData[]
   DocumentsList?: CTTDocumentData[] // Certificados de Aceitação
 }

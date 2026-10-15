@@ -3,7 +3,7 @@ import {
   CTTConnectionCredentials, 
   CTTCompleteShipmentInput, 
   CTTCompleteShipmentOutput, 
-  CTTCloseShipmentInput,
+  CTTShipment2Close,
   CTTCloseShipmentOutput,
   CTTAddressData,
   CTTShipmentData,
@@ -234,22 +234,28 @@ export class CTTShipmentService {
    */
   async closeShipment(
     creds: CTTConnectionCredentials,
-    input: { deliveryNoteId?: string; shipmentIds?: string[] }
+    input: { shipments: CTTShipment2Close[] }
   ): Promise<CTTCloseShipmentOutput> {
     const esc = CTTSoapClient.escapeXml
     const requestId = crypto.randomUUID()
 
+    if (!input.shipments.length) throw new Error('Selecione os envios a fechar.')
+    // Order and namespaces follow the published CloseShipmentInput XSD.
     const bodyXml = `
       <tem:CloseShipment>
         <tem:Input>
           <ws:AuthenticationID>${esc(creds.auth_id)}</ws:AuthenticationID>
-          ${input.deliveryNoteId ? `<ws:DeliveryNoteId>${esc(input.deliveryNoteId)}</ws:DeliveryNoteId>` : ""}
+          <ws:ClientId>${esc(creds.client_number)}</ws:ClientId>
+          <ws:ContractId>${esc(creds.contract_number)}</ws:ContractId>
+          <ws:DistributionChannel>${creds.distribution_channel ?? 99}</ws:DistributionChannel>
+          <ws:ListOfShipmentToClose>
+            ${input.shipments.map(shipment => `<ws:Shipment2Close>
+              <ws:FirstObjectCode>${esc(shipment.FirstObjectCode)}</ws:FirstObjectCode>
+              <ws:LastObjectCode>${esc(shipment.LastObjectCode)}</ws:LastObjectCode>
+              <ws:SubProductCode>${esc(shipment.SubProductCode)}</ws:SubProductCode>
+            </ws:Shipment2Close>`).join('')}
+          </ws:ListOfShipmentToClose>
           <ws:RequestID>${requestId}</ws:RequestID>
-          ${input.shipmentIds && input.shipmentIds.length > 0 ? `
-            <ws:ShipmentIdList>
-              ${input.shipmentIds.map(id => `<mod:string>${esc(id)}</mod:string>`).join("")}
-            </ws:ShipmentIdList>
-          ` : ""}
           ${creds.user_id ? `<ws:UserID>${esc(creds.user_id)}</ws:UserID>` : ""}
         </tem:Input>
       </tem:CloseShipment>
@@ -292,7 +298,6 @@ export class CTTShipmentService {
 
     return {
       Status: status,
-      DeliveryNoteId: this.getText(res?.DeliveryNoteId),
       ErrorsList: errorsList,
       DocumentsList: this.extractDocuments(res?.DocumentsList),
     }
@@ -357,8 +362,8 @@ export class CTTShipmentService {
     if (!docNode?.DocumentData) return []
     const list = Array.isArray(docNode.DocumentData) ? docNode.DocumentData : [docNode.DocumentData]
     return list.map((d: any) => ({
-      FileName: d.FileName,
-      File: d.File,
+      FileName: this.getText(d.FileName),
+      File: this.getText(d.File),
     }))
   }
 }

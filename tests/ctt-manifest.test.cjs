@@ -12,8 +12,8 @@ const PDF = Buffer.from('%PDF-1.4\nfixture document').toString('base64')
 const row = (id = A, extra = {}) => ({ id, tenant_id: TENANT, status: 'pendente', carrier_code: 'ctt_expresso',
   tracking_number: 'LTK123', carrier_tracking_number: 'DD123456789PT', ...extra })
 
-function harness({ rows = [row()], credentials = CREDS, response, carrierError, failure } = {}) {
-  const db = fakeSupabase({ shipments: rows, audit_log: [] }, failure)
+function harness({ rows = [row()], audit = [], credentials = CREDS, response, carrierError, failure } = {}) {
+  const db = fakeSupabase({ shipments: rows, audit_log: audit }, failure)
   const calls = []
   const close = createLoader({
     '@/lib/supabase/server': { createAdminClient: () => db.createAdminClient() },
@@ -22,7 +22,7 @@ function harness({ rows = [row()], credentials = CREDS, response, carrierError, 
       async closeShipment(creds, input) {
         calls.push({ creds, input })
         if (carrierError) throw carrierError
-        return response || { Status: 1, DeliveryNoteId: 'CTT-MAN-FIXTURE', DocumentsList: [{ File: PDF }] }
+        return response || { Status: 1, DocumentsList: [{ FileName: 'certificado.pdf', File: PDF }] }
       }
     } },
   })('lib/services/ctt/close-manifest.ts').closeCttManifest
@@ -34,10 +34,11 @@ test('closing pending CTT shipments uses carrier codes and archives confirmation
   const r = await h.close(TENANT, [A])
   assert.equal(r.success, true)
   assert.equal(r.manifestPdfBase64, PDF)
-  assert.deepEqual(h.calls[0].input.shipmentIds, ['DD123456789PT'])
+  assert.deepEqual(h.calls[0].input.shipments, [{ FirstObjectCode: 'DD123456789PT', LastObjectCode: 'DD123456789PT', SubProductCode: 'EMSF056.01' }])
   assert.equal(h.rows[0].status, 'pendente')
   assert.equal(h.rows[0].ops_substatus, 'manifesto_fechado')
-  assert.equal(h.rows[0].ctt_delivery_note_id, 'CTT-MAN-FIXTURE')
+  assert.equal(h.rows[0].ctt_delivery_note_id, undefined)
+  assert.match(r.manifestReference, /^LINKE-[0-9A-F]{16}$/)
   assert.equal(h.db.writes.some(w => w.table === 'tracking_events'), false)
   assert.ok(h.db.queries.every(q => q.write || q.filters.some(f => f.field === 'tenant_id' && f.value === TENANT)))
   const repeat = await h.close(TENANT, [A])
@@ -73,9 +74,9 @@ test('missing credentials produce an actionable message before calling CTT', asy
   assert.equal(h.db.writes.length, 0)
 })
 
-test('CTT refusal, transport errors and incomplete acknowledgements never fabricate a manifesto or change shipments', async () => {
+test('CTT refusal and transport errors never fabricate a manifesto or change shipments', async () => {
   for (const config of [{ response: { Status: 0, ErrorsList: [{ Code: 42, Message: 'Fixture refusal' }] } },
-    { response: { Status: 1, ErrorsList: [{ Code: 42 }] } }, { response: { Status: 1 } },
+    { response: { Status: 1, ErrorsList: [{ Code: 42 }] } },
     { carrierError: new Error('fixture auth secret and network error') }]) {
     const h = harness(config)
     const r = await h.close(TENANT, [A])
@@ -111,8 +112,41 @@ test('duplicate carrier tracking codes cannot close an ambiguous batch', async (
   assert.equal(h.calls.length, 0)
 })
 
+test('EQ and DB products use their own CTT product code, without a Para Amanhã default', async () => {
+  for (const [tracking, product] of [['EQ123456789PT', 'ENCF008.01'], ['DB123456789PT', 'EMSF057.01']]) {
+    const h = harness({ rows: [row(A, { carrier_tracking_number: tracking })] })
+    assert.equal((await h.close(TENANT, [A])).success, true)
+    assert.equal(h.calls[0].input.shipments[0].SubProductCode, product)
+  }
+  const h = harness({ rows: [row(A, { carrier_tracking_number: 'ZZ123456789PT' })] })
+  assert.equal((await h.close(TENANT, [A])).success, false)
+  assert.equal(h.calls.length, 0)
+})
+
+test('stored emission metadata retains the real last object for multiple volumes', async () => {
+  const metadata = { shipmentId: A, FirstObjectCode: 'DD123456789PT', LastObjectCode: 'DD123456790PT', SubProductCode: 'EMSF056.01' }
+  const h = harness({ rows: [row(A, { volumes_count: 2 })], audit: [{ tenant_id: TENANT, action: 'shipment_data',
+    details: { id: A }, ctt_close_data: metadata }] })
+  assert.equal((await h.close(TENANT, [A])).success, true)
+  assert.equal(h.calls[0].input.shipments[0].LastObjectCode, 'DD123456790PT')
+  const missing = harness({ rows: [row(A, { volumes_count: 2 })] })
+  assert.equal((await missing.close(TENANT, [A])).success, false)
+  assert.equal(missing.calls.length, 0)
+})
+
+test('all official certificates are returned and archived without inventing a CTT delivery-note number', async () => {
+  const docs = [{ FileName: 'economico.pdf', File: PDF }, { FileName: 'amanha.pdf', File: PDF }]
+  const h = harness({ response: { Status: 1, DocumentsList: docs } })
+  const r = await h.close(TENANT, [A])
+  assert.equal(r.success, true)
+  assert.deepEqual(r.documents, docs)
+  assert.equal(h.rows[0].ctt_delivery_note_id, undefined)
+  const archive = h.db.writes.find(w => w.table === 'audit_log')
+  assert.deepEqual(archive.value.details.carrier_documents, docs)
+})
+
 test('missing carrier PDF is reported without fabricating an official certificate', async () => {
-  const h = harness({ response: { Status: 1, DeliveryNoteId: 'CTT-REAL-ID', DocumentsList: [{ File: 'bm90LXBkZg==' }] } })
+  const h = harness({ response: { Status: 1, DocumentsList: [{ File: 'bm90LXBkZg==' }] } })
   const r = await h.close(TENANT, [A])
   assert.equal(r.success, true)
   assert.equal(r.manifestPdfBase64, '')

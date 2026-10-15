@@ -1,0 +1,24 @@
+{
+  "source": "http://cttexpressows.ctt.pt/CTTEWSPool/CTTShipmentProviderWS.svc?xsd=xsd2",
+  "verified": "2026-10-15",
+  "namespace": "http://schemas.datacontract.org/2004/07/CTTExpressoWS",
+  "inputFields": [
+    "AuthenticationID",
+    "ClientId",
+    "ContractId",
+    "DistributionChannel",
+    "ListOfShipmentToClose",
+    "RequestID",
+    "UserID"
+  ],
+  "shipmentFields": [
+    "FirstObjectCode",
+    "LastObjectCode",
+    "SubProductCode"
+  ],
+  "outputFields": [
+    "DocumentsList",
+    "ErrorsList",
+    "Status"
+  ]
+}

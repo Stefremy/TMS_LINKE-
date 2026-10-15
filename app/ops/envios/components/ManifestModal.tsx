@@ -12,11 +12,15 @@ import {
   Barcode 
 } from "lucide-react"
 
+import { ManifestDocuments } from "@/components/manifest-documents"
+import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
+
 interface ManifestModalProps {
   isOpen: boolean
   onClose: () => void
-  deliveryNoteId: string
+  manifestReference: string
   shipmentsCount: number
+  documents?: CTTDocumentData[]
   manifestPdfBase64?: string
   warning?: string
   dateStr?: string
@@ -25,9 +29,10 @@ interface ManifestModalProps {
 export function ManifestModal({
   isOpen,
   onClose,
-  deliveryNoteId,
+  manifestReference,
   shipmentsCount,
   manifestPdfBase64,
+  documents,
   warning,
   dateStr
 }: ManifestModalProps) {
@@ -37,7 +42,7 @@ export function ManifestModal({
     if (!manifestPdfBase64) return
     const link = document.createElement("a")
     link.href = `data:application/pdf;base64,${manifestPdfBase64}`
-    link.download = `Manifesto_Transporte_${deliveryNoteId}.pdf`
+    link.download = `Manifesto_Transporte_${manifestReference}.pdf`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -81,9 +86,9 @@ export function ManifestModal({
           {/* Summary Box */}
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Nº Manifesto:</span>
+              <span className="text-xs font-semibold text-slate-500">Referência Linke:</span>
               <span className="font-mono font-bold text-sm text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
-                {deliveryNoteId}
+                {manifestReference}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -115,6 +120,8 @@ export function ManifestModal({
               O manifesto foi fechado pelos CTT. Imprima o PDF para acompanhar a recolha. O estado de transporte dos envios mantém-se até à confirmação da transportadora.
             </p>
           </div>
+
+          <ManifestDocuments documents={documents} />
 
           {warning && <p role="status" className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3">{warning}</p>}
 

@@ -739,7 +739,8 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
         <ManifestModal 
           isOpen={Boolean(manifestData)} 
           onClose={() => setManifestData(null)}
-          deliveryNoteId={manifestData.deliveryNoteId}
+          manifestReference={manifestData.manifestReference}
+          documents={manifestData.documents}
           shipmentsCount={manifestData.count}
           manifestPdfBase64={manifestData.manifestPdfBase64}
           warning={manifestData.warning}

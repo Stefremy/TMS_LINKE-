@@ -39,6 +39,8 @@ import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CreditCard } from "lucide-react"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 import { useClientScope } from "./ClientScope"
+import { ManifestDocuments } from "@/components/manifest-documents"
+import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
 
 export function ClientDashboard() {
   const { client: currentClient, basePath } = useClientScope()
@@ -81,7 +83,7 @@ export function ClientDashboard() {
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
   const [closingBatch, setClosingBatch] = React.useState(false)
-  const [manifestData, setManifestData] = React.useState<{ fileName: string; base64: string } | null>(null)
+  const [manifestData, setManifestData] = React.useState<{ fileName: string; base64: string; documents?: CTTDocumentData[] } | null>(null)
   const [isTopUpOpen, setIsTopUpOpen] = React.useState(false)
 
   const pageSize = 15
@@ -180,12 +182,13 @@ export function ClientDashboard() {
       if (res.success) {
         if (res.manifestPdfBase64) setManifestData({
           fileName: "Manifesto_CTT.pdf",
-          base64: res.manifestPdfBase64
+          base64: res.manifestPdfBase64,
+          documents: res.documents
         })
         if (res.warning) alert(res.warning)
         setShipments(prev => prev.map(s => {
           if (idsToClose.includes(s.tracking_number) || idsToClose.includes(s.id)) {
-            return { ...s, ops_substatus: "manifesto_fechado", ctt_delivery_note_id: res.deliveryNoteId }
+            return { ...s, ops_substatus: "manifesto_fechado" }
           }
           return s
         }))
@@ -525,6 +528,7 @@ export function ClientDashboard() {
             >
               Descarregar Manifesto
             </button>
+            <ManifestDocuments documents={manifestData.documents} />
             <button
               type="button"
               onClick={() => setManifestData(null)}

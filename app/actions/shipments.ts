@@ -16,6 +16,7 @@ import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "@/l
 import { fetchShipments, fetchShipmentLabel, fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
 import { syncShipmentTracking, mapCorreosStatus } from "@/lib/services/tracking"
 import { publicUrl } from "@/lib/config/public-origins"
+import type { CTTShipment2Close, CTTCompleteShipmentOutput } from "@/lib/services/ctt/ctt-types"
 
 export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
   return fetchShipments(options)
@@ -320,6 +321,7 @@ export async function emitClientGuiaAction(data: {
     // ─── STEP 1: Call carrier API — only write to DB if carrier accepts ──────────
     let realGuia = trackingNumber
     let labelBase64: string | null = null
+    let cttCloseData: (CTTShipment2Close & { shipmentId: string; connectionId?: string }) | undefined
 
     if (carrierCode === "correos") {
       // ── CORREOS EXPRESS ──────────────────────────────────────────────────────────
@@ -442,6 +444,16 @@ export async function emitClientGuiaAction(data: {
         }
 
         realGuia = cttResult.trackingNumber || trackingNumber
+        const emitted = (cttResult.rawResponse as CTTCompleteShipmentOutput | undefined)?.ShipmentData?.[0]
+        if (emitted?.FirstObject && emitted.LastObject) {
+          cttCloseData = {
+            shipmentId,
+            connectionId: data.webserviceConnectionId,
+            FirstObjectCode: emitted.FirstObject,
+            LastObjectCode: emitted.LastObject,
+            SubProductCode: data.subProductId || "EMSF056.01",
+          }
+        }
         const rawZpl = cttResult.labelBase64 || ""
         labelBase64 = rawZpl ? await convertZplToPdfBase64(rawZpl) : null
       } catch (e: any) {
@@ -505,6 +517,7 @@ export async function emitClientGuiaAction(data: {
           ...shipmentData,
           id: shipmentId,
           ctt_label_base64: labelBase64,
+          ctt_close_data: cttCloseData,
           carrier_tracking_number: realGuia,
           carrier_code: carrierCode
         },

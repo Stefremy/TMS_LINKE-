@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { ManifestDocuments } from "@/components/manifest-documents"
 import { 
   Settings,
   ChevronDown,
@@ -363,13 +364,15 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
                     <div>
                       <h4 className="text-sm font-bold text-emerald-800">Lote Fechado com Sucesso!</h4>
                       <p className="text-xs text-emerald-700 mt-1">
-                        Manifesto: <strong>{modalResult?.deliveryNoteId || "N/A"}</strong> ({modalResult?.count || 0} envio(s) fechado(s)).
+                        Referência Linke: <strong>{modalResult?.manifestReference || "N/A"}</strong> ({modalResult?.count || 0} envio(s) fechado(s)).
                       </p>
                       <p className="text-xs text-emerald-600 mt-0.5">
                         O fecho do manifesto não altera o estado de transporte dos envios.
                       </p>
                     </div>
                   </div>
+
+                  <ManifestDocuments documents={modalResult?.documents} />
 
                   {modalResult?.warning && <p role="status" className="text-sm text-amber-900 bg-amber-50 rounded-lg p-3">{modalResult.warning}</p>}
 
@@ -379,7 +382,7 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
                       if (modalResult?.manifestPdfBase64) {
                         const link = document.createElement("a")
                         link.href = `data:application/pdf;base64,${modalResult.manifestPdfBase64}`
-                        link.download = `Guia_Transporte_Manifesto_${modalResult.deliveryNoteId || "fecho"}.pdf`
+                        link.download = `Guia_Transporte_Manifesto_${modalResult.manifestReference || "fecho"}.pdf`
                         document.body.appendChild(link)
                         link.click()
                         document.body.removeChild(link)

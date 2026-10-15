@@ -11,6 +11,8 @@ import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { useClientScope } from "./ClientScope"
+import { ManifestDocuments } from "@/components/manifest-documents"
+import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
 
 export function ClientShipmentsHistory() {
   const { client: currentClient, basePath } = useClientScope()
@@ -20,7 +22,7 @@ export function ClientShipmentsHistory() {
   const [loading, setLoading] = React.useState(true)
   const [loadError, setLoadError] = React.useState(false)
   const [closingBatch, setClosingBatch] = React.useState(false)
-  const [manifestData, setManifestData] = React.useState<{ fileName: string, base64: string } | null>(null)
+  const [manifestData, setManifestData] = React.useState<{ fileName: string, base64: string, documents?: CTTDocumentData[] } | null>(null)
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
 
@@ -155,13 +157,14 @@ export function ClientShipmentsHistory() {
       if (res.success) {
         if (res.manifestPdfBase64) setManifestData({
           fileName: "Manifesto_CTT.pdf",
-          base64: res.manifestPdfBase64
+          base64: res.manifestPdfBase64,
+          documents: res.documents
         })
         if (res.warning) alert(res.warning)
         // update local state
         setShipments(prev => prev.map(s => {
           if (idsToClose.includes(s.tracking_number) || idsToClose.includes(s.id)) {
-            return { ...s, ops_substatus: "manifesto_fechado", ctt_delivery_note_id: res.deliveryNoteId }
+            return { ...s, ops_substatus: "manifesto_fechado" }
           }
           return s
         }))
@@ -266,6 +269,7 @@ export function ClientShipmentsHistory() {
             >
               Descarregar Manifesto
             </button>
+            <ManifestDocuments documents={manifestData.documents} />
             <button
               type="button"
               onClick={() => setManifestData(null)}
