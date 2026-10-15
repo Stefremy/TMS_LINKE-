@@ -40,6 +40,7 @@ export default function ContasCorrenteClient({
     clientName: string
     totalValue: number
     moloniPdf?: string | null
+    warning?: string | null
     moloniDocumentNumber?: string | null
   } | null>(null)
   
@@ -47,6 +48,8 @@ export default function ContasCorrenteClient({
   const [startDate, setStartDate] = React.useState<string>("")
   const [endDate, setEndDate] = React.useState<string>("")
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
+  const [issuingClientId, setIssuingClientId] = React.useState<string | null>(null)
+  const invoiceInFlight = React.useRef(false)
 
   // Modal emissão de recibo
   const [receiptModalStmt, setReceiptModalStmt] = React.useState<any | null>(null)
@@ -462,57 +465,56 @@ export default function ContasCorrenteClient({
                         <>
                           <button 
                             className="flex items-center justify-center px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-xs rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs cursor-pointer"
-                            disabled={activeCount === 0 || isLoading}
+                            disabled={activeCount === 0 || issuingClientId !== null}
                             onClick={async (e) => { 
                               e.stopPropagation(); 
                               const modeStr = groupInvoicesByService ? "Agrupada por Serviço (Fatura Compacta - 1 página)" : "Detalhada (1 linha por envio)"
                               if (!confirm(`Emitir Fatura Oficial Moloni para ${activeCount} envios selecionados?\n\nTotal: ${totalValue.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€\nModo: ${modeStr}`)) return;
                               
-                              setIsLoading(true);
-                              const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
-                              const { emitInvoiceAction } = await import("@/app/actions/moloni")
-                              
-                              const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, groupInvoicesByService) as any;
-                              setIsLoading(false);
-                              if (res?.success && res.statementNumber) {
+                              if (invoiceInFlight.current) return
+                              invoiceInFlight.current = true
+                              setIssuingClientId(client.id)
+                              try {
+                                const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
+                                const { emitInvoiceAction } = await import("@/app/actions/moloni")
+                                const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, groupInvoicesByService)
+                                if (!res?.success || !res.statementNumber || !res.moloniDocumentId) {
+                                  alert(`Erro ao emitir fatura: ${res?.error || "O Moloni não confirmou a emissão."}`)
+                                  return
+                                }
                                 const stmtNum = res.statementNumber
                                 const officialPdfUrl = `/api/statements/${encodeURIComponent(stmtNum)}/moloni-pdf`
                                 const fallbackUrl = `/api/statements/${encodeURIComponent(stmtNum)}/pdf`
-                                const hasOfficialMoloni = !!res.moloniDocumentPdf
-
-                                const downloadTarget = hasOfficialMoloni ? officialPdfUrl : fallbackUrl
-                                const downloadFilename = hasOfficialMoloni 
-                                  ? `Fatura_Oficial_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
-                                  : `Extrato_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
-
-                                try {
+                                // Download only the official invoice. The statement remains an explicit option.
+                                if (res.moloniDocumentPdf) {
                                   const link = document.createElement("a")
-                                  link.href = downloadTarget
-                                  link.setAttribute("download", downloadFilename)
+                                  link.href = officialPdfUrl
+                                  link.download = `Fatura_Oficial_${stmtNum.replace(/[\/\\]/g, "_")}.pdf`
                                   link.target = "_blank"
                                   document.body.appendChild(link)
                                   link.click()
-                                  document.body.removeChild(link)
-                                } catch (err) {
-                                  console.error("Auto download failed", err)
+                                  link.remove()
                                 }
-
                                 setIssuedStatement({
                                   statementNumber: stmtNum,
                                   url: fallbackUrl,
                                   clientName: client.legal_name || client.short_name,
-                                  totalValue: totalValue,
-                                  moloniPdf: hasOfficialMoloni ? officialPdfUrl : null,
-                                  moloniDocumentNumber: res.moloniDocumentNumber || null
+                                  totalValue,
+                                  moloniPdf: officialPdfUrl,
+                                  moloniDocumentNumber: res.moloniDocumentNumber || null,
+                                  warning: res.moloniError || null,
                                 })
                                 setExpandedClient(client.id)
                                 router.refresh()
-                              } else {
-                                alert(`Erro ao faturar: ${res?.error || "Desconhecido"}`)
+                              } catch {
+                                alert("Não foi possível confirmar o resultado da emissão. Consulte o Moloni antes de repetir para evitar uma fatura duplicada.")
+                              } finally {
+                                invoiceInFlight.current = false
+                                setIssuingClientId(null)
                               }
                             }}
                           >
-                            {isLoading ? "A emitir..." : "Emitir Fatura Moloni"}
+                            {issuingClientId === client.id ? "A emitir..." : "Emitir Fatura Moloni"}
                           </button>
                         </>
                       ) : clientUnpaid.length > 0 ? (
@@ -947,7 +949,7 @@ export default function ContasCorrenteClient({
               <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md mx-auto flex items-center justify-center mb-2.5">
                 <CheckCircle2 className="w-7 h-7 text-white" />
               </div>
-              <h3 className="text-lg font-bold">Fatura / Extrato Emitido!</h3>
+              <h3 className="text-lg font-bold">Fatura Moloni emitida!</h3>
               <p className="text-white/80 text-xs font-mono mt-0.5 font-semibold">
                 {issuedStatement.statementNumber}
               </p>
@@ -1018,13 +1020,13 @@ export default function ContasCorrenteClient({
                   ✉️ Enviar Fatura por Email ao Cliente
                 </button>
 
-                {!issuedStatement.moloniPdf && (
+                {issuedStatement.warning && (
                   <div className="p-3 bg-[var(--status-warning-soft)] rounded-lg border border-[rgba(217,119,6,0.2)] text-[11px] text-[var(--text-primary)] flex items-start gap-2.5">
                     <AlertCircle className="w-4 h-4 text-[var(--status-warning)] shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-[var(--status-warning)]">O download do extrato foi iniciado automaticamente.</p>
+                      <p className="font-semibold text-[var(--status-warning)]">A fatura já foi emitida. Não volte a emitir.</p>
                       <p className="mt-0.5 text-[var(--text-secondary)] leading-relaxed">
-                        Este documento detalha todos os envios faturados. Se desejar emitir também a <strong>Fatura Oficial Certificada</strong> pela Autoridade Tributária, ligue a conta Moloni no topo.
+                        {issuedStatement.warning} Pode voltar a tentar descarregar o PDF pelo botão acima.
                       </p>
                     </div>
                   </div>

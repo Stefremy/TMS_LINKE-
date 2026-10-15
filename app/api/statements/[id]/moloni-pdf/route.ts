@@ -50,6 +50,17 @@ export async function GET(
             companyId: process.env.MOLONI_COMPANY_ID,
           }
         }
+        // Connections created through the portal also work without deployment tokens.
+        let connectionQuery = supabase.from("audit_log").select("details")
+          .eq("tenant_id", ctx.tenant_id).eq("action", "moloni_connection_config")
+        if (moloniConfig?.companyId) connectionQuery = connectionQuery.eq("details->>company_id", String(moloniConfig.companyId))
+        const { data: savedConnection } = await connectionQuery.order("created_at", { ascending: false }).limit(1).maybeSingle()
+        if (savedConnection?.details?.company_id && savedConnection.details.refresh_token) {
+          moloniConfig = {
+            companyId: String(savedConnection.details.company_id),
+            refreshToken: savedConnection.details.refresh_token,
+          }
+        }
         if (moloniConfig) {
           const moloni = new MoloniClient(moloniConfig)
           const freshPdfUrl = await moloni.getDocumentPDFLink(Number(docId))

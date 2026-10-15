@@ -163,6 +163,8 @@ export async function GET(request: Request) {
           // So we emit an actual invoice, isProForma = false
           const invoiceRes = await internalEmitInvoice(client, unbilledShipments, false, false, false)
 
+          if (!invoiceRes.success) throw new Error(invoiceRes.error || "Fatura Moloni não emitida.")
+
           let pdfAttachment = null
           if (invoiceRes.success && invoiceRes.rawMoloniUrl) {
             try {

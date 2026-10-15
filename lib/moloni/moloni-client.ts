@@ -6,11 +6,10 @@ export class MoloniClient {
   private accessToken: string | null = null;
   private tokenExpiresAt: number = 0;
   
-  // Shared in-memory token cache across Server Actions
-  private static cachedAccessToken: string | null = null;
-  private static cachedTokenExpiresAt: number = 0;
-  private static refreshPromise: Promise<string> | null = null;
-  
+  // Keep tokens scoped to the tenant, company and current authorization.
+  private static tokens = new Map<string, { accessToken: string; expiresAt: number }>();
+  private static refreshes = new Map<string, Promise<string>>();
+
   // This could be fetched from DB or ENV, for now ENV
   private refreshTokenVal: string;
 
@@ -100,100 +99,72 @@ export class MoloniClient {
    * Obtém um token de acesso fresco (OAuth2 / Refresh Token)
    */
   private async getAccessToken(): Promise<string> {
-    // Use cached in-memory token if still valid
-    if (MoloniClient.cachedAccessToken && Date.now() < MoloniClient.cachedTokenExpiresAt) {
-      this.accessToken = MoloniClient.cachedAccessToken;
-      return MoloniClient.cachedAccessToken;
+    const { createAdminClient } = await import("@/lib/supabase/server");
+    const { getTenantId } = await import("@/lib/auth/context");
+    const tenantId = await getTenantId();
+    const supabase = createAdminClient();
+    // Vercel environment variables are deployment snapshots. A rotated token
+    // must be read from durable storage before consulting that initial value.
+    const { data: connection, error } = await supabase.from("audit_log")
+      .select("details")
+      .eq("tenant_id", tenantId)
+      .eq("action", "moloni_connection_config")
+      .eq("details->>company_id", String(this.companyId))
+      .order("created_at", { ascending: false })
+      .limit(1).maybeSingle();
+    if (error) throw new Error("Não foi possível consultar a sessão Moloni. Tente novamente mais tarde.");
+    const saved = connection?.details;
+    const currentRefreshToken = saved?.refresh_token || this.refreshTokenVal;
+    if (!currentRefreshToken) {
+      throw new Error("Conta Moloni ainda não conectada. Use a opção 'Ligar Moloni' para autorizar.");
     }
-
-    if (MoloniClient.refreshPromise) {
-      return MoloniClient.refreshPromise;
+    const key = JSON.stringify([tenantId, this.companyId, this.clientId, currentRefreshToken]);
+    const cached = MoloniClient.tokens.get(key);
+    if (cached && Date.now() < cached.expiresAt) return cached.accessToken;
+    if (saved?.access_token && Date.now() < Number(saved.access_token_expires_at)) {
+      MoloniClient.tokens.set(key, { accessToken: saved.access_token, expiresAt: Number(saved.access_token_expires_at) });
+      return saved.access_token;
     }
+    const pending = MoloniClient.refreshes.get(key);
+    if (pending) return pending;
 
-    MoloniClient.refreshPromise = (async () => {
-      try {
-        if (!this.clientId || !this.clientSecret) {
-          throw new Error("Credenciais do Moloni (Client ID / Client Secret) não configuradas.");
+    const refreshing = (async () => {
+      if (!this.clientId || !this.clientSecret) throw new Error("Credenciais do Moloni não configuradas.");
+      const params = new URLSearchParams({
+        grant_type: "refresh_token", client_id: this.clientId,
+        client_secret: this.clientSecret, refresh_token: currentRefreshToken,
+      });
+      const res = await fetch(`https://api.moloni.pt/v1/grant/?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json();
+      if (data.error) {
+        if (data.error === "invalid_grant" || String(data.error_description || "").toLowerCase().includes("refresh token")) {
+          throw new Error("Sessão Moloni expirada. Clique em 'Ligar Moloni' no topo da página para voltar a autorizar a conta.");
         }
-
-        let currentRefreshToken = this.refreshTokenVal || process.env.MOLONI_REFRESH_TOKEN || "";
-        if (!currentRefreshToken) {
-          throw new Error("Conta Moloni ainda não conectada (falta Refresh Token). Use a opção 'Gerir Conta Moloni' para autorizar.");
-        }
-
-        const url = "https://api.moloni.pt/v1/grant/?grant_type=refresh_token";
-        const params = new URLSearchParams({
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-          refresh_token: currentRefreshToken
-        });
-
-        const res = await fetch(`${url}&${params.toString()}`);
-        const data = await res.json();
-
-        if (data.error) {
-          if (data.error === "invalid_grant" || String(data.error_description || "").toLowerCase().includes("refresh token")) {
-            throw new Error("Sessão Moloni expirada (Token inválido). Por favor clique em 'Gerir Conta Moloni' para voltar a ligar.");
-          }
-          throw new Error(`Moloni Auth Error: ${data.error_description || data.error}`);
-        }
-
-        MoloniClient.cachedAccessToken = data.access_token;
-        MoloniClient.cachedTokenExpiresAt = Date.now() + (data.expires_in * 1000) - 60000;
-        this.accessToken = data.access_token;
-        this.refreshTokenVal = data.refresh_token;
-        this.tokenExpiresAt = MoloniClient.cachedTokenExpiresAt;
-
-        // Immediately persist rotated refresh token
-        if (data.refresh_token) {
-          process.env.MOLONI_REFRESH_TOKEN = data.refresh_token;
-
-          // 1. Persist to .env.local
-          try {
-            const fs = await import("fs");
-            const path = await import("path");
-            const envPath = path.join(process.cwd(), ".env.local");
-            if (fs.existsSync(envPath)) {
-              let envContent = fs.readFileSync(envPath, "utf8");
-              if (envContent.includes("MOLONI_REFRESH_TOKEN=")) {
-                envContent = envContent.replace(/MOLONI_REFRESH_TOKEN=.*(\r?\n|$)/, `MOLONI_REFRESH_TOKEN=${data.refresh_token}\n`);
-              } else {
-                envContent += `\nMOLONI_REFRESH_TOKEN=${data.refresh_token}\n`;
-              }
-              fs.writeFileSync(envPath, envContent, "utf8");
-            }
-          } catch (e) {
-            console.warn("Could not save updated refresh token to .env.local:", e);
-          }
-
-          // 2. Persist to Supabase audit log for serverless and cross-instance persistence
-          try {
-            const { createAdminClient } = await import("@/lib/supabase/server");
-            const { getTenantId } = await import("@/lib/auth/context");
-            const supabase = createAdminClient();
-            const tenantId = await getTenantId().catch(() => null);
-            await supabase.from("audit_log").insert({
-              tenant_id: tenantId,
-              action: "moloni_connection_config",
-              details: {
-                company_id: this.companyId,
-                refresh_token: data.refresh_token,
-                connected_at: new Date().toISOString(),
-                source: "token_rotation"
-              }
-            });
-          } catch (dbErr) {
-            // Silently catch in case of context restriction
-          }
-        }
-
-        return MoloniClient.cachedAccessToken!;
-      } finally {
-        MoloniClient.refreshPromise = null;
+        throw new Error(`Erro de autenticação Moloni: ${data.error_description || data.error}`);
       }
+      if (!res.ok || !data.access_token || !data.refresh_token || !(Number(data.expires_in) > 0)) {
+        throw new Error("O Moloni não devolveu uma sessão válida.");
+      }
+      const expiresAt = Date.now() + Number(data.expires_in) * 1000 - 60000;
+      const { error: saveError } = await supabase.from("audit_log").insert({
+        tenant_id: tenantId, action: "moloni_connection_config",
+        details: {
+          company_id: this.companyId, refresh_token: data.refresh_token,
+          access_token: data.access_token, access_token_expires_at: expiresAt,
+          connected_at: new Date().toISOString(), source: "token_rotation",
+        },
+      });
+      if (saveError) throw new Error("Não foi possível guardar a sessão renovada do Moloni. Volte a ligar a conta antes de emitir.");
+      const token = { accessToken: data.access_token, expiresAt };
+      MoloniClient.tokens.set(key, token);
+      const nextKey = JSON.stringify([tenantId, this.companyId, this.clientId, data.refresh_token]);
+      MoloniClient.tokens.set(nextKey, token);
+      this.refreshTokenVal = data.refresh_token;
+      return data.access_token as string;
     })();
-
-    return MoloniClient.refreshPromise;
+    MoloniClient.refreshes.set(key, refreshing);
+    try { return await refreshing; }
+    finally { MoloniClient.refreshes.delete(key); }
   }
 
   /**

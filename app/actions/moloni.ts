@@ -230,7 +230,13 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
         }
         
         moloniDocumentId = invoiceRes.document_id
-        moloniDocumentUrl = await moloni.getDocumentPDFLink(moloniDocumentId)
+        if (!moloniDocumentId) throw new Error("O Moloni não confirmou o número do documento.")
+        try {
+          moloniDocumentUrl = await moloni.getDocumentPDFLink(moloniDocumentId)
+          if (!moloniDocumentUrl) moloniEmissionError = "O PDF ainda não está disponível no Moloni."
+        } catch {
+          moloniEmissionError = "Não foi possível obter o PDF da fatura no Moloni."
+        }
         // Fetch human-readable FT number (e.g. "FT 2025/123")
         if (moloniDocumentId) {
           try { moloniDocumentNumber = await moloni.getDocumentNumber(moloniDocumentId) } catch {}
@@ -243,7 +249,10 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
       moloniEmissionError = "Conta Moloni ainda não está ligada."
     }
 
-    // Se Moloni estiver desligado/falhar, criamos na mesma o Extrato Interno mas sem PDFs.
+    // An official invoice request must not silently become an internal statement.
+    if (!skipMoloni && !moloniDocumentId) {
+      return { success: false as const, error: moloniEmissionError || "O Moloni não confirmou a emissão da fatura." }
+    }
     
     // 3. Criar Registo de Extrato no audit_log (sem necessidade de tabela separada)
     const statementNumber = `EXT-${new Date().getFullYear()}/${String(new Date().getMonth()+1).padStart(2,'0')}-${Math.floor(Math.random() * 9000 + 1000)}`
@@ -288,7 +297,10 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
 
     if (statementErr) {
       console.error("Erro ao registar extrato no audit_log:", statementErr)
-      throw new Error(`Erro ao criar registo de extrato: ${statementErr.message || JSON.stringify(statementErr)}`)
+      if (moloniDocumentId) {
+        throw new Error(`A fatura Moloni ${moloniDocumentId} foi emitida, mas não foi possível guardar o registo no TMS. Não repita a emissão; confirme o documento no Moloni.`)
+      }
+      throw new Error("Não foi possível guardar o extrato no TMS.")
     }
 
     // 4. Marcar Envios como faturados (guardar referência ao extrato) - Apenas se não for Pró-Forma
@@ -322,8 +334,9 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
     const localMoloniPdfUrl = `/api/statements/${encodeURIComponent(statementNumber)}/moloni-pdf`
     
     return { 
-      success: true, 
+      success: true as const,
       statementNumber, 
+      moloniDocumentId,
       moloniDocumentNumber,
       url: `/api/statements/${encodeURIComponent(statementNumber)}/pdf`,
       moloniDocumentPdf: moloniDocumentUrl ? localMoloniPdfUrl : null,
@@ -1569,7 +1582,7 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
  * Criação da Fatura no Moloni (Action para ser chamada a partir da UI)
  */
 export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false) {
-  await requireEmployee()
+  const ctx = await requireEmployee()
   try {
     const supabase = createAdminClient()
     
@@ -1582,13 +1595,27 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
     }
 
     // 2. Obter Envios do TMS
-    const { data: dbShipments } = await supabase.from("shipments").select("*").in("id", shipmentIds)
+    if (!shipmentIds.length || shipmentIds.some(id => !isValidUuid(id))) {
+      throw new Error("Selecione envios válidos para faturar.")
+    }
+    const ids = [...new Set(shipmentIds)]
+    const { data: dbShipments, error } = await supabase.from("shipments").select("*")
+      .eq("tenant_id", ctx.tenant_id).eq("client_id", clientId).in("id", ids)
+    if (error || dbShipments?.length !== ids.length) throw new Error("Não foi possível validar os envios deste cliente.")
     const shipments = dbShipments || []
+    const { data: existing, error: existingError } = await supabase.from("audit_log")
+      .select("details").eq("tenant_id", ctx.tenant_id).eq("action", "billing_statement")
+      .eq("details->>client_id", clientId)
+    if (existingError) throw new Error("Não foi possível verificar as faturas existentes. Tente novamente mais tarde.")
+    if (existing?.some(({details: stmt}: {details: any}) => stmt.moloni_document_id && !stmt.is_pro_forma &&
+      stmt.shipment_ids?.some((id: string) => ids.includes(id)))) {
+      throw new Error("Um dos envios já tem fatura Moloni. Atualize a página antes de continuar.")
+    }
 
     return await internalEmitInvoice(client, shipments, skipMoloni, groupShipments, isProForma)
   } catch (err: any) {
     console.error("Emit Invoice Error:", err)
-    return { success: false, error: err?.message || "Failed to emit invoice" }
+    return { success: false as const, error: err?.message || "Failed to emit invoice" }
   }
 }
 
