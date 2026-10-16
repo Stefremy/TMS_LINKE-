@@ -59,3 +59,24 @@ begin
   if has_table_privilege('authenticated','public.billing_emission_claims','SELECT') then raise exception 'Browser role can read reservations'; end if;
 end $$;
 select 'PASS: single invoice, concurrent claims, manual/automatic conflicts, unknown responses, tenant/client ownership, payment state and permissions' as test_result;
+
+do $$
+declare tenant uuid:=gen_random_uuid(); client uuid:=gen_random_uuid(); old_profile uuid; current_profile uuid;
+  beginning date:=(now() at time zone 'Europe/Lisbon')::date-30; doc jsonb; result jsonb;
+begin
+  insert into public.tenants(id,name) values(tenant,'ROLLBACK replaced profile epoch');
+  insert into public.clients(id,tenant_id,name,created_at) values(client,tenant,'Fictional switched client',beginning);
+  insert into public.recurring_statement_settings(tenant_id,enabled,anchor_date) values(tenant,true,beginning);
+  insert into public.audit_log(tenant_id,action,details,created_at) values(tenant,'client_data',jsonb_build_object('id',client,'billing_type','pay_as_you_go','created_at',beginning),beginning) returning id into old_profile;
+  insert into public.audit_log(tenant_id,action,details,created_at) values(tenant,'client_data',jsonb_build_object('id',client,'billing_type','conta_corrente','payment_terms','A 7 dias','created_at',beginning),beginning+10) returning id into current_profile;
+  delete from public.audit_log where tenant_id=tenant and id=old_profile;
+  old_profile:=current_profile;
+  insert into public.audit_log(tenant_id,action,details,created_at) values(tenant,'client_data',jsonb_build_object('id',client,'billing_type','conta_corrente','payment_terms','A 7 dias','created_at',beginning),beginning+15) returning details into doc;
+  delete from public.audit_log where tenant_id=tenant and id=old_profile;
+  if doc->>'recurring_since'<>(beginning+10)::text then raise exception 'Eligibility epoch lost on profile replacement: %',doc; end if;
+  result:=public.reserve_recurring_statement(tenant,client,beginning,beginning+7);
+  if result->>'skipped'<>'already_closed_or_stale' then raise exception 'Prepaid interval included after profile deletion'; end if;
+  result:=public.reserve_recurring_statement(tenant,client,beginning+10,beginning+17);
+  if coalesce((result->>'empty')::boolean,false)<>true then raise exception 'Preserved epoch not used by period reservation: %',result; end if;
+end $$;
+select 'PASS: eligibility survives replacing client profiles and deleting previous snapshots' as profile_epoch_test;

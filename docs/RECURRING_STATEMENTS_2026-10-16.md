@@ -28,7 +28,7 @@ A frequência dos ciclos usa a condição de pagamento do cliente. O vencimento 
 Migração: `supabase/migrations/20261016120000_recurring_statement_cycles.sql`.
 
 - Configuração por empresa, data inicial fixa após a primeira configuração.
-- Reserva transacional por empresa/cliente/período, com bloqueio e restrição de unicidade.
+- Reserva transacional por empresa/cliente/período, com bloqueio e restrição de unicidade. A data de entrada em Conta Corrente é preservada na base de dados quando a ficha é substituída, mesmo após eliminação do perfil anterior.
 - Fotografias dos envios e cliente em `audit_log`, ação `period_statement`, separadas dos documentos fiscais `billing_statement`. A fatura automática tem ligação ao período e é contada apenas uma vez como documento fiscal.
 - Tabelas internas com RLS e acesso apenas por `service_role`; ações e PDFs verificam sessão, permissão e empresa no servidor.
 - `/api/cron/billing` exige `CRON_SECRET`. A opção `force` é rejeitada. Este endpoint emite faturas para períodos fechados e envia os dois PDFs.
