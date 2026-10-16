@@ -174,18 +174,9 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
       // If we only have 1 completed node (e.g. Origin), it doesn't draw a line, which is fine.
       if (completedNodes.length >= 2) {
         const completedLatLngs = completedNodes.map((n) => [n.lat, n.lng])
-        // Outer glow
+        // Solid completed route, kept distinct without a glowing halo.
         L.polyline(completedLatLngs, {
-          color: "#18A957",
-          weight: 8,
-          opacity: 0.35,
-          lineCap: "round",
-          lineJoin: "round",
-        }).addTo(layerGroup)
-
-        // Solid road line
-        L.polyline(completedLatLngs, {
-          color: "#128A47",
+          color: "#477D68",
           weight: 4,
           opacity: 0.95,
           lineCap: "round",
@@ -205,12 +196,11 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
       if (isCurrent && p) {
         pinHtml = `
           <div class="relative flex items-center justify-center">
-            <span class="absolute w-8 h-8 rounded-full bg-emerald-500/30 animate-ping"></span>
-            <span class="absolute w-6 h-6 rounded-full bg-emerald-500/50"></span>
-            <div class="relative z-10 w-6 h-6 rounded-full bg-emerald-600 border-2 border-white shadow-lg flex items-center justify-center text-white">
+            <span class="absolute w-7 h-7 rounded-full border-2 border-[#477D68]/40"></span>
+            <div class="relative z-10 w-6 h-6 rounded-full bg-[#477D68] border-2 border-white shadow-md flex items-center justify-center text-white">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
-            <div class="absolute -top-7 left-1/2 -translate-x-1/2 bg-emerald-700 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap">
+            <div class="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#477D68] text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap">
               ${p.formattedTime} • ÚLTIMO LOCAL
             </div>
           </div>
@@ -240,7 +230,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
       } else {
         pinHtml = `
           <div class="relative flex items-center justify-center">
-            <div class="w-4 h-4 rounded-full ${n.status === "completed" ? "bg-emerald-600" : "bg-slate-400"} border-2 border-white shadow-sm flex items-center justify-center">
+            <div class="w-4 h-4 rounded-full ${n.status === "completed" ? "bg-[#477D68]" : "bg-slate-400"} border-2 border-white shadow-sm flex items-center justify-center">
               <span class="w-1 h-1 rounded-full bg-white"></span>
             </div>
           </div>
@@ -261,7 +251,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
         const popupHtml = `
           <div style="font-family: inherit; min-width: 190px; padding: 2px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-              <span style="font-size: 10px; font-weight: 700; color: #128A47; text-transform: uppercase;">
+              <span style="font-size: 10px; font-weight: 700; color: #477D68; text-transform: uppercase;">
                 [${p.code}] ${p.title}
               </span>
               <span style="font-size: 10px; font-family: monospace; color: #64748b;">
@@ -326,17 +316,17 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
             <h2 className="font-mono text-lg font-bold text-[var(--text-primary)] tracking-tight">
               {shipment.displayId}
             </h2>
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-[var(--surface-bg)] text-emerald-600 border border-[var(--border-strong)] shadow-2xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-[var(--surface-bg)] text-[#477D68] border border-[var(--border-strong)] shadow-2xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#477D68]" />
               {shipment.statusLabel}
             </span>
             <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] px-3 py-1 rounded-full border border-[var(--border-strong)] shadow-2xs">
-              <ScanLine className="w-3.5 h-3.5 text-emerald-600" />
+              <ScanLine className="w-3.5 h-3.5 text-[#477D68]" />
               {shipment.metrics.completedScansCount} de {shipment.metrics.totalScansCount} Pickagens Registadas
             </span>
           </div>
           <p className="text-xs text-[var(--text-tertiary)] truncate">
-            {shipment.origin.hubName} <span className="text-emerald-500 font-semibold">→</span> {shipment.destination.hubName}
+            {shipment.origin.hubName} <span className="text-[#477D68] font-semibold">→</span> {shipment.destination.hubName}
           </p>
         </div>
 
@@ -345,7 +335,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
           <button
             type="button"
             onClick={onOpenDocumentation}
-            className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-xs hover:shadow-md cursor-pointer"
+            className="inline-flex items-center gap-2 bg-[#246B45] hover:bg-[#1D5839] text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-colors shadow-xs cursor-pointer"
           >
             <FileText className="w-4 h-4" />
             <span>Documentação</span>
@@ -364,12 +354,12 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
             onClick={() => setMapStyle(mapStyle === "streets" ? "satellite" : "streets")}
             className="bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)] rounded-lg px-3 py-2 text-xs font-bold text-[var(--text-primary)] flex items-center gap-2 shadow-md transition-colors"
           >
-            <Layers className="w-3.5 h-3.5 text-emerald-600" />
+            <Layers className="w-3.5 h-3.5 text-[#477D68]" />
             <span>{mapStyle === "streets" ? "Vista Satélite" : "Vista Ruas"}</span>
           </button>
 
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--surface-bg)] border border-[var(--border-strong)] text-[11px] text-[var(--text-secondary)] shadow-md">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-[#477D68]" />
             <span>Último local identificado: <strong className="text-[var(--text-primary)] font-bold">{getMappedCheckpoints(shipment.pickagens).at(-1)?.locationName || shipment.origin.city}</strong></span>
           </div>
         </div>
@@ -379,7 +369,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
           <button
             type="button"
             onClick={handleFitAllRoute}
-            className="w-8 h-8 rounded-lg bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-emerald-600 border border-[var(--border-strong)] flex items-center justify-center shadow-md transition-colors"
+            className="w-8 h-8 rounded-lg bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[#477D68] border border-[var(--border-strong)] flex items-center justify-center shadow-md transition-colors"
             title="Ajustar rota completa no mapa"
           >
             <Navigation className="w-4 h-4" />
@@ -387,7 +377,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
           <button
             type="button"
             onClick={handleCenterOnLastPickagem}
-            className="w-8 h-8 rounded-lg bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-emerald-600 border border-[var(--border-strong)] flex items-center justify-center shadow-md transition-colors"
+            className="w-8 h-8 rounded-lg bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[#477D68] border border-[var(--border-strong)] flex items-center justify-center shadow-md transition-colors"
             title="Centrar na última leitura com localização"
             disabled={getMappedCheckpoints(shipment.pickagens).length === 0}
           >

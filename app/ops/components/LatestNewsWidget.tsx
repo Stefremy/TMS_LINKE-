@@ -87,7 +87,7 @@ export function LatestNewsWidget() {
   }
 
   return (
-    <div className="flex flex-col h-full pt-4 mt-4 border-t border-[var(--border-subtle)]">
+    <div className="flex flex-col gap-3 py-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
@@ -95,7 +95,7 @@ export function LatestNewsWidget() {
             <Newspaper className="w-3.5 h-3.5" />
           </div>
           <div className="flex flex-col">
-            <h4 className="text-xs font-bold text-[var(--text-primary)] tracking-tight leading-tight">
+            <h4 className="text-sm font-semibold text-[var(--text-primary)] leading-tight">
               Notícias & Atualizações
             </h4>
             <span className="text-[10px] text-[var(--text-tertiary)] leading-tight">

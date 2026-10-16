@@ -26,6 +26,7 @@ import {
 import { CTTPontoEntrega } from "@/lib/services/ctt"
 import { getPontosPickupCttAction } from "@/app/actions/ctt"
 import { PontoDetailsModal } from "./PontoDetailsModal"
+import { CountryFlag } from "./CountryFlag"
 
 interface PontosPickupClientProps {
   initialPoints: CTTPontoEntrega[]
@@ -226,16 +227,16 @@ export function PontosPickupClient({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Pontos Pickup</h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Pontos Pickup</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#EAF0EC] text-[#477D68] border border-[#C9D7CD]">
+              <span className="w-2 h-2 rounded-full bg-[#477D68]" />
               CTT Expresso & CTT Express ES
             </span>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-[var(--text-tertiary)] mt-1">
             Rede oficial de pontos de entrega e recolha CTT, Cacifos Locky 24H e parceiros em Portugal e Espanha.
             {cachedAt && (
-              <span className="ml-1 text-slate-400">
+              <span className="ml-1 text-[var(--text-tertiary)]">
                 (Sincronizado: {new Date(cachedAt).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })})
               </span>
             )}
@@ -245,16 +246,16 @@ export function PontosPickupClient({
         <div className="flex items-center gap-3">
           <button
             onClick={handleExportCSV}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] shadow-sm transition-colors"
           >
-            <Download className="w-4 h-4 text-slate-500" />
+            <Download className="w-4 h-4 text-[var(--text-tertiary)]" />
             Exportar CSV ({filtered.length.toLocaleString("pt-PT")})
           </button>
 
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-xl text-sm font-semibold shadow-sm transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-60 text-white rounded-xl text-sm font-semibold shadow-sm transition-all"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
             {isRefreshing ? "A sincronizar..." : "Sincronizar CTT"}
@@ -271,20 +272,20 @@ export function PontosPickupClient({
       )}
 
       {/* SEPARADORES PRINCIPAIS: IBÉRICO / PORTUGAL / ESPANHA */}
-      <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-2">
+      <div className="bg-[var(--surface-bg)] p-1.5 rounded-2xl border border-[var(--border-subtle)] shadow-sm flex items-center gap-2">
         {/* Ibérico */}
         <button
           onClick={() => setCountryFilter("todos")}
           className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl font-bold text-sm transition-all ${
             countryFilter === "todos"
-              ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              ? "bg-[var(--accent)] text-white shadow-md shadow-black/10"
+              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
           }`}
         >
           <Globe2 className="w-4 h-4" />
           <span>Rede Ibérica (PT + ES)</span>
           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-            countryFilter === "todos" ? "bg-slate-700 text-white" : "bg-slate-100 text-slate-600"
+            countryFilter === "todos" ? "bg-[#0E6C37] text-white" : "bg-[var(--surface-dim)] text-[var(--text-secondary)]"
           }`}>
             {countryCounts.all.toLocaleString("pt-PT")}
           </span>
@@ -295,14 +296,14 @@ export function PontosPickupClient({
           onClick={() => setCountryFilter("PT")}
           className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl font-bold text-sm transition-all ${
             countryFilter === "PT"
-              ? "bg-green-600 text-white shadow-md shadow-green-600/20"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              ? "bg-[var(--accent)] text-white shadow-md shadow-black/10"
+              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
           }`}
         >
-          <span className="text-base">🇵🇹</span>
+          <CountryFlag country="PT" />
           <span>Portugal</span>
           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-            countryFilter === "PT" ? "bg-green-700 text-white" : "bg-slate-100 text-slate-600"
+            countryFilter === "PT" ? "bg-[var(--accent-hover)] text-white" : "bg-[var(--surface-dim)] text-[var(--text-secondary)]"
           }`}>
             {countryCounts.pt.toLocaleString("pt-PT")}
           </span>
@@ -313,14 +314,14 @@ export function PontosPickupClient({
           onClick={() => setCountryFilter("ES")}
           className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl font-bold text-sm transition-all ${
             countryFilter === "ES"
-              ? "bg-amber-600 text-white shadow-md shadow-amber-600/20"
-              : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+              ? "bg-[var(--accent)] text-white shadow-md shadow-black/10"
+              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
           }`}
         >
-          <span className="text-base">🇪🇸</span>
+          <CountryFlag country="ES" />
           <span>Espanha (CTT Express)</span>
           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-            countryFilter === "ES" ? "bg-amber-700 text-white" : "bg-slate-100 text-slate-600"
+            countryFilter === "ES" ? "bg-[var(--accent-hover)] text-white" : "bg-[var(--surface-dim)] text-[var(--text-secondary)]"
           }`}>
             {countryCounts.es.toLocaleString("pt-PT")}
           </span>
@@ -330,96 +331,96 @@ export function PontosPickupClient({
       {/* KPI Cards (Adaptam-se ao país selecionado) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
               {countryFilter === "PT" ? "Total Portugal" : countryFilter === "ES" ? "Total Espanha" : "Total Ibérico"}
             </span>
-            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+            <div className="w-10 h-10 rounded-xl bg-[var(--surface-dim)] flex items-center justify-center text-[var(--text-secondary)]">
               <Layers className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">{activeStats.total.toLocaleString("pt-PT")}</span>
-            <span className="text-xs font-medium text-slate-500">pontos ativos</span>
+            <span className="text-3xl font-extrabold text-[var(--text-primary)]">{activeStats.total.toLocaleString("pt-PT")}</span>
+            <span className="text-xs font-medium text-[var(--text-tertiary)]">pontos ativos</span>
           </div>
         </div>
 
         {/* Cacifos Locky */}
         <div 
           onClick={() => setCategoryFilter(categoryFilter === "cacifo" ? "todos" : "cacifo")}
-          className={`bg-white rounded-2xl p-5 border shadow-sm cursor-pointer transition-all ${
-            categoryFilter === "cacifo" ? "border-purple-500 ring-2 ring-purple-100" : "border-slate-200/80 hover:border-purple-300"
+          className={`bg-[var(--surface-bg)] rounded-2xl p-5 border shadow-sm cursor-pointer transition-all ${
+            categoryFilter === "cacifo" ? "border-[#8A6944] ring-2 ring-[#F2EEE8]" : "border-[var(--border-subtle)] hover:border-[#C8B7A1]"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-purple-700 uppercase tracking-wider">Cacifos Locky 24H</span>
-            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+            <span className="text-xs font-semibold text-[#8A6944] uppercase tracking-wider">Cacifos Locky 24H</span>
+            <div className="w-10 h-10 rounded-xl bg-[#F2EEE8] flex items-center justify-center text-[#8A6944]">
               <Package className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-purple-900">{activeStats.cacifos.toLocaleString("pt-PT")}</span>
-            <span className="text-xs font-medium text-purple-600">lockers 24/7</span>
+            <span className="text-3xl font-extrabold text-[#6B5237]">{activeStats.cacifos.toLocaleString("pt-PT")}</span>
+            <span className="text-xs font-medium text-[#8A6944]">lockers 24/7</span>
           </div>
         </div>
 
         {/* Lojas CTT */}
         <div 
           onClick={() => setCategoryFilter(categoryFilter === "loja" ? "todos" : "loja")}
-          className={`bg-white rounded-2xl p-5 border shadow-sm cursor-pointer transition-all ${
-            categoryFilter === "loja" ? "border-rose-500 ring-2 ring-rose-100" : "border-slate-200/80 hover:border-rose-300"
+          className={`bg-[var(--surface-bg)] rounded-2xl p-5 border shadow-sm cursor-pointer transition-all ${
+            categoryFilter === "loja" ? "border-[#376C8A] ring-2 ring-[#EDF1F3]" : "border-[var(--border-subtle)] hover:border-[#A8BBC7]"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-rose-700 uppercase tracking-wider">Lojas & Postos CTT</span>
-            <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
+            <span className="text-xs font-semibold text-[#376C8A] uppercase tracking-wider">Lojas & Postos CTT</span>
+            <div className="w-10 h-10 rounded-xl bg-[#EDF1F3] flex items-center justify-center text-[#376C8A]">
               <Building2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-rose-900">{activeStats.lojas.toLocaleString("pt-PT")}</span>
-            <span className="text-xs font-medium text-rose-600">oficiais</span>
+            <span className="text-3xl font-extrabold text-[#284D65]">{activeStats.lojas.toLocaleString("pt-PT")}</span>
+            <span className="text-xs font-medium text-[#376C8A]">oficiais</span>
           </div>
         </div>
 
         {/* Parceiros */}
         <div 
           onClick={() => setCategoryFilter(categoryFilter === "parceiro" ? "todos" : "parceiro")}
-          className={`bg-white rounded-2xl p-5 border shadow-sm cursor-pointer transition-all ${
-            categoryFilter === "parceiro" ? "border-emerald-500 ring-2 ring-emerald-100" : "border-slate-200/80 hover:border-emerald-300"
+          className={`bg-[var(--surface-bg)] rounded-2xl p-5 border shadow-sm cursor-pointer transition-all ${
+            categoryFilter === "parceiro" ? "border-[#477D68] ring-2 ring-[#EAF0EC]" : "border-[var(--border-subtle)] hover:border-[#9DB7A8]"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Pontos Parceiros</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <span className="text-xs font-semibold text-[#477D68] uppercase tracking-wider">Pontos Parceiros</span>
+            <div className="w-10 h-10 rounded-xl bg-[#EAF0EC] flex items-center justify-center text-[#477D68]">
               <Store className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-emerald-900">{activeStats.parceiros.toLocaleString("pt-PT")}</span>
-            <span className="text-xs font-medium text-emerald-600">agentes & lojas</span>
+            <span className="text-3xl font-extrabold text-[#315B43]">{activeStats.parceiros.toLocaleString("pt-PT")}</span>
+            <span className="text-xs font-medium text-[#477D68]">agentes & lojas</span>
           </div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-4">
+      <div className="bg-[var(--surface-bg)] rounded-2xl p-4 border border-[var(--border-subtle)] shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           {/* Search Input */}
           <div className="relative w-full md:max-w-md">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Pesquisar por nome, código PuP, morada, localidade ou CP..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+              className="w-full pl-10 pr-4 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:bg-[var(--surface-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition-colors"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400 hover:text-slate-600 bg-slate-200/60 rounded-md px-1.5 py-0.5"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] bg-[var(--surface-dim)] rounded-md px-1.5 py-0.5"
               >
                 Limpar
               </button>
@@ -427,13 +428,13 @@ export function PontosPickupClient({
           </div>
 
           {/* Quick Category Filter Tabs */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full md:w-auto overflow-x-auto">
+          <div className="flex items-center gap-1 bg-[var(--surface-dim)] p-1 rounded-xl w-full md:w-auto overflow-x-auto">
             <button
               onClick={() => setCategoryFilter("todos")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all ${
                 categoryFilter === "todos"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:text-slate-900"
+                  ? "bg-[var(--surface-bg)] text-[var(--text-primary)] shadow-sm"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
               Todos ({activeStats.total.toLocaleString("pt-PT")})
@@ -442,8 +443,8 @@ export function PontosPickupClient({
               onClick={() => setCategoryFilter("cacifo")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all ${
                 categoryFilter === "cacifo"
-                  ? "bg-purple-600 text-white shadow-sm"
-                  : "text-slate-600 hover:text-purple-700"
+                  ? "bg-[var(--accent)] text-white shadow-sm"
+                  : "text-[var(--text-secondary)] hover:text-[#8A6944]"
               }`}
             >
               📦 Cacifos Locky ({activeStats.cacifos.toLocaleString("pt-PT")})
@@ -452,8 +453,8 @@ export function PontosPickupClient({
               onClick={() => setCategoryFilter("loja")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all ${
                 categoryFilter === "loja"
-                  ? "bg-rose-600 text-white shadow-sm"
-                  : "text-slate-600 hover:text-rose-700"
+                  ? "bg-[var(--accent)] text-white shadow-sm"
+                  : "text-[var(--text-secondary)] hover:text-[#376C8A]"
               }`}
             >
               🏢 Lojas CTT ({activeStats.lojas.toLocaleString("pt-PT")})
@@ -462,8 +463,8 @@ export function PontosPickupClient({
               onClick={() => setCategoryFilter("parceiro")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all ${
                 categoryFilter === "parceiro"
-                  ? "bg-emerald-600 text-white shadow-sm"
-                  : "text-slate-600 hover:text-emerald-700"
+                  ? "bg-[var(--accent)] text-white shadow-sm"
+                  : "text-[var(--text-secondary)] hover:text-[#477D68]"
               }`}
             >
               🏪 Parceiros ({activeStats.parceiros.toLocaleString("pt-PT")})
@@ -472,13 +473,13 @@ export function PontosPickupClient({
         </div>
 
         {/* Secondary Filters (Entity & City) */}
-        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100 text-xs">
+        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-[var(--border-subtle)] text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-medium">Rede / Entidade:</span>
+            <span className="text-[var(--text-tertiary)] font-medium">Rede / Entidade:</span>
             <select
               value={entityFilter}
               onChange={(e) => setEntityFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-2.5 py-1.5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             >
               <option value="todos">Todas as Redes</option>
               <option value="1">Rede CTT / Locky / Agências</option>
@@ -487,11 +488,11 @@ export function PontosPickupClient({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-medium">Localidade / Cidade:</span>
+            <span className="text-[var(--text-tertiary)] font-medium">Localidade / Cidade:</span>
             <select
               value={cityFilter}
               onChange={(e) => setCityFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-green-500 max-w-xs"
+              className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-2.5 py-1.5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] max-w-xs"
             >
               <option value="todos">Todas as Localidades ({uniqueCities.length.toLocaleString("pt-PT")})</option>
               {uniqueCities.slice(0, 150).map((city) => (
@@ -511,7 +512,7 @@ export function PontosPickupClient({
                 setCityFilter("todos")
                 setCountryFilter("todos")
               }}
-              className="text-green-700 hover:text-green-800 font-semibold underline ml-auto"
+              className="text-[var(--accent)] hover:text-[var(--accent-hover)] font-semibold underline ml-auto"
             >
               Repor filtros
             </button>
@@ -520,11 +521,11 @@ export function PontosPickupClient({
       </div>
 
       {/* Table Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] shadow-sm overflow-hidden">
         {/* Table top indicator */}
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between text-xs text-[var(--text-tertiary)]">
           <span>
-            A apresentar <strong className="text-slate-800">{filtered.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> - <strong className="text-slate-800">{Math.min(currentPage * pageSize, filtered.length).toLocaleString("pt-PT")}</strong> de <strong className="text-slate-800">{filtered.length.toLocaleString("pt-PT")}</strong> pontos de pickup
+            A apresentar <strong className="text-[var(--text-primary)]">{filtered.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> - <strong className="text-[var(--text-primary)]">{Math.min(currentPage * pageSize, filtered.length).toLocaleString("pt-PT")}</strong> de <strong className="text-[var(--text-primary)]">{filtered.length.toLocaleString("pt-PT")}</strong> pontos de pickup
           </span>
 
           <div className="flex items-center gap-2">
@@ -532,7 +533,7 @@ export function PontosPickupClient({
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-800 font-medium focus:outline-none"
+              className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-2 py-1 text-[var(--text-primary)] font-medium focus:outline-none"
             >
               <option value={25}>25</option>
               <option value={50}>50</option>
@@ -545,7 +546,7 @@ export function PontosPickupClient({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              <tr className="border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
                 <th className="py-3.5 px-4">Ponto Pickup / Nome</th>
                 <th className="py-3.5 px-4">Código (PuP ID)</th>
                 <th className="py-3.5 px-4">Tipo & Rede</th>
@@ -554,13 +555,13 @@ export function PontosPickupClient({
                 <th className="py-3.5 px-4 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-sm">
+            <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
-                    <MapPin className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="font-semibold text-slate-700">Nenhum ponto de pickup encontrado</p>
-                    <p className="text-xs text-slate-400 mt-1">Tente ajustar a sua pesquisa ou filtros.</p>
+                  <td colSpan={6} className="py-12 text-center text-[var(--text-tertiary)]">
+                    <MapPin className="w-8 h-8 text-[var(--text-tertiary)] mx-auto mb-2" />
+                    <p className="font-semibold text-[var(--text-secondary)]">Nenhum ponto de pickup encontrado</p>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-1">Tente ajustar a sua pesquisa ou filtros.</p>
                   </td>
                 </tr>
               ) : (
@@ -573,17 +574,17 @@ export function PontosPickupClient({
                     <tr
                       key={p.codigo + "-" + p.nome}
                       onClick={() => handleOpenDetails(p)}
-                      className="hover:bg-slate-50/80 cursor-pointer transition-colors group"
+                      className="hover:bg-[var(--surface-muted)] cursor-pointer transition-colors group"
                     >
                       {/* Name */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
                           <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                             isCacifo
-                              ? "bg-purple-50 text-purple-600"
+                              ? "bg-[#F2EEE8] text-[#8A6944]"
                               : isLoja
-                              ? "bg-rose-50 text-rose-600"
-                              : "bg-emerald-50 text-emerald-600"
+                              ? "bg-[#EDF1F3] text-[#376C8A]"
+                              : "bg-[#EAF0EC] text-[#477D68]"
                           }`}>
                             {isCacifo ? (
                               <Package className="w-4 h-4" />
@@ -595,11 +596,14 @@ export function PontosPickupClient({
                           </div>
 
                           <div>
-                            <span className="font-semibold text-slate-900 group-hover:text-green-700 transition-colors block">
+                            <span className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors block">
                               {p.nome}
                             </span>
-                            <span className="text-xs text-slate-400">
-                              {p.pais === "PT" ? "🇵🇹 Portugal" : "🇪🇸 Espanha"}
+                            <span className="text-xs text-[var(--text-tertiary)]">
+                              <span className="inline-flex items-center gap-1.5">
+                                <CountryFlag country={p.pais === "PT" ? "PT" : "ES"} />
+                                {p.pais === "PT" ? "Portugal" : "Espanha"}
+                              </span>
                             </span>
                           </div>
                         </div>
@@ -607,15 +611,15 @@ export function PontosPickupClient({
 
                       {/* Code */}
                       <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200/80 text-slate-800 font-mono text-xs font-semibold transition-colors">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--surface-dim)] hover:bg-[var(--surface-dim)] text-[var(--text-primary)] font-mono text-xs font-semibold transition-colors">
                           <span>{p.codigo}</span>
                           <button
                             onClick={(e) => handleCopyCode(p.codigo, e)}
-                            className="text-slate-400 hover:text-slate-700"
+                            className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                             title="Copiar código PuP"
                           >
                             {copiedCodeId === p.codigo ? (
-                              <Check className="w-3 h-3 text-green-600" />
+                              <Check className="w-3 h-3 text-[var(--accent)]" />
                             ) : (
                               <Copy className="w-3 h-3" />
                             )}
@@ -628,14 +632,14 @@ export function PontosPickupClient({
                         <div className="flex flex-col items-start gap-1">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${
                             isCacifo
-                              ? "bg-purple-50 text-purple-700 border border-purple-200"
+                              ? "bg-[#F2EEE8] text-[#8A6944] border border-[#DBCCB9]"
                               : isLoja
-                              ? "bg-rose-50 text-rose-700 border border-rose-200"
-                              : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              ? "bg-[#EDF1F3] text-[#376C8A] border border-[#C7D4DC]"
+                              : "bg-[#EAF0EC] text-[#477D68] border border-[#C9D7CD]"
                           }`}>
                             {p.tipo}
                           </span>
-                          <span className="text-[11px] text-slate-400 font-medium">
+                          <span className="text-[11px] text-[var(--text-tertiary)] font-medium">
                             {p.entidadeNome}
                           </span>
                         </div>
@@ -644,11 +648,11 @@ export function PontosPickupClient({
                       {/* Location */}
                       <td className="py-3.5 px-4 max-w-xs">
                         <div className="flex flex-col">
-                          <span className="text-xs font-medium text-slate-800 truncate" title={p.morada}>
+                          <span className="text-xs font-medium text-[var(--text-primary)] truncate" title={p.morada}>
                             {p.morada}
                           </span>
-                          <span className="text-xs text-slate-500">
-                            {p.codigoPostal} <strong className="text-slate-700 font-semibold">{p.localidade}</strong>
+                          <span className="text-xs text-[var(--text-tertiary)]">
+                            {p.codigoPostal} <strong className="text-[var(--text-secondary)] font-semibold">{p.localidade}</strong>
                           </span>
                         </div>
                       </td>
@@ -656,12 +660,12 @@ export function PontosPickupClient({
                       {/* Schedule */}
                       <td className="py-3.5 px-4">
                         {isCacifo ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#8A6944] bg-[#F2EEE8] px-2.5 py-0.5 rounded-full">
                             <Clock className="w-3 h-3" />
                             24 Horas
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-600 font-medium block truncate max-w-[180px]" title={p.horarioFormatado}>
+                          <span className="text-xs text-[var(--text-secondary)] font-medium block truncate max-w-[180px]" title={p.horarioFormatado}>
                             {p.horarioFormatado || "Sob consulta"}
                           </span>
                         )}
@@ -671,9 +675,9 @@ export function PontosPickupClient({
                       <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => handleOpenDetails(p)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] bg-[var(--surface-dim)] hover:bg-[var(--surface-dim)] rounded-lg transition-colors"
                         >
-                          <Eye className="w-3.5 h-3.5 text-slate-500" />
+                          <Eye className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
                           Detalhes
                         </button>
                       </td>
@@ -686,31 +690,31 @@ export function PontosPickupClient({
         </div>
 
         {/* Pagination Footer */}
-        <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+        <div className="p-4 border-t border-[var(--border-subtle)] flex items-center justify-between text-xs text-[var(--text-tertiary)]">
           <div>
-            Página <strong className="text-slate-800">{currentPage}</strong> de <strong className="text-slate-800">{totalPages}</strong>
+            Página <strong className="text-[var(--text-primary)]">{currentPage}</strong> de <strong className="text-[var(--text-primary)]">{totalPages}</strong>
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="p-2 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--surface-muted)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              <ChevronLeft className="w-4 h-4 text-slate-600" />
+              <ChevronLeft className="w-4 h-4 text-[var(--text-secondary)]" />
             </button>
 
             {/* Quick page jumps */}
-            <span className="px-3 py-1 bg-slate-100 font-semibold text-slate-800 rounded-lg">
+            <span className="px-3 py-1 bg-[var(--surface-dim)] font-semibold text-[var(--text-primary)] rounded-lg">
               {currentPage} / {totalPages}
             </span>
 
             <button
               onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="p-2 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--surface-muted)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              <ChevronRight className="w-4 h-4 text-slate-600" />
+              <ChevronRight className="w-4 h-4 text-[var(--text-secondary)]" />
             </button>
           </div>
         </div>

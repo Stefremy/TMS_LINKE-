@@ -47,6 +47,25 @@ interface EnviosClientProps {
   initialStatus?: string
 }
 
+function getMutedShipmentBadgeClass(variant: string) {
+  switch (variant) {
+    case "success":
+      return "!bg-[#32734A] !text-white !border-[#285F3C]"
+    case "warning":
+      return "!bg-[#9A6B2E] !text-white !border-[#805823]"
+    case "info":
+      return "!bg-[#315D82] !text-white !border-[#274C6A]"
+    case "purple":
+      return "!bg-[#477D98] !text-white !border-[#39677F]"
+    case "danger":
+      return "!bg-[#B04740] !text-white !border-[#963B35]"
+    case "neutral":
+      return "!bg-[#697078] !text-white !border-[#596068]"
+    default:
+      return "!bg-[#65736B] !text-white !border-[#536058]"
+  }
+}
+
 export function EnviosClient({ envios, recolhas, clients, pagination, initialSearch, initialStatus }: EnviosClientProps) {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = React.useState(initialSearch || "")
@@ -61,6 +80,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
   const [isClosingManifest, setIsClosingManifest] = React.useState(false)
   const [isSyncingSelected, setIsSyncingSelected] = React.useState(false)
   const [isDeletingSelected, setIsDeletingSelected] = React.useState(false)
+  const statusTabs = ["Todos", "Pendente", "Em Trânsito", "Em Distribuição", "Entregue", "Entregue (PUDO)", "Incidência", "Devolvido", "Cancelado"]
 
   // Sincronização automática em segundo plano para envios em curso na página
   React.useEffect(() => {
@@ -177,7 +197,11 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
     const statusCfg = getShipmentStatusConfig(rawStatus)
     
     if (statusFilter !== "Todos") {
-      const targetLabel = statusFilter === "Incidências" ? "Incidência" : statusFilter
+      const targetLabel = statusFilter === "Pendente"
+        ? "Aguarda Entrada"
+        : statusFilter === "Incidências" || statusFilter === "Incidência"
+        ? "Incidência"
+        : statusFilter
       if (statusCfg.label !== targetLabel) return false
     }
 
@@ -207,24 +231,22 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
   })
 
   return (
-    <div className="tms-shipment-workspace flex flex-col bg-[var(--surface-bg)] rounded-lg shadow-sm border border-[var(--border-subtle)] overflow-hidden">
+    <div className="tms-shipment-workspace mx-auto flex w-full max-w-[1600px] flex-col gap-4 bg-transparent [--accent:#526B57] [--accent-hover:#435A48] [--accent-active:#3A4F3F] [--accent-soft:#E9EEE8] [--status-success:#526B57] [--status-success-soft:#E9EEE8] [--status-warning:#846C43] [--status-warning-soft:#F2EEE5] [--status-critical:#9A625D] [--status-critical-soft:#F2E8E6] [--status-info:#596F7C] [--status-info-soft:#EBF0F2]">
       
       {/* Header Area */}
-      <div className="px-4 sm:px-5 py-4 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2 shrink-0">
-        <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
-          {viewMode === "envios" ? "Envios e Serviços" : "Pedidos de Recolha"}
-        </h1>
-        <div className="text-[10px] font-semibold text-[var(--text-tertiary)] flex items-center gap-1.5 uppercase tracking-wide">
-          <span>Painel de Resumo</span>
-          <span className="text-[var(--border-strong)]">&gt;</span>
-          <span className="text-[var(--text-secondary)]">
-            {viewMode === "envios" ? "Envios e Serviços" : "Recolhas"}
-          </span>
+      <div className="flex flex-wrap items-end justify-between gap-3 shrink-0">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
+            {viewMode === "envios" ? "Envios" : "Recolhas"}
+          </h1>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            {viewMode === "envios" ? `${pagination?.total ?? envios.length} envios registados` : `${recolhas.length} pedidos de recolha`}
+          </p>
         </div>
       </div>
 
       {/* Toolbar Area */}
-      <div className="px-3.5 sm:px-5 py-2.5 border-b border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between bg-[var(--surface-bg)] shrink-0 gap-2.5 text-[11px]">
+      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-3 sm:p-4 flex flex-row flex-wrap items-center justify-between gap-3 shrink-0 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
         
         <div className="flex items-center gap-1.5 flex-wrap">
           <Button
@@ -237,17 +259,17 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                 router.push('/ops/envios/novo')
               }
             }}
-            className="font-semibold px-2.5 sm:px-3 py-1.5 h-auto text-xs shadow-xs"
+            className="h-9 px-3.5 text-sm font-medium shadow-none !bg-[#128A47] hover:!bg-[#0E6C37]"
           >
             <Plus className="w-3.5 h-3.5 mr-1" strokeWidth={3} />
-            Novo
+            Novo envio
           </Button>
           
           <Button 
             variant="outline"
             size="sm"
             onClick={() => setViewMode(viewMode === "envios" ? "recolhas" : "envios")}
-            className={`px-2.5 sm:px-3 py-1.5 h-auto text-xs font-semibold shadow-xs ${
+            className={`h-9 px-3.5 text-sm font-medium shadow-none ${
               viewMode === "recolhas" 
                 ? "bg-[var(--surface-dim)] border-[var(--border-strong)] text-[var(--text-primary)]" 
                 : ""
@@ -257,7 +279,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             {viewMode === "envios" ? "Recolhas" : "Envios"}
           </Button>
           
-          <Button variant="outline" size="sm" className="hidden xs:flex px-2.5 sm:px-3 py-1.5 h-auto text-[11px] font-medium shadow-xs">
+          <Button variant="outline" size="sm" className="hidden xs:flex h-9 px-3.5 text-sm font-medium shadow-none">
             <MapPin className="w-3.5 h-3.5 mr-1.5" />
             Localizar
           </Button>
@@ -268,7 +290,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
-            className={`px-2.5 sm:px-3 py-1.5 h-auto text-[11px] font-medium shadow-xs ${
+            className={`h-9 px-3.5 text-sm font-medium shadow-none ${
               showFilters 
                 ? "bg-[var(--surface-dim)] border-[var(--border-strong)] text-[var(--text-primary)]" 
                 : ""
@@ -279,47 +301,42 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             <ChevronDown className={`w-3 h-3 ml-0.5 transition-transform ${showFilters ? "rotate-180" : ""}`} />
           </Button>
 
-          <div className="flex items-center ml-1 sm:ml-2 border-l border-[var(--border-subtle)] pl-2 sm:pl-4">
-            <span className="hidden sm:inline text-[11px] font-semibold text-[var(--text-secondary)] mr-2">Estado</span>
-            <div className="relative">
-              <select 
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none bg-[var(--surface-bg)] border border-[var(--border-strong)] text-[var(--text-primary)] text-[11px] font-medium rounded-md px-2 py-1 sm:px-2.5 sm:py-1.5 pr-6 sm:pr-7 focus:outline-none focus:border-[var(--accent)] shadow-2xs"
-              >
-                <option value="Todos">Todos</option>
-                <option value="Pendente">Pendente</option>
-                <option value="Em Trânsito">Em Trânsito</option>
-                <option value="Em Distribuição">Em Distribuição</option>
-                <option value="Entregue">Entregue</option>
-                <option value="Entregue (PUDO)">Entregue (PUDO)</option>
-                <option value="Incidência">Incidências</option>
-                <option value="Devolvido">Devolvido</option>
-                <option value="Cancelado">Cancelado</option>
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
-            </div>
-          </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:flex-initial">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
+        <div className="flex items-center gap-2 w-full sm:w-[320px]">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
             <input 
               type="text" 
-              placeholder="Pesquisar..." 
+              placeholder="Pesquisar guia, cliente ou destino"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full sm:w-56 pl-8 pr-3 py-1.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-[11px] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors"
+              aria-label="Pesquisar envios"
+              className="h-10 w-full pl-9 pr-3 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-colors"
             />
           </div>
         </div>
 
+        {viewMode === "envios" && (
+          <div role="group" aria-label="Filtrar envios por estado" className="-mx-1 flex w-full max-w-full gap-1 overflow-x-auto px-1 pb-0.5">
+            {statusTabs.map((status) => (
+              <button
+                key={status}
+                type="button"
+                aria-pressed={statusFilter === status}
+                onClick={() => setStatusFilter(status)}
+                className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${statusFilter === status ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"}`}
+              >
+                {status === "Incidência" ? "Incidências" : status === "Todos" ? "Todos os envios" : status}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Expanded Filters Area */}
       {showFilters && (
-        <div className="px-5 py-4 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] shrink-0 flex flex-col gap-3 text-[10px]">
+        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 shrink-0 flex flex-col gap-3 text-xs">
           {/* Row 1 */}
           <div className="flex items-end gap-3 flex-wrap">
             <div className="flex flex-col gap-1 w-32">
@@ -375,13 +392,13 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
 
       {/* Bulk Action Bar */}
       {selectedIds.length > 0 && (
-        <div className="bg-[#141714] text-white px-5 py-2.5 flex items-center justify-between shadow-md shrink-0 border-y border-[rgba(255,255,255,0.08)] transition-all">
+        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] text-[var(--text-primary)] px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] shrink-0 transition-colors">
           <div className="flex items-center gap-3">
-            <span className="text-[10px] font-bold bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)] px-2 py-0.5 rounded flex items-center gap-1.5 uppercase tracking-wide">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            <span className="text-xs font-medium bg-[var(--accent-soft)] text-[var(--accent)] px-2.5 py-1 rounded-md flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" strokeWidth={1.75} />
               {selectedIds.length} selecionado(s)
             </span>
-            <span className="text-[11px] text-[rgba(255,255,255,0.6)] hidden md:inline font-medium">
+            <span className="text-xs text-[var(--text-secondary)] hidden md:inline">
               Operações em lote para expedição e sincronização
             </span>
           </div>
@@ -391,7 +408,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
               type="button"
               onClick={handleCloseSelected}
               disabled={isClosingManifest}
-              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-md text-[11px] font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               {isClosingManifest ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />}
               <span>Fechar Expedição / Manifesto</span>
@@ -401,7 +418,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
               type="button"
               onClick={handleDeleteSelected}
               disabled={isDeletingSelected}
-              className="bg-[var(--status-critical)] hover:bg-red-700 text-white px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              className="bg-[var(--status-critical)] hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               {isDeletingSelected ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
               <span>Eliminar</span>
@@ -411,7 +428,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
               type="button"
               onClick={handleSyncSelected}
               disabled={isSyncingSelected}
-              className="bg-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.12)] text-[rgba(255,255,255,0.8)] px-2.5 py-1.5 rounded-md text-[11px] font-bold border border-[rgba(255,255,255,0.1)] transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              className="bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-primary)] px-3 py-2 rounded-lg text-xs font-medium border border-[var(--border-strong)] transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               {isSyncingSelected ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
               <span>Sincronizar Tracking</span>
@@ -420,7 +437,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             <button
               type="button"
               onClick={() => setSelectedIds([])}
-              className="text-[10px] font-semibold text-[rgba(255,255,255,0.5)] hover:text-white px-2 py-1.5 transition-colors cursor-pointer ml-1"
+              className="text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1.5 transition-colors cursor-pointer ml-1"
             >
               Desmarcar
             </button>
@@ -429,7 +446,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
       )}
 
       {/* Table Area (Desktop Table + Mobile Card View) */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
         {filteredEnvios.length === 0 ? (
           <div className="px-4 py-12 text-center text-[var(--text-secondary)]">
             Nenhum envio encontrado com a pesquisa atual.
@@ -472,7 +489,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                             const target = envio.rawShipment ? { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id } : envio;
                             setDrawerShipment(target)
                           }}
-                          className="font-mono font-bold text-[var(--status-info)] text-xs truncate text-left"
+                          className="font-mono font-bold text-[#1D4ED8] text-xs truncate text-left"
                         >
                           {envio.trk?.id || "N/A"}
                         </button>
@@ -482,11 +499,11 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <Badge variant={cfg.badgeVariant}>
+                        <Badge variant={cfg.badgeVariant} className={getMutedShipmentBadgeClass(cfg.badgeVariant)}>
                           {cfg.label}
                         </Badge>
                         {isBilled && (
-                          <span className="p-0.5 rounded bg-[#fbf7f2] text-[#8f5d30] border border-[#d8c5b2]" title="Faturado">
+                          <span className="p-0.5 rounded bg-[#EEF0F1] text-[#626B70] border border-[#D7DCDF]" title="Faturado">
                             <Lock className="w-2.5 h-2.5" />
                           </span>
                         )}
@@ -554,7 +571,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             </div>
 
             {/* ─── DESKTOP TABLE (hidden md:table) ─────────────────────────────── */}
-            <table className="tms-wide-table w-full text-left text-xs whitespace-nowrap pb-32">
+            <table className="tms-wide-table w-full min-w-[1120px] text-left text-xs whitespace-nowrap pb-32">
               <thead className="bg-[var(--surface-muted)] sticky top-0 z-10">
                 <tr className="border-b border-[var(--border-subtle)] text-[10px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">
                   <th className="px-4 py-2.5 w-10">
@@ -622,7 +639,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                         const target = envio.rawShipment ? { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id } : envio;
                         setDrawerShipment(target)
                       }}
-                      className="font-mono font-semibold text-[var(--status-info)] hover:text-blue-800 hover:underline flex items-center gap-1 text-xs text-left cursor-pointer transition-colors"
+                      className="font-mono font-semibold text-[#1D4ED8] hover:text-[#1E40AF] hover:underline flex items-center gap-1 text-xs text-left cursor-pointer transition-colors"
                       title="Clique para ver os detalhes na barra lateral"
                     >
                       {envio.trk?.id || "N/A"}
@@ -686,7 +703,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                       ) : null}
                       <span className="font-semibold text-[var(--text-secondary)] text-[10px]">{envio.service?.code}</span>
                     </div>
-                    <span className={`px-1.5 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider leading-none ${envio.service?.bgColor || 'bg-[var(--surface-dim)]'} ${envio.service?.textColor || 'text-[var(--text-secondary)]'}`}>
+                    <span className="px-1.5 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider leading-none bg-[#1D4ED8] text-white">
                       {envio.service?.name}
                     </span>
                   </div>
@@ -731,15 +748,15 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                     )
                     return (
                       <div className="flex flex-col gap-1 items-start">
-                        <Badge variant={cfg.badgeVariant}>
+                        <Badge variant={cfg.badgeVariant} className={getMutedShipmentBadgeClass(cfg.badgeVariant)}>
                           {cfg.label}
                         </Badge>
                         {isBilled && (
                           <span 
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#fbf7f2] text-[#6e4e2e] border border-[#d8c5b2] shadow-2xs" 
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#EEF0F1] text-[#626B70] border border-[#D7DCDF] shadow-2xs"
                             title="🔒 Envio Faturado - Eliminação Bloqueada"
                           >
-                            <Lock className="w-2.5 h-2.5 text-[#8f5d30] shrink-0" />
+                            <Lock className="w-2.5 h-2.5 text-[#707A80] shrink-0" />
                             Faturado
                           </span>
                         )}
@@ -784,7 +801,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
       </div>
       
       {pagination && viewMode === "envios" && (
-        <div className="px-5 py-3 border-t border-[var(--border-subtle)] flex items-center justify-between shrink-0 bg-[var(--surface-bg)]">
+        <div className="rounded-xl border border-[var(--border-subtle)] px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 bg-[var(--surface-bg)]">
           <span className="text-[11px] text-[var(--text-secondary)] font-medium">
             A mostrar {envios.length} de {pagination.total} envios (Página {pagination.page} de {pagination.totalPages})
           </span>

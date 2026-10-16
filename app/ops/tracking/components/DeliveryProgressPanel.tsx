@@ -55,17 +55,17 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
             type="button"
             onClick={handleRefreshClick}
             disabled={isRefreshing}
-            className="p-1.5 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-emerald-600 transition-colors disabled:opacity-50"
+            className="p-1.5 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[#477D68] transition-colors disabled:opacity-50"
             title="Atualizar leituras da transportadora"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-emerald-600" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-[#477D68]" : ""}`} />
           </button>
         </div>
 
         {/* Progress Bar & Percent */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between text-xs">
-            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono text-base">
+            <span className="font-extrabold text-[#477D68] font-mono text-base">
               {metrics.progressPercent}%
             </span>
             <span className="text-[11px] text-[var(--text-secondary)]">
@@ -75,7 +75,7 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
 
           <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-500"
+              className="h-full rounded-full bg-[#477D68] transition-all duration-500"
               style={{ width: `${metrics.progressPercent}%` }}
             />
           </div>
@@ -91,7 +91,7 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
       <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl p-4 shadow-xs flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-tertiary)] flex items-center gap-1.5">
-            <ScanLine className="w-3.5 h-3.5 text-emerald-600" />
+            <ScanLine className="w-3.5 h-3.5 text-[#477D68]" />
             Pickagens & Checkpoints
           </h4>
           <span className="text-[10px] font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] border border-[var(--border-strong)] shadow-2xs px-3 py-1 rounded-full">
@@ -110,7 +110,7 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
                 {/* Connecting Vertical Line */}
                 {idx !== pickagens.length - 1 && (
                   <div
-                    className={`absolute left-[9px] top-5 bottom-[-16px] w-0.5 ${isCompleted ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-800"
+                    className={`absolute left-[9px] top-5 bottom-[-16px] w-0.5 ${isCompleted ? "bg-[#477D68]" : "bg-slate-200 dark:bg-slate-800"
                       }`}
                   />
                 )}
@@ -118,11 +118,11 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
                 {/* Step Icon Indicator */}
                 <div className="relative z-10 shrink-0 mt-0.5">
                   {isCompleted ? (
-                    <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                    <div className="w-5 h-5 rounded-full bg-[#477D68] text-white flex items-center justify-center shadow-xs">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                     </div>
                   ) : isCurrent ? (
-                    <div className="w-5 h-5 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20 text-white flex items-center justify-center animate-pulse">
+                    <div className="w-5 h-5 rounded-full bg-[#477D68] text-white flex items-center justify-center">
                       <span className="w-2 h-2 rounded-full bg-white" />
                     </div>
                   ) : (
@@ -136,14 +136,14 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
                     <span className={`font-semibold text-xs truncate ${isCurrent
-                        ? "text-emerald-600 dark:text-emerald-400 font-bold"
+                        ? "text-[#477D68] font-bold"
                         : isCompleted
                           ? "text-[var(--text-primary)]"
                           : "text-[var(--text-tertiary)]"
                       }`}>
                       {p.title}
                     </span>
-                    <span className={`font-mono text-[11px] shrink-0 ${isCurrent ? "font-bold text-emerald-600 dark:text-emerald-400" : "text-[var(--text-tertiary)]"
+                    <span className={`font-mono text-[11px] shrink-0 ${isCurrent ? "font-bold text-[#477D68]" : "text-[var(--text-tertiary)]"
                       }`}>
                       {p.formattedTime}
                     </span>
@@ -189,7 +189,7 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
             <span className="text-xs font-bold text-[var(--text-primary)]">
               {shipment.carrier}
             </span>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+            <span className="text-[10px] text-[#477D68] font-medium">
               {shipment.serviceType}
             </span>
           </div>
@@ -226,7 +226,7 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
         {/* Address Footer */}
         <div className="pt-2 border-t border-[var(--border-subtle)] flex flex-col gap-1 text-[11px]">
           <div className="flex items-start gap-1.5">
-            <MapPin className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+            <MapPin className="w-3.5 h-3.5 text-[#246B45] mt-0.5 shrink-0" />
             <span className="text-[10px] text-[var(--text-secondary)] leading-snug">
               <strong>Origem:</strong> {origin.address}
             </span>

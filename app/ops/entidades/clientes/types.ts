@@ -126,14 +126,14 @@ export const DEFAULT_CLIENT_CATEGORIES = [
 ]
 
 export const CLIENT_COLOR_OPTIONS = [
-  { label: "Verde Esmeralda", value: "#10b981" },
-  { label: "Azul Oceano", value: "#0284c7" },
-  { label: "Azul Marinho", value: "#1e3a8a" },
-  { label: "Roxo / Violeta", value: "#8b5cf6" },
-  { label: "Âmbar / Laranja", value: "#f59e0b" },
-  { label: "Rosa Magenta", value: "#ec4899" },
-  { label: "Vermelho Rubi", value: "#ef4444" },
-  { label: "Ciano Turquesa", value: "#06b6d4" },
+  { label: "Verde Floresta", value: "#246B45" },
+  { label: "Azul Aço", value: "#315D82" },
+  { label: "Azul Marinho", value: "#263F63" },
+  { label: "Verde Petróleo", value: "#31736F" },
+  { label: "Ameixa", value: "#76516D" },
+  { label: "Ocre", value: "#9A6B2E" },
+  { label: "Vermelho Telha", value: "#A7433B" },
+  { label: "Azul Ardósia", value: "#55758A" },
   { label: "Cinza Grafite", value: "#475569" },
 ]
 

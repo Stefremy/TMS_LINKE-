@@ -92,7 +92,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     short_name: initialData?.short_name || "",
     portal_slug: initialData?.portal_slug || "",
     legal_name: initialData?.legal_name || "",
-    color: initialData?.color || "#10b981",
+    color: initialData?.color || "#246B45",
     logo_url: initialData?.logo_url || "",
     nif: initialData?.nif || "",
     category: initialData?.category || "Cliente Conta Corrente",
@@ -135,7 +135,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         short_name: initialData.short_name || "",
         portal_slug: initialData.portal_slug || "",
         legal_name: initialData.legal_name || "",
-        color: initialData.color || "#10b981",
+        color: initialData.color || "#246B45",
         logo_url: initialData.logo_url || "",
         nif: initialData.nif || "",
         category: initialData.category || "Cliente Conta Corrente",
@@ -349,7 +349,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
           <div className="flex items-center gap-3.5 min-w-0">
             <div 
               className="w-11 h-11 rounded-lg flex items-center justify-center text-white font-black text-base shadow-2xs shrink-0 overflow-hidden relative border border-[var(--border-subtle)]"
-              style={{ backgroundColor: formData.color || "#10b981" }}
+              style={{ backgroundColor: formData.color || "#246B45" }}
             >
               {formData.logo_url ? (
                 <img 
@@ -372,7 +372,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                   {formData.code || "CL000"}
                 </span>
 
-                <span className="bg-[var(--accent-soft)] border border-[rgba(18,138,71,0.2)] text-[var(--accent)] text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0">
+                <span className="bg-[#EEF3EF] border border-[#C9D7CD] text-[#315B43] text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0">
                   {formData.category || "Cliente Conta Corrente"}
                 </span>
               </div>
@@ -449,33 +449,33 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
 
         {/* ===================== FORM CONTENT ===================== */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[var(--canvas-bg)]">
-          {initialData && canManageAccess && onManageAccess && <div className="mb-5 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          {initialData && canManageAccess && onManageAccess && <div className="mb-5 flex flex-col gap-3 rounded-xl border border-[#C9D7CD] border-l-4 border-l-[#246B45] bg-[#F4F7F4] p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-emerald-900">Acesso à Área do Cliente</h2>
-              <p className="mt-1 text-xs leading-5 text-emerald-800">Envie um link para o cliente definir ou alterar a própria palavra-passe. A atual continua válida até ele guardar uma nova.</p>
+              <h2 className="text-sm font-semibold text-[#244C35]">Acesso à Área do Cliente</h2>
+              <p className="mt-1 text-xs leading-5 text-[#4D6254]">Envie um link para o cliente definir ou alterar a própria palavra-passe. A atual continua válida até ele guardar uma nova.</p>
             </div>
-            <button type="button" disabled={isSaving} onClick={onManageAccess} className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">
+            <button type="button" disabled={isSaving} onClick={onManageAccess} className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#246B45] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[#1D5839] disabled:opacity-50">
               <Mail className="h-4 w-4" />Enviar email de palavra-passe
             </button>
           </div>}
           {saveError && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{saveError}</p>}
-          {invitationMessage && <p role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{invitationMessage}</p>}
+          {invitationMessage && <p role="status" className="mb-4 rounded-lg border border-[#C9D7CD] bg-[#F4F7F4] p-3 text-sm text-[#315B43]">{invitationMessage}</p>}
           
           {/* TAB 1: IDENTIDADE & GERAL */}
           {activeTab === "geral" && (
             <div className="space-y-5 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
-              {!initialData && canManageAccess && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-                <label className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
+              {!initialData && canManageAccess && <div className="rounded-lg border border-[#C9D7CD] border-l-4 border-l-[#246B45] bg-[#F4F7F4] p-4">
+                <label className="flex items-center gap-2 text-sm font-semibold text-[#244C35]">
                   <input type="checkbox" checked={sendInvitation} disabled={isSaving} onChange={e => {
                     setSendInvitation(e.target.checked)
                     if (!invitationEmail) setInvitationEmail(formData.email || "")
                   }} />
                   Enviar convite de acesso ao criar a loja
                 </label>
-                <p className="mt-2 text-xs leading-5 text-emerald-800">O cliente recebe um email e escolhe a própria palavra-passe. Usa este acesso apenas para esta loja.</p>
+                <p className="mt-2 text-xs leading-5 text-[#4D6254]">O cliente recebe um email e escolhe a própria palavra-passe. Usa este acesso apenas para esta loja.</p>
                 {sendInvitation && <div className="mt-3">
-                  <label htmlFor="invitation-email" className="mb-1 block text-xs font-semibold text-emerald-900">Email de acesso do cliente</label>
-                  <input id="invitation-email" type="email" required maxLength={254} disabled={isSaving} value={invitationEmail} onChange={e => setInvitationEmail(e.target.value)} placeholder="nome@loja.pt" className="w-full rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-900" />
+                  <label htmlFor="invitation-email" className="mb-1 block text-xs font-semibold text-[#244C35]">Email de acesso do cliente</label>
+                  <input id="invitation-email" type="email" required maxLength={254} disabled={isSaving} value={invitationEmail} onChange={e => setInvitationEmail(e.target.value)} placeholder="nome@loja.pt" className="w-full rounded-md border border-[#B8CCBF] bg-white px-3 py-2 text-sm text-slate-900 focus:border-[#246B45] focus:outline-none focus:ring-2 focus:ring-[#246B45]/15" />
                 </div>}
               </div>}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -556,8 +556,8 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                   <div 
                     className="w-16 h-16 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-2xs shrink-0 overflow-hidden border-2 relative"
                     style={{ 
-                      borderColor: formData.color || "#10b981",
-                      backgroundColor: formData.color || "#10b981"
+                      borderColor: formData.color || "#246B45",
+                      backgroundColor: formData.color || "#246B45"
                     }}
                   >
                     {formData.logo_url ? (
@@ -597,15 +597,19 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                       )}
                     </div>
 
-                    <div>
+                    {formData.logo_url?.startsWith("data:") ? (
+                      <p className="text-[11px] text-[var(--text-secondary)]">
+                        Imagem carregada. Para a substituir, carregue outra imagem ou remova a atual.
+                      </p>
+                    ) : (
                       <input
                         type="url"
                         value={formData.logo_url || ""}
                         onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
                         placeholder="Ou cole o URL direto da imagem (ex: https://.../logo.png)"
-                        className="w-full border border-[var(--border-subtle)] bg-[var(--surface-bg)] rounded-md px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
+                        className="w-full border border-[var(--border-subtle)] bg-[var(--surface-bg)] rounded-md px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:border-[#315D82] focus:outline-none focus:ring-2 focus:ring-[#315D82]/15"
                       />
-                    </div>
+                    )}
 
                     <p className="text-[11px] text-[var(--text-tertiary)]">
                       Formatos aceites: PNG, JPG, SVG ou WebP. A foto é usada no TMS, nos mapas e no portal deste cliente.
@@ -633,15 +637,18 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
-                      value={formData.color || "#10b981"}
+                      value={formData.color || "#246B45"}
                       onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                       className="w-9 h-9 p-0.5 rounded-md border border-[var(--border-subtle)] cursor-pointer bg-[var(--surface-muted)]"
                     />
                     <select
-                      value={formData.color || "#10b981"}
+                      value={formData.color || "#246B45"}
                       onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                       className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
                     >
+                      {formData.color && !CLIENT_COLOR_OPTIONS.some(option => option.value.toLowerCase() === formData.color?.toLowerCase()) && (
+                        <option value={formData.color}>Cor personalizada ({formData.color})</option>
+                      )}
                       {CLIENT_COLOR_OPTIONS.map((c) => (
                         <option key={c.value} value={c.value}>{c.label} ({c.value})</option>
                       ))}
@@ -881,14 +888,14 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     onClick={() => setFormData({ ...formData, billing_type: "pay_as_you_go", category: "Cliente Pré-Pagamento" })}
                     className={`relative p-4 rounded-xl border text-left transition-all cursor-pointer ${
                       formData.billing_type === "pay_as_you_go"
-                        ? "border-blue-500 bg-blue-50/50 shadow-xs ring-1 ring-blue-500/30"
+                        ? "border-[#315D82] bg-[#F1F5F7] shadow-xs ring-1 ring-[#315D82]/20"
                         : "border-[var(--border-subtle)] bg-[var(--surface-muted)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-bg)]"
                     }`}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                         formData.billing_type === "pay_as_you_go"
-                          ? "bg-blue-100 text-blue-700 border border-blue-200"
+                          ? "bg-[#315D82] text-white border border-[#315D82]"
                           : "bg-[var(--surface-bg)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]"
                       }`}>
                         <Zap className="w-4 h-4" />
@@ -904,7 +911,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                         </p>
                       </div>
                       {formData.billing_type === "pay_as_you_go" && (
-                        <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 ml-auto" />
+                        <CheckCircle2 className="w-4 h-4 text-[#315D82] shrink-0 ml-auto" />
                       )}
                     </div>
                   </button>

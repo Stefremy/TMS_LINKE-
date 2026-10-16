@@ -239,17 +239,17 @@ export function ActionMenu({
 
   return (
     <div className="relative inline-flex items-center justify-end" ref={menuRef}>
-      {/* Botão Principal: Editar (Diferenciado visualmente se Faturado em tom Castanho Claro) */}
+      {/* Botão Principal: Editar */}
       {isBilled ? (
         <button 
           type="button"
           onClick={() => onOpenDetails?.()}
-          className="bg-[#fbf7f2] hover:bg-[#f3eae0] border border-[#d8c5b2] text-[#6e4e2e] px-2.5 py-1 rounded-l text-[12px] font-bold shadow-xs transition-colors h-7 flex items-center gap-1.5 cursor-pointer"
+          className="bg-white hover:bg-[#F6F7F7] border border-[#D7DCDF] text-[#626B70] px-2.5 py-1 rounded-l text-[12px] font-semibold shadow-xs transition-colors h-7 flex items-center gap-1.5 cursor-pointer"
           title="🔒 Envio Faturado (Eliminação Bloqueada) • Clique para ver detalhes"
         >
-          <Lock className="w-3 h-3 text-[#8f5d30] shrink-0" />
+          <Lock className="w-3 h-3 text-[#707A80] shrink-0" />
           <span>Editar</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#9c6a3b] shrink-0" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#A0A6AA] shrink-0" />
         </button>
       ) : (
         <button 

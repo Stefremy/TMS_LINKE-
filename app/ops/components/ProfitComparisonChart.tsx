@@ -11,7 +11,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
-import { TrendingUp, TrendingDown, Calendar, Layers, Eye, EyeOff } from "lucide-react"
+import { TrendingUp, TrendingDown, Calendar } from "lucide-react"
 
 type ChartData = {
   day: number
@@ -19,6 +19,13 @@ type ChartData = {
   prev1: number | null
   prev2: number | null
   prev3: number | null
+}
+
+const SERIES_COLORS = {
+  actual: "#16834A",
+  prev1: "#2878B5",
+  prev2: "#C4871C",
+  prev3: "#C4554E",
 }
 
 export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[], targetMonth?: number }) {
@@ -84,10 +91,10 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
   }, [data])
 
   const seriesMeta = [
-    { key: "actual", name: getMonthName(0), color: "#10b981", strokeWidth: 3, total: stats?.currentTotal },
-    { key: "prev1", name: getMonthName(1), color: "#3b82f6", strokeWidth: 2, total: stats?.totalPrev1 },
-    { key: "prev2", name: getMonthName(2), color: "#f59e0b", strokeWidth: 2, total: stats?.totalPrev2 },
-    { key: "prev3", name: getMonthName(3), color: "#8b5cf6", strokeWidth: 2, total: stats?.totalPrev3 },
+    { key: "actual", name: getMonthName(0), color: SERIES_COLORS.actual, total: stats?.currentTotal },
+    { key: "prev1", name: getMonthName(1), color: SERIES_COLORS.prev1, total: stats?.totalPrev1 },
+    { key: "prev2", name: getMonthName(2), color: SERIES_COLORS.prev2, total: stats?.totalPrev2 },
+    { key: "prev3", name: getMonthName(3), color: SERIES_COLORS.prev3, total: stats?.totalPrev3 },
   ]
 
   // Custom high-end tooltip
@@ -95,13 +102,13 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
     if (!active || !payload || !payload.length) return null
 
     return (
-      <div className="bg-[var(--surface-bg)]/95 backdrop-blur-md border border-[var(--border-strong)] rounded-xl shadow-xl p-3.5 text-xs min-w-[210px] animate-in fade-in duration-150">
+      <div className="bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-lg shadow-md p-3 text-xs min-w-[210px]">
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border-subtle)]">
           <span className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5 text-xs">
             <Calendar className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
             Dia {label} de {getMonthName(0)}
           </span>
-          <span className="text-[10px] uppercase tracking-wider text-[var(--text-tertiary)] font-mono font-bold">
+          <span className="text-[10px] text-[var(--text-tertiary)] font-medium">
             Acumulado
           </span>
         </div>
@@ -137,20 +144,20 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
   const isPositiveGrowth = (stats?.percentDiff ?? 0) >= 0
 
   return (
-    <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 sm:p-6 shadow-2xs transition-all flex flex-col justify-between">
+    <div className="bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] p-5 sm:p-6 flex flex-col justify-between">
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
           <div className="flex items-center gap-2 mb-0.5">
-            <div className="w-6 h-6 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-3.5 h-3.5" />
+            <div className="w-6 h-6 rounded-md bg-[var(--surface-muted)] text-[var(--text-secondary)] flex items-center justify-center shrink-0">
+              <TrendingUp className="w-3.5 h-3.5" strokeWidth={1.75} />
             </div>
             <h3 className="text-sm sm:text-base font-bold text-[var(--text-primary)] tracking-tight">
-              Comparação de Lucro (Últimos 3 Meses)
+              Lucro acumulado
             </h3>
           </div>
           <p className="text-xs text-[var(--text-tertiary)] pl-8">
-            Lucro diário acumulado • Comparativo homólogo com o mesmo período
+            Período atual e três meses anteriores
           </p>
         </div>
 
@@ -158,8 +165,8 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
         {stats && (
           <div className="flex items-center gap-2 self-start sm:self-auto bg-[var(--surface-muted)] px-3 py-1.5 rounded-lg border border-[var(--border-subtle)]">
             <div className="flex flex-col text-right">
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-tertiary)]">
-                Acumulado (Dia {stats.currentDay})
+              <span className="text-[10px] font-medium text-[var(--text-tertiary)]">
+                Acumulado até dia {stats.currentDay}
               </span>
               <span className="font-mono font-bold text-sm text-[var(--text-primary)] tabular-nums">
                 {stats.currentTotal.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
@@ -168,11 +175,11 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
 
             <div className={`flex items-center gap-0.5 text-xs font-bold px-2 py-1 rounded-md ${
               isPositiveGrowth 
-                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" 
-                : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                ? "text-[var(--status-success)]"
+                : "text-[var(--status-danger)]"
             }`}>
               {isPositiveGrowth ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-              <span>{isPositiveGrowth ? "+" : ""}{stats.percentDiff.toFixed(1)}%</span>
+              <span>{isPositiveGrowth ? "+" : "−"}{Math.abs(stats.diff).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€</span>
             </div>
           </div>
         )}
@@ -182,8 +189,6 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
       <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 sm:gap-4 text-xs mb-4 pt-1">
         {seriesMeta.map((s) => {
           const isVisible = visibleSeries[s.key]
-          const isHovered = hoveredSeries === s.key
-
           return (
             <button
               key={s.key}
@@ -191,24 +196,26 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
               onClick={() => toggleSeries(s.key)}
               onMouseEnter={() => setHoveredSeries(s.key)}
               onMouseLeave={() => setHoveredSeries(null)}
-              className={`flex items-center gap-2 px-2.5 py-1 rounded-lg border transition-all text-xs font-medium cursor-pointer ${
+              className={`flex items-center gap-2 px-2 py-1 rounded-md border transition-colors text-xs font-medium cursor-pointer ${
                 isVisible 
-                  ? isHovered
-                    ? "bg-[var(--surface-muted)] border-[var(--border-strong)] shadow-xs scale-102"
-                    : "bg-[var(--surface-bg)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]" 
+                  ? "bg-[var(--surface-bg)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]"
                   : "opacity-40 bg-transparent border-dashed border-[var(--border-subtle)]"
               }`}
+              style={{
+                borderColor: isVisible ? `${s.color}66` : undefined,
+                backgroundColor: isVisible ? `${s.color}0D` : undefined,
+              }}
               title={`Clique para ${isVisible ? "ocultar" : "mostrar"} a curva de ${s.name}`}
             >
               <span
-                className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs transition-transform"
+                className="w-4 h-0.5 rounded-full shrink-0"
                 style={{ backgroundColor: s.color }}
               />
-              <span style={{ color: isVisible ? "var(--text-primary)" : "var(--text-tertiary)" }} className="font-semibold text-[11px]">
+              <span style={{ color: isVisible ? s.color : "var(--text-tertiary)" }} className="font-semibold text-[11px]">
                 {s.name}
               </span>
               {s.total !== undefined && (
-                <span className="font-mono text-[10px] text-[var(--text-tertiary)] tabular-nums">
+                <span style={{ color: isVisible ? s.color : "var(--text-tertiary)" }} className="font-mono text-[10px] font-semibold tabular-nums">
                   ({(s.total >= 1000 ? `${(s.total / 1000).toFixed(1)}k` : s.total.toFixed(0))}€)
                 </span>
               )}
@@ -217,27 +224,11 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
         })}
       </div>
 
-      {/* Modern High-End Chart */}
       <div className="h-72 w-full text-xs relative">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 10, right: 12, left: -16, bottom: 0 }}>
-            <defs>
-              {/* Premium luminous emerald gradient fill for the current active month */}
-              <linearGradient id="actualProfitGlow" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity={0.25} />
-                <stop offset="70%" stopColor="#10b981" stopOpacity={0.03} />
-                <stop offset="100%" stopColor="#10b981" stopOpacity={0.0} />
-              </linearGradient>
-
-              {/* Prev1 subtle gradient */}
-              <linearGradient id="prev1Glow" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.10} />
-                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.0} />
-              </linearGradient>
-            </defs>
-
             <CartesianGrid 
-              strokeDasharray="4 4" 
+              strokeDasharray="2 4"
               vertical={false} 
               stroke="var(--border-subtle)" 
               strokeOpacity={0.5} 
@@ -261,68 +252,63 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
 
             <Tooltip content={<CustomTooltip />} />
 
-            {/* Current Active Month Area & Line (Emerald) */}
             {visibleSeries.actual && (
               <Area
                 type="monotone"
                 name={getMonthName(0)}
                 dataKey="actual"
-                stroke="#10b981"
-                strokeWidth={hoveredSeries === "actual" ? 3.5 : 3}
-                fill="url(#actualProfitGlow)"
+                stroke={SERIES_COLORS.actual}
+                strokeWidth={hoveredSeries === "actual" ? 2.5 : 2.25}
+                fill={SERIES_COLORS.actual}
+                fillOpacity={0.06}
                 dot={false}
                 activeDot={{
-                  r: 6,
-                  fill: "#10b981",
+                  r: 4,
+                  fill: SERIES_COLORS.actual,
                   stroke: "var(--surface-bg)",
-                  strokeWidth: 2,
-                  className: "filter drop-shadow-[0_0_8px_rgba(16,185,129,0.7)]"
+                  strokeWidth: 1.5,
                 }}
               />
             )}
 
-            {/* Prev 1 (Previous Month - Blue/Indigo) */}
             {visibleSeries.prev1 && (
-              <Area
+              <Line
                 type="monotone"
                 name={getMonthName(1)}
                 dataKey="prev1"
-                stroke="#3b82f6"
-                strokeWidth={hoveredSeries === "prev1" ? 2.5 : 2}
-                fill="url(#prev1Glow)"
-                strokeOpacity={hoveredSeries && hoveredSeries !== "prev1" ? 0.3 : 0.85}
+                stroke={SERIES_COLORS.prev1}
+                strokeWidth={hoveredSeries === "prev1" ? 2.5 : 2.2}
+                strokeOpacity={hoveredSeries && hoveredSeries !== "prev1" ? 0.4 : 1}
                 dot={false}
-                activeDot={{ r: 4, fill: "#3b82f6", stroke: "var(--surface-bg)", strokeWidth: 2 }}
+                activeDot={{ r: 3.5, fill: SERIES_COLORS.prev1, stroke: "var(--surface-bg)", strokeWidth: 1.5 }}
               />
             )}
 
-            {/* Prev 2 (2 Months Ago - Amber) */}
             {visibleSeries.prev2 && (
               <Line
                 type="monotone"
                 name={getMonthName(2)}
                 dataKey="prev2"
-                stroke="#f59e0b"
-                strokeWidth={hoveredSeries === "prev2" ? 2.5 : 1.75}
+                stroke={SERIES_COLORS.prev2}
+                strokeWidth={hoveredSeries === "prev2" ? 2.5 : 2.2}
                 strokeDasharray="4 4"
-                strokeOpacity={hoveredSeries && hoveredSeries !== "prev2" ? 0.25 : 0.65}
+                strokeOpacity={hoveredSeries && hoveredSeries !== "prev2" ? 0.4 : 1}
                 dot={false}
-                activeDot={{ r: 4, fill: "#f59e0b", stroke: "var(--surface-bg)", strokeWidth: 2 }}
+                activeDot={{ r: 3.5, fill: SERIES_COLORS.prev2, stroke: "var(--surface-bg)", strokeWidth: 1.5 }}
               />
             )}
 
-            {/* Prev 3 (3 Months Ago - Violet) */}
             {visibleSeries.prev3 && (
               <Line
                 type="monotone"
                 name={getMonthName(3)}
                 dataKey="prev3"
-                stroke="#8b5cf6"
-                strokeWidth={hoveredSeries === "prev3" ? 2.5 : 1.5}
+                stroke={SERIES_COLORS.prev3}
+                strokeWidth={hoveredSeries === "prev3" ? 2.5 : 2.2}
                 strokeDasharray="2 3"
-                strokeOpacity={hoveredSeries && hoveredSeries !== "prev3" ? 0.2 : 0.45}
+                strokeOpacity={hoveredSeries && hoveredSeries !== "prev3" ? 0.4 : 1}
                 dot={false}
-                activeDot={{ r: 4, fill: "#8b5cf6", stroke: "var(--surface-bg)", strokeWidth: 2 }}
+                activeDot={{ r: 3.5, fill: SERIES_COLORS.prev3, stroke: "var(--surface-bg)", strokeWidth: 1.5 }}
               />
             )}
           </AreaChart>
@@ -333,37 +319,37 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-4 mt-3 border-t border-[var(--border-subtle)]">
           <div className="flex flex-col">
-            <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-              {getMonthName(0)} (Atual)
+            <span className="text-[10px] font-medium text-[var(--text-tertiary)]">
+              {getMonthName(0)} · atual
             </span>
-            <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 tabular-nums">
+            <span className="font-mono font-semibold text-xs text-[var(--text-primary)] tabular-nums">
               {stats.currentTotal.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
             </span>
           </div>
 
           <div className="flex flex-col">
-            <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-              {getMonthName(1)} (Total)
+            <span className="text-[10px] font-medium text-[var(--text-tertiary)]">
+              {getMonthName(1)} · total
             </span>
-            <span className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400 tabular-nums">
+            <span className="font-mono font-medium text-xs text-[var(--text-secondary)] tabular-nums">
               {stats.totalPrev1.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
             </span>
           </div>
 
           <div className="flex flex-col">
-            <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-              {getMonthName(2)} (Total)
+            <span className="text-[10px] font-medium text-[var(--text-tertiary)]">
+              {getMonthName(2)} · total
             </span>
-            <span className="font-mono font-bold text-xs text-amber-600 dark:text-amber-400 tabular-nums">
+            <span className="font-mono font-medium text-xs text-[var(--text-secondary)] tabular-nums">
               {stats.totalPrev2.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
             </span>
           </div>
 
           <div className="flex flex-col">
-            <span className="text-[10px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-              {getMonthName(3)} (Total)
+            <span className="text-[10px] font-medium text-[var(--text-tertiary)]">
+              {getMonthName(3)} · total
             </span>
-            <span className="font-mono font-bold text-xs text-purple-600 dark:text-purple-400 tabular-nums">
+            <span className="font-mono font-medium text-xs text-[var(--text-secondary)] tabular-nums">
               {stats.totalPrev3.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
             </span>
           </div>

@@ -22,9 +22,10 @@ import { getCarrierLogo } from "@/lib/carrier-logos"
 import { OpsDashboardClientSync } from "./components/OpsDashboardClientSync"
 import { ProfitComparisonChart } from "./components/ProfitComparisonChart"
 import { DateRangePicker } from "./components/DateRangePicker"
+import { LatestNewsWidget } from "./components/LatestNewsWidget"
 import { DashboardWidgets } from "./components/DashboardWidgets"
 import { FloatingCalculatorWidget } from "./components/FloatingCalculatorWidget"
-import { LatestNewsWidget } from "./components/LatestNewsWidget"
+import { LocalWeather } from "./components/LocalWeather"
 
 function getMonthName(date: Date) {
   return date.toLocaleString('pt-PT', { month: 'long', year: 'numeric' })
@@ -104,34 +105,6 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
   const clientRevenue = currentMonthClientShipments.reduce((acc: number, s: any) => acc + (Number(s.sell_price) || 0), 0)
   const clientCost = currentMonthClientShipments.reduce((acc: number, s: any) => acc + (Number(s.buy_price) || 0), 0)
   const clientMargin = clientRevenue - clientCost
-
-  // Compare revenue with prior equivalent period for Linke software metrics
-  let prevPeriodStart: Date
-  let prevPeriodEnd: Date
-  if (isCustomRange) {
-    const rangeDuration = currentMonthEnd.getTime() - currentMonthStart.getTime()
-    prevPeriodStart = new Date(currentMonthStart.getTime() - rangeDuration)
-    prevPeriodEnd = new Date(currentMonthStart.getTime() - 1)
-  } else {
-    prevPeriodStart = new Date(targetYear, targetMonth - 1, 1)
-    prevPeriodEnd = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999)
-  }
-
-  const prevPeriodClientShipments = clientShipments.filter((s: any) => {
-    const d = new Date(s.created_at)
-    return d >= prevPeriodStart && d <= prevPeriodEnd
-  })
-  const prevClientRevenue = prevPeriodClientShipments.reduce((acc: number, s: any) => acc + (Number(s.sell_price) || 0), 0)
-  const revenueGrowthPercent = prevClientRevenue > 0
-    ? ((clientRevenue - prevClientRevenue) / prevClientRevenue) * 100
-    : clientRevenue > 0 ? 100 : 0
-
-  const linkeMetrics = {
-    revenue: clientRevenue,
-    prevRevenue: prevClientRevenue,
-    growthPercent: Number(revenueGrowthPercent.toFixed(1)),
-    profit: clientMargin,
-  }
 
   const deliveredShipments = currentMonthShipments.filter((s: any) => s.status === "entregue")
   const deliveredCount = deliveredShipments.length
@@ -278,126 +251,124 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
     .filter((s: any) => s.status !== "entregue" && s.status !== "devolvido" && s.status !== "cancelado")
     .map((s: any) => s.id)
 
+  const primaryStats = [stats[4], stats[5], stats[0], stats[3]]
+  const secondaryStats = [stats[1], stats[2]]
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="max-w-[1600px] mx-auto flex flex-col gap-6">
       <OpsDashboardClientSync activeIds={activeIds} />
       
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <DashboardWidgets linkeMetrics={linkeMetrics} />
-          <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight capitalize">
-            {isCustomRange ? "Período Personalizado" : getMonthName(targetDate)}
-          </h2>
+      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-5 border-b border-[var(--border-subtle)]">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight">Visão geral</h1>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              {isCustomRange ? "Resumo do período selecionado" : `Resumo de ${getMonthName(targetDate)}`}
+            </p>
+          </div>
+          <LocalWeather />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
           <DateRangePicker 
             defaultFrom={isCustomRange ? searchParams.from! : currentMonthStart.toISOString().split('T')[0]} 
             defaultTo={isCustomRange ? searchParams.to! : currentMonthEnd.toISOString().split('T')[0]} 
           />
         </div>
-        <Badge variant="neutral" className="font-medium bg-[var(--surface-bg)] text-[var(--text-secondary)]">
-          Atualizado hoje
-        </Badge>
-      </div>
+      </header>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {stats.map((stat, idx) => (
-          <div 
-            key={idx} 
-            className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 flex flex-col justify-between shadow-2xs hover:border-[var(--border-strong)] transition-all duration-150"
-          >
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
+      <DashboardWidgets showClock={false} showLinkeMetrics={false} />
+
+      <section aria-label="Indicadores principais" className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+        <div className="grid grid-cols-2 xl:grid-cols-4 divide-x divide-y xl:divide-y-0 divide-[var(--border-subtle)]">
+          {primaryStats.map((stat) => (
+            <div key={stat.label} className="min-w-0 p-4 sm:p-5">
+              <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
+                <stat.icon aria-hidden="true" className="w-4 h-4 text-[var(--text-tertiary)]" strokeWidth={1.75} />
                 {stat.label}
-              </span>
-              <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] flex items-center justify-center text-[var(--text-secondary)] border border-[var(--border-subtle)] shrink-0">
-                <stat.icon className="w-4 h-4" strokeWidth={1.75} />
               </div>
-            </div>
-            
-            <div className="flex items-baseline justify-between mt-auto">
-              <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
+              <div className="mt-3 text-2xl sm:text-[28px] leading-none font-semibold tracking-tight text-[var(--text-primary)] tabular-nums">
                 {stat.value}
-              </span>
-              <span className="text-[11px] font-medium text-[var(--text-tertiary)]">
-                {stat.subtext}
-              </span>
+              </div>
+              <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate">{stat.subtext}</p>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/60">
+          {secondaryStats.map((stat, index) => (
+            <div key={stat.label} className={`flex items-center justify-between gap-3 px-4 py-3 sm:px-5 ${index ? "border-l border-[var(--border-subtle)]" : ""}`}>
+              <span className="text-xs text-[var(--text-secondary)]">{stat.label}</span>
+              <span className="text-sm font-medium text-[var(--text-primary)] tabular-nums">{stat.value}</span>
+            </div>
+          ))}
+        </div>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)] gap-5">
         <ProfitComparisonChart data={chartData} targetMonth={targetDate.getMonth()} />
-        {/* Breakdown Row & Live News */}
-        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs flex flex-col justify-between">
+        <section className="bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] p-5">
           <div>
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Estado Atual ({getMonthName(targetDate)})</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Estado dos envios</h2>
+            <p className="mt-1 mb-3 text-xs text-[var(--text-tertiary)]">{getMonthName(targetDate)}</p>
+            <div className="divide-y divide-[var(--border-subtle)]">
               {[
                 { 
                   label: "Pendentes", 
                   value: statusCounts.pendente, 
-                  dot: "bg-slate-400",
+                  dot: "bg-amber-500",
+                  tone: "text-amber-900",
                   href: "/ops/envios?status=Pendente"
                 },
                 { 
                   label: "Em Trânsito", 
                   value: statusCounts.em_transito, 
                   dot: "bg-blue-500",
+                  tone: "text-blue-900",
                   href: "/ops/envios?status=Em Trânsito"
                 },
                 { 
                   label: "Em Distrib.", 
                   value: statusCounts.em_distribuicao, 
-                  dot: "bg-amber-500",
+                  dot: "bg-violet-500",
+                  tone: "text-violet-900",
                   href: "/ops/envios?status=Em Distribuição"
                 },
                 { 
                   label: "Incidências", 
                   value: statusCounts.incidencia, 
-                  dot: statusCounts.incidencia > 0 ? "bg-rose-500 animate-pulse" : "bg-neutral-300",
+                  dot: "bg-rose-500",
+                  tone: "text-rose-900",
                   href: "/ops/incidencias"
                 },
                 { 
                   label: "Entregues", 
                   value: statusCounts.entregue, 
                   dot: "bg-emerald-500",
+                  tone: "text-emerald-800",
                   href: "/ops/envios?status=Entregue"
                 },
                 { 
-                  label: "Total no Mês", 
+                  label: "Envios no mês",
                   value: totalShipments, 
-                  dot: "bg-indigo-500",
+                  dot: "bg-neutral-400",
+                  tone: "text-[var(--text-primary)]",
                   href: "/ops/envios"
                 }
               ].map((s, i) => (
                 <Link
                   key={i}
                   href={s.href}
-                  className="group bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-3.5 flex flex-col justify-between shadow-2xs hover:border-[var(--border-strong)] hover:shadow-xs transition-all duration-150"
+                  className="group flex items-center justify-between gap-3 py-3 px-1 hover:bg-[var(--surface-muted)] transition-colors"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-[var(--text-secondary)] tracking-wide">
-                      {s.label}
-                    </span>
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <span className={`w-2 h-2 rounded-full ${s.dot} shrink-0`} />
+                    <span className={`text-sm font-medium truncate ${s.tone}`}>{s.label}</span>
                   </div>
-                  <div className="mt-2 flex items-baseline justify-between">
-                    <span className="text-xl font-bold tracking-tight text-[var(--text-primary)] tabular-nums">
-                      {s.value}
-                    </span>
-                    <span className="text-[10px] text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity">
-                      Ver &rarr;
-                    </span>
-                  </div>
+                  <span className={`text-sm font-semibold tabular-nums ${s.tone}`}>{s.value}</span>
                 </Link>
               ))}
             </div>
           </div>
-
-          {/* Live Sector & Transport News Feed */}
-          <LatestNewsWidget />
-        </div>
+        </section>
       </div>
 
 
@@ -405,15 +376,15 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
       <div className="flex flex-col xl:flex-row gap-5">
         
         {/* Envios Recentes Table */}
-        <div className="flex-[2] bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs">
+        <div className="flex-[2] bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] p-5">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-sm font-bold text-[var(--text-primary)]">Envios Recentes</h2>
-              <p className="text-[11px] text-[var(--text-tertiary)]">Últimos transportes registados no sistema</p>
+              <h2 className="text-base font-semibold text-[var(--text-primary)]">Envios recentes</h2>
+              <p className="text-xs text-[var(--text-tertiary)] mt-1">Últimos transportes registados</p>
             </div>
             <Link 
               href="/ops/envios" 
-              className="text-xs font-semibold text-[var(--accent)] hover:text-[var(--accent-hover)] bg-[var(--accent-soft)] hover:bg-[rgba(18,138,71,0.15)] px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 border border-[rgba(18,138,71,0.08)]"
+              className="text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--surface-muted)] px-3 py-2 rounded-md transition-colors flex items-center gap-1.5 border border-[var(--border-subtle)]"
             >
               Ver todos ({totalShipments}) <ArrowRight className="w-3.5 h-3.5" />
             </Link>
@@ -603,19 +574,17 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
 
         {/* Right side - Rastreamento Widget */}
         <div className="flex-1 flex flex-col">
-          <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs flex-1 flex flex-col justify-between">
+          <div className="bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] p-5 flex-1 flex flex-col">
             <div>
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-md bg-[var(--status-info-soft)] flex items-center justify-center text-[var(--status-info)] shrink-0 border border-[rgba(37,99,235,0.1)]">
-                    <MapPin className="w-4 h-4" />
-                  </div>
+                  <MapPin className="w-4 h-4 text-[var(--text-tertiary)]" />
                   <div>
-                    <h3 className="font-bold text-[var(--text-primary)] text-sm">Último Rastreamento</h3>
-                    <p className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider font-semibold">Estado em tempo real</p>
+                    <h3 className="font-semibold text-[var(--text-primary)] text-base">Último rastreamento</h3>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-1">Estado mais recente</p>
                   </div>
                 </div>
-                <Link href="/ops/envios" className="text-xs font-semibold text-[var(--status-info)] hover:underline flex items-center gap-1">
+                <Link href="/ops/envios" className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center gap-1">
                   Ver envios <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>
@@ -721,7 +690,10 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
         
       </div>
 
-      {/* Floating Neumorphic Calculator Widget */}
+      <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-4 sm:px-5">
+        <LatestNewsWidget />
+      </section>
+
       <FloatingCalculatorWidget />
     </div>
   )

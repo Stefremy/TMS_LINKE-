@@ -323,19 +323,25 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
-      <div className="bg-[var(--surface-bg)] rounded-lg shadow-sm border border-[var(--border-subtle)] overflow-hidden flex flex-col">
+    <div className="mx-auto w-full max-w-[1440px] p-4 sm:p-6 lg:p-8 [--accent:#526B57] [--accent-hover:#435A48] [--accent-active:#3A4F3F] [--accent-soft:#E9EEE8] [--status-success:#526B57] [--status-success-soft:#E9EEE8] [--status-info:#596F7C] [--status-info-soft:#EBF0F2]">
+      <header className="mb-5">
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Novo envio</h1>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+          Registe uma expedição operacional {activeLinkeService ? `via ${carrierDisplayName}` : "multicarrier"}.
+        </p>
+      </header>
+      <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-muted)]">
+        <div className="px-5 sm:px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-bg)]">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-md bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] border border-[rgba(18,138,71,0.1)]">
+            <div className="w-9 h-9 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] border border-[rgba(82,107,87,0.16)]">
               <Package className="w-4.5 h-4.5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Criar Novo Envio</h2>
-              <p className="text-[11px] font-medium text-[var(--text-secondary)]">
-                Registar expedição operacional {activeLinkeService ? `via ${carrierDisplayName}` : "multicarrier"}
+              <h2 className="text-base font-semibold text-[var(--text-primary)] tracking-tight">Detalhes da expedição</h2>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Confirme os dados do remetente, destinatário e serviço antes de emitir.
               </p>
             </div>
           </div>
@@ -343,13 +349,13 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
         {/* Content */}
         <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-          <div className="p-6 overflow-y-auto flex-1 space-y-8">
+          <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-8">
             
             {success && shipmentResult && (
-              <div className="bg-white border border-slate-200 border-l-4 border-l-emerald-600 rounded-lg p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in">
+              <div className="bg-white border border-slate-200 border-l-4 border-l-[#718774] rounded-lg p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-3.5">
-                    <div className="w-9 h-9 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-md bg-[#526B57] text-white flex items-center justify-center shrink-0">
                       <Check className="w-5 h-5" />
                     </div>
                     <div>
@@ -397,7 +403,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       <button
                         type="button"
                         onClick={() => downloadCttLabel(shipmentResult.labelBase64!, `etiqueta_${shipmentResult.guia}.pdf`)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                        className="bg-[#128A47] hover:bg-[#0E6C37] text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">Descarregar Etiqueta CTT</span>
@@ -412,7 +418,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                   <button
                     type="button"
                     onClick={() => setSuccess(false)}
-                    className="text-emerald-700 hover:text-emerald-950 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
+                    className="text-[#526B57] hover:text-[#3A4F3F] text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
                   >
                     Fechar
                   </button>
@@ -430,21 +436,23 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 <p className="text-xs text-amber-700" role="status">{estimatedTier.error}</p>
               )}
               {/* Price Preview Banner */}
-              <div className="bg-[var(--accent-soft)] border border-[rgba(18,138,71,0.2)] rounded-lg p-3 flex items-center justify-between shadow-2xs">
-                <div className="flex items-center gap-2 text-[var(--accent)]">
-                  <Euro className="w-4 h-4" />
-                  <span className="text-[11px] font-bold uppercase tracking-wide">Preço estimado</span>
-                  <span className="text-[11px] font-medium opacity-80">({estimatedTier.label} · inclui combustível e extras)</span>
+              <div className="bg-[var(--accent-soft)] border border-[rgba(82,107,87,0.18)] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3 text-[var(--accent)]">
+                  <Euro className="w-5 h-5 mt-0.5" strokeWidth={1.75} />
+                  <div>
+                    <div className="text-sm font-semibold">Preço estimado</div>
+                    <div className="mt-0.5 text-xs text-[var(--text-secondary)]">{estimatedTier.label} · inclui combustível e extras</div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4 text-xs font-mono">
-                  <span className="text-[var(--text-secondary)] font-medium">Custo: <span className="font-bold text-[var(--text-primary)]">{estimatedTier.buy.toFixed(2)}€</span></span>
-                  <span className="text-[var(--accent)] font-extrabold text-sm">{estimatedTier.error ? "Indisponível" : `${estimatedTier.sell.toFixed(2)}€`}</span>
+                <div className="flex items-end sm:items-center justify-between sm:justify-end gap-4">
+                  <span className="text-xs text-[var(--text-secondary)]">Custo <span className="font-mono font-medium text-[var(--text-primary)]">{estimatedTier.buy.toFixed(2)} €</span></span>
+                  <span className="text-2xl font-semibold tracking-tight tabular-nums text-[var(--accent)]">{estimatedTier.error ? "Indisponível" : `${estimatedTier.sell.toFixed(2)} €`}</span>
                 </div>
               </div>
 
               {/* Cliente & Serviço */}
               <div>
-                <h3 className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wider mb-4 flex items-center gap-2">
+                <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                   <User className="w-4 h-4 text-[var(--accent)]" />
                   Detalhes da Expedição
                 </h3>
@@ -458,19 +466,33 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                     </select>
                     <input type="hidden" name="client_id" value={selectedClientId} />
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Serviço/Produto *</label>
-                    <select
-                      name="service_type"
-                      required
-                      value={selectedServiceId}
-                      onChange={e => setSelectedServiceId(e.target.value)}
-                      className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] font-medium focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors cursor-pointer shadow-2xs"
-                    >
-                      {availableServicos.map(s => (
-                        <option key={s.id} value={s.id}>[{s.category}] {getServiceDisplayLabel(s)}</option>
-                      ))}
-                    </select>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs font-medium text-[var(--text-secondary)]">Serviço / produto *</label>
+                    <div role="radiogroup" aria-label="Selecionar serviço" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                      {availableServicos.map((service) => {
+                        const selected = activeLinkeService?.id === service.id
+                        return (
+                          <label
+                            key={service.id}
+                            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${availableServicos.length === 1 ? "sm:col-span-2 xl:col-span-3" : ""} ${selected ? "border-[var(--accent)] bg-[var(--accent-soft)]/60 ring-1 ring-[var(--accent)]/20" : "border-[var(--border-subtle)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)]/50"}`}
+                          >
+                            <input
+                              type="radio"
+                              name="service_type"
+                              value={service.id}
+                              checked={selected}
+                              onChange={() => setSelectedServiceId(service.id)}
+                              required
+                              className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium text-[var(--text-primary)]">{getServiceDisplayLabel(service)}</span>
+                              <span className="mt-0.5 block text-xs text-[var(--text-secondary)]">{service.category}</span>
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-semibold text-[var(--text-secondary)] flex items-center gap-1.5">
@@ -535,11 +557,11 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Remetente */}
-                <div>
+                <div className="rounded-xl border border-[var(--border-subtle)] p-4 sm:p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-[var(--status-warning)]" />
                       Remetente
                     </h3>
@@ -547,7 +569,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       <button 
                         type="button" 
                         onClick={() => setIsEditingSender(!isEditingSender)} 
-                        className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-md transition-colors"
+                        className="text-[#526B57] hover:text-[#3A4F3F] bg-[#E9EEE8] hover:bg-[#DFE7DE] px-2 py-1 rounded-md transition-colors text-[10px] font-bold"
                       >
                         {isEditingSender ? "Cancelar" : "Editar"}
                       </button>
@@ -658,9 +680,9 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 </div>
 
                 {/* Destinatário */}
-                <div>
+                <div className="rounded-xl border border-[var(--border-subtle)] p-4 sm:p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-[var(--accent)]" />
                       Destinatário
                     </h3>
@@ -957,7 +979,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
             {specialServicesAvailable.length > 0 && (
               <div className="px-6 pb-6 pt-2">
-                <h3 className="text-[11px] font-bold text-[var(--text-primary)] uppercase tracking-wider mb-4 flex items-center gap-2">
+                <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
                   <Package className="w-4 h-4 text-[var(--accent)]" />
                   Opções Especiais de Entrega
                 </h3>
@@ -1001,7 +1023,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
             {/* Opção Exclusiva de Operações (Ops): Emissão de Guia no Moloni */}
             <div className="px-6 pb-2">
-              <div className={`p-4 rounded-xl border transition-all ${emitMoloniGt ? "bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-500/40 shadow-xs" : "bg-[var(--surface-muted)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]"}`}>
+              <div className={`p-4 rounded-xl border transition-all ${emitMoloniGt ? "bg-[#E9EEE8] dark:bg-[#29342B] border-[#AAB9A8] dark:border-[#526B57] shadow-xs" : "bg-[var(--surface-muted)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]"}`}>
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
@@ -1041,7 +1063,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
               <Button 
                 type="submit" 
                 disabled={loading}
-                className="shadow-xs text-[11px] h-auto px-5 py-2 font-bold flex items-center gap-2 bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] border-none"
+                className="shadow-xs text-[11px] h-auto px-5 py-2 font-bold flex items-center gap-2 bg-[var(--accent)] !bg-[#128A47] text-white hover:bg-[var(--accent-hover)] hover:!bg-[#0E6C37] border-none"
               >
                 {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                 Emitir Envio & Etiqueta

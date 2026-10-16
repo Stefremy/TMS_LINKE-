@@ -12,10 +12,10 @@ export function TrackingQuickBar() {
     <div className="flex items-center gap-1.5">
       <Link
         href="/ops/tracking"
-        className="flex items-center gap-2 px-3 py-1.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-semibold text-[var(--text-primary)] hover:text-blue-600 transition-colors cursor-pointer"
+        className="flex items-center gap-2 px-3 py-1.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-medium text-[var(--text-primary)] transition-colors cursor-pointer"
         title="Tracking e Mapa em Tempo Real"
       >
-        <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+        <MapPin className="w-3.5 h-3.5 text-[var(--text-tertiary)]" strokeWidth={1.75} />
         <span className="hidden sm:inline">Tracking & Mapa</span>
       </Link>
       <Link

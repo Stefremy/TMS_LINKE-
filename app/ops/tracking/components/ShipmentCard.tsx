@@ -50,32 +50,32 @@ export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardPro
     switch (shipment.status) {
       case "active":
         return {
-          bg: "bg-[var(--surface-bg)] text-emerald-600 border-[var(--border-strong)] font-bold shadow-2xs",
-          dot: "bg-emerald-500 animate-pulse",
+          bg: "bg-[var(--surface-bg)] text-[#315D82] border-[var(--border-strong)] font-bold shadow-2xs",
+          dot: "bg-[#315D82]",
           label: "Em Trânsito"
         }
       case "arriving":
         return {
-          bg: "bg-[var(--surface-bg)] text-indigo-600 border-[var(--border-strong)] font-bold shadow-2xs",
-          dot: "bg-indigo-500",
+          bg: "bg-[var(--surface-bg)] text-[#477D68] border-[var(--border-strong)] font-bold shadow-2xs",
+          dot: "bg-[#477D68]",
           label: "A Chegar"
         }
       case "departed":
         return {
-          bg: "bg-[var(--surface-bg)] text-sky-600 border-[var(--border-strong)] font-bold shadow-2xs",
-          dot: "bg-sky-500",
+          bg: "bg-[var(--surface-bg)] text-[#9A6B2E] border-[var(--border-strong)] font-bold shadow-2xs",
+          dot: "bg-[#9A6B2E]",
           label: "Partida Recente"
         }
       case "delivered":
         return {
-          bg: "bg-[var(--surface-bg)] text-emerald-600 border-[var(--border-strong)] font-bold shadow-2xs",
-          dot: "bg-emerald-500",
+          bg: "bg-[var(--surface-bg)] text-[#246B45] border-[var(--border-strong)] font-bold shadow-2xs",
+          dot: "bg-[#246B45]",
           label: "Entregue"
         }
       default:
         return {
-          bg: "bg-[var(--surface-bg)] text-emerald-600 border-[var(--border-strong)] font-bold shadow-2xs",
-          dot: "bg-emerald-500",
+          bg: "bg-[var(--surface-bg)] text-[#315D82] border-[var(--border-strong)] font-bold shadow-2xs",
+          dot: "bg-[#315D82]",
           label: shipment.statusLabel || "Em Rota"
         }
     }
@@ -88,8 +88,8 @@ export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardPro
       onClick={() => onSelect(shipment)}
       className={`cursor-pointer rounded-xl border transition-all duration-200 bg-[var(--surface-bg)] shadow-xs ${
         isSelected 
-          ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-md" 
-          : "border-[var(--border-subtle)] hover:border-emerald-300 dark:hover:border-emerald-800"
+          ? "border-[#315D82] ring-1 ring-[#315D82]/20 shadow-md"
+          : "border-[var(--border-subtle)] hover:border-[#315D82]/50"
       }`}
     >
       <div className="p-3.5 flex flex-col gap-2.5">
@@ -122,9 +122,9 @@ export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardPro
 
           <div className="flex-1 flex items-center justify-center px-2">
             <div className="w-full flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <div className="h-0.5 flex-1 border-t-2 border-dashed border-emerald-300 dark:border-emerald-700" />
-              <ArrowRight className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <div className="w-1.5 h-1.5 rounded-full bg-[#246B45]" />
+              <div className="h-0.5 flex-1 border-t-2 border-dashed border-[#315D82]/45" />
+              <ArrowRight className="w-3.5 h-3.5 text-[#315D82] shrink-0" />
             </div>
           </div>
 
@@ -139,7 +139,7 @@ export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardPro
         {/* ETA & Carrier */}
         <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] border-t border-[var(--border-subtle)] pt-2">
           <span className="flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-emerald-500" />
+            <Clock className="w-3.5 h-3.5 text-[#315D82]" />
             <span>ETA: <strong className="text-[var(--text-primary)]">{shipment.destination.eta}</strong></span>
           </span>
           <div className="flex items-center gap-2">
@@ -184,7 +184,7 @@ export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardPro
 
           <div className="text-[11px] pt-1 border-t border-[var(--border-subtle)]/60 flex flex-col gap-1">
             <div className="flex items-start gap-1 text-[var(--text-tertiary)]">
-              <MapPin className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
+              <MapPin className="w-3 h-3 text-[#246B45] mt-0.5 shrink-0" />
               <span className="text-[10px] leading-tight text-[var(--text-secondary)]">
                 <strong className="text-[var(--text-primary)]">De:</strong> {shipment.origin.address}
               </span>

@@ -39,7 +39,7 @@ type NavSection = {
 
 const navConfig: NavSection[] = [
   {
-    label: "OPERAÇÃO",
+    label: "Operação",
     items: [
       { title: "Visão geral", href: "/ops", icon: LayoutDashboard },
       { title: "Novo Envio", href: "/ops/envios/novo", icon: PackagePlus },
@@ -51,7 +51,7 @@ const navConfig: NavSection[] = [
     ]
   },
   {
-    label: "GESTÃO",
+    label: "Gestão",
     items: [
       { 
         title: "Entidades", 
@@ -92,7 +92,7 @@ const navConfig: NavSection[] = [
     ]
   },
   {
-    label: "SISTEMA",
+    label: "Sistema",
     items: [
       { title: "Relatórios", href: "/ops/relatorios", icon: BarChart3 },
       { 
@@ -181,7 +181,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                         href={item.href}
                         className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
                           isGroupActive
-                            ? "bg-[var(--accent-soft)] text-[var(--accent)] font-semibold"
+                            ? "bg-[var(--surface-muted)] text-[var(--text-primary)] font-semibold"
                             : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
                         }`}
                       >
@@ -208,7 +208,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                               href={sub.href!}
                               className={`block py-1.5 px-2 rounded-md text-[12px] transition-colors ${
                                 isSubActive
-                                  ? "text-[var(--accent)] font-bold bg-[var(--accent-soft)]/70"
+                                  ? "text-[var(--text-primary)] font-semibold bg-[var(--surface-muted)]"
                                   : "text-[var(--text-secondary)] font-medium hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
                               }`}
                             >
@@ -227,7 +227,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                       href={item.href}
                       className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
                         isActive
-                          ? "bg-[var(--accent-soft)] text-[var(--accent)] font-semibold"
+                          ? "bg-[var(--surface-muted)] text-[var(--text-primary)] font-semibold"
                           : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
                       }`}
                     >
@@ -255,7 +255,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
     <nav className="flex-1 px-4 space-y-6 overflow-y-auto mt-4 pb-8">
       {navConfig.map((section, idx) => (
         <div key={idx} className="flex flex-col">
-          <h4 className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-2 px-2">
+          <h4 className="text-[11px] font-medium text-[var(--text-tertiary)] mb-2 px-2">
             {section.label}
           </h4>
           <div className="flex flex-col space-y-0.5">
@@ -320,7 +320,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                               href={sub.href!}
                               className={`block py-1.5 px-2 rounded-md text-[12px] transition-colors ${
                                 isSubActive
-                                  ? "text-[var(--accent)] font-bold bg-[var(--accent-soft)]/70"
+                                  ? "text-[var(--text-primary)] font-semibold bg-[var(--surface-muted)]"
                                   : "text-[var(--text-secondary)] font-medium hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
                               }`}
                             >

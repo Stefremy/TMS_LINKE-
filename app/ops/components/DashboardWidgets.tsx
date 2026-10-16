@@ -22,6 +22,8 @@ interface StockQuote {
 
 interface DashboardWidgetsProps {
   linkeMetrics?: LinkeMetrics
+  showClock?: boolean
+  showLinkeMetrics?: boolean
 }
 
 const DEFAULT_SYMBOLS = [
@@ -36,7 +38,7 @@ const DEFAULT_SYMBOLS = [
   "CTT.LS",
 ]
 
-export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
+export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetrics = true }: DashboardWidgetsProps) {
   const [mounted, setMounted] = useState(false)
   const [time, setTime] = useState<Date | null>(null)
   const [quotes, setQuotes] = useState<StockQuote[]>([])
@@ -150,14 +152,15 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
 
   const renderTickerItems = (keyPrefix: string) => (
     <div key={keyPrefix} className="flex items-center gap-5 shrink-0">
-      {/* LED Live Badge */}
-      <span className="flex items-center gap-1.5 text-[9px] font-mono font-bold tracking-widest uppercase text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded shadow-[0_0_8px_rgba(16,185,129,0.3)]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#00FF66] shadow-[0_0_6px_#00FF66] animate-pulse" />
-        LIVE LED
-      </span>
+      {showLinkeMetrics && (
+        <span className="flex items-center gap-1.5 text-[9px] font-medium tracking-wide text-[var(--text-tertiary)] border-r border-[var(--border-subtle)] pr-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--status-success)]" />
+          Mercado
+        </span>
+      )}
 
       {/* Real Linke Revenue LED Comparison */}
-      <div 
+      {showLinkeMetrics && <div
         title={`Receita Período: €${(linkeMetrics?.revenue || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2 })} | Anterior: €${(linkeMetrics?.prevRevenue || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2 })} | Lucro: €${(linkeMetrics?.profit || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2 })}`}
         className="flex items-center gap-1.5 font-mono text-xs px-2 py-0.5 rounded bg-black/60 border border-emerald-500/30 text-emerald-400 cursor-help transition-all hover:border-emerald-400 shadow-[0_0_8px_rgba(0,255,102,0.15)]"
       >
@@ -169,9 +172,9 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
           {isLinkePositive ? "▲ +" : "▼ "}
           {Math.abs(linkeGrowth)}%
         </span>
-      </div>
+      </div>}
 
-      <span className="text-neutral-700 font-mono select-none">|</span>
+      {showLinkeMetrics && <span className="text-[var(--border-strong)] font-mono select-none">|</span>}
 
       {/* Official Stock Quotes with glowing LED styling */}
       {quotes.map((q) => {
@@ -183,16 +186,16 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
 
         return (
           <div key={q.symbol} className="flex items-center gap-1.5 font-mono text-xs">
-            <span className="font-bold text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.5)]">
+          <span className="font-semibold text-[var(--text-primary)]">
               {q.label}
             </span>
             <span className="text-neutral-300 font-medium">
               {currSymbol}{formattedPrice}
             </span>
-            <span className={`font-bold flex items-center text-[11px] ${
+            <span className={`font-medium flex items-center text-[11px] ${
               isPositive 
-                ? "text-[#00FF66] drop-shadow-[0_0_6px_rgba(0,255,102,0.7)]" 
-                : "text-[#FF3838] drop-shadow-[0_0_6px_rgba(255,56,56,0.7)]"
+                ? "text-[var(--status-success)]"
+                : "text-[var(--status-danger)]"
             }`}>
               {isPositive ? "▲" : "▼"}{isPositive ? "+" : ""}{q.changePercent.toFixed(2)}%
             </span>
@@ -209,9 +212,9 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
     : "12:00:00"
 
   return (
-    <div className="flex items-center gap-3 relative">
+    <div className="flex items-center gap-3 relative w-full min-w-0">
       {/* Figma 'Clock Stef' (Meridian) Trigger */}
-      <div 
+      {showClock && <div
         onClick={() => setShowClockModal(true)}
         title="Abrir Relógio Meridian (Clock Stef)"
         className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full bg-white dark:bg-[#111318] border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all cursor-pointer group"
@@ -225,17 +228,13 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
             MERIDIAN
           </span>
         </div>
-      </div>
+      </div>}
 
       {/* Digital LED Stock Ticker Bar (Smoother, Slower Scrolling, LED Matrix Style) */}
-      <div className="group relative hidden sm:flex items-center bg-[#07080a] dark:bg-[#030405] border border-neutral-800 rounded-lg pl-3 pr-2 py-1.5 shadow-[inset_0_2px_6px_rgba(0,0,0,0.9),0_1px_2px_rgba(255,255,255,0.05)] max-w-[800px] w-full overflow-hidden">
+      <div className="group relative flex items-center bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-lg pl-3 pr-2 py-2 max-w-full w-full overflow-hidden">
         {/* Subtle LED dot pattern overlay */}
         <div 
-          className="absolute inset-0 pointer-events-none opacity-20"
-          style={{
-            backgroundImage: "radial-gradient(rgba(255,255,255,0.3) 1px, transparent 1px)",
-            backgroundSize: "3px 3px"
-          }}
+          className="absolute inset-0 pointer-events-none"
         />
 
         {/* Marquee area with slightly slower, comfortable speed (38s) and seamless loop */}
@@ -254,7 +253,7 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
         <button
           onClick={() => setShowSettings(!showSettings)}
           title="Personalizar ações no ticker LED"
-          className="ml-2.5 p-1 text-neutral-400 hover:text-emerald-400 rounded hover:bg-neutral-800/80 transition-colors shrink-0 relative z-10"
+          className="ml-2.5 p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--surface-muted)] transition-colors shrink-0 relative z-10"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>
@@ -279,7 +278,7 @@ export function DashboardWidgets({ linkeMetrics }: DashboardWidgetsProps) {
       {showSettings && (
         <div 
           ref={popoverRef}
-          className="absolute top-12 left-12 z-50 w-72 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl shadow-xl p-4 text-xs flex flex-col gap-3 backdrop-blur-md"
+          className="absolute top-12 right-0 z-50 w-72 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-lg shadow-lg p-4 text-xs flex flex-col gap-3"
         >
           <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
             <span className="font-bold text-[var(--text-primary)] flex items-center gap-1.5">

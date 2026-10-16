@@ -117,8 +117,7 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-xl text-xs shadow-xs">
         <div className="flex items-center gap-2">
           <span className="flex h-2 w-2 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#477D68]"></span>
           </span>
           <span className="font-bold text-[var(--text-primary)]">Posto de Controlo de Rastreio por Pickagens & Checkpoints</span>
           <span className="text-[var(--text-tertiary)]">•</span>
@@ -128,7 +127,7 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
         </div>
 
         <div className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] px-3 py-1 rounded-full border border-[var(--border-strong)] shadow-2xs">
-          <Info className="w-3.5 h-3.5 text-emerald-600" />
+          <Info className="w-3.5 h-3.5 text-[#477D68]" />
           <span>Mapeamento por Pickagens Ativo</span>
         </div>
       </div>
@@ -148,7 +147,7 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Pesquisar guia, cidade, matrícula..."
-                className="w-full pl-9 pr-8 py-2 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-muted)] text-xs text-[var(--text-primary)] placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                className="w-full pl-9 pr-8 py-2 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-muted)] text-xs text-[var(--text-primary)] placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#477D68]/20 focus:border-[#477D68] transition-all"
               />
               {searchQuery && (
                 <button
@@ -168,7 +167,7 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
                 onClick={() => setStatusFilter("all")}
                 className={`py-1.5 px-1 rounded-md text-[11px] transition-all flex items-center justify-center gap-1 ${
                   statusFilter === "all"
-                    ? "bg-[var(--surface-bg)] text-emerald-600 dark:text-emerald-400 shadow-xs"
+                    ? "bg-[var(--surface-bg)] text-[#477D68] shadow-xs"
                     : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                 }`}
               >
@@ -181,7 +180,7 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
                 onClick={() => setStatusFilter("active")}
                 className={`py-1.5 px-1 rounded-md text-[11px] transition-all flex items-center justify-center gap-1 ${
                   statusFilter === "active"
-                    ? "bg-[var(--surface-bg)] text-emerald-600 dark:text-emerald-400 shadow-xs font-bold"
+                    ? "bg-[var(--surface-bg)] text-[#477D68] shadow-xs font-bold"
                     : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                 }`}
               >
@@ -194,7 +193,7 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
                 onClick={() => setStatusFilter("arriving")}
                 className={`py-1.5 px-1 rounded-md text-[11px] transition-all flex items-center justify-center gap-1 ${
                   statusFilter === "arriving"
-                    ? "bg-[var(--surface-bg)] text-emerald-600 dark:text-emerald-400 shadow-xs font-bold"
+                    ? "bg-[var(--surface-bg)] text-[#477D68] shadow-xs font-bold"
                     : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                 }`}
               >
@@ -207,7 +206,7 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
                 onClick={() => setStatusFilter("departed")}
                 className={`py-1.5 px-1 rounded-md text-[11px] transition-all flex items-center justify-center gap-1 ${
                   statusFilter === "departed"
-                    ? "bg-[var(--surface-bg)] text-emerald-600 dark:text-emerald-400 shadow-xs font-bold"
+                    ? "bg-[var(--surface-bg)] text-[#477D68] shadow-xs font-bold"
                     : "text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                 }`}
               >
