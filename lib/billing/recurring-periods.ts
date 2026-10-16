@@ -13,6 +13,7 @@ export interface RecurringClient {
   nif?: string
   address?: string
   city?: string
+  postal_code?: string
   created_at?: string
   recurring_since?: string
   is_active?: boolean

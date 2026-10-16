@@ -4,7 +4,7 @@ import { runRecurringStatements } from '@/lib/billing/recurring-statements'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-/** Scheduled internal statements only. Never emits a Moloni document. */
+/** Scheduled closed-period Moloni invoices, followed by invoice and statement email delivery. */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET
   if (!secret) return NextResponse.json({ error: 'CRON_SECRET is not configured' }, { status: 503 })

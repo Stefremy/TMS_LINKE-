@@ -10,6 +10,7 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
   const db = fakeSupabase({audit_log: [...(connected ? [connection()] : []), ...existing], shipments:[
     {id:SHIPMENT,client_id:CLIENT,tenant_id:TENANT,sell_price:3.91,service_type:'Nacional'}
   ]}, q=>failArchive&&q.write?.kind==='insert'&&q.write.value.action==='billing_statement'?{message:'unavailable'}:null)
+  db.client.rpc = async (name) => { assert.equal(name, 'claim_billing_shipments'); return { data: null, error: null } }
   let issued = 0
   const load = createLoader({
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
@@ -196,4 +197,13 @@ test('Official PDF recovery uses the saved tenant connection when no deployment 
   const result=await load('app/api/statements/[id]/moloni-pdf/route.ts').GET({}, {params:Promise.resolve({id:'stmt'})})
   assert.equal(result.status,200);assert.equal(config.refreshToken,'saved-refresh')
   assert.ok(db.queries[0].filters.some(f=>f.field==='tenant_id'&&f.value===TENANT))
+})
+
+test('direct invoice actions reload the client and prices from server-owned records', async()=>{
+ const h=invoiceHarness()
+ const result=await h.load('app/actions/moloni.ts').internalEmitInvoice({id:CLIENT,tenant_id:'forged',nif:'forged'},[{id:SHIPMENT,sell_price:0.01}])
+ assert.equal(result.success,true)
+ const saved=h.db.writes.find(w=>w.kind==='insert'&&w.value.action==='billing_statement').value
+ assert.equal(saved.tenant_id,TENANT);assert.equal(saved.details.total_value,3.91)
+ assert.ok(h.db.queries.some(q=>q.table==='shipments'&&q.filters.some(f=>f.field==='tenant_id'&&f.value===TENANT)&&q.filters.some(f=>f.field==='client_id'&&f.value===CLIENT)))
 })

@@ -835,7 +835,7 @@ export default function ContasCorrenteClient({
                                 ) : (stmt.moloni_document_pdf || stmt.moloni_document_id) ? (
                                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(217,119,6,0.2)] text-[10px] font-bold uppercase tracking-wider">
                                     <AlertCircle className="w-3 h-3" />
-                                    Pendente
+                                    Fatura emitida · Por pagar
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] text-[10px] font-bold uppercase tracking-wider">

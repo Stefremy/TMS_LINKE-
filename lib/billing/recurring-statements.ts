@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/server'
+import { ensureRecurringInvoice, recurringInvoiceAttachment } from '@/lib/billing/recurring-invoices'
 import { sendEmail } from '@/lib/email/resend'
 import { generateStatementPdfBuffer } from '@/lib/services/billing/statement-pdf'
 import {
@@ -23,6 +24,9 @@ export interface PeriodStatement {
   shipments: PeriodShipment[]
   created_at: string
   client_snapshot: { name: string; nif?: string; address?: string; city?: string }
+  invoice_status?: string
+  invoice_statement_id?: string
+  invoice_error?: string
   email_status: string
   email_sent_at?: string | null
   email_error?: string | null
@@ -133,7 +137,7 @@ export async function recurringPreview(tenantId: string, asOf = lisbonDate(), db
 export async function loadPeriodStatements(tenantId: string, clientId?: string, db = createAdminClient()): Promise<PeriodStatement[]> {
   const rows = await tenantRows<AuditRow>(db, 'audit_log', 'id,details,created_at', tenantId, ['period_statement'])
   return rows.filter(row => !clientId || row.details.client_id === clientId)
-    .map(row => ({ ...row.details, id: row.id, document_type: 'period_statement', created_at: row.details.created_at || row.created_at }) as PeriodStatement)
+    .map(row => ({ ...row.details, id: row.id, document_type: 'period_statement', invoice_status: row.details.invoice_status || 'pending', created_at: row.details.created_at || row.created_at }) as PeriodStatement)
 }
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
@@ -157,6 +161,7 @@ export async function statementEmail(statement: PeriodStatement, recipient: stri
 
 export async function deliverPeriodStatement(tenantId: string, id: string, client: RecurringClient, db = createAdminClient()) {
   if (!eligibleRecurringClient(client)) return { status: 'skipped' }
+  if (!await ensureRecurringInvoice(tenantId, id, client, db)) return { status: 'failed' }
   const { data, error } = await db.rpc('claim_recurring_statement_email', { p_tenant: tenantId, p_id: id })
   if (error) throw new Error('Não foi possível reservar o envio do extrato.')
   if (!data) return { status: 'skipped' }
@@ -177,9 +182,13 @@ export async function deliverPeriodStatement(tenantId: string, id: string, clien
       const { data: record, error: readError } = await db.from('audit_log').select('details')
         .eq('tenant_id', tenantId).eq('action', 'period_statement').eq('id', cycle.statement_id).eq('details->>client_id', client.id).single()
       if (readError || !record?.details) throw new Error('Extrato não encontrado.')
+      const invoice = await recurringInvoiceAttachment(tenantId, id, db)
       payload = await statementEmail(record.details as PeriodStatement, recipient)
+      payload.attachments.unshift({ filename: invoice.filename, content: invoice.content })
+      payload.subject = `Linke | Fatura ${invoice.number} e extrato · ${periodLabel(record.details.period_start, record.details.period_end)}`
+      payload.html = payload.html.replace('Segue em anexo o extrato', `Seguem em anexo a fatura ${escapeHtml(invoice.number)} e o extrato`)
     } catch {
-      return finish('failed', null, 'Não foi possível preparar o PDF do extrato.')
+      return finish('failed', null, 'Não foi possível obter os dois PDFs. A fatura emitida não será repetida; o email fica pendente.')
     }
   }
   // A stored payload, recipient and idempotency key are never changed after an attempt.

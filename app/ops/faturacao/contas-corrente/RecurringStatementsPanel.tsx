@@ -28,13 +28,13 @@ export function RecurringStatementsPanel({ initialPreview, canManage }: { initia
     <button type="button" aria-expanded={open} aria-controls="recurring-statements-settings" onClick={() => setOpen(!open)}
       className="w-full flex items-center gap-3 p-4 text-left rounded-xl hover:bg-[var(--surface-muted)] transition-colors">
       <span className="p-2 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]"><CalendarClock className="w-5 h-5" /></span>
-      <span className="flex-1 min-w-0"><span className="block text-sm font-bold text-[var(--text-primary)]">Extratos automáticos por período</span>
+      <span className="flex-1 min-w-0"><span className="block text-sm font-bold text-[var(--text-primary)]">Faturação automática por período</span>
         <span className="block text-xs text-[var(--text-secondary)] mt-0.5">Conta Corrente · {preview.enabled ? 'Ativos' : 'Por ativar'} · {preview.clients.length} clientes</span></span>
       <ChevronDown className={`w-4 h-4 text-[var(--text-secondary)] transition-transform motion-reduce:transition-none ${open ? '' : '-rotate-90'}`} />
     </button>
     <AnimatedDisclosure open={open} id="recurring-statements-settings">
       <div className="border-t border-[var(--border-subtle)] p-4 sm:p-5 space-y-4">
-        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">Cada cliente recebe os envios do seu período num PDF. Os ciclos começam na data de ativação; os envios anteriores continuam na faturação manual. Os extratos não emitem faturas Moloni nem alteram o saldo.</p>
+        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">No fecho de cada período, é emitida a fatura Moloni e enviada por email com o extrato detalhado. A fatura fica pendente de pagamento, com a opção Emitir Recibo. Os envios anteriores à ativação continuam na faturação manual.</p>
         {!preview.ready && <p role="alert" className="text-sm text-[var(--status-warning)]">{preview.error}</p>}
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-xs font-semibold text-[var(--text-secondary)]">Simular fecho em
@@ -61,7 +61,7 @@ export function RecurringStatementsPanel({ initialPreview, canManage }: { initia
                 const result = await configureRecurringStatementsAction(!preview.enabled, preview.anchorDate)
                 if (!result.success) throw new Error(result.error)
                 setPreview(await previewRecurringStatementsAction(date))
-                setFeedback(preview.enabled ? 'Envios automáticos suspensos.' : 'Automação ativada. Os primeiros extratos serão enviados após o fecho de cada período.')
+                setFeedback(preview.enabled ? 'Envios automáticos suspensos.' : 'Automação ativada. As primeiras faturas e extratos serão enviados após o fecho de cada período.')
                 router.refresh()
               })} className="px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-xs font-bold disabled:opacity-50">
               {busy === 'configure' ? 'A guardar...' : preview.enabled ? 'Suspender envios automáticos' : 'Ativar ciclos a partir de hoje'}
@@ -79,7 +79,7 @@ export function RecurringStatementsPanel({ initialPreview, canManage }: { initia
               setFeedback('message' in result ? result.message : 'Email de teste aceite.')
             })} className="inline-flex items-center gap-2 border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-xs font-semibold text-[var(--text-primary)] disabled:opacity-50"><Mail className="w-3.5 h-3.5" />{busy === 'test' ? 'A enviar...' : 'Enviar teste com PDF'}</button>
           </div>
-          <p className="text-[11px] text-[var(--text-tertiary)]">O teste contém dados fictícios e é enviado apenas para o endereço indicado.</p>
+          <p className="text-[11px] text-[var(--text-tertiary)]">O teste contém dados fictícios, testa apenas a entrega do extrato e não emite faturas fiscais. É enviado apenas para o endereço indicado.</p>
         </div>}
         {feedback && <p role={error ? 'alert' : 'status'} className={`text-xs ${error ? 'text-[var(--status-warning)]' : 'text-[var(--accent)]'}`}>{feedback}</p>}
       </div>

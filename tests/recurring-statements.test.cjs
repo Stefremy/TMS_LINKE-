@@ -64,7 +64,7 @@ test('delivery hours use Lisbon time in summer and winter', () => {
   assert.equal(logic.isBillingDeliveryHour(new Date('2026-07-16T18:00:00Z')), false)
 })
 
-function harness({ failure = false, alreadySent = false, persistedPayload = null, leased = false, clients = [client] } = {}) {
+function harness({ invoiceReady = true, invoicePdfFailure = false, failure = false, alreadySent = false, persistedPayload = null, leased = false, clients = [client] } = {}) {
   const cycle = { id: 'cycle-id', client_id: CLIENT, statement_id: 'period-id', period_end: '2026-10-23', delivery_status: alreadySent ? 'sent' : 'pending', email_payload: persistedPayload, lease_token: 'lease-token' }
   const db = fakeSupabase({ audit_log: [
     ...clients.map(c => ({ id: `profile-${c.id}`, tenant_id: TENANT, action: 'client_data', details: c, created_at: '2026-10-01' })),
@@ -85,6 +85,7 @@ function harness({ failure = false, alreadySent = false, persistedPayload = null
     throw new Error(`Unexpected RPC ${name}`)
   } }
   const load = createLoader({
+    '@/lib/billing/recurring-invoices': { ensureRecurringInvoice: async () => invoiceReady, recurringInvoiceAttachment: async () => { if (invoicePdfFailure) throw Error('PDF unavailable'); return { number: 'FT 2026/123', filename: 'Fatura.pdf', content: 'JVBERi0=' } } },
     '@/lib/supabase/server': { createAdminClient: () => api },
     '@/lib/email/resend': { sendEmail: async payload => { emails.push(payload); return failure ? { success: false, error: 'offline' } : { success: true, data: { id: 'provider-123' } } } },
     '@/lib/services/billing/statement-pdf': { generateStatementPdfBuffer: async () => { pdfCalls++; return Buffer.from('mock-pdf') } },
@@ -95,6 +96,9 @@ test('a successful delivery persists the payload before sending, records acknowl
   const h = harness()
   assert.equal((await h.deliverPeriodStatement(TENANT, 'cycle-id', client)).status, 'sent')
   assert.equal(h.emails.length, 1)
+  assert.equal(h.emails[0].attachments.length, 2)
+  assert.equal(h.emails[0].attachments[0].filename, 'Fatura.pdf')
+  assert.match(h.emails[0].subject, /FT 2026\/123/)
   assert.equal(h.emails[0].idempotencyKey, `period-statement/${TENANT}/cycle-id`)
   assert.equal(h.rpcs[1].name, 'prepare_recurring_statement_email')
   assert.equal(h.rpcs.at(-1).args.p_status, 'sent')
@@ -196,7 +200,7 @@ test('closed empty periods advance the cursor without sending or creating accoun
     assert.equal(name, 'reserve_recurring_statement')
     periods.push([args.p_start, args.p_end]); return { data: { empty: true }, error: null }
   } }
-  const load = createLoader({ '@/lib/supabase/server': { createAdminClient: () => api },
+  const load = createLoader({ '@/lib/billing/recurring-invoices': {}, '@/lib/supabase/server': { createAdminClient: () => api },
     '@/lib/email/resend': { sendEmail: () => { throw Error('Empty periods must not email') } },
     '@/lib/services/billing/statement-pdf': {} })
   const { runRecurringStatements } = load('lib/billing/recurring-statements.ts')
@@ -219,4 +223,14 @@ test('recurring server actions reject unauthorized access before reading or writ
     await assert.rejects(actions[name](...args), /Forbidden/)
   }
   assert.equal(touched, false)
+})
+
+test('no email is sent before fiscal confirmation or when the official invoice PDF is unavailable', async () => {
+  const pending = harness({ invoiceReady: false })
+  assert.equal((await pending.deliverPeriodStatement(TENANT, 'cycle-id', client)).status, 'failed')
+  assert.equal(pending.emails.length, 0); assert.equal(pending.rpcs.length, 0)
+  const missingPdf = harness({ invoicePdfFailure: true })
+  assert.equal((await missingPdf.deliverPeriodStatement(TENANT, 'cycle-id', client)).status, 'failed')
+  assert.equal(missingPdf.emails.length, 0)
+  assert.match(missingPdf.rpcs.at(-1).args.p_error, /dois PDFs/)
 })

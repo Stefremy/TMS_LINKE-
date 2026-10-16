@@ -1,5 +1,6 @@
 export class MoloniClient {
   private companyId: string;
+  private tenantId?: string;
   private developerId: string;
   private clientId: string;
   private clientSecret: string;
@@ -13,7 +14,8 @@ export class MoloniClient {
   // This could be fetched from DB or ENV, for now ENV
   private refreshTokenVal: string;
 
-  constructor(config?: { companyId?: string; refreshToken?: string }) {
+  constructor(config?: { companyId?: string; refreshToken?: string; tenantId?: string }) {
+    this.tenantId = config?.tenantId;
     this.companyId = config?.companyId || process.env.MOLONI_COMPANY_ID || "";
     this.developerId = process.env.MOLONI_DEVELOPER_ID || process.env.MOLONI_CLIENT_ID || "518600300";
     this.clientId = process.env.MOLONI_CLIENT_ID || "518600300";
@@ -101,7 +103,7 @@ export class MoloniClient {
   private async getAccessToken(): Promise<string> {
     const { createAdminClient } = await import("@/lib/supabase/server");
     const { getTenantId } = await import("@/lib/auth/context");
-    const tenantId = await getTenantId();
+    const tenantId = this.tenantId || await getTenantId();
     const supabase = createAdminClient();
     // Vercel environment variables are deployment snapshots. A rotated token
     // must be read from durable storage before consulting that initial value.
@@ -489,16 +491,8 @@ export class MoloniClient {
       products: formattedProducts,
     };
 
-    let result;
-    try {
-      result = await this.request("invoices/insert", payload);
-    } catch (err1: any) {
-      console.warn("Could not insert status 1 invoice, falling back to status 0:", err1?.message);
-      payload.status = 0;
-      result = await this.request("invoices/insert", payload);
-    }
-
-    return result;
+    // A failed response may follow a successful fiscal insert. Never insert again as a draft.
+    return this.request("invoices/insert", payload);
   }
 
   /**

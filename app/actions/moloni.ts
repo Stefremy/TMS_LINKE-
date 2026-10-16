@@ -11,13 +11,29 @@ import { moloniRedirectUri } from "@/lib/config/public-origins"
 
 const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 
+async function claimManualInvoiceShipments(clientId: string, shipmentIds: string[]) {
+  const ctx = await requireEmployee()
+  const { error } = await createAdminClient().rpc('claim_billing_shipments', {
+    p_tenant: ctx.tenant_id, p_client: clientId, p_emission: crypto.randomUUID(), p_shipments: shipmentIds,
+  })
+  if (error) throw new Error('Estes envios já estão faturados ou têm uma emissão em curso/por confirmar. Não repita a emissão.')
+}
+
 /**
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
 export async function internalEmitInvoice(client: any, shipments: any[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false) {
+  const ctx = await requireEmployee()
   const supabase = createAdminClient()
-  if (!client) throw new Error("Cliente não encontrado.")
-  if (!shipments || shipments.length === 0) throw new Error("Envios não encontrados.")
+  if (!client?.id || !shipments?.length) throw new Error("Cliente ou envios não encontrados.")
+  const persistedClient = (await getClientesAction(client.id)).find((c: any) => c.id === client.id)
+  if (!persistedClient) throw new Error("Cliente não encontrado nesta empresa.")
+  client = { ...persistedClient, tenant_id: ctx.tenant_id }
+  const selectedIds = [...new Set(shipments.map((s: any) => s.id))]
+  const { data: authoritativeShipments, error: shipmentError } = await supabase.from('shipments').select('*')
+    .eq('tenant_id', ctx.tenant_id).eq('client_id', client.id).in('id', selectedIds)
+  if (shipmentError || authoritativeShipments?.length !== selectedIds.length) throw new Error("Envios não encontrados neste cliente.")
+  shipments = authoritativeShipments
 
   
 
@@ -208,6 +224,8 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
         const dateNow = new Date().toISOString().split("T")[0]
         const paymentDays = typeof billingConfig.defaultPaymentDays === "number" ? billingConfig.defaultPaymentDays : 30
         const expirationDate = new Date(Date.now() + paymentDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+
+        if (!isProForma) await claimManualInvoiceShipments(client.id, shipments.map((s: any) => s.id))
 
         // D. Emitir Fatura ou Fatura Pró-Forma
         let invoiceRes;
@@ -742,6 +760,8 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     const dateNow = new Date().toISOString().split("T")[0]
     const paymentDays = typeof billingConfig.defaultPaymentDays === "number" ? billingConfig.defaultPaymentDays : 30
     const expirationDate = new Date(Date.now() + paymentDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+
+    if (!isProForma) await claimManualInvoiceShipments(stmt.client_id, stmt.shipment_ids || stmt.shipments?.map((s: any) => s.id) || [])
 
     // 7. Criar fatura/pro-forma no Moloni
     let invoiceRes
@@ -1362,13 +1382,22 @@ export async function emitMoloniReceiptForStatementAction(
 
     const dateNow = opts?.date || new Date().toISOString().split("T")[0]
 
+    let receiptValue = Number(stmt.total_value || 0)
+    if (stmt.period_statement_id) {
+      const fiscalDocument = await moloni.request('documents/getOne', { document_id: Number(stmt.moloni_document_id) })
+      const { automaticInvoicePayment } = await import('@/lib/billing/recurring-invoices')
+      const payment = automaticInvoicePayment(fiscalDocument, Number(stmt.moloni_document_id))
+      receiptValue = payment.value
+      moloniCustomerId = payment.customerId
+    }
+
     // Criar o recibo
     const receiptRes = await moloni.createReceipt({
       customerId: moloniCustomerId,
       date: dateNow,
       documentSetId: documentSetId,
       invoiceId: stmt.moloni_document_id,
-      value: Number(stmt.total_value || 0),
+      value: receiptValue,
       paymentMethodId: opts?.paymentMethodId,
       notes: opts?.notes,
     })

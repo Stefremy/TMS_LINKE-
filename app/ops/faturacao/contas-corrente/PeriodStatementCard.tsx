@@ -21,20 +21,21 @@ export function PeriodStatementCard({ statement, invoicedIds, onSelect }: {
       <span className="flex-1 min-w-0"><span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-secondary)] block">Extrato do período</span>
         <span className="text-xs font-bold text-[var(--text-primary)] block mt-1">{periodLabel(statement.period_start, statement.period_end)}</span>
         <span className="text-[11px] text-[var(--text-secondary)] block mt-1">{statement.shipments_count} envios · {statement.total_value.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</span>
-        <span className="text-[10px] text-[var(--text-tertiary)] block mt-1">{emailLabels[statement.email_status] || 'Email pendente'} · {fullyInvoiced ? 'Envios faturados' : 'Faturação manual disponível'}</span>
+        <span className="text-[10px] text-[var(--text-tertiary)] block mt-1">{emailLabels[statement.email_status] || 'Email pendente'} · {fullyInvoiced || statement.invoice_status === 'issued' ? 'Fatura emitida' : statement.invoice_status === 'review_required' ? 'Emissão por confirmar' : statement.invoice_status === 'blocked' ? 'Emissão bloqueada' : 'Emissão automática pendente'}</span>
       </span><ChevronDown className={`w-4 h-4 shrink-0 text-[var(--text-secondary)] transition-transform motion-reduce:transition-none ${open ? '' : '-rotate-90'}`} />
     </button>
     <AnimatedDisclosure open={open} id={`period-${statement.id}`}>
       <div className="px-4 pb-4 space-y-3">
         <div className="flex flex-wrap gap-2">
           <a href={`/api/period-statements/${encodeURIComponent(statement.id)}/pdf`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--accent)] border border-[var(--border-subtle)] rounded-lg px-3 py-2"><FileText className="w-3.5 h-3.5" />Ver Extrato TMS Interno</a>
-          {!fullyInvoiced && <button type="button" disabled={selecting} onClick={async () => {
+          {!fullyInvoiced && !statement.invoice_status && <button type="button" disabled={selecting} onClick={async () => {
             if (selecting) return
             setSelecting(true); setError('')
             try { await onSelect(statement) } catch { setError('Não foi possível selecionar os envios deste período.') } finally { setSelecting(false) }
           }} className="text-xs font-semibold rounded-lg border border-[var(--border-subtle)] px-3 py-2 text-[var(--text-primary)] disabled:opacity-50">{selecting ? 'A selecionar...' : 'Selecionar envios para faturar'}</button>}
         </div>
         {error && <p role="alert" className="text-xs text-[var(--status-warning)]">{error}</p>}
+        {statement.invoice_error && <p role="alert" className="text-xs text-[var(--status-warning)]">{statement.invoice_error}</p>}
         {statement.email_error && <p className="text-xs text-[var(--status-warning)]">{statement.email_error}</p>}
         <ul className="divide-y divide-[var(--border-subtle)] border-t border-[var(--border-subtle)]">
           {statement.shipments.map(shipment => <li key={shipment.id} className="py-2 flex flex-wrap gap-2 justify-between text-[11px] text-[var(--text-secondary)]">
