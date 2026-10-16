@@ -7,6 +7,7 @@ import { Building, FolderOpen, FileText, ChevronDown, ChevronRight, Euro, Cloud,
 import { groupInvoiceArchive, isInvoicePaid } from "@/lib/billing/invoice-archive"
 import { InvoiceIssueButton } from "./InvoiceIssueButton"
 import { AnimatedDisclosure } from "./AnimatedDisclosure"
+import { StoreAvatar } from "./StoreAvatar"
 import { MoloniConnectModal } from "./MoloniConnectModal"
 
 export default function ContasCorrenteClient({ 
@@ -421,9 +422,7 @@ export default function ContasCorrenteClient({
                     onClick={() => setExpandedClient(isExpanded ? null : client.id)}
                   >
                     <div className="tms-billing-client flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-[var(--surface-muted)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0 text-[var(--text-secondary)] group-hover:text-[var(--accent)] group-hover:border-[rgba(18,138,71,0.2)] transition-colors">
-                        <Building className="w-4 h-4" />
-                      </div>
+                      <StoreAvatar name={client.short_name || client.legal_name || "Loja"} logoUrl={client.logo_url} color={client.color} />
                       <div>
                         <p className="font-bold break-words text-[var(--text-primary)] text-sm group-hover:text-[var(--accent)] transition-colors">
                           {client.legal_name || client.short_name}
@@ -748,9 +747,7 @@ export default function ContasCorrenteClient({
                         return next
                       }) }}>
                       <span className="flex items-center gap-3 min-w-0">
-                        <span className="w-10 h-10 shrink-0 rounded-xl bg-[var(--surface-bg)] border border-[var(--accent)]/20 flex items-center justify-center">
-                          <Building className="w-5 h-5 text-[var(--accent)]" />
-                        </span>
+                        <StoreAvatar name={group.name} logoUrl={group.logo_url} color={group.color} />
                         <span className="min-w-0">
                           <span className="block text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--accent)] mb-0.5">Loja</span>
                           <span className="block text-sm font-bold text-[var(--text-primary)] break-words">{group.name}</span>

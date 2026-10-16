@@ -3,6 +3,8 @@ export type ArchiveClient = {
   legal_name?: string | null
   short_name?: string | null
   nif?: string | null
+  logo_url?: string | null
+  color?: string | null
 }
 
 export type ArchiveStatement = {
@@ -25,6 +27,8 @@ export type InvoiceArchiveGroup = {
   key: string
   name: string
   nif?: string | null
+  logo_url?: string | null
+  color?: string | null
   associationMissing: boolean
   statements: ArchiveStatement[]
   paidCount: number
@@ -64,7 +68,7 @@ export function groupInvoiceArchive(clients: ArchiveClient[], statements: Archiv
     const name = client?.short_name || client?.legal_name || statement.client_name || "Loja não identificada"
     let group = groups.get(key)
     if (!group) {
-      group = { key, name, nif: client?.nif, associationMissing: !id, statements: [], paidCount: 0, awaitingReceiptCount: 0 }
+      group = { key, name, nif: client?.nif, logo_url: client?.logo_url, color: client?.color, associationMissing: !id, statements: [], paidCount: 0, awaitingReceiptCount: 0 }
       groups.set(key, group)
     }
     group.statements.push(statement)
