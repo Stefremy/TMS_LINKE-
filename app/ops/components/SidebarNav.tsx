@@ -185,7 +185,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                             : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
                         }`}
                       >
-                        <item.icon className="w-5 h-5" strokeWidth={isGroupActive ? 2.2 : 1.8} />
+                        <item.icon className="w-5 h-5" strokeWidth={1.75} />
                       </Link>
 
                       {/* Flyout Submenu on Hover */}
@@ -231,7 +231,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                           : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
                       }`}
                     >
-                      <item.icon className="w-5 h-5" strokeWidth={isActive ? 2.2 : 1.8} />
+                      <item.icon className="w-5 h-5" strokeWidth={1.75} />
                       {item.badge && (
                         <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-[var(--surface-bg)]" />
                       )}
@@ -291,7 +291,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                           className={`w-[18px] h-[18px] ${
                             isGroupActive ? "text-[var(--accent)]" : "text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)]"
                           }`} 
-                          strokeWidth={isGroupActive ? 2.2 : 1.8} 
+                          strokeWidth={1.75}
                         />
                         {item.title}
                       </div>
@@ -349,7 +349,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
                       className={`w-[18px] h-[18px] ${
                         isActive ? "text-[var(--accent)]" : "text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)]"
                       }`} 
-                      strokeWidth={isActive ? 2.2 : 1.8} 
+                      strokeWidth={1.75}
                     />
                     {item.title}
                   </div>

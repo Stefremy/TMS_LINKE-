@@ -7,7 +7,6 @@ import {
   Euro, 
   Plus, 
   Trash2, 
-  Sparkles, 
   Building, 
   Calendar, 
   CreditCard, 
@@ -15,7 +14,6 @@ import {
   ExternalLink, 
   CheckCircle2, 
   AlertCircle, 
-  Cloud, 
   RefreshCw,
   Search,
   Layers,
@@ -331,7 +329,7 @@ export default function FaturaPersonalizadaClient({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] border border-[rgba(18,138,71,0.15)] shadow-2xs">
-            <Euro className="w-5 h-5" />
+            <Euro aria-hidden="true" strokeWidth={1.75} className="w-5 h-5" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
@@ -352,7 +350,7 @@ export default function FaturaPersonalizadaClient({
             </div>
           ) : (
             <div className="flex items-center gap-2 px-3.5 py-1.5 bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(217,119,6,0.25)] rounded-md text-xs font-semibold shadow-2xs">
-              <AlertCircle className="w-3.5 h-3.5" />
+              <AlertCircle aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
               <span>Modo Demonstrativo (Moloni Desconectado)</span>
             </div>
           )}
@@ -365,11 +363,11 @@ export default function FaturaPersonalizadaClient({
           href="/ops/faturacao/contas-corrente"
           className="px-4 py-2.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-b-2 border-transparent hover:border-[var(--border-strong)] transition-colors flex items-center gap-2"
         >
-          <Building className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+          <Building aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
           Contas Corrente (Envios de Transporte)
         </Link>
         <div className="px-4 py-2.5 text-xs font-bold text-[var(--accent)] border-b-2 border-[var(--accent)] flex items-center gap-2 bg-[var(--accent-soft)]/50 rounded-t-md">
-          <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+          <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
           Fatura Personalizada (Serviços & Consultoria)
         </div>
       </div>
@@ -379,7 +377,7 @@ export default function FaturaPersonalizadaClient({
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--surface-bg)] rounded-xl max-w-lg w-full p-6 shadow-[var(--shadow-layer)] border border-[var(--border-subtle)] animate-in fade-in zoom-in-95 duration-200">
             <div className="w-12 h-12 bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)] rounded-full flex items-center justify-center mb-4 mx-auto">
-              <CheckCircle2 className="w-6 h-6" />
+              <CheckCircle2 aria-hidden="true" strokeWidth={1.75} className="w-6 h-6" />
             </div>
 
             <h3 className="text-lg font-bold text-[var(--text-primary)] text-center">
@@ -414,7 +412,7 @@ export default function FaturaPersonalizadaClient({
                 download={`${(successData.invoiceNumber || "Fatura").replace(/[\/\\]/g, "_")}.pdf`}
                 className="flex-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 shadow-xs transition-colors text-xs cursor-pointer"
               >
-                <Download className="w-4 h-4" />
+                <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                 Descarregar PDF Novamente
               </a>
               <a
@@ -423,7 +421,7 @@ export default function FaturaPersonalizadaClient({
                 rel="noopener noreferrer"
                 className="py-2.5 px-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] text-[var(--text-primary)] hover:bg-[var(--surface-muted)] font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <ExternalLink className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+                <ExternalLink aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
                 Ver no Navegador
               </a>
               <button
@@ -445,7 +443,7 @@ export default function FaturaPersonalizadaClient({
           {/* Card de Dados do Cliente */}
           <div className="bg-[var(--surface-bg)] rounded-xl p-5 shadow-2xs border border-[var(--border-subtle)]">
             <div className="flex items-center gap-2 mb-4 pb-2 border-b border-[var(--border-subtle)]">
-              <Building className="w-4 h-4 text-[var(--accent)]" />
+              <Building aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
               <h2 className="text-sm font-bold text-[var(--text-primary)]">Entidade / Cliente a Faturar</h2>
             </div>
 
@@ -568,7 +566,7 @@ export default function FaturaPersonalizadaClient({
           <div className="bg-[var(--surface-bg)] rounded-xl p-5 shadow-2xs border border-[var(--border-subtle)]">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-[var(--border-subtle)]">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-[var(--accent)]" />
+                <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
                 <h2 className="text-sm font-bold text-[var(--text-primary)]">Linhas de Serviço / Artigos</h2>
               </div>
               <button
@@ -576,7 +574,7 @@ export default function FaturaPersonalizadaClient({
                 onClick={() => handleAddItem()}
                 className="flex items-center gap-1.5 text-xs font-bold text-[var(--accent)] bg-[var(--accent-soft)] hover:bg-[var(--accent-soft)]/80 border border-[rgba(18,138,71,0.2)] py-1.5 px-3 rounded-md transition-colors cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                 Adicionar Linha
               </button>
             </div>
@@ -605,7 +603,7 @@ export default function FaturaPersonalizadaClient({
                           className="text-[var(--text-tertiary)] hover:text-rose-600 transition-colors p-1 cursor-pointer"
                           title="Remover linha"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                         </button>
                       )}
                     </div>
@@ -715,7 +713,7 @@ export default function FaturaPersonalizadaClient({
           {/* Card de Condições de Pagamento e Datas */}
           <div className="bg-[var(--surface-bg)] rounded-xl p-5 shadow-2xs border border-[var(--border-subtle)] space-y-3.5">
             <div className="flex items-center gap-2 pb-2 border-b border-[var(--border-subtle)]">
-              <Calendar className="w-4 h-4 text-[var(--accent)]" />
+              <Calendar aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
               <h2 className="text-sm font-bold text-[var(--text-primary)]">Datas & Condições</h2>
             </div>
 
@@ -841,7 +839,7 @@ export default function FaturaPersonalizadaClient({
 
             {errorMsg && (
               <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-xs flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <AlertCircle aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{errorMsg}</span>
               </div>
             )}
@@ -854,12 +852,12 @@ export default function FaturaPersonalizadaClient({
             >
               {isSubmitting ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <RefreshCw aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 animate-spin" />
                   A Emitir Fatura...
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" />
+                  <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                   Emitir Fatura Oficial
                 </>
               )}
@@ -876,7 +874,7 @@ export default function FaturaPersonalizadaClient({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
           <div>
             <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[var(--accent)]" />
+              <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
               Histórico de Faturas Personalizadas
             </h2>
             <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
@@ -885,7 +883,7 @@ export default function FaturaPersonalizadaClient({
           </div>
 
           <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
+            <Search aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input
               type="text"
               placeholder="Pesquisar fatura ou cliente..."
@@ -898,7 +896,7 @@ export default function FaturaPersonalizadaClient({
 
         {filteredHistory.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-[var(--border-subtle)] rounded-lg bg-[var(--surface-muted)]/30">
-            <FileText className="w-8 h-8 text-[var(--text-tertiary)] mx-auto mb-2 opacity-50" />
+            <FileText aria-hidden="true" strokeWidth={1.75} className="w-8 h-8 text-[var(--text-tertiary)] mx-auto mb-2 opacity-50" />
             <div className="text-xs font-bold text-[var(--text-secondary)]">Nenhuma fatura personalizada encontrada</div>
             <p className="text-[11px] text-[var(--text-tertiary)] mt-1">
               As faturas de website, e-commerce ou consultoria que emitir aparecerão aqui.
@@ -957,7 +955,7 @@ export default function FaturaPersonalizadaClient({
                           className="inline-flex items-center gap-1 px-2.5 py-1 bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[var(--accent-soft)]/80 border border-[rgba(18,138,71,0.2)] rounded-md font-bold text-xs transition-colors shadow-2xs cursor-pointer"
                           title="Descarregar PDF para o computador"
                         >
-                          <Download className="w-3.5 h-3.5" />
+                          <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                           Descarregar
                         </a>
                         <a
@@ -967,7 +965,7 @@ export default function FaturaPersonalizadaClient({
                           className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-dim)] border border-[var(--border-subtle)] rounded-md font-medium text-xs transition-colors cursor-pointer"
                           title="Ver PDF no navegador"
                         >
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          <ExternalLink aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                         </a>
                       </div>
                     </td>

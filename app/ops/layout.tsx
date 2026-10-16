@@ -45,7 +45,7 @@ export default async function OpsLayout({
           
           <div className="flex items-center gap-5">
             <Link href="/ops/envios/novo" className="flex items-center gap-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-md text-[12px] font-bold transition-colors shadow-xs">
-              <Plus className="w-3.5 h-3.5" strokeWidth={3} />
+              <Plus className="w-4 h-4" strokeWidth={1.75} />
               Novo Envio
             </Link>
             

@@ -101,7 +101,7 @@ export function OpsSidebar() {
             href="/ops/envios/novo"
             className="min-h-11 flex items-center gap-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 transition-all"
           >
-            <Plus className="w-3.5 h-3.5" strokeWidth={3} />
+            <Plus className="w-4 h-4" strokeWidth={1.75} />
             <span>Novo</span>
           </Link>
         </div>
@@ -227,7 +227,7 @@ export function OpsSidebar() {
             ) : (
               <>
                 <span className="text-[11px] font-medium text-[var(--text-secondary)]">Recolher painel</span>
-                <ChevronsLeft className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+                <ChevronsLeft className="w-4 h-4 text-[var(--text-tertiary)]" />
               </>
             )}
           </button>
@@ -270,7 +270,7 @@ export function OpsSidebar() {
           className="tms-nav-create flex flex-col items-center justify-center -mt-3 shrink-0"
         >
           <div className="w-11 h-11 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white flex items-center justify-center shadow-md active:scale-95 transition-all">
-            <Plus className="w-6 h-6" strokeWidth={3} />
+            <Plus className="w-6 h-6" strokeWidth={1.75} />
           </div>
           <span className="text-[9px] font-bold text-[var(--accent)] mt-0.5">Novo</span>
         </Link>

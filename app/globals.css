@@ -3,15 +3,15 @@
 /* ===== Precision Logistics Engine — Design System Tokens ===== */
 :root {
   /* Canvas & Surfaces */
-  --canvas-bg: #F5F7F5;
+  --canvas-bg: #F7F7F8;
   --surface-bg: #FFFFFF;
-  --surface-muted: #F8FAF8;
-  --surface-dim: #F1F4F1;
+  --surface-muted: #F5F5F6;
+  --surface-dim: #EFEFF1;
 
   /* Text hierarchy */
-  --text-primary: #141714;
-  --text-secondary: #566057;
-  --text-tertiary: #788279;
+  --text-primary: #202124;
+  --text-secondary: #575B63;
+  --text-tertiary: #69707A;
 
   /* Brand / Accent */
   --accent: #128A47;
@@ -20,8 +20,8 @@
   --accent-soft: #F0FDF4;
 
   /* Borders */
-  --border-subtle: rgba(20, 23, 20, 0.08);
-  --border-strong: rgba(20, 23, 20, 0.16);
+  --border-subtle: rgba(24, 24, 27, 0.08);
+  --border-strong: rgba(24, 24, 27, 0.16);
 
   /* Status */
   --status-success: #128A47;
@@ -34,7 +34,7 @@
   --status-info-soft: #EFF6FF;
 
   /* Elevation */
-  --shadow-layer: 0 1px 2px rgba(20, 23, 20, 0.05), 0 4px 12px rgba(20, 23, 20, 0.08);
+  --shadow-layer: 0 1px 2px rgba(24, 24, 27, 0.05), 0 4px 12px rgba(24, 24, 27, 0.08);
 }
 
 /* Global base styles */

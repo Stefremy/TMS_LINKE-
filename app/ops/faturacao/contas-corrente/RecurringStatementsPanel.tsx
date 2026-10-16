@@ -27,10 +27,10 @@ export function RecurringStatementsPanel({ initialPreview, canManage }: { initia
   return <section className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] shadow-2xs">
     <button type="button" aria-expanded={open} aria-controls="recurring-statements-settings" onClick={() => setOpen(!open)}
       className="w-full flex items-center gap-3 p-4 text-left rounded-xl hover:bg-[var(--surface-muted)] transition-colors">
-      <span className="p-2 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]"><CalendarClock className="w-5 h-5" /></span>
+      <span className="p-2 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]"><CalendarClock aria-hidden="true" strokeWidth={1.75} className="w-5 h-5" /></span>
       <span className="flex-1 min-w-0"><span className="block text-sm font-bold text-[var(--text-primary)]">Faturação automática por período</span>
         <span className="block text-xs text-[var(--text-secondary)] mt-0.5">Conta Corrente · {preview.enabled ? 'Ativos' : 'Por ativar'} · {preview.clients.length} clientes</span></span>
-      <ChevronDown className={`w-4 h-4 text-[var(--text-secondary)] transition-transform motion-reduce:transition-none ${open ? '' : '-rotate-90'}`} />
+      <ChevronDown aria-hidden="true" strokeWidth={1.75} className={`w-4 h-4 text-[var(--text-secondary)] transition-transform motion-reduce:transition-none ${open ? '' : '-rotate-90'}`} />
     </button>
     <AnimatedDisclosure open={open} id="recurring-statements-settings">
       <div className="border-t border-[var(--border-subtle)] p-4 sm:p-5 space-y-4">
@@ -40,7 +40,7 @@ export function RecurringStatementsPanel({ initialPreview, canManage }: { initia
           <label className="text-xs font-semibold text-[var(--text-secondary)]">Simular fecho em
             <input type="date" value={date} onChange={e => setDate(e.target.value)} className="block mt-1 px-3 py-2 border border-[var(--border-subtle)] rounded-lg bg-[var(--surface-muted)] text-[var(--text-primary)]" />
           </label>
-          <button disabled={!!busy || !date} type="button" onClick={() => perform('preview', async () => setPreview(await previewRecurringStatementsAction(date)))} className="inline-flex items-center gap-2 border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-xs font-semibold text-[var(--text-primary)] disabled:opacity-50"><RefreshCw className={`w-3.5 h-3.5 ${busy === 'preview' ? 'animate-spin' : ''}`} />Pré-visualizar</button>
+          <button disabled={!!busy || !date} type="button" onClick={() => perform('preview', async () => setPreview(await previewRecurringStatementsAction(date)))} className="inline-flex items-center gap-2 border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-xs font-semibold text-[var(--text-primary)] disabled:opacity-50"><RefreshCw aria-hidden="true" strokeWidth={1.75} className={`w-4 h-4 ${busy === 'preview' ? 'animate-spin' : ''}`} />Pré-visualizar</button>
           <p className="text-[11px] text-[var(--text-tertiary)]">A simulação usa os envios já existentes e não envia emails.</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -77,7 +77,7 @@ export function RecurringStatementsPanel({ initialPreview, canManage }: { initia
               const result = await sendRecurringTestEmailAction(testEmail)
               if (!result.success) throw new Error('error' in result ? result.error : 'Falha no teste.')
               setFeedback('message' in result ? result.message : 'Email de teste aceite.')
-            })} className="inline-flex items-center gap-2 border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-xs font-semibold text-[var(--text-primary)] disabled:opacity-50"><Mail className="w-3.5 h-3.5" />{busy === 'test' ? 'A enviar...' : 'Enviar teste com PDF'}</button>
+            })} className="inline-flex items-center gap-2 border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-xs font-semibold text-[var(--text-primary)] disabled:opacity-50"><Mail aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />{busy === 'test' ? 'A enviar...' : 'Enviar teste com PDF'}</button>
           </div>
           <p className="text-[11px] text-[var(--text-tertiary)]">O teste contém dados fictícios, testa apenas a entrega do extrato e não emite faturas fiscais. É enviado apenas para o endereço indicado.</p>
         </div>}

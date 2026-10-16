@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-export function StoreAvatar({ name, logoUrl, color }: {
+export function StoreAvatar({ name, logoUrl }: {
   name: string
   logoUrl?: string | null
   color?: string | null
@@ -14,8 +14,7 @@ export function StoreAvatar({ name, logoUrl, color }: {
   return (
     <span
       aria-hidden="true"
-      className="w-10 h-10 shrink-0 rounded-xl overflow-hidden border border-[var(--border-subtle)] bg-[var(--surface-bg)] flex items-center justify-center shadow-2xs"
-      style={color ? { borderColor: color } : undefined}
+      className="w-10 h-10 shrink-0 rounded-lg overflow-hidden border border-[var(--border-subtle)] bg-[var(--surface-bg)] flex items-center justify-center "
     >
       {showLogo ? (
         // Uploaded store avatars may be embedded data URLs or use tenant-specific hosts.

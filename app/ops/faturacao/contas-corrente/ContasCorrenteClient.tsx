@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Building, FolderOpen, FileText, ChevronDown, ChevronRight, Euro, Cloud, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X, Sparkles, Mail, Send } from "lucide-react"
+import { Building, FolderOpen, FileText, ChevronDown, ChevronRight, Euro, Plug, ReceiptText, Loader2, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X, Mail, Send } from "lucide-react"
 import { groupInvoiceArchive, isInvoicePaid } from "@/lib/billing/invoice-archive"
 import { InvoiceIssueButton } from "./InvoiceIssueButton"
 import { AnimatedDisclosure } from "./AnimatedDisclosure"
@@ -271,17 +271,17 @@ export default function ContasCorrenteClient({
   }, [clients, shipments, periodShipments, periodClientFilter, startDate, endDate, excludedShipmentIds, unpaidStatements])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 tms-billing-page">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] border border-[rgba(18,138,71,0.15)] shadow-2xs">
-            <Euro className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-lg bg-[var(--surface-bg)] flex items-center justify-center text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+            <Euro aria-hidden="true" strokeWidth={1.75} className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
+            <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight">
               Contas Corrente / Faturação
             </h1>
-            <p className="text-xs text-[var(--text-tertiary)] font-medium mt-0.5">
+            <p className="text-sm text-[var(--text-secondary)] mt-1">
               Gestão de faturação a clientes e sincronização com software certificado
             </p>
           </div>
@@ -289,26 +289,26 @@ export default function ContasCorrenteClient({
         
         <div className="flex flex-wrap items-center gap-3">
           {hasArchiveDocuments && (
-            <a href="#invoice-archive" onClick={() => setShowHistory(true)} className="flex items-center gap-2 px-3.5 py-2 rounded-md text-xs font-bold text-[var(--accent)] bg-[var(--accent-soft)] border border-[var(--border-subtle)]">
-              <FolderOpen className="w-4 h-4" /> Arquivo por loja
+            <a href="#invoice-archive" onClick={() => setShowHistory(true)} className="flex items-center gap-2 px-3.5 py-2 rounded-md text-xs font-medium text-[var(--text-primary)] bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)]">
+              <FolderOpen aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" /> Arquivo por loja
             </a>
           )}
           <button
             onClick={() => setIsMoloniModalOpen(true)}
             className={`flex items-center gap-2 px-3.5 py-2 border rounded-md font-bold text-xs transition-colors cursor-pointer shadow-2xs ${
               moloniConfig?.isConnected 
-                ? "border-[rgba(18,138,71,0.25)] text-[var(--status-success)] bg-[var(--status-success-soft)] hover:bg-[var(--accent-soft)]" 
+                ? "border-[var(--border-subtle)] text-[var(--text-primary)] bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)]"
                 : "border-[var(--border-subtle)] text-[var(--text-primary)] bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)]"
             }`}
           >
             {moloniConfig?.isConnected ? (
               <>
-                <span className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-[var(--status-success)]" />
                 <span>Moloni Ligado ({moloniConfig.companyName || moloniConfig.companyId})</span>
               </>
             ) : (
               <>
-                <Cloud className="w-4 h-4 text-[var(--accent)]" />
+                <Plug aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
                 <span>Ligar Moloni</span>
               </>
             )}
@@ -319,14 +319,14 @@ export default function ContasCorrenteClient({
       {/* Navegação por Abas (Tabs) */}
       <div className="flex items-center gap-2 border-b border-[var(--border-subtle)]">
         <div className="px-4 py-2.5 text-xs font-bold text-[var(--accent)] border-b-2 border-[var(--accent)] flex items-center gap-2 bg-[var(--accent-soft)]/50 rounded-t-md">
-          <Building className="w-3.5 h-3.5 text-[var(--accent)]" />
+          <Building aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
           Contas Corrente (Envios de Transporte)
         </div>
         <Link
           href="/ops/faturacao/personalizada"
           className="px-4 py-2.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-b-2 border-transparent hover:border-[var(--border-strong)] transition-colors flex items-center gap-2"
         >
-          <Sparkles className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+          <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
           Fatura Personalizada (Serviços & Consultoria)
         </Link>
       </div>
@@ -337,7 +337,7 @@ export default function ContasCorrenteClient({
       {!moloniConfig?.isConnected && (
         <div className="p-4 rounded-xl bg-[var(--status-warning-soft)] border border-[rgba(217,119,6,0.25)] text-[var(--text-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-[var(--status-warning)] shrink-0 mt-0.5" />
+            <AlertCircle aria-hidden="true" strokeWidth={1.75} className="w-5 h-5 text-[var(--status-warning)] shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-bold text-[var(--text-primary)]">Moloni (Fatura Oficial AT) ainda não está ligado</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">
@@ -349,7 +349,7 @@ export default function ContasCorrenteClient({
             onClick={() => setIsMoloniModalOpen(true)}
             className="px-3.5 py-1.5 bg-[var(--status-warning)] hover:bg-[rgba(217,119,6,0.9)] text-white font-bold text-xs rounded-md shadow-xs transition-colors shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <Cloud className="w-3.5 h-3.5" />
+            <Plug aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
             Ligar Moloni Agora
           </button>
         </div>
@@ -359,7 +359,7 @@ export default function ContasCorrenteClient({
       <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-bg)] p-3 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-            <Filter className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+            <Filter aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
             <span className="text-[11px] font-bold uppercase tracking-wider">Filtros</span>
           </div>
           <div className="h-5 w-px bg-[var(--border-subtle)] mx-1" />
@@ -423,7 +423,7 @@ export default function ContasCorrenteClient({
         <div className="divide-y divide-[var(--border-subtle)]">
           {clientDataMap.length === 0 ? (
              <div className="px-6 py-12 text-center">
-               <AlertCircle className="w-10 h-10 text-[var(--text-tertiary)] mx-auto mb-2.5 opacity-60" />
+               <AlertCircle aria-hidden="true" strokeWidth={1.75} className="w-10 h-10 text-[var(--text-tertiary)] mx-auto mb-2.5 opacity-60" />
                <h3 className="text-sm font-bold text-[var(--text-primary)]">Nenhum envio pendente de faturação</h3>
                <p className="text-xs text-[var(--text-tertiary)] mt-1">Todos os envios para este período já foram faturados ou não existem envios.</p>
              </div>
@@ -454,7 +454,7 @@ export default function ContasCorrenteClient({
                       )}
                       {clientUnpaid.length > 0 && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--status-warning-soft)] border border-[rgba(217,119,6,0.2)] text-[var(--status-warning)] text-[11px] font-bold font-mono">
-                          <AlertCircle className="w-3 h-3 text-[var(--status-warning)] shrink-0" />
+                          <AlertCircle aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--status-warning)] shrink-0" />
                           {clientUnpaid.length} fatura(s) a aguardar recibo
                         </span>
                       )}
@@ -548,9 +548,9 @@ export default function ContasCorrenteClient({
                                 e.stopPropagation()
                                 handleEmitReceipt(clientUnpaid[0])
                               }}
-                              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-[var(--status-success-soft)] hover:bg-[var(--accent-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)] font-bold text-xs rounded-md shadow-2xs transition-colors"
+                              className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-strong)] font-medium text-xs rounded-md shadow-2xs transition-colors"
                             >
-                              <Cloud className="w-3.5 h-3.5" />
+                              <ReceiptText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                               Emitir Recibo
                             </button>
                           )}
@@ -563,14 +563,14 @@ export default function ContasCorrenteClient({
                               className="p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--surface-muted)] hover:text-[var(--accent)] rounded-md transition-colors"
                               title="Descarregar Fatura Moloni"
                             >
-                              <Download className="w-4 h-4" />
+                              <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                             </a>
                           )}
                         </>
                       ) : null}
 
                       <div className="text-[var(--text-tertiary)] p-1">
-                        {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        {isExpanded ? <ChevronDown aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" /> : <ChevronRight aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />}
                       </div>
                     </div>
                   </div>
@@ -580,7 +580,7 @@ export default function ContasCorrenteClient({
                       <div className="bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] overflow-hidden shadow-2xs">
                         <div className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] px-4 py-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <FileText className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+                            <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
                             <span className="text-xs font-bold text-[var(--text-primary)]">Detalhe de Novos Envios</span>
                           </div>
                           <p className="text-[10px] text-[var(--text-tertiary)] font-medium">
@@ -639,7 +639,7 @@ export default function ContasCorrenteClient({
                       <div className="bg-[var(--surface-bg)] rounded-lg border border-[rgba(217,119,6,0.25)] overflow-hidden shadow-2xs">
                         <div className="bg-[var(--status-warning-soft)]/50 border-b border-[rgba(217,119,6,0.2)] px-4 py-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <AlertCircle className="w-3.5 h-3.5 text-[var(--status-warning)]" />
+                            <AlertCircle aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--status-warning)]" />
                             <span className="text-xs font-bold text-[var(--status-warning)]">Contas a Receber (Faturas Moloni Emitidas - Aguardando Recibo)</span>
                           </div>
                           <span className="text-[10px] text-[var(--status-warning)] font-semibold">
@@ -652,8 +652,8 @@ export default function ContasCorrenteClient({
                               <div>
                                 <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
                                 {formatFTNumber(stmt.moloni_document_number) && (
-                                  <p className="text-[10px] font-bold text-[var(--accent)] font-mono mt-0.5 flex items-center gap-1">
-                                    <Cloud className="w-3 h-3 shrink-0" />
+                                  <p className="text-xs font-medium text-[var(--text-secondary)] font-mono mt-1 flex items-center gap-1.5">
+                                    <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 shrink-0" />
                                     {formatFTNumber(stmt.moloni_document_number)}
                                   </p>
                                 )}
@@ -677,7 +677,7 @@ export default function ContasCorrenteClient({
                                     }}
                                     className="px-2.5 py-1 bg-[var(--status-success-soft)] hover:bg-[var(--accent-soft)] text-[var(--status-success)] font-bold text-[11px] rounded-md border border-[rgba(18,138,71,0.2)] transition-colors flex items-center gap-1.5 shadow-2xs"
                                   >
-                                    <Cloud className="w-3 h-3 text-[var(--status-success)]" />
+                                    <ReceiptText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--status-success)]" />
                                     Emitir Recibo
                                   </button>
                                 )}
@@ -689,7 +689,7 @@ export default function ContasCorrenteClient({
                                     className="p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--surface-muted)] hover:text-[var(--accent)] rounded-md transition-colors"
                                     title="Descarregar Fatura Moloni"
                                   >
-                                    <Download className="w-3.5 h-3.5" />
+                                    <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                                   </a>
                                 )}
                                 <a 
@@ -699,7 +699,7 @@ export default function ContasCorrenteClient({
                                   className="p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--surface-muted)] hover:text-[var(--status-warning)] rounded-md transition-colors"
                                   title="Descarregar Fatura Linke"
                                 >
-                                  <FileText className="w-3.5 h-3.5" />
+                                  <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                                 </a>
                               </div>
                             </div>
@@ -727,7 +727,7 @@ export default function ContasCorrenteClient({
             >
               <span className="flex items-center gap-3">
                 <span className="w-10 h-10 shrink-0 rounded-xl bg-[var(--surface-bg)] border border-[var(--border-strong)] flex items-center justify-center text-[var(--text-secondary)]">
-                  <FolderOpen className="w-5 h-5" />
+                  <FolderOpen aria-hidden="true" strokeWidth={1.75} className="w-5 h-5" />
                 </span>
                 <span>
                   <span role="heading" aria-level={2} className="block text-sm font-bold text-[var(--text-primary)]">Arquivo de Faturas e Extratos por Cliente</span>
@@ -735,7 +735,7 @@ export default function ContasCorrenteClient({
                 </span>
               </span>
               <span className="text-[var(--text-tertiary)]">
-                <ChevronDown className={`w-4 h-4 transition-transform duration-300 motion-reduce:transition-none ${showHistory ? "rotate-0" : "-rotate-90"}`} />
+                <ChevronDown aria-hidden="true" strokeWidth={1.75} className={`w-4 h-4 transition-transform duration-300 motion-reduce:transition-none ${showHistory ? "rotate-0" : "-rotate-90"}`} />
               </span>
             </button>
 
@@ -753,10 +753,10 @@ export default function ContasCorrenteClient({
                 </div>
                 {archiveGroups.length === 0 && <p className="px-6 py-6 text-sm text-[var(--text-tertiary)]">Nenhum documento encontrado.</p>}
                 {archiveGroups.map(group => (
-                  <div key={group.key} className={`mx-3 sm:mx-5 my-3 rounded-xl border shadow-2xs transition-colors duration-300 ${expandedArchiveStores.has(group.key) ? "border-[var(--accent)]/30" : "border-[var(--border-subtle)]"}`}>
+                  <div key={group.key} className={`mx-3 sm:mx-5 my-3 rounded-xl border shadow-2xs transition-colors duration-300 ${expandedArchiveStores.has(group.key) ? "border-[var(--border-strong)]" : "border-[var(--border-subtle)]"}`}>
                     <button type="button" aria-expanded={expandedArchiveStores.has(group.key)}
                       aria-controls={`invoice-store-${encodeURIComponent(group.key)}`}
-                      className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-4 text-left bg-[var(--accent-soft)] hover:brightness-[0.98] rounded-xl cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                      className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-4 text-left bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] rounded-xl cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
                       onClick={() => { setOpenActionMenuId(null); setExpandedArchiveStores(previous => {
                         const next = new Set(previous)
                         if (next.has(group.key)) next.delete(group.key)
@@ -766,27 +766,27 @@ export default function ContasCorrenteClient({
                       <span className="flex items-center gap-3 min-w-0">
                         <StoreAvatar name={group.name} logoUrl={group.logo_url} color={group.color} />
                         <span className="min-w-0">
-                          <span className="block text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--accent)] mb-0.5">Cliente</span>
+                          <span className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Cliente</span>
                           <span className="block text-sm font-bold text-[var(--text-primary)] break-words">{group.name}</span>
-                          <span className="block text-[11px] text-[var(--text-secondary)] mt-1 leading-relaxed">
+                          <span className="block text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
                             {group.nif && `NIF: ${group.nif} · `}{group.paidCount} faturas pagas{group.periodCount > 0 && ` · ${group.periodCount} extratos de período`}{group.awaitingReceiptCount > 0 && ` · ${group.awaitingReceiptCount} a aguardar recibo`}
                           </span>
                           {group.associationMissing && <span className="block text-xs text-[var(--status-warning)] mt-1">Loja por associar</span>}
                         </span>
                       </span>
-                      <span className="flex items-center gap-2 sm:gap-4 shrink-0 text-[var(--accent)]">
+                      <span className="flex items-center gap-2 sm:gap-4 shrink-0 text-[var(--text-secondary)]">
                         <span className="hidden sm:inline text-[11px] font-semibold">{expandedArchiveStores.has(group.key) ? "Ocultar documentos" : "Ver documentos"}</span>
-                        <span className="px-2 py-1 rounded-md bg-[var(--surface-bg)] border border-[var(--accent)]/15 text-[11px] font-bold tabular-nums">{group.statements.length}<span className="hidden sm:inline"> documentos</span></span>
-                        <ChevronDown className={`w-4 h-4 transition-transform duration-300 motion-reduce:transition-none ${expandedArchiveStores.has(group.key) ? "rotate-0" : "-rotate-90"}`} />
+                        <span className="px-2 py-1 rounded-md bg-[var(--surface-bg)] border border-[var(--border-subtle)] text-xs font-medium tabular-nums">{group.statements.length}<span className="hidden sm:inline"> documentos</span></span>
+                        <ChevronDown aria-hidden="true" strokeWidth={1.75} className={`w-4 h-4 transition-transform duration-300 motion-reduce:transition-none ${expandedArchiveStores.has(group.key) ? "rotate-0" : "-rotate-90"}`} />
                       </span>
                     </button>
                     <AnimatedDisclosure open={expandedArchiveStores.has(group.key)} id={`invoice-store-${encodeURIComponent(group.key)}`}>
-                      <div className="p-3 sm:p-5 bg-[var(--surface-muted)] rounded-b-xl border-t border-[var(--border-subtle)]">
+                      <div className="p-3 sm:p-5 bg-[var(--surface-bg)] rounded-b-xl border-t border-[var(--border-subtle)]">
                         <div className="flex flex-wrap items-center justify-between gap-1 mb-3 pl-3 sm:pl-4">
-                          <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)]"><FileText className="w-3.5 h-3.5" />Faturas e períodos de envios</h3>
+                          <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)]"><FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />Faturas e períodos de envios</h3>
                           <span className="text-[10px] text-[var(--text-tertiary)]">Mais recentes primeiro</span>
                         </div>
-                        <div className="border-l-2 border-[var(--border-strong)] pl-3 sm:pl-4 space-y-2">
+                        <div className="divide-y divide-[var(--border-subtle)]">
                         {group.statements.map((stmt: any) => stmt.document_type === 'period_statement' ? (
                           <PeriodStatementCard key={stmt.id} statement={stmt} invoicedIds={invoicedIds} onSelect={async period => {
                             const { getPeriodShipmentsForBillingAction } = await import('@/app/actions/recurring-statements')
@@ -797,27 +797,27 @@ export default function ContasCorrenteClient({
                             document.getElementById('billing-pending')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                           }} />
                         ) : (
-                          <div key={stmt.id || stmt.statement_number} className="px-3 sm:px-4 py-3.5 bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-[var(--border-strong)] transition-colors">
+                          <div key={stmt.id || stmt.statement_number} className="px-3 sm:px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[var(--surface-muted)] transition-colors">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-secondary)] shrink-0">
-                                <FileText className="w-3.5 h-3.5" />
+                                <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                               </div>
                               <div>
                                 <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
                                 {formatFTNumber(stmt.moloni_document_number) && (
-                                  <p className="text-[10px] font-bold text-[var(--accent)] font-mono mt-0.5 flex items-center gap-1">
-                                    <Cloud className="w-3 h-3 shrink-0" />
+                                  <p className="text-xs font-medium text-[var(--text-secondary)] font-mono mt-1 flex items-center gap-1.5">
+                                    <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 shrink-0" />
                                     {formatFTNumber(stmt.moloni_document_number)}
                                   </p>
                                 )}
-                                <p className="text-[11px] text-[var(--text-tertiary)] flex flex-wrap items-center gap-2 mt-1">
+                                <p className="text-xs text-[var(--text-secondary)] flex flex-wrap items-center gap-2 mt-1">
                                   <span className="flex items-center gap-1">
-                                    <Package className="w-3 h-3 text-[var(--text-tertiary)]" />
+                                    <Package aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
                                     {stmt.shipments_count || stmt.shipment_ids?.length || 0} envios
                                   </span>
                                   <span>•</span>
                                   <span className="flex items-center gap-1">
-                                    <Calendar className="w-3 h-3 text-[var(--text-tertiary)]" />
+                                    <Calendar aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
                                     {new Date(stmt.created_at).toLocaleDateString("pt-PT")}
                                   </span>
                                 </p>
@@ -829,12 +829,12 @@ export default function ContasCorrenteClient({
                               <div className="flex items-center">
                                 {isInvoicePaid(stmt) ? (
                                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)] text-[10px] font-bold uppercase tracking-wider">
-                                    <CheckCircle2 className="w-3 h-3" />
+                                    <CheckCircle2 aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                                     Paga
                                   </span>
                                 ) : (stmt.moloni_document_pdf || stmt.moloni_document_id) ? (
                                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(217,119,6,0.2)] text-[10px] font-bold uppercase tracking-wider">
-                                    <AlertCircle className="w-3 h-3" />
+                                    <AlertCircle aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                                     Fatura emitida · Por pagar
                                   </span>
                                 ) : (
@@ -857,7 +857,7 @@ export default function ContasCorrenteClient({
                                   }}
                                   className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md text-xs font-bold transition-colors shadow-2xs cursor-pointer"
                                 >
-                                  Opções <ChevronDown className="w-3.5 h-3.5" />
+                                  Opções <ChevronDown aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                                 </button>
 
                                 {openActionMenuId === stmt.id && (
@@ -911,7 +911,7 @@ export default function ContasCorrenteClient({
                                             }}
                                             className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
                                           >
-                                            <Cloud className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                            <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
                                             Emitir Fatura no Moloni
                                           </button>
                                       )}
@@ -927,7 +927,7 @@ export default function ContasCorrenteClient({
                                               rel="noreferrer"
                                               className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[var(--status-success)] hover:bg-[var(--status-success-soft)] transition-colors"
                                             >
-                                              <Download className="w-3.5 h-3.5 text-[var(--status-success)]" />
+                                              <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--status-success)]" />
                                               Descarregar Fatura (AT)
                                             </a>
                                           )}
@@ -939,7 +939,7 @@ export default function ContasCorrenteClient({
                                             }}
                                             className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
                                           >
-                                            <Mail className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                            <Mail aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
                                             Enviar Fatura por Email
                                           </button>
                                         </>
@@ -954,7 +954,7 @@ export default function ContasCorrenteClient({
                                           }}
                                           className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
                                         >
-                                          <Mail className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                          <Mail aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
                                           Enviar Extrato por Email
                                         </button>
                                       )}
@@ -968,7 +968,7 @@ export default function ContasCorrenteClient({
                                           rel="noreferrer"
                                           className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
                                         >
-                                          <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                          <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
                                           Descarregar Recibo
                                         </a>
                                       ) : (stmt.moloni_document_id && !stmt.is_pro_forma) ? (
@@ -980,12 +980,12 @@ export default function ContasCorrenteClient({
                                           }}
                                           className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"
                                         >
-                                          <Cloud className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                          <ReceiptText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
                                           Emitir Recibo
                                         </button>
                                       ) : (
                                         <div className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[var(--text-tertiary)] cursor-not-allowed opacity-60" title="O recibo estará disponível após a fatura ser emitida">
-                                          <Download className="w-3.5 h-3.5" />
+                                          <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                                           Recibo (Pendente)
                                         </div>
                                       )}
@@ -999,7 +999,7 @@ export default function ContasCorrenteClient({
                                         rel="noreferrer"
                                         className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] transition-colors"
                                       >
-                                        <FileText className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+                                        <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
                                         Ver Extrato TMS Interno
                                       </a>
                                     </div>
@@ -1029,10 +1029,10 @@ export default function ContasCorrenteClient({
                 onClick={() => setIssuedStatement(null)}
                 className="absolute top-4 right-4 text-white/80 hover:text-white p-1 rounded-md transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X aria-hidden="true" strokeWidth={1.75} className="w-5 h-5" />
               </button>
               <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md mx-auto flex items-center justify-center mb-2.5">
-                <CheckCircle2 className="w-7 h-7 text-white" />
+                <CheckCircle2 aria-hidden="true" strokeWidth={1.75} className="w-7 h-7 text-white" />
               </div>
               <h3 className="text-lg font-bold">Fatura Moloni emitida!</h3>
               <p className="text-white/80 text-xs font-mono mt-0.5 font-semibold">
@@ -1069,7 +1069,7 @@ export default function ContasCorrenteClient({
                     rel="noreferrer"
                     className="w-full py-3 px-4 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-xs rounded-lg transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Download className="w-4 h-4" />
+                    <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                     📥 Descarregar Fatura Oficial AT (PDF)
                   </a>
                 )}
@@ -1081,7 +1081,7 @@ export default function ContasCorrenteClient({
                   rel="noreferrer"
                   className={`w-full ${issuedStatement.moloniPdf ? "py-2.5 bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] text-[var(--text-primary)] font-semibold text-xs border border-[var(--border-subtle)]" : "py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-xs shadow-sm"} rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer`}
                 >
-                  <Download className="w-4 h-4" />
+                  <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                   Descarregar Extrato Detalhado TMS (PDF)
                 </a>
 
@@ -1101,13 +1101,13 @@ export default function ContasCorrenteClient({
                   }}
                   className="w-full py-2.5 bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-primary)] font-semibold text-xs border border-[var(--border-subtle)] rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
                 >
-                  <Mail className="w-4 h-4 text-[var(--accent)]" />
+                  <Mail aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
                   ✉️ Enviar Fatura por Email ao Cliente
                 </button>
 
                 {issuedStatement.warning && (
                   <div className="p-3 bg-[var(--status-warning-soft)] rounded-lg border border-[rgba(217,119,6,0.2)] text-[11px] text-[var(--text-primary)] flex items-start gap-2.5">
-                    <AlertCircle className="w-4 h-4 text-[var(--status-warning)] shrink-0 mt-0.5" />
+                    <AlertCircle aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--status-warning)] shrink-0 mt-0.5" />
                     <div>
                       <p className="font-semibold text-[var(--status-warning)]">A fatura já foi emitida. Não volte a emitir.</p>
                       <p className="mt-0.5 text-[var(--text-secondary)] leading-relaxed">
@@ -1146,7 +1146,7 @@ export default function ContasCorrenteClient({
             <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}>
-                  <FileText className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+                  <FileText aria-hidden="true" strokeWidth={1.75} className="w-5 h-5" style={{ color: 'var(--accent)' }} />
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Emitir Recibo</h3>
@@ -1154,7 +1154,7 @@ export default function ContasCorrenteClient({
                 </div>
               </div>
               <button onClick={() => setReceiptModalStmt(null)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-70 transition-opacity" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border-subtle)' }}>
-                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                <X aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
               </button>
             </div>
 
@@ -1248,7 +1248,7 @@ export default function ContasCorrenteClient({
             <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}>
-                  <Mail className="w-5 h-5" style={{ color: 'var(--accent)' }} />
+                  <Mail aria-hidden="true" strokeWidth={1.75} className="w-5 h-5" style={{ color: 'var(--accent)' }} />
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Enviar Fatura por Email</h3>
@@ -1265,7 +1265,7 @@ export default function ContasCorrenteClient({
                 className="w-8 h-8 rounded-lg flex items-center justify-center hover:opacity-70 transition-opacity cursor-pointer" 
                 style={{ background: 'var(--surface-muted)', border: '1px solid var(--border-subtle)' }}
               >
-                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                <X aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
               </button>
             </div>
 
@@ -1300,7 +1300,7 @@ export default function ContasCorrenteClient({
                     className="w-full rounded-xl px-4 py-2.5 text-sm outline-none transition-all pl-10"
                     style={{ background: 'var(--surface-muted)', border: '1px solid var(--border-strong)', color: 'var(--text-primary)' }}
                   />
-                  <Mail className="w-4 h-4 absolute left-3.5 top-3 text-[var(--text-tertiary)] pointer-events-none" />
+                  <Mail aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 absolute left-3.5 top-3 text-[var(--text-tertiary)] pointer-events-none" />
                 </div>
                 <p className="text-[11px] text-[var(--text-tertiary)] mt-1">
                   Pode alterar ou introduzir outro email para o reenvio da fatura.
@@ -1322,7 +1322,7 @@ export default function ContasCorrenteClient({
                       className="w-4 h-4 rounded text-[var(--accent)] accent-[var(--accent)] cursor-pointer"
                     />
                     <div className="flex items-center gap-2">
-                      <Download className="w-3.5 h-3.5 text-[var(--status-success)]" />
+                      <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--status-success)]" />
                       <span className="text-xs font-medium text-[var(--text-primary)]">
                         Fatura Oficial Certificada AT (PDF)
                       </span>
@@ -1338,7 +1338,7 @@ export default function ContasCorrenteClient({
                     className="w-4 h-4 rounded text-[var(--accent)] accent-[var(--accent)] cursor-pointer"
                   />
                   <div className="flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+                    <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
                     <span className="text-xs font-medium text-[var(--text-primary)]">
                       Extrato Detalhado Linke TMS (PDF)
                     </span>
@@ -1354,9 +1354,9 @@ export default function ContasCorrenteClient({
                     : "bg-[var(--status-error-soft)] border-[rgba(239,68,68,0.2)] text-[var(--status-error)]"
                 }`}>
                   {emailFeedback.type === "success" ? (
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-[var(--status-success)]" />
+                    <CheckCircle2 aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 shrink-0 text-[var(--status-success)]" />
                   ) : (
-                    <AlertCircle className="w-4 h-4 shrink-0 text-[var(--status-error)]" />
+                    <AlertCircle aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 shrink-0 text-[var(--status-error)]" />
                   )}
                   <span>{emailFeedback.message}</span>
                 </div>
@@ -1384,12 +1384,12 @@ export default function ContasCorrenteClient({
               >
                 {isSendingEmail ? (
                   <>
-                    <Cloud className="w-4 h-4 animate-spin" />
+                    <Loader2 aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 animate-spin" />
                     A enviar...
                   </>
                 ) : (
                   <>
-                    <Send className="w-3.5 h-3.5" />
+                    <Send aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
                     Enviar Email
                   </>
                 )}
