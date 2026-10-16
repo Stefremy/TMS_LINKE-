@@ -3,9 +3,9 @@ import { Metadata } from "next"
 import { DeliveryTrackingClient } from "./components/DeliveryTrackingClient"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { createAdminClient } from "@/lib/supabase/server"
-import { resolveLocationCoordinate } from "@/lib/services/geo/coordinates"
 import { resolveCoordinates } from "@/lib/services/geo/geocoder"
-import { TrackingShipment, ShipmentPickagem } from "./types"
+import { TrackingShipment } from "./types"
+import { buildTrackingCheckpoints } from "./checkpoints"
 
 export const metadata: Metadata = {
   title: "Monitorização & Tracking por Pickagens | Linke TMS",
@@ -61,9 +61,6 @@ export default async function OpsTrackingPage(props: {
         const senderZip = s.sender_zip4 && s.sender_zip3 ? `${s.sender_zip4}-${s.sender_zip3}` : s.sender_postal_code
         const recipientZip = s.recipient_zip4 && s.recipient_zip3 ? `${s.recipient_zip4}-${s.recipient_zip3}` : s.recipient_postal_code
 
-        const senderLocationName = s.sender_city || s.sender_address || "Local Desconhecido"
-        const recipientLocationName = s.recipient_city || s.recipient_address || "Local Desconhecido"
-
         // Resolve origin + destination in parallel using the smart geocoder
         // (postal code SQLite DB + known CTT hubs/cities)
         const [originCoord, destCoord] = await Promise.all([
@@ -85,63 +82,12 @@ export default async function OpsTrackingPage(props: {
 
         const dbEvts = eventsByShipment[s.id] || []
 
-        // Build pickagens list from real DB events ONLY
-        const pickagens: ShipmentPickagem[] = []
-
-        // Real scans from tracking_events table
-        for (let idx = 0; idx < dbEvts.length; idx++) {
-          const e = dbEvts[idx]
-          // Try location_name first, then description, then sender city
-          const rawLocation = e.location_name || e.description || senderLocationName
-
-          const parenMatch = rawLocation.match(/\(([^)]+)\)[^()]*$/)
-          let candidateCity = parenMatch && parenMatch[1] ? parenMatch[1].trim() : rawLocation
-          candidateCity = candidateCity.replace(/^(c\.?\s*o\.?|co|ctc|cd|cdp|hub|centro operacional|centro de tratamento|plataforma|cais|delegação|delegacion|delegación|correos express|posto)\s+/i, "").trim()
-
-          const isEntregueEvent = e.description?.toUpperCase().includes("ENTREGUE") || e.description?.toUpperCase().includes("ENTREGA CONSEGUIDA") || e.event_code === "EMI"
-
-          let evtCoord
-          if (isEntregueEvent) {
-            evtCoord = destCoord
-          } else {
-            let countryCode = "PT"
-            const isCorreos = s.carrier_code === "correos" || s.carrier_name?.toLowerCase().includes("correos") || s.provider === "correos_express"
-            if (isCorreos) {
-              // For Correos Express, it might be Portugal, Spain or International (Europe)
-              countryCode = ""
-            }
-
-            evtCoord = await resolveCoordinates({
-              city: candidateCity,
-              country: countryCode,
-              useApi: true
-            })
-          }
-
-          // If geo lookup returned the generic fallback, inherit last known checkpoint position (or origin if first)
-          const isGenericFallback = evtCoord.lat === 39.5 && evtCoord.lng === -8.5
-          const lastKnown = pickagens.length > 0
-            ? { lat: pickagens[pickagens.length - 1].lat, lng: pickagens[pickagens.length - 1].lng, name: pickagens[pickagens.length - 1].locationName, district: pickagens[pickagens.length - 1].city }
-            : originCoord
-
-          const finalLat = isGenericFallback ? lastKnown.lat : evtCoord.lat
-          const finalLng = isGenericFallback ? lastKnown.lng : evtCoord.lng
-          const isLast = idx === dbEvts.length - 1
-          pickagens.push({
-            id: `pick-${e.id || idx}`,
-            code: e.event_code || "TRN",
-            title: e.description || "Passagem em Ponto de Controlo",
-            locationName: isGenericFallback ? (rawLocation || lastKnown.name) : evtCoord.name,
-            city: isGenericFallback ? (lastKnown.district || s.sender_city || "Portugal") : (evtCoord.district || s.sender_city || "Portugal"),
-            lat: finalLat,
-            lng: finalLng,
-            timestamp: e.timestamp || e.created_at,
-            formattedTime: e.timestamp ? new Date(e.timestamp).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) : "11:30",
-            status: isLast && s.status !== "entregue" ? "current" : "completed",
-            isCurrentPosition: isLast,
-            description: e.description
-          })
-        }
+        const isCorreos = s.carrier_code === "correos" || s.carrier_name?.toLowerCase().includes("correos") || s.provider === "correos_express"
+        const pickagens = await buildTrackingCheckpoints(dbEvts, {
+          destination: destCoord,
+          delivered: ["entregue", "devolvido", "entregue_pudo"].includes(s.status),
+          country: isCorreos ? "" : "PT",
+        })
 
         const completedScans = pickagens.filter(p => p.status === "completed" || p.status === "current").length
         
@@ -201,7 +147,7 @@ export default async function OpsTrackingPage(props: {
           isRealData: true,
           origin: {
             hubName: s.sender_name || `Origem: ${originCoord.name}`,
-            city: s.sender_city || originCoord.district || "Local Desconhecido",
+            city: s.sender_city || originCoord.name || "Local Desconhecido",
             postalCode: senderZip || "1000-001",
             address: s.sender_address || `${originCoord.name}, Portugal`,
             departureTime: s.created_at ? new Date(s.created_at).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) : "09:00",
@@ -266,7 +212,7 @@ export default async function OpsTrackingPage(props: {
             Tracking & Mapeamento por Pickagens
           </h1>
           <p className="text-xs text-[var(--text-tertiary)]">
-            Itinerário rodoviário em mapa real traçado com base nas leituras dos centros de triagem e cais da transportadora.
+            Ligação entre os locais identificados nas leituras da transportadora. O traçado não representa o percurso rodoviário exato.
           </p>
         </div>
 

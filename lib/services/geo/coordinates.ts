@@ -209,10 +209,7 @@ const KNOWN_LOCATIONS: Record<string, GeoCoordinate> = {
   "c. o. vila real de santo antónio":{ lat: 37.194, lng: -7.416, name: "C.O. VILA REAL DE SANTO ANTÓNIO", district: "Faro" },
   "c.o. vila real de santo antonio": { lat: 37.194, lng: -7.416, name: "C.O. VILA REAL DE SANTO ANTÓNIO", district: "Faro" },
   "c.o. vila real de santo antónio": { lat: 37.194, lng: -7.416, name: "C.O. VILA REAL DE SANTO ANTÓNIO", district: "Faro" },
-  // Nós Cliente / generic hub nodes
-  "nó cliente":                      { lat: 41.244, lng: -8.680, name: "Nó Cliente (Porto Norte)", district: "Porto" },
-  "no cliente":                      { lat: 41.244, lng: -8.680, name: "Nó Cliente (Porto Norte)", district: "Porto" },
-  "nó de cliente":                   { lat: 41.244, lng: -8.680, name: "Nó Cliente (Porto Norte)", district: "Porto" },
+  // "Nó Cliente" is an event/facility category, not a geographic location.
 
   // Portuguese Districts / Major Cities (18 Mainland Districts)
   "lisboa": { lat: 38.722, lng: -9.139, name: "Lisboa", district: "Lisboa" },

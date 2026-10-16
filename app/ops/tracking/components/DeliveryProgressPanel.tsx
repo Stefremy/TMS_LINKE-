@@ -2,6 +2,7 @@
 
 import React, { useState } from "react"
 import { TrackingShipment } from "../types"
+import { hasCheckpointLocation, getMappedCheckpoints } from "../map-points"
 import {
   RefreshCw,
   CheckCircle2,
@@ -94,7 +95,7 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
             Pickagens & Checkpoints
           </h4>
           <span className="text-[10px] font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] border border-[var(--border-strong)] shadow-2xs px-3 py-1 rounded-full">
-            Itinerário Mapeado
+            {getMappedCheckpoints(pickagens).length} com localização
           </span>
         </div>
 
@@ -151,6 +152,12 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
                   <p className="text-[11px] font-medium text-[var(--text-secondary)] leading-snug mt-0.5">
                     {p.locationName}
                   </p>
+
+                  {!hasCheckpointLocation(p) && (
+                    <p className="text-[10px] text-[var(--text-tertiary)] mt-0.5">
+                      Localização não indicada pela transportadora
+                    </p>
+                  )}
 
                   {p.description && (
                     <p className="text-[10px] text-[var(--text-tertiary)] mt-0.5">

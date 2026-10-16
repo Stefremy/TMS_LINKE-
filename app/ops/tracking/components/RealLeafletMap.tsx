@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react"
 import { TrackingShipment, ShipmentPickagem } from "../types"
+import { getMappedCheckpoints } from "../map-points"
 import "leaflet/dist/leaflet.css"
 import { 
   Layers, 
@@ -123,7 +124,8 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
   ) => {
     layerGroup.clearLayers()
 
-    const pickagens = targetShipment.pickagens || []
+    const pickagens = getMappedCheckpoints(targetShipment.pickagens || [])
+    const lastMappedCheckpoint = pickagens.at(-1)
     
     // Combine origin, pickagens, and destination into one continuous path
     const pathNodes: any[] = []
@@ -197,7 +199,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
       const isOrigin = n.isOrigin
       const isDestination = n.isDestination
       const p = n.pickagemData
-      const isCurrent = p?.isCurrentPosition || n.status === "current"
+      const isCurrent = p && p.id === lastMappedCheckpoint?.id
 
       let pinHtml = ""
       if (isCurrent && p) {
@@ -209,7 +211,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             </div>
             <div class="absolute -top-7 left-1/2 -translate-x-1/2 bg-emerald-700 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap">
-              ${p.formattedTime} • ÚLTIMA PICKAGEM
+              ${p.formattedTime} • ÚLTIMO LOCAL
             </div>
           </div>
         `
@@ -297,16 +299,20 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
 
   const handleCenterOnLastPickagem = () => {
     if (!mapInstanceRef.current) return
-    const current = shipment.pickagens.find((p) => p.isCurrentPosition || p.status === "current")
+    const current = getMappedCheckpoints(shipment.pickagens).at(-1)
     if (current) {
       mapInstanceRef.current.flyTo([current.lat, current.lng], 12, { animate: true, duration: 1.2 })
     }
   }
 
   const handleFitAllRoute = () => {
-    if (!mapInstanceRef.current || shipment.pickagens.length === 0) return
+    if (!mapInstanceRef.current) return
     import("leaflet").then((L) => {
-      const bounds = L.latLngBounds(shipment.pickagens.map((p) => [p.lat, p.lng]))
+      const bounds = L.latLngBounds([
+        [shipment.origin.lat, shipment.origin.lng],
+        ...getMappedCheckpoints(shipment.pickagens).map((p) => [p.lat, p.lng]),
+        [shipment.destination.lat, shipment.destination.lng],
+      ] as [number, number][])
       mapInstanceRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 13, animate: true })
     })
   }
@@ -364,7 +370,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
 
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--surface-bg)] border border-[var(--border-strong)] text-[11px] text-[var(--text-secondary)] shadow-md">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Última Pickagem: <strong className="text-[var(--text-primary)] font-bold">{shipment.metrics.lastPickagemLocation}</strong></span>
+            <span>Último local identificado: <strong className="text-[var(--text-primary)] font-bold">{getMappedCheckpoints(shipment.pickagens).at(-1)?.locationName || shipment.origin.city}</strong></span>
           </div>
         </div>
 
@@ -382,7 +388,8 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
             type="button"
             onClick={handleCenterOnLastPickagem}
             className="w-8 h-8 rounded-lg bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-emerald-600 border border-[var(--border-strong)] flex items-center justify-center shadow-md transition-colors"
-            title="Centrar na última pickagem"
+            title="Centrar na última leitura com localização"
+            disabled={getMappedCheckpoints(shipment.pickagens).length === 0}
           >
             <Crosshair className="w-4 h-4" />
           </button>

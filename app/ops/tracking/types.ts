@@ -7,8 +7,9 @@ export interface ShipmentPickagem {
   locationName: string
   city: string
   postalCode?: string
-  lat: number
-  lng: number
+  // A carrier reading may have no geographic location; retain it in the timeline.
+  lat: number | null
+  lng: number | null
   timestamp: string
   formattedTime: string
   status: "completed" | "current" | "pending"
