@@ -7,6 +7,8 @@ import { getClientesAction } from "@/app/actions/clientes"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
 import { getBillingConfigAction } from "@/app/actions/billing-config"
+import { paymentDueDays } from "@/lib/billing/payment-terms"
+import { addCalendarDays, lisbonDate } from "@/lib/billing/recurring-periods"
 import { moloniRedirectUri } from "@/lib/config/public-origins"
 
 const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
@@ -221,9 +223,9 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
            throw new Error("Todos os envios selecionados têm valor nulo (0€).")
         }
 
-        const dateNow = new Date().toISOString().split("T")[0]
-        const paymentDays = typeof billingConfig.defaultPaymentDays === "number" ? billingConfig.defaultPaymentDays : 30
-        const expirationDate = new Date(Date.now() + paymentDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+        const dateNow = lisbonDate()
+        const paymentDays = paymentDueDays(client.payment_due_days, billingConfig.defaultPaymentDays === undefined ? 30 : billingConfig.defaultPaymentDays)
+        const expirationDate = addCalendarDays(dateNow, paymentDays)
 
         if (!isProForma) await claimManualInvoiceShipments(client.id, shipments.map((s: any) => s.id))
 
@@ -234,6 +236,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
             customerId: moloniCustomerId,
             date: dateNow,
             expirationDate: expirationDate,
+            paymentDays,
             documentSetId: documentSetId,
             products: validProducts
           })
@@ -242,6 +245,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
             customerId: moloniCustomerId,
             date: dateNow,
             expirationDate: expirationDate,
+            paymentDays,
             documentSetId: documentSetId,
             products: validProducts
           })
@@ -757,9 +761,9 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       })
     }
 
-    const dateNow = new Date().toISOString().split("T")[0]
-    const paymentDays = typeof billingConfig.defaultPaymentDays === "number" ? billingConfig.defaultPaymentDays : 30
-    const expirationDate = new Date(Date.now() + paymentDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+    const dateNow = lisbonDate()
+    const paymentDays = paymentDueDays(client.payment_due_days, billingConfig.defaultPaymentDays === undefined ? 30 : billingConfig.defaultPaymentDays)
+    const expirationDate = addCalendarDays(dateNow, paymentDays)
 
     if (!isProForma) await claimManualInvoiceShipments(stmt.client_id, stmt.shipment_ids || stmt.shipments?.map((s: any) => s.id) || [])
 
@@ -770,6 +774,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
         customerId: moloniCustomerId,
         date: dateNow,
         expirationDate: expirationDate,
+        paymentDays,
         documentSetId: documentSetId,
         products: validProducts
       })
@@ -778,6 +783,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
         customerId: moloniCustomerId,
         date: dateNow,
         expirationDate: expirationDate,
+        paymentDays,
         documentSetId: documentSetId,
         products: validProducts
       })

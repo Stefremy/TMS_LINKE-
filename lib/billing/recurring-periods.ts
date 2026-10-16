@@ -8,6 +8,7 @@ export interface RecurringClient {
   legal_name?: string
   billing_type?: string
   payment_terms?: string
+  payment_due_days?: number
   billing_email?: string
   email?: string
   nif?: string

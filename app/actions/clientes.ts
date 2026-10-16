@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { DEFAULT_CLIENT_PRICING, SYSTEM_AVAILABLE_WEBSERVICES } from "@/app/ops/entidades/clientes/types"
 import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
+import { paymentDueDays } from "@/lib/billing/payment-terms"
 import { normalizeStoreSlug } from "@/lib/client-portal/paths"
 
 
@@ -303,6 +304,9 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     manager_name: cliente.manager_name?.trim() || "",
     billing_agency: cliente.billing_agency || "A01 - Sede Guimarães",
     payment_terms: cliente.payment_terms || "A 30 dias",
+    payment_due_days: cliente.payment_due_days === undefined
+      ? previous?.details?.payment_due_days
+      : paymentDueDays(cliente.payment_due_days, 0),
     iban: cliente.iban?.trim() || "",
     credit_limit: cliente.credit_limit ?? 5000,
     balance: cliente.balance || "0,00€",

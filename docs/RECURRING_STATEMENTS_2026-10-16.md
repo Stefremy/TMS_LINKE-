@@ -21,7 +21,7 @@ Os documentos ficam em **Cliente → Período → Extrato e envios**, junto das 
 
 O extrato continua a ser um documento interno. No fecho, a automação emite **uma fatura Moloni fechada**, guarda o documento no arquivo e associa os envios à fatura. A fatura fica **emitida e por pagar**, com **Emitir Recibo** disponível. O recibo é emitido apenas quando o pagamento é confirmado pela equipa. Para estas faturas automáticas, o valor do recibo é obtido do documento Moloni, incluindo impostos e deduzindo montantes já conciliados. O saldo da carteira não é debitado. Envios anteriores à ativação continuam na faturação manual.
 
-A frequência dos ciclos usa a condição de pagamento do cliente. O vencimento da fatura mantém o prazo configurado na configuração de faturação do TMS; no momento desta atualização, 7 dias. O prazo correspondente é obtido/criado no Moloni para que o PDF apresente a designação correta.
+A frequência dos ciclos usa a condição de pagamento do cliente. O vencimento da fatura usa o campo **Prazo para pagar (dias)** da ficha de cada cliente, independente da **Frequência de faturação**. Aceita 0 a 365 dias inteiros (0 = próprio dia). Para clientes sem um prazo próprio, usa o valor geral da empresa; no momento desta atualização, 7 dias. A alteração aplica-se às próximas faturas, automáticas e manuais, sem modificar documentos já emitidos. O prazo correspondente é obtido/criado no Moloni para que o PDF apresente a designação correta.
 
 ## Implementação e operação
 
@@ -43,8 +43,8 @@ Migração: `supabase/migrations/20261016120000_recurring_statement_cycles.sql`.
 
 ## Validação
 
-- `npm run test:recurring`: 31 testes de emissão e períodos, limites, fuso horário, alterações de modalidade, concorrência, duplicados, falhas de email, períodos vazios e permissões.
-- `npm run test:billing`: 19 testes, incluindo preservação da faturação Moloni e arquivo existente.
+- `npm run test:recurring`: 33 testes de emissão e períodos, limites, fuso horário, alterações de modalidade, concorrência, duplicados, falhas de email, períodos vazios e permissões.
+- `npm run test:billing`: 21 testes, incluindo preservação da faturação Moloni e arquivo existente.
 - `npm run test:security`: cobre também autorização dos PDFs dos novos extratos.
 - `tests/recurring-statements.integration.sql`: executado na base de dados real com registos fictícios isolados, dentro de transação terminada com **ROLLBACK**. Valida todos os prazos, limites, valores, transições, bloqueios, recuperação e permissões.
 - PDFs de 2 e 100 envios renderizados e inspecionados, incluindo a última página.

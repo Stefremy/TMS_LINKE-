@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 import Link from "next/link"
 
 export default async function OpsTrackingPage(props: {
-  searchParams?: Promise<{ tab?: string; search?: string }> | { tab?: string; search?: string }
+  searchParams?: Promise<{ tab?: string; search?: string }>
 }) {
   const supabase = createAdminClient()
   const resolvedSearchParams = await props.searchParams

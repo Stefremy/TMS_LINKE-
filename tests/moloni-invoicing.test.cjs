@@ -6,17 +6,17 @@ const TENANT = '11111111-1111-1111-1111-111111111111'
 const CLIENT = '22222222-2222-2222-2222-222222222222'
 const SHIPMENT = '44444444-4444-4444-4444-444444444444'
 const connection = (details = {}) => ({tenant_id: TENANT, action: 'moloni_connection_config', created_at:'2026-10-15', details:{company_id:'42',refresh_token:'saved-refresh',...details}})
-function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false}={}) {
+function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false, clientDueDays=undefined}={}) {
   const db = fakeSupabase({audit_log: [...(connected ? [connection()] : []), ...existing], shipments:[
     {id:SHIPMENT,client_id:CLIENT,tenant_id:TENANT,sell_price:3.91,service_type:'Nacional'}
   ]}, q=>failArchive&&q.write?.kind==='insert'&&q.write.value.action==='billing_statement'?{message:'unavailable'}:null)
   db.client.rpc = async (name) => { assert.equal(name, 'claim_billing_shipments'); return { data: null, error: null } }
-  let issued = 0
+  let issued = 0, lastInvoicePayload
   const load = createLoader({
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
     '@/lib/auth/context':{getTenantId:async()=>TENANT,requireEmployee:async()=>({tenant_id:TENANT}),requireUser:async()=>({tenant_id:TENANT})},
     '@/lib/config/public-origins':{moloniRedirectUri:()=> 'https://fixture.invalid/callback'},
-    '@/app/actions/clientes':{getClientesAction:async()=>[{id:CLIENT,tenant_id:TENANT,nif:'999999990'}]},
+    '@/app/actions/clientes':{getClientesAction:async()=>[{id:CLIENT,tenant_id:TENANT,nif:'999999990',payment_due_days:clientDueDays}]},
     '@/app/actions/shipments':{},
     '@/app/actions/billing-config':{getBillingConfigAction:async()=>({defaultVatRate:23})},
     'next/cache':{revalidatePath(){}},
@@ -26,12 +26,12 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
       async getTaxId(){return 1}
       async getDocumentSet(){return 1}
       async getGenericProductId(){return 1}
-      async createInvoice(){issued++;if(failInvoice)throw new Error('Sessão Moloni expirada');return {document_id:123}}
+      async createInvoice(payload){lastInvoicePayload=payload;issued++;if(failInvoice)throw new Error('Sessão Moloni expirada');return {document_id:123}}
       async getDocumentPDFLink(){if(failPdf)throw new Error('PDF unavailable');return 'https://fixture.invalid/invoice.pdf'}
       async getDocumentNumber(){return 'FT 2026/123'}
     }},
   })
-  return {db,load, get issued(){return issued}, emit:status=>load('app/actions/moloni.ts').internalEmitInvoice(
+  return {db,load, get lastInvoicePayload(){return lastInvoicePayload}, get issued(){return issued}, emit:status=>load('app/actions/moloni.ts').internalEmitInvoice(
     {id:CLIENT,tenant_id:TENANT,nif:'999999990'},[{id:SHIPMENT,status,sell_price:3.91,service_type:'Nacional'}])}
 }
 
@@ -206,4 +206,29 @@ test('direct invoice actions reload the client and prices from server-owned reco
  const saved=h.db.writes.find(w=>w.kind==='insert'&&w.value.action==='billing_statement').value
  assert.equal(saved.tenant_id,TENANT);assert.equal(saved.details.total_value,3.91)
  assert.ok(h.db.queries.some(q=>q.table==='shipments'&&q.filters.some(f=>f.field==='tenant_id'&&f.value===TENANT)&&q.filters.some(f=>f.field==='client_id'&&f.value===CLIENT)))
+})
+
+test('manual shipment invoices also use the saved client deadline, including same-day payment',async()=>{
+ const {addCalendarDays}=createLoader({})('lib/billing/recurring-periods.ts')
+ for(const days of [0,10,30]){
+  const h=invoiceHarness({clientDueDays:days})
+  assert.equal((await h.emit('pending')).success,true)
+  assert.equal(h.lastInvoicePayload.paymentDays,days)
+  assert.equal(h.lastInvoicePayload.expirationDate,addCalendarDays(h.lastInvoicePayload.date,days))
+ }
+})
+
+test('Invoice and proforma payloads use the selected payment deadline in Moloni', async()=>{
+  for (const method of ['createInvoice','createProFormaInvoice']) {
+    const requests=[]
+    const h=tokenHarness([connection({access_token:'cached',access_token_expires_at:Date.now()+60000})],async(url,opts)=>{
+      const payload=JSON.parse(opts.body);requests.push({url,payload})
+      return new Response(JSON.stringify(url.includes('maturityDates/getAll')?[{days:10,maturity_date_id:77}]:{valid:1,document_id:123}))
+    })
+    await new h.MoloniClient({companyId:'42'})[method]({customerId:1,date:'2026-10-16',expirationDate:'2026-10-26',paymentDays:10,documentSetId:1,products:[]})
+    const inserts=requests.filter(r=>r.url.includes('/insert'))
+    assert.equal(inserts.length,1)
+    assert.equal(inserts[0].payload.maturity_date_id,77)
+    assert.equal(inserts[0].payload.expiration_date,'2026-10-26')
+  }
 })

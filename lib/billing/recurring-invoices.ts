@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { MoloniClient } from '@/lib/moloni/moloni-client'
 import { DEFAULT_BILLING_CONFIG, type BillingConfig } from '@/app/actions/billing-config-types'
 import { addCalendarDays, lisbonDate, periodLabel, shipmentTotal, type RecurringClient } from './recurring-periods'
+import { paymentDueDays, moloniMaturityDateId } from './payment-terms'
 import type { PeriodStatement } from './recurring-statements'
 
 interface InvoiceCycle { id: string; statement_id: string; client_id: string; invoice_status: string; invoice_token: string; invoice_document_id: number }
@@ -36,18 +37,10 @@ export async function buildRecurringInvoice(moloni: MoloniClient, client: Recurr
     group.count++; group.cents += Math.round(Number(shipment.sell_price) * 100); groups.set(key, group)
   }
   const date = lisbonDate()
-  // Billing frequency and invoice due date are distinct: preserve the configured payment deadline.
-  const paymentDays = Number(config.defaultPaymentDays)
-  if (!Number.isInteger(paymentDays) || paymentDays < 0) throw new Error('Prazo de vencimento da fatura inválido.')
-  const maturities = await moloni.request('maturityDates/getAll', {})
-  let maturity = Array.isArray(maturities) ? maturities.find((m: { days: number }) => Number(m.days) === paymentDays) : null
-  if (!maturity?.maturity_date_id) {
-    const created = await moloni.request('maturityDates/insert', { name: paymentDays === 0 ? 'Pronto Pagamento' : `${paymentDays} Dias`, days: paymentDays, associated_discount: 0 })
-    if (created?.valid !== 1 || !created.maturity_date_id) throw new Error('Não foi possível configurar o prazo de vencimento no Moloni.')
-    maturity = created
-  }
+  const paymentDays = paymentDueDays(client.payment_due_days, config.defaultPaymentDays)
+  const maturityId = await moloniMaturityDateId(moloni, paymentDays)
   return { customer_id: customer, date, expiration_date: addCalendarDays(date, paymentDays),
-    maturity_date_id: maturity.maturity_date_id, document_set_id: series, status: 1,
+    maturity_date_id: maturityId, document_set_id: series, status: 1,
     your_reference: `TMS-PERIOD-${statement.id}`, notes: `Período de envios: ${periodLabel(statement.period_start, statement.period_end)}`,
     products: [...groups].filter(([, g]) => g.cents > 0).map(([name, g]) => ({ product_id: product,
       name: config.defaultGrouping === 'grouped' ? `${name} (${g.count} envios)` : name,

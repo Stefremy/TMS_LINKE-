@@ -93,6 +93,8 @@ export interface Cliente {
   manager_name?: string
   billing_agency: string
   payment_terms: string
+  /** Prazo após emissão da fatura, separado da frequência de faturação. */
+  payment_due_days?: number
   iban?: string
   credit_limit?: number
   available_credit?: number

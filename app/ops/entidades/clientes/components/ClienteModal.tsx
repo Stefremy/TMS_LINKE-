@@ -44,6 +44,7 @@ import {
 } from "lucide-react"
 import { saveClienteAction } from "@/app/actions/clientes"
 import { inviteClientAccessAction } from "@/app/actions/client-invitations"
+import { paymentDueDays } from "@/lib/billing/payment-terms"
 import { normalizeStoreSlug } from "@/lib/client-portal/paths"
 import type { ServicoLinke, PriceTierLinke } from "@/app/ops/configuracao/servicos/types"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
@@ -64,6 +65,7 @@ interface ClienteModalProps {
   initialData?: Cliente | null
   servicosLinke?: ServicoLinke[]
   canManageAccess?: boolean
+  defaultPaymentDays?: number
   onManageAccess?: () => void
   onClose: () => void
   onSaved: (saved: Cliente) => void
@@ -72,7 +74,7 @@ interface ClienteModalProps {
 type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario"
 type PrecarioSubTab = "servicos_linke" | "suplementares" | "geral"
 
-export function ClienteModal({ initialData, servicosLinke = [], canManageAccess = false, onManageAccess, onClose, onSaved }: ClienteModalProps) {
+export function ClienteModal({ initialData, servicosLinke = [], canManageAccess = false, defaultPaymentDays = 30, onManageAccess, onClose, onSaved }: ClienteModalProps) {
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
@@ -106,6 +108,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     manager_name: initialData?.manager_name || "",
     billing_agency: initialData?.billing_agency || "A01 - Sede Guimarães",
     payment_terms: initialData?.payment_terms || "A 30 dias",
+    payment_due_days: initialData?.payment_due_days ?? defaultPaymentDays,
     iban: initialData?.iban || "",
     credit_limit: initialData?.credit_limit ?? 5000,
     balance: initialData?.balance || "0,00€",
@@ -148,6 +151,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         manager_name: initialData.manager_name || "",
         billing_agency: initialData.billing_agency || "A01 - Sede Guimarães",
         payment_terms: initialData.payment_terms || "A 30 dias",
+        payment_due_days: initialData.payment_due_days ?? defaultPaymentDays,
         iban: initialData.iban || "",
         credit_limit: initialData.credit_limit ?? 5000,
         balance: initialData.balance || "0,00€",
@@ -174,7 +178,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         },
       })
     }
-  }, [initialData, servicosLinke])
+  }, [initialData, servicosLinke, defaultPaymentDays])
 
   React.useEffect(() => {
     if (formData.billing_type === "pay_as_you_go" && formData.payment_terms !== "Pronto Pagamento") {
@@ -304,6 +308,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     setIsSaving(true)
     let persisted = false
     try {
+      paymentDueDays(formData.payment_due_days, NaN)
       const res = await saveClienteAction({
         ...formData,
         id: initialData?.id || draftId,
@@ -906,9 +911,9 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Condição de Pagamento</label>
+                  <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Frequência de faturação</label>
                   <select
                     value={formData.billing_type === "pay_as_you_go" ? "Pronto Pagamento" : (formData.payment_terms || "A 30 dias")}
                     onChange={(e) => setFormData({ ...formData, payment_terms: e.target.value })}
@@ -919,7 +924,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                         : "bg-[var(--surface-muted)] text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] cursor-pointer"
                     }`}
                   >
-                    <option value="Pronto Pagamento">Pronto Pagamento</option>
+                    <option value="Pronto Pagamento">{formData.billing_type === "pay_as_you_go" ? "Pré-pagamento" : "Diária"}</option>
                     <option value="A 7 dias">A 7 dias (Semanal)</option>
                     <option value="A 15 dias">A 15 dias</option>
                     <option value="A 30 dias">A 30 dias</option>
@@ -927,6 +932,16 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     <option value="A 60 dias">A 60 dias</option>
                     <option value="A 90 dias">A 90 dias</option>
                   </select>
+                  <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">Intervalo entre faturas automáticas.</p>
+                </div>
+
+                <div>
+                  <label htmlFor="client-payment-due-days" className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Prazo para pagar (dias)</label>
+                  <input id="client-payment-due-days" type="number" min={0} max={365} step={1}
+                    value={formData.payment_due_days ?? ""} disabled={formData.billing_type === "pay_as_you_go"}
+                    onChange={e => setFormData({ ...formData, payment_due_days: e.target.value === "" ? undefined : Number(e.target.value) })}
+                    className="w-full border border-[var(--border-subtle)] rounded-md px-3 py-2 text-xs font-semibold bg-[var(--surface-muted)] text-[var(--text-primary)] disabled:opacity-50" />
+                  <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">Dias após emissão da fatura. 0 = pagamento no próprio dia. Aplica-se às próximas faturas.</p>
                 </div>
 
                 <div>

@@ -123,3 +123,21 @@ test('automatic invoice receipts use the official amount including VAT and subtr
  assert.throws(()=>h.automaticInvoicePayment({...doc,reconciled_value:'10.34'},123),/já está paga/)
  assert.throws(()=>h.automaticInvoicePayment({...doc,document_id:999},123),/validar/)
 })
+
+test('client payment days accept custom deadlines including zero and reject invalid values',()=>{
+ const {paymentDueDays}=createLoader({})('lib/billing/payment-terms.ts')
+ assert.equal(paymentDueDays(undefined,7),7)
+ for(const days of [0,10,15,30,365])assert.equal(paymentDueDays(days,7),days)
+ for(const bad of [null,'10',-1,1.5,366,NaN,Infinity])assert.throws(()=>paymentDueDays(bad,7),/prazo para pagar/)
+})
+test('each client invoice uses its own payment deadline independently of a fifteen-day billing cycle',async()=>{
+ const h=harness()
+ const {DEFAULT_BILLING_CONFIG}=createLoader({})('app/actions/billing-config-types.ts')
+ const {addCalendarDays}=createLoader({})('lib/billing/recurring-periods.ts')
+ for(const days of [0,10,30]){
+  const m={getCustomerByVat:async()=>({customer_id:7}),getTaxId:async()=>8,getDocumentSet:async()=>9,getGenericProductId:async()=>10,
+   request:async(name)=>{assert.equal(name,'maturityDates/getAll');return [{days,maturity_date_id:77}]}}
+  const payload=await h.buildRecurringInvoice(m,{...client,payment_terms:'A 15 dias',payment_due_days:days},statement,{...DEFAULT_BILLING_CONFIG,defaultPaymentDays:7})
+  assert.equal(payload.expiration_date,addCalendarDays(payload.date,days));assert.equal(payload.maturity_date_id,77)
+ }
+})

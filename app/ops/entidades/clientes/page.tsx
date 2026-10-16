@@ -3,17 +3,20 @@ import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getBillingStatementsAction } from "@/app/actions/moloni"
 import { ClientesClient } from "./components/ClientesClient"
+import { createAdminClient } from "@/lib/supabase/server"
+import { defaultClientPaymentDays } from "@/lib/billing/payment-settings"
 import { requireEmployee } from "@/lib/auth/context"
 
 export const dynamic = "force-dynamic"
 
 export default async function EntidadesClientesPage() {
   const ctx = await requireEmployee()
-  const [clientes, servicosLinke, shipments, statements] = await Promise.all([
+  const [clientes, servicosLinke, shipments, statements, defaultPaymentDays] = await Promise.all([
     getClientesAction(),
     getServicosLinkeAction(),
     getShipmentsAction({ includeLabels: false }),
-    getBillingStatementsAction()
+    getBillingStatementsAction(),
+    defaultClientPaymentDays(createAdminClient(), ctx.tenant_id)
   ])
 
   // Calcular o crédito disponível para cada cliente
@@ -61,6 +64,7 @@ export default async function EntidadesClientesPage() {
       initialClientes={clientesComCredito} 
       initialServicosLinke={servicosLinke} 
       canManageAccess={ctx.role === "admin"}
+      defaultPaymentDays={defaultPaymentDays}
     />
   )
 }

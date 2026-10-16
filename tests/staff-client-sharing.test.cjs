@@ -140,3 +140,25 @@ test('a failed company registry or profile read reports an error instead of hidi
     assert.equal(h.db.writes.length, 0)
   }
 })
+
+test('custom payment deadlines are saved per client, survive reloads and partial edits, without changing billing frequency',async()=>{
+ const h=harness()
+ for(const days of [0,10,45]){
+  const before=h.db.writes.length
+  const result=await h.actions.saveClienteAction({id:A,short_name:'Store A',payment_terms:'A 15 dias',payment_due_days:days})
+  assert.equal(result.success,true);assert.equal(result.data.payment_due_days,days)
+  const profile=h.db.writes.slice(before).find(w=>w.kind==='insert'&&w.value.action==='client_data').value
+  h.tables.audit_log.push({id:`saved-${days}`,created_at:new Date().toISOString(),...profile})
+  const reloaded=(await h.actions.getClientesAction(A)).find(c=>c.id===A)
+  assert.equal(reloaded.payment_due_days,days);assert.equal(reloaded.payment_terms,'A 15 dias')
+  const partial=await h.actions.saveClienteAction({id:A,short_name:'Edited store'})
+  assert.equal(partial.data.payment_due_days,days)
+ }
+})
+test('invalid payment deadlines are rejected by the server without saving the client',async()=>{
+ for(const days of [-1,1.5,366,'10',null,NaN]){
+  const h=harness()
+  await assert.rejects(h.actions.saveClienteAction({id:A,short_name:'Store A',payment_due_days:days}),/prazo para pagar/)
+  assert.equal(h.db.writes.length,0)
+ }
+})

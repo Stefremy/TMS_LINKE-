@@ -1,3 +1,5 @@
+import { moloniMaturityDateId } from "@/lib/billing/payment-terms"
+
 export class MoloniClient {
   private companyId: string;
   private tenantId?: string;
@@ -455,6 +457,7 @@ export class MoloniClient {
     customerId: number;
     date: string;
     expirationDate: string;
+    paymentDays?: number;
     documentSetId: number; // Série documental
     products: Array<{
       productId?: number;
@@ -485,6 +488,9 @@ export class MoloniClient {
     const payload: any = {
       date: data.date,
       expiration_date: data.expirationDate,
+      ...(data.paymentDays !== undefined
+        ? { maturity_date_id: await moloniMaturityDateId(this, data.paymentDays) }
+        : {}),
       document_set_id: data.documentSetId,
       customer_id: data.customerId,
       status: 1, // 1 = Fechado / Certificado AT
@@ -639,6 +645,7 @@ export class MoloniClient {
     customerId: number;
     date: string;
     expirationDate: string;
+    paymentDays?: number;
     documentSetId: number;
     products: Array<{
       productId?: number;
@@ -669,6 +676,9 @@ export class MoloniClient {
     const payload: any = {
       date: data.date,
       expiration_date: data.expirationDate,
+      ...(data.paymentDays !== undefined
+        ? { maturity_date_id: await moloniMaturityDateId(this, data.paymentDays) }
+        : {}),
       document_set_id: data.documentSetId,
       customer_id: data.customerId,
       status: 1, // 1 = Fechado

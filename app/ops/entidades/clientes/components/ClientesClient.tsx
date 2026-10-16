@@ -34,9 +34,10 @@ interface ClientesClientProps {
   initialClientes: Cliente[]
   initialServicosLinke?: ServicoLinke[]
   canManageAccess?: boolean
+  defaultPaymentDays?: number
 }
 
-export function ClientesClient({ initialClientes, initialServicosLinke = [], canManageAccess = false }: ClientesClientProps) {
+export function ClientesClient({ initialClientes, initialServicosLinke = [], canManageAccess = false, defaultPaymentDays = 30 }: ClientesClientProps) {
   const [clientes, setClientes] = React.useState<Cliente[]>(initialClientes || [])
   const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>(initialServicosLinke || [])
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -293,7 +294,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
               <th className="py-2.5 px-3 min-w-[200px]">Contactos</th>
               <th className="py-2.5 px-3 min-w-[150px]">Localidade & Agência</th>
               <th className="py-2.5 px-3 min-w-[140px]">Categoria</th>
-              <th className="py-2.5 px-3 w-24">Cond. Pagam.</th>
+              <th className="py-2.5 px-3 w-24">Faturação / Prazo</th>
               <th className="py-2.5 px-3 w-24 text-right">Crédito</th>
               <th className="py-2.5 px-3 w-20 text-center">Estado</th>
               <th className="py-2.5 px-4 w-12 text-center"></th>
@@ -418,7 +419,8 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
 
                     {/* Condições de Pagamento */}
                     <td className="py-3 px-3 text-[11px] text-[var(--text-secondary)] font-medium">
-                      {item.payment_terms}
+                      <span className="block">{item.billing_type === 'pay_as_you_go' ? 'Pré-pagamento' : item.payment_terms === 'Pronto Pagamento' ? 'Diária' : item.payment_terms}</span>
+                      {item.billing_type !== 'pay_as_you_go' && <span className="block text-[10px] text-[var(--text-tertiary)] mt-0.5">Pagar em {item.payment_due_days ?? defaultPaymentDays} dias</span>}
                     </td>
 
                     {/* Crédito */}
@@ -566,6 +568,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
           initialData={editingCliente}
           servicosLinke={servicosLinke}
           canManageAccess={canManageAccess}
+          defaultPaymentDays={defaultPaymentDays}
           onManageAccess={() => { if (editingCliente) setAuthModalCliente(editingCliente) }}
           onClose={() => setIsModalOpen(false)}
           onSaved={handleSaved}
