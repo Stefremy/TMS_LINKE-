@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from "react"
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, X } from "lucide-react"
+import { Bell, BellRing, ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { User as SupabaseUser } from "@supabase/supabase-js"
 
@@ -18,8 +18,6 @@ const PALETTE = [
   { color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30", dot: "bg-indigo-500" },
 ]
 
-const STORAGE_KEY = "tms_calendar_events"
-
 type CalendarEvent = { 
   id: string | number, 
   date: number, 
@@ -31,6 +29,16 @@ type CalendarEvent = {
   month: number, 
   year: number 
 }
+type CalendarEventRow = {
+  id: string | number
+  event_date: string
+  title: string
+  description?: string | null
+  time?: string | null
+  collab_id: string
+  creator_email?: string | null
+}
+type CalendarCollaborator = { id: string; name: string; email: string; color: string; dot: string }
 
 // Helper to calculate Easter date for a given year
 function getEasterDate(year: number): Date {
@@ -152,12 +160,13 @@ export function TeamCalendar() {
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const [selectedDay, setSelectedDay] = useState<number | null>(new Date().getDate())
   const [formData, setFormData] = useState({ title: "", description: "", time: "" })
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [collaborators, setCollaborators] = useState<any[]>([])
+  const [collaborators, setCollaborators] = useState<CalendarCollaborator[]>([])
   const [showPtHolidays, setShowPtHolidays] = useState(true)
   const [showEsHolidays, setShowEsHolidays] = useState(true)
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default")
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -194,7 +203,7 @@ export function TeamCalendar() {
       const data = await fetchCalendarEvents(year, month)
       if (data) {
         // Map db events to CalendarEvent
-        const mapped: CalendarEvent[] = data.map((d: any) => {
+        const mapped: CalendarEvent[] = data.map((d: CalendarEventRow) => {
           const dateObj = new Date(d.event_date)
           return {
             id: d.id,
@@ -205,7 +214,7 @@ export function TeamCalendar() {
             description: d.description || "",
             time: d.time || "",
             collabId: d.collab_id,
-            creatorEmail: d.creator_email
+            creatorEmail: d.creator_email || undefined
           }
         })
         setEvents(mapped)
@@ -217,10 +226,6 @@ export function TeamCalendar() {
 
   // Notifications logic
   useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      Notification.requestPermission()
-    }
-    
     const checkNotifications = () => {
       const now = new Date()
       
@@ -261,6 +266,11 @@ export function TeamCalendar() {
     const interval = setInterval(checkNotifications, 60000) // check every minute
     return () => clearInterval(interval)
   }, [events])
+
+  const enableNotifications = async () => {
+    if (!("Notification" in window)) return
+    setNotificationPermission(await Notification.requestPermission())
+  }
 
   const openAddEvent = (day?: number) => {
     setSelectedDay(day || new Date().getDate())
@@ -312,13 +322,16 @@ export function TeamCalendar() {
   }
 
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const firstDayOfMonth = new Date(year, month, 1).getDay() // 0 is Sunday
+  const firstDayOfMonth = (new Date(year, month, 1).getDay() + 6) % 7 // Portugal: weeks start Monday
   
   const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
-  const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
+  const dayNames = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
 
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1))
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1))
+  const moveMonth = (offset: number) => {
+    const nextDate = new Date(year, month + offset, 1)
+    setCurrentDate(nextDate)
+    setSelectedDay((day) => Math.min(day || 1, new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate()))
+  }
 
   const days = []
   for (let i = 0; i < firstDayOfMonth; i++) days.push({ day: null, isCurrentMonth: false })
@@ -333,33 +346,37 @@ export function TeamCalendar() {
     if (showEsHolidays) list.push(...getSpanishHolidays(year))
     return list
   }, [year, showPtHolidays, showEsHolidays])
+  const selectedEvents = events.filter((event) => event.date === selectedDay && event.month === month && event.year === year)
+  const selectedHolidays = holidaysThisYear.filter((holiday) => holiday.date === selectedDay && holiday.month === month)
+  const eventCount = events.filter((event) => event.month === month && event.year === year).length
 
   return (
     <>
-      <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-2xs overflow-hidden min-h-[800px] flex flex-col">
+      <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-sm overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="p-5 border-b border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[var(--surface-muted)]/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[var(--accent)]/10 flex items-center justify-center text-[var(--accent)] border border-[var(--accent)]/20 shadow-inner">
+        <div className="p-4 md:px-5 border-b border-[var(--border-subtle)] flex flex-col gap-4 bg-[var(--surface-bg)]">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[var(--surface-muted)] flex items-center justify-center text-[var(--accent)] border border-[var(--border-subtle)]">
               <CalendarIcon className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">Calendário de Equipa</h2>
-              <p className="text-xs text-[var(--text-tertiary)]">Apontamentos, notas e feriados ibéricos (PT & ES)</p>
+              <h2 className="text-base font-bold text-[var(--text-primary)]">Agenda de operações</h2>
+              <p className="text-xs text-[var(--text-secondary)]">{eventCount} {eventCount === 1 ? "evento" : "eventos"} neste mês · Semana de segunda a domingo{isLoading ? " · A atualizar…" : ""}</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Holiday filter toggles */}
-            <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] shadow-xs text-xs">
-              <span className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider font-semibold mr-1">Feriados:</span>
+            <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] px-2 py-1.5 rounded-lg border border-[var(--border-subtle)] text-xs">
+              <span className="text-[10px] text-[var(--text-secondary)] uppercase tracking-wider font-semibold mr-1">Feriados</span>
               <button
                 type="button"
                 onClick={() => setShowPtHolidays(!showPtHolidays)}
                 className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold transition-all border cursor-pointer ${
                   showPtHolidays 
                     ? "bg-[var(--surface-bg)] text-[var(--text-primary)] border-[var(--border-strong)] shadow-2xs" 
-                    : "opacity-40 text-neutral-400 border-transparent hover:opacity-70"
+                    : "text-[var(--text-tertiary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]"
                 }`}
                 title="Mostrar/ocultar feriados de Portugal"
               >
@@ -372,7 +389,7 @@ export function TeamCalendar() {
                 className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold transition-all border cursor-pointer ${
                   showEsHolidays 
                     ? "bg-[var(--surface-bg)] text-[var(--text-primary)] border-[var(--border-strong)] shadow-2xs" 
-                    : "opacity-40 text-neutral-400 border-transparent hover:opacity-70"
+                    : "text-[var(--text-tertiary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]"
                 }`}
                 title="Mostrar/ocultar feriados de Espanha (Atenção a expedições e trânsito)"
               >
@@ -381,52 +398,70 @@ export function TeamCalendar() {
               </button>
             </div>
 
-            {/* Legend with dynamic names */}
-            <div className="hidden lg:flex items-center gap-3 bg-[var(--surface-bg)] px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] shadow-xs">
-              <span className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider font-semibold mr-1">Equipa:</span>
-              {collaborators.map(c => (
-                <div key={c.id} className="flex items-center gap-1.5 cursor-pointer hover:scale-105 transition-transform" title={c.name}>
-                  <span className={`w-2.5 h-2.5 rounded-full ${c.dot}`} />
-                  <span className="text-[11px] font-semibold text-[var(--text-secondary)]">{c.name}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md p-1">
-              <button onClick={prevMonth} className="p-1.5 hover:bg-[var(--border-strong)] rounded transition-colors text-[var(--text-secondary)]">
+            <div className="flex items-center bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-lg p-1">
+              <button type="button" aria-label="Mês anterior" onClick={() => moveMonth(-1)} className="w-9 h-9 flex items-center justify-center hover:bg-[var(--surface-muted)] rounded-md transition-colors text-[var(--text-secondary)]">
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <span className="text-sm font-bold text-[var(--text-primary)] w-32 text-center capitalize">
                 {monthNames[month]} {year}
               </span>
-              <button onClick={nextMonth} className="p-1.5 hover:bg-[var(--border-strong)] rounded transition-colors text-[var(--text-secondary)]">
+              <button type="button" aria-label="Mês seguinte" onClick={() => moveMonth(1)} className="w-9 h-9 flex items-center justify-center hover:bg-[var(--surface-muted)] rounded-md transition-colors text-[var(--text-secondary)]">
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
             <button 
-              onClick={() => openAddEvent()}
-              className="flex items-center gap-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-4 py-2 rounded-md text-sm font-semibold shadow-xs transition-colors"
+              type="button"
+              onClick={() => openAddEvent(selectedDay || new Date().getDate())}
+              className="flex items-center gap-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-xs transition-colors"
             >
               <Plus className="w-4 h-4" />
-              <span>Adicionar Evento</span>
+              <span>Novo evento</span>
+            </button>
+            <button
+              type="button"
+              onClick={enableNotifications}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"
+              title={notificationPermission === "denied" ? "As notificações estão bloqueadas nas definições do navegador" : "Os lembretes aparecem enquanto o calendário está aberto"}
+            >
+              {notificationPermission === "granted" ? <BellRing className="h-4 w-4 text-[var(--accent)]" /> : <Bell className="h-4 w-4" />}
+              <span>
+                {notificationPermission === "granted"
+                  ? "Lembretes ativos"
+                  : notificationPermission === "denied"
+                    ? "Lembretes bloqueados"
+                    : "Ativar lembretes"}
+              </span>
             </button>
           </div>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[var(--border-subtle)] pt-3">
+            <span className="text-[10px] text-[var(--text-secondary)] uppercase tracking-wider font-semibold">Equipa</span>
+            {collaborators.map(c => (
+              <div key={c.id} className="flex items-center gap-1.5" title={c.name}>
+                <span className={`w-2.5 h-2.5 rounded-full ${c.dot}`} />
+                <span className="text-xs font-medium text-[var(--text-secondary)]">{c.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
         </div>
 
         {/* Calendar Grid */}
-        <div className="flex-1 flex flex-col p-5">
+        <div className="flex flex-col p-3 md:p-5">
+          <div className="overflow-x-auto pb-1">
+          <div className="min-w-[700px]">
           <div className="grid grid-cols-7 mb-2">
             {dayNames.map(d => (
-              <div key={d} className="text-center text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
+              <div key={d} className="text-center text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider py-2">
                 {d}
               </div>
             ))}
           </div>
           
-          <div className="flex-1 grid grid-cols-7 gap-px bg-[var(--border-subtle)] border border-[var(--border-subtle)] rounded-lg overflow-hidden">
+          <div className="grid grid-cols-7 gap-px bg-[var(--border-subtle)] border border-[var(--border-subtle)] rounded-lg overflow-hidden">
             {days.map((d, i) => {
               if (!d.isCurrentMonth) {
-                return <div key={`empty-${i}`} className="bg-[var(--surface-bg)]/40 min-h-[120px] p-2" />
+                return <div key={`empty-${i}`} aria-hidden="true" className="bg-[var(--surface-muted)]/35 min-h-[104px] md:min-h-[124px] p-2" />
               }
 
               const dayEvents = events.filter(e => e.date === d.day && e.month === month && e.year === year)
@@ -436,11 +471,13 @@ export function TeamCalendar() {
               const isCurrDay = isToday(d.day!)
 
               return (
-                <div 
+                <button
+                  type="button"
                   key={`day-${d.day}`} 
-                  onClick={() => openAddEvent(d.day!)}
-                  className={`bg-[var(--surface-bg)] min-h-[120px] p-2 transition-colors hover:bg-[var(--surface-muted)] group relative cursor-pointer ${
-                    isCurrDay ? 'ring-1 ring-inset ring-[var(--accent)] bg-[var(--accent)]/5' : ''
+                  onClick={() => setSelectedDay(d.day!)}
+                  aria-pressed={selectedDay === d.day}
+                  className={`text-left bg-[var(--surface-bg)] min-h-[104px] md:min-h-[124px] p-2 transition-colors hover:bg-[var(--surface-muted)] group relative cursor-pointer focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
+                    selectedDay === d.day ? 'ring-2 ring-inset ring-[var(--accent)] bg-[var(--accent)]/[0.06]' : ''
                   } ${hasPt && hasEs ? 'bg-amber-500/[0.04]' : hasPt ? 'bg-rose-500/[0.04]' : hasEs ? 'bg-amber-500/[0.03]' : ''}`}
                 >
                   <div className="flex items-start justify-between mb-1.5">
@@ -478,9 +515,9 @@ export function TeamCalendar() {
                         </div>
                       )}
                     </div>
-                    <button className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-tertiary)] hover:text-[var(--text-primary)] shrink-0 mt-0.5">
+                    <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-tertiary)] shrink-0 mt-0.5" aria-hidden="true">
                       <Plus className="w-3.5 h-3.5" />
-                    </button>
+                    </span>
                   </div>
                   
                   <div className="space-y-1.5 flex flex-col overflow-y-auto max-h-[80px] pr-1 custom-scrollbar">
@@ -504,10 +541,45 @@ export function TeamCalendar() {
                       )
                     })}
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
+          </div>
+          </div>
+
+          <section aria-label="Detalhes do dia selecionado" className="mt-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)]/50">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">Dia selecionado</p>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">{selectedDay} de {monthNames[month]} de {year}</h3>
+              </div>
+              <button type="button" onClick={() => openAddEvent(selectedDay || undefined)} className="inline-flex items-center justify-center gap-1.5 min-h-9 px-3 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] text-[var(--text-primary)] hover:border-[var(--accent)] hover:text-[var(--accent)] text-xs font-semibold transition-colors">
+                <Plus className="w-3.5 h-3.5" /> Adicionar ao dia
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              {selectedHolidays.map((holiday) => (
+                <div key={`${holiday.country}-${holiday.title}`} className="flex items-center gap-2 text-sm text-[var(--text-primary)]">
+                  <MinimalFlag country={holiday.country} />
+                  <span className="font-medium">{holiday.title}</span>
+                  <span className="text-xs text-[var(--text-secondary)]">{holiday.country === "PT" ? "Portugal" : "Espanha"}</span>
+                </div>
+              ))}
+              {selectedEvents.map((event) => {
+                const collaborator = collaborators.find((person) => person.id === event.collabId)
+                return <div key={event.id} className="flex items-start gap-3 rounded-md border border-[var(--border-subtle)] px-3 py-2.5">
+                  <span className="mt-1.5 w-2 h-2 rounded-full bg-[var(--accent)] shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">{event.title}</p>
+                    {event.description && <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{event.description}</p>}
+                    <p className="mt-1 text-[11px] text-[var(--text-secondary)]">{event.time || "Sem hora"}{collaborator ? ` · ${collaborator.name}` : ""}</p>
+                  </div>
+                </div>
+              })}
+              {selectedHolidays.length === 0 && selectedEvents.length === 0 && <p className="text-sm text-[var(--text-secondary)]">Sem eventos ou feriados neste dia.</p>}
+            </div>
+          </section>
         </div>
       </div>
 
@@ -578,9 +650,11 @@ export function TeamCalendar() {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-semibold transition-colors"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-60 text-white rounded-lg text-sm font-semibold transition-colors"
                 >
-                  Guardar Evento
+                  {isSubmitting && <span className="h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />}
+                  {isSubmitting ? "A guardar…" : "Guardar Evento"}
                 </button>
               </div>
             </form>

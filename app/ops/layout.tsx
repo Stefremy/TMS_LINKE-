@@ -5,9 +5,9 @@ import { OpsSidebar } from "./components/OpsSidebar"
 import { getMyProfile } from "@/lib/auth/profile"
 import { NotificationBell } from "./components/NotificationBell"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
-import { createClient } from "@/lib/supabase/server"
 import { signout } from "@/app/login/actions"
 import { requireEmployee } from "@/lib/auth/context"
+import { canAccessStaffDocuments } from "@/lib/auth/staff-documents"
 import { 
   Plus,
   HelpCircle,
@@ -33,7 +33,7 @@ export default async function OpsLayout({
   return (
     <div className="tms-shell tms-workspace bg-[var(--canvas-bg)] flex flex-col text-[var(--text-primary)]">
       {/* Interactive Collapsible Sidebar */}
-      <OpsSidebar />
+      <OpsSidebar canAccessDocuments={canAccessStaffDocuments(authContext)} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -44,7 +44,7 @@ export default async function OpsLayout({
           </div>
           
           <div className="flex items-center gap-5">
-            <Link href="/ops/envios/novo" className="flex items-center gap-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-md text-[12px] font-bold transition-colors shadow-xs">
+            <Link href="/ops/envios/novo" className="tms-brand-cta flex items-center gap-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-md text-[12px] font-bold transition-colors shadow-xs">
               <Plus className="w-4 h-4" strokeWidth={1.75} />
               Novo Envio
             </Link>

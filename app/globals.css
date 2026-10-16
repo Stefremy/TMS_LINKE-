@@ -14,7 +14,7 @@
   --text-tertiary: #69707A;
 
   /* Brand / Accent */
-  --accent: #128A47;
+  --accent: #107b3e;
   --accent-hover: #0E6C37;
   --accent-active: #18A957;
   --accent-soft: #F0FDF4;
@@ -32,9 +32,543 @@
   --status-critical-soft: #FEF2F2;
   --status-info: #1D4ED8;
   --status-info-soft: #EFF6FF;
+  --status-distribution: #0369a1;
+  --chart-series-actual: #167344;
+  --chart-series-prev1: #1d5fa5;
+  --chart-series-prev2: #8a5a00;
+  --chart-series-prev3: #a43b32;
 
   /* Elevation */
   --shadow-layer: 0 1px 2px rgba(24, 24, 27, 0.05), 0 4px 12px rgba(24, 24, 27, 0.08);
+}
+
+/* Optional local Windows 98 inspired skin for staff who prefer a classic UI. */
+html[data-tms-theme="win98"] {
+  --canvas-bg: #c0c0c0;
+  --surface-bg: #d4d0c8;
+  --surface-muted: #c0c0c0;
+  --surface-dim: #b5b2aa;
+  --text-primary: #111111;
+  --text-secondary: #303030;
+  --text-tertiary: #505050;
+  --accent: #000080;
+  --accent-hover: #000066;
+  --accent-active: #1084d0;
+  --accent-soft: #d8e4f2;
+  --border-subtle: #808080;
+  --border-strong: #404040;
+  --status-success: #008000;
+  --status-success-soft: #d8e8d8;
+  --status-warning: #9a6500;
+  --status-warning-soft: #f5e8bd;
+  --status-critical: #a00000;
+  --status-critical-soft: #f1dada;
+  --status-info: #000080;
+  --status-info-soft: #d8e4f2;
+  --status-distribution: #005a9e;
+  --chart-series-actual: #008000;
+  --chart-series-prev1: #000080;
+  --chart-series-prev2: #805400;
+  --chart-series-prev3: #a00000;
+  --shadow-layer: inset 1px 1px 0 #ffffff, inset -1px -1px 0 #808080;
+}
+
+/* Windows XP Luna inspired theme. */
+html[data-tms-theme="winxp"] {
+  --canvas-bg: #e8f0fb;
+  --surface-bg: #f7faff;
+  --surface-muted: #e5eefb;
+  --surface-dim: #d4e2f5;
+  --text-primary: #18365d;
+  --text-secondary: #435b79;
+  --text-tertiary: #607995;
+  --accent: #1769bd;
+  --accent-hover: #10549e;
+  --accent-active: #0b4486;
+  --accent-soft: #d9e9ff;
+  --border-subtle: #b7cbe6;
+  --border-strong: #83a7d5;
+  --status-success: #23813c;
+  --status-success-soft: #e1f1df;
+  --status-warning: #a95b08;
+  --status-warning-soft: #fff0cf;
+  --status-critical: #c33228;
+  --status-critical-soft: #fde5e1;
+  --status-info: #1769bd;
+  --status-info-soft: #d9e9ff;
+  --status-distribution: #1556a6;
+  --chart-series-actual: #23813c;
+  --chart-series-prev1: #1769bd;
+  --chart-series-prev2: #805500;
+  --chart-series-prev3: #a2362e;
+  --shadow-layer: 0 2px 6px rgba(32, 72, 128, 0.2), inset 0 1px 0 #ffffff;
+}
+
+html[data-tms-theme="winxp"] body {
+  background: linear-gradient(180deg, #dbe9fb 0, #edf4fd 12rem, var(--canvas-bg) 24rem);
+  font-family: Tahoma, Verdana, Arial, sans-serif;
+  -webkit-font-smoothing: auto;
+}
+
+html[data-tms-theme="winxp"] .tms-sidebar,
+html[data-tms-theme="winxp"] .tms-mobile-topbar,
+html[data-tms-theme="winxp"] .tms-bottom-nav,
+html[data-tms-theme="winxp"] .tms-mobile-dialog {
+  --surface-bg: #2163bd;
+  --surface-muted: #347bd2;
+  --surface-dim: #164a9b;
+  --text-primary: #ffffff;
+  --text-secondary: #edf5ff;
+  --text-tertiary: #c7dcf9;
+  --accent: #c7ee88;
+  --accent-hover: #b6e471;
+  --accent-active: #a3d45d;
+  --accent-soft: rgba(218, 245, 178, 0.2);
+  --border-subtle: rgba(255, 255, 255, 0.28);
+  --border-strong: rgba(255, 255, 255, 0.48);
+  background: linear-gradient(180deg, #1e5eb6, #164b9b 62%, #123e84);
+  color: #ffffff;
+}
+
+html[data-tms-theme="winxp"] .tms-sidebar :is(a, button):hover {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+html[data-tms-theme="winxp"] :is(.tms-sidebar, .tms-mobile-dialog) a[class*="bg-[var(--accent-soft)]"] {
+  background-color: #c7ee88;
+  color: #173d6d;
+}
+
+html[data-tms-theme="winxp"] .tms-brand-logo,
+html[data-tms-theme="linke-vibrant"] .tms-brand-logo,
+html[data-tms-theme="linke-four"] .tms-brand-logo {
+  filter: brightness(0) invert(1);
+}
+
+html[data-tms-theme="winxp"] :is(.tms-mobile-topbar, .tms-bottom-nav) .tms-brand-cta {
+  background: linear-gradient(180deg, #e6f7c7, #bfe78a);
+  color: #174a25;
+}
+
+html[data-tms-theme="winxp"] :is(button, input, select, textarea) {
+  border-radius: 4px;
+}
+
+html[data-tms-theme="winxp"] button {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 1px 2px rgba(24, 56, 100, 0.2);
+}
+
+html[data-tms-theme="winxp"] :is(input, select, textarea) {
+  border-color: #9db8dc;
+  box-shadow: inset 0 1px 2px rgba(27, 61, 105, 0.12), 0 1px 0 #ffffff;
+}
+
+html[data-tms-theme="winxp"] :is(.bg-white, .bg-slate-50, .bg-slate-100) {
+  background-color: var(--surface-bg);
+}
+
+html[data-tms-theme="winxp"] :is(.border-slate-100, .border-slate-200, .border-slate-300) {
+  border-color: var(--border-subtle);
+}
+
+/* Linke's brighter brand palette: teal chrome, lime highlights, calm content surfaces. */
+html[data-tms-theme="linke-vibrant"] {
+  --canvas-bg: #f5f7f4;
+  --surface-bg: #ffffff;
+  --surface-muted: #edf3ec;
+  --surface-dim: #e1e9e1;
+  --text-primary: #1d2927;
+  --text-secondary: #53635f;
+  --text-tertiary: #697a75;
+  --accent: #177e74;
+  --accent-hover: #126b63;
+  --accent-active: #0e5d57;
+  --accent-soft: #e9f5d5;
+  --border-subtle: rgba(29, 67, 59, 0.13);
+  --border-strong: rgba(29, 67, 59, 0.24);
+  --status-success: #16834d;
+  --status-success-soft: #e8f4e8;
+  --shadow-layer: 0 1px 2px rgba(24, 48, 42, 0.05), 0 4px 12px rgba(24, 48, 42, 0.08);
+}
+
+html[data-tms-theme="linke-vibrant"] .tms-sidebar,
+html[data-tms-theme="linke-vibrant"] .tms-mobile-topbar,
+html[data-tms-theme="linke-vibrant"] .tms-bottom-nav,
+html[data-tms-theme="linke-vibrant"] .tms-mobile-dialog {
+  --surface-bg: #116f67;
+  --surface-muted: #0e625b;
+  --surface-dim: #0b554f;
+  --text-primary: #f8fff6;
+  --text-secondary: #e0f2ed;
+  --text-tertiary: #b9ddd4;
+  --accent: #c0f35c;
+  --accent-hover: #a9df42;
+  --accent-active: #98ce35;
+  --accent-soft: rgba(192, 243, 92, 0.16);
+  --border-subtle: rgba(232, 255, 246, 0.2);
+  --border-strong: rgba(232, 255, 246, 0.34);
+  background-color: #116f67;
+  color: #f8fff6;
+}
+
+html[data-tms-theme="linke-vibrant"] .tms-sidebar :is(a, button):hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+html[data-tms-theme="linke-vibrant"] :is(.tms-sidebar, .tms-mobile-dialog) a[class*="bg-[var(--accent-soft)]"] {
+  background-color: #c0f35c;
+  color: #174b43;
+}
+
+html[data-tms-theme="linke-vibrant"] .tms-mobile-topbar .tms-brand-cta {
+  background-color: #c0f35c;
+  color: #174b43;
+}
+
+html[data-tms-theme="linke-vibrant"] .tms-mobile-topbar .tms-brand-cta:hover {
+  background-color: #a9df42;
+}
+
+html[data-tms-theme="linke-vibrant"] .tms-bottom-nav .tms-brand-cta {
+  background-color: #c0f35c;
+  color: #174b43;
+}
+
+html[data-tms-theme="linke-vibrant"] .tms-bottom-nav .tms-nav-create > span {
+  color: #174b43;
+}
+
+/* Four-color Linke palette: teal navigation, lime selection, blue nav actions, petrol text. */
+html[data-tms-theme="linke-four"] {
+  --canvas-bg: #f6f8f3;
+  --surface-bg: #fffefa;
+  --surface-muted: #edf3e8;
+  --surface-dim: #dfe9da;
+  --text-primary: #174f49;
+  --text-secondary: #48645e;
+  --text-tertiary: #688078;
+  --accent: #197d73;
+  --accent-hover: #126b63;
+  --accent-active: #0e5a54;
+  --accent-soft: #e3f0d2;
+  --border-subtle: rgba(28, 85, 73, 0.15);
+  --border-strong: rgba(28, 85, 73, 0.25);
+  --shadow-layer: 0 1px 2px rgba(24, 48, 42, 0.05), 0 4px 12px rgba(24, 48, 42, 0.08);
+}
+
+html[data-tms-theme="linke-four"] .tms-sidebar,
+html[data-tms-theme="linke-four"] .tms-mobile-topbar,
+html[data-tms-theme="linke-four"] .tms-bottom-nav,
+html[data-tms-theme="linke-four"] .tms-mobile-dialog {
+  --surface-bg: #116f67;
+  --surface-muted: #0e625b;
+  --surface-dim: #0b554f;
+  --text-primary: #f8fff6;
+  --text-secondary: #e0f2ed;
+  --text-tertiary: #b9ddd4;
+  --accent: #c0f35c;
+  --accent-hover: #a9df42;
+  --accent-active: #98ce35;
+  --accent-soft: rgba(192, 243, 92, 0.16);
+  --border-subtle: rgba(232, 255, 246, 0.2);
+  --border-strong: rgba(232, 255, 246, 0.34);
+  background-color: #116f67;
+  color: #f8fff6;
+}
+
+html[data-tms-theme="linke-four"] .tms-sidebar :is(a, button):hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+html[data-tms-theme="linke-four"] :is(.tms-sidebar, .tms-mobile-dialog) a[class*="bg-[var(--accent-soft)]"] {
+  background-color: #c0f35c;
+  color: #174b43;
+}
+
+html[data-tms-theme="linke-four"] .tms-brand-cta {
+  background-color: #246caf;
+  color: #ffffff;
+}
+
+html[data-tms-theme="linke-four"] .tms-brand-cta:hover {
+  background-color: #1d5fa5;
+}
+
+/* Linke Noir: a restrained dark workspace with a teal brand accent. */
+html[data-tms-theme="linke-noir"] {
+  color-scheme: dark;
+  --canvas-bg: #141d20;
+  --surface-bg: #202b2f;
+  --surface-muted: #29373b;
+  --surface-dim: #34454a;
+  --text-primary: #eef4f3;
+  --text-secondary: #c1cecc;
+  --text-tertiary: #9eafad;
+  --accent: #45bba8;
+  --accent-hover: #36a18f;
+  --accent-active: #287f72;
+  --accent-soft: #263f3d;
+  --border-subtle: #3b4a4e;
+  --border-strong: #53676b;
+  --status-success: #46a969;
+  --status-success-soft: #213b2e;
+  --status-warning: #d99b45;
+  --status-warning-soft: #463923;
+  --status-critical: #dc6259;
+  --status-critical-soft: #472c2d;
+  --status-info: #5b9ad7;
+  --status-info-soft: #243b50;
+  --status-distribution: #73b5e3;
+  --chart-series-actual: #63c482;
+  --chart-series-prev1: #78b9eb;
+  --chart-series-prev2: #e2b755;
+  --chart-series-prev3: #ed8175;
+  --shadow-layer: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+html[data-tms-theme="linke-noir"] body { background: var(--canvas-bg); }
+html[data-tms-theme="linke-noir"] :is(.bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-200) { background-color: var(--surface-bg); }
+html[data-tms-theme="linke-noir"] :is(.text-slate-900, .text-slate-800, .text-slate-700) { color: var(--text-primary); }
+html[data-tms-theme="linke-noir"] :is(.text-slate-600, .text-slate-500, .text-slate-400) { color: var(--text-secondary); }
+html[data-tms-theme="linke-noir"] :is(.border-slate-100, .border-slate-200, .border-slate-300) { border-color: var(--border-subtle); }
+html[data-tms-theme="linke-noir"] .tms-sidebar,
+html[data-tms-theme="linke-noir"] .tms-mobile-topbar,
+html[data-tms-theme="linke-noir"] .tms-bottom-nav,
+html[data-tms-theme="linke-noir"] .tms-mobile-dialog {
+  --surface-bg: #172427;
+  --surface-muted: #223235;
+  --surface-dim: #2b3e40;
+  --text-primary: #f1f7f5;
+  --text-secondary: #d1dfdc;
+  --text-tertiary: #a9c0bb;
+  --accent: #63d0bd;
+  --accent-hover: #48b7a4;
+  --accent-soft: rgba(99, 208, 189, 0.15);
+  --border-subtle: rgba(220, 245, 238, 0.16);
+  background: #172427;
+  color: #f1f7f5;
+}
+html[data-tms-theme="linke-noir"] .tms-brand-logo { filter: brightness(0) invert(1); }
+html[data-tms-theme="linke-noir"] :is(button, a)[class*="bg-[var(--accent)]"] { color: #102321; }
+
+/* Terminal DOS: warm phosphor text on a dark, square-edged workspace. */
+html[data-tms-theme="terminal-dos"] {
+  color-scheme: dark;
+  --canvas-bg: #080c09;
+  --surface-bg: #101711;
+  --surface-muted: #182219;
+  --surface-dim: #222e22;
+  --text-primary: #e5e9d8;
+  --text-secondary: #c4ceb4;
+  --text-tertiary: #9eae8a;
+  --accent: #efc35b;
+  --accent-hover: #d9aa3e;
+  --accent-active: #b98a2e;
+  --accent-soft: #2b2819;
+  --border-subtle: #46513a;
+  --border-strong: #6b754f;
+  --status-success: #83c765;
+  --status-success-soft: #1b2d19;
+  --status-warning: #efc35b;
+  --status-warning-soft: #322b19;
+  --status-critical: #ed7666;
+  --status-critical-soft: #321d1b;
+  --status-info: #7ba9d1;
+  --status-info-soft: #1b2731;
+  --status-distribution: #8fc5e9;
+  --chart-series-actual: #83c765;
+  --chart-series-prev1: #8fc5e9;
+  --chart-series-prev2: #efc35b;
+  --chart-series-prev3: #ed7666;
+  --shadow-layer: 0 0 0 1px rgba(239, 195, 91, 0.08);
+}
+html[data-tms-theme="terminal-dos"] body { background: var(--canvas-bg); font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+html[data-tms-theme="terminal-dos"] :is(.bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-200) { background-color: var(--surface-bg); }
+html[data-tms-theme="terminal-dos"] :is(.text-slate-900, .text-slate-800, .text-slate-700) { color: var(--text-primary); }
+html[data-tms-theme="terminal-dos"] :is(.text-slate-600, .text-slate-500, .text-slate-400) { color: var(--text-secondary); }
+html[data-tms-theme="terminal-dos"] :is(.border-slate-100, .border-slate-200, .border-slate-300) { border-color: var(--border-subtle); }
+html[data-tms-theme="terminal-dos"] :is(button, input, select, textarea) { border-radius: 0; }
+html[data-tms-theme="terminal-dos"] button { box-shadow: inset 0 0 0 1px rgba(239, 195, 91, 0.16); }
+html[data-tms-theme="terminal-dos"] :is(input, select, textarea) { background-color: #0a100b; color: var(--text-primary); }
+html[data-tms-theme="terminal-dos"] .tms-sidebar,
+html[data-tms-theme="terminal-dos"] .tms-mobile-topbar,
+html[data-tms-theme="terminal-dos"] .tms-bottom-nav,
+html[data-tms-theme="terminal-dos"] .tms-mobile-dialog {
+  --surface-bg: #090e0a;
+  --surface-muted: #151f15;
+  --surface-dim: #202d1d;
+  --text-primary: #e5e9d8;
+  --text-secondary: #c4ceb4;
+  --text-tertiary: #9eae8a;
+  --accent: #efc35b;
+  --accent-soft: rgba(239, 195, 91, 0.12);
+  --border-subtle: #3b4932;
+  background: #090e0a;
+  color: #e5e9d8;
+}
+html[data-tms-theme="terminal-dos"] .tms-brand-logo { filter: brightness(0) invert(1); }
+html[data-tms-theme="terminal-dos"] :is(button, a)[class*="bg-[var(--accent)]"] { color: #28210e; }
+
+/* Game Boy: muted LCD greens with crisp, square controls. */
+html[data-tms-theme="gameboy"] {
+  --canvas-bg: #cbd6a4;
+  --surface-bg: #e6edc6;
+  --surface-muted: #d8e2b4;
+  --surface-dim: #bfce98;
+  --text-primary: #263b2e;
+  --text-secondary: #405944;
+  --text-tertiary: #536e56;
+  --accent: #557c53;
+  --accent-hover: #426843;
+  --accent-active: #344f35;
+  --accent-soft: #d1dfaa;
+  --border-subtle: #9baa78;
+  --border-strong: #6f875f;
+  --status-success: #267348;
+  --status-success-soft: #c7dba8;
+  --status-warning: #966a24;
+  --status-warning-soft: #ead9a7;
+  --status-critical: #a64034;
+  --status-critical-soft: #e6c2a8;
+  --status-info: #37667e;
+  --status-info-soft: #c3d7cd;
+  --status-distribution: #37667e;
+  --chart-series-actual: #267348;
+  --chart-series-prev1: #37667e;
+  --chart-series-prev2: #805918;
+  --chart-series-prev3: #a64034;
+  --shadow-layer: 2px 2px 0 rgba(48, 69, 49, 0.22);
+}
+html[data-tms-theme="gameboy"] body { background: var(--canvas-bg); font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+html[data-tms-theme="gameboy"] :is(.bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-200) { background-color: var(--surface-bg); }
+html[data-tms-theme="gameboy"] :is(.text-slate-900, .text-slate-800, .text-slate-700) { color: var(--text-primary); }
+html[data-tms-theme="gameboy"] :is(.text-slate-600, .text-slate-500, .text-slate-400) { color: var(--text-secondary); }
+html[data-tms-theme="gameboy"] :is(.border-slate-100, .border-slate-200, .border-slate-300) { border-color: var(--border-subtle); }
+html[data-tms-theme="gameboy"] :is(button, input, select, textarea, .rounded-2xl, .rounded-xl, .rounded-lg, .rounded-md) { border-radius: 0; }
+html[data-tms-theme="gameboy"] button { box-shadow: inset 1px 1px 0 #f4f6dc, 2px 2px 0 rgba(48, 69, 49, 0.24); }
+html[data-tms-theme="gameboy"] .tms-sidebar,
+html[data-tms-theme="gameboy"] .tms-mobile-topbar,
+html[data-tms-theme="gameboy"] .tms-bottom-nav,
+html[data-tms-theme="gameboy"] .tms-mobile-dialog {
+  --surface-bg: #405c48;
+  --surface-muted: #4e6d53;
+  --surface-dim: #344b3b;
+  --text-primary: #eef4cf;
+  --text-secondary: #d7e4b3;
+  --text-tertiary: #bacd91;
+  --accent: #c4d991;
+  --accent-hover: #b2cb79;
+  --accent-soft: rgba(196, 217, 145, 0.16);
+  --border-subtle: rgba(237, 245, 207, 0.24);
+  background: #405c48;
+  color: #eef4cf;
+}
+html[data-tms-theme="gameboy"] .tms-brand-logo { filter: brightness(0) invert(1); }
+html[data-tms-theme="gameboy"] :is(.tms-sidebar, .tms-mobile-dialog) a[class*="bg-[var(--accent-soft)]"] {
+  background-color: #c4d991;
+  color: #263b2e;
+}
+
+/* Fallout 4 Pip-Boy inspired interface: phosphor green with dark olive housing. */
+html[data-tms-theme="fallout-pipboy"] {
+  color-scheme: dark;
+  --canvas-bg: #080d07;
+  --surface-bg: #111a0e;
+  --surface-muted: #1a2713;
+  --surface-dim: #26371b;
+  --text-primary: #d2ef9b;
+  --text-secondary: #b7d982;
+  --text-tertiary: #91b45f;
+  --accent: #a7df5c;
+  --accent-hover: #91c946;
+  --accent-active: #77a933;
+  --accent-soft: #27391a;
+  --border-subtle: #4b6332;
+  --border-strong: #719249;
+  --status-success: #9bdc58;
+  --status-success-soft: #243719;
+  --status-warning: #e2bd5e;
+  --status-warning-soft: #3b3218;
+  --status-critical: #ee7561;
+  --status-critical-soft: #3d211b;
+  --status-info: #81c8bd;
+  --status-info-soft: #19342d;
+  --status-distribution: #81c8bd;
+  --chart-series-actual: #9bdc58;
+  --chart-series-prev1: #81bdf2;
+  --chart-series-prev2: #e2bd5e;
+  --chart-series-prev3: #ee7561;
+  --shadow-layer: 0 0 0 1px rgba(167, 223, 92, 0.08), 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+
+html[data-tms-theme="fallout-pipboy"] body {
+  background-color: var(--canvas-bg);
+  background-image: repeating-linear-gradient(0deg, rgba(167, 223, 92, 0.025) 0 1px, transparent 1px 4px);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+html[data-tms-theme="fallout-pipboy"] :is(.bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-200) { background-color: var(--surface-bg); }
+html[data-tms-theme="fallout-pipboy"] :is(.text-slate-900, .text-slate-800, .text-slate-700) { color: var(--text-primary); }
+html[data-tms-theme="fallout-pipboy"] :is(.text-slate-600, .text-slate-500, .text-slate-400) { color: var(--text-secondary); }
+html[data-tms-theme="fallout-pipboy"] :is(.border-slate-100, .border-slate-200, .border-slate-300) { border-color: var(--border-subtle); }
+html[data-tms-theme="fallout-pipboy"] :is(button, input, select, textarea) { border-radius: 2px; }
+html[data-tms-theme="fallout-pipboy"] button { box-shadow: inset 0 0 0 1px rgba(167, 223, 92, 0.13); }
+html[data-tms-theme="fallout-pipboy"] :is(input, select, textarea) { background-color: #0b1209; color: var(--text-primary); }
+
+html[data-tms-theme="fallout-pipboy"] .tms-sidebar,
+html[data-tms-theme="fallout-pipboy"] .tms-mobile-topbar,
+html[data-tms-theme="fallout-pipboy"] .tms-bottom-nav,
+html[data-tms-theme="fallout-pipboy"] .tms-mobile-dialog {
+  --surface-bg: #090f07;
+  --surface-muted: #192513;
+  --surface-dim: #27391a;
+  --text-primary: #d2ef9b;
+  --text-secondary: #b7d982;
+  --text-tertiary: #91b45f;
+  --accent: #a7df5c;
+  --accent-hover: #91c946;
+  --accent-soft: rgba(167, 223, 92, 0.15);
+  --border-subtle: rgba(167, 223, 92, 0.25);
+  background-color: #090f07;
+  color: #d2ef9b;
+}
+
+html[data-tms-theme="fallout-pipboy"] .tms-brand-logo { filter: brightness(0) saturate(100%) invert(89%) sepia(35%) saturate(669%) hue-rotate(32deg) brightness(104%) contrast(90%); }
+html[data-tms-theme="fallout-pipboy"] :is(button, a)[class*="bg-[var(--accent)]"] { color: #1b2a10; }
+
+html[data-tms-theme="win98"] body {
+  background: var(--canvas-bg);
+  font-family: Tahoma, Verdana, Arial, sans-serif;
+  -webkit-font-smoothing: auto;
+}
+
+html[data-tms-theme="win98"] :is(.bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-200) {
+  background-color: var(--surface-bg);
+}
+
+html[data-tms-theme="win98"] :is(.text-slate-900, .text-slate-800, .text-slate-700) {
+  color: var(--text-primary);
+}
+
+html[data-tms-theme="win98"] :is(.text-slate-600, .text-slate-500, .text-slate-400) {
+  color: var(--text-secondary);
+}
+
+html[data-tms-theme="win98"] :is(.border-slate-100, .border-slate-200, .border-slate-300) {
+  border-color: var(--border-subtle);
+}
+
+html[data-tms-theme="win98"] :is(.rounded-2xl, .rounded-xl, .rounded-lg, .rounded-md) {
+  border-radius: 2px;
+}
+
+html[data-tms-theme="win98"] :is(button, input, select, textarea) {
+  border-radius: 0;
+}
+
+html[data-tms-theme="win98"] button {
+  box-shadow: inset 1px 1px 0 #ffffff, inset -1px -1px 0 #808080;
+}
+
+html[data-tms-theme="win98"] :is(input, select, textarea) {
+  box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #ffffff;
 }
 
 /* Global base styles */

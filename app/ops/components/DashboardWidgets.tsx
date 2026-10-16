@@ -153,7 +153,7 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
   const renderTickerItems = (keyPrefix: string) => (
     <div key={keyPrefix} className="flex items-center gap-5 shrink-0">
       {showLinkeMetrics && (
-        <span className="flex items-center gap-1.5 text-[9px] font-medium tracking-wide text-[var(--text-tertiary)] border-r border-[var(--border-subtle)] pr-4">
+        <span className="flex items-center gap-1.5 text-[9px] font-medium tracking-wide text-white/70 border-r border-white/25 pr-4">
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--status-success)]" />
           Mercado
         </span>
@@ -174,7 +174,7 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
         </span>
       </div>}
 
-      {showLinkeMetrics && <span className="text-[var(--border-strong)] font-mono select-none">|</span>}
+      {showLinkeMetrics && <span className="text-white/40 font-mono select-none">|</span>}
 
       {/* Official Stock Quotes with glowing LED styling */}
       {quotes.map((q) => {
@@ -189,17 +189,17 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
           <span className="font-semibold text-[var(--text-primary)]">
               {q.label}
             </span>
-            <span className="text-neutral-300 font-medium">
+            <span className="text-white/80 font-medium">
               {currSymbol}{formattedPrice}
             </span>
             <span className={`font-medium flex items-center text-[11px] ${
               isPositive 
                 ? "text-[var(--status-success)]"
-                : "text-[var(--status-danger)]"
+                : "text-[var(--status-critical)]"
             }`}>
               {isPositive ? "▲" : "▼"}{isPositive ? "+" : ""}{q.changePercent.toFixed(2)}%
             </span>
-            <span className="text-neutral-700 font-mono select-none ml-2">|</span>
+            <span className="text-white/40 font-mono select-none ml-2">|</span>
           </div>
         )
       })}
@@ -282,12 +282,12 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
         >
           <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
             <span className="font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-neutral-500" />
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
               Mercados no Ticker
             </span>
             <button 
               onClick={() => setShowSettings(false)}
-              className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+              className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -299,7 +299,7 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
               placeholder="Ex: AMZN, GOOGL, META..."
               value={newSymbolInput}
               onChange={(e) => setNewSymbolInput(e.target.value)}
-              className="flex-1 px-2.5 py-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-muted)] text-[var(--text-primary)] placeholder:text-neutral-400 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="flex-1 px-2.5 py-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-muted)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] text-xs uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
             <button
               type="submit"
@@ -316,20 +316,20 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
 
           {customSymbols.length > 0 ? (
             <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pt-1">
-              <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">
+              <span className="text-[10px] text-[var(--text-tertiary)] font-semibold uppercase tracking-wider">
                 Ações Personalizadas ({customSymbols.length})
               </span>
               <div className="flex flex-wrap gap-1.5">
                 {customSymbols.map((sym) => (
                   <span 
                     key={sym}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-neutral-100 dark:bg-neutral-800 rounded-md font-bold text-neutral-700 dark:text-neutral-300"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-[var(--surface-muted)] rounded-md font-bold text-[var(--text-primary)]"
                   >
                     {sym}
                     <button 
                       type="button" 
                       onClick={() => handleRemoveCustom(sym)}
-                      className="text-neutral-400 hover:text-rose-500"
+                      className="text-[var(--text-tertiary)] hover:text-rose-500"
                     >
                       <X className="w-2.5 h-2.5" />
                     </button>
@@ -345,7 +345,7 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
               </button>
             </div>
           ) : (
-            <p className="text-[11px] text-neutral-400">
+            <p className="text-[11px] text-[var(--text-tertiary)]">
               A mostrar mercados oficiais principais (S&P 500, NASDAQ, DOW, NVDA, AAPL, TSLA, MSFT, BTC, CTT) e o lucro GO LINKE em tempo real.
             </p>
           )}

@@ -315,35 +315,35 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
                   label: "Pendentes", 
                   value: statusCounts.pendente, 
                   dot: "bg-amber-500",
-                  tone: "text-amber-900",
+                  tone: "text-[var(--status-warning)]",
                   href: "/ops/envios?status=Pendente"
                 },
                 { 
                   label: "Em Trânsito", 
                   value: statusCounts.em_transito, 
                   dot: "bg-blue-500",
-                  tone: "text-blue-900",
+                  tone: "text-[var(--status-info)]",
                   href: "/ops/envios?status=Em Trânsito"
                 },
                 { 
                   label: "Em Distrib.", 
                   value: statusCounts.em_distribuicao, 
                   dot: "bg-violet-500",
-                  tone: "text-violet-900",
+                  tone: "text-[var(--status-distribution)]",
                   href: "/ops/envios?status=Em Distribuição"
                 },
                 { 
                   label: "Incidências", 
                   value: statusCounts.incidencia, 
                   dot: "bg-rose-500",
-                  tone: "text-rose-900",
+                  tone: "text-[var(--status-critical)]",
                   href: "/ops/incidencias"
                 },
                 { 
                   label: "Entregues", 
                   value: statusCounts.entregue, 
                   dot: "bg-emerald-500",
-                  tone: "text-emerald-800",
+                  tone: "text-[var(--status-success)]",
                   href: "/ops/envios?status=Entregue"
                 },
                 { 

@@ -5,7 +5,7 @@ import Link from "next/link"
 import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, Lightbulb, Package, Printer, RefreshCw, Truck } from "lucide-react"
 import { getRelatoriosDataAction } from "@/app/actions/relatorios"
 import { REPORT_PERIODS } from "@/lib/reports/operational-reports"
-import type { OperationalReport, ReportFilters, ReportGroup } from "@/lib/reports/operational-reports"
+import type { OperationalReport, ReportGroup } from "@/lib/reports/operational-reports"
 import { reportCsv } from "@/lib/reports/report-csv"
 
 const euro = (value: number) => new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(value)
@@ -27,7 +27,7 @@ function GroupTable({ groups, title, clients = false }: { groups: ReportGroup[];
       <p className="mt-1 text-xs text-slate-500">Comparação de volume com a mesma duração no período anterior. Margem estimada com os preços guardados.</p>
     </div>
     {groups.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">Sem envios para estes filtros.</p> :
-      <div className="overflow-x-auto"><table className="w-full text-left text-xs">
+      <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-xs">
         <thead className="bg-slate-50 text-slate-500"><tr>
           <th className="px-5 py-3">{clients ? "Cliente" : "Designação"}</th><th className="p-3">Envios</th>
           <th className="p-3">Anterior</th><th className="p-3">Variação</th><th className="p-3">Entregues</th>
@@ -75,8 +75,8 @@ export function RelatoriosClient({ initialData }: { initialData: OperationalRepo
   }
   const t = data.totals
   const coverage = t.volume ? Math.round(t.pricedCount / t.volume * 100) : 0
-  const show = (section: Tab) => tab === "overview" || tab === section
   const maxVolume = Math.max(1, ...data.timeline.map(day => day.volume))
+  const hasExtraFilters = Boolean(data.filters.clientId || data.filters.carrier || data.filters.service)
   const filters: { key: "clientId" | "carrier" | "service"; label: string; options: { id: string; name: string }[] }[] = [
     { key: "clientId", label: "Cliente", options: data.options.clients },
     { key: "carrier", label: "Transportadora", options: data.options.carriers.map(name => ({ id: name, name })) },
@@ -93,22 +93,34 @@ export function RelatoriosClient({ initialData }: { initialData: OperationalRepo
         <button className={button} disabled={loading} onClick={() => window.print()}><Printer className="h-4 w-4" />Imprimir</button>
       </div>
     </header>
-    <div className={`${panel} space-y-4 p-4 print:hidden`}>
-      <div className="flex flex-wrap gap-2" aria-label="Período do relatório">{REPORT_PERIODS.map(period =>
-        <button key={period.id} disabled={loading} aria-pressed={data.filters.period === period.id}
-          className={`${button} ${data.filters.period === period.id ? "border-emerald-700 bg-emerald-50 text-emerald-800" : ""}`}
-          onClick={() => refresh({ period: period.id })}>{period.label}</button>)}</div>
-      <div className="grid gap-3 sm:grid-cols-3">{filters.map(filter => <label key={filter.key} className="space-y-1.5 text-xs font-semibold text-slate-600">
-        <span>{filter.label}</span><select aria-label={filter.label} disabled={loading} value={data.filters[filter.key] || ""}
-          onChange={event => changeFilter(filter.key, event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-slate-800">
-          <option value="">Todos</option>{filter.options.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
-        </select></label>)}</div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-        <span>Envios criados de {timestamp(data.range.start)} até {timestamp(data.range.end)}.</span>
-        <button className="font-semibold text-emerald-700 disabled:opacity-50" disabled={loading} onClick={() => refresh({ period: data.filters.period })}>Limpar filtros</button>
+    <section className={`${panel} space-y-4 p-4 print:hidden`} aria-label="Filtros do relatório">
+      <div>
+        <h2 className="text-sm font-bold text-slate-900">Filtros do relatório</h2>
+        <p className="mt-0.5 text-xs text-slate-500">Escolhe o período e, se necessário, filtra por cliente, transportadora ou serviço.</p>
       </div>
-    </div>
+      <div>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Período</p>
+        <div className="flex flex-wrap gap-2" aria-label="Período do relatório">{REPORT_PERIODS.map(period =>
+          <button key={period.id} disabled={loading} aria-pressed={data.filters.period === period.id}
+            className={`${button} ${data.filters.period === period.id ? "border-emerald-700 bg-emerald-50 text-emerald-800" : ""}`}
+            onClick={() => refresh({ period: period.id })}>{period.label}</button>)}</div>
+      </div>
+      <div>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Detalhar resultados</p>
+        <div className="grid gap-3 sm:grid-cols-3">{filters.map(filter => <label key={filter.key} className="space-y-1.5 text-xs font-semibold text-slate-600">
+          <span>{filter.label}</span><select aria-label={filter.label} disabled={loading} value={data.filters[filter.key] || ""}
+            onChange={event => changeFilter(filter.key, event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-slate-800">
+            <option value="">Todos</option>{filter.options.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+          </select></label>)}</div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <span>Envios criados entre {timestamp(data.range.start)} e {timestamp(data.range.end)}.</span>
+        {hasExtraFilters && <button className="font-semibold text-emerald-700 disabled:opacity-50" disabled={loading} onClick={() => refresh({ period: data.filters.period })}>Limpar filtros adicionais</button>}
+      </div>
+    </section>
     {error && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</div>}
+    <nav aria-label="Secções dos relatórios" className="flex flex-wrap gap-2 print:hidden">{tabs.map(item => <button key={item.id} aria-pressed={tab === item.id}
+      className={`${button} ${tab === item.id ? "bg-slate-900 text-white hover:bg-slate-800" : ""}`} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>
     <main aria-busy={loading} className={`space-y-5 ${loading ? "opacity-60" : ""}`}>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
@@ -122,11 +134,12 @@ export function RelatoriosClient({ initialData }: { initialData: OperationalRepo
           <p className="mt-2 text-xs text-slate-500">{card.detail}</p>
         </section>)}
       </div>
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
-        <strong className="text-slate-800">Como ler estes números:</strong> excluímos {data.excluded.drafts} rascunhos e {data.excluded.cancelled} envios anulados/cancelados.
-        O valor de venda não confirma faturação nem recebimento. A margem usa apenas envios com venda e custo válidos, incluindo perdas, e ainda depende da conferência das faturas das transportadoras.
-      </div>
-      <section className={`${panel} p-5`}>
+      <details className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+        <summary className="cursor-pointer font-semibold text-slate-800">Como interpretar os indicadores</summary>
+        <p className="mt-2 leading-relaxed">Excluímos {data.excluded.drafts} rascunhos e {data.excluded.cancelled} envios anulados/cancelados. O valor de venda não confirma faturação nem recebimento. A margem é estimada com envios que têm venda e custo válidos, incluindo perdas, e deve ser conferida com as faturas das transportadoras.</p>
+      </details>
+      {tab === "overview" && <>
+        <section className={`${panel} p-5`}>
         <div className="flex items-center gap-2"><Lightbulb className="h-5 w-5 text-amber-600" /><h2 className="font-bold text-slate-900">Sugestões para a operação</h2></div>
         <p className="mt-1 text-xs text-slate-500">Baseadas no período e nos filtros selecionados. As decisões continuam contigo.</p>
         {data.suggestions.length === 0 ? <p className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-500">{t.volume ? "Nenhum alerta pelas regras atuais. Isto não substitui a revisão dos envios e dos custos." : "Sem envios neste período para gerar sugestões."}</p> :
@@ -135,17 +148,20 @@ export function RelatoriosClient({ initialData }: { initialData: OperationalRepo
             <p className="mt-2 text-xs leading-relaxed text-slate-600">{s.detail}</p>
             <Link href={s.href} className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-emerald-800">{s.action}<ArrowUpRight className="h-3.5 w-3.5" /></Link>
           </article>)}</div>}
-      </section>
-      <nav aria-label="Secções dos relatórios" className="flex flex-wrap gap-2 print:hidden">{tabs.map(item => <button key={item.id} aria-pressed={tab === item.id}
-        className={`${button} ${tab === item.id ? "bg-slate-900 text-white hover:bg-slate-800" : ""}`} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav>
-      {tab === "overview" && <section className={`${panel} p-5`}>
+        </section>
+        <section className={`${panel} p-5`}>
         <h2 className="font-bold text-slate-900">Estado atual dos envios deste período</h2>
         <p className="mt-1 text-xs text-slate-500">Entrega confirmada não significa entrega dentro do prazo. Os estados refletem a última atualização guardada.</p>
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">{[
           ["Entregues", t.delivered], ["Em trânsito", t.inTransit], ["Pendentes", t.pending], ["Em incidência", t.incidents], ["Devolvidos", t.returned], ["Outros estados", t.other],
         ].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-bold text-slate-900">{value}</p></div>)}</div>
-      </section>}
-      {show("finance") && <section className={`${panel} p-5`}>
+        </section>
+        <details className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+        <summary className="flex cursor-pointer items-center gap-2 font-semibold text-slate-800"><AlertTriangle className="h-4 w-4" />Indicadores que ainda não estão disponíveis</summary>
+        <p className="mt-2 leading-relaxed">Entregas no prazo, primeira tentativa e tempo de resolução dependem dos eventos de tracking e dos prazos de cada serviço. O mapa de destinos depende de país e localidade guardados de forma consistente. Não apresentamos estimativas de demonstração para estes indicadores.</p>
+        </details>
+      </>}
+      {tab === "finance" && <section className={`${panel} p-5`}>
         <h2 className="font-bold text-slate-900">Evolução dos envios</h2>
         <p className="mt-1 text-xs text-slate-500">Volume por dia de criação, no período selecionado. Dias sem envios ficam a zero.</p>
         <div className="mt-5 flex h-40 items-end gap-1 overflow-x-auto border-b border-slate-200" role="img" aria-label="Gráfico de volume diário; valores detalhados na tabela abaixo">
@@ -159,14 +175,9 @@ export function RelatoriosClient({ initialData }: { initialData: OperationalRepo
             <td className={day.margin < 0 ? "text-rose-700" : "text-emerald-700"}>{day.pricedCount ? euro(day.margin) : "—"}</td><td>{day.pricedCount} de {day.volume}</td></tr>)}</tbody>
         </table></div>
       </section>}
-      {(show("carriers") || show("clients") || show("services")) && <p className="text-xs text-slate-500">Base anterior: {timestamp(data.range.previousStart)} até {timestamp(data.range.previousEnd)}. Sem volume anterior, não calculamos crescimento percentual.</p>}
-      {show("carriers") && <GroupTable title="Comparação de transportadoras" groups={data.carriers} />}
-      {show("clients") && <GroupTable title="Atividade dos clientes" groups={data.clients} clients />}
-      {show("services") && <GroupTable title="Serviços utilizados" groups={data.services} />}
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
-        <div className="flex items-center gap-2 font-semibold text-slate-800"><AlertTriangle className="h-4 w-4" />Indicadores ainda por ligar</div>
-        <p className="mt-2 leading-relaxed">Entregas no prazo, primeira tentativa e tempo de resolução precisam de eventos de tracking e prazos de cada serviço. O mapa de destinos precisa de país e localidade guardados de forma consistente. Estes indicadores ficam sem estimativas de demonstração.</p>
-      </section>
+      {tab === "carriers" && <><p className="text-xs text-slate-500">Período de comparação: {timestamp(data.range.previousStart)} até {timestamp(data.range.previousEnd)}. Sem volume anterior, não calculamos crescimento percentual.</p><GroupTable title="Comparação de transportadoras" groups={data.carriers} /></>}
+      {tab === "clients" && <><p className="text-xs text-slate-500">Período de comparação: {timestamp(data.range.previousStart)} até {timestamp(data.range.previousEnd)}. Sem volume anterior, não calculamos crescimento percentual.</p><GroupTable title="Atividade dos clientes" groups={data.clients} clients /></>}
+      {tab === "services" && <><p className="text-xs text-slate-500">Período de comparação: {timestamp(data.range.previousStart)} até {timestamp(data.range.previousEnd)}. Sem volume anterior, não calculamos crescimento percentual.</p><GroupTable title="Serviços utilizados" groups={data.services} /></>}
     </main>
   </div>
 }

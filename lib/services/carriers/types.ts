@@ -5,6 +5,7 @@ export interface Address {
   city: string
   country?: string
   phone: string
+  mobilePhone?: string
   email?: string
   contact?: string
 }
@@ -55,6 +56,9 @@ export interface PickupInput {
   endHour: string // HH:mm
   volumes: number
   weightKg: number
+  heaviestWeightKg?: number
+  pickupDestination?: "PT" | "ES" | "RM"
+  biggestParcelDimensionsCm?: { length: number; width: number; height: number }
   sender: Address
   observations?: string
 }

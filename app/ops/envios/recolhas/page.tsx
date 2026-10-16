@@ -41,10 +41,11 @@ export default async function RecolhasPage() {
       created_at: r.created_at,
       volumes: meta.volumes ?? r.volumes ?? 1,
       weight_kg: meta.weight_kg ?? r.weight_kg ?? 1,
+      heaviest_weight_kg: meta.heaviest_weight_kg ?? null,
       sender_name: meta.sender_name ?? r.sender_name ?? "Armazém Principal",
       sender_address: meta.sender_address ?? r.sender_address ?? "",
       sender_city: meta.sender_city ?? r.sender_city ?? "",
-      period: meta.period ?? r.period ?? "09:00-19:00",
+      period: meta.period ?? r.period ?? "10:00-13:00",
       observations: meta.observations ?? r.observations ?? "",
       client_id: meta.client_id ?? r.client_id ?? null,
     }
@@ -58,7 +59,8 @@ export default async function RecolhasPage() {
     address: c.address || "",
     city: c.city || "",
     postal_code: c.postal_code || "",
-    phone: c.mobile_phone || c.phone || "",
+    phone: c.phone || "",
+    mobile_phone: c.mobile_phone || "",
   }))
 
   const mappedConnections = (carrierConnections || []).map((c: any) => {

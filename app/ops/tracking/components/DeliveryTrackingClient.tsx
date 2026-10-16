@@ -141,19 +141,19 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
             
             {/* Search Input */}
             <div className="relative">
-              <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[var(--text-tertiary)] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Pesquisar guia, cidade, matrícula..."
-                className="w-full pl-9 pr-8 py-2 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-muted)] text-xs text-[var(--text-primary)] placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-[#477D68]/20 focus:border-[#477D68] transition-all"
+                className="w-full pl-9 pr-8 py-2 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-muted)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[#477D68]/20 focus:border-[#477D68] transition-all"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>

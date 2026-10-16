@@ -38,6 +38,7 @@ interface MappedClient {
   city: string
   postal_code: string
   phone: string
+  mobile_phone?: string
   email?: string
 }
 
@@ -60,6 +61,7 @@ interface Recolha {
   created_at: string
   volumes?: number
   weight_kg?: number
+  heaviest_weight_kg?: number | null
   sender_name?: string
   sender_address?: string
   sender_city?: string
@@ -134,10 +136,10 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
   // Client & Form fields
   const [selectedClientId, setSelectedClientId] = React.useState("")
   const [date, setDate] = React.useState(tomorrowDate())
-  const [period, setPeriod] = React.useState("09:00-19:00")
+  const [period, setPeriod] = React.useState("10:00-13:00")
   const [volumes, setVolumes] = React.useState(1)
   const [weightKg, setWeightKg] = React.useState(1)
-  const [heaviestWeight, setHeaviestWeight] = React.useState("")
+  const [heaviestWeightKg, setHeaviestWeightKg] = React.useState(1)
   const [dimLength, setDimLength] = React.useState("")
   const [dimWidth, setDimWidth] = React.useState("")
   const [dimHeight, setDimHeight] = React.useState("")
@@ -151,7 +153,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
   const [senderAddress, setSenderAddress] = React.useState("Rua do Ouro, 100")
   const [senderZip, setSenderZip] = React.useState("4000-001")
   const [senderCity, setSenderCity] = React.useState("Porto")
-  const [senderPhone, setSenderPhone] = React.useState("910000000")
+  const [senderPhone, setSenderPhone] = React.useState("")
   const [senderMobile, setSenderMobile] = React.useState("")
   const [observations, setObservations] = React.useState("")
 
@@ -166,7 +168,8 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
       setSenderAddress(client.address || senderAddress)
       setSenderZip(client.postal_code || senderZip)
       setSenderCity(client.city || senderCity)
-      setSenderPhone(client.phone || senderPhone)
+      setSenderPhone(client.phone || "")
+      setSenderMobile(client.mobile_phone || "")
     }
   }
 
@@ -179,18 +182,24 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
     setTimeout(() => setCopiedId(null), 2000)
   }
 
+  const updateVolumeCount = (count: number) => {
+    const next = Math.max(1, count)
+    setVolumes(next)
+    if (next === 1) setHeaviestWeightKg(weightKg)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (volumes > 1 && (!Number.isFinite(heaviestWeightKg) || heaviestWeightKg <= 0 || heaviestWeightKg > weightKg)) {
+      setResult({ success: false, error: "O peso do volume mais pesado deve ser maior que 0 e não pode ultrapassar o peso total." })
+      return
+    }
     setLoading(true)
     setResult(null)
     try {
       const baseObs = observations
       const guideObs = guideStatus === "Necessário levar" ? " | Necessário levar guia de transporte" : ""
-      const heavyObs = heaviestWeight ? ` | Objeto mais pesado: ${heaviestWeight}kg` : ""
-      const dimObs = (dimLength || dimWidth || dimHeight) ? ` | Dimensões(cm): ${dimLength || 0}x${dimWidth || 0}x${dimHeight || 0}` : ""
-      const destObs = destination !== "PT" ? ` | Destino: ${destination}` : ""
-      const finalObs = `${baseObs}${guideObs}${heavyObs}${dimObs}${destObs}`
-      const finalPhone = senderMobile ? `${senderPhone} / ${senderMobile}` : senderPhone
+      const finalObs = `${baseObs}${guideObs}`
 
       const [startHour, endHour] = period.split("-")
 
@@ -203,6 +212,13 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
         endHour,
         volumes,
         weightKg,
+        heaviestWeightKg: volumes > 1 ? heaviestWeightKg : weightKg,
+        pickupDestination: isCttActive ? destination as "PT" | "ES" | "RM" : undefined,
+        biggestParcelDimensionsCm: isCttActive ? {
+          length: Number(dimLength),
+          width: Number(dimWidth),
+          height: Number(dimHeight),
+        } : undefined,
         sender: {
           name: senderName,
           contact: senderContact,
@@ -211,7 +227,8 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
           address: senderAddress,
           zip: senderZip,
           city: senderCity,
-          phone: finalPhone,
+          phone: senderPhone,
+          mobilePhone: senderMobile || undefined,
         },
         observations: finalObs || undefined,
       })
@@ -411,7 +428,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Cliente</th>
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Data / Janela</th>
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Local de Recolha</th>
-                    <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Volumes / Peso</th>
+                    <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Volumes / Pesos</th>
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Estado</th>
                   </tr>
                 </thead>
@@ -507,7 +524,10 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                         {/* Volumes / Weight */}
                         <td className="px-5 py-4">
                           <div className="text-[var(--text-primary)] font-semibold">{r.volumes ?? 1} vol.</div>
-                          <div className="text-[11px] text-[var(--text-tertiary)]">{r.weight_kg ?? 1} kg</div>
+                          <div className="text-[11px] text-[var(--text-tertiary)]">Total: {r.weight_kg ?? 1} kg</div>
+                          {r.heaviest_weight_kg != null && r.volumes > 1 && (
+                            <div className="text-[11px] text-[var(--text-tertiary)]">Mais pesado: {r.heaviest_weight_kg} kg</div>
+                          )}
                         </td>
 
                         {/* Status */}
@@ -528,7 +548,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
       ) : (
         /* ───── FORM VIEW ───── */
         <div className="flex-1 overflow-auto">
-          <div className="max-w-3xl mx-auto p-6">
+          <div className="max-w-5xl mx-auto w-full p-4 sm:p-6">
 
             {result && (result.success || result.Success) ? (
               /* ── Success State ── */
@@ -551,7 +571,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                 <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl p-5 space-y-3 shadow-xs">
                   <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Detalhes da Confirmação</span>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 dark:bg-slate-800 text-[var(--text-secondary)] border border-slate-200 dark:border-slate-700">
                       {result.carrier_name || (selectedCarrierCode === "correos_express" ? "Correos Express" : "CTT Expresso")}
                     </span>
                   </div>
@@ -603,13 +623,13 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                   <button
                     type="button"
                     onClick={() => { setView("list"); setResult(null); window.location.reload() }}
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors border border-[var(--border-subtle)]"
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors border border-[var(--border-subtle)]"
                   >
                     Ver Lista de Recolhas
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setResult(null); setVolumes(1); setWeightKg(1) }}
+                    onClick={() => { setResult(null); setVolumes(1); setWeightKg(1); setHeaviestWeightKg(1) }}
                     className="flex items-center gap-2 px-5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-bold rounded-xl shadow-xs transition-colors"
                   >
                     <Plus className="w-4 h-4" />
@@ -619,7 +639,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
               </div>
             ) : (
               /* ── Form ── */
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-5 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 shadow-sm sm:p-6">
 
                 {/* Error */}
                 {result && !result.success && (
@@ -633,7 +653,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                 )}
 
                 {/* ── Section 0: Transportadora & Conta ── */}
-                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-[var(--border-subtle)] p-5">
+                <div className="bg-[var(--surface-muted)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-xs">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
                       <Truck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -652,8 +672,8 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                       onClick={() => handleSelectCarrierTab("ctt_expresso")}
                       className={`relative flex items-center gap-3 p-3.5 rounded-xl border-2 text-left transition-all ${
                         isCttActive
-                          ? "border-red-500 bg-red-50/70 dark:bg-red-950/30 shadow-xs"
-                          : "border-slate-200 dark:border-slate-800 bg-[var(--surface-bg)] hover:border-slate-300"
+                          ? "border-red-700 bg-red-700 text-white shadow-sm"
+                          : "border-[var(--border-strong)] bg-[var(--surface-bg)] text-[var(--text-primary)] hover:border-red-700"
                       }`}
                     >
                       <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 shadow-2xs">
@@ -665,12 +685,12 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-bold text-slate-900 dark:text-slate-100">CTT Expresso</span>
+                          <span className={`text-sm font-bold ${isCttActive ? "text-white" : "text-[var(--text-primary)]"}`}>CTT Expresso</span>
                           {isCttActive && (
-                            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                            <span className="w-2 h-2 rounded-full bg-white shrink-0" />
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-500 truncate">RecolhasWS • Directo CTT</p>
+                        <p className={`text-[11px] truncate ${isCttActive ? "text-white/80" : "text-[var(--text-tertiary)]"}`}>RecolhasWS • Directo CTT</p>
                       </div>
                     </button>
 
@@ -680,8 +700,8 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                       onClick={() => handleSelectCarrierTab("correos_express")}
                       className={`relative flex items-center gap-3 p-3.5 rounded-xl border-2 text-left transition-all ${
                         isCorreosActive
-                          ? "border-amber-500 bg-amber-50/70 dark:bg-amber-950/30 shadow-xs"
-                          : "border-slate-200 dark:border-slate-800 bg-[var(--surface-bg)] hover:border-slate-300"
+                          ? "border-amber-700 bg-amber-700 text-white shadow-sm"
+                          : "border-[var(--border-strong)] bg-[var(--surface-bg)] text-[var(--text-primary)] hover:border-amber-700"
                       }`}
                     >
                       <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 shadow-2xs">
@@ -693,12 +713,12 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Correos Express</span>
+                          <span className={`text-sm font-bold ${isCorreosActive ? "text-white" : "text-[var(--text-primary)]"}`}>Correos Express</span>
                           {isCorreosActive && (
-                            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                            <span className="w-2 h-2 rounded-full bg-white shrink-0" />
                           )}
                         </div>
-                        <p className="text-[11px] text-slate-500 truncate">WebServices • CEX API</p>
+                        <p className={`text-[11px] truncate ${isCorreosActive ? "text-white/80" : "text-[var(--text-tertiary)]"}`}>WebServices • CEX API</p>
                       </div>
                     </button>
                   </div>
@@ -707,11 +727,11 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-200 dark:border-slate-800">
                     {/* Carrier Account */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                         Conta / Contrato {isCorreosActive ? "Correos Express" : "CTT Expresso"}
                       </label>
                       {availableConnectionsForCarrier.length === 0 ? (
-                        <div className="flex items-center gap-2 px-3 py-2 border border-slate-300 bg-white dark:bg-slate-800 rounded-lg text-xs text-slate-600 dark:text-slate-300">
+                        <div className="flex items-center gap-2 px-3 py-2 border border-slate-300 bg-white dark:bg-slate-800 rounded-lg text-xs text-[var(--text-secondary)]">
                           <Wifi className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span>Conta padrão configurada no sistema</span>
                         </div>
@@ -745,7 +765,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
 
                     {/* Client Selector */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                         Cliente Associado (Preenche Morada)
                       </label>
                       <div className="relative">
@@ -774,14 +794,14 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                 </div>
 
                 {/* ── Section 1: Quando ── */}
-                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-[var(--border-subtle)] p-5">
+                <div className="bg-[var(--surface-muted)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-xs">
                   <h2 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <Calendar className="w-4 h-4 text-[var(--accent)]" />
                     2. Quando — Data e Janela Horária
                   </h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Data da Recolha *</label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Data da Recolha *</label>
                       <input
                         required
                         type="date"
@@ -792,15 +812,17 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Período de Recolha *</label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Período de Recolha *</label>
                       <select
                         value={period}
                         onChange={e => setPeriod(e.target.value)}
                         className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                       >
-                        <option value="09:00-19:00">Dia Inteiro (09h00 - 19h00)</option>
-                        <option value="09:00-13:00">Manhã (09h00 - 13h00)</option>
-                        <option value="14:00-19:00">Tarde (14h00 - 19h00)</option>
+                        <option value="08:00-10:00">08h00 - 10h00</option>
+                        <option value="10:00-13:00">10h00 - 13h00</option>
+                        <option value="13:00-16:00">13h00 - 16h00</option>
+                        <option value="16:00-19:00">16h00 - 19h00</option>
+                        <option value="19:00-22:00">19h00 - 22h00</option>
                       </select>
                     </div>
                   </div>
@@ -808,20 +830,20 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                     <Info className="w-3.5 h-3.5 shrink-0" />
                     {isCorreosActive
                       ? "O estafeta da Correos Express passará na morada do remetente na data indicada."
-                      : "O estafeta dos CTT Expresso passará no endereço indicado dentro da janela selecionada."}
+                      : "Escolha uma janela horária CTT disponível para a sua morada; a disponibilidade pode variar por código postal."}
                   </p>
                 </div>
 
                 {/* ── Section 2: Morada ── */}
-                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-[var(--border-subtle)] p-5">
+                <div className="bg-[var(--surface-muted)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-xs">
                   <h2 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <MapPin className="w-4 h-4 text-[var(--accent)]" />
                     3. Onde — Morada de Recolha
                   </h2>
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Nome / Empresa *</label>
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Nome / Empresa *</label>
                         <div className="relative">
                           <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
@@ -835,7 +857,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Pessoa de Contacto</label>
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Pessoa de Contacto</label>
                         <input
                           type="text"
                           value={senderContact}
@@ -847,7 +869,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">País</label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">País</label>
                       <select
                         value={senderCountry}
                         onChange={e => setSenderCountry(e.target.value)}
@@ -859,7 +881,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Morada (Rua, Nº, Andar) *</label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Morada (Rua, Nº, Andar) *</label>
                       <input
                         required
                         type="text"
@@ -872,7 +894,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                     
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Código Postal *</label>
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Código Postal *</label>
                         <input
                           required
                           type="text"
@@ -883,7 +905,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                         />
                       </div>
                       <div className="col-span-2">
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Localidade *</label>
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Localidade *</label>
                         <input
                           required
                           type="text"
@@ -897,7 +919,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
 
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Email</label>
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Email</label>
                         <input
                           type="email"
                           value={senderEmail}
@@ -907,11 +929,10 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Telefone Principal *</label>
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Telefone Principal</label>
                         <div className="relative">
                           <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
-                            required
                             type="tel"
                             value={senderPhone}
                             onChange={e => setSenderPhone(e.target.value)}
@@ -920,7 +941,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Telemóvel Alternativo</label>
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Telemóvel Alternativo</label>
                         <div className="relative">
                           <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
@@ -932,23 +953,26 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                         </div>
                       </div>
                     </div>
+                    <p className="col-span-3 -mt-2 text-[11px] text-[var(--text-tertiary)]">
+                      O telefone principal é opcional se preencher o telemóvel alternativo. Indique pelo menos um número válido para contacto dos CTT.
+                    </p>
                   </div>
                 </div>
 
                 {/* ── Section 3: Volumes e Dimensões ── */}
-                <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-[var(--border-subtle)] p-5">
+                <div className="bg-[var(--surface-muted)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-xs">
                   <h2 className="text-sm font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-                    <Weight className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <Weight className="w-4 h-4 text-[var(--accent)]" />
                     4. O Quê — Dados dos Volumes
                   </h2>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Nº de Volumes *</label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Nº de Volumes *</label>
                       <div className="flex items-center border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500">
                         <button
                           type="button"
-                          onClick={() => setVolumes(v => Math.max(1, v - 1))}
+                          onClick={() => updateVolumeCount(volumes - 1)}
                           className="px-3 py-2 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold text-lg leading-none transition-colors"
                         >−</button>
                         <input
@@ -956,18 +980,18 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                           type="number"
                           min={1}
                           value={volumes}
-                          onChange={e => setVolumes(parseInt(e.target.value) || 1)}
+                          onChange={e => updateVolumeCount(parseInt(e.target.value) || 1)}
                           className="flex-1 text-center text-sm font-bold text-slate-800 dark:text-slate-200 py-2 focus:outline-none bg-white dark:bg-slate-800"
                         />
                         <button
                           type="button"
-                          onClick={() => setVolumes(v => v + 1)}
+                          onClick={() => updateVolumeCount(volumes + 1)}
                           className="px-3 py-2 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 font-bold text-lg leading-none transition-colors"
                         >+</button>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Peso Total (kg) *</label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Peso Total (kg) *</label>
                       <div className="relative">
                         <input
                           required
@@ -975,31 +999,40 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                           min={0.1}
                           step={0.1}
                           value={weightKg}
-                          onChange={e => setWeightKg(parseFloat(e.target.value) || 1)}
+                          onChange={e => {
+                            const next = parseFloat(e.target.value) || 1
+                            setWeightKg(next)
+                            if (volumes === 1 || heaviestWeightKg > next) setHeaviestWeightKg(next)
+                          }}
                           className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 pr-10 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">kg</span>
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Peso do + Pesado (kg)</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min={0.1}
-                          step={0.1}
-                          value={heaviestWeight}
-                          onChange={e => setHeaviestWeight(e.target.value)}
-                          placeholder="(Opcional)"
-                          className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
-                        />
+                    {volumes > 1 && (
+                      <div>
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Peso do Volume Mais Pesado (kg) *</label>
+                        <div className="relative">
+                          <input
+                            required
+                            type="number"
+                            min={0.1}
+                            max={weightKg}
+                            step={0.1}
+                            value={heaviestWeightKg}
+                            onChange={e => setHeaviestWeightKg(parseFloat(e.target.value) || 0)}
+                            className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 pr-10 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">kg</span>
+                        </div>
+                        <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">Indique o peso de um único volume; tem de ser igual ou inferior ao total. Os CTT exigem que o peso enviado à API corresponda ao total; o TMS guarda este valor separado.</p>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Guia de Transporte:</label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Guia de Transporte:</label>
                       <select
                         value={guideStatus}
                         onChange={e => setGuideStatus(e.target.value)}
@@ -1011,26 +1044,27 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Dimensões do Maior Volume (cm)</label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Dimensões do Maior Volume (cm) {isCttActive && "*"}</label>
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1 w-1/3">
-                          <span className="text-xs text-slate-500">C:</span>
-                          <input type="number" placeholder="Comp" value={dimLength} onChange={e => setDimLength(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800" />
+                          <span className="text-xs font-semibold text-[var(--text-secondary)]">C:</span>
+                          <input type="number" aria-label="Comprimento do maior volume em centímetros" placeholder="Comp" min={1} max={299} step={1} required={isCttActive} value={dimLength} onChange={e => setDimLength(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-2 text-xs text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800" />
                         </div>
                         <div className="flex items-center gap-1 w-1/3">
-                          <span className="text-xs text-slate-500">L:</span>
-                          <input type="number" placeholder="Larg" value={dimWidth} onChange={e => setDimWidth(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800" />
+                          <span className="text-xs font-semibold text-[var(--text-secondary)]">L:</span>
+                          <input type="number" aria-label="Largura do maior volume em centímetros" placeholder="Larg" min={1} max={299} step={1} required={isCttActive} value={dimWidth} onChange={e => setDimWidth(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-2 text-xs text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800" />
                         </div>
                         <div className="flex items-center gap-1 w-1/3">
-                          <span className="text-xs text-slate-500">A:</span>
-                          <input type="number" placeholder="Alt" value={dimHeight} onChange={e => setDimHeight(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-2 text-xs text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800" />
+                          <span className="text-xs font-semibold text-[var(--text-secondary)]">A:</span>
+                          <input type="number" aria-label="Altura do maior volume em centímetros" placeholder="Alt" min={1} max={299} step={1} required={isCttActive} value={dimHeight} onChange={e => setDimHeight(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-2 text-xs text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800" />
                         </div>
                       </div>
                     </div>
                   </div>
+                  {isCttActive && <p className="-mt-2 mb-4 text-[10px] text-[var(--text-tertiary)]">Indique as medidas inteiras do maior volume em centímetros (1–299 cm).</p>}
 
                   <div className="w-1/2 pr-2">
-                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Destino Previsto</label>
+                    <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Destino Previsto</label>
                     <select
                       value={destination}
                       onChange={e => setDestination(e.target.value)}
@@ -1038,14 +1072,14 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                     >
                       <option value="PT">Portugal Continental e Ilhas</option>
                       <option value="ES">Espanha Peninsular</option>
-                      <option value="ROW">Resto do Mundo / Internacional</option>
+                      <option value="RM">Resto do Mundo / Internacional</option>
                     </select>
                   </div>
                 </div>
 
                 {/* Observations */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
                     Instruções ou Observações para o Motorista
                   </label>
                   <textarea

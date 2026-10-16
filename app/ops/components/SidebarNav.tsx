@@ -10,11 +10,8 @@ import {
   CalendarCheck, 
   CalendarDays,
   AlertTriangle, 
-  Building2, 
   FileText, 
-  CreditCard, 
   BarChart3, 
-  Plug, 
   Settings,
   ChevronDown,
   Users,
@@ -117,10 +114,15 @@ const navConfig: NavSection[] = [
 
 interface SidebarNavProps {
   collapsed?: boolean
+  canAccessDocuments?: boolean
 }
 
-export function SidebarNav({ collapsed = false }: SidebarNavProps) {
+export function SidebarNav({ collapsed = false, canAccessDocuments = false }: SidebarNavProps) {
   const pathname = usePathname()
+  const visibleNavConfig = React.useMemo(() => navConfig.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => canAccessDocuments || item.href !== "/ops/documentos"),
+  })), [canAccessDocuments])
   
   // Track open state of multiple accordions
   const [openItems, setOpenItems] = React.useState<Record<string, boolean>>({})
@@ -129,7 +131,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
   React.useEffect(() => {
     const newOpenItems = { ...openItems }
     let changed = false
-    navConfig.forEach((section) => {
+    visibleNavConfig.forEach((section) => {
       section.items.forEach((item) => {
         if (item.subItems) {
           const isChildActive = item.subItems.some((sub) => {
@@ -143,10 +145,12 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
       })
     })
     if (changed) {
+      // Keep the current section expanded when navigation enters one of its routes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpenItems(newOpenItems)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname])
+  }, [pathname, visibleNavConfig])
 
   const toggleItem = (title: string) => {
     setOpenItems(prev => ({
@@ -158,7 +162,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
   if (collapsed) {
     return (
       <nav className="flex-1 px-2 space-y-3 overflow-y-auto mt-4 pb-8">
-        {navConfig.map((section, idx) => (
+        {visibleNavConfig.map((section, idx) => (
           <div key={idx} className="flex flex-col">
             {idx > 0 && <div className="my-2 border-t border-[var(--border-subtle)] mx-1" />}
             <div className="flex flex-col space-y-1">
@@ -253,7 +257,7 @@ export function SidebarNav({ collapsed = false }: SidebarNavProps) {
 
   return (
     <nav className="flex-1 px-4 space-y-6 overflow-y-auto mt-4 pb-8">
-      {navConfig.map((section, idx) => (
+      {visibleNavConfig.map((section, idx) => (
         <div key={idx} className="flex flex-col">
           <h4 className="text-[11px] font-medium text-[var(--text-tertiary)] mb-2 px-2">
             {section.label}

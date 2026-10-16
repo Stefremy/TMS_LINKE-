@@ -172,7 +172,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
       <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-6 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5 mb-1.5">
-            <div className="w-8 h-8 rounded-lg bg-[var(--status-critical-soft)] text-[var(--status-critical)] border border-[rgba(220,38,38,0.2)] flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-red-700 text-white border border-red-700 flex items-center justify-center font-bold">
               <AlertTriangle className="w-4.5 h-4.5" />
             </div>
             <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
@@ -180,8 +180,8 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
             </h1>
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
               stats.total > 0 
-                ? "bg-[var(--status-critical)] text-white" 
-                : "bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)]"
+                ? "bg-red-700 text-white"
+                : "bg-emerald-700 text-white"
             }`}>
               {stats.total} Ativas
             </span>
@@ -225,8 +225,8 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
             </span>
             <div className={`w-8 h-8 rounded-md flex items-center justify-center border ${
               stats.total > 0
-                ? "bg-[var(--status-critical-soft)] text-[var(--status-critical)] border-[rgba(220,38,38,0.15)]"
-                : "bg-[var(--status-success-soft)] text-[var(--status-success)] border-[rgba(18,138,71,0.15)]"
+                ? "bg-red-700 text-white border-red-700"
+                : "bg-emerald-700 text-white border-emerald-700"
             }`}>
               {stats.total > 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
             </div>
@@ -245,7 +245,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
             <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
               Destinatário Ausente
             </span>
-            <div className="w-8 h-8 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200">
+            <div className="w-8 h-8 rounded-md bg-amber-700 text-white flex items-center justify-center border border-amber-700">
               <User className="w-4 h-4" />
             </div>
           </div>
@@ -263,7 +263,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
             <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
               Morada Incorreta / Incompleta
             </span>
-            <div className="w-8 h-8 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200">
+            <div className="w-8 h-8 rounded-md bg-blue-700 text-white flex items-center justify-center border border-blue-700">
               <MapPin className="w-4 h-4" />
             </div>
           </div>
@@ -281,7 +281,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
             <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
               Avarias / Outros Motivos
             </span>
-            <div className="w-8 h-8 rounded-md bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-200">
+            <div className="w-8 h-8 rounded-md bg-violet-700 text-white flex items-center justify-center border border-violet-700">
               <ShieldAlert className="w-4 h-4" />
             </div>
           </div>
@@ -318,7 +318,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
               onClick={() => setSelectedFilter("destinatario_ausente")}
               className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer shrink-0 ${
                 selectedFilter === "destinatario_ausente"
-                  ? "bg-amber-600 text-white font-semibold"
+                  ? "bg-amber-700 text-white font-semibold"
                   : "bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
@@ -329,7 +329,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
               onClick={() => setSelectedFilter("morada_incorreta")}
               className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer shrink-0 ${
                 selectedFilter === "morada_incorreta"
-                  ? "bg-blue-600 text-white font-semibold"
+                  ? "bg-blue-700 text-white font-semibold"
                   : "bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
@@ -340,7 +340,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
               onClick={() => setSelectedFilter("avaria_dano")}
               className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer shrink-0 ${
                 selectedFilter === "avaria_dano"
-                  ? "bg-purple-600 text-white font-semibold"
+                  ? "bg-violet-700 text-white font-semibold"
                   : "bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
@@ -379,8 +379,8 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
 
         {/* Bulk Action Header (if items selected) */}
         {selectedIds.length > 0 && (
-          <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center justify-between text-xs animate-in fade-in">
-            <span className="font-semibold text-amber-900">
+          <div className="px-5 py-2.5 bg-amber-700 border-b border-amber-800 flex items-center justify-between text-xs text-white animate-in fade-in">
+            <span className="font-semibold text-white">
               {selectedIds.length} envio(s) com incidência selecionado(s)
             </span>
             <div className="flex items-center gap-2">
@@ -391,7 +391,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                   const first = incidents.find(i => selectedIds.includes(i.id))
                   if (first) setTratarModalShipment(first.rawShipment || first)
                 }}
-                className="h-7 text-xs bg-white text-amber-900 border-amber-300 hover:bg-amber-100 font-semibold"
+                className="h-7 text-xs bg-white text-amber-800 border-white hover:bg-amber-50 font-semibold"
               >
                 <RotateCcw className="w-3 h-3 mr-1" />
                 Tratar em Lote
@@ -400,7 +400,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                 size="sm"
                 variant="ghost"
                 onClick={() => setSelectedIds([])}
-                className="h-7 text-xs text-amber-800 hover:bg-amber-100/50"
+                className="h-7 text-xs text-white hover:bg-amber-800"
               >
                 Cancelar
               </Button>
@@ -435,7 +435,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-[var(--text-secondary)]">
                     <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-                      <div className="w-12 h-12 rounded-full bg-[var(--status-success-soft)] text-[var(--status-success)] flex items-center justify-center mb-3">
+                      <div className="w-12 h-12 rounded-full bg-emerald-700 text-white flex items-center justify-center mb-3">
                         <CheckCircle2 className="w-6 h-6" />
                       </div>
                       <h3 className="text-sm font-bold text-[var(--text-primary)]">
@@ -489,7 +489,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                       {/* Envio / AWB */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-start gap-2.5">
-                          <div className="w-7 h-7 rounded bg-[var(--status-critical-soft)] text-[var(--status-critical)] flex items-center justify-center shrink-0 border border-[rgba(220,38,38,0.15)] mt-0.5">
+                          <div className="w-7 h-7 rounded bg-red-700 text-white flex items-center justify-center shrink-0 border border-red-700 mt-0.5">
                             <Truck className="w-3.5 h-3.5" />
                           </div>
                           <div>
@@ -557,7 +557,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                       {/* Motivo da Incidência */}
                       <td className="py-3.5 px-4 max-w-[240px]">
                         <div className="flex items-center gap-1.5 mb-1">
-                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-[var(--status-critical-soft)] text-[var(--status-critical)] border border-[rgba(220,38,38,0.2)]">
+                          <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-red-700 text-white border border-red-700">
                             {item.incident_code}
                           </span>
                           <span className="font-bold text-[var(--text-primary)] truncate text-xs">
@@ -580,10 +580,10 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                           <span 
                             className={`px-2 py-0.5 rounded font-semibold text-[11px] flex items-center gap-1 ${
                               isSlaCritical
-                                ? "bg-red-100 text-red-700 border border-red-200"
+                                ? "bg-red-700 text-white border border-red-700"
                                 : isSlaWarning
-                                ? "bg-amber-100 text-amber-700 border border-amber-200"
-                                : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                ? "bg-amber-700 text-white border border-amber-700"
+                                : "bg-emerald-700 text-white border border-emerald-700"
                             }`}
                           >
                             <Clock className="w-3 h-3" />
@@ -598,22 +598,22 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                       {/* Estado Tratamento */}
                       <td className="py-3.5 px-4">
                         {item.status_tratamento === "pendente" && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 inline-block">
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-700 text-white border border-amber-700 inline-block">
                             Pendente Ação
                           </span>
                         )}
                         {item.status_tratamento === "reagendado" && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 inline-block">
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-700 text-white border border-blue-700 inline-block">
                             Reagendado
                           </span>
                         )}
                         {item.status_tratamento === "morada_atualizada" && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 inline-block">
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-700 text-white border border-violet-700 inline-block">
                             Morada Atualizada
                           </span>
                         )}
                         {item.status_tratamento === "em_resolucao" && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-block">
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-700 text-white border border-emerald-700 inline-block">
                             Em Resolução
                           </span>
                         )}

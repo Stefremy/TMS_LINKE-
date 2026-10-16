@@ -21,13 +21,15 @@ import { SidebarNav } from "./SidebarNav"
 import { APP_VERSION } from "@/lib/config/version"
 import { signout } from "@/app/login/actions"
 
-export function OpsSidebar() {
+export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?: boolean }) {
   const [isCollapsed, setIsCollapsed] = React.useState(false)
   const [isMobileOpen, setIsMobileOpen] = React.useState(false)
   const pathname = usePathname()
 
   // Auto-close mobile drawer whenever route changes
   React.useEffect(() => {
+    // Route changes are an external event that should close the mobile drawer.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMobileOpen(false)
   }, [pathname])
 
@@ -38,6 +40,8 @@ export function OpsSidebar() {
     try {
       const saved = localStorage.getItem("linke_ops_sidebar_collapsed")
       if (saved !== null) {
+        // Sync the user's persisted sidebar preference after mount.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsCollapsed(saved === "true")
       }
     } catch {
@@ -79,7 +83,7 @@ export function OpsSidebar() {
               alt="Linke TMS"
               width={95}
               height={24}
-              className="object-contain"
+              className="tms-brand-logo object-contain"
               style={{ height: "auto" }}
               priority
             />
@@ -99,7 +103,7 @@ export function OpsSidebar() {
           </Link>
           <Link
             href="/ops/envios/novo"
-            className="min-h-11 flex items-center gap-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 transition-all"
+            className="tms-brand-cta min-h-11 flex items-center gap-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 transition-all"
           >
             <Plus className="w-4 h-4" strokeWidth={1.75} />
             <span>Novo</span>
@@ -117,7 +121,7 @@ export function OpsSidebar() {
                 alt="Linke TMS"
                 width={110}
                 height={28}
-                className="object-contain"
+                className="tms-brand-logo object-contain"
                 style={{ height: "auto" }}
               />
               <span className="text-[10px] font-medium text-[var(--text-tertiary)] bg-[var(--surface-bg)] px-1.5 py-0.5 rounded border border-[var(--border-subtle)]">
@@ -138,7 +142,7 @@ export function OpsSidebar() {
           <div className="tms-drawer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {/* Scrollable Navigation */}
             <div className="py-2">
-              <SidebarNav collapsed={false} />
+              <SidebarNav collapsed={false} canAccessDocuments={canAccessDocuments} />
             </div>
 
             {/* Drawer Footer Actions */}
@@ -184,7 +188,7 @@ export function OpsSidebar() {
                   alt="Linke TMS"
                   width={36}
                   height={36}
-                  className="object-contain rounded-lg"
+                  className="tms-brand-logo object-contain rounded-lg"
                   priority
                 />
               </div>
@@ -195,7 +199,7 @@ export function OpsSidebar() {
                   alt="Linke TMS"
                   width={130}
                   height={32}
-                  className="object-contain"
+                  className="tms-brand-logo object-contain"
                   style={{ height: "auto" }}
                   priority
                 />
@@ -208,7 +212,7 @@ export function OpsSidebar() {
         </div>
 
         {/* Navigation */}
-        <SidebarNav collapsed={isCollapsed} />
+        <SidebarNav collapsed={isCollapsed} canAccessDocuments={canAccessDocuments} />
 
         {/* Bottom Sidebar Action: Recolher painel */}
         <div className={`pb-4 pt-2 ${isCollapsed ? "px-2" : "px-4"}`}>
@@ -269,7 +273,7 @@ export function OpsSidebar() {
           href="/ops/envios/novo"
           className="tms-nav-create flex flex-col items-center justify-center -mt-3 shrink-0"
         >
-          <div className="w-11 h-11 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white flex items-center justify-center shadow-md active:scale-95 transition-all">
+          <div className="tms-brand-cta w-11 h-11 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white flex items-center justify-center shadow-md active:scale-95 transition-all">
             <Plus className="w-6 h-6" strokeWidth={1.75} />
           </div>
           <span className="text-[9px] font-bold text-[var(--accent)] mt-0.5">Novo</span>

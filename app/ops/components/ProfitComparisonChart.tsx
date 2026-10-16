@@ -22,10 +22,10 @@ type ChartData = {
 }
 
 const SERIES_COLORS = {
-  actual: "#16834A",
-  prev1: "#2878B5",
-  prev2: "#C4871C",
-  prev3: "#C4554E",
+  actual: "var(--chart-series-actual)",
+  prev1: "var(--chart-series-prev1)",
+  prev2: "var(--chart-series-prev2)",
+  prev3: "var(--chart-series-prev3)",
 }
 
 export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[], targetMonth?: number }) {

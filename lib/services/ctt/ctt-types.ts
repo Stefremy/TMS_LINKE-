@@ -174,9 +174,12 @@ export interface CTTPickupRequestInput {
   DataRecolha: string // YYYY-MM-DD
   HoraInicio: string  // HH:MM
   HoraFim: string     // HH:MM
+  Destination: "PT" | "ES" | "RM"
+  BiggestObjectDimensionsCm: { Length: number; Width: number; Height: number }
   Expedidor: {
     Nome: string
     Contacto?: string
+    Pais?: string
     Morada: string
     Piso?: string
     Porta?: string
@@ -184,10 +187,12 @@ export interface CTTPickupRequestInput {
     CP3: string
     Localidade: string
     Telefone: string
+    Telemovel?: string
     Email?: string
   }
   QuantidadeVolumes: number
   PesoKg: number
+  PesoObjetoMaisPesadoKg?: number
   Observacoes?: string
 }
 

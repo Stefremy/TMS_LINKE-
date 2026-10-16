@@ -10,6 +10,7 @@ export interface CorreosPickupInput {
   endHour: string // HH:mm
   volumes: number
   weightKg: number
+  heaviestWeightKg?: number
   sender: {
     name: string
     contact?: string
@@ -82,7 +83,12 @@ export class CorreosPickupService {
       emailRte: input.sender.email || "",
       bultos: String(input.volumes || 1),
       kilos: String(input.weightKg || 1),
-      observac: (input.observations || "").slice(0, 100),
+      observac: [
+        input.observations || "",
+        input.volumes > 1 && input.heaviestWeightKg
+          ? `Peso do volume mais pesado: ${input.heaviestWeightKg} kg`
+          : "",
+      ].filter(Boolean).join(" | ").slice(0, 100),
     }
 
     try {

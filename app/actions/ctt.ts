@@ -500,10 +500,19 @@ export async function scheduleCttPickupAction(input: {
   endHour: string
   volumes: number
   weightKg: number
-  sender: { name: string; contact?: string; address: string; country?: string; zip: string; city: string; phone: string; email?: string }
+  heaviestWeightKg?: number
+  pickupDestination?: "PT" | "ES" | "RM"
+  biggestParcelDimensionsCm?: { length: number; width: number; height: number }
+  sender: { name: string; contact?: string; address: string; country?: string; zip: string; city: string; phone: string; mobilePhone?: string; email?: string }
   observations?: string
 }) {
   await requireEmployee()
+  const heaviestWeightKg = input.heaviestWeightKg ?? input.weightKg
+  if (!Number.isFinite(input.weightKg) || input.weightKg <= 0 ||
+      !Number.isFinite(heaviestWeightKg) || heaviestWeightKg <= 0 || heaviestWeightKg > input.weightKg ||
+      !Number.isInteger(input.volumes) || input.volumes < 1) {
+    return { success: false, error: "Confirme os pesos e o número de volumes. O volume mais pesado não pode exceder o peso total." }
+  }
   const supabase = createAdminClient()
   const tenantId = await getTenantId()
 
@@ -539,6 +548,9 @@ export async function scheduleCttPickupAction(input: {
         endHour: input.endHour,
         volumes: input.volumes,
         weightKg: input.weightKg,
+        heaviestWeightKg,
+        destination: input.pickupDestination,
+        biggestParcelDimensionsCm: input.biggestParcelDimensionsCm,
         sender: input.sender,
         observations: input.observations,
       })
@@ -557,12 +569,18 @@ export async function scheduleCttPickupAction(input: {
         endHour: input.endHour,
         volumes: input.volumes,
         weightKg: input.weightKg,
+        heaviestWeightKg,
+        pickupDestination: input.pickupDestination,
+        biggestParcelDimensionsCm: input.biggestParcelDimensionsCm,
         sender: {
           name: input.sender.name,
+          contact: input.sender.contact,
+          country: input.sender.country,
           address: input.sender.address,
           zip: input.sender.zip,
           city: input.sender.city,
           phone: input.sender.phone,
+          mobilePhone: input.sender.mobilePhone,
           email: input.sender.email,
         },
         observations: input.observations,
@@ -602,6 +620,7 @@ export async function scheduleCttPickupAction(input: {
           sender_city: input.sender.city,
           volumes: input.volumes,
           weight_kg: input.weightKg,
+          heaviest_weight_kg: heaviestWeightKg,
           period: `${input.startHour}-${input.endHour}`,
           observations: input.observations,
           created_at: new Date().toISOString(),
