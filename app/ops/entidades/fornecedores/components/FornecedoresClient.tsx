@@ -286,16 +286,13 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
               <th className="py-3 px-2 text-center w-10">
                 <Check className="w-3.5 h-3.5 mx-auto text-slate-500" strokeWidth={3} />
               </th>
-              <th className="py-3 px-2 text-center w-10">
-                <span className="text-sm">🚩</span>
-              </th>
               <th className="py-3 px-4 text-center w-28">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-12 text-center text-slate-500">
+                <td colSpan={9} className="py-12 text-center text-slate-500">
                   Nenhuma transportadora encontrada com os critérios selecionados.
                 </td>
               </tr>
@@ -429,16 +426,6 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
                           <XCircle className="w-4 h-4 text-slate-300" />
                         )}
                       </button>
-                    </td>
-
-                    {/* Bandeira País */}
-                    <td className="py-3 px-2 text-center align-middle">
-                      <svg aria-label="Portugal" role="img" viewBox="0 0 30 20" className="h-3.5 w-5 overflow-hidden rounded-[3px] border border-black/10 shadow-sm">
-                        <rect width="12" height="20" fill="#176B45" />
-                        <rect x="12" width="18" height="20" fill="#C8483D" />
-                        <circle cx="12" cy="10" r="3.4" fill="#E5B84D" stroke="#F8F3E6" strokeWidth="0.8" />
-                        <circle cx="12" cy="10" r="1.5" fill="#C8483D" />
-                      </svg>
                     </td>
 
                     {/* Ações Dropdown */}

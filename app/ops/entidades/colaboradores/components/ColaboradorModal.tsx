@@ -24,13 +24,12 @@ interface ColaboradorModalProps {
 }
 
 const AVATAR_COLORS = [
-  "#16a34a", // Green
-  "#9333ea", // Purple
-  "#2563eb", // Blue
-  "#ea580c", // Orange
-  "#e11d48", // Rose
-  "#0d9488", // Teal
-  "#475569", // Slate
+  "#477D68", // Linke green
+  "#376C8A", // Steel blue
+  "#8A6944", // Ochre
+  "#475569", // Graphite
+  "#263F63", // Navy
+  "#76516D", // Plum
 ]
 
 export function ColaboradorModal({
@@ -139,22 +138,22 @@ export function ColaboradorModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-[var(--surface-bg)] rounded-2xl shadow-2xl border border-[var(--border-subtle)] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="p-6 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-muted)]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-green-100 text-green-700 flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-xl bg-[#EAF0EC] text-[var(--accent)] flex items-center justify-center font-bold">
               <User className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">
                 {colaborador ? "Editar Colaborador" : "Novo Colaborador"}
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[var(--text-tertiary)]">
                 {colaborador ? `Atualizar dados de ${colaborador.name}` : "Adicionar membro à equipa Linke Logistics"}
               </p>
             </div>
@@ -162,7 +161,7 @@ export function ColaboradorModal({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            className="p-2 rounded-xl text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-[var(--surface-dim)] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -171,7 +170,7 @@ export function ColaboradorModal({
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
           {error && (
-            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
+            <div className="p-3.5 bg-[var(--status-critical-soft)] border border-[rgba(220,38,38,0.2)] rounded-xl text-xs text-[var(--status-critical)] font-medium">
               {error}
             </div>
           )}
@@ -179,7 +178,7 @@ export function ColaboradorModal({
           {/* Nome e Cargo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                 Nome Completo *
               </label>
               <input
@@ -188,12 +187,12 @@ export function ColaboradorModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Stefano"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                 Cargo / Função *
               </label>
               <input
@@ -202,7 +201,7 @@ export function ColaboradorModal({
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 placeholder="Ex: Diretor Geral de Operações"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
               />
             </div>
           </div>
@@ -210,13 +209,13 @@ export function ColaboradorModal({
           {/* Departamento e Nível de Acesso */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                 Departamento
               </label>
               <select
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
               >
                 {DEPARTMENTS.map((dept) => (
                   <option key={dept} value={dept}>
@@ -227,13 +226,13 @@ export function ColaboradorModal({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                 Nível de Acesso / Perfil
               </label>
               <select
                 value={accessLevel}
                 onChange={(e) => setAccessLevel(e.target.value as any)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
               >
                 {ACCESS_LEVELS.map((lvl) => (
                   <option key={lvl} value={lvl}>
@@ -247,7 +246,7 @@ export function ColaboradorModal({
           {/* Email e Telefone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                 Email
               </label>
               <input
@@ -255,12 +254,12 @@ export function ColaboradorModal({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="exemplo@linkelogistics.pt"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                 Telefone
               </label>
               <input
@@ -268,7 +267,7 @@ export function ColaboradorModal({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Ex: 910 000 000"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
               />
             </div>
           </div>
@@ -276,13 +275,13 @@ export function ColaboradorModal({
           {/* Estado e Cor Avatar */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                 Estado
               </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
               >
                 <option value="Ativo">Ativo</option>
                 <option value="Férias">Férias</option>
@@ -291,7 +290,7 @@ export function ColaboradorModal({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                 Cor de Identificação (Avatar)
               </label>
               <div className="flex items-center gap-2 pt-1">
@@ -301,9 +300,12 @@ export function ColaboradorModal({
                     type="button"
                     onClick={() => setAvatarColor(c)}
                     className={`w-7 h-7 rounded-full transition-transform ${
-                      avatarColor === c ? "ring-2 ring-offset-2 ring-slate-900 scale-110" : "hover:scale-105"
+                      avatarColor === c ? "ring-2 ring-offset-2 ring-[var(--accent)] ring-offset-[var(--surface-bg)] scale-110" : "hover:scale-105"
                     }`}
                     style={{ backgroundColor: c }}
+                    aria-label={`Selecionar cor ${c}`}
+                    aria-pressed={avatarColor === c}
+                    title={c}
                   />
                 ))}
               </div>
@@ -313,7 +315,7 @@ export function ColaboradorModal({
           {/* Agência e Data de Admissão */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                 Localização / Agência
               </label>
               <input
@@ -321,26 +323,26 @@ export function ColaboradorModal({
                 value={agencyLocation}
                 onChange={(e) => setAgencyLocation(e.target.value)}
                 placeholder="Ex: Sede - Felgueiras / Guimarães"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                 Data de Admissão
               </label>
               <input
                 type="date"
                 value={admissionDate}
                 onChange={(e) => setAdmissionDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
               />
             </div>
           </div>
 
           {/* Observações */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
               Observações
             </label>
             <textarea
@@ -348,16 +350,16 @@ export function ColaboradorModal({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Notas operacionais ou funções específicas..."
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-green-500 focus:outline-none"
+              className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
             />
           </div>
 
           {/* Buttons */}
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+          <div className="pt-4 border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+              className="px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-muted)] transition-colors"
             >
               Cancelar
             </button>
@@ -365,7 +367,7 @@ export function ColaboradorModal({
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl shadow-sm disabled:opacity-60 transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-semibold rounded-xl shadow-sm disabled:opacity-60 transition-colors"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {colaborador ? "Guardar Alterações" : "Criar Colaborador"}

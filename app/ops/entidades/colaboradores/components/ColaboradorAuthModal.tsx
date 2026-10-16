@@ -9,7 +9,7 @@ import {
   EyeOff,
   Copy,
   Check,
-  Sparkles,
+  RefreshCw,
   Loader2,
   CheckCircle2,
   Lock,
@@ -147,7 +147,7 @@ Link de Acesso: http://localhost:3000/ops`
             ) : (
               <div
                 className="w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-2xs shrink-0"
-                style={{ backgroundColor: colaborador.avatar_color || "#16a34a" }}
+                style={{ backgroundColor: colaborador.avatar_color || "#477D68" }}
               >
                 {colaborador.name.charAt(0).toUpperCase()}
               </div>
@@ -173,7 +173,7 @@ Link de Acesso: http://localhost:3000/ops`
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5">
           {error && (
-            <div className="p-3 text-xs text-[var(--status-error)] bg-[var(--status-error-soft)] border border-[rgba(220,38,38,0.2)] rounded-xl font-medium">
+            <div className="p-3 text-xs text-[var(--status-critical)] bg-[var(--status-critical-soft)] border border-[rgba(220,38,38,0.2)] rounded-xl font-medium">
               {error}
             </div>
           )}
@@ -212,7 +212,7 @@ Link de Acesso: http://localhost:3000/ops`
                 onClick={handleGeneratePassword}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:underline cursor-pointer"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <RefreshCw className="w-3.5 h-3.5" />
                 Gerar Password Segura
               </button>
             </div>

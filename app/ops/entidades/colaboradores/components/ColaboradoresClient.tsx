@@ -12,7 +12,6 @@ import {
   Phone,
   Mail,
   MapPin,
-  Calendar,
   Eye,
   Edit,
   Trash2,
@@ -22,14 +21,13 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
   Key,
-  Lock
 } from "lucide-react"
 import { Colaborador, DEPARTMENTS, ACCESS_LEVELS } from "../types"
 import { ColaboradorModal } from "./ColaboradorModal"
 import { ColaboradorDetailsModal } from "./ColaboradorDetailsModal"
 import { ColaboradorAuthModal } from "./ColaboradorAuthModal"
+import { AccessLevelBadge } from "./AccessLevelBadge"
 import { deleteColaboradorAction, toggleColaboradorStatusAction, getColaboradoresAction } from "@/app/actions/colaboradores"
 
 interface ColaboradoresClientProps {
@@ -254,13 +252,13 @@ export function ColaboradoresClient({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Colaboradores</h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Colaboradores</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#EAF0EC] text-[#477D68] border border-[#C9D7CD]">
               <Users className="w-3.5 h-3.5" />
               Equipa Linke
             </span>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-[var(--text-tertiary)] mt-1">
             Gestão de colaboradores, perfis de acesso, cargos e equipa de operações.
           </p>
         </div>
@@ -268,16 +266,16 @@ export function ColaboradoresClient({
         <div className="flex items-center gap-3">
           <button
             onClick={handleExportCSV}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] shadow-sm transition-colors"
           >
-            <Download className="w-4 h-4 text-slate-500" />
+            <Download className="w-4 h-4 text-[var(--text-tertiary)]" />
             Exportar CSV
           </button>
 
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-50 shadow-sm transition-colors"
+            className="p-2.5 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] shadow-sm transition-colors"
             title="Atualizar lista"
           >
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -285,7 +283,7 @@ export function ColaboradoresClient({
 
           <button
             onClick={handleOpenNew}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-all"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-sm font-semibold shadow-sm transition-all"
           >
             <Plus className="w-4 h-4" />
             Novo Colaborador
@@ -296,79 +294,79 @@ export function ColaboradoresClient({
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Colaboradores */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Colaboradores</span>
-            <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
+            <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Total Colaboradores</span>
+            <div className="w-10 h-10 rounded-xl bg-[#EAF0EC] flex items-center justify-center text-[var(--accent)]">
               <Users className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-slate-900">{stats.total}</span>
-            <span className="text-xs font-medium text-slate-500">membros registados</span>
+            <span className="text-3xl font-extrabold text-[var(--text-primary)]">{stats.total}</span>
+            <span className="text-xs font-medium text-[var(--text-tertiary)]">membros registados</span>
           </div>
         </div>
 
         {/* Ativos */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Colaboradores Ativos</span>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+            <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Colaboradores Ativos</span>
+            <div className="w-10 h-10 rounded-xl bg-[#EAF0EC] flex items-center justify-center text-[#477D68]">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-emerald-900">{stats.ativos}</span>
-            <span className="text-xs font-medium text-emerald-600">em funções</span>
+            <span className="text-3xl font-extrabold text-[#315B43]">{stats.ativos}</span>
+            <span className="text-xs font-medium text-[#477D68]">em funções</span>
           </div>
         </div>
 
         {/* Administradores */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Administradores</span>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+            <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Administradores</span>
+            <div className="w-10 h-10 rounded-xl bg-[#EDF1F3] flex items-center justify-center text-[#376C8A]">
               <Shield className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-blue-900">{stats.admins}</span>
-            <span className="text-xs font-medium text-blue-600">acesso total</span>
+            <span className="text-3xl font-extrabold text-[#284D65]">{stats.admins}</span>
+            <span className="text-xs font-medium text-[#376C8A]">acesso total</span>
           </div>
         </div>
 
         {/* Departamentos */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Departamentos</span>
-            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+            <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Departamentos</span>
+            <div className="w-10 h-10 rounded-xl bg-[#F2EEE8] flex items-center justify-center text-[#8A6944]">
               <Building2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-purple-900">{stats.departamentos}</span>
-            <span className="text-xs font-medium text-purple-600">áreas operacionais</span>
+            <span className="text-3xl font-extrabold text-[#6B5237]">{stats.departamentos}</span>
+            <span className="text-xs font-medium text-[#8A6944]">áreas operacionais</span>
           </div>
         </div>
       </div>
 
       {/* Filters and View Controls */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-4">
+      <div className="bg-[var(--surface-bg)] rounded-2xl p-4 border border-[var(--border-subtle)] shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           {/* Search Input */}
           <div className="relative w-full md:max-w-md">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Pesquisar por nome, cargo, departamento, email..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors"
+              className="w-full pl-10 pr-4 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:bg-[var(--surface-bg)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] transition-colors"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-400 hover:text-slate-600 bg-slate-200/60 rounded-md px-1.5 py-0.5"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] bg-[var(--surface-dim)] rounded-md px-1.5 py-0.5"
               >
                 Limpar
               </button>
@@ -376,11 +374,11 @@ export function ColaboradoresClient({
           </div>
 
           {/* View Toggle */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+          <div className="flex items-center gap-1 bg-[var(--surface-dim)] p-1 rounded-xl">
             <button
               onClick={() => setViewMode("grid")}
               className={`p-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                viewMode === "grid" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                viewMode === "grid" ? "bg-[var(--surface-bg)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
               title="Vista de Cartões"
             >
@@ -390,7 +388,7 @@ export function ColaboradoresClient({
             <button
               onClick={() => setViewMode("table")}
               className={`p-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                viewMode === "table" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                viewMode === "table" ? "bg-[var(--surface-bg)] text-[var(--text-primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
               title="Vista de Tabela"
             >
@@ -401,13 +399,13 @@ export function ColaboradoresClient({
         </div>
 
         {/* Secondary Filters */}
-        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-100 text-xs">
+        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-[var(--border-subtle)] text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-medium">Departamento:</span>
+            <span className="text-[var(--text-tertiary)] font-medium">Departamento:</span>
             <select
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-2.5 py-1.5 text-[var(--text-primary)] font-medium focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             >
               <option value="todos">Todos os Departamentos</option>
               {DEPARTMENTS.map((dept) => (
@@ -419,11 +417,11 @@ export function ColaboradoresClient({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-medium">Estado:</span>
+            <span className="text-[var(--text-tertiary)] font-medium">Estado:</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-2.5 py-1.5 text-[var(--text-primary)] font-medium focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             >
               <option value="todos">Todos os Estados</option>
               <option value="Ativo">Ativo</option>
@@ -433,11 +431,11 @@ export function ColaboradoresClient({
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-medium">Perfil de Acesso:</span>
+            <span className="text-[var(--text-tertiary)] font-medium">Perfil de Acesso:</span>
             <select
               value={accessFilter}
               onChange={(e) => setAccessFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-2.5 py-1.5 text-[var(--text-primary)] font-medium focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             >
               <option value="todos">Todos os Perfis</option>
               {ACCESS_LEVELS.map((lvl) => (
@@ -456,7 +454,7 @@ export function ColaboradoresClient({
                 setStatusFilter("todos")
                 setAccessFilter("todos")
               }}
-              className="text-green-700 hover:text-green-800 font-semibold underline ml-auto"
+              className="text-[var(--accent)] hover:text-[var(--accent-hover)] font-semibold underline ml-auto"
             >
               Repor filtros
             </button>
@@ -471,15 +469,15 @@ export function ColaboradoresClient({
             <div
               key={col.id}
               onClick={() => handleOpenDetails(col)}
-              className="bg-white rounded-2xl border border-slate-200/90 hover:border-green-300 p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
+              className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] hover:border-[#9DB7A8] p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
             >
               {/* Card Top */}
               <div>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div
-                      className="w-14 h-14 rounded-2xl text-white flex items-center justify-center text-xl font-bold shadow-md shrink-0 overflow-hidden"
-                      style={{ backgroundColor: col.avatar_color || "#16a34a" }}
+                      className="w-14 h-14 rounded-xl text-white flex items-center justify-center text-xl font-bold shadow-sm shrink-0 overflow-hidden"
+                      style={{ backgroundColor: col.avatar_color || "#477D68" }}
                     >
                       {col.avatar ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -489,11 +487,11 @@ export function ColaboradoresClient({
                       )}
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-slate-900 group-hover:text-green-700 transition-colors">
+                      <h3 className="text-lg font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors">
                         {col.name}
                       </h3>
-                      <p className="text-xs font-semibold text-slate-500">{col.role}</p>
-                      <span className="inline-flex items-center text-[11px] font-medium text-green-700 mt-0.5">
+                      <p className="text-xs font-semibold text-[var(--text-tertiary)]">{col.role}</p>
+                      <span className="inline-flex items-center text-[11px] font-medium text-[var(--accent)] mt-0.5">
                         {col.department}
                       </span>
                     </div>
@@ -501,61 +499,59 @@ export function ColaboradoresClient({
 
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
                     col.status === "Ativo"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      ? "bg-[#EAF0EC] text-[#477D68] border border-[#C9D7CD]"
                       : col.status === "Férias"
-                      ? "bg-amber-50 text-amber-700 border border-amber-200"
-                      : "bg-slate-100 text-slate-700 border border-slate-200"
+                      ? "bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(180,83,9,0.2)]"
+                      : "bg-[var(--surface-dim)] text-[var(--text-secondary)] border border-[var(--border-subtle)]"
                   }`}>
+                    <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${col.status === "Ativo" ? "bg-[#477D68]" : col.status === "Férias" ? "bg-[var(--status-warning)]" : "bg-[var(--text-tertiary)]"}`} />
                     {col.status}
                   </span>
                 </div>
 
                 {/* Contacts & Info */}
-                <div className="mt-5 pt-4 border-t border-slate-100 space-y-2 text-xs text-slate-600">
+                <div className="mt-5 pt-4 border-t border-[var(--border-subtle)] space-y-2 text-xs text-[var(--text-secondary)]">
                   <div className="flex items-center gap-2">
-                    <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Mail className="w-3.5 h-3.5 text-[var(--text-tertiary)] shrink-0" />
                     <a
                       href={`mailto:${col.email}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="hover:text-green-700 truncate"
+                      className="hover:text-[var(--accent)] truncate"
                     >
                       {col.email}
                     </a>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Phone className="w-3.5 h-3.5 text-[var(--text-tertiary)] shrink-0" />
                     <a
                       href={`tel:${col.phone}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="hover:text-green-700"
+                      className="hover:text-[var(--accent)]"
                     >
                       {col.phone}
                     </a>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <MapPin className="w-3.5 h-3.5 text-[var(--text-tertiary)] shrink-0" />
                     <span className="truncate">{col.agency_location}</span>
                   </div>
                 </div>
 
                 {/* Permissions Tags preview */}
                 <div className="mt-4 flex flex-wrap gap-1.5">
-                  <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                    <Shield className="w-3 h-3 inline mr-1" />
-                    {col.access_level}
-                  </span>
+                  <AccessLevelBadge level={col.access_level} />
                   {col.permissions.slice(0, 2).map((p, i) => (
                     <span
                       key={i}
-                      className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 truncate max-w-[140px]"
+                      className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-[var(--surface-dim)] text-[var(--text-secondary)] truncate max-w-[140px]"
                     >
                       {p}
                     </span>
                   ))}
                   {col.permissions.length > 2 && (
-                    <span className="px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-500">
+                    <span className="px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-[var(--surface-dim)] text-[var(--text-tertiary)]">
                       +{col.permissions.length - 2}
                     </span>
                   )}
@@ -564,12 +560,12 @@ export function ColaboradoresClient({
 
               {/* Card Footer Actions */}
               <div
-                className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between"
+                className="mt-5 pt-4 border-t border-[var(--border-subtle)] flex items-center justify-between"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
                   onClick={() => handleOpenDetails(col)}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 hover:text-green-800"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:text-[var(--accent-hover)]"
                 >
                   <Eye className="w-3.5 h-3.5" />
                   Ver Perfil
@@ -579,7 +575,7 @@ export function ColaboradoresClient({
                   {isStefano && (
                     <button
                       onClick={(e) => handleOpenAuth(col, e)}
-                      className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                      className="p-1.5 text-[#376C8A] hover:text-[#376C8A] hover:bg-[#EDF1F3] rounded-lg transition-colors"
                       title="Gerir Acesso & Palavra-passe"
                     >
                       <Key className="w-3.5 h-3.5" />
@@ -587,14 +583,14 @@ export function ColaboradoresClient({
                   )}
                   <button
                     onClick={() => handleOpenEdit(col)}
-                    className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-dim)] rounded-lg transition-colors"
                     title="Editar"
                   >
                     <Edit className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={(e) => handleDelete(col.id, e)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--status-critical)] hover:bg-[var(--status-critical-soft)] rounded-lg transition-colors"
                     title="Eliminar"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -606,11 +602,11 @@ export function ColaboradoresClient({
         </div>
       ) : (
         /* TABLE VIEW */
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/75 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <tr className="border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
                   <th className="py-3.5 px-4">Colaborador</th>
                   <th className="py-3.5 px-4">Departamento & Cargo</th>
                   <th className="py-3.5 px-4">Contactos</th>
@@ -619,19 +615,19 @@ export function ColaboradoresClient({
                   <th className="py-3.5 px-4 text-right">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
+              <tbody className="divide-y divide-[var(--border-subtle)] text-sm">
                 {paginated.map((col) => (
                   <tr
                     key={col.id}
                     onClick={() => handleOpenDetails(col)}
-                    className="hover:bg-slate-50/80 cursor-pointer transition-colors group"
+                    className="hover:bg-[var(--surface-muted)] cursor-pointer transition-colors group"
                   >
                     {/* Name & Avatar */}
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-3">
                         <div
                           className="w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold shadow-sm shrink-0 overflow-hidden"
-                          style={{ backgroundColor: col.avatar_color || "#16a34a" }}
+                          style={{ backgroundColor: col.avatar_color || "#477D68" }}
                         >
                           {col.avatar ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -641,10 +637,10 @@ export function ColaboradoresClient({
                           )}
                         </div>
                         <div>
-                          <span className="font-semibold text-slate-900 group-hover:text-green-700 transition-colors block">
+                          <span className="font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent)] transition-colors block">
                             {col.name}
                           </span>
-                          <span className="text-xs font-mono text-slate-400">{col.code}</span>
+                          <span className="text-xs font-mono text-[var(--text-tertiary)]">{col.code}</span>
                         </div>
                       </div>
                     </td>
@@ -652,27 +648,24 @@ export function ColaboradoresClient({
                     {/* Department & Role */}
                     <td className="py-3.5 px-4">
                       <div>
-                        <span className="font-semibold text-slate-800 block text-xs">{col.role}</span>
-                        <span className="text-xs text-green-700 font-medium">{col.department}</span>
+                        <span className="font-semibold text-[var(--text-primary)] block text-xs">{col.role}</span>
+                        <span className="text-xs text-[var(--accent)] font-medium">{col.department}</span>
                       </div>
                     </td>
 
                     {/* Contacts */}
                     <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
                       <div className="text-xs space-y-0.5">
-                        <a href={`mailto:${col.email}`} className="text-slate-800 hover:text-green-700 block">
+                        <a href={`mailto:${col.email}`} className="text-[var(--text-primary)] hover:text-[var(--accent)] block">
                           {col.email}
                         </a>
-                        <span className="text-slate-400">{col.phone}</span>
+                        <span className="text-[var(--text-tertiary)]">{col.phone}</span>
                       </div>
                     </td>
 
                     {/* Access Level */}
                     <td className="py-3.5 px-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                        <Shield className="w-3 h-3 mr-1" />
-                        {col.access_level}
-                      </span>
+                      <AccessLevelBadge level={col.access_level} />
                     </td>
 
                     {/* Status */}
@@ -681,13 +674,14 @@ export function ColaboradoresClient({
                         onClick={(e) => handleToggleStatus(col, e)}
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold transition-transform hover:scale-105 ${
                           col.status === "Ativo"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            ? "bg-[#EAF0EC] text-[#477D68] border border-[#C9D7CD]"
                             : col.status === "Férias"
-                            ? "bg-amber-50 text-amber-700 border border-amber-200"
-                            : "bg-slate-100 text-slate-700 border border-slate-200"
+                            ? "bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(180,83,9,0.2)]"
+                            : "bg-[var(--surface-dim)] text-[var(--text-secondary)] border border-[var(--border-subtle)]"
                         }`}
                         title="Clique para alternar estado"
                       >
+                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${col.status === "Ativo" ? "bg-[#477D68]" : col.status === "Férias" ? "bg-[var(--status-warning)]" : "bg-[var(--text-tertiary)]"}`} />
                         {col.status}
                       </button>
                     </td>
@@ -698,7 +692,7 @@ export function ColaboradoresClient({
                         {isStefano && (
                           <button
                             onClick={(e) => handleOpenAuth(col, e)}
-                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                            className="p-1.5 text-[#376C8A] hover:text-[#376C8A] hover:bg-[#EDF1F3] rounded-lg transition-colors"
                             title="Gerir Acesso & Palavra-passe"
                           >
                             <Key className="w-4 h-4" />
@@ -706,21 +700,21 @@ export function ColaboradoresClient({
                         )}
                         <button
                           onClick={() => handleOpenDetails(col)}
-                          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-dim)] rounded-lg transition-colors"
                           title="Ver Perfil"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleOpenEdit(col)}
-                          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-dim)] rounded-lg transition-colors"
                           title="Editar"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
                           onClick={(e) => handleDelete(col.id, e)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--status-critical)] hover:bg-[var(--status-critical-soft)] rounded-lg transition-colors"
                           title="Eliminar"
                         >
                           <Trash2 className="w-4 h-4" />

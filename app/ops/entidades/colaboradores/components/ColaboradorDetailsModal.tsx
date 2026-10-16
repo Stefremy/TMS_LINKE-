@@ -6,7 +6,6 @@ import {
   Mail,
   Phone,
   Calendar,
-  Shield,
   MapPin,
   CheckCircle2,
   Copy,
@@ -15,6 +14,7 @@ import {
   Key
 } from "lucide-react"
 import { Colaborador } from "../types"
+import { AccessLevelBadge } from "./AccessLevelBadge"
 
 interface ColaboradorDetailsModalProps {
   isOpen: boolean
@@ -58,7 +58,7 @@ export function ColaboradorDetailsModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 border-b border-[var(--border-subtle)] flex items-start justify-between bg-[var(--surface-muted)]">
+        <div className="p-4 sm:p-6 border-b border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 bg-[var(--surface-muted)]">
           <div className="flex items-start gap-4">
             {/* Avatar */}
             <div
@@ -78,7 +78,7 @@ export function ColaboradorDetailsModal({
                 {/* Status badge */}
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border ${
                   colaborador.status === "Ativo"
-                    ? "bg-[var(--status-success-soft)] text-[var(--status-success)] border-[rgba(18,138,71,0.2)]"
+                    ? "bg-[#EAF0EC] text-[#477D68] border-[#C9D7CD]"
                     : colaborador.status === "Férias"
                     ? "bg-[var(--status-warning-soft)] text-[var(--status-warning)] border-[rgba(217,119,6,0.2)]"
                     : "bg-[var(--surface-muted)] text-[var(--text-tertiary)] border-[var(--border-subtle)]"
@@ -89,10 +89,7 @@ export function ColaboradorDetailsModal({
                   {colaborador.status}
                 </span>
 
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-[var(--surface-bg)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
-                  <Shield className="w-3 h-3" />
-                  {colaborador.access_level}
-                </span>
+                <AccessLevelBadge level={colaborador.access_level} />
 
                 <span className="text-[11px] font-mono text-[var(--text-tertiary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">
                   {colaborador.code}
@@ -108,15 +105,15 @@ export function ColaboradorDetailsModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-start">
             {onManageAuth && (
               <button
                 onClick={() => { onClose(); onManageAuth(colaborador) }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[var(--accent)] bg-[var(--accent-soft)] hover:bg-[var(--accent-soft)]/80 border border-[rgba(18,138,71,0.2)] transition-colors shadow-2xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[var(--accent)] bg-[#EAF0EC] hover:bg-[#E2EBE5] border border-[#C9D7CD] transition-colors shadow-2xs cursor-pointer"
                 title="Atribuir / Alterar Credenciais de Acesso"
               >
                 <Key className="w-3.5 h-3.5" />
-                <span>Credenciais &amp; Password</span>
+                <span>Credenciais<span className="hidden sm:inline"> &amp; Password</span></span>
               </button>
             )}
             {onEdit && (
@@ -233,7 +230,7 @@ export function ColaboradorDetailsModal({
               {colaborador.permissions.map((perm, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[var(--accent-soft)] border border-[rgba(18,138,71,0.15)] rounded-lg text-[11px] font-semibold text-[var(--accent)]"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#EAF0EC] border border-[#C9D7CD] rounded-lg text-[11px] font-semibold text-[#477D68]"
                 >
                   <CheckCircle2 className="w-3 h-3 shrink-0" />
                   {perm}
