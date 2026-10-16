@@ -749,7 +749,7 @@ export default function ContasCorrenteClient({
                       <span className="flex items-center gap-3 min-w-0">
                         <StoreAvatar name={group.name} logoUrl={group.logo_url} color={group.color} />
                         <span className="min-w-0">
-                          <span className="block text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--accent)] mb-0.5">Loja</span>
+                          <span className="block text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--accent)] mb-0.5">Cliente</span>
                           <span className="block text-sm font-bold text-[var(--text-primary)] break-words">{group.name}</span>
                           <span className="block text-[11px] text-[var(--text-secondary)] mt-1 leading-relaxed">
                             {group.nif && `NIF: ${group.nif} · `}{group.paidCount} paga(s){group.awaitingReceiptCount > 0 && ` · ${group.awaitingReceiptCount} a aguardar recibo`}
