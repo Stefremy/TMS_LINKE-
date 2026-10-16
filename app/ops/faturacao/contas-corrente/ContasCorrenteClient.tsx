@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Building, FolderOpen, FileText, ChevronDown, ChevronRight, Euro, Cloud, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X, Sparkles, Mail, Send } from "lucide-react"
 import { groupInvoiceArchive, isInvoicePaid } from "@/lib/billing/invoice-archive"
 import { InvoiceIssueButton } from "./InvoiceIssueButton"
+import { AnimatedDisclosure } from "./AnimatedDisclosure"
 import { MoloniConnectModal } from "./MoloniConnectModal"
 
 export default function ContasCorrenteClient({ 
@@ -704,26 +705,27 @@ export default function ContasCorrenteClient({
             <button
               type="button"
               aria-expanded={showHistory}
-              className="w-full text-left bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] px-6 py-3.5 flex items-center justify-between cursor-pointer select-none rounded-t-xl"
-              onClick={() => setShowHistory(!showHistory)}
+              aria-controls="invoice-archive-content"
+              className="w-full text-left bg-[var(--surface-muted)] px-4 sm:px-6 py-4 flex items-center justify-between gap-3 cursor-pointer select-none rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+              onClick={() => { setShowHistory(!showHistory); setOpenActionMenuId(null) }}
             >
               <span className="flex items-center gap-3">
-                <span className="w-7 h-7 rounded-md bg-[var(--status-success-soft)] border border-[rgba(18,138,71,0.2)] flex items-center justify-center text-[var(--status-success)]">
-                  <FolderOpen className="w-4 h-4" />
+                <span className="w-10 h-10 shrink-0 rounded-xl bg-[var(--surface-bg)] border border-[var(--border-strong)] flex items-center justify-center text-[var(--text-secondary)]">
+                  <FolderOpen className="w-5 h-5" />
                 </span>
                 <span>
-                  <span role="heading" aria-level={2} className="block text-xs font-bold text-[var(--text-primary)]">Arquivo de Faturas por Loja</span>
-                  <span className="block text-[11px] text-[var(--text-tertiary)]">{archiveDocumentCount} documento(s) · Mais recentes primeiro dentro de cada loja</span>
+                  <span role="heading" aria-level={2} className="block text-sm font-bold text-[var(--text-primary)]">Arquivo de Faturas por Loja</span>
+                  <span className="block text-xs text-[var(--text-secondary)] mt-0.5">{archiveGroups.length} lojas · {archiveDocumentCount} documentos · Abre uma loja para consultar as faturas</span>
                 </span>
               </span>
               <span className="text-[var(--text-tertiary)]">
-                {showHistory ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 motion-reduce:transition-none ${showHistory ? "rotate-0" : "-rotate-90"}`} />
               </span>
             </button>
 
-            {showHistory && (
-              <div>
-                <div className="px-6 py-3 border-b border-[var(--border-subtle)]">
+            <AnimatedDisclosure open={showHistory} id="invoice-archive-content">
+              <div className="border-t border-[var(--border-subtle)]">
+                <div className="px-4 sm:px-6 py-4 border-b border-[var(--border-subtle)]">
                   <label htmlFor="invoice-archive-search" className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">Procurar no arquivo</label>
                   <input id="invoice-archive-search" type="search" value={archiveSearch} onChange={event => {
                     const value = event.target.value
@@ -735,31 +737,44 @@ export default function ContasCorrenteClient({
                 </div>
                 {archiveGroups.length === 0 && <p className="px-6 py-6 text-sm text-[var(--text-tertiary)]">Nenhum documento encontrado.</p>}
                 {archiveGroups.map(group => (
-                  <div key={group.key} className="border-b last:border-b-0 border-[var(--border-subtle)]">
+                  <div key={group.key} className={`mx-3 sm:mx-5 my-3 rounded-xl border shadow-2xs transition-colors duration-300 ${expandedArchiveStores.has(group.key) ? "border-[var(--accent)]/30" : "border-[var(--border-subtle)]"}`}>
                     <button type="button" aria-expanded={expandedArchiveStores.has(group.key)}
-                      className="w-full flex items-center justify-between gap-3 px-6 py-4 text-left hover:bg-[var(--surface-muted)]/50 cursor-pointer"
-                      onClick={() => setExpandedArchiveStores(previous => {
+                      aria-controls={`invoice-store-${encodeURIComponent(group.key)}`}
+                      className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-4 text-left bg-[var(--accent-soft)] hover:brightness-[0.98] rounded-xl cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                      onClick={() => { setOpenActionMenuId(null); setExpandedArchiveStores(previous => {
                         const next = new Set(previous)
                         if (next.has(group.key)) next.delete(group.key)
                         else next.add(group.key)
                         return next
-                      })}>
-                      <span className="flex items-center gap-3">
-                        <Building className="w-5 h-5 text-[var(--accent)] shrink-0" />
-                        <span>
-                          <span className="block text-sm font-bold text-[var(--text-primary)]">{group.name}</span>
-                          <span className="block text-xs text-[var(--text-tertiary)] mt-0.5">
-                            {group.nif && `NIF: ${group.nif} · `}{group.statements.length} documento(s) · {group.paidCount} pago(s) · {group.awaitingReceiptCount} a aguardar recibo
+                      }) }}>
+                      <span className="flex items-center gap-3 min-w-0">
+                        <span className="w-10 h-10 shrink-0 rounded-xl bg-[var(--surface-bg)] border border-[var(--accent)]/20 flex items-center justify-center">
+                          <Building className="w-5 h-5 text-[var(--accent)]" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--accent)] mb-0.5">Loja</span>
+                          <span className="block text-sm font-bold text-[var(--text-primary)] break-words">{group.name}</span>
+                          <span className="block text-[11px] text-[var(--text-secondary)] mt-1 leading-relaxed">
+                            {group.nif && `NIF: ${group.nif} · `}{group.paidCount} paga(s){group.awaitingReceiptCount > 0 && ` · ${group.awaitingReceiptCount} a aguardar recibo`}
                           </span>
                           {group.associationMissing && <span className="block text-xs text-[var(--status-warning)] mt-1">Loja por associar</span>}
                         </span>
                       </span>
-                      {expandedArchiveStores.has(group.key) ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
+                      <span className="flex items-center gap-2 sm:gap-4 shrink-0 text-[var(--accent)]">
+                        <span className="hidden sm:inline text-[11px] font-semibold">{expandedArchiveStores.has(group.key) ? "Ocultar faturas" : "Ver faturas"}</span>
+                        <span className="px-2 py-1 rounded-md bg-[var(--surface-bg)] border border-[var(--accent)]/15 text-[11px] font-bold tabular-nums">{group.statements.length}<span className="hidden sm:inline"> faturas</span></span>
+                        <ChevronDown className={`w-4 h-4 transition-transform duration-300 motion-reduce:transition-none ${expandedArchiveStores.has(group.key) ? "rotate-0" : "-rotate-90"}`} />
+                      </span>
                     </button>
-                    {expandedArchiveStores.has(group.key) && (
-                      <div className="border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/20 divide-y divide-[var(--border-subtle)]">
+                    <AnimatedDisclosure open={expandedArchiveStores.has(group.key)} id={`invoice-store-${encodeURIComponent(group.key)}`}>
+                      <div className="p-3 sm:p-5 bg-[var(--surface-muted)] rounded-b-xl border-t border-[var(--border-subtle)]">
+                        <div className="flex flex-wrap items-center justify-between gap-1 mb-3 pl-3 sm:pl-4">
+                          <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)]"><FileText className="w-3.5 h-3.5" />Histórico de faturas</h3>
+                          <span className="text-[10px] text-[var(--text-tertiary)]">Mais recentes primeiro</span>
+                        </div>
+                        <div className="border-l-2 border-[var(--border-strong)] pl-3 sm:pl-4 space-y-2">
                         {group.statements.map((stmt: any) => (
-                          <div key={stmt.id || stmt.statement_number} className="px-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[var(--surface-muted)]/50 transition-colors">
+                          <div key={stmt.id || stmt.statement_number} className="px-3 sm:px-4 py-3.5 bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-[var(--border-strong)] transition-colors">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-secondary)] shrink-0">
                                 <FileText className="w-3.5 h-3.5" />
@@ -772,9 +787,7 @@ export default function ContasCorrenteClient({
                                     {formatFTNumber(stmt.moloni_document_number)}
                                   </p>
                                 )}
-                                <p className="text-[11px] text-[var(--text-tertiary)] flex items-center gap-2 mt-0.5">
-                                  <span className="font-semibold text-[var(--text-secondary)]">{stmt.client_name}</span>
-                                  <span>•</span>
+                                <p className="text-[11px] text-[var(--text-tertiary)] flex flex-wrap items-center gap-2 mt-1">
                                   <span className="flex items-center gap-1">
                                     <Package className="w-3 h-3 text-[var(--text-tertiary)]" />
                                     {stmt.shipments_count || stmt.shipment_ids?.length || 0} envios
@@ -973,12 +986,13 @@ export default function ContasCorrenteClient({
                             </div>
                           </div>
                         ))}
+                        </div>
                       </div>
-                    )}
+                    </AnimatedDisclosure>
                   </div>
                 ))}
               </div>
-            )}
+            </AnimatedDisclosure>
           </div>
         )}
 
