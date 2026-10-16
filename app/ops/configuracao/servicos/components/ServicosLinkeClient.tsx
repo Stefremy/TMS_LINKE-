@@ -3,17 +3,10 @@
 import * as React from "react"
 import { 
   Package, 
-  Building2, 
   Calculator, 
   Plus, 
   Layers, 
-  ShieldCheck, 
-  Percent, 
-  ArrowUpRight,
-  RefreshCw,
-  Sparkles,
-  Users,
-  Globe
+  Percent
 } from "lucide-react"
 
 import type { ServicoLinke } from "../types"
@@ -142,12 +135,10 @@ export function ServicosLinkeClient({
   // Stats
   const totalServicos = servicos.length
   const servicosAtivos = servicos.filter((s) => s.is_active).length
-  const activeWebservicesCount = (webservices && webservices.length > 0)
-    ? webservices.filter((w) => w.is_active !== false).length
-    : 1
-  const vipServicesCount = servicos.filter((s) => s.pricing_profile === "VIP / Alto Volume" || s.pricing_profile === "Tabela Negociada Cliente").length
+  const baseServicesCount = servicos.filter((s) => s.is_primordial).length
+  const customServicesCount = servicos.filter((s) => !s.is_primordial).length
   const avgMarkup = totalServicos > 0
-    ? (servicos.reduce((acc, s) => acc + s.global_markup_pct, 0) / totalServicos).toFixed(1)
+    ? (servicos.reduce((acc, s) => acc + (Number(s.global_markup_pct) || 0), 0) / totalServicos).toFixed(1)
     : "0"
 
   return (
@@ -178,8 +169,10 @@ export function ServicosLinkeClient({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {activeTab === "servicos_linke" && (
+          <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => {
               setSelectedServicoForEdit(null)
               setIsModalOpen(true)
@@ -189,6 +182,30 @@ export function ServicosLinkeClient({
             <Plus className="w-3.5 h-3.5" />
             Novo Serviço / Tabela
           </button>
+          </div>
+        )}
+      </div>
+
+      {/* Resumo rápido: sempre visível antes das ferramentas de gestão */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+          <span className="text-[11px] font-medium text-slate-500">Serviços ativos</span>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-xl font-semibold text-slate-900">{servicosAtivos}</span>
+            <span className="text-xs text-slate-400">de {totalServicos}</span>
+          </div>
+        </div>
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+          <span className="text-[11px] font-medium text-slate-500">Tabelas base</span>
+          <div className="mt-1 text-xl font-semibold text-slate-900">{baseServicesCount}</div>
+        </div>
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+          <span className="text-[11px] font-medium text-slate-500">Tabelas personalizadas</span>
+          <div className="mt-1 text-xl font-semibold text-slate-900">{customServicesCount}</div>
+        </div>
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
+          <span className="text-[11px] font-medium text-slate-500">Margem média configurada</span>
+          <div className="mt-1 text-xl font-semibold text-slate-900">{avgMarkup}%</div>
         </div>
       </div>
 
@@ -203,7 +220,7 @@ export function ServicosLinkeClient({
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
-          Tabelas de Preço & Serviços
+          Serviços e tabelas
         </button>
 
         <button
@@ -215,7 +232,7 @@ export function ServicosLinkeClient({
           }`}
         >
           <Percent className="w-3.5 h-3.5" />
-          Matriz de Margens dos Fornecedores
+          Margens dos fornecedores
         </button>
 
         <button
@@ -227,7 +244,7 @@ export function ServicosLinkeClient({
           }`}
         >
           <Calculator className="w-3.5 h-3.5" />
-          Simulador de Cotação
+          Simulador de preços
         </button>
       </div>
 
@@ -237,14 +254,9 @@ export function ServicosLinkeClient({
           <TabelasLinkeTab
             mode="linke_services"
             servicos={servicos}
-            fornecedores={fornecedores}
             canDeletePrimordial={canDeletePrimordial}
             onEditServico={(servico) => {
               setSelectedServicoForEdit(servico)
-              setIsModalOpen(true)
-            }}
-            onNewServico={() => {
-              setSelectedServicoForEdit(null)
               setIsModalOpen(true)
             }}
             onDuplicateServico={(servico) => {
@@ -267,74 +279,6 @@ export function ServicosLinkeClient({
         {activeTab === "simulador" && (
           <SimuladorCotacaoTab servicos={servicos} />
         )}
-      </div>
-
-      {/* Bottom Stat KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Tabelas & Serviços Linke</span>
-            <span className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
-              <Package className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-extrabold text-slate-900">{servicosAtivos}</span>
-            <span className="text-xs text-slate-400">/ {totalServicos} configurados</span>
-          </div>
-          <span className="text-[11px] text-emerald-600 font-medium block mt-1">
-            Criação ilimitada de serviços
-          </span>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Tabelas VIP / Grande Volume</span>
-            <span className="p-1.5 bg-teal-50 text-teal-700 rounded-lg">
-              <Users className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-extrabold text-teal-700">{vipServicesCount}</span>
-            <span className="text-xs text-slate-400">tarifas negociadas</span>
-          </div>
-          <span className="text-[11px] text-teal-600 font-medium block mt-1">
-            Preços reduzidos p/ mais envios
-          </span>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Webservices / APIs Conectadas</span>
-            <span className="p-1.5 bg-blue-50 text-blue-700 rounded-lg">
-              <Globe className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-extrabold text-blue-700">{activeWebservicesCount}</span>
-            <span className="text-xs text-slate-400">webservice ativo</span>
-          </div>
-          <span className="text-[11px] text-emerald-700 font-bold block mt-1 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            CTT Expresso API (Ativa)
-          </span>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Transportadores Parceiros</span>
-            <span className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
-              <Building2 className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-extrabold text-slate-900">{fornecedores.length}</span>
-            <span className="text-xs text-slate-400">parceiros registados</span>
-          </div>
-          <span className="text-[11px] text-emerald-700 font-semibold block mt-1">
-            Rede Integrada & Contratos
-          </span>
-        </div>
       </div>
 
       {/* Modal for Create/Edit Linke Service & Tables */}

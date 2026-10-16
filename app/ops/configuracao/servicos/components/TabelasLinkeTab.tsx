@@ -4,31 +4,24 @@ import * as React from "react"
 import { 
   Package, 
   Search, 
-  Plus, 
   Edit3, 
   Trash2, 
   Copy,
   ShieldCheck, 
   Lock,
-  MapPin,
   Percent,
-  TrendingUp,
-  DollarSign
 } from "lucide-react"
 import { DestinationBadge } from "./DestinationIcons"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
 import { getCttServiceIdentity } from "@/lib/services/ctt/service-identity"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import type { ServicoLinke } from "../types"
-import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 
 interface TabelasLinkeTabProps {
   mode?: "base" | "custom" | "linke_services"
   servicos: ServicoLinke[]
-  fornecedores: Fornecedor[]
   canDeletePrimordial?: boolean
   onEditServico: (servico: ServicoLinke) => void
-  onNewServico: () => void
   onDuplicateServico: (servico: ServicoLinke) => void
   onDeleteServico: (id: string) => void
   onToggleStatus: (id: string, active: boolean) => void
@@ -38,10 +31,8 @@ interface TabelasLinkeTabProps {
 export function TabelasLinkeTab({
   mode = "base",
   servicos,
-  fornecedores,
   canDeletePrimordial = false,
   onEditServico,
-  onNewServico,
   onDuplicateServico,
   onDeleteServico,
   onToggleStatus,
@@ -90,7 +81,6 @@ export function TabelasLinkeTab({
 
   const renderServiceCard = (servico: ServicoLinke) => {
     const isSelected = servico.id === currentServico?.id
-    const isCustom = servico.pricing_profile === "Tabela Negociada Cliente"
     const isOg = Boolean(servico.is_primordial)
 
     return (
@@ -200,6 +190,14 @@ export function TabelasLinkeTab({
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Catálogo de serviços e tabelas</h2>
+          <p className="text-xs text-slate-500">Escolha um serviço para consultar custos, preços de venda e margens.</p>
+        </div>
+        <span className="text-[11px] text-slate-500">{filteredServicos.length} resultado(s)</span>
+      </div>
+
       {/* Top Filter Bar */}
       <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs space-y-3">
         <div className="flex flex-col md:flex-row gap-3 items-center justify-between w-full">
@@ -268,14 +266,6 @@ export function TabelasLinkeTab({
             </select>
           </div>
 
-          {/* New Service Button */}
-          <button
-            onClick={onNewServico}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium shadow-2xs transition-colors shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            {isLinkeServicesMode ? "Novo Serviço" : "Nova Tabela"}
-          </button>
         </div>
 
         {/* Category Filter Pills */}

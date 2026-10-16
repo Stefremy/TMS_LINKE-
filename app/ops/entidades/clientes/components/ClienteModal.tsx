@@ -258,7 +258,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   }
 
   const handleResetPricing = () => {
-    if (confirm("Deseja repor os serviços especiais e os preços personalizados das tabelas Linke para os valores padrão oficiais?")) {
+    if (confirm("Repor taxas adicionais, combustível, desconto geral e escalões personalizados para os valores padrão? A tabela base, os serviços autorizados e os preços definidos por serviço serão mantidos.")) {
       setFormData((prev) => ({
         ...prev,
         pricing: {
@@ -339,6 +339,13 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   const specialFeesList = formData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES
   const visibleAssignedTablesCount = servicosLinke.filter(service =>
     (formData.assigned_linke_service_ids || []).includes(service.id)).length
+  const activeSpecialFeesCount = specialFeesList.filter((fee) => fee.is_enabled).length
+  const selectedBaseTable = servicosLinke.find((service) => service.id === formData.default_linke_table_id)
+  const selectedBaseTableLabel = selectedBaseTable
+    ? getServiceDisplayLabel(selectedBaseTable)
+    : formData.default_linke_table_id
+      ? "Tabela selecionada"
+      : "Não definida"
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
@@ -418,7 +425,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
             { id: "faturacao", label: "Moradas & Faturação", icon: MapPin },
             { id: "contactos", label: "Contactos", icon: Phone },
             { id: "comercial", label: "Condições & Crédito", icon: Euro },
-            { id: "precario", label: "Tabelas de Preço & Serviços", icon: Percent, badge: `${visibleAssignedTablesCount} Tabelas` },
+            { id: "precario", label: "Preços & Serviços", icon: Percent, badge: `${visibleAssignedTablesCount} serviços` },
           ].map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -449,7 +456,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
 
         {/* ===================== FORM CONTENT ===================== */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[var(--canvas-bg)]">
-          {initialData && canManageAccess && onManageAccess && <div className="mb-5 flex flex-col gap-3 rounded-xl border border-[#C9D7CD] border-l-4 border-l-[#246B45] bg-[#F4F7F4] p-4 sm:flex-row sm:items-center sm:justify-between">
+          {initialData && canManageAccess && onManageAccess && <div className="mb-5 flex flex-col gap-3 rounded-xl border border-[#C9D7CD] bg-[#F4F7F4] p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-semibold text-[#244C35]">Acesso à Área do Cliente</h2>
               <p className="mt-1 text-xs leading-5 text-[#4D6254]">Envie um link para o cliente definir ou alterar a própria palavra-passe. A atual continua válida até ele guardar uma nova.</p>
@@ -464,7 +471,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
           {/* TAB 1: IDENTIDADE & GERAL */}
           {activeTab === "geral" && (
             <div className="space-y-5 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
-              {!initialData && canManageAccess && <div className="rounded-lg border border-[#C9D7CD] border-l-4 border-l-[#246B45] bg-[#F4F7F4] p-4">
+              {!initialData && canManageAccess && <div className="rounded-lg border border-[#C9D7CD] bg-[#F4F7F4] p-4">
                 <label className="flex items-center gap-2 text-sm font-semibold text-[#244C35]">
                   <input type="checkbox" checked={sendInvitation} disabled={isSaving} onChange={e => {
                     setSendInvitation(e.target.checked)
@@ -1042,7 +1049,27 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
           {activeTab === "precario" && (
             <div className="space-y-4">
               
-              {/* Top Sub-Tab Switcher */}
+              {/* Resumo da configuração de preços */}
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
+                <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3.5 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Tabela base</p>
+                  <p className="mt-1 truncate text-xs font-semibold text-[var(--text-primary)]" title={selectedBaseTableLabel}>{selectedBaseTableLabel}</p>
+                </div>
+                <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3.5 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Serviços autorizados</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--text-primary)]">{visibleAssignedTablesCount} de {servicosLinke.length}</p>
+                </div>
+                <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3.5 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Taxas adicionais</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--text-primary)]">{activeSpecialFeesCount} ativas</p>
+                </div>
+                <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3.5 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Combustível</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--text-primary)]">{formData.pricing?.fuel_surcharge_pct ?? DEFAULT_CLIENT_PRICING.fuel_surcharge_pct}%</p>
+                </div>
+              </div>
+
+              {/* Navegação por grupos de configuração */}
               <div className="bg-[var(--surface-bg)] p-3 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)] flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5 bg-[var(--surface-muted)] p-1 rounded-lg border border-[var(--border-subtle)] flex-wrap">
                   <button
@@ -1055,7 +1082,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     }`}
                   >
                     <Package className="w-3.5 h-3.5" />
-                    <span>1. Tabelas de envio ativas ({servicosLinke.length})</span>
+                    <span>Serviços autorizados ({visibleAssignedTablesCount}/{servicosLinke.length})</span>
                   </button>
 
                   <button
@@ -1068,7 +1095,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     }`}
                   >
                     <Zap className="w-3.5 h-3.5 text-amber-500" />
-                    <span>2. Taxas Especiais ({specialFeesList.length})</span>
+                    <span>Taxas adicionais ({activeSpecialFeesCount} ativas)</span>
                   </button>
 
                   <button
@@ -1081,7 +1108,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     }`}
                   >
                     <Sliders className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
-                    <span>3. Combustível & Descontos</span>
+                    <span>Ajustes gerais</span>
                   </button>
                 </div>
 
@@ -1089,13 +1116,17 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                   <button
                     type="button"
                     onClick={handleResetPricing}
+                    title="Repõe taxas adicionais, ajustes gerais e escalões personalizados. Mantém a tabela base e os serviços autorizados."
                     className="px-2.5 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg flex items-center gap-1.5 font-medium transition-colors cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
-                    <span>Repor Valores Padrão</span>
+                    <span>Repor preços e taxas</span>
                   </button>
                 </div>
               </div>
+              <p className="-mt-2 px-1 text-[10px] text-[var(--text-tertiary)]">
+                A reposição afeta taxas adicionais, ajustes gerais e escalões personalizados. A tabela base, os serviços autorizados e os preços definidos por serviço são mantidos.
+              </p>
 
               {/* SUBTAB 1: TABELAS LINKE & SERVIÇOS AUTORIZADOS */}
               {precarioSubTab === "servicos_linke" && (
@@ -1107,11 +1138,11 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                         <div className="flex items-center gap-2">
                           <Package className="w-4 h-4 text-[var(--accent)]" />
                           <h3 className="font-bold text-sm text-[var(--text-primary)]">
-                            Tabela de Preço Linke Atribuída ao Cliente
+                            Tabela de preços base
                           </h3>
                         </div>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Atribua manualmente a tabela tarifária que este cliente utilizará como base (ex: Standard, VIP, E-Commerce ou Negociada).
+                          Define os preços de referência usados para calcular o custo dos serviços deste cliente.
                         </p>
                       </div>
 
@@ -1134,7 +1165,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                           }}
                           className="w-full px-3.5 py-2 bg-[var(--surface-muted)] border border-[var(--border-strong)] rounded-lg text-xs font-bold text-[var(--text-primary)] focus:bg-[var(--surface-bg)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-all cursor-pointer"
                         >
-                          <option value="">-- Selecione a Tabela Linke --</option>
+                          <option value="">-- Selecione a tabela base --</option>
                           {servicosLinke.map((s) => (
                             <option key={s.id} value={s.id}>
                               {getServiceDisplayLabel(s)} ({s.pricing_profile}) - {s.preferred_carrier_name}
@@ -1176,7 +1207,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                       <div>
                         <h4 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
                           <ShieldCheck className="w-4 h-4 text-[var(--accent)]" />
-                          Serviços Linke Autorizados para este Cliente ({visibleAssignedTablesCount} de {servicosLinke.length})
+                          Serviços que o cliente pode usar ({visibleAssignedTablesCount} de {servicosLinke.length})
                         </h4>
                         <p className="text-[11px] text-[var(--text-secondary)]">
                           Marque os serviços e parceiros que este cliente tem permissão para usar ao criar envios.
