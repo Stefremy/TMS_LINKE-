@@ -14,6 +14,7 @@ export interface RecurringClient {
   address?: string
   city?: string
   created_at?: string
+  recurring_since?: string
   is_active?: boolean
 }
 
@@ -64,7 +65,7 @@ export function eligibleRecurringClient(client: RecurringClient) {
 }
 
 export function billingRecipient(client: RecurringClient): string | null {
-  const candidate = (client.billing_email || client.email || "").trim()
+  const candidate = client.billing_email?.trim() || client.email?.trim() || ""
   return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(candidate) ? candidate : null
 }
 
@@ -77,7 +78,7 @@ export function periodForClient(client: RecurringClient, activationDate: string,
   const days = cycleDaysForTerms(client.payment_terms)
   if (!days || !isDateKey(activationDate)) return null
   const created = client.created_at ? lisbonDate(client.created_at) : activationDate
-  const start = lastEnd || (created > activationDate ? created : activationDate)
+  const start = [activationDate, created, lastEnd || activationDate, client.recurring_since || activationDate].sort().at(-1)!
   return { start, end: addCalendarDays(start, days), days }
 }
 
@@ -85,7 +86,7 @@ export function selectPeriodShipments(
   clientId: string, tenantId: string, start: string, end: string,
   shipments: PeriodShipment[], invoicedIds: Set<string>,
 ) {
-  return shipments.filter(s => s.client_id === clientId && (!s.tenant_id || s.tenant_id === tenantId)
+  return shipments.filter(s => s.client_id === clientId && s.tenant_id === tenantId
     && !["rascunho", "anulado", "cancelado", "cancelled", "canceled", "draft"].includes(s.status)
     && !s.billing_statement_id && !invoicedIds.has(s.id)
     && lisbonDate(s.created_at) >= start && lisbonDate(s.created_at) < end)

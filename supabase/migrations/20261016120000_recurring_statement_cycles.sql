@@ -41,8 +41,8 @@ declare existing_anchor date;
 begin
   perform pg_advisory_xact_lock(hashtextextended('period-settings:'||p_tenant::text,0));
   select anchor_date into existing_anchor from public.recurring_statement_settings where tenant_id=p_tenant;
-  if existing_anchor is null and p_anchor < (now() at time zone 'Europe/Lisbon')::date then
-    raise exception 'A ativação não pode incluir períodos anteriores.';
+  if existing_anchor is null and p_anchor <> (now() at time zone 'Europe/Lisbon')::date then
+    raise exception 'Os ciclos começam na data de ativação.';
   end if;
   if existing_anchor is not null and existing_anchor <> p_anchor then
     raise exception 'A data inicial dos ciclos já está fixada. Suspenda ou retome sem alterar o histórico.';
@@ -58,6 +58,8 @@ declare
   cfg public.recurring_statement_settings%rowtype;
   previous_end date;
   initial_start date;
+  eligibility_start date;
+  last_ineligible record;
   client jsonb;
   days integer;
   items jsonb;
@@ -75,7 +77,7 @@ begin
   select a.details into client from public.audit_log a where a.tenant_id=p_tenant
     and a.action='client_data' and a.details->>'id'=p_client::text
     order by a.created_at desc,a.id desc limit 1;
-  if client is null or client->>'billing_type' <> 'conta_corrente'
+  if client is null or coalesce(client->>'billing_type','') <> 'conta_corrente'
     or client->>'is_active'='false' or exists(select 1 from public.audit_log a
       where a.tenant_id=p_tenant and a.action='deleted_client' and a.details->>'id'=p_client::text) then
     return jsonb_build_object('skipped','ineligible');
@@ -87,7 +89,17 @@ begin
   select max(period_end) into previous_end from public.recurring_statement_cycles
     where tenant_id=p_tenant and client_id=p_client;
   initial_start := greatest(cfg.anchor_date,coalesce((nullif(client->>'created_at','')::timestamptz at time zone 'Europe/Lisbon')::date,cfg.anchor_date));
-  if p_start <> coalesce(previous_end,initial_start) then
+  select a.created_at,a.id into last_ineligible from public.audit_log a
+    where a.tenant_id=p_tenant and a.action='client_data' and a.details->>'id'=p_client::text
+      and (coalesce(a.details->>'billing_type','')<>'conta_corrente' or a.details->>'is_active'='false')
+    order by a.created_at desc,a.id desc limit 1;
+  if found then
+    select (min(a.created_at) at time zone 'Europe/Lisbon')::date into eligibility_start
+      from public.audit_log a where a.tenant_id=p_tenant and a.action='client_data'
+        and a.details->>'id'=p_client::text and (a.created_at,a.id)>(last_ineligible.created_at,last_ineligible.id);
+  end if;
+  initial_start := greatest(initial_start,eligibility_start,previous_end);
+  if p_start <> initial_start then
     return jsonb_build_object('skipped','already_closed_or_stale');
   end if;
   if p_end <> p_start+days or p_end > (now() at time zone 'Europe/Lisbon')::date then
@@ -108,7 +120,7 @@ begin
       and coalesce(to_jsonb(s)->>'billing_statement_id','')=''
       and not exists(select 1 from public.audit_log a where a.tenant_id=p_tenant
         and a.action='billing_statement' and a.details->>'client_id'=p_client::text
-        and coalesce(a.details->>'moloni_document_id','')<>''
+        and (coalesce(a.details->>'moloni_document_id','')<>'' or coalesce(a.details->>'moloni_document_pdf','')<>'')
         and coalesce(a.details->>'is_pro_forma','false')<>'true'
         and coalesce(a.details->'shipment_ids','[]'::jsonb) ? s.id::text);
   if exists(select 1 from jsonb_array_elements(items) item where item->>'sell_price' is null
@@ -139,6 +151,12 @@ begin
   select * into cycle from public.recurring_statement_cycles where tenant_id=p_tenant and id=p_id for update;
   if not found or cycle.delivery_status in ('sent','empty','review_required') then return null; end if;
   if not exists(select 1 from public.recurring_statement_settings where tenant_id=p_tenant and enabled) then return null; end if;
+  if not exists(select 1 from (
+      select a.details from public.audit_log a where a.tenant_id=p_tenant and a.action='client_data'
+      and a.details->>'id'=cycle.client_id::text order by a.created_at desc,a.id desc limit 1
+    ) latest where latest.details->>'billing_type'='conta_corrente' and coalesce(latest.details->>'is_active','true')<>'false')
+    or exists(select 1 from public.audit_log a where a.tenant_id=p_tenant and a.action='deleted_client'
+      and a.details->>'id'=cycle.client_id::text) then return null; end if;
   if cycle.delivery_status='processing' and cycle.lease_until>now() then return null; end if;
   if cycle.next_attempt_at>now() then return null; end if;
   if cycle.first_attempt_at is not null and cycle.first_attempt_at < now()-interval '23 hours' then

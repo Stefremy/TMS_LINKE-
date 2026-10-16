@@ -62,7 +62,7 @@ test('The invoice page renders store folders and an archive shortcut before open
   })
   const Component=load('app/ops/faturacao/contas-corrente/ContasCorrenteClient.tsx').default
   const html=renderToStaticMarkup(React.createElement(Component,{clients,shipments:[],statements:[invoice('1','a','2026-10-01',{status:'paid'}),invoice('2','b','2026-10-02',{status:'paid'})],moloniConfig:{isConnected:true}}))
-  assert.match(html,/Arquivo de Faturas por Loja/)
+  assert.match(html,/Arquivo de Faturas e Extratos por Cliente/)
   assert.match(html,/href="#invoice-archive"/)
   assert.match(html,/Loja Águia/)
   assert.match(html,/Loja Beta/)

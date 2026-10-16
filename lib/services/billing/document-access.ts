@@ -7,7 +7,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 /** Authenticate before service-role access, then scope every lookup to ownership. */
 export async function loadFinancialDocument(
   identifier: string,
-  action: "billing_statement" | "custom_invoice"
+  action: "billing_statement" | "custom_invoice" | "period_statement"
 ) {
   const ctx = await getAuthContext()
   if (!ctx?.user || !ctx.tenant_id || !ctx.role) return null
@@ -20,7 +20,7 @@ export async function loadFinancialDocument(
   if (!id || id.length > 160 || /[\u0000-\u001f\u007f]/.test(id)) return null
 
   const supabase = createAdminClient()
-  const numberField = action === "billing_statement" ? "statement_number" : "invoice_number"
+  const numberField = action === "custom_invoice" ? "invoice_number" : "statement_number"
   const fields = UUID.test(id) ? ["id", "details->>id", `details->>${numberField}`]
     : ["details->>id", `details->>${numberField}`]
 

@@ -21,6 +21,9 @@ export type ArchiveStatement = {
   status?: string
   total_value?: string | number
   created_at?: string | null
+  document_type?: string
+  period_start?: string
+  period_end?: string
 }
 
 export type InvoiceArchiveGroup = {
@@ -33,6 +36,7 @@ export type InvoiceArchiveGroup = {
   statements: ArchiveStatement[]
   paidCount: number
   awaitingReceiptCount: number
+  periodCount: number
 }
 
 export function isInvoicePaid(statement: ArchiveStatement): boolean {
@@ -57,7 +61,7 @@ export function groupInvoiceArchive(clients: ArchiveClient[], statements: Archiv
   for (const statement of statements) {
     // Failed attempts/internal drafts must not appear as issued invoices.
     // Preserve older paid statements even if their original Moloni link is missing.
-    if (statement.is_pro_forma || !(statement.moloni_document_id || statement.moloni_document_pdf || isInvoicePaid(statement))) continue
+    if (statement.is_pro_forma || !(statement.document_type === 'period_statement' || statement.moloni_document_id || statement.moloni_document_pdf || isInvoicePaid(statement))) continue
     let client = statement.client_id ? byId.get(statement.client_id) : undefined
     if (!statement.client_id && normalize(statement.client_name)) {
       const matches = clients.filter(item => [item.legal_name, item.short_name].some(name => normalize(name) === normalize(statement.client_name)))
@@ -68,7 +72,7 @@ export function groupInvoiceArchive(clients: ArchiveClient[], statements: Archiv
     const name = client?.short_name || client?.legal_name || statement.client_name || "Loja não identificada"
     let group = groups.get(key)
     if (!group) {
-      group = { key, name, nif: client?.nif, logo_url: client?.logo_url, color: client?.color, associationMissing: !id, statements: [], paidCount: 0, awaitingReceiptCount: 0 }
+      group = { key, name, nif: client?.nif, logo_url: client?.logo_url, color: client?.color, associationMissing: !id, statements: [], paidCount: 0, awaitingReceiptCount: 0, periodCount: 0 }
       groups.set(key, group)
     }
     group.statements.push(statement)
@@ -80,7 +84,8 @@ export function groupInvoiceArchive(clients: ArchiveClient[], statements: Archiv
       normalize(`${statement.statement_number || ""} ${statement.moloni_document_number || ""} ${statement.client_name || ""}`).includes(query))
       .sort((a, b) => timestamp(b.created_at) - timestamp(a.created_at) || String(a.id || a.statement_number).localeCompare(String(b.id || b.statement_number)))
     group.paidCount = group.statements.filter(isInvoicePaid).length
-    group.awaitingReceiptCount = group.statements.filter(statement => !isInvoicePaid(statement)).length
+    group.awaitingReceiptCount = group.statements.filter(statement => statement.document_type !== 'period_statement' && !isInvoicePaid(statement)).length
+    group.periodCount = group.statements.filter(statement => statement.document_type === 'period_statement').length
     return group
   }).filter(group => group.statements.length > 0)
     .sort((a, b) => a.name.localeCompare(b.name, "pt-PT") || a.key.localeCompare(b.key))

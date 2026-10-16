@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib'
+import { PDFDocument, rgb, StandardFonts, PDFPage, type PDFImage, type PDFFont, type Color } from 'pdf-lib'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -28,6 +28,7 @@ export interface BillingStatementPdfData {
   clientCity?: string
   clientEmail?: string
   dateStr?: string
+  periodLabel?: string
   totalValue: number
   shipments: BillingStatementPdfShipment[]
 }
@@ -52,7 +53,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
   const fontNormal = await doc.embedFont(StandardFonts.Helvetica)
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
   
-  let logo: any = null
+  let logo: PDFImage | null = null
   try {
     const logoPath = path.join(process.cwd(), 'public/Linke-logo.png')
     if (fs.existsSync(logoPath)) {
@@ -67,6 +68,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
   const dateStr = data.dateStr || new Date().toLocaleDateString("pt-PT")
   const shipments = data.shipments || []
   const totalShipments = shipments.length
+  const isPeriodStatement = Boolean(data.periodLabel)
 
   // Breakdown normalization for every shipment
   const items = shipments.map((s, idx) => {
@@ -82,7 +84,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
         try {
           const parsed = JSON.parse(s.special_fees_description)
           if (Array.isArray(parsed) && parsed.length > 0) {
-            specialDesc = parsed.map((p: any) => p.name || p.service || "Extra").join(", ")
+            specialDesc = parsed.map((p: { name?: string; service?: string }) => p.name || p.service || "Extra").join(", ")
           }
         } catch {
           specialDesc = s.special_fees_description
@@ -96,7 +98,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
     }
 
     // Fallback: reverse engineer base price and fuel tax from sell_price if not explicitly stored
-    if ((basePrice === 0 || fuelTax === 0) && sellPrice > 0) {
+    if (!isPeriodStatement && (basePrice === 0 || fuelTax === 0) && sellPrice > 0) {
       const fuelRate = (s.fuel_rate_pct != null && s.fuel_rate_pct > 0 ? s.fuel_rate_pct : 12.5) / 100
       const netBaseFuel = Math.max(0, sellPrice - specialFees)
       if (basePrice === 0 && fuelTax === 0) {
@@ -121,6 +123,9 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
       basePrice,
       fuelTax,
       specialFees,
+      hasBase: !isPeriodStatement || s.base_price != null,
+      hasFuel: !isPeriodStatement || s.fuel_tax_amount != null,
+      hasSpecial: !isPeriodStatement || s.special_fees_amount != null,
       specialDesc: safeStr(specialDesc.slice(0, 20)),
       sellPrice
     }
@@ -143,7 +148,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
   const footerReservedHeight = 45
 
   // Helper for right-aligned text
-  const drawRightText = (page: PDFPage, text: string, rightX: number, textY: number, size: number, font: any, color: any) => {
+  const drawRightText = (page: PDFPage, text: string, rightX: number, textY: number, size: number, font: PDFFont, color: Color) => {
     const textWidth = font.widthOfTextAtSize(text, size)
     page.drawText(text, { x: rightX - textWidth, y: textY, size, font, color })
   }
@@ -210,6 +215,9 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
 
     page.drawText("TOTAL ENVIOS:", { x: 35, y: 720, size: 8, font: fontBold, color: c(0.35, 0.40, 0.48) })
     page.drawText(`${totalShipments} objeto(s)`, { x: 110, y: 720, size: 8.5, font: fontBold, color: c(0.06, 0.09, 0.16) })
+    if (data.periodLabel) {
+      page.drawText(`PERIODO: ${safeStr(data.periodLabel)}`, { x: 35, y: 691, size: 7.5, font: fontBold, color: c(0.06, 0.40, 0.22) })
+    }
 
     // Right card details (client)
     page.drawText("DADOS DO CLIENTE:", { x: 320, y: 756, size: 8, font: fontBold, color: c(0.35, 0.40, 0.48) })
@@ -250,7 +258,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
       borderWidth: 1
     })
 
-    page.drawText("DISCRIMINACAO DOS CUSTOS (RESUMO)", {
+    page.drawText(isPeriodStatement ? "VALORES REGISTADOS (SEM ESTIMATIVAS)" : "DISCRIMINACAO DOS CUSTOS (RESUMO)", {
       x: 35,
       y: bottomY + 82,
       size: 8.5,
@@ -260,15 +268,15 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
 
     const rowY1 = bottomY + 64
     page.drawText("Custo Base Tabela (Servicos):", { x: 35, y: rowY1, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
-    drawRightText(page, fmtCurrency(totalBase), 295, rowY1, 8, fontBold, c(0.06, 0.09, 0.16))
+    drawRightText(page, items.every(i => i.hasBase) ? fmtCurrency(totalBase) : "-", 295, rowY1, 8, fontBold, c(0.06, 0.09, 0.16))
 
     const rowY2 = bottomY + 47
     page.drawText("Taxa de Combustivel:", { x: 35, y: rowY2, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
-    drawRightText(page, fmtCurrency(totalFuel), 295, rowY2, 8, fontBold, c(0.06, 0.09, 0.16))
+    drawRightText(page, items.every(i => i.hasFuel) ? fmtCurrency(totalFuel) : "-", 295, rowY2, 8, fontBold, c(0.06, 0.09, 0.16))
 
     const rowY3 = bottomY + 30
     page.drawText("Extras & Servicos Adicionais:", { x: 35, y: rowY3, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
-    drawRightText(page, fmtCurrency(totalSpecial), 295, rowY3, 8, fontBold, c(0.06, 0.09, 0.16))
+    drawRightText(page, items.every(i => i.hasSpecial) ? fmtCurrency(totalSpecial) : "-", 295, rowY3, 8, fontBold, c(0.06, 0.09, 0.16))
 
     const rowY4 = bottomY + 13
     page.drawText("Total de Objetos / Envios:", { x: 35, y: rowY4, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
@@ -285,7 +293,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
       borderWidth: 1
     })
 
-    page.drawText("TOTAIS DE FATURACAO", {
+    page.drawText(isPeriodStatement ? "TOTAIS DO EXTRATO" : "TOTAIS DE FATURACAO", {
       x: 332,
       y: bottomY + 82,
       size: 8.5,
@@ -298,8 +306,8 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
     drawRightText(page, fmtCurrency(subtotalNet), 558, rTotY1, 8.5, fontBold, c(0.06, 0.09, 0.16))
 
     const rTotY2 = bottomY + 47
-    page.drawText("IVA (23%):", { x: 332, y: rTotY2, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
-    drawRightText(page, fmtCurrency(iva), 558, rTotY2, 8.5, fontBold, c(0.06, 0.09, 0.16))
+    page.drawText(isPeriodStatement ? "Impostos conforme a fatura oficial." : "IVA (23%):", { x: 332, y: rTotY2, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
+    if (!isPeriodStatement) drawRightText(page, fmtCurrency(iva), 558, rTotY2, 8.5, fontBold, c(0.06, 0.09, 0.16))
 
     // Dark Bottom Banner
     page.drawRectangle({
@@ -309,8 +317,8 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
       height: 28,
       color: c(0.06, 0.09, 0.16)
     })
-    page.drawText("TOTAL A PAGAR:", { x: 336, y: bottomY + 18, size: 9.5, font: fontBold, color: c(1, 1, 1) })
-    drawRightText(page, fmtCurrency(totalWithIva), 556, bottomY + 18, 10.5, fontBold, c(1, 1, 1))
+    page.drawText(isPeriodStatement ? "TOTAL DOS ENVIOS:" : "TOTAL A PAGAR:", { x: 336, y: bottomY + 18, size: 9.5, font: fontBold, color: c(1, 1, 1) })
+    drawRightText(page, fmtCurrency(isPeriodStatement ? subtotalNet : totalWithIva), 556, bottomY + 18, 10.5, fontBold, c(1, 1, 1))
   }
 
   // Build Pages Dynamically
@@ -379,10 +387,10 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
     }
 
     // Col 5: Base Tabela
-    drawRightText(currentPage, fmtCurrency(item.basePrice), 395, midY, 7.5, fontNormal, c(0.15, 0.18, 0.22))
+    drawRightText(currentPage, item.hasBase ? fmtCurrency(item.basePrice) : "-", 395, midY, 7.5, fontNormal, c(0.15, 0.18, 0.22))
 
     // Col 6: Taxa Combustível
-    drawRightText(currentPage, fmtCurrency(item.fuelTax), 450, midY, 7.5, fontNormal, c(0.15, 0.18, 0.22))
+    drawRightText(currentPage, item.hasFuel ? fmtCurrency(item.fuelTax) : "-", 450, midY, 7.5, fontNormal, c(0.15, 0.18, 0.22))
 
     // Col 7: Extras
     if (item.specialFees > 0) {
@@ -416,6 +424,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
   // Draw Footer on all pages
   const totalPages = pages.length
   pages.forEach((p, idx) => {
+    if (isPeriodStatement) p.drawText("Documento interno de movimentos. Nao substitui uma fatura.", { x: 25, y: 43, size: 7, font: fontNormal, color: c(0.40, 0.44, 0.50) })
     p.drawText("Processado por computador - TMS LINKE Logistics Software. Todos os direitos reservados.", {
       x: 25,
       y: 28,

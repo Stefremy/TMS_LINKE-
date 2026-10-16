@@ -8,17 +8,24 @@ import { groupInvoiceArchive, isInvoicePaid } from "@/lib/billing/invoice-archiv
 import { InvoiceIssueButton } from "./InvoiceIssueButton"
 import { AnimatedDisclosure } from "./AnimatedDisclosure"
 import { StoreAvatar } from "./StoreAvatar"
+import { PeriodStatementCard } from './PeriodStatementCard'
+import type { PeriodStatement } from '@/lib/billing/recurring-statements'
+import { addCalendarDays } from '@/lib/billing/recurring-periods'
 import { MoloniConnectModal } from "./MoloniConnectModal"
 
 export default function ContasCorrenteClient({ 
   clients, 
   shipments, 
   statements = [],
+  periodStatements = [],
+  automationPanel,
   moloniConfig
 }: { 
   clients: any[]
   shipments: any[]
   statements?: any[]
+  periodStatements?: PeriodStatement[]
+  automationPanel?: React.ReactNode
   moloniConfig?: any
 }) {
   const router = useRouter()
@@ -53,6 +60,8 @@ export default function ContasCorrenteClient({
   // Filtros
   const [startDate, setStartDate] = React.useState<string>("")
   const [endDate, setEndDate] = React.useState<string>("")
+  const [periodClientFilter, setPeriodClientFilter] = React.useState<string | null>(null)
+  const [periodShipments, setPeriodShipments] = React.useState<any[] | null>(null)
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
   const [isIssuingInvoice, setIsIssuingInvoice] = React.useState(false)
   const invoiceInFlight = React.useRef(false)
@@ -138,9 +147,11 @@ export default function ContasCorrenteClient({
   }
 
   // Archive issued invoices by store and keep outstanding invoices available for receipt issuance.
-  const archiveGroups = React.useMemo(() => groupInvoiceArchive(clients, statements, archiveSearch), [clients, statements, archiveSearch])
+  const archiveDocuments = React.useMemo(() => [...statements, ...periodStatements], [statements, periodStatements])
+  const archiveGroups = React.useMemo(() => groupInvoiceArchive(clients, archiveDocuments, archiveSearch), [clients, archiveDocuments, archiveSearch])
+  const invoicedIds = React.useMemo(() => new Set<string>(statements.filter(s => (s.moloni_document_id || s.moloni_document_pdf) && !s.is_pro_forma).flatMap(s => s.shipment_ids || [])), [statements])
   const archiveDocumentCount = archiveGroups.reduce((count, group) => count + group.statements.length, 0)
-  const hasArchiveDocuments = statements.some(stmt => !stmt.is_pro_forma && (stmt.moloni_document_id || stmt.moloni_document_pdf || isInvoicePaid(stmt)))
+  const hasArchiveDocuments = periodStatements.length > 0 || statements.some(stmt => !stmt.is_pro_forma && (stmt.moloni_document_id || stmt.moloni_document_pdf || isInvoicePaid(stmt)))
   const unpaidStatements = React.useMemo(() => statements?.filter((s: any) => s.status !== 'paid' && !s.moloni_receipt_pdf && !s.moloni_receipt_id && !s.is_pro_forma && Boolean(s.moloni_document_id)) || [], [statements])
 
   const handleEmitReceipt = (stmt: any) => {
@@ -219,6 +230,7 @@ export default function ContasCorrenteClient({
     
     const unpaidByStore = new Map(groupInvoiceArchive(clients, unpaidStatements).map(group => [group.key, group.statements]))
     clients.forEach(c => {
+      if (periodClientFilter && c.id !== periodClientFilter) return
       const clientUnpaid = unpaidByStore.get(`store:${c.id}`) || []
       const unpaidTotal = clientUnpaid.reduce((acc: number, s: any) => acc + Number(s.total_value || 0), 0)
 
@@ -237,7 +249,7 @@ export default function ContasCorrenteClient({
     // O endDate inclui todo o dia
     const endTs = endDate ? new Date(endDate).getTime() + 86399999 : Infinity
 
-    shipments.forEach(s => {
+    ;(periodShipments || shipments).forEach(s => {
       if (!s.client_id || !map.has(s.client_id)) return
       
       const sTs = new Date(s.created_at).getTime()
@@ -256,7 +268,7 @@ export default function ContasCorrenteClient({
     return Array.from(map.values())
       .filter(x => x.shipments.length > 0 || x.clientUnpaid.length > 0)
       .sort((a, b) => (b.totalValue + b.unpaidTotal) - (a.totalValue + a.unpaidTotal))
-  }, [clients, shipments, startDate, endDate, excludedShipmentIds, unpaidStatements])
+  }, [clients, shipments, periodShipments, periodClientFilter, startDate, endDate, excludedShipmentIds, unpaidStatements])
 
   return (
     <div className="space-y-6">
@@ -319,6 +331,8 @@ export default function ContasCorrenteClient({
         </Link>
       </div>
 
+      {automationPanel}
+
       {/* Aviso de Moloni Desconectado */}
       {!moloniConfig?.isConnected && (
         <div className="p-4 rounded-xl bg-[var(--status-warning-soft)] border border-[rgba(217,119,6,0.25)] text-[var(--text-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
@@ -372,6 +386,7 @@ export default function ContasCorrenteClient({
         </div>
 
         {/* Opção de Agrupamento por Serviço (Fatura Compacta) */}
+        {periodClientFilter && <button type="button" onClick={() => { setPeriodClientFilter(null); setPeriodShipments(null); setStartDate(''); setEndDate('') }} className="text-xs text-[var(--accent)] font-semibold">Limpar seleção do período</button>}
         <div className="flex items-center gap-2 bg-[var(--surface-muted)] px-3 py-1.5 rounded-lg border border-[var(--border-subtle)]">
           <label className="flex items-center gap-2.5 cursor-pointer select-none">
             <input 
@@ -397,7 +412,7 @@ export default function ContasCorrenteClient({
         </div>
       </div>
 
-      <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] shadow-2xs rounded-xl overflow-hidden mb-8">
+      <div id="billing-pending" className="scroll-mt-20 bg-[var(--surface-bg)] border border-[var(--border-subtle)] shadow-2xs rounded-xl overflow-hidden mb-8">
         <div className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] px-6 py-3.5 tms-wide-grid grid-cols-12 gap-4 items-center">
           <div className="col-span-5 text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">Cliente</div>
           <div className="col-span-3 text-[11px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider text-center">Envios (Selecionados)</div>
@@ -491,6 +506,8 @@ export default function ContasCorrenteClient({
                                   return
                                 }
                                 const stmtNum = res.statementNumber
+                                setPeriodShipments(null)
+                                setPeriodClientFilter(null)
                                 const officialPdfUrl = `/api/statements/${encodeURIComponent(stmtNum)}/moloni-pdf`
                                 const fallbackUrl = `/api/statements/${encodeURIComponent(stmtNum)}/pdf`
                                 // Download only the official invoice. The statement remains an explicit option.
@@ -713,7 +730,7 @@ export default function ContasCorrenteClient({
                   <FolderOpen className="w-5 h-5" />
                 </span>
                 <span>
-                  <span role="heading" aria-level={2} className="block text-sm font-bold text-[var(--text-primary)]">Arquivo de Faturas por Loja</span>
+                  <span role="heading" aria-level={2} className="block text-sm font-bold text-[var(--text-primary)]">Arquivo de Faturas e Extratos por Cliente</span>
                   <span className="block text-xs text-[var(--text-secondary)] mt-0.5">{archiveGroups.length} lojas · {archiveDocumentCount} documentos · Abre uma loja para consultar as faturas</span>
                 </span>
               </span>
@@ -729,7 +746,7 @@ export default function ContasCorrenteClient({
                   <input id="invoice-archive-search" type="search" value={archiveSearch} onChange={event => {
                     const value = event.target.value
                     setArchiveSearch(value)
-                    setExpandedArchiveStores(new Set(value.trim() ? groupInvoiceArchive(clients, statements, value).map(group => group.key) : []))
+                    setExpandedArchiveStores(new Set(value.trim() ? groupInvoiceArchive(clients, archiveDocuments, value).map(group => group.key) : []))
                   }}
                     placeholder="Loja, NIF ou número de fatura"
                     className="w-full max-w-md px-3 py-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] text-sm text-[var(--text-primary)]" />
@@ -752,25 +769,34 @@ export default function ContasCorrenteClient({
                           <span className="block text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--accent)] mb-0.5">Cliente</span>
                           <span className="block text-sm font-bold text-[var(--text-primary)] break-words">{group.name}</span>
                           <span className="block text-[11px] text-[var(--text-secondary)] mt-1 leading-relaxed">
-                            {group.nif && `NIF: ${group.nif} · `}{group.paidCount} paga(s){group.awaitingReceiptCount > 0 && ` · ${group.awaitingReceiptCount} a aguardar recibo`}
+                            {group.nif && `NIF: ${group.nif} · `}{group.paidCount} faturas pagas{group.periodCount > 0 && ` · ${group.periodCount} extratos de período`}{group.awaitingReceiptCount > 0 && ` · ${group.awaitingReceiptCount} a aguardar recibo`}
                           </span>
                           {group.associationMissing && <span className="block text-xs text-[var(--status-warning)] mt-1">Loja por associar</span>}
                         </span>
                       </span>
                       <span className="flex items-center gap-2 sm:gap-4 shrink-0 text-[var(--accent)]">
-                        <span className="hidden sm:inline text-[11px] font-semibold">{expandedArchiveStores.has(group.key) ? "Ocultar faturas" : "Ver faturas"}</span>
-                        <span className="px-2 py-1 rounded-md bg-[var(--surface-bg)] border border-[var(--accent)]/15 text-[11px] font-bold tabular-nums">{group.statements.length}<span className="hidden sm:inline"> faturas</span></span>
+                        <span className="hidden sm:inline text-[11px] font-semibold">{expandedArchiveStores.has(group.key) ? "Ocultar documentos" : "Ver documentos"}</span>
+                        <span className="px-2 py-1 rounded-md bg-[var(--surface-bg)] border border-[var(--accent)]/15 text-[11px] font-bold tabular-nums">{group.statements.length}<span className="hidden sm:inline"> documentos</span></span>
                         <ChevronDown className={`w-4 h-4 transition-transform duration-300 motion-reduce:transition-none ${expandedArchiveStores.has(group.key) ? "rotate-0" : "-rotate-90"}`} />
                       </span>
                     </button>
                     <AnimatedDisclosure open={expandedArchiveStores.has(group.key)} id={`invoice-store-${encodeURIComponent(group.key)}`}>
                       <div className="p-3 sm:p-5 bg-[var(--surface-muted)] rounded-b-xl border-t border-[var(--border-subtle)]">
                         <div className="flex flex-wrap items-center justify-between gap-1 mb-3 pl-3 sm:pl-4">
-                          <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)]"><FileText className="w-3.5 h-3.5" />Histórico de faturas</h3>
+                          <h3 className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)]"><FileText className="w-3.5 h-3.5" />Faturas e períodos de envios</h3>
                           <span className="text-[10px] text-[var(--text-tertiary)]">Mais recentes primeiro</span>
                         </div>
                         <div className="border-l-2 border-[var(--border-strong)] pl-3 sm:pl-4 space-y-2">
-                        {group.statements.map((stmt: any) => (
+                        {group.statements.map((stmt: any) => stmt.document_type === 'period_statement' ? (
+                          <PeriodStatementCard key={stmt.id} statement={stmt} invoicedIds={invoicedIds} onSelect={async period => {
+                            const { getPeriodShipmentsForBillingAction } = await import('@/app/actions/recurring-statements')
+                            const selected = await getPeriodShipmentsForBillingAction(period.id)
+                            setPeriodShipments(selected); setPeriodClientFilter(period.client_id)
+                            setStartDate(period.period_start); setEndDate(addCalendarDays(period.period_end, -1))
+                            setExcludedShipmentIds(new Set())
+                            document.getElementById('billing-pending')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }} />
+                        ) : (
                           <div key={stmt.id || stmt.statement_number} className="px-3 sm:px-4 py-3.5 bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-[var(--border-strong)] transition-colors">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--text-secondary)] shrink-0">

@@ -11,18 +11,22 @@ export async function sendEmail({
   subject,
   html,
   attachments,
+  idempotencyKey,
+  from: sender,
 }: {
   to: string | string[];
   subject: string;
   html: string;
   attachments?: any[];
+  idempotencyKey?: string;
+  from?: string;
 }) {
   if (!resendClient) {
     console.warn("RESEND_API_KEY not configured. Skipping email send to:", to);
     return { success: false, error: "RESEND_API_KEY not configured" };
   }
 
-  const from = process.env.STORE_FROM_EMAIL || "notificacoes@linke.pt";
+  const from = sender || process.env.STORE_FROM_EMAIL || "notificacoes@linke.pt";
 
   try {
     const { data, error } = await resendClient.emails.send({
@@ -31,7 +35,7 @@ export async function sendEmail({
       subject,
       html,
       attachments,
-    });
+    }, idempotencyKey ? { idempotencyKey } : undefined);
 
     if (error) {
       console.error("Resend API Error:", error);

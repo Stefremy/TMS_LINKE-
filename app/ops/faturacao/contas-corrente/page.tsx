@@ -3,15 +3,21 @@ import { getClientesAction } from "@/app/actions/clientes"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getBillingStatementsAction, getMoloniConfigAction } from "@/app/actions/moloni"
 import ContasCorrenteClient from "./ContasCorrenteClient"
+import { requirePermission } from '@/lib/auth/context'
+import { recurringPreview, loadPeriodStatements } from '@/lib/billing/recurring-statements'
+import { RecurringStatementsPanel } from './RecurringStatementsPanel'
 
 export const dynamic = "force-dynamic"
 
 export default async function ContasCorrentePage() {
-  const [clients, shipments, statements, moloniConfig] = await Promise.all([
+  const ctx = await requirePermission('Faturação & Contas Correntes')
+  const [clients, shipments, statements, moloniConfig, recurring, periodStatements] = await Promise.all([
     getClientesAction(),
     getShipmentsAction({ includeLabels: false, createdAfter: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() }),
     getBillingStatementsAction(),
-    getMoloniConfigAction()
+    getMoloniConfigAction(),
+    recurringPreview(ctx.tenant_id),
+    loadPeriodStatements(ctx.tenant_id),
   ])
 
   // Filtrar envios já faturados em faturas oficiais Moloni
@@ -32,6 +38,8 @@ export default async function ContasCorrentePage() {
         shipments={pendingShipments} 
         statements={statements}
         moloniConfig={moloniConfig}
+        periodStatements={periodStatements}
+        automationPanel={<RecurringStatementsPanel initialPreview={recurring} canManage={ctx.role === 'admin'} />}
       />
     </div>
   )

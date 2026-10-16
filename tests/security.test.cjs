@@ -14,11 +14,13 @@ const routes = [
   ['app/api/statements/[id]/proforma-pdf/route.ts', 'billing_statement'],
   ['app/api/statements/[id]/moloni-pdf/route.ts', 'billing_statement'],
   ['app/api/custom-invoices/[id]/pdf/route.ts', 'custom_invoice'],
+  ['app/api/period-statements/[id]/pdf/route.ts', 'period_statement'],
 ]
 function documentRow(action, owner = CLIENT, tenant = TENANT) {
   return { id: UUID, tenant_id: tenant, action, created_at: '2026-10-13', details: {
     id: 'internal-id', statement_number: 'EXT-2026/10-1234', invoice_number: 'FT 2026/1234',
     client_id: owner, client_name: 'Fixture', total_value: 10, shipments: [],
+    client_snapshot: { name: 'Fixture' }, period_start: '2026-10-01', period_end: '2026-10-08', created_at: '2026-10-08',
     moloni_document_pdf: 'https://fixture.invalid/invoice.pdf',
   } }
 }
@@ -68,7 +70,7 @@ for (const [file, action] of routes) {
   })
   test(`${file}: owner, financial staff and admin can retrieve private PDFs`, async () => {
     for (const ctx of [clientContext, financeContext, { ...financeContext, role: 'admin', permissions: [] }]) {
-      for (const id of [UUID, 'internal-id', action === 'billing_statement' ? 'ext-2026/10-1234' : 'ft 2026/1234']) {
+      for (const id of [UUID, 'internal-id', action !== 'custom_invoice' ? 'ext-2026/10-1234' : 'ft 2026/1234']) {
         const h = pdfHarness(ctx, [documentRow(action)])
         const response = await h.load(file).GET(request(), { params: Promise.resolve({ id }) })
         assert.equal(response.status, 200)
