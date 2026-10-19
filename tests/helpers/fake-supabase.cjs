@@ -21,7 +21,7 @@ function fakeSupabase(tables, failure) {
   function from(table) {
     const state = { table, filters: [], limit: Infinity, single: false }
     const query = {
-      select(projection) { state.projection = projection; if (state.write) state.returnRows = true; return query },
+      select(projection, options) { state.projection = projection; state.count = options?.count; if (state.write) state.returnRows = true; return query },
       eq(field, value) { state.filters.push({ field, value, kind: 'eq' }); return query },
       gte(field, value) { state.filters.push({ field, value, kind: 'gte' }); return query },
       lte(field, value) { state.filters.push({ field, value, kind: 'lte' }); return query },
@@ -62,10 +62,11 @@ function fakeSupabase(tables, failure) {
             }
             return 0
           })
+          const count = rows.length
           rows = rows.slice(0, state.limit)
           if (state.range) rows = rows.slice(state.range[0], state.range[1] + 1)
           if (state.single && rows.length > 1) return { data: null, error: { message: 'Expected at most one row' } }
-          return { data: structuredClone(state.single ? rows[0] || null : rows), error: null }
+          return { data: structuredClone(state.single ? rows[0] || null : rows), error: null, ...(state.count ? { count } : {}) }
         }).then(resolve, reject)
       },
     }

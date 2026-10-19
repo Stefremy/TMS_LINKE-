@@ -31,6 +31,8 @@ import { scheduleCttPickupAction } from "@/app/actions/ctt"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { DEFAULT_CTT_REQUESTER_PHONE, readPickupContact, readPickupRequester } from "@/lib/pickup-contact"
 import type { CTTPickupRequester } from "@/lib/services/ctt/ctt-types"
+import type { PickupSummary } from "@/lib/pickup-management"
+import { PickupDetailsDialog, PickupSearchPanel } from "./PickupManagement"
 
 interface MappedClient {
   id: string
@@ -53,26 +55,10 @@ interface CarrierConnection {
   carrier_code?: string
 }
 
-interface Recolha {
-  id: string
-  ctt_pickup_id?: string
-  carrier_code?: string
-  carrier_name?: string
-  status: string
-  scheduled_date?: string
-  created_at: string
-  volumes?: number
-  weight_kg?: number
-  heaviest_weight_kg?: number | null
-  sender_name?: string
-  sender_address?: string
-  sender_city?: string
-  period?: string
-  observations?: string
-  client_id?: string
-}
+type Recolha = PickupSummary
 
 interface RecolhasClientProps {
+  initialError?: string
   requesterContact?: CTTPickupRequester
   recolhas: Recolha[]
   clients: MappedClient[]
@@ -97,8 +83,9 @@ function tomorrowDate() {
   return d.toISOString().split("T")[0]
 }
 
-export function RecolhasClient({ recolhas, clients, carrierConnections, requesterContact }: RecolhasClientProps) {
-  const [view, setView] = React.useState<"list" | "form">("list")
+export function RecolhasClient({ recolhas, clients, carrierConnections, requesterContact, initialError }: RecolhasClientProps) {
+  const [view, setView] = React.useState<"list" | "search" | "form">("list")
+  const [openedPickup, setOpenedPickup] = React.useState<PickupSummary | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [result, setResult] = React.useState<any>(null)
   const [copiedId, setCopiedId] = React.useState<string | null>(null)
@@ -297,7 +284,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
     <div className="flex flex-col h-[calc(100vh-8rem)] bg-[var(--surface-bg)] rounded-xl shadow-sm border border-[var(--border-subtle)] overflow-hidden">
 
       {/* Header */}
-      <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0 bg-[var(--surface-muted)]">
+      <div className="px-6 py-4 border-b border-[var(--border-subtle)] flex flex-wrap gap-3 items-center justify-between shrink-0 bg-[var(--surface-muted)]">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/10 to-emerald-500/10 border border-[var(--border-subtle)] flex items-center justify-center text-[var(--accent)] shadow-xs">
             <Truck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -310,12 +297,12 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
               </span>
             </div>
             <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-              Agendamento centralizado via WebServices • CTT Expresso & Correos Express
+              Recolhas recentes · Use a pesquisa para consultar o histórico por data
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => { setView("list"); setResult(null) }}
             className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 ${
@@ -330,6 +317,10 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
             </span>
           </button>
           <button
+            onClick={() => { setView("search"); setResult(null) }}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 ${view === "search" ? "bg-[var(--text-primary)] text-[var(--surface-bg)] border-[var(--text-primary)]" : "bg-[var(--surface-bg)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)]"}`}
+          ><Search className="h-3.5 w-3.5" />Pesquisar</button>
+          <button
             onClick={() => { setView("form"); setResult(null) }}
             className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 shadow-xs ${
               view === "form"
@@ -343,7 +334,10 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
         </div>
       </div>
 
-      {view === "list" ? (
+      {initialError && view === "list" && <p role="alert" className="m-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{initialError} Tente novamente no separador Pesquisar.</p>}
+      {view === "search" ? (
+        <PickupSearchPanel onOpen={setOpenedPickup} connections={carrierConnections.filter(c => c.carrier_code === "ctt_expresso")} />
+      ) : view === "list" ? (
         /* ───── LIST VIEW ───── */
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           
@@ -448,6 +442,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Local de Recolha</th>
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Volumes / Pesos</th>
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Estado</th>
+                    <th className="px-5 py-3"><span className="sr-only">Detalhes</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -485,9 +480,9 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
                         {/* PickUp ID */}
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-[var(--accent)] text-[13px]">
+                            <button onClick={() => setOpenedPickup(r)} className="font-mono font-bold text-[var(--accent)] text-[13px] hover:underline underline-offset-4">
                               {r.ctt_pickup_id || "—"}
-                            </span>
+                            </button>
                             {r.ctt_pickup_id && (
                               <button
                                 onClick={() => handleCopy(r.ctt_pickup_id!)}
@@ -543,7 +538,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
                         <td className="px-5 py-4">
                           <div className="text-[var(--text-primary)] font-semibold">{r.volumes ?? 1} vol.</div>
                           <div className="text-[11px] text-[var(--text-tertiary)]">Total: {r.weight_kg ?? 1} kg</div>
-                          {r.heaviest_weight_kg != null && r.volumes > 1 && (
+                          {r.heaviest_weight_kg != null && (r.volumes ?? 1) > 1 && (
                             <div className="text-[11px] text-[var(--text-tertiary)]">Mais pesado: {r.heaviest_weight_kg} kg</div>
                           )}
                         </td>
@@ -555,6 +550,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
                             {cfg.label}
                           </span>
                         </td>
+                        <td className="px-5 py-4"><button onClick={() => setOpenedPickup(r)} className="whitespace-nowrap rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)]">Ver detalhes</button></td>
                       </tr>
                     )
                   })}
@@ -1180,6 +1176,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
           </div>
         </div>
       )}
+      {openedPickup && <PickupDetailsDialog key={`${openedPickup.source}:${openedPickup.id}`} selected={openedPickup} onClose={() => setOpenedPickup(null)} />}
     </div>
   )
 }

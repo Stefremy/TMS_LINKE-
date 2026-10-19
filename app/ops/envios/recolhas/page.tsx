@@ -1,56 +1,18 @@
-import { createAdminClient } from "@/lib/supabase/server"
+import { searchPickupsAction } from "@/app/actions/pickups"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import { RecolhasClient } from "./RecolhasClient"
 import { getCttPickupRequester } from "@/lib/config/ctt-pickup-requester"
 
 export default async function RecolhasPage() {
-  const supabase = createAdminClient()
-
-  const [recolhasResult, auditLogsResult, clients, carrierConnections] = await Promise.all([
-    supabase.from("recolhas").select("*").order("created_at", { ascending: false }).limit(100),
-    supabase.from("audit_log").select("*").eq("action", "recolha_data").order("created_at", { ascending: false }).limit(100),
+  const [recolhasResult, clients, carrierConnections] = await Promise.all([
+    searchPickupsAction(),
     getClientesAction(),
     getCarrierConnectionsAction(),
   ])
 
-  if (recolhasResult.error) {
-    console.error("Error fetching recolhas:", recolhasResult.error)
-  }
-
-  const auditLogs = auditLogsResult.data || []
-  const auditByPickupId = new Map<string, any>()
-  const auditByRecolhaId = new Map<string, any>()
-  for (const log of auditLogs) {
-    if (log.details?.pickup_id) auditByPickupId.set(String(log.details.pickup_id).trim(), log.details)
-    if (log.details?.recolha_id) auditByRecolhaId.set(String(log.details.recolha_id).trim(), log.details)
-  }
-
-  const mappedRecolhas = (recolhasResult.data || []).map((r: any) => {
-    const meta = auditByRecolhaId.get(r.id) || auditByPickupId.get(r.ctt_pickup_id) || {}
-    const isCorreos = meta.carrier_code === "correos_express" || (r.ctt_pickup_id && String(r.ctt_pickup_id).startsWith("CEX"))
-    const carrierCode = meta.carrier_code || (isCorreos ? "correos_express" : "ctt_expresso")
-    const carrierName = meta.carrier_name || (carrierCode === "correos_express" ? "Correos Express" : "CTT Expresso")
-
-    return {
-      id: r.id,
-      ctt_pickup_id: r.ctt_pickup_id || meta.pickup_id || "",
-      carrier_code: carrierCode,
-      carrier_name: carrierName,
-      status: r.status || "Agendado",
-      scheduled_date: r.scheduled_date || "",
-      created_at: r.created_at,
-      volumes: meta.volumes ?? r.volumes ?? 1,
-      weight_kg: meta.weight_kg ?? r.weight_kg ?? 1,
-      heaviest_weight_kg: meta.heaviest_weight_kg ?? null,
-      sender_name: meta.sender_name ?? r.sender_name ?? "Armazém Principal",
-      sender_address: meta.sender_address ?? r.sender_address ?? "",
-      sender_city: meta.sender_city ?? r.sender_city ?? "",
-      period: meta.period ?? r.period ?? "09:00-19:00",
-      observations: meta.observations ?? r.observations ?? "",
-      client_id: meta.client_id ?? r.client_id ?? null,
-    }
-  })
+  if (!recolhasResult.success) console.error("Error fetching recolhas:", recolhasResult.error)
+  const mappedRecolhas = recolhasResult.success ? recolhasResult.pickups : []
 
   const mappedClients = (clients || []).map((c: any) => ({
     id: c.id,
@@ -109,6 +71,7 @@ export default async function RecolhasPage() {
   return (
     <RecolhasClient
       recolhas={mappedRecolhas}
+      initialError={recolhasResult.success ? undefined : recolhasResult.error}
       clients={mappedClients}
       carrierConnections={mappedConnections}
       requesterContact={getCttPickupRequester()}
