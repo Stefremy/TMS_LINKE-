@@ -22,10 +22,10 @@ type ChartData = {
 }
 
 const SERIES_COLORS = {
-  actual: "var(--chart-series-actual)",
-  prev1: "var(--chart-series-prev1)",
-  prev2: "var(--chart-series-prev2)",
-  prev3: "var(--chart-series-prev3)",
+  actual: "#008A4B",
+  prev1: "#155EEF",
+  prev2: "#C95249",
+  prev3: "#7933D1",
 }
 
 export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[], targetMonth?: number }) {
@@ -116,7 +116,7 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
         <div className="space-y-1.5">
           {payload.map((item: any, idx: number) => {
             const series = seriesMeta.find(s => s.name === item.name)
-            const color = series?.color || item.color || "#10b981"
+            const color = series?.color || item.color || "#00865f"
             const val = item.value !== null && item.value !== undefined ? Number(item.value) : null
 
             return (
@@ -196,26 +196,27 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
               onClick={() => toggleSeries(s.key)}
               onMouseEnter={() => setHoveredSeries(s.key)}
               onMouseLeave={() => setHoveredSeries(null)}
-              className={`flex items-center gap-2 px-2 py-1 rounded-md border transition-colors text-xs font-medium cursor-pointer ${
+              aria-pressed={isVisible}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md border transition-colors text-xs font-bold cursor-pointer ${
                 isVisible 
-                  ? "bg-[var(--surface-bg)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]"
+                  ? "text-white shadow-2xs hover:brightness-110"
                   : "opacity-40 bg-transparent border-dashed border-[var(--border-subtle)]"
               }`}
               style={{
-                borderColor: isVisible ? `${s.color}66` : undefined,
-                backgroundColor: isVisible ? `${s.color}0D` : undefined,
+                borderColor: isVisible ? s.color : undefined,
+                backgroundColor: isVisible ? s.color : undefined,
               }}
               title={`Clique para ${isVisible ? "ocultar" : "mostrar"} a curva de ${s.name}`}
             >
               <span
                 className="w-4 h-0.5 rounded-full shrink-0"
-                style={{ backgroundColor: s.color }}
+                style={{ backgroundColor: isVisible ? "#ffffff" : s.color }}
               />
-              <span style={{ color: isVisible ? s.color : "var(--text-tertiary)" }} className="font-semibold text-[11px]">
+              <span style={{ color: isVisible ? "#ffffff" : "var(--text-tertiary)" }} className="font-bold text-xs">
                 {s.name}
               </span>
               {s.total !== undefined && (
-                <span style={{ color: isVisible ? s.color : "var(--text-tertiary)" }} className="font-mono text-[10px] font-semibold tabular-nums">
+                <span style={{ color: isVisible ? "#ffffff" : "var(--text-tertiary)" }} className="font-mono text-[11px] font-bold tabular-nums">
                   ({(s.total >= 1000 ? `${(s.total / 1000).toFixed(1)}k` : s.total.toFixed(0))}€)
                 </span>
               )}

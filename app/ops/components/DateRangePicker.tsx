@@ -44,7 +44,7 @@ export function DateRangePicker({ defaultFrom, defaultTo }: { defaultFrom: strin
       />
       <button 
         type="submit" 
-        className="bg-[var(--surface-muted)] hover:bg-[var(--border-strong)] text-[var(--text-secondary)] text-xs font-medium px-2 py-1 rounded transition-colors ml-1"
+        className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2 py-1 rounded transition-colors ml-1"
       >
         Aplicar
       </button>

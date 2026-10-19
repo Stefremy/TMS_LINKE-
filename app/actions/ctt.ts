@@ -539,6 +539,7 @@ export async function scheduleCttPickupAction(input: {
   }
 
   let result: { success: boolean; pickupNumber?: string; error?: string } = { success: false }
+  let metadataSaved = true
   let carrierName = carrierCode === "correos_express" ? "Correos Express" : "CTT Expresso"
 
   // 2. Chamar o webservice da transportadora correta
@@ -615,7 +616,7 @@ export async function scheduleCttPickupAction(input: {
 
     // Guardar metadados enriquecidos no audit_log para permitir histórico detalhado unificado
     try {
-      await supabase.from("audit_log").insert({
+      const { error: metadataError } = await supabase.from("audit_log").insert({
         tenant_id: tenantId,
         action: "recolha_data",
         details: {
@@ -645,7 +646,12 @@ export async function scheduleCttPickupAction(input: {
           created_at: new Date().toISOString(),
         }
       })
+      if (metadataError) {
+        metadataSaved = false
+        console.error("CTT pickup was accepted, but its detailed metadata was not saved:", metadataError.message)
+      }
     } catch (auditErr: any) {
+      metadataSaved = false
       console.warn("Could not save recolha metadata to audit_log:", auditErr?.message)
     }
 
@@ -682,6 +688,9 @@ export async function scheduleCttPickupAction(input: {
     ...result,
     carrier_code: carrierCode,
     carrier_name: carrierName,
+    // A carrier may accept the booking even if the separate local detail archive fails.
+    // Keep those outcomes distinct so operators know when the details need attention.
+    ...(result.success && result.pickupNumber ? { metadata_saved: metadataSaved } : {}),
   }
 }
 

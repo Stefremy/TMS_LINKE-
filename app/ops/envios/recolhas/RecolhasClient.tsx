@@ -304,12 +304,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
             <Truck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-[var(--text-primary)]">Pedidos de Recolha</h1>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                Multi-Operadora
-              </span>
-            </div>
+            <h1 className="text-lg font-bold text-[var(--text-primary)]">Pedidos de Recolha</h1>
             <p className="text-xs text-[var(--text-secondary)] mt-0.5">
               Recolhas recentes · Use a pesquisa para consultar o histórico por data
             </p>
@@ -605,6 +600,9 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                       O pedido de recolha foi confirmado nos WebServices da {result.carrier_name || (selectedCarrierCode === "correos_express" ? "Correos Express" : "CTT Expresso")}.
                       O estafeta passará na morada indicada na janela horária estabelecida.
                     </p>
+                    {result.metadata_saved === false && <p role="alert" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                      A transportadora aceitou a recolha, mas os dados detalhados não foram arquivados no TMS. Guarde a referência {result.pickupNumber} e contacte a administração para recuperar este registo.
+                    </p>}
                   </div>
                 </div>
 
