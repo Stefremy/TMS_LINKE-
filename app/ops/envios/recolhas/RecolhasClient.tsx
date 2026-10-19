@@ -124,6 +124,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
   // Switch carrier code and update connection ID to match
   const handleSelectCarrierTab = (code: "ctt_expresso" | "correos_express") => {
     setSelectedCarrierCode(code)
+    setPeriod(code === "ctt_expresso" ? "09:00-19:00" : "10:00-13:00")
     const matchingConn = carrierConnections.find(c => c.carrier_code === code)
     if (matchingConn) {
       setSelectedCarrierId(matchingConn.id)
@@ -139,7 +140,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
   // Client & Form fields
   const [selectedClientId, setSelectedClientId] = React.useState("")
   const [date, setDate] = React.useState(tomorrowDate())
-  const [period, setPeriod] = React.useState("10:00-13:00")
+  const [period, setPeriod] = React.useState(carrierConnections[0]?.carrier_code === "correos_express" ? "10:00-13:00" : "09:00-19:00")
   const [volumes, setVolumes] = React.useState(1)
   const [weightKg, setWeightKg] = React.useState(1)
   const [heaviestWeightKg, setHeaviestWeightKg] = React.useState(1)
@@ -859,11 +860,17 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
                         onChange={e => setPeriod(e.target.value)}
                         className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                       >
-                        <option value="08:00-10:00">08h00 - 10h00</option>
-                        <option value="10:00-13:00">10h00 - 13h00</option>
-                        <option value="13:00-16:00">13h00 - 16h00</option>
-                        <option value="16:00-19:00">16h00 - 19h00</option>
-                        <option value="19:00-22:00">19h00 - 22h00</option>
+                        {isCttActive ? (
+                          <option value="09:00-19:00">09h00 - 19h00 — Dia inteiro</option>
+                        ) : (
+                          <>
+                            <option value="08:00-10:00">08h00 - 10h00</option>
+                            <option value="10:00-13:00">10h00 - 13h00</option>
+                            <option value="13:00-16:00">13h00 - 16h00</option>
+                            <option value="16:00-19:00">16h00 - 19h00</option>
+                            <option value="19:00-22:00">19h00 - 22h00</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   </div>
@@ -871,7 +878,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
                     <Info className="w-3.5 h-3.5 shrink-0" />
                     {isCorreosActive
                       ? "O estafeta da Correos Express passará na morada do remetente na data indicada."
-                      : "Escolha uma janela horária CTT disponível para a sua morada; a disponibilidade pode variar por código postal."}
+                      : "Os CTT efetuam a recolha entre as 09h00 e as 19h00, sem hora específica garantida."}
                   </p>
                 </div>
 

@@ -3,6 +3,56 @@ const assert = require('node:assert/strict')
 const { XMLValidator } = require('fast-xml-parser')
 const { createLoader } = require('./helpers/load-typescript.cjs')
 
+test('NewOfferPickUp omits the period for 09:00–19:00 and uses SAP codes for timed services', async () => {
+  const requests = []
+  const load = createLoader({
+    './ctt-soap-client': {
+      CTTSoapClient: class {
+        static escapeXml(value) { return String(value ?? '') }
+        async callSoap(options) {
+          requests.push(options)
+          return { NewOfferPickUpResponse: { NewOfferPickUpResult: { Status: 'Success', PickUpID: 'MOCK-ONLY' } } }
+        }
+      },
+    },
+  })
+  const { CTTPickupService } = load('lib/services/ctt/ctt-pickup.service.ts')
+  const service = new CTTPickupService()
+  const creds = { auth_id: '11111111-1111-4111-8111-111111111111', client_number: '123456', contract_number: '654321', environment: 'production' }
+  const input = {
+    AuthenticationID: creds.auth_id, ClientId: creds.client_number, ContractId: creds.contract_number,
+    DataRecolha: '2026-10-20', HoraInicio: '10:00', HoraFim: '13:00', Destination: 'PT',
+    BiggestObjectDimensionsCm: { Length: 40, Width: 30, Height: 20 }, QuantidadeVolumes: 1, PesoKg: 1,
+    Expedidor: { Nome: 'Teste', Morada: 'Rua Teste', CP4: '1000', CP3: '001', Localidade: 'Lisboa', Telefone: '253123456' },
+  }
+  // Contract examples from SGEE V1.8, page 54, independent of the implementation.
+  const expected = [
+    ['08:00', '10:00', 'EMSE036.01.60'],
+    ['10:00', '13:00', 'EMSE037.01.60'],
+    ['13:00', '16:00', 'EMSE038.01.60'],
+    ['16:00', '19:00', 'EMSE039.01.60'],
+    ['19:00', '22:00', 'EMSE040.01.60'],
+  ]
+  const { XMLParser } = require('fast-xml-parser')
+  for (const [HoraInicio, HoraFim, code] of expected) {
+    const result = await service.newOfferPickUp(creds, { ...input, HoraInicio, HoraFim })
+    assert.equal(result.Success, true)
+    const xml = requests.at(-1).soapBodyXml
+    const parsed = new XMLParser({ removeNSPrefix: true, parseTagValue: false }).parse(xml)
+    assert.equal(parsed.NewOfferPickUp.Input.PickUpData.PickUpPeriod, code)
+    assert.doesNotMatch(xml, /<pick:PickUpPeriod>\d{2}:\d{2}-/)
+  }
+  const allDay = await service.newOfferPickUp(creds, { ...input, HoraInicio: '09:00', HoraFim: '19:00' })
+  assert.equal(allDay.Success, true)
+  const allDayXml = requests.at(-1).soapBodyXml
+  assert.doesNotMatch(allDayXml, /PickUpPeriod/)
+  const allDayData = new XMLParser({ removeNSPrefix: true, parseTagValue: false }).parse(allDayXml).NewOfferPickUp.Input.PickUpData
+  assert.equal(Object.hasOwn(allDayData, 'PickUpPeriod'), false)
+  const invalid = await service.newOfferPickUp(creds, { ...input, HoraInicio: '10:00', HoraFim: '12:00' })
+  assert.equal(invalid.Success, false)
+  assert.equal(requests.length, 6, 'invalid windows must be blocked before calling CTT')
+})
+
 test('requester defaults and manual overrides stay separate from pickup location contacts', async () => {
   let soapRequest
   const loadService = createLoader({
@@ -161,7 +211,7 @@ test('CTT NewOfferPickUp serializes the input using the WSDL data-contract names
   // CTT's live validation requires this API field to equal TotalWeight; the actual heaviest
   // parcel weight is kept in the TMS metadata separately.
   assert.match(soapRequest.soapBodyXml, /<pick:HeavierObjectWeight>1500<\/pick:HeavierObjectWeight>/)
-  assert.match(soapRequest.soapBodyXml, /<pick:PickUpPeriod>10:00-13:00<\/pick:PickUpPeriod>/)
+  assert.match(soapRequest.soapBodyXml, /<pick:PickUpPeriod>EMSE037\.01\.60<\/pick:PickUpPeriod>/)
   assert.match(soapRequest.soapBodyXml, /<pick:TotalWeight>1500<\/pick:TotalWeight>/)
   assert.match(soapRequest.soapBodyXml, /<pick:Phone>910000000<\/pick:Phone>/)
   assert.match(soapRequest.soapBodyXml, /<pick:Name>Loja &amp; Filhos<\/pick:Name>/)
@@ -302,7 +352,7 @@ test('CTT pickup validation blocks missing dimensions and invalid contact number
 
   const missingDimensions = await service.newOfferPickUp(creds, { ...baseInput, BiggestObjectDimensionsCm: { Length: 0, Width: 30, Height: 20 } })
   const invalidPhones = await service.newOfferPickUp(creds, { ...baseInput, Expedidor: { ...baseInput.Expedidor, Telefone: '91234567890123456' } })
-  const invalidPeriod = await service.newOfferPickUp(creds, { ...baseInput, HoraInicio: '09:00', HoraFim: '19:00' })
+  const invalidPeriod = await service.newOfferPickUp(creds, { ...baseInput, HoraInicio: '09:00', HoraFim: '18:00' })
   const invalidHeaviestWeight = await service.newOfferPickUp(creds, { ...baseInput, PesoKg: 1, PesoObjetoMaisPesadoKg: 1.1 })
   const alternatePhoneOnly = await service.newOfferPickUp(creds, {
     ...baseInput,

@@ -10,8 +10,8 @@ export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => voi
 
   // Form state
   const [date, setDate] = React.useState(new Date(Date.now() + 86400000).toISOString().split('T')[0])
-  const [startHour, setStartHour] = React.useState("09:00")
-  const [endHour, setEndHour] = React.useState("18:00")
+  const startHour = "09:00"
+  const endHour = "19:00"
   const [volumes, setVolumes] = React.useState(1)
   const [weightKg, setWeightKg] = React.useState(1)
   const [heaviestWeight, setHeaviestWeight] = React.useState("")
@@ -152,9 +152,9 @@ export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => voi
                   <div className="flex-1">
                     <label className="text-xs font-semibold text-slate-600 block mb-1">Horário</label>
                     <div className="flex items-center gap-1">
-                      <input type="time" value={startHour} onChange={e => setStartHour(e.target.value)} className="w-full border rounded px-1 py-1.5 text-sm" />
+                      <input type="time" value={startHour} readOnly className="w-full border rounded px-1 py-1.5 text-sm" />
                       <span className="text-xs text-slate-400">às</span>
-                      <input type="time" value={endHour} onChange={e => setEndHour(e.target.value)} className="w-full border rounded px-1 py-1.5 text-sm" />
+                      <input type="time" value={endHour} readOnly className="w-full border rounded px-1 py-1.5 text-sm" />
                     </div>
                   </div>
                 </div>

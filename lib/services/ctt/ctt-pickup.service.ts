@@ -6,13 +6,15 @@ const CTT_QA_PICKUP_ENDPOINT = "http://cttexpressows.qa.ctt.pt/CTTEWSPool/Recolh
 const CTT_PROD_PICKUP_ENDPOINT = "http://cttexpressows.ctt.pt/CTTEWSPool/RecolhasWS.svc"
 const PICKUP_MODEL_NS = "http://schemas.datacontract.org/2004/07/CTTExpressoWS.Models.PickUp"
 const INVALID_PICKUP_PHONE_MESSAGE = "O TMS não recebeu um contacto utilizável. Preencha Telefone Principal ou Telemóvel com um número até 15 dígitos. O pedido ainda não foi enviado aos CTT."
-const CTT_PICKUP_WINDOWS = new Set([
-  "08:00-10:00",
-  "10:00-13:00",
-  "13:00-16:00",
-  "16:00-19:00",
-  "19:00-22:00",
-])
+// NewOfferPickUp expects the SAP service code, not the human-readable hours.
+// SGEE V1.8, section 5.2.1, page 54.
+const CTT_PICKUP_PERIOD_CODES: Record<string, string> = {
+  "08:00-10:00": "EMSE036.01.60",
+  "10:00-13:00": "EMSE037.01.60",
+  "13:00-16:00": "EMSE038.01.60",
+  "16:00-19:00": "EMSE039.01.60",
+  "19:00-22:00": "EMSE040.01.60",
+}
 
 function getPickupErrorMessages(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(getPickupErrorMessages)
@@ -86,6 +88,9 @@ function buildNewOfferPickUpXml(creds: CTTConnectionCredentials, input: CTTPicku
     : mainPhone || mobilePhone
   const requesterName = requester?.name || contact
   const requesterEmail = requester ? requester.email : sender.Email
+  // Omitting this optional element selects the documented default 09:00–19:00.
+  // Timed SAP services are not enabled for every CTT contract.
+  const pickupPeriodCode = CTT_PICKUP_PERIOD_CODES[`${input.HoraInicio}-${input.HoraFim}`]
   const dimensions = input.BiggestObjectDimensionsCm
   const totalWeight = Math.round((input.PesoKg || 1) * 1000)
   const destination = input.Destination || "PT"
@@ -117,7 +122,7 @@ function buildNewOfferPickUpXml(creds: CTTConnectionCredentials, input: CTTPicku
             <!-- CTT rejects this request unless HeavierObjectWeight equals TotalWeight. -->
             <pick:HeavierObjectWeight>${totalWeight}</pick:HeavierObjectWeight>
             <pick:Observations>${esc(input.Observacoes || "")}</pick:Observations>
-            <pick:PickUpPeriod>${esc(`${input.HoraInicio}-${input.HoraFim}`)}</pick:PickUpPeriod>
+            ${pickupPeriodCode ? `<pick:PickUpPeriod>${esc(pickupPeriodCode)}</pick:PickUpPeriod>` : ""}
             <pick:PickupAddress>
               <pick:Address>${esc(sender.Morada)}</pick:Address>
               <pick:CP3>${esc(sender.CP3)}</pick:CP3>
@@ -168,10 +173,10 @@ export class CTTPickupService {
       }
     }
     const pickupPeriod = `${input.HoraInicio}-${input.HoraFim}`
-    if (!CTT_PICKUP_WINDOWS.has(pickupPeriod)) {
+    if (pickupPeriod !== "09:00-19:00" && !CTT_PICKUP_PERIOD_CODES[pickupPeriod]) {
       return {
         Success: false,
-        Errors: ["Selecione uma janela horária CTT válida: 08h00–10h00, 10h00–13h00, 13h00–16h00, 16h00–19h00 ou 19h00–22h00."],
+        Errors: ["Selecione uma janela horária CTT válida. O período normal de recolha é 09h00–19h00; as janelas específicas dependem do contrato CTT."],
       }
     }
     const heaviestWeight = input.PesoObjetoMaisPesadoKg ?? input.PesoKg

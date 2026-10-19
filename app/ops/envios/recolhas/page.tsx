@@ -46,7 +46,7 @@ export default async function RecolhasPage() {
       sender_name: meta.sender_name ?? r.sender_name ?? "Armazém Principal",
       sender_address: meta.sender_address ?? r.sender_address ?? "",
       sender_city: meta.sender_city ?? r.sender_city ?? "",
-      period: meta.period ?? r.period ?? "10:00-13:00",
+      period: meta.period ?? r.period ?? "09:00-19:00",
       observations: meta.observations ?? r.observations ?? "",
       client_id: meta.client_id ?? r.client_id ?? null,
     }
