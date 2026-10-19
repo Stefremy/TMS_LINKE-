@@ -11,7 +11,9 @@ import {
   Clock,
   ArrowRight,
   PlusCircle,
-  Truck
+  Truck,
+  AlertTriangle,
+  Activity
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { createAdminClient } from "@/lib/supabase/server"
@@ -314,6 +316,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
       <section aria-label="Estado dos envios" className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
         <div className="flex flex-col lg:flex-row lg:items-center">
           <div className="px-4 py-2.5 lg:py-3 border-b lg:border-b-0 lg:border-r border-[var(--border-subtle)] bg-[var(--surface-muted)]/50 shrink-0 flex items-center justify-between lg:justify-start gap-2">
+            <Activity className="w-3.5 h-3.5 text-[#21734d]" />
             <h2 className="text-xs font-semibold text-[var(--text-primary)] whitespace-nowrap">Estado dos envios</h2>
             <span className="text-[11px] text-[var(--text-tertiary)] whitespace-nowrap">· {getMonthName(targetDate)}</span>
           </div>
@@ -322,42 +325,54 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
               { 
                 label: "Pendentes", 
                 value: statusCounts.pendente, 
-                dot: "bg-amber-500",
+                icon: Clock,
+                iconColor: "text-amber-500",
+                badgeBg: "bg-amber-500/10",
                 tone: "text-[var(--status-warning)]",
                 href: "/ops/envios?status=Pendente"
               },
               { 
                 label: "Em Trânsito", 
                 value: statusCounts.em_transito, 
-                dot: "bg-blue-500",
+                icon: Truck,
+                iconColor: "text-blue-500",
+                badgeBg: "bg-blue-500/10",
                 tone: "text-[var(--status-info)]",
                 href: "/ops/envios?status=Em Trânsito"
               },
               { 
                 label: "Em Distrib.", 
                 value: statusCounts.em_distribuicao, 
-                dot: "bg-violet-500",
+                icon: MapPin,
+                iconColor: "text-violet-500",
+                badgeBg: "bg-violet-500/10",
                 tone: "text-[var(--status-distribution)]",
                 href: "/ops/envios?status=Em Distribuição"
               },
               { 
                 label: "Incidências", 
                 value: statusCounts.incidencia, 
-                dot: "bg-rose-500",
+                icon: AlertTriangle,
+                iconColor: "text-rose-500",
+                badgeBg: "bg-rose-500/10",
                 tone: "text-[var(--status-critical)]",
                 href: "/ops/incidencias"
               },
               { 
                 label: "Entregues", 
                 value: statusCounts.entregue, 
-                dot: "bg-emerald-500",
+                icon: CheckCircle2,
+                iconColor: "text-emerald-500",
+                badgeBg: "bg-emerald-500/10",
                 tone: "text-[var(--status-success)]",
                 href: "/ops/envios?status=Entregue"
               },
               { 
                 label: "Envios no mês",
                 value: totalShipments, 
-                dot: "bg-neutral-400",
+                icon: Package,
+                iconColor: "text-neutral-500 dark:text-neutral-400",
+                badgeBg: "bg-neutral-500/10",
                 tone: "text-[var(--text-primary)]",
                 href: "/ops/envios"
               }
@@ -368,7 +383,9 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
                 className="group flex items-center justify-between gap-2.5 px-3.5 py-2.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] transition-colors"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className={`w-2 h-2 rounded-full ${s.dot} shrink-0`} />
+                  <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${s.badgeBg} ${s.iconColor}`}>
+                    <s.icon className="w-3.5 h-3.5" strokeWidth={2} />
+                  </span>
                   <span className="text-xs font-medium truncate text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]">{s.label}</span>
                 </div>
                 <span className={`text-xs font-bold tabular-nums ${s.tone}`}>{s.value}</span>
