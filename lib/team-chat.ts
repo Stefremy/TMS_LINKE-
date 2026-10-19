@@ -2,11 +2,43 @@ export const CHAT_MAX_LENGTH = 4000
 export const CHAT_PAGE_SIZE = 50
 
 export type ChatMember = { user_id: string; name: string; avatar_url: string | null }
+export type ChatChannel = {
+  id: string
+  slug: string
+  name: string
+  description: string
+  is_default?: boolean
+  created_at?: string
+  created_by?: string
+}
 export type ChatMessage = {
   id: string; sequence: number; sender_id: string; recipient_id: string | null
   sender_name: string; sender_avatar_url: string | null; body: string; created_at: string
+  channel_slug?: string
 }
-export type ChatPage = { viewerId: string; members: ChatMember[]; messages: ChatMessage[]; hasMore: boolean }
+export type ChatPage = {
+  viewerId: string
+  members: ChatMember[]
+  channels: ChatChannel[]
+  activeChannel: string
+  messages: ChatMessage[]
+  hasMore: boolean
+}
+
+export const DEFAULT_CHANNELS: ChatChannel[] = [
+  { id: "geral", slug: "geral", name: "Sala geral", description: "Toda a equipa", is_default: true },
+  { id: "operacoes", slug: "operacoes", name: "Operações", description: "Recolhas, trânsito e incidências" },
+]
+
+export function normalizeChannelSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50) || "canal"
+}
 
 export class ChatError extends Error {
   constructor(message: string, public status = 400) { super(message) }
