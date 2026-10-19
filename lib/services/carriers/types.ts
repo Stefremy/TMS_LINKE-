@@ -51,6 +51,7 @@ export interface TrackingResult {
 }
 
 export interface PickupInput {
+  requester?: { name: string; phone?: string; mobilePhone?: string; email?: string }
   date: string // YYYY-MM-DD
   startHour: string // HH:mm
   endHour: string // HH:mm

@@ -7,11 +7,19 @@
  * - Track and Trace - Eventos, Razões e Situações
  */
 
+export interface CTTPickupRequester {
+  name: string
+  phone?: string
+  mobilePhone?: string
+  email?: string
+}
+
 export interface CTTConnectionCredentials {
   contract_number: string // ContractId
   client_number: string   // ClientId
   auth_id: string         // AuthenticationID (GUID)
   user_id?: string        // UserId (GUID)
+  pickup_requester?: CTTPickupRequester
   distribution_channel?: number // Default: 99 (EMS)
   environment?: "qa" | "production"
   default_subproduct?: string // Default: 'ERS24' or 'D+1'
@@ -168,6 +176,7 @@ export interface CTTCloseShipmentOutput {
 
 
 export interface CTTPickupRequestInput {
+  Solicitante?: CTTPickupRequester
   AuthenticationID: string
   ClientId: string
   ContractId: string

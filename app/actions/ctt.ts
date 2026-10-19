@@ -1,6 +1,7 @@
 "use server"
 
 import { publicUrl } from "@/lib/config/public-origins"
+import { getCttPickupRequester } from "@/lib/config/ctt-pickup-requester"
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -13,6 +14,7 @@ import {
   CTTTrackingService, 
   CTTReferencesService,
   CTTConnectionCredentials,
+  CTTPickupRequester,
   CTTAddressData,
   CTTShipmentData,
   CTTPontoEntrega,
@@ -43,6 +45,7 @@ async function getCttCredentials(): Promise<CTTConnectionCredentials> {
         client_number: conn.client_id,
         auth_id: conn.auth_id,
         user_id: conn.user_id || undefined,
+        pickup_requester: getCttPickupRequester(),
         distribution_channel: conn.distribution_channel || 99,
         environment: (conn.environment as "qa" | "production") || "production",
         default_subproduct: conn.default_subproduct || "EMSF056.01",
@@ -64,6 +67,7 @@ async function getCttCredentials(): Promise<CTTConnectionCredentials> {
     client_number: process.env.CTT_CLIENT_ID,
     auth_id: process.env.CTT_AUTHENTICATION_ID,
     user_id: process.env.CTT_USER_ID,
+    pickup_requester: getCttPickupRequester(),
     distribution_channel: 99,
     environment: "production",
     default_subproduct: "EMSF056.01",
@@ -492,6 +496,7 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
  * Agenda uma recolha junto da transportadora (CTT Expresso ou Correos Express)
  */
 export async function scheduleCttPickupAction(input: {
+  requester?: CTTPickupRequester
   connection_id?: string
   carrier_code?: string
   client_id?: string
@@ -564,6 +569,7 @@ export async function scheduleCttPickupAction(input: {
       await provider.initialize(creds)
 
       result = await provider.createPickup({
+        requester: input.requester,
         date: input.date,
         startHour: input.startHour,
         endHour: input.endHour,

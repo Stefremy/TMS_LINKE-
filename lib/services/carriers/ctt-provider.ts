@@ -158,6 +158,7 @@ export class CttProvider implements CarrierProvider {
         AuthenticationID: this.creds.auth_id,
         ClientId: this.creds.client_number,
         ContractId: this.creds.contract_number,
+        Solicitante: input.requester,
         DataRecolha: input.date,
         HoraInicio: input.startHour,
         HoraFim: input.endHour,
@@ -178,7 +179,7 @@ export class CttProvider implements CarrierProvider {
           CP4: senderZip.cp4,
           CP3: senderZip.cp3,
           Localidade: input.sender.city,
-          Telefone: input.sender.phone,
+          Telefone: input.sender.phone?.trim() || input.sender.mobilePhone?.trim() || "",
           Telemovel: input.sender.mobilePhone,
           Email: input.sender.email
         },

@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import { RecolhasClient } from "./RecolhasClient"
+import { getCttPickupRequester } from "@/lib/config/ctt-pickup-requester"
 
 export default async function RecolhasPage() {
   const supabase = createAdminClient()
@@ -110,6 +111,7 @@ export default async function RecolhasPage() {
       recolhas={mappedRecolhas}
       clients={mappedClients}
       carrierConnections={mappedConnections}
+      requesterContact={getCttPickupRequester()}
     />
   )
 }

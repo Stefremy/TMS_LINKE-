@@ -1,9 +1,11 @@
 import { CTTSoapClient } from "./ctt-soap-client"
 import { CTTConnectionCredentials, CTTPickupRequestInput, CTTPickupRequestOutput } from "./ctt-types"
+import { DEFAULT_CTT_REQUESTER_PHONE } from "@/lib/pickup-contact"
 
 const CTT_QA_PICKUP_ENDPOINT = "http://cttexpressows.qa.ctt.pt/CTTEWSPool/RecolhasWS.svc"
 const CTT_PROD_PICKUP_ENDPOINT = "http://cttexpressows.ctt.pt/CTTEWSPool/RecolhasWS.svc"
 const PICKUP_MODEL_NS = "http://schemas.datacontract.org/2004/07/CTTExpressoWS.Models.PickUp"
+const INVALID_PICKUP_PHONE_MESSAGE = "O TMS não recebeu um contacto utilizável. Preencha Telefone Principal ou Telemóvel com um número até 15 dígitos. O pedido ainda não foi enviado aos CTT."
 const CTT_PICKUP_WINDOWS = new Set([
   "08:00-10:00",
   "10:00-13:00",
@@ -30,12 +32,42 @@ function getPickupErrorMessages(value: unknown): string[] {
 }
 
 function normalizePickupPhone(phone: string, country: string) {
-  const firstNumber = (phone || "").split(/[\/,;]/, 1)[0]
-  const digits = firstNumber.replace(/\D/g, "")
-  const callingCode = country === "PT" ? "351" : country === "ES" ? "34" : ""
-  return callingCode && digits.startsWith(callingCode) && digits.length > 9
-    ? digits.slice(callingCode.length)
-    : digits
+  const callingCode = country.toUpperCase() === "PT" ? "351" : country.toUpperCase() === "ES" ? "34" : ""
+  const normalizeCandidate = (candidate: string) => {
+    let digits = candidate.replace(/\D/g, "")
+    if (!digits) return ""
+
+    if (callingCode && digits.startsWith(`00${callingCode}`)) {
+      digits = digits.slice(callingCode.length + 2)
+    } else if (callingCode && digits.startsWith(callingCode) && digits.length >= callingCode.length + 9) {
+      digits = digits.slice(callingCode.length)
+    }
+
+    // Some address books store the national trunk prefix even though CTT expects
+    // the nine-digit national number without it.
+    if (digits.length === 10 && digits.startsWith("0")) digits = digits.slice(1)
+    return digits.length >= 1 && digits.length <= 15 ? digits : ""
+  }
+
+  // First normalize the whole field so punctuation used inside a number (for
+  // example 912/345/678) does not split a valid phone into unusable fragments.
+  const wholeFieldNumber = normalizeCandidate(phone || "")
+  if (wholeFieldNumber) return wholeFieldNumber
+
+  // If the operator entered more than one number, try each alternative.
+  const candidates = (phone || "").split(/[\/,;|]|\bou\b/i)
+  for (const candidate of candidates) {
+    const normalized = normalizeCandidate(candidate)
+    if (normalized) return normalized
+  }
+  return ""
+}
+
+function isValidPickupPhone(phone: string, country: string) {
+  const normalized = normalizePickupPhone(phone, country)
+  // The CTT specification requires a value and caps it at 15 characters; it
+  // does not require exactly nine digits. Let CTT validate the number itself.
+  return normalized.length >= 1 && normalized.length <= 15
 }
 
 function buildNewOfferPickUpXml(creds: CTTConnectionCredentials, input: CTTPickupRequestInput, requestId: string) {
@@ -44,8 +76,16 @@ function buildNewOfferPickUpXml(creds: CTTConnectionCredentials, input: CTTPicku
   const contact = sender.Contacto || sender.Nome
   const country = sender.Pais || "PT"
   const mainPhone = normalizePickupPhone(sender.Telefone, country)
-  const mobilePhone = normalizePickupPhone(sender.Telemovel || sender.Telefone, country)
-  const phone = mainPhone.length === 9 ? mainPhone : mobilePhone
+  const suppliedMobilePhone = normalizePickupPhone(sender.Telemovel || "", country)
+  const mainIsMobile = country.toUpperCase() === "PT" && /^9\d{8}$/.test(mainPhone)
+  const mobilePhone = isValidPickupPhone(sender.Telemovel || "", country) ? suppliedMobilePhone : mainIsMobile ? mainPhone : ""
+  const pickupPhone = mainIsMobile ? "" : mainPhone
+  const requester = input.Solicitante ?? creds.pickup_requester
+  const requesterPhone = requester
+    ? normalizePickupPhone(requester.phone?.trim() || DEFAULT_CTT_REQUESTER_PHONE, "PT")
+    : mainPhone || mobilePhone
+  const requesterName = requester?.name || contact
+  const requesterEmail = requester ? requester.email : sender.Email
   const dimensions = input.BiggestObjectDimensionsCm
   const totalWeight = Math.round((input.PesoKg || 1) * 1000)
   const destination = input.Destination || "PT"
@@ -63,11 +103,11 @@ function buildNewOfferPickUpXml(creds: CTTConnectionCredentials, input: CTTPicku
             <pick:BiggerObjectWidth>${dimensions.Width}</pick:BiggerObjectWidth>
             <pick:ClientData>
               <pick:ClientID>${esc(input.ClientId || creds.client_number)}</pick:ClientID>
-              <pick:ContactName>${esc(contact)}</pick:ContactName>
+              <pick:ContactName>${esc(requesterName)}</pick:ContactName>
               <pick:ContractID>${esc(input.ContractId || creds.contract_number)}</pick:ContractID>
-              ${sender.Email ? `<pick:Email>${esc(sender.Email)}</pick:Email>` : ""}
-              <pick:Phone>${esc(phone)}</pick:Phone>
-              <pick:RequestedBy>${esc(creds.user_id || contact)}</pick:RequestedBy>
+              ${requesterEmail ? `<pick:Email>${esc(requesterEmail)}</pick:Email>` : ""}
+              <pick:Phone>${esc(requesterPhone)}</pick:Phone>
+              <pick:RequestedBy>${esc(requester?.name || creds.user_id || contact)}</pick:RequestedBy>
             </pick:ClientData>
             <pick:ClientRef>${esc(requestId)}</pick:ClientRef>
             <pick:Date>${esc(input.DataRecolha)}</pick:Date>
@@ -88,9 +128,9 @@ function buildNewOfferPickUpXml(creds: CTTConnectionCredentials, input: CTTPicku
               <pick:Door>${esc(sender.Porta || "")}</pick:Door>
               ${sender.Email ? `<pick:Email>${esc(sender.Email)}</pick:Email>` : ""}
               <pick:Floor>${esc(sender.Piso || "")}</pick:Floor>
-              <pick:MobilePhone>${esc(mobilePhone)}</pick:MobilePhone>
+              ${mobilePhone ? `<pick:MobilePhone>${esc(mobilePhone)}</pick:MobilePhone>` : ""}
               <pick:Name>${esc(sender.Nome)}</pick:Name>
-              <pick:Phone>${esc(phone)}</pick:Phone>
+              <pick:Phone>${esc(pickupPhone)}</pick:Phone>
             </pick:PickupAddress>
             <pick:TotalObjects>${input.QuantidadeVolumes || 1}</pick:TotalObjects>
             <pick:TotalWeight>${totalWeight}</pick:TotalWeight>
@@ -142,12 +182,18 @@ export class CTTPickupService {
       }
     }
     const country = input.Expedidor.Pais || "PT"
+    const requester = input.Solicitante ?? creds.pickup_requester
+    if (requester && (!requester.name?.trim() || requester.name.length > 50 ||
+      !isValidPickupPhone(requester.phone?.trim() || DEFAULT_CTT_REQUESTER_PHONE, "PT") ||
+      (requester.email && requester.email.length > 50))) {
+      return { Success: false, Errors: ["Confirme os dados do cliente CTT: contacto até 50 caracteres, telefone ou telemóvel preenchido e email até 50 caracteres."] }
+    }
     const validPhone = [input.Expedidor.Telefone, input.Expedidor.Telemovel || ""]
-      .some(phone => normalizePickupPhone(phone, country).length === 9)
+      .some(phone => isValidPickupPhone(phone, country))
     if (!validPhone) {
       return {
         Success: false,
-        Errors: ["Indique um telefone de contacto válido com 9 dígitos."],
+        Errors: [INVALID_PICKUP_PHONE_MESSAGE],
       }
     }
 
@@ -164,7 +210,18 @@ export class CTTPickupService {
       const result = response?.NewOfferPickUpResponse?.NewOfferPickUpResult || response
       const pickupId = result.PickUpID || result._IDRecolha
       const newDate = result.NewPickUpDate || result._NovaDataRecolha
-      const errors = getPickupErrorMessages(result.ErrorList || result.Errors)
+      const errors = getPickupErrorMessages(result.ErrorList || result.Errors).map(message => {
+        if (!/Phone Number is not valid/i.test(message)) return message
+        const requester = input.Solicitante ?? creds.pickup_requester
+        const contactPhone = requester ? requester.phone?.trim() || DEFAULT_CTT_REQUESTER_PHONE
+          : isValidPickupPhone(input.Expedidor.Telefone, country) ? input.Expedidor.Telefone : input.Expedidor.Telemovel || ""
+        const contactCountry = requester ? "PT" : country
+        const digitCount = normalizePickupPhone(contactPhone, contactCountry).length
+        if (/ClientData:/i.test(message) && contactCountry === "PT" && /^9\d{8}$/.test(normalizePickupPhone(contactPhone, contactCountry))) {
+          return `Os CTT recusaram o telemóvel no contacto obrigatório do solicitante${requester ? ` (${requester.name})` : ""} (ClientData.Phone). O número foi enviado; esta recusa precisa de confirmação/correção pelos CTT. Resposta CTT: ${message}`
+        }
+        return `Os CTT recusaram o contacto enviado (${digitCount} dígitos). Resposta CTT: ${message}`
+      })
       if (result.Status === "Failure" && errors.length === 0) {
         errors.push("Os CTT recusaram a recolha, mas não devolveram uma descrição do erro.")
       }

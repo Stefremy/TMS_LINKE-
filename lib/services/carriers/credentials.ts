@@ -4,6 +4,7 @@
  */
 import { createAdminClient } from "@/lib/supabase/server"
 import { getTenantId } from "@/lib/auth/context"
+import { getCttPickupRequester } from "@/lib/config/ctt-pickup-requester"
 import { CTTConnectionCredentials } from "@/lib/services/ctt/ctt-types"
 import { CorreosCredentials } from "@/lib/services/correos/types"
 
@@ -52,6 +53,7 @@ export async function resolveCttCredentials(connectionId?: string): Promise<CTTC
     client_number: connection.client_id || connection.client_number || "",
     auth_id: connection.auth_id || "",
     user_id: connection.user_id || undefined,
+    pickup_requester: getCttPickupRequester(),
     distribution_channel: connection.distribution_channel || 99,
     environment: connection.environment === "qa" ? "qa" : "production",
     default_subproduct: connection.default_subproduct || "EMSF056.01",
@@ -60,6 +62,7 @@ export async function resolveCttCredentials(connectionId?: string): Promise<CTTC
     client_number: process.env.CTT_CLIENT_ID || "",
     auth_id: process.env.CTT_AUTHENTICATION_ID || "",
     user_id: process.env.CTT_USER_ID || undefined,
+    pickup_requester: getCttPickupRequester(),
     distribution_channel: Number(process.env.CTT_DISTRIBUTION_CHANNEL) || 99,
     environment: process.env.CTT_ENVIRONMENT === "qa" ? "qa" : "production",
     default_subproduct: process.env.CTT_DEFAULT_SUBPRODUCT || "EMSF056.01",

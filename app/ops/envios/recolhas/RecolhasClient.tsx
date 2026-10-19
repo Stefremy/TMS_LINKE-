@@ -29,6 +29,8 @@ import {
 } from "lucide-react"
 import { scheduleCttPickupAction } from "@/app/actions/ctt"
 import { getCarrierLogo } from "@/lib/carrier-logos"
+import { DEFAULT_CTT_REQUESTER_PHONE, readPickupContact, readPickupRequester } from "@/lib/pickup-contact"
+import type { CTTPickupRequester } from "@/lib/services/ctt/ctt-types"
 
 interface MappedClient {
   id: string
@@ -71,6 +73,7 @@ interface Recolha {
 }
 
 interface RecolhasClientProps {
+  requesterContact?: CTTPickupRequester
   recolhas: Recolha[]
   clients: MappedClient[]
   carrierConnections: CarrierConnection[]
@@ -94,7 +97,7 @@ function tomorrowDate() {
   return d.toISOString().split("T")[0]
 }
 
-export function RecolhasClient({ recolhas, clients, carrierConnections }: RecolhasClientProps) {
+export function RecolhasClient({ recolhas, clients, carrierConnections, requesterContact }: RecolhasClientProps) {
   const [view, setView] = React.useState<"list" | "form">("list")
   const [loading, setLoading] = React.useState(false)
   const [result, setResult] = React.useState<any>(null)
@@ -188,8 +191,22 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
     if (next === 1) setHeaviestWeightKg(weightKg)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    const submittedContact = readPickupContact(formData)
+    const submittedRequester = readPickupRequester(formData)
+    if (isCttActive && (!submittedRequester.name || (!submittedRequester.phone && !submittedRequester.mobilePhone))) {
+      setResult({ success: false, error: "Preencha o contacto e um telefone ou telemóvel nos Dados do cliente CTT." })
+      return
+    }
+    if (isCttActive && !submittedContact.phone) {
+      setResult({
+        success: false,
+        error: "Não foi indicado telefone. Os CTT exigem um número de contacto válido. Preencha o telefone principal ou o telemóvel alternativo; sem telefone, não é possível agendar por este serviço.",
+      })
+      return
+    }
     if (volumes > 1 && (!Number.isFinite(heaviestWeightKg) || heaviestWeightKg <= 0 || heaviestWeightKg > weightKg)) {
       setResult({ success: false, error: "O peso do volume mais pesado deve ser maior que 0 e não pode ultrapassar o peso total." })
       return
@@ -204,6 +221,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
       const [startHour, endHour] = period.split("-")
 
       const res = await scheduleCttPickupAction({
+        requester: isCttActive ? submittedRequester : undefined,
         connection_id: selectedCarrier?.id || selectedCarrierId,
         carrier_code: selectedCarrierCode,
         client_id: selectedClientId || undefined,
@@ -227,8 +245,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
           address: senderAddress,
           zip: senderZip,
           city: senderCity,
-          phone: senderPhone,
-          mobilePhone: senderMobile || undefined,
+          ...submittedContact,
         },
         observations: finalObs || undefined,
       })
@@ -652,6 +669,30 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                   </div>
                 )}
 
+                {isCttActive && (
+                  <section className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-5">
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-[var(--text-primary)]">
+                      <Building2 className="h-4 w-4" /> Dados do cliente CTT — Linke
+                    </h2>
+                    <p className="mt-1 text-xs text-[var(--text-secondary)]">Empresa que solicita a recolha. Pode editar estes contactos para esta marcação; são independentes do local de recolha.</p>
+                    <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)]">Contacto *
+                        <input name="requesterName" required maxLength={50} defaultValue={requesterContact?.name || ""} autoComplete="section-ctt-requester organization" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
+                      </label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)]">Email
+                        <input name="requesterEmail" type="email" maxLength={50} defaultValue={requesterContact?.email || ""} autoComplete="section-ctt-requester email" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
+                      </label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)]">Telefone
+                        <input name="requesterPhone" type="tel" defaultValue={requesterContact?.phone || DEFAULT_CTT_REQUESTER_PHONE} autoComplete="section-ctt-requester-phone tel" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
+                      </label>
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)]">Telemóvel
+                        <input name="requesterMobile" type="tel" defaultValue={requesterContact?.mobilePhone || ""} autoComplete="section-ctt-requester-mobile tel" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
+                      </label>
+                    </div>
+                    <p className="mt-3 text-xs text-[var(--text-secondary)]">Se deixar o telefone vazio, será usado {DEFAULT_CTT_REQUESTER_PHONE} como contacto do solicitante. O telemóvel e os contactos do local de recolha mantêm os seus próprios valores.</p>
+                  </section>
+                )}
+
                 {/* ── Section 0: Transportadora & Conta ── */}
                 <div className="bg-[var(--surface-muted)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-xs">
                   <div className="flex items-center justify-between mb-4">
@@ -934,6 +975,8 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                           <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
                             type="tel"
+                            name="pickupPhone"
+                            autoComplete="section-pickup-phone tel"
                             value={senderPhone}
                             onChange={e => setSenderPhone(e.target.value)}
                             className="w-full pl-9 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
@@ -941,11 +984,13 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Telemóvel Alternativo</label>
+                        <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Telemóvel</label>
                         <div className="relative">
                           <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
                             type="tel"
+                            name="pickupMobilePhone"
+                            autoComplete="section-pickup-mobile tel"
                             value={senderMobile}
                             onChange={e => setSenderMobile(e.target.value)}
                             className="w-full pl-9 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
@@ -954,7 +999,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections }: Recolh
                       </div>
                     </div>
                     <p className="col-span-3 -mt-2 text-[11px] text-[var(--text-tertiary)]">
-                      O telefone principal é opcional se preencher o telemóvel alternativo. Indique pelo menos um número válido para contacto dos CTT.
+                      O telefone principal é opcional se preencher o telemóvel alternativo. Os CTT exigem pelo menos um número válido; sem telefone, não é possível agendar por este serviço.
                     </p>
                   </div>
                 </div>
