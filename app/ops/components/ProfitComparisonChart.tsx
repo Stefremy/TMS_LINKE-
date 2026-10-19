@@ -22,8 +22,8 @@ type ChartData = {
 }
 
 const SERIES_COLORS = {
-  actual: "#008A4B",
-  prev1: "#155EEF",
+  actual: "#155EEF", // Azul para o mês atual (Outubro)
+  prev1: "#008A4B",  // Verde para o mês anterior (Setembro)
   prev2: "#FA8072",
   prev3: "#007F8B",
 }

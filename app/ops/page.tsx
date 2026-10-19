@@ -315,8 +315,10 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
       {/* Estado dos envios - Linha horizontal */}
       <section aria-label="Estado dos envios" className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
         <div className="flex flex-col lg:flex-row lg:items-center">
-          <div className="px-4 py-2.5 lg:py-3 border-b lg:border-b-0 lg:border-r border-[var(--border-subtle)] bg-[var(--surface-muted)]/50 shrink-0 flex items-center justify-between lg:justify-start gap-2">
-            <Activity className="w-3.5 h-3.5 text-[#21734d]" />
+          <div className="px-4 py-2.5 lg:py-3 border-b lg:border-b-0 lg:border-r border-[var(--border-subtle)] bg-[var(--surface-muted)]/50 shrink-0 flex items-center justify-between lg:justify-start gap-2.5">
+            <span className="w-6 h-6 rounded-md bg-[#21734d] text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Activity className="w-3.5 h-3.5" strokeWidth={2.2} />
+            </span>
             <h2 className="text-xs font-semibold text-[var(--text-primary)] whitespace-nowrap">Estado dos envios</h2>
             <span className="text-[11px] text-[var(--text-tertiary)] whitespace-nowrap">· {getMonthName(targetDate)}</span>
           </div>
@@ -326,54 +328,48 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
                 label: "Pendentes", 
                 value: statusCounts.pendente, 
                 icon: Clock,
-                iconColor: "text-amber-500",
-                badgeBg: "bg-amber-500/10",
-                tone: "text-[var(--status-warning)]",
+                badgeBg: "bg-amber-500",
+                tone: "text-amber-600 dark:text-amber-400",
                 href: "/ops/envios?status=Pendente"
               },
               { 
                 label: "Em Trânsito", 
                 value: statusCounts.em_transito, 
                 icon: Truck,
-                iconColor: "text-blue-500",
-                badgeBg: "bg-blue-500/10",
-                tone: "text-[var(--status-info)]",
+                badgeBg: "bg-blue-600",
+                tone: "text-blue-600 dark:text-blue-400",
                 href: "/ops/envios?status=Em Trânsito"
               },
               { 
                 label: "Em Distrib.", 
                 value: statusCounts.em_distribuicao, 
                 icon: MapPin,
-                iconColor: "text-violet-500",
-                badgeBg: "bg-violet-500/10",
-                tone: "text-[var(--status-distribution)]",
+                badgeBg: "bg-violet-600",
+                tone: "text-violet-600 dark:text-violet-400",
                 href: "/ops/envios?status=Em Distribuição"
               },
               { 
                 label: "Incidências", 
                 value: statusCounts.incidencia, 
                 icon: AlertTriangle,
-                iconColor: "text-rose-500",
-                badgeBg: "bg-rose-500/10",
-                tone: "text-[var(--status-critical)]",
+                badgeBg: "bg-rose-600",
+                tone: "text-rose-600 dark:text-rose-400",
                 href: "/ops/incidencias"
               },
               { 
                 label: "Entregues", 
                 value: statusCounts.entregue, 
                 icon: CheckCircle2,
-                iconColor: "text-emerald-500",
-                badgeBg: "bg-emerald-500/10",
-                tone: "text-[var(--status-success)]",
+                badgeBg: "bg-emerald-600",
+                tone: "text-emerald-600 dark:text-emerald-400",
                 href: "/ops/envios?status=Entregue"
               },
               { 
-                label: "Envios no mês",
+                label: "Envios no mês", 
                 value: totalShipments, 
                 icon: Package,
-                iconColor: "text-neutral-500 dark:text-neutral-400",
-                badgeBg: "bg-neutral-500/10",
-                tone: "text-[var(--text-primary)]",
+                badgeBg: "bg-slate-700 dark:bg-slate-600",
+                tone: "text-slate-900 dark:text-slate-100",
                 href: "/ops/envios"
               }
             ].map((s, i) => (
@@ -383,12 +379,12 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
                 className="group flex items-center justify-between gap-2.5 px-3.5 py-2.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] transition-colors"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${s.badgeBg} ${s.iconColor}`}>
-                    <s.icon className="w-3.5 h-3.5" strokeWidth={2} />
+                  <span className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 shadow-xs ${s.badgeBg} text-white`}>
+                    <s.icon className="w-3.5 h-3.5 text-white" strokeWidth={2.2} />
                   </span>
-                  <span className="text-xs font-medium truncate text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]">{s.label}</span>
+                  <span className="text-xs font-semibold truncate text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]">{s.label}</span>
                 </div>
-                <span className={`text-xs font-bold tabular-nums ${s.tone}`}>{s.value}</span>
+                <span className={`text-sm font-bold tabular-nums ${s.tone}`}>{s.value}</span>
               </Link>
             ))}
           </div>
