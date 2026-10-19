@@ -310,73 +310,75 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
         </div>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)] gap-5">
-        <ProfitComparisonChart data={chartData} targetMonth={targetDate.getMonth()} />
-        <section className="bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] p-5">
-          <div>
-            <h2 className="text-base font-semibold text-[var(--text-primary)]">Estado dos envios</h2>
-            <p className="mt-1 mb-3 text-xs text-[var(--text-tertiary)]">{getMonthName(targetDate)}</p>
-            <div className="divide-y divide-[var(--border-subtle)]">
-              {[
-                { 
-                  label: "Pendentes", 
-                  value: statusCounts.pendente, 
-                  dot: "bg-amber-500",
-                  tone: "text-[var(--status-warning)]",
-                  href: "/ops/envios?status=Pendente"
-                },
-                { 
-                  label: "Em Trânsito", 
-                  value: statusCounts.em_transito, 
-                  dot: "bg-blue-500",
-                  tone: "text-[var(--status-info)]",
-                  href: "/ops/envios?status=Em Trânsito"
-                },
-                { 
-                  label: "Em Distrib.", 
-                  value: statusCounts.em_distribuicao, 
-                  dot: "bg-violet-500",
-                  tone: "text-[var(--status-distribution)]",
-                  href: "/ops/envios?status=Em Distribuição"
-                },
-                { 
-                  label: "Incidências", 
-                  value: statusCounts.incidencia, 
-                  dot: "bg-rose-500",
-                  tone: "text-[var(--status-critical)]",
-                  href: "/ops/incidencias"
-                },
-                { 
-                  label: "Entregues", 
-                  value: statusCounts.entregue, 
-                  dot: "bg-emerald-500",
-                  tone: "text-[var(--status-success)]",
-                  href: "/ops/envios?status=Entregue"
-                },
-                { 
-                  label: "Envios no mês",
-                  value: totalShipments, 
-                  dot: "bg-neutral-400",
-                  tone: "text-[var(--text-primary)]",
-                  href: "/ops/envios"
-                }
-              ].map((s, i) => (
-                <Link
-                  key={i}
-                  href={s.href}
-                  className="group flex items-center justify-between gap-3 py-3 px-1 hover:bg-[var(--surface-muted)] transition-colors"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className={`w-2 h-2 rounded-full ${s.dot} shrink-0`} />
-                    <span className={`text-sm font-medium truncate ${s.tone}`}>{s.label}</span>
-                  </div>
-                  <span className={`text-sm font-semibold tabular-nums ${s.tone}`}>{s.value}</span>
-                </Link>
-              ))}
-            </div>
+      {/* Estado dos envios - Linha horizontal */}
+      <section aria-label="Estado dos envios" className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+        <div className="flex flex-col lg:flex-row lg:items-center">
+          <div className="px-4 py-2.5 lg:py-3 border-b lg:border-b-0 lg:border-r border-[var(--border-subtle)] bg-[var(--surface-muted)]/50 shrink-0 flex items-center justify-between lg:justify-start gap-2">
+            <h2 className="text-xs font-semibold text-[var(--text-primary)] whitespace-nowrap">Estado dos envios</h2>
+            <span className="text-[11px] text-[var(--text-tertiary)] whitespace-nowrap">· {getMonthName(targetDate)}</span>
           </div>
-        </section>
-      </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-[var(--border-subtle)] flex-1">
+            {[
+              { 
+                label: "Pendentes", 
+                value: statusCounts.pendente, 
+                dot: "bg-amber-500",
+                tone: "text-[var(--status-warning)]",
+                href: "/ops/envios?status=Pendente"
+              },
+              { 
+                label: "Em Trânsito", 
+                value: statusCounts.em_transito, 
+                dot: "bg-blue-500",
+                tone: "text-[var(--status-info)]",
+                href: "/ops/envios?status=Em Trânsito"
+              },
+              { 
+                label: "Em Distrib.", 
+                value: statusCounts.em_distribuicao, 
+                dot: "bg-violet-500",
+                tone: "text-[var(--status-distribution)]",
+                href: "/ops/envios?status=Em Distribuição"
+              },
+              { 
+                label: "Incidências", 
+                value: statusCounts.incidencia, 
+                dot: "bg-rose-500",
+                tone: "text-[var(--status-critical)]",
+                href: "/ops/incidencias"
+              },
+              { 
+                label: "Entregues", 
+                value: statusCounts.entregue, 
+                dot: "bg-emerald-500",
+                tone: "text-[var(--status-success)]",
+                href: "/ops/envios?status=Entregue"
+              },
+              { 
+                label: "Envios no mês",
+                value: totalShipments, 
+                dot: "bg-neutral-400",
+                tone: "text-[var(--text-primary)]",
+                href: "/ops/envios"
+              }
+            ].map((s, i) => (
+              <Link
+                key={i}
+                href={s.href}
+                className="group flex items-center justify-between gap-2.5 px-3.5 py-2.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`w-2 h-2 rounded-full ${s.dot} shrink-0`} />
+                  <span className="text-xs font-medium truncate text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]">{s.label}</span>
+                </div>
+                <span className={`text-xs font-bold tabular-nums ${s.tone}`}>{s.value}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <ProfitComparisonChart data={chartData} targetMonth={targetDate.getMonth()} />
 
 
       {/* Table & Widgets Grid */}
