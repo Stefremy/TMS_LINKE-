@@ -10,7 +10,7 @@ const decoratedPages = new Set([
   "/ops/entidades/clientes", "/ops/entidades/fornecedores", "/ops/entidades/colaboradores",
   "/ops/configuracao/servicos", "/ops/faturacao/contas-corrente", "/ops/faturacao/clientes", "/ops/faturacao/estatistica",
   "/ops/tesouraria/reembolsos", "/ops/tesouraria/reconciliacao",
-  "/ops/documentos",
+  "/ops/documentos", "/ops/configuracao/webservices", "/ops/configuracao/notificacoes",
 ])
 
 export function OpsPageSurface({ children }: { children: ReactNode }) {

@@ -101,7 +101,6 @@ const navConfig: NavSection[] = [
           { title: "Webservices Globais", href: "/ops/configuracao/webservices" },
           { title: "Taxas Adicionais", href: "/ops/configuracao/taxas" },
           { title: "Zonas de Preço", href: "/ops/configuracao/zonas" },
-          { title: "Estados de Envio", href: "/ops/configuracao/estados" },
           { title: "Comunicações", isSeparator: true },
           { title: "Email Templates", href: "/ops/configuracao/notificacoes" },
         ]
