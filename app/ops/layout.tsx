@@ -13,6 +13,7 @@ import {
   Plus,
   HelpCircle,
   User,
+  MessageSquare,
   LogOut
 } from "lucide-react"
 
@@ -51,6 +52,7 @@ export default async function OpsLayout({
             </Link>
             
             <div className="flex items-center gap-4 border-r border-[var(--border-subtle)] pr-5">
+              <Link href="/ops/chat" aria-label="Chat da equipa" title="Chat da equipa" className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"><MessageSquare className="w-5 h-5" /></Link>
               <NotificationBell />
               <HelpCircle className="w-5 h-5 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] cursor-pointer transition-colors" />
             </div>

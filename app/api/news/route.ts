@@ -1,140 +1,76 @@
 import { NextRequest, NextResponse } from "next/server"
 import { XMLParser } from "fast-xml-parser"
+import { newsCategory, type NewsCategory, type NewsItem } from "@/lib/news-categories"
 
 export const runtime = "nodejs"
 
-interface NewsItem {
-  id: string
-  title: string
-  source: string
-  link: string
-  pubDate: string
-  timeAgo: string
-}
-
-// In-memory cache for 3 hours (aligned with client auto-refresh)
-const cache = new Map<string, { items: NewsItem[]; timestamp: number }>()
+type StoredNews = Omit<NewsItem, "timeAgo">
+const cache = new Map<NewsCategory, { items: StoredNews[]; timestamp: number }>()
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000
 
-const FALLBACK_NEWS: NewsItem[] = [
-  {
-    id: "fb-1",
-    title: "CTT e DHL reforçam ligações transfronteiriças na Península Ibérica",
-    source: "Transportes & Negócios",
-    link: "https://www.ctt.pt",
-    pubDate: new Date().toISOString(),
-    timeAgo: "há 1h"
-  },
-  {
-    id: "fb-2",
-    title: "Preços dos combustíveis: atualização de tarifas e impacto nas frotas rodoviárias",
-    source: "Jornal de Negócios",
-    link: "https://www.jornaldenegocios.pt",
-    pubDate: new Date().toISOString(),
-    timeAgo: "há 3h"
-  },
-  {
-    id: "fb-3",
-    title: "Setor da logística em Portugal prevê crescimento recorde em envios de e-commerce",
-    source: "Dinheiro Vivo",
-    link: "https://www.dinheirovivo.pt",
-    pubDate: new Date().toISOString(),
-    timeAgo: "há 5h"
-  },
-  {
-    id: "fb-4",
-    title: "Novas regras alfandegárias e desalfandegamento expresso para trânsito internacional",
-    source: "Eco Economia Online",
-    link: "https://eco.sapo.pt",
-    pubDate: new Date().toISOString(),
-    timeAgo: "ontem"
-  }
-]
-
-function formatRelativeTime(dateStr: string): string {
-  try {
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-    const diffDays = Math.floor(diffHours / 24)
-
-    if (diffHours < 1) return "agora mesmo"
-    if (diffHours < 24) return `há ${diffHours}h`
-    if (diffDays === 1) return "ontem"
-    if (diffDays < 7) return `há ${diffDays}d`
-    return date.toLocaleDateString("pt-PT", { day: "2-digit", month: "short" })
-  } catch {
-    return "recente"
-  }
+function nodeText(value: unknown): string {
+  if (typeof value === "string") return value.trim()
+  if (value && typeof value === "object" && "#text" in value) return nodeText(value["#text"])
+  return ""
+}
+function relativeTime(date: string): string {
+  const timestamp = Date.parse(date)
+  if (!Number.isFinite(timestamp)) return "Data indisponível"
+  const hours = Math.floor(Math.max(0, Date.now() - timestamp) / 3600000)
+  if (hours < 1) return "agora mesmo"
+  if (hours < 24) return `há ${hours}h`
+  const days = Math.floor(hours / 24)
+  return days === 1 ? "ontem" : days < 7 ? `há ${days}d` : new Date(date).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", timeZone: "Europe/Lisbon" })
+}
+function response(entry: { items: StoredNews[]; timestamp: number }, cached: boolean, stale = false) {
+  return NextResponse.json({ items: entry.items.map(item => ({ ...item, timeAgo: relativeTime(item.pubDate) })),
+    fetchedAt: new Date(entry.timestamp).toISOString(), cached, stale })
 }
 
 export async function GET(req: NextRequest) {
+  const category = newsCategory(new URL(req.url).searchParams.get("category"))
+  const cached = cache.get(category.id)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) return response(cached, true)
   try {
-    const { searchParams } = new URL(req.url)
-    const category = searchParams.get("category") || "geral"
-
-    let query = "logistica transportes portugal"
-    if (category === "ctt") {
-      query = "ctt correos expresso logistica encomendas"
-    } else if (category === "combustivel") {
-      query = "combustiveis gasoleo transportes frota portugal"
-    }
-
-    const cached = cache.get(category)
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      return NextResponse.json({ items: cached.items, cached: true })
-    }
-
-    const googleNewsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=pt-PT&gl=PT&ceid=PT:pt-150`
-    const res = await fetch(googleNewsUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; TMSLinkeNewsBot/1.0)",
-      },
-      next: { revalidate: 300 }
+    const locale = "hl=pt-PT&gl=PT&ceid=PT:pt-150"
+    const url = "topic" in category
+      ? `https://news.google.com/rss/headlines/section/topic/${category.topic}?${locale}`
+      : `https://news.google.com/rss/search?q=${encodeURIComponent(category.query)}&${locale}`
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; TMSLinkeNewsBot/1.0)" },
+      signal: AbortSignal.timeout(10000), next: { revalidate: 300 },
     })
-
-    if (!res.ok) {
-      throw new Error(`Google News returned status ${res.status}`)
+    if (!res.ok) throw new Error("Feed indisponível")
+    const parsed = new XMLParser({ ignoreAttributes: false }).parse(await res.text())
+    if (parsed?.rss?.channel === undefined || parsed.rss.channel === null) throw new Error("Feed inválido")
+    const raw = parsed.rss.channel?.item || []
+    const rows: Record<string, unknown>[] = Array.isArray(raw) ? raw : [raw]
+    const seen = new Set<string>()
+    const items: StoredNews[] = []
+    for (const row of rows) {
+      let title = nodeText(row.title)
+      const link = nodeText(row.link)
+      if (!title || seen.has(link)) continue
+      try {
+        const parsedLink = new URL(link)
+        if (!["https:", "http:"].includes(parsedLink.protocol) || parsedLink.username || parsedLink.password) continue
+      } catch { continue }
+      let source = nodeText(row.source)
+      if (!source && title.includes(" - ")) {
+        const parts = title.split(" - "); source = parts.pop() || ""; title = parts.join(" - ")
+      } else if (source && title.endsWith(` - ${source}`)) title = title.slice(0, -source.length - 3)
+      const timestamp = Date.parse(nodeText(row.pubDate))
+      items.push({ id: nodeText(row.guid) || link, title, source: source || "Notícias", link,
+        pubDate: Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : "" })
+      seen.add(link)
     }
-
-    const xml = await res.text()
-    const parser = new XMLParser({ ignoreAttributes: false })
-    const parsed = parser.parse(xml)
-    const rawItems = parsed?.rss?.channel?.item || []
-    const itemsList = Array.isArray(rawItems) ? rawItems : [rawItems]
-
-    const items: NewsItem[] = itemsList.slice(0, 8).map((item: any, idx: number) => {
-      let title = item.title || ""
-      let source = "Notícias"
-
-      if (typeof item.source === "string") {
-        source = item.source
-      } else if (item.source && item.source["#text"]) {
-        source = item.source["#text"]
-      } else if (title.includes(" - ")) {
-        const parts = title.split(" - ")
-        source = parts.pop() || "Notícias"
-        title = parts.join(" - ")
-      }
-
-      return {
-        id: item.guid?.["#text"] || item.guid || `news-${idx}-${Date.now()}`,
-        title: title.trim(),
-        source: source.trim(),
-        link: item.link || "#",
-        pubDate: item.pubDate || new Date().toISOString(),
-        timeAgo: formatRelativeTime(item.pubDate)
-      }
-    })
-
-    const finalItems = items.length > 0 ? items : FALLBACK_NEWS
-
-    cache.set(category, { items: finalItems, timestamp: Date.now() })
-
-    return NextResponse.json({ items: finalItems, cached: false })
-  } catch (err: any) {
-    console.warn("Failed to fetch live news, returning fallback:", err.message)
-    return NextResponse.json({ items: FALLBACK_NEWS, cached: false, fallback: true })
+    items.sort((a, b) => (Date.parse(b.pubDate) || 0) - (Date.parse(a.pubDate) || 0))
+    const entry = { items: items.slice(0, 8), timestamp: Date.now() }
+    cache.set(category.id, entry)
+    return response(entry, false)
+  } catch {
+    // Preserve only real news from the same category, with an explicit stale flag.
+    if (cached) return response(cached, true, true)
+    return NextResponse.json({ items: [], error: "Não foi possível atualizar as notícias. Tente novamente mais tarde." }, { status: 503 })
   }
 }
