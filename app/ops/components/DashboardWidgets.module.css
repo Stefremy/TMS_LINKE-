@@ -1,0 +1,44 @@
+.ticker {
+  background: #080b0f;
+  border: 1px solid #252d36;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%), 0 2px 5px rgb(0 0 0 / 12%);
+  min-height: 42px;
+}
+.matrix {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgb(255 255 255 / 5%) .6px, transparent .8px);
+  background-size: 4px 4px;
+}
+.label {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-right: 16px;
+  padding-right: 16px;
+  border-right: 1px solid #303842;
+  color: #e9bc65;
+  font: 600 10px ui-monospace, monospace;
+  letter-spacing: 1.3px;
+}
+.label > span { width: 5px; height: 5px; border-radius: 50%; background: #e9bc65; }
+.symbol { color: #e3e9f0; font-weight: 600; letter-spacing: .3px; }
+.price { color: #fff; font-weight: 500; font-variant-numeric: tabular-nums; }
+.positive { color: #5bdf94; }
+.negative { color: #ff7979; }
+.viewport { overflow: hidden; }
+.track { animation: ticker 38s linear infinite; }
+.ticker:hover .track, .ticker:focus-within .track { animation-play-state: paused; }
+.settingsButton { color: #b4c0cf; border: 1px solid #303842; background: #141b23; }
+.settingsButton:hover { color: #fff; background: #253140; }
+.settingsButton:focus-visible { outline: 2px solid #e9bc65; outline-offset: 2px; }
+@keyframes ticker { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .ticker .track { animation: none; }
+  .viewport { overflow-x: auto; scrollbar-width: thin; }
+  .duplicate { display: none; }
+}

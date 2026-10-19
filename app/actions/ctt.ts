@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache"
 import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
 import { syncShipmentTracking } from "@/lib/services/tracking"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
+import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
 import { 
   CTTShipmentService, 
   CTTPickupService, 
@@ -528,6 +529,7 @@ export async function scheduleCttPickupAction(input: {
       const { data: conn } = await supabase
         .from("carrier_connections")
         .select("carrier_code")
+        .eq("tenant_id", tenantId)
         .eq("id", input.connection_id)
         .single()
       if (conn?.carrier_code) {
@@ -562,7 +564,10 @@ export async function scheduleCttPickupAction(input: {
     }
   } else {
     try {
-      const creds = await getCttCredentials()
+      const creds = await resolveCttCredentials(input.connection_id?.startsWith("default-") ? undefined : input.connection_id)
+      if (!creds.auth_id?.trim() || !creds.client_number?.trim() || !creds.contract_number?.trim()) {
+        throw new Error("A ligação CTT não tem as credenciais completas. Confirme o número de cliente, contrato e chave de autenticação em Configuração → Webservices.")
+      }
       const provider = new CttProvider()
       await provider.initialize(creds)
 

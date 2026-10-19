@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from "react"
 import { Plus, X, RefreshCw, SlidersHorizontal, TrendingUp, TrendingDown } from "lucide-react"
 import { ClockStef } from "./ClockStef"
 import { NeumorphicCalculator } from "./NeumorphicCalculator"
+import styles from "./DashboardWidgets.module.css"
 
 export interface LinkeMetrics {
   revenue: number
@@ -186,16 +187,16 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
 
         return (
           <div key={q.symbol} className="flex items-center gap-1.5 font-mono text-xs">
-          <span className="font-semibold text-[var(--text-primary)]">
+          <span className={styles.symbol}>
               {q.label}
             </span>
-            <span className="text-white/80 font-medium">
+            <span className={styles.price}>
               {currSymbol}{formattedPrice}
             </span>
             <span className={`font-medium flex items-center text-[11px] ${
               isPositive 
-                ? "text-[var(--status-success)]"
-                : "text-[var(--status-critical)]"
+                ? styles.positive
+                : styles.negative
             }`}>
               {isPositive ? "▲" : "▼"}{isPositive ? "+" : ""}{q.changePercent.toFixed(2)}%
             </span>
@@ -231,19 +232,21 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
       </div>}
 
       {/* Digital LED Stock Ticker Bar (Smoother, Slower Scrolling, LED Matrix Style) */}
-      <div className="group relative flex items-center bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-lg pl-3 pr-2 py-2 max-w-full w-full overflow-hidden">
+      <div className={`${styles.ticker} group relative flex items-center rounded-lg pl-3 pr-2 py-2 max-w-full w-full overflow-hidden`}>
         {/* Subtle LED dot pattern overlay */}
         <div 
-          className="absolute inset-0 pointer-events-none"
+          className={styles.matrix}
+          aria-hidden="true"
         />
+        <span className={styles.label}><span aria-hidden="true" />BOLSA</span>
 
         {/* Marquee area with slightly slower, comfortable speed (38s) and seamless loop */}
-        <div className="overflow-hidden w-full relative z-10 flex">
-          <div className="flex w-max animate-[ticker_38s_linear_infinite] group-hover:[animation-play-state:paused]">
+        <div className={`${styles.viewport} w-full min-w-0 relative z-10 flex`}>
+          <div className={`${styles.track} flex w-max`}>
             <div className="flex items-center gap-5 pr-5 shrink-0">
               {renderTickerItems("item1")}
             </div>
-            <div className="flex items-center gap-5 pr-5 shrink-0" aria-hidden="true">
+            <div className={`${styles.duplicate} flex items-center gap-5 pr-5 shrink-0`} aria-hidden="true">
               {renderTickerItems("item2")}
             </div>
           </div>
@@ -253,7 +256,8 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
         <button
           onClick={() => setShowSettings(!showSettings)}
           title="Personalizar ações no ticker LED"
-          className="ml-2.5 p-1 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded hover:bg-[var(--surface-muted)] transition-colors shrink-0 relative z-10"
+          aria-label="Personalizar mercados"
+          className={`${styles.settingsButton} ml-2.5 p-1 rounded transition-colors shrink-0 relative z-10`}
         >
           <Plus className="w-3.5 h-3.5" />
         </button>
@@ -352,12 +356,6 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
         </div>
       )}
 
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes ticker {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-      `}} />
     </div>
   )
 }
