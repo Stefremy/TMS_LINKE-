@@ -96,6 +96,9 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
   const [searchQuery, setSearchQuery] = React.useState("")
   const [carrierFilter, setCarrierFilter] = React.useState<"all" | "ctt_expresso" | "correos_express">("all")
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
+  const [dateFrom, setDateFrom] = React.useState("")
+  const [dateTo, setDateTo] = React.useState("")
+  const invalidDateRange = Boolean(dateFrom && dateTo && dateFrom > dateTo)
 
   // Carrier Selection
   // Find first CTT and first Correos connection
@@ -249,6 +252,8 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
 
   // Filter recolhas list
   const filteredRecolhas = recolhas.filter((r) => {
+    const scheduledDate = r.scheduled_date.slice(0, 10)
+    if (invalidDateRange || (dateFrom && scheduledDate < dateFrom) || (dateTo && scheduledDate > dateTo)) return false
     if (carrierFilter !== "all") {
       const matchesCarrier = r.carrier_code === carrierFilter || 
         (carrierFilter === "correos_express" && (r.ctt_pickup_id || "").startsWith("CEX")) ||
@@ -410,6 +415,18 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
             </div>
           </div>
 
+          <div className="flex shrink-0 flex-wrap items-end gap-3 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)] px-6 py-3">
+            <label className="text-xs font-semibold text-[var(--text-secondary)]">Data de recolha — desde
+              <input type="date" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)} className="mt-1 block rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-2.5 py-1.5 text-xs text-[var(--text-primary)]" />
+            </label>
+            <label className="text-xs font-semibold text-[var(--text-secondary)]">Até
+              <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)} className="mt-1 block rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-2.5 py-1.5 text-xs text-[var(--text-primary)]" />
+            </label>
+            {(dateFrom || dateTo) && <button type="button" onClick={() => { setDateFrom(""); setDateTo("") }} className="rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]">Limpar datas</button>}
+            <p className="text-xs text-[var(--text-secondary)]">Filtra as recolhas recentes. Para pesquisar todo o histórico, use <button type="button" onClick={() => setView("search")} className="font-semibold text-[var(--accent)] underline">Pesquisar</button>.</p>
+            {invalidDateRange && <p role="alert" className="w-full text-xs text-red-700">A data final deve ser igual ou posterior à data inicial.</p>}
+          </div>
+
           {/* Table */}
           <div className="flex-1 overflow-auto">
             {filteredRecolhas.length === 0 ? (
@@ -420,7 +437,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                 <div>
                   <p className="text-base font-bold text-[var(--text-primary)]">Nenhuma recolha encontrada</p>
                   <p className="text-sm text-[var(--text-tertiary)] mt-1 max-w-sm">
-                    {searchQuery || carrierFilter !== "all" || statusFilter !== "all"
+                    {searchQuery || carrierFilter !== "all" || statusFilter !== "all" || dateFrom || dateTo
                       ? "Nenhum agendamento coincide com os filtros aplicados."
                       : "Agende recolhas CTT Expresso ou Correos Express diretamente a partir deste painel."}
                   </p>
