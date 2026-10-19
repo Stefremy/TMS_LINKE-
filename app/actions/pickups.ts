@@ -49,13 +49,28 @@ export async function refreshPickupParcelsAction(id: string) {
     const creds = await resolveCttCredentials(local.connection_id?.startsWith("default-") ? undefined : local.connection_id)
     const pickup = await new CTTPickupReadService().details(creds, local.ctt_pickup_id)
     if (pickup.ctt_pickup_id.toUpperCase() !== local.ctt_pickup_id.toUpperCase()) throw new Error("A referência devolvida pelos CTT não corresponde à recolha consultada.")
+    const collectedAt = pickup.collected_at && Date.parse(pickup.collected_at) > Date.parse("2000-01-01") ? pickup.collected_at : ""
+    let localPickup: PickupSummary | undefined
+    if (collectedAt && ["Agendado", "pendente"].includes(result.data.status)) {
+      const updated = await db.from("recolhas").update({ status: "Realizado" }).eq("tenant_id", tenant).eq("id", id).eq("status", result.data.status).select("*").maybeSingle()
+      if (!updated.error && updated.data) {
+        await db.from("audit_log").insert({ tenant_id: tenant, action: "recolha_ctt_status_sync", details: {
+          recolha_id: id, pickup_id: local.ctt_pickup_id, previous_status: result.data.status, status: "Realizado",
+          collected_at: collectedAt, source: "ctt_pesquisa_recolhas",
+        } })
+        const [synced] = await enrich(db, tenant, [updated.data])
+        localPickup = synced
+        revalidatePath("/ops/envios/recolhas")
+      }
+    }
+    if (pickup.objects_unavailable_reason) return { success: true as const, pickup, localPickup }
     const objects = normalizePickupObjects(pickup.objects)
     const checkedAt = new Date().toISOString()
     const saved = await db.from("audit_log").insert({ tenant_id: tenant, action: "recolha_ctt_objects", details: {
       recolha_id: local.id, pickup_id: local.ctt_pickup_id, objects, checked_at: checkedAt, source: "ctt_get_recolha",
     } })
     if (saved.error) throw new Error("Os CTT responderam, mas não foi possível guardar a lista de objetos. Tente atualizar novamente.")
-    return { success: true as const, pickup: { ...pickup, objects, objects_checked_at: checkedAt } }
+    return { success: true as const, pickup: { ...pickup, objects, objects_checked_at: checkedAt }, localPickup }
   } catch (error) {
     return { success: false as const, error: error instanceof Error ? error.message : "Não foi possível atualizar os objetos da recolha." }
   }

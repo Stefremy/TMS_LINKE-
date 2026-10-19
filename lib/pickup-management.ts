@@ -33,6 +33,8 @@ export interface PickupSummary {
   connection_id?: string
   objects?: string[]
   objects_checked_at?: string
+  /** Set when CTT denied GetRecolha and only PesquisaRecolhas (status) could be read. */
+  objects_unavailable_reason?: string
   collected_at?: string
   manual_confirmation?: { confirmed_at: string; confirmed_by: string }
 }

@@ -67,7 +67,17 @@ export class CTTPickupReadService {
 
   async details(creds: CTTConnectionCredentials, reference: string): Promise<PickupSummary> {
     if (!reference || !/^[A-Za-z0-9/_-]{1,64}$/.test(reference)) throw new Error("Referência CTT inválida.")
-    const result = await this.call(creds, "GetRecolha", { NumRecolha: reference })
+    let result: RecordData
+    try {
+      result = await this.call(creds, "GetRecolha", { NumRecolha: reference })
+    } catch (error) {
+      if (!/permiss/i.test(error instanceof Error ? error.message : "")) throw error
+      // GetRecolha (objects) denied: PesquisaRecolhas by number still reports the collected state.
+      const found = (await this.search(creds, { reference })).find(item => item.ctt_pickup_id.toUpperCase() === reference.toUpperCase())
+      if (!found) throw error
+      found.objects_unavailable_reason = "Os CTT não permitem a este utilizador consultar os objetos desta recolha (GetRecolha). O estado foi lido da pesquisa de recolhas."
+      return found
+    }
     const pickup = mapRemote(result._recolhas || result.Recolha)
     if (!pickup.ctt_pickup_id) throw new Error("Os CTT não devolveram detalhes para esta referência.")
     if (pickup.ctt_pickup_id.toUpperCase() !== reference.toUpperCase()) throw new Error("A referência devolvida pelos CTT não corresponde à recolha consultada.")
