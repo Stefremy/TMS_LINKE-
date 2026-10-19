@@ -26,6 +26,8 @@ import { LatestNewsWidget } from "./components/LatestNewsWidget"
 import { DashboardWidgets } from "./components/DashboardWidgets"
 import { FloatingCalculatorWidget } from "./components/FloatingCalculatorWidget"
 import { LocalWeather } from "./components/LocalWeather"
+import { DashboardBackdrop } from "./components/DashboardBackdrop"
+import backdropStyles from "./components/DashboardBackdrop.module.css"
 
 function getMonthName(date: Date) {
   return date.toLocaleString('pt-PT', { month: 'long', year: 'numeric' })
@@ -255,7 +257,8 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
   const secondaryStats = [stats[1], stats[2]]
 
   return (
-    <div className="max-w-[1600px] mx-auto flex flex-col gap-6">
+    <div className={`${backdropStyles.dashboard} max-w-[1600px] mx-auto flex flex-col gap-6`}>
+      <DashboardBackdrop />
       <OpsDashboardClientSync activeIds={activeIds} />
       
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-5 border-b border-[var(--border-subtle)]">
