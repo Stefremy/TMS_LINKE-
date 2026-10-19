@@ -33,6 +33,7 @@ import { DEFAULT_CTT_REQUESTER_PHONE, readPickupContact, readPickupRequester } f
 import type { CTTPickupRequester } from "@/lib/services/ctt/ctt-types"
 import type { PickupSummary } from "@/lib/pickup-management"
 import { PickupDetailsDialog, PickupSearchPanel } from "./PickupManagement"
+import { PickupCutoffNotice } from "./PickupCutoffNotice"
 
 interface MappedClient {
   id: string
@@ -81,6 +82,12 @@ function tomorrowDate() {
   const d = new Date()
   d.setDate(d.getDate() + 1)
   return d.toISOString().split("T")[0]
+}
+
+function todayDate() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date())
 }
 
 export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConnections, requesterContact, initialError }: RecolhasClientProps) {
@@ -863,10 +870,11 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                         required
                         type="date"
                         value={date}
-                        min={tomorrowDate()}
+                        min={isCttActive ? todayDate() : tomorrowDate()}
                         onChange={e => setDate(e.target.value)}
                         className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                       />
+                      {isCttActive && <button type="button" onClick={() => setDate(todayDate())} className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline">Selecionar hoje</button>}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Período de Recolha *</label>
@@ -895,6 +903,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                       ? "O estafeta da Correos Express passará na morada do remetente na data indicada."
                       : "Os CTT efetuam a recolha entre as 09h00 e as 19h00, sem hora específica garantida."}
                   </p>
+                  {isCttActive && <p className="mt-2 text-[11px] text-[var(--text-secondary)]">Pode pedir para o próprio dia, sujeito à hora-limite do código postal e destino e à aceitação dos CTT. <a href="https://www.ctt.pt/application/themes/pdfs/horas%20de%20corte%20pedido%20de%20recolha%20por%20canal%2027mar.pdf" target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--accent)] underline">Horários por canal/destino</a> · <a href="https://www.ctt.pt/application/themes/pdfs/ajuda-particulares/Horas%20de%20Corte_Recolhas_Pedido.pdf" target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--accent)] underline">Horários por código postal</a></p>}
                 </div>
 
                 {/* ── Section 2: Morada ── */}
@@ -1131,7 +1140,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                   {isCttActive && <p className="-mt-2 mb-4 text-[10px] text-[var(--text-tertiary)]">Indique as medidas inteiras do maior volume em centímetros (1–299 cm).</p>}
 
                   <div className="w-1/2 pr-2">
-                    <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Destino Previsto</label>
+                    <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Destino dos objetos</label>
                     <select
                       value={destination}
                       onChange={e => setDestination(e.target.value)}
@@ -1141,6 +1150,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                       <option value="ES">Espanha Peninsular</option>
                       <option value="RM">Resto do Mundo / Internacional</option>
                     </select>
+                    {isCttActive && <p className="mt-1 text-[11px] text-[var(--text-secondary)]">O destino é usado para calcular a hora-limite do pedido de recolha.</p>}
                   </div>
                 </div>
 
@@ -1159,6 +1169,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                 </div>
 
                 {/* Submit Bar */}
+                {isCttActive && <PickupCutoffNotice postalCode={senderZip} country={senderCountry} destination={destination} date={date} period={period} />}
                 <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
                   <button
                     type="button"
