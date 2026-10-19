@@ -323,7 +323,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] p-4 sm:p-6 lg:p-8 [--accent:#526B57] [--accent-hover:#435A48] [--accent-active:#3A4F3F] [--accent-soft:#E9EEE8] [--status-success:#526B57] [--status-success-soft:#E9EEE8] [--status-info:#596F7C] [--status-info-soft:#EBF0F2]">
+    <div className="mx-auto w-full max-w-[1440px] p-4 sm:p-6 lg:p-8 [--accent:#128A47] [--accent-hover:#0E6C37] [--accent-active:#0B572D] [--accent-soft:#EAF5EE] [--status-success:#128A47] [--status-success-soft:#EAF5EE] [--status-info:#596F7C] [--status-info-soft:#EBF0F2]">
       <header className="mb-5">
         <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Novo envio</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
@@ -335,7 +335,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         {/* Header */}
         <div className="px-5 sm:px-6 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-bg)]">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] border border-[rgba(82,107,87,0.16)]">
+            <div className="w-9 h-9 rounded-lg bg-[var(--accent)] flex items-center justify-center text-white border border-[var(--accent)]">
               <Package className="w-4.5 h-4.5" />
             </div>
             <div>
@@ -355,7 +355,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
               <div className="bg-white border border-slate-200 border-l-4 border-l-[#718774] rounded-lg p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-3.5">
-                    <div className="w-9 h-9 rounded-md bg-[#526B57] text-white flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-md bg-[var(--accent)] text-white flex items-center justify-center shrink-0">
                       <Check className="w-5 h-5" />
                     </div>
                     <div>
@@ -436,17 +436,17 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 <p className="text-xs text-amber-700" role="status">{estimatedTier.error}</p>
               )}
               {/* Price Preview Banner */}
-              <div className="bg-[var(--accent-soft)] border border-[rgba(82,107,87,0.18)] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-start gap-3 text-[var(--accent)]">
+              <div className="bg-[var(--accent)] border border-[var(--accent)] rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3 text-white">
                   <Euro className="w-5 h-5 mt-0.5" strokeWidth={1.75} />
                   <div>
                     <div className="text-sm font-semibold">Preço estimado</div>
-                    <div className="mt-0.5 text-xs text-[var(--text-secondary)]">{estimatedTier.label} · inclui combustível e extras</div>
+                    <div className="mt-0.5 text-xs text-white">{estimatedTier.label} · inclui combustível e extras</div>
                   </div>
                 </div>
                 <div className="flex items-end sm:items-center justify-between sm:justify-end gap-4">
-                  <span className="text-xs text-[var(--text-secondary)]">Custo <span className="font-mono font-medium text-[var(--text-primary)]">{estimatedTier.buy.toFixed(2)} €</span></span>
-                  <span className="text-2xl font-semibold tracking-tight tabular-nums text-[var(--accent)]">{estimatedTier.error ? "Indisponível" : `${estimatedTier.sell.toFixed(2)} €`}</span>
+                  <span className="text-xs text-white">Custo <span className="font-mono font-medium text-white">{estimatedTier.buy.toFixed(2)} €</span></span>
+                  <span className="text-2xl font-semibold tracking-tight tabular-nums text-white">{estimatedTier.error ? "Indisponível" : `${estimatedTier.sell.toFixed(2)} €`}</span>
                 </div>
               </div>
 
@@ -474,7 +474,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                         return (
                           <label
                             key={service.id}
-                            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${availableServicos.length === 1 ? "sm:col-span-2 xl:col-span-3" : ""} ${selected ? "border-[var(--accent)] bg-[var(--accent-soft)]/60 ring-1 ring-[var(--accent)]/20" : "border-[var(--border-subtle)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)]/50"}`}
+                            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${availableServicos.length === 1 ? "sm:col-span-2 xl:col-span-3" : ""} ${selected ? "border-[var(--accent)] bg-[var(--accent)]" : "border-[var(--border-subtle)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)]/50"}`}
                           >
                             <input
                               type="radio"
@@ -486,8 +486,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                               className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
                             />
                             <span className="min-w-0">
-                              <span className="block truncate text-sm font-medium text-[var(--text-primary)]">{getServiceDisplayLabel(service)}</span>
-                              <span className="mt-0.5 block text-xs text-[var(--text-secondary)]">{service.category}</span>
+                              <span className={`block truncate text-sm font-medium ${selected ? "text-white" : "text-[var(--text-primary)]"}`}>{getServiceDisplayLabel(service)}</span>
+                              <span className={`mt-0.5 block text-xs ${selected ? "text-white" : "text-[var(--text-secondary)]"}`}>{service.category}</span>
                             </span>
                           </label>
                         )
@@ -569,7 +569,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       <button 
                         type="button" 
                         onClick={() => setIsEditingSender(!isEditingSender)} 
-                        className="text-[#526B57] hover:text-[#3A4F3F] bg-[#E9EEE8] hover:bg-[#DFE7DE] px-2 py-1 rounded-md transition-colors text-[10px] font-bold"
+                        className="text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] px-2 py-1 rounded-md transition-colors text-[10px] font-bold"
                       >
                         {isEditingSender ? "Cancelar" : "Editar"}
                       </button>
@@ -691,7 +691,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                         <button
                           type="button"
                           onClick={() => setShowAgendaDropdown(!showAgendaDropdown)}
-                          className="text-[10px] font-semibold text-[var(--accent)] hover:underline flex items-center gap-1 cursor-pointer bg-[var(--accent-soft)] px-2 py-0.5 rounded border border-[var(--accent-subtle)]"
+                          className="text-[10px] font-semibold text-white flex items-center gap-1 cursor-pointer bg-[var(--accent)] hover:bg-[var(--accent-hover)] px-2 py-0.5 rounded border border-[var(--accent)]"
                         >
                           <BookmarkCheck className="w-3.5 h-3.5" />
                           Agenda ({savedRecipients.length})

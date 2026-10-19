@@ -311,12 +311,6 @@ export default function ReconciliacaoClient({ initialHistory }: ReconciliacaoCli
         <span className="px-3 py-1.5 rounded-md font-bold text-[var(--accent)] bg-[var(--accent-soft)] border border-[var(--accent-subtle)]">
           Reconciliação CTT
         </span>
-        <Link
-          href="/ops/tesouraria/salarios"
-          className="px-3 py-1.5 rounded-md font-semibold text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors"
-        >
-          Salários & Folha
-        </Link>
       </div>
 
       {/* 2. Header Bar */}

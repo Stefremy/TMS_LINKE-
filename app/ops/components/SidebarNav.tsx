@@ -69,7 +69,6 @@ const navConfig: NavSection[] = [
         icon: Receipt,
         subItems: [
           { title: "Contas Corrente", href: "/ops/faturacao/contas-corrente" },
-          { title: "Fatura Personalizada", href: "/ops/faturacao/personalizada" },
           { title: "Faturação Clientes", href: "/ops/faturacao/clientes" },
           { title: "Análise Estatística", href: "/ops/faturacao/estatistica" },
           { title: "Configuração Faturação", href: "/ops/configuracao/faturacao" },
@@ -82,7 +81,6 @@ const navConfig: NavSection[] = [
         subItems: [
           { title: "Reembolsos", href: "/ops/tesouraria/reembolsos" },
           { title: "Reconciliação CTT", href: "/ops/tesouraria/reconciliacao" },
-          { title: "Salários", href: "/ops/tesouraria/salarios" },
         ]
       },
       { title: "Documentos", href: "/ops/documentos", icon: FileText },

@@ -177,7 +177,7 @@ function PublicTrackingContent() {
               Onde está a sua encomenda?
             </h1>
             <p className="text-sm text-slate-500">
-              Introduza o número da sua guia <strong className="text-slate-800 font-bold">LTK...</strong> ou referência CTT para acompanhar o envio em tempo real.
+              Introduza o número da guia Linke <strong className="text-slate-800 font-bold">LTK...</strong> ou o código de rastreio da transportadora para acompanhar o envio.
             </p>
 
             <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row gap-2 pt-2">

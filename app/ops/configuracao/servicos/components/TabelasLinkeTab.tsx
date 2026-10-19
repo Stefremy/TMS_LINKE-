@@ -89,7 +89,7 @@ export function TabelasLinkeTab({
         onClick={() => setActiveServicoId(servico.id)}
         className={`p-3 rounded-lg border transition-all cursor-pointer text-xs ${
           isSelected
-            ? "bg-slate-50 border-slate-900 shadow-2xs"
+            ? "bg-[var(--surface-bg)] border-[#128A47] shadow-sm ring-1 ring-[#128A47]"
             : "bg-white border-slate-200 hover:border-slate-300"
         }`}
       >
@@ -130,8 +130,8 @@ export function TabelasLinkeTab({
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
-            <span className={`w-1.5 h-1.5 rounded-full ${servico.is_active ? "bg-emerald-500" : "bg-slate-300"}`} />
-            <span className="text-[10px] text-slate-500">
+            <span className={`w-1.5 h-1.5 rounded-full ${servico.is_active ? "bg-[#008A4B]" : "bg-slate-300"}`} />
+            <span className={`text-[10px] font-semibold ${servico.is_active ? "text-[#008A4B]" : "text-slate-500"}`}>
               {servico.is_active ? "Ativo" : "Inativo"}
             </span>
           </div>
@@ -141,11 +141,11 @@ export function TabelasLinkeTab({
         <div className="mt-2 flex items-center gap-1.5 flex-wrap">
           <CttServiceBadge service={servico} />
           {isOg ? (
-            <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-semibold text-white bg-[#128A47] px-1.5 py-0.5 rounded">
               Base Oficial
             </span>
           ) : (
-            <span className="text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-semibold text-white bg-[#155EEF] border border-[#155EEF] px-1.5 py-0.5 rounded">
               Personalizada
             </span>
           )}
@@ -220,7 +220,7 @@ export function TabelasLinkeTab({
               onClick={() => setSectionFilter("all")}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                 sectionFilter === "all"
-                  ? "bg-white text-slate-900 shadow-2xs"
+                  ? "bg-[#128A47] text-white shadow-sm"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -231,11 +231,11 @@ export function TabelasLinkeTab({
               onClick={() => setSectionFilter("og")}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
                 sectionFilter === "og"
-                  ? "bg-white text-slate-900 shadow-2xs"
+                  ? "bg-[#155EEF] text-white shadow-sm"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              <Lock className="w-3 h-3 text-slate-400" />
+                  <Lock className={`w-3 h-3 ${sectionFilter === "og" ? "text-white" : "text-slate-400"}`} />
               Tabelas Base ({ogServicos.length})
             </button>
             <button
@@ -243,7 +243,7 @@ export function TabelasLinkeTab({
               onClick={() => setSectionFilter("custom")}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                 sectionFilter === "custom"
-                  ? "bg-white text-slate-900 shadow-2xs"
+                  ? "bg-[#007F8B] text-white shadow-sm"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >

@@ -8,7 +8,7 @@ export default async function NovoPage() {
   const servicosLinke = await getServicosLinkeAction()
   
   return (
-    <div className="bg-[var(--canvas-bg)] min-h-[calc(100vh-4rem)]">
+    <div className="min-h-[calc(100vh-4rem)]">
       <NovoEnvioPageClient clients={clients} servicosLinke={servicosLinke} />
     </div>
   )

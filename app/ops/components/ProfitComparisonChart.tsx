@@ -24,8 +24,8 @@ type ChartData = {
 const SERIES_COLORS = {
   actual: "#008A4B",
   prev1: "#155EEF",
-  prev2: "#C95249",
-  prev3: "#7933D1",
+  prev2: "#FA8072",
+  prev3: "#007F8B",
 }
 
 export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[], targetMonth?: number }) {
@@ -189,6 +189,7 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
       <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 sm:gap-4 text-xs mb-4 pt-1">
         {seriesMeta.map((s) => {
           const isVisible = visibleSeries[s.key]
+          const labelColor = isVisible ? (s.key === "prev2" ? "#54241F" : "#ffffff") : "var(--text-tertiary)"
           return (
             <button
               key={s.key}
@@ -210,13 +211,13 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
             >
               <span
                 className="w-4 h-0.5 rounded-full shrink-0"
-                style={{ backgroundColor: isVisible ? "#ffffff" : s.color }}
+                style={{ backgroundColor: isVisible ? labelColor : s.color }}
               />
-              <span style={{ color: isVisible ? "#ffffff" : "var(--text-tertiary)" }} className="font-bold text-xs">
+              <span style={{ color: labelColor }} className="font-bold text-xs">
                 {s.name}
               </span>
               {s.total !== undefined && (
-                <span style={{ color: isVisible ? "#ffffff" : "var(--text-tertiary)" }} className="font-mono text-[11px] font-bold tabular-nums">
+                <span style={{ color: labelColor }} className="font-mono text-[11px] font-bold tabular-nums">
                   ({(s.total >= 1000 ? `${(s.total / 1000).toFixed(1)}k` : s.total.toFixed(0))}€)
                 </span>
               )}

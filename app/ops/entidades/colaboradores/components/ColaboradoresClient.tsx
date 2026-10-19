@@ -253,8 +253,8 @@ export function ColaboradoresClient({
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Colaboradores</h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#EAF0EC] text-[#477D68] border border-[#C9D7CD]">
-              <Users className="w-3.5 h-3.5" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#128A47] text-white border border-[#128A47]">
+              <Users className="w-3.5 h-3.5 text-white" />
               Equipa Linke
             </span>
           </div>
@@ -294,58 +294,58 @@ export function ColaboradoresClient({
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Colaboradores */}
-        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] border-t-4 border-t-[#155EEF] shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Total Colaboradores</span>
-            <div className="w-10 h-10 rounded-xl bg-[#EAF0EC] flex items-center justify-center text-[var(--accent)]">
+            <div className="w-10 h-10 rounded-xl bg-[#155EEF] flex items-center justify-center text-white">
               <Users className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[var(--text-primary)]">{stats.total}</span>
+            <span className="text-3xl font-extrabold text-[#155EEF]">{stats.total}</span>
             <span className="text-xs font-medium text-[var(--text-tertiary)]">membros registados</span>
           </div>
         </div>
 
         {/* Ativos */}
-        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] border-t-4 border-t-[#008A4B] shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Colaboradores Ativos</span>
-            <div className="w-10 h-10 rounded-xl bg-[#EAF0EC] flex items-center justify-center text-[#477D68]">
+            <div className="w-10 h-10 rounded-xl bg-[#008A4B] flex items-center justify-center text-white">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[#315B43]">{stats.ativos}</span>
-            <span className="text-xs font-medium text-[#477D68]">em funções</span>
+            <span className="text-3xl font-extrabold text-[#008A4B]">{stats.ativos}</span>
+            <span className="text-xs font-medium text-[var(--text-tertiary)]">em funções</span>
           </div>
         </div>
 
         {/* Administradores */}
-        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] border-t-4 border-t-[#29496D] shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Administradores</span>
-            <div className="w-10 h-10 rounded-xl bg-[#EDF1F3] flex items-center justify-center text-[#376C8A]">
+            <div className="w-10 h-10 rounded-xl bg-[#29496D] flex items-center justify-center text-white">
               <Shield className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[#284D65]">{stats.admins}</span>
-            <span className="text-xs font-medium text-[#376C8A]">acesso total</span>
+            <span className="text-3xl font-extrabold text-[#29496D]">{stats.admins}</span>
+            <span className="text-xs font-medium text-[var(--text-tertiary)]">acesso total</span>
           </div>
         </div>
 
         {/* Departamentos */}
-        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] shadow-sm">
+        <div className="bg-[var(--surface-bg)] rounded-2xl p-5 border border-[var(--border-subtle)] border-t-4 border-t-[#007F8B] shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Departamentos</span>
-            <div className="w-10 h-10 rounded-xl bg-[#F2EEE8] flex items-center justify-center text-[#8A6944]">
+            <div className="w-10 h-10 rounded-xl bg-[#007F8B] flex items-center justify-center text-white">
               <Building2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[#6B5237]">{stats.departamentos}</span>
-            <span className="text-xs font-medium text-[#8A6944]">áreas operacionais</span>
+            <span className="text-3xl font-extrabold text-[#007F8B]">{stats.departamentos}</span>
+            <span className="text-xs font-medium text-[var(--text-tertiary)]">áreas operacionais</span>
           </div>
         </div>
       </div>
@@ -469,7 +469,7 @@ export function ColaboradoresClient({
             <div
               key={col.id}
               onClick={() => handleOpenDetails(col)}
-              className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] hover:border-[#9DB7A8] p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
+              className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] hover:border-[var(--accent)] p-6 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
             >
               {/* Card Top */}
               <div>
@@ -499,12 +499,12 @@ export function ColaboradoresClient({
 
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
                     col.status === "Ativo"
-                      ? "bg-[#EAF0EC] text-[#477D68] border border-[#C9D7CD]"
+                      ? "bg-[#008A4B] text-white border border-[#008A4B]"
                       : col.status === "Férias"
-                      ? "bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(180,83,9,0.2)]"
+                      ? "bg-[#B45309] text-white border border-[#B45309]"
                       : "bg-[var(--surface-dim)] text-[var(--text-secondary)] border border-[var(--border-subtle)]"
                   }`}>
-                    <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${col.status === "Ativo" ? "bg-[#477D68]" : col.status === "Férias" ? "bg-[var(--status-warning)]" : "bg-[var(--text-tertiary)]"}`} />
+                    <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${col.status === "Ativo" || col.status === "Férias" ? "bg-white" : "bg-[var(--text-tertiary)]"}`} />
                     {col.status}
                   </span>
                 </div>
@@ -674,14 +674,14 @@ export function ColaboradoresClient({
                         onClick={(e) => handleToggleStatus(col, e)}
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold transition-transform hover:scale-105 ${
                           col.status === "Ativo"
-                            ? "bg-[#EAF0EC] text-[#477D68] border border-[#C9D7CD]"
+                            ? "bg-[#008A4B] text-white border border-[#008A4B]"
                             : col.status === "Férias"
-                            ? "bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(180,83,9,0.2)]"
+                            ? "bg-[#B45309] text-white border border-[#B45309]"
                             : "bg-[var(--surface-dim)] text-[var(--text-secondary)] border border-[var(--border-subtle)]"
                         }`}
                         title="Clique para alternar estado"
                       >
-                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${col.status === "Ativo" ? "bg-[#477D68]" : col.status === "Férias" ? "bg-[var(--status-warning)]" : "bg-[var(--text-tertiary)]"}`} />
+                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${col.status === "Ativo" || col.status === "Férias" ? "bg-white" : "bg-[var(--text-tertiary)]"}`} />
                         {col.status}
                       </button>
                     </td>

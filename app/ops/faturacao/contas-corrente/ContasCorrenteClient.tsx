@@ -323,7 +323,7 @@ export default function ContasCorrenteClient({
           Contas Corrente (Envios de Transporte)
         </div>
         <Link
-          href="/ops/faturacao/personalizada"
+          href="/ops/faturacao/clientes"
           className="px-4 py-2.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-b-2 border-transparent hover:border-[var(--border-strong)] transition-colors flex items-center gap-2"
         >
           <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />

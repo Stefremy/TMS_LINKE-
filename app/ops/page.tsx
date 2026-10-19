@@ -26,8 +26,6 @@ import { LatestNewsWidget } from "./components/LatestNewsWidget"
 import { DashboardWidgets } from "./components/DashboardWidgets"
 import { FloatingCalculatorWidget } from "./components/FloatingCalculatorWidget"
 import { LocalWeather } from "./components/LocalWeather"
-import { DashboardBackdrop } from "./components/DashboardBackdrop"
-import backdropStyles from "./components/DashboardBackdrop.module.css"
 
 function getMonthName(date: Date) {
   return date.toLocaleString('pt-PT', { month: 'long', year: 'numeric' })
@@ -253,12 +251,16 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
     .filter((s: any) => s.status !== "entregue" && s.status !== "devolvido" && s.status !== "cancelado")
     .map((s: any) => s.id)
 
-  const primaryStats = [stats[4], stats[5], stats[0], stats[3]]
+  const primaryStats = [
+    { ...stats[4], color: "#155EEF" },
+    { ...stats[5], color: "#008A4B" },
+    { ...stats[0], color: "#FA8072" },
+    { ...stats[3], color: "#007F8B" },
+  ]
   const secondaryStats = [stats[1], stats[2]]
 
   return (
-    <div className={`${backdropStyles.dashboard} max-w-[1600px] mx-auto flex flex-col gap-6`}>
-      <DashboardBackdrop />
+    <div className="max-w-[1600px] mx-auto flex flex-col gap-6">
       <OpsDashboardClientSync activeIds={activeIds} />
       
       <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-5 border-b border-[var(--border-subtle)]">
@@ -281,12 +283,14 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
 
       <DashboardWidgets showClock={false} showLinkeMetrics={false} />
 
-      <section aria-label="Indicadores principais" className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+      <section aria-label="Indicadores principais" className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
         <div className="grid grid-cols-2 xl:grid-cols-4 divide-x divide-y xl:divide-y-0 divide-[var(--border-subtle)]">
           {primaryStats.map((stat) => (
-            <div key={stat.label} className="min-w-0 p-4 sm:p-5">
-              <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
-                <stat.icon aria-hidden="true" className="w-4 h-4 text-[var(--text-tertiary)]" strokeWidth={1.75} />
+            <div key={stat.label} className="min-w-0 border-t-4 p-4 sm:p-5" style={{ borderTopColor: stat.color }}>
+              <div className="flex items-center gap-2.5 text-sm font-medium text-[var(--text-primary)]">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white" style={{ backgroundColor: stat.color }}>
+                  <stat.icon aria-hidden="true" className="w-4 h-4" strokeWidth={2} />
+                </span>
                 {stat.label}
               </div>
               <div className="mt-3 text-2xl sm:text-[28px] leading-none font-semibold tracking-tight text-[var(--text-primary)] tabular-nums">
@@ -387,7 +391,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
             </div>
             <Link 
               href="/ops/envios" 
-              className="text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--surface-muted)] px-3 py-2 rounded-md transition-colors flex items-center gap-1.5 border border-[var(--border-subtle)]"
+              className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-md transition-colors flex items-center gap-1.5 border border-blue-600"
             >
               Ver todos ({totalShipments}) <ArrowRight className="w-3.5 h-3.5" />
             </Link>

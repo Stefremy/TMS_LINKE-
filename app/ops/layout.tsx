@@ -5,6 +5,7 @@ import { OpsSidebar } from "./components/OpsSidebar"
 import { getMyProfile } from "@/lib/auth/profile"
 import { NotificationBell } from "./components/NotificationBell"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
+import { OpsPageSurface } from "./components/OpsPageSurface"
 import { signout } from "@/app/login/actions"
 import { requireEmployee } from "@/lib/auth/context"
 import { canAccessStaffDocuments } from "@/lib/auth/staff-documents"
@@ -85,9 +86,9 @@ export default async function OpsLayout({
         </header>
 
         {/* Page Content */}
-        <main className="tms-main flex-1 bg-[var(--canvas-bg)]">
+        <OpsPageSurface>
           {children}
-        </main>
+        </OpsPageSurface>
       </div>
     </div>
   )

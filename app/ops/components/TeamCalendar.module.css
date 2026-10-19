@@ -1,0 +1,7 @@
+.weekend {
+  background: color-mix(in srgb, var(--surface-bg) 88%, #155eef);
+}
+
+.weekend:hover {
+  background: color-mix(in srgb, var(--surface-bg) 80%, #155eef);
+}

@@ -152,17 +152,17 @@ export function ServicosLinkeClient({
       )}
 
       {/* Main Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200/80 shadow-2xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[var(--surface-bg)] p-5 rounded-xl border border-[var(--border-subtle)] shadow-sm">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-800 flex items-center justify-center border border-slate-200/80">
-              <Package className="w-4 h-4 text-slate-700" />
+            <div className="w-9 h-9 rounded-lg bg-[#128A47] text-white flex items-center justify-center border border-[#128A47]">
+              <Package className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-slate-900 tracking-tight">
+              <h1 className="text-lg font-semibold text-[var(--text-primary)] tracking-tight">
                 Serviços & Tabelas de Preço
               </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 Custos base de fornecedores (CTT Expresso, Correos Express), margens e tarifários para clientes.
               </p>
             </div>
@@ -177,7 +177,7 @@ export function ServicosLinkeClient({
               setSelectedServicoForEdit(null)
               setIsModalOpen(true)
             }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium shadow-2xs transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#128A47] hover:bg-[#0E6C37] text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             Novo Serviço / Tabela
@@ -188,35 +188,35 @@ export function ServicosLinkeClient({
 
       {/* Resumo rápido: sempre visível antes das ferramentas de gestão */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
-          <span className="text-[11px] font-medium text-slate-500">Serviços ativos</span>
+        <div className="bg-[var(--surface-bg)] p-3.5 rounded-xl border border-[var(--border-subtle)] border-t-4 border-t-[#008A4B] shadow-sm">
+          <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Serviços ativos</span>
           <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl font-semibold text-slate-900">{servicosAtivos}</span>
-            <span className="text-xs text-slate-400">de {totalServicos}</span>
+            <span className="text-xl font-bold text-[#008A4B]">{servicosAtivos}</span>
+            <span className="text-xs text-[var(--text-tertiary)]">de {totalServicos}</span>
           </div>
         </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
-          <span className="text-[11px] font-medium text-slate-500">Tabelas base</span>
-          <div className="mt-1 text-xl font-semibold text-slate-900">{baseServicesCount}</div>
+        <div className="bg-[var(--surface-bg)] p-3.5 rounded-xl border border-[var(--border-subtle)] border-t-4 border-t-[#155EEF] shadow-sm">
+          <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Tabelas base</span>
+          <div className="mt-1 text-xl font-bold text-[#155EEF]">{baseServicesCount}</div>
         </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
-          <span className="text-[11px] font-medium text-slate-500">Tabelas personalizadas</span>
-          <div className="mt-1 text-xl font-semibold text-slate-900">{customServicesCount}</div>
+        <div className="bg-[var(--surface-bg)] p-3.5 rounded-xl border border-[var(--border-subtle)] border-t-4 border-t-[#E76F61] shadow-sm">
+          <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Tabelas personalizadas</span>
+          <div className="mt-1 text-xl font-bold text-[#C94F45]">{customServicesCount}</div>
         </div>
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
-          <span className="text-[11px] font-medium text-slate-500">Margem média configurada</span>
-          <div className="mt-1 text-xl font-semibold text-slate-900">{avgMarkup}%</div>
+        <div className="bg-[var(--surface-bg)] p-3.5 rounded-xl border border-[var(--border-subtle)] border-t-4 border-t-[#007F8B] shadow-sm">
+          <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Margem média configurada</span>
+          <div className="mt-1 text-xl font-bold text-[#007F8B]">{avgMarkup}%</div>
         </div>
       </div>
 
       {/* Navigation Tabs Bar */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 bg-white px-3 py-1.5 rounded-xl shadow-2xs">
+      <div className="flex flex-wrap items-center gap-1.5 border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-1.5 rounded-xl shadow-sm">
         <button
           onClick={() => setActiveTab("servicos_linke")}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             activeTab === "servicos_linke"
-              ? "bg-slate-900 text-white shadow-2xs"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              ? "bg-[#128A47] text-white shadow-sm"
+              : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
@@ -227,8 +227,8 @@ export function ServicosLinkeClient({
           onClick={() => setActiveTab("matriz_margens")}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             activeTab === "matriz_margens"
-              ? "bg-slate-900 text-white shadow-2xs"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              ? "bg-[#155EEF] text-white shadow-sm"
+              : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
           }`}
         >
           <Percent className="w-3.5 h-3.5" />
@@ -239,8 +239,8 @@ export function ServicosLinkeClient({
           onClick={() => setActiveTab("simulador")}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             activeTab === "simulador"
-              ? "bg-slate-900 text-white shadow-2xs"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              ? "bg-[#007F8B] text-white shadow-sm"
+              : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
           }`}
         >
           <Calculator className="w-3.5 h-3.5" />

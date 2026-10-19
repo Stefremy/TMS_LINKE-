@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client"
 import { User as SupabaseUser } from "@supabase/supabase-js"
 
 import { getColaboradoresAction } from "@/app/actions/colaboradores"
+import styles from "./TeamCalendar.module.css"
 
 const PALETTE = [
   { color: "bg-blue-500/20 text-blue-400 border-blue-500/30", dot: "bg-blue-500" },
@@ -161,7 +162,7 @@ export function TeamCalendar() {
   const [isLoading, setIsLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedDay, setSelectedDay] = useState<number | null>(new Date().getDate())
-  const [formData, setFormData] = useState({ title: "", description: "", time: "" })
+  const [formData, setFormData] = useState({ title: "", description: "", time: "09:00", endTime: "18:00", startDate: "", endDate: "", allDay: true, collabId: "" })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [collaborators, setCollaborators] = useState<CalendarCollaborator[]>([])
   const [showPtHolidays, setShowPtHolidays] = useState(true)
@@ -204,7 +205,7 @@ export function TeamCalendar() {
       if (data) {
         // Map db events to CalendarEvent
         const mapped: CalendarEvent[] = data.map((d: CalendarEventRow) => {
-          const dateObj = new Date(d.event_date)
+          const dateObj = new Date(`${d.event_date}T12:00:00`)
           return {
             id: d.id,
             date: dateObj.getDate(),
@@ -232,7 +233,9 @@ export function TeamCalendar() {
       // Events 1 hour before
       events.forEach(e => {
         if (!e.time) return
-        const [hours, minutes] = e.time.split(":").map(Number)
+        const startTime = e.time.match(/^(\d{2}):(\d{2})/)
+        if (!startTime) return
+        const [, hours, minutes] = startTime.map(Number)
         const eventTime = new Date(e.year, e.month, e.date, hours, minutes)
         const diffMins = Math.round((eventTime.getTime() - now.getTime()) / 60000)
         
@@ -273,8 +276,10 @@ export function TeamCalendar() {
   }
 
   const openAddEvent = (day?: number) => {
-    setSelectedDay(day || new Date().getDate())
-    setFormData({ title: "", description: "", time: "09:00" })
+    const chosenDay = Math.min(day || new Date().getDate(), new Date(year, month + 1, 0).getDate())
+    const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(chosenDay).padStart(2, "0")}`
+    setSelectedDay(chosenDay)
+    setFormData({ title: "", description: "", time: "09:00", endTime: "18:00", startDate: date, endDate: date, allDay: true, collabId: collaborators.find(c => c.email === user?.email)?.id || collaborators[0]?.id || "" })
     setIsModalOpen(true)
   }
 
@@ -283,42 +288,44 @@ export function TeamCalendar() {
     if (!formData.title) return
     setIsSubmitting(true)
     
-    // Find creator's color from dynamic collaborators
-    const myCollab = collaborators.find(c => c.email === user?.email) || collaborators[0] || { id: "unknown", color: PALETTE[0].color, dot: PALETTE[0].dot }
-    const currentSelectedDay = selectedDay || new Date().getDate()
-    
-    // YYYY-MM-DD
-    const eventDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(currentSelectedDay).padStart(2, '0')}`
+    try {
+      const result = await addCalendarEvent({
+        title: formData.title,
+        description: formData.description,
+        time: formData.time,
+        event_date: formData.startDate,
+        end_date: formData.endDate,
+        end_time: formData.endTime,
+        all_day: formData.allDay,
+        collab_id: formData.collabId,
+        creator_email: user?.email || "Admin Local"
+      })
 
-    const result = await addCalendarEvent({
-      title: formData.title,
-      description: formData.description,
-      time: formData.time,
-      event_date: eventDate,
-      collab_id: myCollab.id,
-      creator_email: user?.email || "Admin Local"
-    })
-    
-    if (result.success && result.data) {
-      const d = result.data
-      const dateObj = new Date(d.event_date)
-      const newEvent: CalendarEvent = {
-        id: d.id,
-        date: dateObj.getDate(),
-        title: d.title,
-        description: d.description || "",
-        time: d.time || "",
-        collabId: d.collab_id,
-        creatorEmail: d.creator_email,
-        month: dateObj.getMonth(),
-        year: dateObj.getFullYear()
+      if (result.success && result.data) {
+        const newEvents: CalendarEvent[] = (result.events || [result.data]).map((d: CalendarEventRow) => {
+          const dateObj = new Date(`${d.event_date}T12:00:00`)
+          return {
+            id: d.id,
+            date: dateObj.getDate(),
+            title: d.title,
+            description: d.description || "",
+            time: d.time || "",
+            collabId: d.collab_id,
+            creatorEmail: d.creator_email || undefined,
+            month: dateObj.getMonth(),
+            year: dateObj.getFullYear()
+          }
+        })
+        setEvents(previous => [...previous, ...newEvents])
+        setIsModalOpen(false)
+      } else {
+        alert("Erro ao guardar evento: " + (result.error || "Erro desconhecido"))
       }
-      setEvents([...events, newEvent])
-      setIsModalOpen(false)
-    } else {
-      alert("Erro ao guardar evento: " + (result.error || "Erro desconhecido"))
+    } catch {
+      alert("Não foi possível confirmar a gravação. Consulte o calendário antes de repetir o pedido.")
+    } finally {
+      setIsSubmitting(false)
     }
-    setIsSubmitting(false)
   }
 
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -451,8 +458,8 @@ export function TeamCalendar() {
           <div className="overflow-x-auto pb-1">
           <div className="min-w-[700px]">
           <div className="grid grid-cols-7 mb-2">
-            {dayNames.map(d => (
-              <div key={d} className="text-center text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider py-2">
+            {dayNames.map((d, index) => (
+              <div key={d} className={`text-center text-[11px] font-bold uppercase tracking-wider py-2 ${index >= 5 ? "bg-[#155EEF] text-white" : "text-[var(--text-secondary)]"}`}>
                 {d}
               </div>
             ))}
@@ -466,8 +473,7 @@ export function TeamCalendar() {
 
               const dayEvents = events.filter(e => e.date === d.day && e.month === month && e.year === year)
               const dayHolidays = holidaysThisYear.filter(h => h.date === d.day && h.month === month)
-              const hasPt = dayHolidays.some(h => h.country === "PT")
-              const hasEs = dayHolidays.some(h => h.country === "ES")
+              const isWeekend = i % 7 >= 5
               const isCurrDay = isToday(d.day!)
 
               return (
@@ -476,9 +482,9 @@ export function TeamCalendar() {
                   key={`day-${d.day}`} 
                   onClick={() => setSelectedDay(d.day!)}
                   aria-pressed={selectedDay === d.day}
-                  className={`text-left bg-[var(--surface-bg)] min-h-[104px] md:min-h-[124px] p-2 transition-colors hover:bg-[var(--surface-muted)] group relative cursor-pointer focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
-                    selectedDay === d.day ? 'ring-2 ring-inset ring-[var(--accent)] bg-[var(--accent)]/[0.06]' : ''
-                  } ${hasPt && hasEs ? 'bg-amber-500/[0.04]' : hasPt ? 'bg-rose-500/[0.04]' : hasEs ? 'bg-amber-500/[0.03]' : ''}`}
+                  className={`text-left min-h-[104px] md:min-h-[124px] p-2 transition-colors group relative cursor-pointer focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${isWeekend ? styles.weekend : "bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)]"} ${
+                    selectedDay === d.day ? 'ring-2 ring-inset ring-[var(--accent)]' : ''
+                  }`}
                 >
                   <div className="flex items-start justify-between mb-1.5">
                     <div className="flex flex-col gap-0.5 w-full pr-1">
@@ -486,10 +492,6 @@ export function TeamCalendar() {
                         <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full shrink-0 ${
                           isCurrDay 
                             ? 'bg-[var(--accent)] text-white shadow-sm' 
-                            : hasPt 
-                            ? 'text-rose-600 bg-rose-500/15 font-extrabold' 
-                            : hasEs 
-                            ? 'text-amber-700 dark:text-amber-400 bg-amber-500/15 font-extrabold' 
                             : 'text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]'
                         }`}>
                           {d.day}
@@ -502,11 +504,7 @@ export function TeamCalendar() {
                             <div 
                               key={hIdx} 
                               title={`${h.country === "PT" ? "Feriado Portugal" : "Feriado Espanha (Atenção a Trânsito e Entregas)"}: ${h.title}`}
-                              className={`text-[8.5px] font-medium leading-tight px-1.5 py-0.5 rounded-md border flex items-center gap-1.5 truncate ${
-                                h.country === "PT" 
-                                  ? "bg-slate-500/5 text-[var(--text-primary)] border-slate-300/40 dark:border-slate-700/60" 
-                                  : "bg-amber-500/5 text-[var(--text-primary)] border-amber-300/40 dark:border-amber-700/50"
-                              }`}
+                              className="text-[8.5px] font-medium leading-tight py-0.5 flex items-center gap-1.5 truncate text-[var(--text-primary)]"
                             >
                               <MinimalFlag country={h.country} />
                               <span className="truncate">{h.title}</span>
@@ -522,7 +520,7 @@ export function TeamCalendar() {
                   
                   <div className="space-y-1.5 flex flex-col overflow-y-auto max-h-[80px] pr-1 custom-scrollbar">
                     {dayEvents.map(event => {
-                      const collab = collaborators.find(c => c.id === event.collabId) || { color: 'bg-[var(--surface-muted)] text-[var(--text-secondary)] border-[var(--border-subtle)]', dot: 'bg-gray-400' }
+                      const collab = collaborators.find(c => c.id === event.collabId) || { name: "Equipa", color: 'bg-[var(--surface-muted)] text-[var(--text-secondary)] border-[var(--border-subtle)]', dot: 'bg-gray-400' }
                       return (
                         <div 
                           key={event.id}
@@ -534,8 +532,8 @@ export function TeamCalendar() {
                             <span className="truncate font-bold">{event.title}</span>
                           </div>
                           <div className="flex items-center justify-between text-[8px] opacity-80 pl-3">
-                            <span>{event.time}</span>
-                            {/* We just show color for creator, but we store the email in tooltip */}
+                            <span>{event.time || "Dia inteiro"}</span>
+                            <span className="ml-1 truncate">{collab.name}</span>
                           </div>
                         </div>
                       )
@@ -573,7 +571,7 @@ export function TeamCalendar() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-[var(--text-primary)]">{event.title}</p>
                     {event.description && <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{event.description}</p>}
-                    <p className="mt-1 text-[11px] text-[var(--text-secondary)]">{event.time || "Sem hora"}{collaborator ? ` · ${collaborator.name}` : ""}</p>
+                    <p className="mt-1 text-[11px] text-[var(--text-secondary)]">{event.time || "Dia inteiro"}{collaborator ? ` · ${collaborator.name}` : ""}</p>
                   </div>
                 </div>
               })}
@@ -586,7 +584,7 @@ export function TeamCalendar() {
       {/* Add Event Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
             <div className="px-5 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
               <h3 className="text-lg font-bold text-[var(--text-primary)]">Novo Evento</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
@@ -603,30 +601,38 @@ export function TeamCalendar() {
                     required
                     value={formData.title}
                     onChange={e => setFormData({...formData, title: e.target.value})}
-                    placeholder="Ex: Reunião Equipa..."
+                    placeholder="Ex: Férias da Ana, reunião de equipa…"
                     className="w-full bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
                   />
                 </div>
                 
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">Data</label>
-                  <input 
-                    type="text" 
-                    readOnly
-                    value={`${selectedDay} de ${monthNames[month]}`}
-                    className="w-full bg-[var(--surface-muted)]/50 border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-secondary)] cursor-not-allowed"
-                  />
+                <label className="col-span-2 block text-xs font-semibold text-[var(--text-secondary)]">Colaborador
+                  <select required value={formData.collabId} onChange={e => setFormData({...formData, collabId: e.target.value})} className="mt-1.5 w-full bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+                    <option value="">Selecionar colaborador</option>
+                    {collaborators.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
+                  </select>
+                </label>
+                <label className="block text-xs font-semibold text-[var(--text-secondary)]">Data de início
+                  <input type="date" required value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value, endDate: formData.endDate < e.target.value ? e.target.value : formData.endDate})} className="mt-1.5 w-full min-w-0 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]" />
+                </label>
+                <label className="block text-xs font-semibold text-[var(--text-secondary)]">Data de fim
+                  <input type="date" required min={formData.startDate} value={formData.endDate} onChange={e => setFormData({...formData, endDate: e.target.value})} className="mt-1.5 w-full min-w-0 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]" />
+                </label>
+                <div className="col-span-2 space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                    <input type="checkbox" checked={formData.allDay} onChange={e => setFormData({...formData, allDay: e.target.checked})} className="accent-[var(--accent)]" /> Dia inteiro
+                  </label>
+                  <p className="text-xs text-[var(--text-secondary)]">Para férias ou ausências, marque o período completo. O evento aparece em todos os dias, incluindo a data de fim.</p>
                 </div>
-                
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">Hora</label>
-                  <input 
-                    type="time" 
-                    value={formData.time}
-                    onChange={e => setFormData({...formData, time: e.target.value})}
-                    className="w-full bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-                  />
-                </div>
+                {!formData.allDay && <>
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)]">Hora de início
+                    <input type="time" required value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="mt-1.5 w-full bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]" />
+                  </label>
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)]">Hora de fim
+                    <input type="time" required min={formData.time} value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} className="mt-1.5 w-full bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]" />
+                  </label>
+                  <p className="col-span-2 text-xs text-[var(--text-secondary)]">Este horário aplica-se a cada dia do período.</p>
+                </>}
 
                 <div className="col-span-2">
                   <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">Descrição (Opcional)</label>

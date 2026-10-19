@@ -4,7 +4,7 @@
 }
 .backdrop {
   position: absolute;
-  inset: -24px;
+  inset: 0;
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
@@ -36,7 +36,6 @@
   50% { transform: translate3d(10px, -16px, 0) rotate(calc(var(--turn, 0deg) + 8deg)); }
 }
 @media (max-width: 640px) {
-  .backdrop { inset: -16px; }
   .circle { width: 74px; height: 74px; left: -22px; }
   .triangle { width: 96px; height: 98px; right: -15px; }
   .smallTriangle, .smallCross { display: none; }

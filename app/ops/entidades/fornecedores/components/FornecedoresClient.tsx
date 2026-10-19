@@ -4,7 +4,6 @@ import * as React from "react"
 import { 
   Plus, 
   ArrowUpDown, 
-  Wrench, 
   Filter, 
   Search, 
   ChevronDown, 
@@ -183,16 +182,6 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
           >
             <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
             Ordenar
-          </button>
-
-          {/* Ferramentas */}
-          <button 
-            type="button"
-            className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded font-medium shadow-2xs flex items-center gap-1 transition-colors"
-          >
-            <Wrench className="w-3.5 h-3.5 text-slate-500" />
-            Ferramentas
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
           </button>
 
           {/* Filtrar */}

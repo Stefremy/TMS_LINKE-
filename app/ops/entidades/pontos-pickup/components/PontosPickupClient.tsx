@@ -228,10 +228,6 @@ export function PontosPickupClient({
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Pontos Pickup</h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#EAF0EC] text-[#477D68] border border-[#C9D7CD]">
-              <span className="w-2 h-2 rounded-full bg-[#477D68]" />
-              CTT Expresso & CTT Express ES
-            </span>
           </div>
           <p className="text-sm text-[var(--text-tertiary)] mt-1">
             Rede oficial de pontos de entrega e recolha CTT, Cacifos Locky 24H e parceiros em Portugal e Espanha.
@@ -350,18 +346,18 @@ export function PontosPickupClient({
         <div 
           onClick={() => setCategoryFilter(categoryFilter === "cacifo" ? "todos" : "cacifo")}
           className={`bg-[var(--surface-bg)] rounded-2xl p-5 border shadow-sm cursor-pointer transition-all ${
-            categoryFilter === "cacifo" ? "border-[#8A6944] ring-2 ring-[#F2EEE8]" : "border-[var(--border-subtle)] hover:border-[#C8B7A1]"
+            categoryFilter === "cacifo" ? "border-[var(--accent)] ring-2 ring-[var(--accent-soft)]" : "border-[var(--border-subtle)] hover:border-[var(--border-strong)]"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#8A6944] uppercase tracking-wider">Cacifos Locky 24H</span>
-            <div className="w-10 h-10 rounded-xl bg-[#F2EEE8] flex items-center justify-center text-[#8A6944]">
+            <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Cacifos Locky 24H</span>
+            <div className="w-10 h-10 rounded-xl bg-[var(--surface-dim)] flex items-center justify-center text-[var(--text-secondary)]">
               <Package className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[#6B5237]">{activeStats.cacifos.toLocaleString("pt-PT")}</span>
-            <span className="text-xs font-medium text-[#8A6944]">lockers 24/7</span>
+            <span className="text-3xl font-extrabold text-[var(--text-primary)]">{activeStats.cacifos.toLocaleString("pt-PT")}</span>
+            <span className="text-xs font-medium text-[var(--text-tertiary)]">lockers 24/7</span>
           </div>
         </div>
 
@@ -369,18 +365,18 @@ export function PontosPickupClient({
         <div 
           onClick={() => setCategoryFilter(categoryFilter === "loja" ? "todos" : "loja")}
           className={`bg-[var(--surface-bg)] rounded-2xl p-5 border shadow-sm cursor-pointer transition-all ${
-            categoryFilter === "loja" ? "border-[#376C8A] ring-2 ring-[#EDF1F3]" : "border-[var(--border-subtle)] hover:border-[#A8BBC7]"
+            categoryFilter === "loja" ? "border-[var(--accent)] ring-2 ring-[var(--accent-soft)]" : "border-[var(--border-subtle)] hover:border-[var(--border-strong)]"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#376C8A] uppercase tracking-wider">Lojas & Postos CTT</span>
-            <div className="w-10 h-10 rounded-xl bg-[#EDF1F3] flex items-center justify-center text-[#376C8A]">
+            <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Lojas & Postos CTT</span>
+            <div className="w-10 h-10 rounded-xl bg-[var(--surface-dim)] flex items-center justify-center text-[var(--text-secondary)]">
               <Building2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[#284D65]">{activeStats.lojas.toLocaleString("pt-PT")}</span>
-            <span className="text-xs font-medium text-[#376C8A]">oficiais</span>
+            <span className="text-3xl font-extrabold text-[var(--text-primary)]">{activeStats.lojas.toLocaleString("pt-PT")}</span>
+            <span className="text-xs font-medium text-[var(--text-tertiary)]">oficiais</span>
           </div>
         </div>
 
@@ -388,18 +384,18 @@ export function PontosPickupClient({
         <div 
           onClick={() => setCategoryFilter(categoryFilter === "parceiro" ? "todos" : "parceiro")}
           className={`bg-[var(--surface-bg)] rounded-2xl p-5 border shadow-sm cursor-pointer transition-all ${
-            categoryFilter === "parceiro" ? "border-[#477D68] ring-2 ring-[#EAF0EC]" : "border-[var(--border-subtle)] hover:border-[#9DB7A8]"
+            categoryFilter === "parceiro" ? "border-[var(--accent)] ring-2 ring-[var(--accent-soft)]" : "border-[var(--border-subtle)] hover:border-[var(--border-strong)]"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#477D68] uppercase tracking-wider">Pontos Parceiros</span>
-            <div className="w-10 h-10 rounded-xl bg-[#EAF0EC] flex items-center justify-center text-[#477D68]">
+            <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Pontos Parceiros</span>
+            <div className="w-10 h-10 rounded-xl bg-[var(--surface-dim)] flex items-center justify-center text-[var(--text-secondary)]">
               <Store className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold text-[#315B43]">{activeStats.parceiros.toLocaleString("pt-PT")}</span>
-            <span className="text-xs font-medium text-[#477D68]">agentes & lojas</span>
+            <span className="text-3xl font-extrabold text-[var(--text-primary)]">{activeStats.parceiros.toLocaleString("pt-PT")}</span>
+            <span className="text-xs font-medium text-[var(--text-tertiary)]">agentes & lojas</span>
           </div>
         </div>
       </div>
@@ -437,7 +433,10 @@ export function PontosPickupClient({
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
-              Todos ({activeStats.total.toLocaleString("pt-PT")})
+              <span className="inline-flex items-center gap-1.5">
+                <Layers aria-hidden="true" className="h-3.5 w-3.5" />
+                Todos ({activeStats.total.toLocaleString("pt-PT")})
+              </span>
             </button>
             <button
               onClick={() => setCategoryFilter("cacifo")}
@@ -447,7 +446,10 @@ export function PontosPickupClient({
                   : "text-[var(--text-secondary)] hover:text-[#8A6944]"
               }`}
             >
-              📦 Cacifos Locky ({activeStats.cacifos.toLocaleString("pt-PT")})
+              <span className="inline-flex items-center gap-1.5">
+                <Package aria-hidden="true" className={`h-3.5 w-3.5 ${categoryFilter === "cacifo" ? "text-white" : "text-[#8A6944]"}`} />
+                Cacifos Locky ({activeStats.cacifos.toLocaleString("pt-PT")})
+              </span>
             </button>
             <button
               onClick={() => setCategoryFilter("loja")}
@@ -457,7 +459,10 @@ export function PontosPickupClient({
                   : "text-[var(--text-secondary)] hover:text-[#376C8A]"
               }`}
             >
-              🏢 Lojas CTT ({activeStats.lojas.toLocaleString("pt-PT")})
+              <span className="inline-flex items-center gap-1.5">
+                <Building2 aria-hidden="true" className={`h-3.5 w-3.5 ${categoryFilter === "loja" ? "text-white" : "text-[#376C8A]"}`} />
+                Lojas CTT ({activeStats.lojas.toLocaleString("pt-PT")})
+              </span>
             </button>
             <button
               onClick={() => setCategoryFilter("parceiro")}
@@ -467,7 +472,10 @@ export function PontosPickupClient({
                   : "text-[var(--text-secondary)] hover:text-[#477D68]"
               }`}
             >
-              🏪 Parceiros ({activeStats.parceiros.toLocaleString("pt-PT")})
+              <span className="inline-flex items-center gap-1.5">
+                <Store aria-hidden="true" className={`h-3.5 w-3.5 ${categoryFilter === "parceiro" ? "text-white" : "text-[#477D68]"}`} />
+                Parceiros ({activeStats.parceiros.toLocaleString("pt-PT")})
+              </span>
             </button>
           </div>
         </div>
