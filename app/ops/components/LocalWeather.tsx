@@ -34,7 +34,7 @@ const DEFAULT_LOCATION: WeatherLocation = {
 const LOCATION_STORAGE_KEY = "tms_ops_weather_location"
 const WEATHER_REFRESH_MS = 15 * 60 * 1000
 
-function getWeatherDescription(code: number) {
+function getWeatherDescription(code: string) {
   if (code.startsWith("clearsky")) return { label: "Céu limpo", Icon: Sun }
   if (code.startsWith("fair")) return { label: "Pouco nublado", Icon: CloudSun }
   if (code.startsWith("partlycloudy")) return { label: "Parcialmente nublado", Icon: CloudSun }

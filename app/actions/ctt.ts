@@ -554,8 +554,6 @@ export async function scheduleCttPickupAction(input: {
         volumes: input.volumes,
         weightKg: input.weightKg,
         heaviestWeightKg,
-        destination: input.pickupDestination,
-        biggestParcelDimensionsCm: input.biggestParcelDimensionsCm,
         sender: input.sender,
         observations: input.observations,
       })
