@@ -83,7 +83,9 @@ function tomorrowDate() {
   return d.toISOString().split("T")[0]
 }
 
-export function RecolhasClient({ recolhas, clients, carrierConnections, requesterContact, initialError }: RecolhasClientProps) {
+export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConnections, requesterContact, initialError }: RecolhasClientProps) {
+  const [updatedPickups, setUpdatedPickups] = React.useState<Record<string, PickupSummary>>({})
+  const recolhas = initialRecolhas.map(row => updatedPickups[row.id] || row)
   const [view, setView] = React.useState<"list" | "search" | "form">("list")
   const [openedPickup, setOpenedPickup] = React.useState<PickupSummary | null>(null)
   const [loading, setLoading] = React.useState(false)
@@ -336,7 +338,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
 
       {initialError && view === "list" && <p role="alert" className="m-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{initialError} Tente novamente no separador Pesquisar.</p>}
       {view === "search" ? (
-        <PickupSearchPanel onOpen={setOpenedPickup} connections={carrierConnections.filter(c => c.carrier_code === "ctt_expresso")} />
+        <PickupSearchPanel onOpen={setOpenedPickup} updatedPickups={updatedPickups} connections={carrierConnections.filter(c => c.carrier_code === "ctt_expresso")} />
       ) : view === "list" ? (
         /* ───── LIST VIEW ───── */
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -1176,7 +1178,7 @@ export function RecolhasClient({ recolhas, clients, carrierConnections, requeste
           </div>
         </div>
       )}
-      {openedPickup && <PickupDetailsDialog key={`${openedPickup.source}:${openedPickup.id}`} selected={openedPickup} onClose={() => setOpenedPickup(null)} />}
+      {openedPickup && <PickupDetailsDialog key={`${openedPickup.source}:${openedPickup.id}`} selected={openedPickup} onClose={() => setOpenedPickup(null)} onUpdated={pickup => setUpdatedPickups(previous => ({ ...previous, [pickup.id]: pickup }))} />}
     </div>
   )
 }

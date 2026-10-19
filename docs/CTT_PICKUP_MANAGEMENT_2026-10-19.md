@@ -20,9 +20,21 @@ A verificação real, exclusivamente de leitura, devolveu: **Utilizador não tem
 
 O WSDL publicado não contém operações de alteração ou anulação. O separador **Alterar / Anular** permite copiar a referência e abrir o Portal Expresso para alterar data, morada, período ou anular. A operação tem de ser confirmada no portal. Estes atalhos não atualizam o estado local nem simulam uma confirmação CTT.
 
+## Confirmação manual de recolha
+
+Nos detalhes de um registo TMS agendado ou pendente, **Marcar como recolhida** abre uma confirmação. **Sim, confirmar recolha** passa o estado para `Realizado`, atualiza a lista e guarda no `audit_log` uma entrada `recolha_manual_confirmation`, com operador autenticado, hora do servidor e estado anterior. A ficha mostra essa identificação após voltar a abrir.
+
+A ação exige um operador autenticado e limita a atualização à sua empresa. Recusa recolhas canceladas, não sobrescreve alterações concorrentes de estado e não duplica a confirmação de um registo já realizado. Não altera envios nem comunica uma recolha aos CTT. Se a gravação da auditoria falhar, tenta repor o estado anterior e comunica a falha sem apresentar sucesso. Estado e auditoria usam dois pedidos à base de dados, não uma transação única.
+
+## Encomendas associadas
+
+A ficha tem uma secção **Encomendas associadas à recolha**, com códigos e hora da última consulta. **Atualizar objetos e detalhes nos CTT** consulta `GetRecolha` e lê `_Objectos.string`. Nos registos TMS, uma resposta válida fica guardada no `audit_log` como `recolha_ctt_objects`, limitada à empresa, ID local e referência CTT. A referência da resposta tem de coincidir com o pedido. A última lista é recuperada ao voltar a abrir a ficha e preservada se uma nova consulta falhar.
+
+Não existe atualização por scan ou sincronização periódica nesta implementação. O operador pede a atualização na ficha. É necessário que os CTT autorizem a consulta e disponibilizem as associações. Uma lista vazia significa apenas que a consulta não devolveu códigos, não prova que a recolha esteja vazia. A confirmação manual não cria associações e o rastreio de uma encomenda, isoladamente, não permite deduzir a que recolha pertence.
+
 ## Verificação
 
-- `node --test tests/pickup-management.test.cjs tests/ctt-pickup-serialization.test.cjs`: 13 testes aprovados.
+- `node --test tests/pickup-management.test.cjs tests/ctt-pickup-serialization.test.cjs`: 21 testes aprovados, incluindo confirmação manual, isolamento, repetição, concorrência, reposição após falha de auditoria, objetos associados e preservação de consultas anteriores.
 - `npm run test:security`: 137 testes aprovados.
 - ESLint nos novos módulos: aprovado.
 - Interface verificada num navegador com respostas simuladas: pesquisa, abertura da ficha, quatro atalhos para o portal, fecho por botão e Escape, e largura em telemóvel de 390 px. Capturas em `/tmp/tms-pickup-details-desktop.png` e `/tmp/tms-pickup-details-mobile.png`.

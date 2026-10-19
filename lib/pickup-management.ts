@@ -32,7 +32,16 @@ export interface PickupSummary {
   dimensions?: { length: number; width: number; height: number }
   connection_id?: string
   objects?: string[]
+  objects_checked_at?: string
   collected_at?: string
+  manual_confirmation?: { confirmed_at: string; confirmed_by: string }
+}
+
+export function normalizePickupObjects(value: unknown): string[] {
+  return [...new Set((Array.isArray(value) ? value : value == null ? [] : [value])
+    .filter((code): code is string => typeof code === "string")
+    .map(code => code.trim().toUpperCase())
+    .filter(code => /^[A-Z0-9][A-Z0-9/_-]{0,63}$/.test(code)))]
 }
 
 export interface PickupSearch {

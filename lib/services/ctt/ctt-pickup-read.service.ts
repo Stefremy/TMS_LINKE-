@@ -1,6 +1,6 @@
 import { CTTSoapClient } from "./ctt-soap-client"
 import type { CTTConnectionCredentials } from "./ctt-types"
-import { validatePickupSearch, type PickupSearch, type PickupSummary } from "@/lib/pickup-management"
+import { normalizePickupObjects, validatePickupSearch, type PickupSearch, type PickupSummary } from "@/lib/pickup-management"
 
 type RecordData = Record<string, unknown>
 const object = (value: unknown): RecordData => value && typeof value === "object" ? value as RecordData : {}
@@ -30,7 +30,7 @@ function mapRemote(value: unknown): PickupSummary {
     sender_contact: s("ContactoExp"), sender_phone: s("TelefoneExp"), sender_email: s("Email"),
     period: start && end ? `${start}-${end}` : undefined, volumes: n("QuantObj"),
     weight_kg: n("Peso") === undefined ? undefined : Number(n("Peso")) / 1000,
-    observations: s("ObsObj") || s("Observacao"), objects: list(object(row._Objectos).string).map(String),
+    observations: s("ObsObj") || s("Observacao"), objects: normalizePickupObjects(object(row._Objectos).string),
     requester: s("Contacto") ? { name: s("Contacto"), phone: s("Telefone"), email: s("Email") } : undefined,
   }
 }
@@ -70,6 +70,8 @@ export class CTTPickupReadService {
     const result = await this.call(creds, "GetRecolha", { NumRecolha: reference })
     const pickup = mapRemote(result._recolhas || result.Recolha)
     if (!pickup.ctt_pickup_id) throw new Error("Os CTT não devolveram detalhes para esta referência.")
+    if (pickup.ctt_pickup_id.toUpperCase() !== reference.toUpperCase()) throw new Error("A referência devolvida pelos CTT não corresponde à recolha consultada.")
+    pickup.objects_checked_at = new Date().toISOString()
     return pickup
   }
 }

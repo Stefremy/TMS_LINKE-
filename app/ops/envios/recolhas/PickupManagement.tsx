@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Search, Loader2, X, Copy, ExternalLink, Calendar, MapPin, Clock, Ban, RefreshCw, FileText } from "lucide-react"
-import { searchPickupsAction, searchCttPickupsAction, getPickupDetailsAction, getCttPickupDetailsAction } from "@/app/actions/pickups"
+import { searchPickupsAction, searchCttPickupsAction, getPickupDetailsAction, getCttPickupDetailsAction, markPickupCollectedAction, refreshPickupParcelsAction } from "@/app/actions/pickups"
 import { CTT_PICKUP_PORTAL_URL, PICKUP_PAGE_SIZE, type PickupSummary } from "@/lib/pickup-management"
 
 const inputClass = "w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]"
@@ -18,9 +18,10 @@ function today() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
 }
 
-export function PickupSearchPanel({ onOpen, connections }: {
+export function PickupSearchPanel({ onOpen, connections, updatedPickups = {} }: {
   onOpen: (pickup: PickupSummary) => void
   connections: { id: string; label: string }[]
+  updatedPickups?: Record<string, PickupSummary>
 }) {
   const [source, setSource] = React.useState<"tms" | "ctt">("tms")
   const [from, setFrom] = React.useState(() => `${today().slice(0, 7)}-01`)
@@ -48,7 +49,7 @@ export function PickupSearchPanel({ onOpen, connections }: {
     } finally { setLoading(false); setSearched(true) }
   }
   const changePage = (next: number) => source === "ctt" ? setPage(next) : void run(next)
-  const visibleRows = source === "ctt" ? rows.slice(page * PICKUP_PAGE_SIZE, (page + 1) * PICKUP_PAGE_SIZE) : rows
+  const visibleRows = (source === "ctt" ? rows.slice(page * PICKUP_PAGE_SIZE, (page + 1) * PICKUP_PAGE_SIZE) : rows).map(row => row.source === "tms" ? updatedPickups[row.id] || row : row)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4 sm:p-6">
@@ -122,15 +123,18 @@ export function PickupSearchPanel({ onOpen, connections }: {
   )
 }
 
-export function PickupDetailsDialog({ selected, onClose }: { selected: PickupSummary; onClose: () => void }) {
+export function PickupDetailsDialog({ selected, onClose, onUpdated }: { selected: PickupSummary; onClose: () => void; onUpdated?: (pickup: PickupSummary) => void }) {
   const dialog = React.useRef<HTMLDialogElement>(null)
   const [pickup, setPickup] = React.useState(selected)
   const [tab, setTab] = React.useState<"details" | "manage">("details")
   const [loading, setLoading] = React.useState(true)
   const [remoteLoading, setRemoteLoading] = React.useState(false)
+  const [parcelError, setParcelError] = React.useState("")
   const [error, setError] = React.useState("")
   const [remote, setRemote] = React.useState<PickupSummary | null>(null)
   const [copied, setCopied] = React.useState(false)
+  const [confirming, setConfirming] = React.useState(false)
+  const [saving, startSaving] = React.useTransition()
   React.useEffect(() => { dialog.current?.showModal() }, [])
   React.useEffect(() => {
     let active = true
@@ -153,14 +157,26 @@ export function PickupDetailsDialog({ selected, onClose }: { selected: PickupSum
     catch { setError("Não foi possível copiar. Selecione a referência apresentada no cabeçalho.") }
   }
   const consultCtt = async () => {
-    setRemoteLoading(true); setError("")
+    setRemoteLoading(true); setParcelError("")
     try {
-      const result = await getCttPickupDetailsAction(pickup.ctt_pickup_id, pickup.connection_id?.startsWith("default-") ? undefined : pickup.connection_id)
+      const result = pickup.source === "tms"
+        ? await refreshPickupParcelsAction(pickup.id)
+        : await getCttPickupDetailsAction(pickup.ctt_pickup_id, pickup.connection_id?.startsWith("default-") ? undefined : pickup.connection_id)
       if (result.success) setRemote(result.pickup)
-      else setError(result.error)
-    } catch { setError("Não foi possível consultar os CTT.") }
+      else setParcelError(result.error)
+    } catch { setParcelError("Não foi possível consultar os CTT. A última lista guardada foi mantida.") }
     finally { setRemoteLoading(false) }
   }
+  const markCollected = () => startSaving(async () => {
+    setError("")
+    try {
+      const result = await markPickupCollectedAction(pickup.id)
+      if (!result.success) { setError(result.error); return }
+      setPickup(result.pickup); setConfirming(false); onUpdated?.(result.pickup)
+    } catch { setError("Não foi possível confirmar a recolha. Volte a abrir os detalhes para verificar o estado antes de repetir.") }
+  })
+  const canConfirm = pickup.source === "tms" && ["Agendado", "pendente"].includes(pickup.status)
+  const objectData = remote || pickup
   const field = (label: string, value?: string | number | null) => <div><dt className="text-xs text-[var(--text-secondary)]">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-[var(--text-primary)]">{value === undefined || value === null || value === "" ? "Não registado" : value}</dd></div>
 
   return (
@@ -177,19 +193,34 @@ export function PickupDetailsDialog({ selected, onClose }: { selected: PickupSum
         {loading && <p role="status" className="flex items-center gap-2 text-sm text-[var(--text-secondary)]"><Loader2 className="h-4 w-4 animate-spin" />A carregar detalhes…</p>}
         {error && <p role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
         {tab === "details" ? <>
+          {canConfirm && <section className="space-y-3 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-muted)] p-4">
+            {confirming ? <>
+              <p className="text-sm font-semibold">Confirma que esta recolha já foi efetuada?</p>
+              <p className="text-xs text-[var(--text-secondary)]">O estado passará para Realizado. Ficará registado o seu utilizador e a hora da confirmação manual. Esta ação não altera o estado dos envios nem envia um pedido aos CTT.</p>
+              <div className="flex flex-wrap gap-2"><button disabled={saving} onClick={markCollected} className={`${buttonClass} !bg-[var(--accent)] !text-white`}>{saving && <Loader2 className="h-4 w-4 animate-spin" />}{saving ? "A confirmar…" : "Sim, confirmar recolha"}</button><button disabled={saving} onClick={() => setConfirming(false)} className={buttonClass}>Voltar</button></div>
+            </> : <><button disabled={loading} onClick={() => setConfirming(true)} className={buttonClass}>Marcar como recolhida</button><p className="text-xs text-[var(--text-secondary)]">Confirmação manual pelo operador, sem depender da consulta aos CTT.</p></>}
+          </section>}
+          {pickup.manual_confirmation && <p role="status" className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-sm">Recolha confirmada manualmente por <strong>{pickup.manual_confirmation.confirmed_by}</strong> em {new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Lisbon" }).format(new Date(pickup.manual_confirmation.confirmed_at))}.</p>}
           <dl className="grid grid-cols-2 gap-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4 sm:grid-cols-3">
             {field(pickup.source === "tms" ? "Estado guardado" : "Estado devolvido pelos CTT", pickup.status)}{field("Data prevista", displayDate(pickup.scheduled_date))}{field("Período", pickup.period)}
             {field("Volumes", pickup.volumes)}{field("Peso total (kg)", pickup.weight_kg)}{field("Mais pesado (kg)", pickup.heaviest_weight_kg)}
           </dl>
+          {pickup.carrier_code === "ctt_expresso" && <section className="space-y-3 rounded-xl border border-[var(--border-strong)] p-4" aria-labelledby="pickup-objects-title">
+            <div className="flex flex-wrap items-center justify-between gap-2"><h3 id="pickup-objects-title" className="text-sm font-bold">Encomendas associadas à recolha</h3><span className="text-xs text-[var(--text-secondary)]">{objectData.objects_checked_at ? `${objectData.objects?.length || 0} objeto(s) devolvido(s)` : "Por consultar"}</span></div>
+            <p className="text-xs text-[var(--text-secondary)]">Códigos de rastreio que os CTT devolveram para a recolha {pickup.ctt_pickup_id}. Após a leitura pelo estafeta, atualize para verificar se a associação já está disponível.</p>
+            {!!objectData.objects?.length ? <ul className="grid gap-2 sm:grid-cols-2">{objectData.objects.map(code => <li key={code} className="select-text break-all rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2 font-mono text-sm font-semibold">{code}</li>)}</ul> : <p className="text-sm text-[var(--text-secondary)]">{objectData.objects_checked_at ? "Os CTT ainda não devolveram objetos associados nesta consulta. Isto não confirma que a recolha esteja vazia ou não tenha sido efetuada." : "Ainda não foi obtida uma lista dos CTT. Marcar a recolha como realizada não associa encomendas automaticamente."}</p>}
+            {objectData.objects_checked_at && <p className="text-xs text-[var(--text-secondary)]">Última consulta: {new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Lisbon" }).format(new Date(objectData.objects_checked_at))} · Origem: CTT</p>}
+            <button onClick={() => void consultCtt()} disabled={loading || remoteLoading || !pickup.ctt_pickup_id} className={buttonClass}><RefreshCw className={`h-4 w-4 ${remoteLoading ? "animate-spin" : ""}`} />{remoteLoading ? "A consultar os CTT…" : "Atualizar objetos e detalhes nos CTT"}</button>
+            {parcelError && <p role="alert" className="text-sm text-red-700">{parcelError} A última lista guardada, se existir, foi mantida.</p>}
+            <p className="text-xs text-[var(--text-secondary)]">A consulta requer autorização CTT. Os códigos só aparecem quando os CTT os disponibilizarem para esta referência.</p>
+          </section>}
           <section><h3 className="mb-3 flex items-center gap-2 text-sm font-bold"><MapPin className="h-4 w-4" />Local de recolha</h3>
             <dl className="grid gap-4 sm:grid-cols-2">{field("Nome", pickup.sender_name)}{field("Pessoa de contacto", pickup.sender_contact)}{field("Morada", pickup.sender_address)}{field("Código postal / Localidade", [pickup.sender_zip, pickup.sender_city].filter(Boolean).join(" "))}{field("Telefone", pickup.sender_phone)}{field("Telemóvel", pickup.sender_mobile)}{field("Email", pickup.sender_email)}{field("País", pickup.sender_country)}</dl>
           </section>
           <section className="border-t border-[var(--border-subtle)] pt-4"><h3 className="mb-3 text-sm font-bold">Contacto do solicitante</h3><dl className="grid gap-4 sm:grid-cols-2">{field("Contacto", pickup.requester?.name)}{field("Telefone", pickup.requester?.phone)}{field("Telemóvel", pickup.requester?.mobilePhone)}{field("Email", pickup.requester?.email)}</dl></section>
           <dl className="grid gap-4 border-t border-[var(--border-subtle)] pt-4 sm:grid-cols-2">{field("Destino", pickup.destination)}{field("Dimensões (C × L × A, cm)", pickup.dimensions ? `${pickup.dimensions.length} × ${pickup.dimensions.width} × ${pickup.dimensions.height}` : undefined)}{field("Observações", pickup.observations)}</dl>
-          {!!pickup.objects?.length && <section><h3 className="text-sm font-bold">Objetos associados</h3><ul className="mt-2 space-y-1 font-mono text-sm">{pickup.objects.map(id => <li key={id}>{id}</li>)}</ul></section>}
           {pickup.source === "tms" && <p className="text-xs text-[var(--text-secondary)]">Os pedidos antigos podem não ter todos os contactos e dimensões registados. O estado guardado não confirma alterações posteriores feitas no portal.</p>}
-          {pickup.carrier_code === "ctt_expresso" && <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-4">
-            <button onClick={() => void consultCtt()} disabled={loading || remoteLoading || !pickup.ctt_pickup_id} className={buttonClass}><RefreshCw className={`h-4 w-4 ${remoteLoading ? "animate-spin" : ""}`} />{remoteLoading ? "A consultar os CTT…" : "Consultar detalhes atuais nos CTT"}</button>
+          {pickup.carrier_code === "ctt_expresso" && remote && <div className="space-y-3 rounded-xl border border-[var(--border-subtle)] p-4">
             {remote && <dl className="grid gap-3 sm:grid-cols-2">{field("Origem", "Resposta CTT")} {field("Data indicada pelos CTT", displayDate(remote.scheduled_date))}{field("Estado devolvido", remote.status)}{field("Data de recolha efetuada", remote.collected_at ? displayDate(remote.collected_at) : undefined)}{field("Local", remote.sender_name)}{field("Morada", remote.sender_address)}</dl>}
           </div>}
         </> : <>
