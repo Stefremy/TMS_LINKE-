@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState, type FormEvent } from "react"
-import { ChevronDown, Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, MapPin, Search, Sun, Thermometer, X } from "lucide-react"
+import { ChevronDown, Cloud, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun, MapPin, Moon, Search, Sun, Thermometer, X } from "lucide-react"
+import styles from "./LocalWeather.module.css"
 
 type WeatherLocation = {
   id?: number
@@ -35,15 +36,30 @@ const LOCATION_STORAGE_KEY = "tms_ops_weather_location"
 const WEATHER_REFRESH_MS = 15 * 60 * 1000
 
 function getWeatherDescription(code: string) {
-  if (code.startsWith("clearsky")) return { label: "Céu limpo", Icon: Sun }
-  if (code.startsWith("fair")) return { label: "Pouco nublado", Icon: CloudSun }
-  if (code.startsWith("partlycloudy")) return { label: "Parcialmente nublado", Icon: CloudSun }
-  if (code.startsWith("cloudy")) return { label: "Nublado", Icon: Cloud }
-  if (code.startsWith("fog")) return { label: "Nevoeiro", Icon: CloudFog }
-  if (code.includes("thunder")) return { label: "Trovoada", Icon: CloudLightning }
-  if (code.includes("snow") || code.includes("sleet")) return { label: "Neve", Icon: CloudSnow }
-  if (code.includes("rain") || code.includes("shower")) return { label: "Chuva", Icon: CloudRain }
-  return { label: "Condições atuais", Icon: Thermometer }
+  const night = code.endsWith("_night")
+  if (code.includes("thunder")) return { label: "Trovoada", Icon: CloudLightning, kind: "storm", night }
+  if (code.includes("snow") || code.includes("sleet")) return { label: "Neve", Icon: CloudSnow, kind: "snow", night }
+  if (code.includes("rain") || code.includes("shower")) return { label: "Chuva", Icon: CloudRain, kind: "rain", night }
+  if (code.startsWith("fog")) return { label: "Nevoeiro", Icon: CloudFog, kind: "fog", night }
+  if (code.startsWith("cloudy")) return { label: "Nublado", Icon: Cloud, kind: "cloudy", night }
+  if (code.startsWith("fair") || code.startsWith("partlycloudy")) return { label: code.startsWith("fair") ? "Pouco nublado" : "Parcialmente nublado", Icon: night ? Moon : CloudSun, kind: "partial", night }
+  if (code.startsWith("clearsky")) return { label: "Céu limpo", Icon: night ? Moon : Sun, kind: "clear", night }
+  return { label: "Condições atuais", Icon: Thermometer, kind: "unknown", night }
+}
+
+function WeatherScene({ kind, night }: { kind: string; night: boolean }) {
+  const clouds = ["cloudy", "partial", "rain", "snow", "storm", "fog"].includes(kind)
+  return <svg className={styles.scene} viewBox="0 0 112 82" fill="none" aria-hidden="true" focusable="false">
+    {(kind === "clear" || kind === "partial") && (night
+      ? <g><path d="M70 10a20 20 0 1 0 25 26A21 21 0 0 1 70 10Z" fill="#f4e5b7" /><circle cx="42" cy="16" r="1.5" fill="white" /><circle cx="101" cy="12" r="1" fill="white" /></g>
+      : <g className={styles.sun}><circle cx="72" cy="29" r="14" fill="#efb940" /><path d="M72 6v-3m0 52v-3M49 29h-3m52 0h-3M56 13l-3-3m38 38-3-3M56 45l-3 3m38-38-3 3" stroke="#e5a72a" strokeWidth="2.5" strokeLinecap="round" /></g>)}
+    {clouds && <g className={styles.cloud}><path d="M30 44a10 10 0 0 1 1-20 15 15 0 0 1 28-3 11 11 0 1 1 8 23Z" fill="#adbfcf" opacity=".7" /><path d="M39 52a13 13 0 0 1-2-26 18 18 0 0 1 34 0 13 13 0 1 1 7 26Z" fill="#f3f6f8" stroke="#d8e1e8" strokeWidth="1" /></g>}
+    {(kind === "rain" || kind === "storm") && <g className={styles.rain} stroke="#76b7e0" strokeWidth="2.5" strokeLinecap="round">{[35, 47, 59, 71, 83].map((x, i) => <path key={x} d={`M${x} 58l-3 7`} style={{ animationDelay: `${i * -0.23}s` }} />)}</g>}
+    {kind === "snow" && <g className={styles.snow} fill="#fff">{[36, 49, 62, 76].map((x, i) => <circle key={x} cx={x} cy="62" r="2" style={{ animationDelay: `${i * -0.6}s` }} />)}</g>}
+    {kind === "storm" && <path d="m64 43-9 16h8l-4 13 17-21h-10l5-8Z" fill="#edbd4c" stroke="#b3821e" strokeWidth=".7" />}
+    {kind === "fog" && <g className={styles.fog} stroke="#d8e2e9" strokeWidth="3" strokeLinecap="round"><path d="M24 60h58m-49 8h61M22 76h48" /></g>}
+    {kind === "unknown" && <Thermometer x={40} y={24} width={32} height={32} strokeWidth={1.5} />}
+  </svg>
 }
 
 function isWeatherLocation(value: unknown): value is WeatherLocation {
@@ -111,6 +127,7 @@ export function LocalWeather() {
 
   const condition = weather ? getWeatherDescription(weather.symbolCode) : null
   const WeatherIcon = condition?.Icon || Thermometer
+  const sky = { "data-weather": condition?.kind || "unknown", "data-night": condition?.night || false }
 
   const chooseLocation = (nextLocation: WeatherLocation) => {
     setLocation(nextLocation)
@@ -153,33 +170,36 @@ export function LocalWeather() {
       <button
         type="button"
         aria-expanded={isOpen}
-        aria-label={weather ? `${weather.location}: ${Math.round(weather.temperature)} graus. Ver previsão e mudar localidade.` : "Ver previsão e mudar localidade"}
+        aria-label={weather ? `${weather.location}: ${Math.round(weather.temperature)} graus, ${condition?.label}. Ver previsão e mudar localidade.` : "Ver previsão e mudar localidade"}
         onClick={() => setIsOpen((open) => !open)}
-        className="inline-flex min-h-10 items-center gap-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-1.5 text-left hover:bg-[var(--surface-muted)] transition-colors"
+        className={styles.weatherButton}
+        {...sky}
       >
-        <WeatherIcon className="h-4 w-4 text-[var(--text-secondary)]" strokeWidth={1.75} aria-hidden="true" />
-        <span className="leading-tight">
-          <span className="block text-sm font-semibold tabular-nums text-[var(--text-primary)]">
+        <WeatherScene kind={condition?.kind || "unknown"} night={condition?.night || false} />
+        <span className={styles.reading}>
+          <span className={styles.temperature}>
             {weather ? `${Math.round(weather.temperature)}°C` : "--°C"}
           </span>
-          <span className="block text-[10px] text-[var(--text-tertiary)]">{weather?.location || location.name}</span>
+          <span className={styles.location}>{weather?.location || location.name}</span>
+          <span className={styles.condition}>{condition?.label || "A obter tempo…"}</span>
         </span>
-        <ChevronDown className={`h-3.5 w-3.5 text-[var(--text-tertiary)] transition-transform ${isOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+        <ChevronDown className={`${styles.chevron} ${isOpen ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>
 
       {isOpen && (
         <div className="absolute left-0 top-full z-50 mt-2 w-[min(360px,calc(100vw-2rem))] rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 shadow-lg">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <WeatherIcon className="h-5 w-5 text-[var(--text-secondary)]" strokeWidth={1.75} aria-hidden="true" />
+          <div className={styles.forecastHeader} {...sky}>
+            <WeatherScene kind={condition?.kind || "unknown"} night={condition?.night || false} />
+            <div className="relative flex items-center gap-2.5">
+              <WeatherIcon className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
               <div>
-                <div className="text-sm font-semibold text-[var(--text-primary)]">{weather?.location || location.name}</div>
-                <div className="text-xs text-[var(--text-secondary)]">
+                <div className="text-sm font-semibold">{weather?.location || location.name}</div>
+                <div className="mt-1 text-xs">
                   {weather ? `${condition?.label} · ${Math.round(weather.temperature)}°C agora` : "A carregar condições atuais…"}
                 </div>
               </div>
             </div>
-            <button type="button" onClick={() => setIsOpen(false)} aria-label="Fechar previsão" className="rounded p-1 text-[var(--text-tertiary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]">
+            <button type="button" onClick={() => setIsOpen(false)} aria-label="Fechar previsão" className="relative rounded p-1 hover:bg-white/15">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -189,11 +209,12 @@ export function LocalWeather() {
             {weather?.nextHours.length ? (
               <div className="grid grid-cols-6 gap-1">
                 {weather.nextHours.map((hour) => {
-                  const ForecastIcon = getWeatherDescription(hour.symbolCode).Icon
+                  const forecast = getWeatherDescription(hour.symbolCode)
+                  const ForecastIcon = forecast.Icon
                   return (
                     <div key={hour.time} className="flex flex-col items-center gap-1 rounded-md bg-[var(--surface-muted)]/60 px-1 py-2 text-center">
                       <span className="text-[10px] tabular-nums text-[var(--text-tertiary)]">{new Date(hour.time).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}</span>
-                      <ForecastIcon className="h-3.5 w-3.5 text-[var(--text-secondary)]" strokeWidth={1.75} aria-hidden="true" />
+                      <ForecastIcon className={`${styles.forecastIcon} h-3.5 w-3.5`} data-weather={forecast.kind} data-night={forecast.night} strokeWidth={1.75} aria-hidden="true" />
                       <span className="text-xs font-medium tabular-nums text-[var(--text-primary)]">{Math.round(hour.temperature)}°</span>
                     </div>
                   )
