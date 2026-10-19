@@ -28,6 +28,7 @@ import { LatestNewsWidget } from "./components/LatestNewsWidget"
 import { DashboardWidgets } from "./components/DashboardWidgets"
 import { FloatingCalculatorWidget } from "./components/FloatingCalculatorWidget"
 import { LocalWeather } from "./components/LocalWeather"
+import { HeaderClockDate } from "./components/HeaderClockDate"
 
 function getMonthName(date: Date) {
   return date.toLocaleString('pt-PT', { month: 'long', year: 'numeric' })
@@ -274,6 +275,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
             </p>
           </div>
           <LocalWeather />
+          <HeaderClockDate />
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <DateRangePicker 
