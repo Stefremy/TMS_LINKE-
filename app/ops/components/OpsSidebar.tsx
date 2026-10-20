@@ -18,6 +18,7 @@ import {
   Package
 } from "lucide-react"
 import { SidebarNav } from "./SidebarNav"
+import styles from "./SidebarPattern.module.css"
 import { APP_VERSION } from "@/lib/config/version"
 import { signout } from "@/app/login/actions"
 
@@ -139,7 +140,7 @@ export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?
             </button>
           </div>
 
-          <div className="tms-drawer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className={`tms-drawer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain ${styles.pattern} ${styles.mobilePattern}`}>
             {/* Scrollable Navigation */}
             <div className="py-2">
               <SidebarNav collapsed={false} canAccessDocuments={canAccessDocuments} />
@@ -171,7 +172,7 @@ export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?
 
       {/* ─── DESKTOP SIDEBAR (desktop layout) ─────────────────────────────────── */}
       <aside
-        className={`tms-desktop-only tms-sidebar bg-[var(--surface-bg)] border-r border-[var(--border-subtle)] flex-col shrink-0 transition-all duration-200 select-none ${
+        className={`tms-desktop-only tms-sidebar ${styles.pattern} bg-[var(--surface-bg)] border-r border-[var(--border-subtle)] flex-col shrink-0 transition-all duration-200 select-none ${
           isCollapsed ? "w-[68px]" : "w-[220px]"
         }`}
       >

@@ -1,0 +1,20 @@
+.pattern {
+  isolation: isolate;
+}
+
+/* Sparse routes and hubs stay behind the menu and adapt to the active theme. */
+.pattern::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--accent) 18%, transparent);
+  mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20260%20900%22%20preserveAspectRatio%3D%22none%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22fade%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22white%22%20stop-opacity%3D%22.08%22%2F%3E%3Cstop%20offset%3D%22.4%22%20stop-color%3D%22white%22%20stop-opacity%3D%22.55%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22white%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22url(%23fade)%22%20stroke-width%3D%221.5%22%3E%3Cpath%20d%3D%22M282%2052H224Q196%2052%20196%2080V242Q196%20270%20224%20270H234Q258%20270%20258%20298V480Q258%20508%20230%20508H206Q180%20508%20180%20536V714Q180%20742%20208%20742H284%22%2F%3E%3Cpath%20d%3D%22M-28%20398H24Q52%20398%2052%20426V544Q52%20574%2082%20574H112Q140%20574%20140%20602V828Q140%20856%20168%20856H284%22%20stroke-dasharray%3D%225%208%22%2F%3E%3Cpath%20d%3D%22M196%20182H142Q114%20182%20114%20210V316Q114%20344%20142%20344H230Q258%20344%20258%20372%22%20opacity%3D%22.5%22%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%221.5%22%3E%3Ccircle%20cx%3D%22196%22%20cy%3D%22182%22%20r%3D%225%22%20opacity%3D%22.18%22%2F%3E%3Ccircle%20cx%3D%22258%22%20cy%3D%22344%22%20r%3D%224%22%20opacity%3D%22.35%22%2F%3E%3Ccircle%20cx%3D%2252%22%20cy%3D%22478%22%20r%3D%225%22%20opacity%3D%22.6%22%2F%3E%3Ccircle%20cx%3D%22180%22%20cy%3D%22646%22%20r%3D%226%22%20opacity%3D%22.85%22%2F%3E%3Ccircle%20cx%3D%22140%22%20cy%3D%22784%22%20r%3D%224%22%20opacity%3D%22.75%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+}
+
+.mobilePattern {
+  position: relative;
+}
