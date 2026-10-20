@@ -19,7 +19,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
     
     // 1. Obter Cliente do TMS (com fallback garantido)
     const allClients = await getClientesAction()
-    const client = allClients.find((c: any) => c.id === clientId)
+    const client = allClients.find(c => c.id === clientId)
       
     if (!client) {
       throw new Error("Cliente não encontrado.")
