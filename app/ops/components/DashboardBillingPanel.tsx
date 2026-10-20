@@ -36,7 +36,7 @@ export function DashboardBillingPanel({ totals, recent }: Props) {
             <section key={metric.id} aria-label={metric.label} className="min-w-0 border-l-4 px-3 py-1.5" style={{ borderLeftColor: metric.color }}>
               <div className="flex min-w-0 items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white" style={{ backgroundColor: metric.color }}><metric.Icon aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.2} /></span>
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[var(--text-secondary)]"><metric.Icon aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.2} /></span>
                   <div className="flex min-w-0 items-center gap-1.5" title={metric.note}>
                     <h3 className="truncate text-[11px] font-semibold text-[var(--text-secondary)]">{metric.label}</h3>
                     {metric.id === "billed" && totals && <span className="shrink-0 text-[10px] text-[var(--text-tertiary)]">({totals.count})</span>}
