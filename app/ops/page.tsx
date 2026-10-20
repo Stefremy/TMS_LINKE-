@@ -276,6 +276,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
           </div>
           <LocalWeather />
           <HeaderClockDate />
+          <FloatingCalculatorWidget placement="inline" />
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <DateRangePicker 
@@ -718,7 +719,6 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
         <LatestNewsWidget />
       </section>
 
-      <FloatingCalculatorWidget />
     </div>
   )
 }

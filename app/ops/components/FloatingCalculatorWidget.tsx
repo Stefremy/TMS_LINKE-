@@ -4,13 +4,13 @@ import React, { useState } from "react"
 import { Calculator, X } from "lucide-react"
 import { NeumorphicCalculator } from "./NeumorphicCalculator"
 
-export function FloatingCalculatorWidget() {
+export function FloatingCalculatorWidget({ placement = "floating" }: { placement?: "floating" | "inline" }) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
     <>
       {/* Floating Neumorphic Action Button (docked bottom-right) */}
-      <div className="fixed bottom-6 right-6 z-40 select-none print:hidden">
+      <div className={placement === "inline" ? "relative z-40 select-none print:hidden" : "fixed bottom-6 right-6 z-40 select-none print:hidden"}>
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
@@ -21,7 +21,7 @@ export function FloatingCalculatorWidget() {
               ? "inset 3px 3px 6px #cad4e2, inset -3px -3px 6px #ffffff"
               : "6px 6px 14px rgba(166, 180, 200, 0.45), -6px -6px 14px #ffffff",
           }}
-          className={`group flex items-center gap-2.5 h-12 px-4 rounded-full border border-white/60 transition-all duration-200 cursor-pointer hover:scale-105 active:scale-95 ${
+          className={`group flex items-center gap-2.5 h-12 px-4 rounded-xl border border-white/60 transition-all duration-200 cursor-pointer hover:scale-[1.02] active:scale-95 ${
             isOpen ? "ring-2 ring-teal-500/40 text-teal-600" : "text-slate-700 hover:text-teal-600"
           }`}
         >
