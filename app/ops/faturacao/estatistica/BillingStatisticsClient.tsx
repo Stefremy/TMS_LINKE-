@@ -76,10 +76,10 @@ export function BillingStatisticsClient({ data }: { data: BillingStatisticsData 
       {invalidRange && <p role="alert" className="mt-3 text-sm text-[#C2413B]">A data final deve ser igual ou posterior à data inicial.</p>}
     </section>
 
-    <section aria-label="Totais do período selecionado" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {cards.map(({ label, value, note, color, Icon }) => <div key={label} className={`${panel} border-t-4 p-4`} style={{ borderTopColor: color }}>
-        <div className="flex items-center justify-between gap-2"><h2 className="text-xs font-semibold text-[var(--text-secondary)]">{label}</h2><span style={{ backgroundColor: color }} className="flex h-8 w-8 items-center justify-center rounded-lg text-white"><Icon aria-hidden="true" className="h-4 w-4" /></span></div>
-        <p className="mt-2 text-2xl font-bold tabular-nums">{selected.length && !knownAmounts ? "Sem dados" : money(value)}</p><p className="mt-1 text-[11px] text-[var(--text-tertiary)]">{note}</p>
+    <section aria-label="Totais do período selecionado" className="grid grid-cols-2 divide-x divide-y divide-[var(--border-subtle)] overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] xl:grid-cols-4 xl:divide-y-0">
+      {cards.map(({ label, value, note, color, Icon }) => <div key={label} className="min-w-0 border-t-4 p-4 sm:p-5" style={{ borderTopColor: color }}>
+        <div className="flex items-center gap-2.5 text-sm font-medium text-[var(--text-primary)]"><span style={{ backgroundColor: color }} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white"><Icon aria-hidden="true" className="h-4 w-4" /></span><h2 className="truncate">{label}</h2></div>
+        <p className="mt-3 break-words text-2xl font-semibold leading-none tracking-tight tabular-nums">{selected.length && !knownAmounts ? "Sem dados" : money(value)}</p><p className="mt-2 text-xs text-[var(--text-tertiary)]">{note}</p>
       </div>)}
     </section>
     {(unknownDue > 0 || summary.totals.missingAmounts > 0 || data.cyclesUnavailable || reviewReceipts > 0) && <div role="status" className={`${panel} flex items-start gap-2 px-4 py-3 text-xs text-[var(--text-secondary)]`}><AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[#B45309]" /><div>

@@ -8,7 +8,7 @@
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
-  background-color: color-mix(in srgb, var(--canvas-bg) 50%, var(--surface-bg));
+  background-color: color-mix(in srgb, var(--canvas-bg) 42%, #d8dee3 58%);
   background-image:
     radial-gradient(ellipse at 72% 18%, rgb(92 214 157 / 10%), transparent 48%),
     radial-gradient(circle, color-mix(in srgb, var(--text-tertiary) 22%, transparent) .7px, transparent .9px);
@@ -17,17 +17,17 @@
 .shape {
   position: absolute;
   display: block;
-  opacity: .22;
+  opacity: .36;
   animation: float 26s ease-in-out infinite;
   transform: rotate(var(--turn, 0deg));
 }
-.circle { width: 106px; height: 106px; border-radius: 50%; background: #69dba8; left: 1%; top: 52px; }
-.triangle { width: 145px; height: 142px; background: #70d9aa; clip-path: polygon(50% 0, 100% 100%, 0 100%); right: 6%; top: -34px; --turn: 12deg; animation-duration: 31s; animation-delay: -11s; }
-.smallTriangle { width: 82px; height: 86px; background: #58be91; clip-path: polygon(50% 0, 100% 100%, 0 100%); right: 24%; top: 285px; --turn: -17deg; animation-duration: 23s; animation-delay: -7s; opacity: .16; }
-.limeCircle { width: 62px; height: 62px; border-radius: 50%; background: #aacd66; right: 1%; top: 405px; animation-duration: 29s; animation-delay: -16s; }
-.square { width: 115px; height: 115px; background: #3e9282; right: 3%; bottom: 8%; --turn: 32deg; animation-duration: 34s; animation-delay: -19s; opacity: .16; }
-.cross { width: 70px; height: 70px; left: 7%; top: 360px; --turn: 12deg; color: #a2cc68; animation-duration: 28s; animation-delay: -9s; }
-.smallCross { width: 46px; height: 46px; left: 39%; bottom: 3%; --turn: -24deg; color: #57c596; animation-duration: 25s; animation-delay: -14s; }
+.circle { width: 106px; height: 106px; border-radius: 50%; background: #42c985; left: 1%; top: 52px; }
+.triangle { width: 145px; height: 142px; background: #43c58a; clip-path: polygon(50% 0, 100% 100%, 0 100%); right: 6%; top: -34px; --turn: 12deg; animation-duration: 31s; animation-delay: -11s; }
+.smallTriangle { width: 82px; height: 86px; background: #32ae80; clip-path: polygon(50% 0, 100% 100%, 0 100%); right: 24%; top: 285px; --turn: -17deg; animation-duration: 23s; animation-delay: -7s; opacity: .27; }
+.limeCircle { width: 62px; height: 62px; border-radius: 50%; background: #a4c94e; right: 1%; top: 405px; animation-duration: 29s; animation-delay: -16s; }
+.square { width: 115px; height: 115px; background: #348b7c; right: 3%; bottom: 8%; --turn: 32deg; animation-duration: 34s; animation-delay: -19s; opacity: .27; }
+.cross { width: 70px; height: 70px; left: 7%; top: 360px; --turn: 12deg; color: #91bd49; animation-duration: 28s; animation-delay: -9s; }
+.smallCross { width: 46px; height: 46px; left: 39%; bottom: 3%; --turn: -24deg; color: #34ae7d; animation-duration: 25s; animation-delay: -14s; }
 .cross::before, .smallCross::before, .cross::after, .smallCross::after { content: ""; position: absolute; background: currentColor; }
 .cross::before, .smallCross::before { width: 100%; height: 1.5px; top: 50%; left: 0; }
 .cross::after, .smallCross::after { height: 100%; width: 1.5px; left: 50%; top: 0; }

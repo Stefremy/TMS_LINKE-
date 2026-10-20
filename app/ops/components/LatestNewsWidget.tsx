@@ -76,7 +76,7 @@ export function LatestNewsWidget() {
   return <section aria-label="Notícias e atualizações" className="flex min-w-0 flex-col gap-3 py-4">
     <div className="relative mb-1 flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-2.5 pr-8 sm:pr-0">
-        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${category === "mercados" ? "border-[#155EEF] bg-[#155EEF] text-white" : "border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-secondary)]"}`}>
+        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${category === "mercados" ? "border-[#155EEF] bg-[#155EEF] text-white" : "border-[#B45309] bg-[#B45309] text-white"}`}>
           {category === "mercados" ? <TrendingUp aria-hidden="true" className="h-3.5 w-3.5" /> : <Newspaper aria-hidden="true" className="h-3.5 w-3.5" />}
         </div>
         <div><h4 className="text-sm font-semibold leading-tight text-[var(--text-primary)]">Notícias &amp; Atualizações</h4>
@@ -85,12 +85,12 @@ export function LatestNewsWidget() {
       <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto">
         <div aria-label="Categoria de notícias" className="flex flex-wrap gap-0.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-0.5 text-[10px]">
           {NEWS_CATEGORIES.map(item => <button key={item.id} type="button" aria-pressed={category === item.id} onClick={() => changeCategory(item.id)}
-            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#155EEF] ${category === item.id ? "bg-[#155EEF] text-white shadow-sm" : "text-[var(--text-secondary)] hover:bg-[var(--surface-bg)] hover:text-[var(--text-primary)]"}`}>
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B45309] ${category === item.id ? "text-white shadow-sm" : "text-[var(--text-secondary)] hover:bg-[var(--surface-bg)] hover:text-[var(--text-primary)]"}`} style={category === item.id ? { backgroundColor: item.id === "mercados" ? "#155EEF" : "#B45309" } : undefined}>
             {item.id === "mercados" && <TrendingUp aria-hidden="true" className="h-3 w-3" />}{item.label}
           </button>)}
         </div>
         <button type="button" onClick={refreshNews} disabled={loading || refreshing} title="Atualizar notícias" aria-label="Atualizar notícias"
-          className="absolute right-0 top-0 rounded-lg p-1.5 text-[var(--text-tertiary)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 sm:static">
+          className="absolute right-0 top-0 rounded-lg p-1.5 text-[var(--text-tertiary)] transition-colors hover:bg-[#B45309]/10 hover:text-[#8A3F05] disabled:opacity-50 sm:static">
           <RefreshCw aria-hidden="true" className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
         </button>
       </div>
@@ -101,7 +101,7 @@ export function LatestNewsWidget() {
     <div aria-busy={loading} className="custom-scrollbar max-h-[195px] flex-1 space-y-2 overflow-y-auto pr-1">
       {loading ? <div className="space-y-2 py-1" aria-label="A carregar notícias">{[1, 2, 3].map(i => <div key={i} className="flex animate-pulse flex-col gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3"><div className="h-2 w-20 rounded bg-[var(--border-subtle)]" /><div className="h-3 w-5/6 rounded bg-[var(--border-subtle)]" /></div>)}</div>
         : !news.length ? <p className="py-6 text-center text-xs text-[var(--text-tertiary)]">{error ? "Use o botão atualizar para tentar novamente." : "Nenhuma notícia encontrada de momento."}</p>
-        : news.slice(0, 5).map(item => <a key={item.id} href={item.link} target="_blank" rel="noopener noreferrer" className="group block rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-3 shadow-2xs transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)]">
+        : news.slice(0, 5).map(item => <a key={item.id} href={item.link} target="_blank" rel="noopener noreferrer" className="group block rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-3 shadow-2xs transition-colors hover:border-[#B45309]/50 hover:bg-[#B45309]/[0.03]">
           <div className="mb-1 flex items-center justify-between gap-2 text-[10px] text-[var(--text-tertiary)]">
             <div className="flex min-w-0 items-center gap-1.5"><span className="truncate font-semibold text-[var(--text-secondary)]">{item.source}</span><span>·</span><span className="flex shrink-0 items-center gap-0.5"><Clock aria-hidden="true" className="h-2.5 w-2.5" />{item.timeAgo}</span></div>
             <ArrowUpRight aria-hidden="true" className="h-3 w-3 shrink-0 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />

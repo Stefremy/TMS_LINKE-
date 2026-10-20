@@ -20,6 +20,8 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getCarrierLogo } from "@/lib/carrier-logos"
+import { filterStatisticsInvoices, summarizeBillingStatistics } from "@/lib/billing/statistics"
+import { loadBillingStatistics } from "@/lib/billing/statistics-data"
 
 import { OpsDashboardClientSync } from "./components/OpsDashboardClientSync"
 import { ProfitComparisonChart } from "./components/ProfitComparisonChart"
@@ -29,6 +31,7 @@ import { DashboardWidgets } from "./components/DashboardWidgets"
 import { FloatingCalculatorWidget } from "./components/FloatingCalculatorWidget"
 import { LocalWeather } from "./components/LocalWeather"
 import { HeaderClockDate } from "./components/HeaderClockDate"
+import { DashboardBillingPanel } from "./components/DashboardBillingPanel"
 
 function getMonthName(date: Date) {
   return date.toLocaleString('pt-PT', { month: 'long', year: 'numeric' })
@@ -39,17 +42,33 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
   const supabase = createAdminClient()
 
   // Fetch real data from DB & persistent actions
-  const [shipments, recolhasResult, clients] = await Promise.all([
+  const [shipments, recolhasResult, clients, billingData] = await Promise.all([
     getShipmentsAction({ includeLabels: false }),
     supabase
       .from("recolhas")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(500),
-    getClientesAction()
+    getClientesAction(),
+    loadBillingStatistics().catch(() => null)
   ])
 
   const recolhas = recolhasResult.data || []
+  const billingStart = billingData ? `${billingData.today.slice(0, 4)}-01-01` : ""
+  const billingInvoices = billingData
+    ? filterStatisticsInvoices(billingData.invoices, { start: billingStart, end: billingData.today, client: "", state: "all" })
+    : []
+  const billingSummary = billingData ? summarizeBillingStatistics(
+    billingInvoices, billingData.today, billingStart, billingData.today
+  ) : null
+  const orderedBillingInvoices = [...billingInvoices]
+    .sort((a, b) => b.issuedDate.localeCompare(a.issuedDate) || b.id.localeCompare(a.id, "en", { numeric: true }))
+  const recentBillingInvoices = {
+    billed: orderedBillingInvoices.slice(0, 3),
+    paid: orderedBillingInvoices.filter(invoice => invoice.paid).slice(0, 3),
+    open: orderedBillingInvoices.filter(invoice => !invoice.paid).slice(0, 3),
+    overdue: orderedBillingInvoices.filter(invoice => invoice.state === "overdue").slice(0, 3),
+  }
 
   // Create client map
   const clientMap = new Map<string, string>()
@@ -394,8 +413,12 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
         </div>
       </section>
 
-      <ProfitComparisonChart data={chartData} targetMonth={targetDate.getMonth()} />
-
+      <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-3">
+        <div className="min-w-0 xl:col-span-2 [&>div]:h-full">
+          <ProfitComparisonChart data={chartData} targetMonth={targetDate.getMonth()} />
+        </div>
+        <DashboardBillingPanel totals={billingSummary?.totals ?? null} recent={recentBillingInvoices} />
+      </div>
 
       {/* Table & Widgets Grid */}
       <div className="flex flex-col xl:flex-row gap-5">
@@ -715,7 +738,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
         
       </div>
 
-      <section className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-4 sm:px-5">
+      <section className="rounded-lg border border-[var(--border-subtle)] px-4 sm:px-5" style={{ backgroundColor: "color-mix(in srgb, var(--surface-bg) 86%, #B45309 14%)" }}>
         <LatestNewsWidget />
       </section>
 

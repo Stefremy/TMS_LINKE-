@@ -226,7 +226,7 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
         })}
       </div>
 
-      <div className="h-72 w-full text-xs relative">
+      <div className="min-h-72 flex-1 w-full text-xs relative">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 10, right: 12, left: -16, bottom: 0 }}>
             <CartesianGrid 
