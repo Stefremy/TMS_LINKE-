@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { getClientesAction } from "@/app/actions/clientes"
 import { normalizeBillingStatistics, type BillingLog, type BillingStatsCycle } from "./statistics"
 
-export async function loadBillingStatistics() {
+export async function loadBillingStatistics(preloadedClients?: any[]) {
   const ctx = await requireEmployee()
   if (!ctx.tenant_id) throw new Error("Conta sem empresa associada.")
   const db = createAdminClient()
@@ -29,6 +29,10 @@ export async function loadBillingStatistics() {
       if (data.length < 1000) return { cycles, unavailable: false }
     }
   }
-  const [logs, clients, cycleData] = await Promise.all([readLogs(), getClientesAction(), readCycles()])
+  const [logs, clients, cycleData] = await Promise.all([
+    readLogs(),
+    preloadedClients ? Promise.resolve(preloadedClients) : getClientesAction(),
+    readCycles()
+  ])
   return { ...normalizeBillingStatistics(logs, clients, cycleData.cycles), cyclesUnavailable: cycleData.unavailable }
 }

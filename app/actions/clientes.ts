@@ -145,12 +145,26 @@ const DEFAULT_CLIENTES: Cliente[] = [
   },
 ]
 
+const clientProfileMemoryCache = new Map<string, { tenantId: string; timestamp: number; profile: Cliente }>()
+
+function clearClientProfileMemoryCache(id?: string) {
+  if (id) clientProfileMemoryCache.delete(id)
+  else clientProfileMemoryCache.clear()
+}
+
 /**
  * Obtém todos os clientes para listagem
  */
 export async function getClientesAction(selectedClientId?: string): Promise<Cliente[]> {
   const ctx = await requireUser()
   const scopedId = ctx.role === "client" ? ctx.client_id! : selectedClientId
+
+  if (scopedId) {
+    const cached = clientProfileMemoryCache.get(scopedId)
+    if (cached && cached.tenantId === ctx.tenant_id && (Date.now() - cached.timestamp) < 30_000) {
+      return [cached.profile]
+    }
+  }
 
   const supabase = createAdminClient()
 
@@ -246,6 +260,9 @@ export async function getClientesAction(selectedClientId?: string): Promise<Clie
 
   if (scopedId) {
     result = result.filter((c) => c.id === scopedId)
+    if (result.length === 1) {
+      clientProfileMemoryCache.set(scopedId, { tenantId: ctx.tenant_id, timestamp: Date.now(), profile: result[0] })
+    }
   }
 
   return result
@@ -346,6 +363,12 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     .eq("tenant_id", ctx.tenant_id).eq("action", "deleted_client").eq("details->>id", id)
   if (restoreError) throw new Error("Não foi possível repor a loja. Tente novamente.")
 
+  try {
+    const { clearStoresMemoryCache } = await import("@/lib/client-portal/access")
+    clearStoresMemoryCache()
+    clearClientProfileMemoryCache(id)
+  } catch {}
+
   revalidatePath("/ops/entidades/clientes")
   revalidatePath("/ops/clientes")
   revalidatePath("/app", "layout")
@@ -392,6 +415,12 @@ export async function toggleClienteStatusAction(id: string, is_active: boolean) 
         }
       }
     }
+  } catch {}
+
+  try {
+    const { clearStoresMemoryCache } = await import("@/lib/client-portal/access")
+    clearStoresMemoryCache()
+    clearClientProfileMemoryCache(id)
   } catch {}
 
   revalidatePath("/ops/entidades/clientes")
@@ -456,6 +485,12 @@ export async function deleteClienteAction(id: string) {
   } catch (err: any) {
     console.warn("Error saving deleted_client tombstone:", err?.message)
   }
+
+  try {
+    const { clearStoresMemoryCache } = await import("@/lib/client-portal/access")
+    clearStoresMemoryCache()
+    clearClientProfileMemoryCache(id)
+  } catch {}
 
   revalidatePath("/ops/entidades/clientes")
   revalidatePath("/ops/clientes")

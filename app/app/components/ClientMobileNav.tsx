@@ -178,6 +178,7 @@ export function ClientMobileNav() {
             <Link
               key={tab.href}
               href={tab.href}
+              prefetch={false}
               aria-current={isActive ? "page" : undefined}
               className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
                 isActive

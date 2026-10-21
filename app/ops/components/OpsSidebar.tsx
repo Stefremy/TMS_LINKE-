@@ -240,6 +240,7 @@ export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?
       >
         <Link
           href="/ops"
+          prefetch={false}
           aria-current={pathname === "/ops" ? "page" : undefined}
           className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
             pathname === "/ops"
@@ -253,6 +254,7 @@ export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?
 
         <Link
           href="/ops/envios"
+          prefetch={false}
           aria-current={pathname.startsWith("/ops/envios") && pathname !== "/ops/envios/novo" ? "page" : undefined}
           className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
             pathname.startsWith("/ops/envios") && pathname !== "/ops/envios/novo"
@@ -266,6 +268,7 @@ export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?
 
         <Link
           href="/ops/envios/novo"
+          prefetch={false}
           className="tms-nav-create flex flex-col items-center justify-center -mt-3 shrink-0"
         >
           <div className="tms-brand-cta w-11 h-11 rounded-full bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white flex items-center justify-center shadow-md active:scale-95 transition-all">
@@ -276,6 +279,7 @@ export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?
 
         <Link
           href="/ops/envios/recolhas"
+          prefetch={false}
           aria-current={pathname.startsWith("/ops/envios/recolhas") ? "page" : undefined}
           className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
             pathname.startsWith("/ops/envios/recolhas")

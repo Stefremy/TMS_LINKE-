@@ -30,6 +30,7 @@ export function ClientSidebarNav() {
           <Link
             key={item.href}
             href={item.href}
+            prefetch={false}
             className={`flex items-center justify-between px-2.5 py-2 rounded-md text-[13px] transition-colors group ${
               isActive
                 ? "text-[var(--accent)] bg-[var(--accent-soft)] font-semibold border border-[rgba(18,138,71,0.15)]"

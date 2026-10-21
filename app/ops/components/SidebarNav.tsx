@@ -207,6 +207,7 @@ export function SidebarNav({ collapsed = false, canAccessDocuments = false }: Si
                             <Link
                               key={sub.title}
                               href={sub.href!}
+                              prefetch={false}
                               className={`block py-1.5 px-2 rounded-md text-[12px] transition-colors ${
                                 isSubActive
                                   ? "text-[var(--text-primary)] font-semibold bg-[var(--surface-muted)]"
@@ -226,6 +227,7 @@ export function SidebarNav({ collapsed = false, canAccessDocuments = false }: Si
                   <div key={item.title} className="relative group flex justify-center">
                     <Link
                       href={item.href}
+                      prefetch={false}
                       className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
                         isActive
                           ? "bg-[var(--surface-muted)] text-[var(--text-primary)] font-semibold"
@@ -319,6 +321,7 @@ export function SidebarNav({ collapsed = false, canAccessDocuments = false }: Si
                             <Link
                               key={sub.title}
                               href={sub.href!}
+                              prefetch={false}
                               className={`block py-1.5 px-2 rounded-md text-[12px] transition-colors ${
                                 isSubActive
                                   ? "text-[var(--text-primary)] font-semibold bg-[var(--surface-muted)]"
@@ -339,6 +342,7 @@ export function SidebarNav({ collapsed = false, canAccessDocuments = false }: Si
                 <Link 
                   key={item.title}
                   href={item.href} 
+                  prefetch={false}
                   className={`flex items-center justify-between px-2 py-1.5 rounded-md text-[13px] transition-colors group ${
                     isActive 
                       ? "text-[var(--accent)] font-semibold" 

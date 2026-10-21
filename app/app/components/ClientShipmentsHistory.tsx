@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon, Undo2, Trash2 } from "lucide-react"
+import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon, Undo2, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientPortalStatsAction, getShipmentLabelAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
 import { closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
@@ -120,6 +120,21 @@ export function ClientShipmentsHistory() {
       return matchesSearch && matchesStatus
     })
   }, [shipments, searchTerm, statusFilter])
+
+  // Pagination (15 por página)
+  const pageSize = 15
+  const [currentPage, setCurrentPage] = React.useState(1)
+
+  // Reiniciar página quando os filtros ou pesquisa mudam
+  React.useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter])
+
+  const totalPages = Math.ceil(filteredShipments.length / pageSize) || 1
+  const paginatedShipments = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    return filteredShipments.slice(startIndex, startIndex + pageSize)
+  }, [filteredShipments, currentPage, pageSize])
 
   const pendingShipments = React.useMemo(() => {
     return shipments.filter(s => s.status === "pendente" && ["ctt", "ctt_expresso"].includes(s.carrier_code) && !s.ctt_manifest_pdf && !["manifesto_fechado", "expedido"].includes(s.ops_substatus))
@@ -312,7 +327,7 @@ export function ClientShipmentsHistory() {
           <div>
             {/* ─── MOBILE CARDS VIEW (md:hidden) ─── */}
             <div className="tms-compact-list divide-y divide-slate-100">
-              {filteredShipments.map((envio) => {
+              {paginatedShipments.map((envio) => {
                 const linkeRef =
                   (envio.reference?.startsWith("LTK") ? envio.reference : null) ||
                   (envio.tracking_number?.startsWith("LTK") ? envio.tracking_number : null) ||
@@ -436,7 +451,7 @@ export function ClientShipmentsHistory() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredShipments.map((envio) => (
+                {paginatedShipments.map((envio) => (
                   <tr key={envio.id} className="hover:bg-slate-50">
                     <td className="py-3">
                       {(() => {
@@ -573,6 +588,41 @@ export function ClientShipmentsHistory() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer (15 por página) */}
+          {filteredShipments.length > 0 && (
+            <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-4 text-xs text-[var(--text-secondary)]">
+              <div>
+                A mostrar <strong className="text-[var(--text-primary)]">{Math.min((currentPage - 1) * pageSize + 1, filteredShipments.length)}</strong> a <strong className="text-[var(--text-primary)]">{Math.min(currentPage * pageSize, filteredShipments.length)}</strong> de <strong className="text-[var(--text-primary)]">{filteredShipments.length}</strong> envios
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] disabled:opacity-40 disabled:cursor-not-allowed rounded-md font-bold text-[var(--text-primary)] flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Anterior</span>
+                </button>
+
+                <span className="px-2 font-bold text-[var(--text-primary)] font-mono">
+                  {currentPage} / {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                  disabled={currentPage >= totalPages}
+                  className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] disabled:opacity-40 disabled:cursor-not-allowed rounded-md font-bold text-[var(--text-primary)] flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <span>Próxima</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
       </div>

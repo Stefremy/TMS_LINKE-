@@ -41,7 +41,8 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
   const searchParams = await props.searchParams || {}
   const supabase = createAdminClient()
 
-  // Fetch real data from DB & persistent actions
+  // Fetch real data from DB & persistent actions (share clients promise to avoid duplicate queries)
+  const clientsPromise = getClientesAction()
   const [shipments, recolhasResult, clients, billingData] = await Promise.all([
     getShipmentsAction({ includeLabels: false }),
     supabase
@@ -49,8 +50,8 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
       .select("*")
       .order("created_at", { ascending: false })
       .limit(500),
-    getClientesAction(),
-    loadBillingStatistics().catch(() => null)
+    clientsPromise,
+    clientsPromise.then((loadedClients) => loadBillingStatistics(loadedClients)).catch(() => null)
   ])
 
   const recolhas = recolhasResult.data || []

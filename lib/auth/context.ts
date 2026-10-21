@@ -52,6 +52,34 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
   let colaborador_id: string | null = null;
   let permissions: string[] = [];
 
+  const metadata = user.app_metadata || {}
+
+  // Fast path for clients: app_metadata is server-managed and cannot be spoofed by users.
+  // Clients are never in colaboradores, so skipping that avoids a slow failing query.
+  if (metadata.role === 'client') {
+    role = 'client'
+    client_id = metadata.client_id || null
+    if (!client_id) {
+      const supabaseAdmin = createAdminClient()
+      const { data: clientUser } = await supabaseAdmin
+        .from('client_users')
+        .select('client_id')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (clientUser?.client_id) {
+        client_id = clientUser.client_id
+      }
+    }
+    return {
+      user,
+      role: 'client',
+      tenant_id: metadata.tenant_id || LINKE_TENANT_ID,
+      client_id,
+      colaborador_id: null,
+      permissions: [],
+    }
+  }
+
   const supabaseAdmin = createAdminClient()
   
   // 1. Check if the user is an employee in the database
@@ -69,7 +97,6 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
     }
   } else {
     // Only server-managed metadata may assign roles or client scope.
-    const metadata = user.app_metadata || {}
     role = ['client', 'employee', 'admin'].includes(metadata.role) ? metadata.role : null
 
     if (role === 'client') {

@@ -126,7 +126,7 @@ test('EQ and DB products use their own CTT product code, without a Para Amanhã 
 test('stored emission metadata retains the real last object for multiple volumes', async () => {
   const metadata = { shipmentId: A, FirstObjectCode: 'DD123456789PT', LastObjectCode: 'DD123456790PT', SubProductCode: 'EMSF056.01' }
   const h = harness({ rows: [row(A, { volumes_count: 2 })], audit: [{ tenant_id: TENANT, action: 'shipment_data',
-    details: { id: A }, ctt_close_data: metadata }] })
+    details: { id: A, ctt_close_data: metadata } }] })
   assert.equal((await h.close(TENANT, [A])).success, true)
   assert.equal(h.calls[0].input.shipments[0].LastObjectCode, 'DD123456790PT')
   const missing = harness({ rows: [row(A, { volumes_count: 2 })] })

@@ -55,7 +55,7 @@ test('Client mobile navigation preserves scoped store links and keeps OPS access
     const load=createLoader({
       react:React,'react/jsx-runtime':require('react/jsx-runtime'),'lucide-react':require('lucide-react'),
       'next/navigation':{usePathname:()=>'/app/store-a/envios'},
-      'next/link':{__esModule:true,default:({children,...props})=>React.createElement('a',props,children)},
+      'next/link':{__esModule:true,default:({children,prefetch,...props})=>React.createElement('a',props,children)},
       'next/image':{__esModule:true,default:({src,alt,width,height})=>React.createElement('img',{src,alt,width,height})},
       './ClientScope':{useClientScope:()=>scope},
       './ClientImpersonationBanner':{ClientProfileSidebar:()=>null},

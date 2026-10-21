@@ -9,8 +9,20 @@ import { buildStoreSlugs, portalPath, type PortalSection } from "./paths"
 type StoreIdentity = { id: string; name: string; portal_slug?: string; is_active?: boolean }
 type StoreLog = { action: string; store_id?: string; short_name?: string; legal_name?: string; portal_slug?: string; is_active?: boolean }
 
+let storesMemoryCache: { tenantId: string; timestamp: number; data: (StoreIdentity & { slug: string })[] } | null = null
+
+export function clearStoresMemoryCache() {
+  storesMemoryCache = null
+}
+
 const loadStores = cache(async (tenantId: string) => {
   if (!tenantId) throw new Error("Conta sem empresa associada.")
+
+  // 30-second memory cache avoids re-querying clients and audit_log on every page transition in the portal
+  if (storesMemoryCache && storesMemoryCache.tenantId === tenantId && (Date.now() - storesMemoryCache.timestamp) < 30_000) {
+    return storesMemoryCache.data
+  }
+
   const db = createAdminClient()
   // Paginate the registry so stores beyond the old display limits remain routable.
   const readRegistry = async () => {
@@ -52,7 +64,9 @@ const loadStores = cache(async (tenantId: string) => {
   }
   deleted.forEach(id => stores.delete(id))
   const slugs = buildStoreSlugs([...stores.values()])
-  return [...stores.values()].map(store => ({ ...store, slug: slugs.get(store.id)! }))
+  const result = [...stores.values()].map(store => ({ ...store, slug: slugs.get(store.id)! }))
+  storesMemoryCache = { tenantId, timestamp: Date.now(), data: result }
+  return result
 })
 
 export const requirePortalStore = cache(async (slug: string) => {

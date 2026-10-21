@@ -24,6 +24,7 @@ function createLoader(mocks) {
       const base = id.startsWith('@/') ? path.join(root, id.slice(2)) : path.resolve(path.dirname(absolute), id)
       const resolved = [base, `${base}.ts`, `${base}.tsx`].find(p => fs.existsSync(p) && fs.statSync(p).isFile())
       if (!resolved) throw new Error(`Module not found: ${id}`)
+      if (resolved.endsWith('.css')) return new Proxy({}, { get: (_, prop) => String(prop) })
       return load(resolved)
     }
     const fetch = mocks.fetch || (() => { throw new Error('Network access is forbidden in security tests') })
