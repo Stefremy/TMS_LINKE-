@@ -39,6 +39,7 @@ import { getCarrierLogo } from "@/lib/carrier-logos"
 import { useClientScope } from "./ClientScope"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
 import { useRecipientAgenda } from "@/lib/hooks/useRecipientAgenda"
+import { ClientTopUpModal } from "./ClientTopUpModal"
 
 export function ClientCreateGuia() {
   const { client: currentClient, basePath } = useClientScope()
@@ -111,6 +112,7 @@ export function ClientCreateGuia() {
   const [submitError, setSubmitError] = React.useState<string | null>(null)
   const [dbWarning, setDbWarning] = React.useState<string | null>(null)
   const [fieldError, setFieldError] = React.useState<"postal" | "name" | "address" | "weight" | "special" | null>(null)
+  const [isTopUpOpen, setIsTopUpOpen] = React.useState(false)
   const [sessionShipments, setSessionShipments] = React.useState<Array<{
     guia: string
     destinatario: string
@@ -1018,6 +1020,18 @@ export function ClientCreateGuia() {
               <div className="flex-1">
                 <div className="font-bold text-red-700 mb-0.5">Envio não criado — pedido rejeitado</div>
                 <div className="text-red-700">{submitError}</div>
+                {submitError.includes("Saldo Insuficiente") && (
+                  <div className="mt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsTopUpOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Carregar Saldo Agora</span>
+                    </button>
+                  </div>
+                )}
                 {fieldError === "special" && (
                   <div className="mt-1.5 text-red-600">
                     💡 Dica: Desmarque os serviços especiais (Frágil, Retorno, SMS) e tente novamente sem eles.
@@ -1115,6 +1129,13 @@ export function ClientCreateGuia() {
           </div>
         </div>
       )}
+
+      {/* Modal de Carregamento de Saldo Stripe */}
+      <ClientTopUpModal 
+        isOpen={isTopUpOpen} 
+        onClose={() => setIsTopUpOpen(false)} 
+        clientId={currentClient?.id || ""} 
+      />
 
     </div>
   )

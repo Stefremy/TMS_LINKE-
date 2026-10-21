@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, FileText, Search, Plus, UserCheck } from "lucide-react"
+import { Home, FileText, Search, Plus, UserCheck, CreditCard } from "lucide-react"
 import { useClientScope } from "./ClientScope"
 
 export function ClientSidebarNav() {
@@ -15,6 +15,7 @@ export function ClientSidebarNav() {
     { href: `${basePath}/destinatarios`, label: "Destinatários", icon: UserCheck },
     { href: `${basePath}/envios`, label: "Histórico & Envios", icon: Search },
     { href: `${basePath}/faturas`, label: "Faturas e Extratos", icon: FileText },
+    { href: `${basePath}/carregamentos`, label: "Carregamentos", icon: CreditCard },
   ]
 
   return (

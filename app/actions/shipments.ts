@@ -73,18 +73,40 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   const client = profiles.find(profile => profile.id === effectiveClientId)
   const clientBillingType = client?.billing_type || "conta_corrente"
 
+  const now = new Date()
+  const currentMonthPrefix = now.toISOString().slice(0, 7) // e.g. "2026-10"
+  const currentPeriodName = now.toLocaleDateString("pt-PT", { month: "long", year: "numeric" }) // "outubro de 2026"
+
+  // Envios do mês/período atual
+  const monthShipments = clientShipments.filter((s: any) => s.created_at && s.created_at.startsWith(currentMonthPrefix))
+  const monthCount = monthShipments.length
+  const monthDeliveredCount = monthShipments.filter((s: any) => s.status === "entregue").length
+  const monthRevenue = monthShipments
+    .filter((s: any) => s.status !== "anulado")
+    .reduce((acc: number, s: any) => acc + (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0)), 0)
+
+  // Extratos com recibo emitido/pagos (períodos fechados e liquidados)
+  const paidStatementIds = new Set(
+    allStatements
+      .filter((stmt: any) => (!effectiveClientId || stmt.client_id === effectiveClientId) && (stmt.moloni_receipt_pdf || stmt.status === "paid"))
+      .map((stmt: any) => stmt.id)
+  )
+
   let totalDebt = 0
   
   if (clientBillingType === "pay_as_you_go") {
-    // Para contas Pré-Pagas, TODOS os envios não anulados descontam do saldo da Wallet (credit_limit = Top-Ups),
-    // independentemente de terem sido faturados ou não (as faturas não restituem o saldo).
+    // Para Pay As You Go: apenas envios em aberto (que não pertençam a extratos com recibo emitido)
+    // debitam da carteira do período.
     clientShipments.forEach((s: any) => {
+      if (s.billing_statement_id && paidStatementIds.has(s.billing_statement_id)) {
+        return // Já liquidado no seu respetivo extrato/período
+      }
       if (s.status !== "anulado") {
         totalDebt += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
       }
     })
   } else {
-    // Para Conta Corrente, a dívida é calculada com base nos envios pendentes + extratos não pagos.
+    // Para Conta Corrente:
     // 1. Envios pendentes de faturação (billing_statement_id === null)
     clientShipments.forEach((s: any) => {
       if (!s.billing_statement_id && s.status !== "anulado") {
@@ -95,9 +117,9 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
     // 2. Extratos faturados mas não pagos (sem recibo)
     allStatements.forEach((stmt: any) => {
       if (effectiveClientId && stmt.client_id === effectiveClientId) {
-        if (stmt.moloni_document_id && !stmt.moloni_receipt_pdf) {
+        if (stmt.moloni_document_id && !stmt.moloni_receipt_pdf && stmt.status !== "paid") {
           totalDebt += Number(stmt.total_value || 0)
-        } else if (!stmt.is_pro_forma && !stmt.moloni_document_id) {
+        } else if (!stmt.is_pro_forma && !stmt.moloni_document_id && stmt.status !== "paid") {
           totalDebt += Number(stmt.total_value || 0)
         }
       }
@@ -167,6 +189,10 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   return {
     totalCount,
     totalRevenue,
+    monthCount,
+    monthDeliveredCount,
+    monthRevenue,
+    currentPeriodName,
     deliveredCount,
     deliveryRate,
     weeklyVolume,
@@ -222,21 +248,7 @@ export async function emitClientGuiaAction(data: {
 
     const recipientZip4 = data.recipientPostal?.split("-")[0] || ""
     const recipientZip3 = data.recipientPostal?.split("-")[1] || ""
-
-    // The pricing lookup verifies the existing client without creating fallback records.
     const validatedClientId = finalClientId
-
-    if (validatedClientId) {
-      const { data: clientCheck } = await supabase
-        .from('clientes')
-        .select('credit_limit')
-        .eq('id', validatedClientId)
-        .single()
-        
-      if (clientCheck && clientCheck.credit_limit <= 0) {
-        throw new Error("Conta bloqueada. O seu saldo atual é igual ou inferior a 0.00€. Por favor, efetue um carregamento.")
-      }
-    }
 
     // Server-side price recalculation — never trust the frontend value
     let computedSellPrice: number
@@ -280,6 +292,44 @@ export async function emitClientGuiaAction(data: {
       computedSellPrice = specials.totalPrice
       computedSpecialAmount = specials.amount
       computedSpecialDesc = specials.items.length > 0 ? JSON.stringify(specials.items) : null
+
+      // Wallet and -2.00€ overdraft validation for pay_as_you_go clients
+      if (matchedClient.billing_type === "pay_as_you_go") {
+        const { data: pastShipments, error: walletError } = await supabase
+          .from("shipments")
+          .select("sell_price, fuel_tax_amount, status, billing_statement_id")
+          .eq("tenant_id", ctx.tenant_id)
+          .eq("client_id", validatedClientId)
+
+        if (walletError) throw new ShipmentPricingUnavailableError()
+
+        const { data: paidStatements } = await supabase
+          .from("billing_statements")
+          .select("id")
+          .eq("tenant_id", ctx.tenant_id)
+          .eq("client_id", validatedClientId)
+          .not("moloni_receipt_pdf", "is", null)
+
+        const paidSet = new Set((paidStatements || []).map((p: any) => p.id))
+        let totalSpent = 0
+        ;(pastShipments || []).forEach((s: any) => {
+          if (s.billing_statement_id && paidSet.has(s.billing_statement_id)) return
+          if (s.status !== "anulado") {
+            totalSpent += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
+          }
+        })
+
+        const currentBalance = (Number(matchedClient.credit_limit) || 0) - totalSpent
+        const finalShipmentCost = Number((computedSellPrice + computedFuelAmount).toFixed(2))
+        const projectedBalance = Number((currentBalance - finalShipmentCost).toFixed(2))
+        const OVERDRAFT_LIMIT = -2.00
+
+        if (projectedBalance < OVERDRAFT_LIMIT) {
+          throw new ShipmentPricingError(
+            `Saldo Insuficiente: Este envio tem o custo de ${finalShipmentCost.toFixed(2)}€, mas o seu saldo atual é de ${currentBalance.toFixed(2)}€. O limite máximo de descoberto autorizado é de -2,00€ (o saldo ficaria em ${projectedBalance.toFixed(2)}€). Por favor, efetue um carregamento para continuar.`
+          )
+        }
+      }
 
     } catch (pricingErr) {
       return { success: false, error: pricingErr instanceof ShipmentPricingError || pricingErr instanceof ShipmentPricingUnavailableError

@@ -57,26 +57,6 @@ export async function createShipment(formData: FormData) {
     })
     service_type = service.name
     
-    // SECURITY WALLET CHECK: Block creation if pay_as_you_go client has no balance
-    if (matchedClient.billing_type === "pay_as_you_go") {
-      const { data: pastShipments, error: walletError } = await supabase.from("shipments").select("sell_price, fuel_tax_amount, status")
-        .eq("tenant_id", ctx.tenant_id).eq("client_id", client_id)
-      if (walletError) throw new ShipmentPricingUnavailableError()
-      let totalSpent = 0
-      ;(pastShipments || []).forEach((s: any) => {
-        if (s.status !== "anulado") {
-          totalSpent += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
-        }
-      })
-      const availableCredit = Math.max((matchedClient.credit_limit || 0) - totalSpent, 0)
-      if (availableCredit <= 0) {
-        return {
-          success: false,
-          error: "Saldo Insuficiente: A sua Wallet tem saldo nulo ou negativo. Efetue um carregamento para criar envios."
-        }
-      }
-    }
-
     const recipientCountry = (formData.get("recipient_country") as string) || "PT"
     const priceResult = calculateShipmentPrice(weightKg, { ...matchedClient, default_linke_table_id: service.id },
       [service], recipientCountry, recipient_zip, { requireConfiguredTariff: true })
@@ -85,6 +65,41 @@ export async function createShipment(formData: FormData) {
     computedFuelAmount = priceResult.fuelSurchargeAmount || 0
     computedBasePrice = priceResult.basePrice
     computedTierLabel = priceResult.tierLabel || "Standard"
+
+    // SECURITY WALLET CHECK: Block creation if pay_as_you_go client exceeds -2.00€ overdraft
+    if (matchedClient.billing_type === "pay_as_you_go") {
+      const { data: pastShipments, error: walletError } = await supabase.from("shipments").select("sell_price, fuel_tax_amount, status, billing_statement_id")
+        .eq("tenant_id", ctx.tenant_id).eq("client_id", client_id)
+      if (walletError) throw new ShipmentPricingUnavailableError()
+
+      const { data: paidStatements } = await supabase
+        .from("billing_statements")
+        .select("id")
+        .eq("tenant_id", ctx.tenant_id)
+        .eq("client_id", client_id)
+        .not("moloni_receipt_pdf", "is", null)
+
+      const paidSet = new Set((paidStatements || []).map((p: any) => p.id))
+
+      let totalSpent = 0
+      ;(pastShipments || []).forEach((s: any) => {
+        if (s.billing_statement_id && paidSet.has(s.billing_statement_id)) return
+        if (s.status !== "anulado") {
+          totalSpent += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
+        }
+      })
+      const currentBalance = (Number(matchedClient.credit_limit) || 0) - totalSpent
+      const newShipmentCost = Number((computedSellPrice + computedFuelAmount).toFixed(2))
+      const projectedBalance = Number((currentBalance - newShipmentCost).toFixed(2))
+      const OVERDRAFT_LIMIT = -2.00
+
+      if (projectedBalance < OVERDRAFT_LIMIT) {
+        return {
+          success: false,
+          error: `Saldo Insuficiente: Este envio tem o custo de ${newShipmentCost.toFixed(2)}€, mas o seu saldo atual é de ${currentBalance.toFixed(2)}€. O limite máximo de descoberto autorizado é de -2,00€ (o saldo ficaria em ${projectedBalance.toFixed(2)}€). Por favor, efetue um carregamento para continuar.`
+        }
+      }
+    }
   } catch (pricingErr) {
     return { success: false, error: pricingErr instanceof ShipmentPricingError || pricingErr instanceof ShipmentPricingUnavailableError
       ? pricingErr.message : "Não foi possível validar a tarifa. Tente novamente ou contacte o suporte." }

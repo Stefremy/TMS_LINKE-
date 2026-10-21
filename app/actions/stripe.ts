@@ -1,18 +1,21 @@
 "use server"
 
 import { createAdminClient } from "@/lib/supabase/server"
-import Stripe from "stripe"
-import { headers } from "next/headers"
 import { requireUser } from "@/lib/auth/context"
 import { checkoutReturnOrigin } from "@/lib/config/public-origins"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_dummy", {
-  apiVersion: "2026-08-26.dahlia" as any,
-})
+async function getStripe() {
+  const StripeModule = await import("stripe")
+  const StripeClass = (StripeModule as any).default || StripeModule
+  return new StripeClass(process.env.STRIPE_SECRET_KEY || "sk_test_dummy", {
+    apiVersion: "2026-08-26.dahlia" as any,
+  })
+}
 
 export async function createTopUpCheckoutSession(clientId: string, amountEuro: number) {
   try {
     const ctx = await requireUser()
+    const { headers } = await import("next/headers")
     const headersList = await headers()
     const origin = checkoutReturnOrigin(headersList.get("origin"))
     if (ctx.role === "client" && ctx.client_id !== clientId) {
@@ -57,6 +60,7 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
     }
 
     // 3. Create Stripe Checkout Session
+    const stripe = await getStripe()
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card', 'mb_way', 'multibanco'],
       // payment_method_types: ['mb_way', 'card'],
@@ -99,5 +103,33 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
   } catch (error: any) {
     console.error("createTopUpCheckoutSession Error:", error)
     return { success: false, error: error.message }
+  }
+}
+
+export async function getClientTransactionsAction(clientId?: string) {
+  try {
+    const ctx = await requireUser()
+    const effectiveClientId = ctx.role === "client" ? ctx.client_id : clientId
+    if (!effectiveClientId) return []
+    if (ctx.role === "client" && ctx.client_id !== effectiveClientId) {
+      throw new Error("Não autorizado.")
+    }
+
+    const supabase = createAdminClient()
+    const { data, error } = await supabase
+      .from("client_transactions")
+      .select("id, client_id, amount, status, stripe_session_id, created_at, updated_at")
+      .eq("tenant_id", ctx.tenant_id)
+      .eq("client_id", effectiveClientId)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching client transactions:", error.message)
+      return []
+    }
+    return data || []
+  } catch (error: any) {
+    console.error("getClientTransactionsAction Error:", error)
+    return []
   }
 }
