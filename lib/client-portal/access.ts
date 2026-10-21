@@ -7,38 +7,48 @@ import { getClientesAction } from "@/app/actions/clientes"
 import { buildStoreSlugs, portalPath, type PortalSection } from "./paths"
 
 type StoreIdentity = { id: string; name: string; portal_slug?: string; is_active?: boolean }
-type StoreLog = { action: string; details: { id?: string; short_name?: string; legal_name?: string; portal_slug?: string; is_active?: boolean } | null }
+type StoreLog = { action: string; store_id?: string; short_name?: string; legal_name?: string; portal_slug?: string; is_active?: boolean }
 
 const loadStores = cache(async (tenantId: string) => {
   if (!tenantId) throw new Error("Conta sem empresa associada.")
   const db = createAdminClient()
-  const stores = new Map<string, StoreIdentity>()
   // Paginate the registry so stores beyond the old display limits remain routable.
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await db.from("clients").select("id, name").eq("tenant_id", tenantId)
-      .order("id").range(offset, offset + 999)
-    if (error) throw new Error("Não foi possível verificar a loja. Tente novamente.")
-    for (const row of data || []) stores.set(row.id, row)
-    if (!data || data.length < 1000) break
+  const readRegistry = async () => {
+    const rows: StoreIdentity[] = []
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await db.from("clients").select("id, name").eq("tenant_id", tenantId)
+        .order("id").range(offset, offset + 999)
+      if (error) throw new Error("Não foi possível verificar a loja. Tente novamente.")
+      rows.push(...(data || []))
+      if (!data || data.length < 1000) return rows
+    }
   }
+  const readIdentities = async () => {
+    const rows: StoreLog[] = []
+    for (let offset = 0; ; offset += 1000) {
+      // Slug checks need identity fields only, never avatars, prices or balances.
+      const { data, error } = await db.from("audit_log")
+        .select("action,store_id:details->>id,short_name:details->>short_name,legal_name:details->>legal_name,portal_slug:details->>portal_slug,is_active:details->is_active")
+        .eq("tenant_id", tenantId).in("action", ["client_data", "deleted_client"])
+        .order("created_at", { ascending: false }).order("id").range(offset, offset + 999)
+      if (error) throw new Error("Não foi possível verificar a loja. Tente novamente.")
+      rows.push(...(data || []) as StoreLog[])
+      if (!data || data.length < 1000) return rows
+    }
+  }
+  const [registry, identities] = await Promise.all([readRegistry(), readIdentities()])
+  const stores = new Map(registry.map(row => [row.id, row]))
   const seen = new Set<string>()
   const deleted = new Set<string>()
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await db.from("audit_log").select("action, details").eq("tenant_id", tenantId)
-      .in("action", ["client_data", "deleted_client"]).order("created_at", { ascending: false }).order("id")
-      .range(offset, offset + 999)
-    if (error) throw new Error("Não foi possível verificar a loja. Tente novamente.")
-    for (const row of (data || []) as StoreLog[]) {
-      const d = row.details
-      if (!d?.id) continue
-      if (row.action === "deleted_client") { deleted.add(d.id); continue }
-      if (seen.has(d.id)) continue
-      const previous = stores.get(d.id)
-      stores.set(d.id, { id: d.id, name: d.short_name || d.legal_name || previous?.name || "Loja",
-        portal_slug: d.portal_slug, is_active: d.is_active })
-      seen.add(d.id)
-    }
-    if (!data || data.length < 1000) break
+  for (const row of identities) {
+    const id = row.store_id
+    if (!id) continue
+    if (row.action === "deleted_client") { deleted.add(id); continue }
+    if (seen.has(id)) continue
+    const previous = stores.get(id)
+    stores.set(id, { id, name: row.short_name || row.legal_name || previous?.name || "Loja",
+      portal_slug: row.portal_slug, is_active: row.is_active })
+    seen.add(id)
   }
   deleted.forEach(id => stores.delete(id))
   const slugs = buildStoreSlugs([...stores.values()])

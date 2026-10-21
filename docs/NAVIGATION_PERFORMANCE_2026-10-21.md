@@ -47,3 +47,36 @@ Os testes usam sessões, base e transportadoras simuladas. O carregador de teste
 - A latência do proxy/autenticação e da base remota pode continuar a pesar. Os testes não certificam um tempo de resposta final.
 - A F02 e as verificações RLS/permissões publicadas continuam pendentes no plano de auditoria.
 - As eliminações de documentos já presentes na árvore de trabalho foram preservadas e não fazem parte desta alteração.
+
+## Continuação — lentidão na Área do Cliente publicada
+
+O utilizador confirmou que o problema continua na Área do Cliente em toke. Nesta ronda foram encontrados e corrigidos dois custos concretos:
+
+- `ClientDashboard` lançava `getServicosLinkeAction()` antes da ação de estatísticas e guardava o catálogo num estado que nunca era lido. Essa chamada foi removida do dashboard; a criação de envios mantém o carregamento de serviços de que precisa.
+- A validação de slug carregava `audit_log.details` completo de todas as lojas da empresa, incluindo dados que não usa, como avatares, condições comerciais e preços. Agora a projeção PostgREST devolve apenas ação, ID, nomes, slug e estado ativo. O registo nativo e o histórico de identidades são consultados em paralelo.
+
+Mantêm-se a paginação integral de identidades, o âmbito por empresa, a validação da loja atribuída ao cliente, os slugs duplicados/reservados, as eliminações, o bloqueio de clientes inativos e a falha fechada quando a base não responde. O perfil completo continua a ser carregado apenas para a loja autorizada. Não foi acrescentada cache partilhada de contas ou permissões, nem modificada a autenticação.
+
+### Medição de leitura real, sem alterar dados
+
+A mesma primeira página de 10 registos de identidade foi consultada no Supabase configurado, usando o mesmo filtro e ordenação:
+
+| Projeção | Bytes JSON | Duração observada |
+| --- | --- | --- |
+| Antes: `action,details` | 839 928 | 453 ms |
+| Depois: apenas identidade | 1 648 | 88 ms |
+
+Isto corresponde a cerca de 99,8% menos JSON nessa leitura. É uma comparação de duas consultas consecutivas, não um benchmark controlado nem a medição da navegação completa; aquecimento de ligações e rede podem afetar a duração. O tamanho foi medido sem imprimir perfis ou dados pessoais.
+
+Os logins públicos publicados responderam em cerca de 0,3–0,5 s nesta amostra. Não havia uma sessão de toke acessível nos separadores automatizáveis do navegador, pelo que não se mediu o carregamento autenticado completo do painel publicado nesta ronda.
+
+### Validação
+
+- O novo teste de projeção falhou antes da correção por encontrar a leitura de `details` completo; depois passou.
+- Testes de slugs: 18 passaram, incluindo lojas distintas, colaboradores, duplicados, inativos, eliminados, erros e paginação.
+- `npm run test:security`: 138 passaram; zero falhas.
+- Isolamento e regressões de navegação: 99 passaram; zero falhas.
+- `npm run build`: passou, incluindo TypeScript.
+- ESLint dos módulos de acesso e testes alterados e `git diff --check`: passaram.
+
+Estas alterações são locais e precisam de publicação para afetar app.toke.pt. Não houve migrações, alterações de saldos/preços, chamadas a transportadoras, emails, commit, push ou deployment nesta ronda. F02 e P01 já foram resolvidas conforme os relatórios de auditoria; as menções a pendências nas secções anteriores descrevem a revisão anterior.

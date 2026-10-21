@@ -66,6 +66,16 @@ function fakeSupabase(tables, failure) {
           rows = rows.slice(0, state.limit)
           if (state.range) rows = rows.slice(state.range[0], state.range[1] + 1)
           if (state.single && rows.length > 1) return { data: null, error: { message: 'Expected at most one row' } }
+          // PostgREST JSON projections return flat aliases, not the whole JSON document.
+          if (state.projection?.includes('->')) {
+            rows = rows.map(row => Object.fromEntries(state.projection.split(',').map(part => {
+              const expression = part.trim()
+              const m = /^(?:(\w+):)?(\w+)->(>)?(\w+)$/.exec(expression)
+              if (!m) return [expression, row[expression]]
+              const value = row[m[2]]?.[m[4]] ?? null
+              return [m[1] || m[4], m[3] && value !== null ? String(value) : value]
+            })))
+          }
           return { data: structuredClone(state.single ? rows[0] || null : rows), error: null, ...(state.count ? { count } : {}) }
         }).then(resolve, reject)
       },

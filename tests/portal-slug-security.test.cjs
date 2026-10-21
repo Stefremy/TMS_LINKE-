@@ -109,6 +109,22 @@ test('each store login is independently bound to exactly its assigned store', as
   await assert.rejects(h.access.getPortalDestination(A), /NOT_FOUND/)
 })
 
+test('store routing reads only identity JSON fields instead of full billing, avatars and pricing documents', async () => {
+  const h = harness(client, { adjust: t => {
+    t.audit_log[0].details.logo_url = 'data:image/png;base64,' + 'X'.repeat(100000)
+    t.audit_log[0].details.credit_limit = 123
+    t.audit_log[0].details.portal_slug = 'stef-store'
+  } })
+  assert.equal((await h.access.requirePortalStore('stef-store')).client.id, A)
+  const identityQueries = h.db.queries.filter(q => q.table === 'audit_log')
+  assert.ok(identityQueries.length > 0)
+  for (const q of identityQueries) {
+    assert.match(q.projection, /store_id:details->>id/)
+    assert.match(q.projection, /is_active:details->is_active/)
+    assert.doesNotMatch(q.projection, /logo_url|credit_limit|pricing|(?:^|,)\s*details\s*(?:,|$)/)
+  }
+})
+
 test('Ops and admins open both stores directly, independent of the last selection cookie', async () => {
   for (const role of ['employee', 'admin']) {
     const ctx = { ...staff, role, client_id: A }

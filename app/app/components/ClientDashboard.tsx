@@ -23,7 +23,6 @@ import {
   Trash2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { syncCttTrackingAction, closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { 
@@ -103,13 +102,10 @@ export function ClientDashboard() {
     }
   }, [])
 
-  const [servicosLinke, setServicosLinke] = React.useState<any[]>([])
-
   React.useEffect(() => {
     let active = true
     setLoadingStats(true)
     setStatsError(false)
-    getServicosLinkeAction().then(servicos => { if (active) setServicosLinke(servicos) })
     getClientPortalStatsAction(currentClient.id, currentClient.short_name).then(res => {
       if (!active) return
       if (res) {
