@@ -1,6 +1,8 @@
 -- Auditoria de isolamento: APENAS LEITURA DE METADADOS.
 -- Não executa RPCs de saldo nem lê registos de clientes, envios ou faturas.
--- Não altera grants, políticas ou dados. Ainda não executado no Supabase.
+-- Não altera grants, políticas ou dados.
+-- Consultas equivalentes executadas em 21/10/2026; resultados em
+-- docs/CLIENT_ISOLATION_SUPABASE_2026-10-21.md.
 
 -- 1. Funções sensíveis: contexto de execução e permissões efetivas.
 select
@@ -70,3 +72,9 @@ from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'auth' and p.proname in ('role', 'client_id')
 order by p.proname;
+
+-- 5. Confirmar o corpo publicado da função sensível, sem a executar.
+select pg_get_functiondef(p.oid) as function_definition
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname = 'increment_client_balance';

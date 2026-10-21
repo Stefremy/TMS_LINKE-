@@ -2,7 +2,7 @@
 
 Guardado em: 20/10/2026  
 Retoma prevista: 21/10/2026 (Europe/Lisbon)  
-Estado: Passo 1 em curso. F01, F03 e F04 corrigidas localmente em 21/10/2026 após autorização. F04: 13 testes passaram; 137 testes de segurança e build passaram. Auditoria completa: 65 de 66 passaram; F02 e validação do Supabase publicado pendentes.
+Estado: Passo 1 em curso. F01–F04 corrigidas localmente após autorização. Auditoria de isolamento: 93/93; segurança: 137/137; build passou. F02 validada por HTTP com sessões reais de Stef Store e GO Linke. Permissões/RLS publicadas consultadas: P01 confirmado crítico na função de saldo; proposta de restrição ainda não aplicada. O site publicado não foi atualizado nesta ronda.
 
 ## Objetivo
 
@@ -100,7 +100,9 @@ Começar apenas pelo **Passo 1 — Isolamento entre clientes**: analisar os cami
 
 Resultados da primeira ronda: [Auditoria de isolamento de 21/10/2026](CLIENT_ISOLATION_AUDIT_2026-10-21.md).
 
-Próxima ação proposta: obter autorização para corrigir F02 isoladamente (cronologia de outro cliente através de ID e referência combinados). F01, F03 e F04 concluídas localmente. Antes de concluir o Passo 1, resolver a F02, rever os filtros por empresa do catálogo, validar permissões/RLS no Supabase e testar HTTP com contas controladas.
+Próxima ação proposta: rever e autorizar a correção P01 das permissões da função de saldo. A inspeção publicada confirmou execução por `anon` e `authenticated` de uma função `SECURITY DEFINER` sem verificação de loja/empresa. A [proposta SQL](../supabase/audits/proposals/20261021_restrict_increment_balance.sql) preserva `service_role`, usado pelo webhook Stripe; não foi aplicada nem foi executada a função de saldo. Antes de concluir o Passo 1 continuam a faltar a resolução deste risco, a revisão dos filtros por empresa do catálogo e a validação do deployment final.
+
+Resultados da F02 e da verificação real: [Supabase e duas sessões de cliente — 21/10/2026](CLIENT_ISOLATION_SUPABASE_2026-10-21.md). O login temporário da GO Linke foi criado com autorização e apagado no fim. Não houve alteração de dados comerciais.
 
 
-Revisão operacional posterior: [Navegação OPS e portal — 21/10/2026](NAVIGATION_PERFORMANCE_2026-10-21.md). Rastreio automático separado da fila das ações; filtros de segurança preservados. F02 continua pendente.
+Revisão operacional posterior: [Navegação OPS e portal — 21/10/2026](NAVIGATION_PERFORMANCE_2026-10-21.md). Rastreio automático separado da fila das ações; filtros de segurança preservados. A correção F02 reutiliza o registo autorizado na leitura dos eventos para evitar repetir a consulta do envio.

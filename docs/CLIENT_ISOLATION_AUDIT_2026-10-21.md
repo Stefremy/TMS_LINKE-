@@ -2,12 +2,12 @@
 
 Data: 21/10/2026 (Europe/Lisbon)  
 Referência do código analisado: `ee40497299209caeb215eb8ce9c957fd1e9a9d0c`  
-Estado: F01, F03 e F04 corrigidas e validadas localmente após autorização; F02 e a validação do Supabase publicado continuam pendentes.  
-O Passo 1 ainda não constitui uma validação do sistema publicado: falta confirmar permissões/RLS no Supabase e o comportamento HTTP com contas de teste.
+Estado atualizado: F01–F04 corrigidas e validadas localmente após autorização; F02 também testada por HTTP com duas sessões reais de cliente. Permissões/RLS do Supabase publicado consultadas: P01 confirmado crítico, ainda sem alteração de grants.  
+O Passo 1 ainda não está concluído: falta resolver P01, rever os restantes pontos e validar o deployment final. [Resultados da verificação real](CLIENT_ISOLATION_SUPABASE_2026-10-21.md).
 
 ## Resultado para decisão
 
-Na ronda inicial foram reproduzidas **três falhas no código**, em **cinco testes inicialmente a falhar**. As atualizações abaixo registam as correções locais da F01 e F03. F02 continua reproduzível; a revisão dos chamadores revelou também a F04, entretanto corrigida conforme a atualização abaixo.
+Na ronda inicial foram reproduzidas **três falhas no código**, em **cinco testes inicialmente a falhar**. A revisão dos chamadores revelou também a F04. As atualizações abaixo preservam a evidência inicial e registam as correções F01–F04, incluindo a validação final da F02.
 
 | ID | Prioridade | Resultado observado na simulação |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ Na ronda inicial foram reproduzidas **três falhas no código**, em **cinco test
 | F02 | Alta | O ID de um envio próprio pode ser combinado com a referência de outro envio para receber a cronologia desse outro cliente. |
 | F03 | Alta | Quando a consulta de autorização falha, a sincronização de rastreio pode continuar e modificar um envio de outro cliente. |
 
-Não foram emitidas faturas, cobrados pagamentos, enviados emails, criados envios/recolhas reais ou alterados dados de produção. A aplicação e as migrações existentes não foram corrigidas nem modificadas nesta ronda; foram acrescentados apenas testes e documentação.
+Na ronda inicial foram acrescentados apenas testes e documentação. As correções de aplicação foram autorizadas posteriormente e estão descritas nas atualizações. Não foram emitidas faturas, cobrados pagamentos, enviados emails, criados envios/recolhas reais ou alterados dados comerciais. No teste real posterior foi criado e apagado um login temporário autorizado.
 
 ## O que foi efetivamente testado
 
@@ -59,14 +59,14 @@ Critério de aceitação: ambos os testes F01 passam, os clientes continuam a re
 
 ## F02 — Referência de rastreio não vinculada ao envio autorizado
 
-Código: [app/actions/shipments.ts](../app/actions/shipments.ts), linhas 914–937 e 1035–1053.  
-Teste: caso F02 no ficheiro de auditoria.
+Código: [app/actions/shipments.ts](../app/actions/shipments.ts), funções `getShipmentTrackingTimelineAction` e `loadShipmentTrackingTimeline`.  
+Testes: casos F02 no ficheiro de auditoria. Corrigida na atualização final abaixo.
 
-`getShipmentTrackingTimelineAction` confirma que o ID inicial pertence a A, mas passa a referência de rastreio recebida para a função de leitura. Se o envio inicial não tiver eventos, o fallback procura outro envio pela referência e lê os seus eventos sem voltar a confirmar a loja.
+Antes da correção, `getShipmentTrackingTimelineAction` confirmava que o ID inicial pertencia a A, mas passava a referência de rastreio recebida para a função de leitura. Se o envio inicial não tivesse eventos, o fallback procurava outro envio pela referência e lia os seus eventos sem voltar a confirmar a loja.
 
 **Reprodução local:** A tem um envio sem eventos. B tem um envio com o evento fictício `PRIVATE-B-EVENT`. A chama a ação com o seu ID e a referência de B; recebe o evento de B.
 
-**Proposta de correção, ainda não aplicada:** resolver a referência canónica a partir do envio autorizado e manter o âmbito de empresa e cliente em todos os percursos de fallback. Recusar combinações inconsistentes de ID e referência.
+**Correção autorizada e aplicada localmente:** resolver a referência canónica a partir do envio autorizado e manter o âmbito de empresa e cliente nos fallbacks privados. Recusar combinações inconsistentes de ID e referência. Ver testes e limites na atualização final.
 
 Há um rastreio público intencional no produto. Esse comportamento precisa de uma política de dados própria; não elimina a necessidade de vincular os identificadores nas ações autenticadas. Esta falha não reproduziu acesso a etiquetas ou documentos financeiros.
 
@@ -99,15 +99,15 @@ Os dois testes F04 falhavam antes da correção, preservando a evidência da rep
 
 **Proposta inicial (F04 corrigida na atualização abaixo):** exigir sessão no servidor antes de aceder à base, limitar a consulta à empresa e, para clientes, à própria loja. Usar contexto verificado ao invocar o dispatcher; a otimização com um objeto já carregado deve ficar restrita a percursos internos autorizados. Testar também o lote normal de clientes e colaboradores, seleções mistas, ausência de sessão e erros de consulta.
 
-## Pontos ainda não confirmados no Supabase publicado
+## Permissões e revisões complementares
 
-### P01 — Permissões da função de incremento de saldo
+### P01 — Permissões da função de incremento de saldo — crítico confirmado
 
 A migração [20261007000000_add_increment_balance.sql](../supabase/migrations/20261007000000_add_increment_balance.sql) define `increment_client_balance(uuid,numeric)` com `SECURITY DEFINER`, sem validação do solicitante, da loja ou da empresa no corpo. Não foi encontrada outra migração no repositório a restringir `EXECUTE` dessa função.
 
-**Impacto potencial: crítico**, caso funções de cliente ou anónimas a possam executar na base publicada. Não foi confirmado quem tem essa permissão efetivamente, nem se a função publicada corresponde ao ficheiro. Não foi executado um incremento de saldo para testar.
+**Atualização publicada confirmada em 21/10/2026:** a função mantém esse corpo sem autorização e permite efetivamente execução a `PUBLIC`, `anon` e `authenticated`. O risco crítico foi confirmado por ACL e definição publicada; não foi executado um incremento de saldo para demonstrar exploração.
 
-Foi preparado um [SQL apenas de leitura de metadados](../supabase/audits/20261021_client_isolation_readonly.sql) para verificar ACLs das funções, RLS, políticas e permissões das tabelas. Esse SQL ainda não foi executado no Supabase.
+As consultas de metadados foram executadas numa forma consolidada equivalente ao [SQL de referência](../supabase/audits/20261021_client_isolation_readonly.sql). Foi preparada uma [proposta de restrição ainda não aplicada](../supabase/audits/proposals/20261021_restrict_increment_balance.sql). [Resultados e limites](CLIENT_ISOLATION_SUPABASE_2026-10-21.md).
 
 ### P02 — Filtros de empresa inconsistentes em percursos antigos
 
@@ -120,6 +120,8 @@ O rastreio público aceita referências exatas e devolve nomes, localidades e cr
 As listagens de envios usam projeções amplas e podem incluir custos internos do próprio envio. A decisão de apresentação desses campos deve ser revista, distinguindo-a de acesso a dados de outra loja.
 
 ## Limites desta ronda
+
+Os limites seguintes descrevem a ronda inicial. A validação posterior da F02 e a inspeção publicada estão documentadas na atualização final e no relatório de Supabase.
 
 - Não houve acesso a contas ou dados de produção, nem testes HTTP com sessões reais de A/B.
 - A base em memória não executa RLS, funções PostgreSQL, grants ou constraints SQL. Os testes não certificam essas camadas.
@@ -206,11 +208,39 @@ Os testes cobrem lotes mistos nos dois sentidos A/B, outra empresa, acesso de co
 
 Não houve chamadas reais às transportadoras, cobranças, emails ou alterações em produção durante os testes. Não houve migração, commit, push ou deployment. O teste F02 continua ativo e a falhar; não foi desativado nem adaptado para aceitar o problema. O Passo 1 ainda não está concluído.
 
+## Atualização — F02 corrigida e verificada com sessões reais em 21/10/2026
+
+Autorização: corrigir F02, confirmar permissões do Supabase e testar com dois logins controlados. A criação/eliminação do login temporário da GO Linke também foi expressamente autorizada.
+
+- A ação autenticada exige sessão, função reconhecida, empresa e, para clientes, loja válida antes de consultar dados. Confirma o envio na empresa e verifica o proprietário do registo atual; um snapshot antigo não pode substituir essa propriedade.
+- Para envios antigos sem linha nativa, verifica o snapshot mais recente da mesma empresa e ID e só depois o proprietário. Um erro de autorização não é tratado como ausência de registo para ativar um fallback.
+- ID e referência contraditórios são recusados antes de consultar eventos. Os fallbacks usam uma referência guardada, limitam envios relacionados à mesma empresa/loja e filtram eventos e audit log pela empresa.
+- O registo já autorizado é reutilizado na leitura para evitar outra consulta de metadados. A consulta nativa respeita o esquema efetivamente publicado, que não tem a coluna opcional `ctt_object_id`; essa referência continua suportada nos snapshots antigos.
+- Colaboradores mantêm acesso às lojas da própria empresa. O rastreio público por referência exata mantém o percurso separado e o teste de regressão; a política de campos públicos P03 continua por rever.
+- Não foram modificados preços, gravadores de rastreio ou integrações com transportadoras. A proposta de grants P01 foi guardada fora de `migrations` e não foi aplicada.
+
+### Validação final
+
+| Verificação | Resultado |
+| --- | --- |
+| Primeiros casos F02 ampliados antes da correção | 20 casos: 6 passaram e 14 falharam. |
+| Casos F02 finais | 26 passaram, incluindo a reprodução original com histórico próprio vazio. |
+| `node --test tests/client-isolation-audit.test.cjs` | 93 passaram; 0 falhas. |
+| Isolamento, navegação, submissão e mapas antes do último caso adicional | 114 passaram; 0 falhas. O caso adicional passou na execução final de isolamento acima. |
+| `npm run test:security` | 137 passaram; 0 falhas. |
+| `npm run build` | Passou, incluindo TypeScript. Foi este build que recebeu os pedidos HTTP reais. |
+| ESLint do teste de isolamento | Passou. |
+| ESLint de `app/actions/shipments.ts` comparado com `HEAD` | 33 erros e 6 avisos em ambos, com a mesma distribuição de regras; não representa lint global limpo. |
+| Duas sessões reais, HTTP local | Históricos próprios com 5 e 12 eventos; quatro tentativas cruzadas recusadas; sem sessão, redirecionamento para login. |
+| Supabase publicado | Inspeção de RLS/grants concluída para os objetos listados; P01 confirmado crítico e ainda por corrigir. |
+
+Os [resultados detalhados e limites dos testes reais](CLIENT_ISOLATION_SUPABASE_2026-10-21.md) ficam registados separadamente. Não houve commit, push, deployment ou alteração de permissões nesta ronda.
+
 ## Continuação proposta
 
-1. Obter autorização para corrigir **F02** isoladamente: impedir a leitura da cronologia de B combinando o ID de um envio de A com uma referência de B.
-2. Rever os filtros por empresa do catálogo e confirmar o SQL de permissões/RLS.
-3. Executar a validação HTTP com contas controladas antes de concluir o Passo 1 e antes da entrega.
+1. Rever e autorizar a proposta **P01**: restringir a função de saldo a `service_role`, preservando o chamador administrativo Stripe.
+2. Rever os filtros por empresa do catálogo e os restantes pontos P02/P03.
+3. Validar o deployment final e os restantes percursos do Passo 1 antes de concluir a auditoria e entregar a clientes.
 
 Comando de reprodução de todos os resultados novos:
 

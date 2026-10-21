@@ -831,25 +831,41 @@ export async function updateShipmentStatusAction(
 /**
  * Obtém a timeline completa de eventos de rastreio e pickagens de um envio
  */
+type TimelineShipment = {
+  id: string
+  client_id?: string | null
+  carrier_code?: string | null
+  service_type?: string | null
+  carrier_tracking_number?: string | null
+  tracking_number?: string | null
+  ctt_object_id?: string | null
+  reference?: string | null
+}
+
+type PrivateTimelineScope = {
+  tenantId: string
+  clientId?: string
+  shipment: TimelineShipment
+}
+
 async function loadShipmentTrackingTimeline(
   shipmentId: string,
-  trackingNumber?: string
+  trackingNumber?: string,
+  scope?: PrivateTimelineScope
 ) {
   const supabase = createAdminClient()
   const events: any[] = []
 
-  // Run initial queries in parallel to drastically improve loading time
+  // Private callers reuse the authorized record instead of repeating its lookup.
+  let eventsQuery = supabase.from("tracking_events").select("*").eq("shipment_id", shipmentId)
+  if (scope) eventsQuery = eventsQuery.eq("tenant_id", scope.tenantId)
   const [sRowResult, dbEventsResult] = await Promise.all([
-    supabase
+    scope ? Promise.resolve({ data: scope.shipment }) : supabase
       .from("shipments")
       .select("carrier_code, service_type, carrier_tracking_number, tracking_number")
       .eq("id", shipmentId)
       .maybeSingle(),
-    supabase
-      .from("tracking_events")
-      .select("*")
-      .eq("shipment_id", shipmentId)
-      .order("created_at", { ascending: true })
+    eventsQuery.order("created_at", { ascending: true })
   ])
 
   let isCorreos = false
@@ -912,23 +928,33 @@ async function loadShipmentTrackingTimeline(
   }
 
   // 1b. Se não encontrou eventos pelo shipment_id, tenta pelo carrier_tracking_number (EQ... ou 16 dígitos)
-  if (events.length === 0 && trackingNumber) {
+  if (events.length === 0 && trackingNumber && /^[A-Za-z0-9-]{1,80}$/.test(trackingNumber)) {
     try {
-      const { data: linkedShipments } = await supabase
+      let linkedQuery = supabase
         .from("shipments")
         .select("id, carrier_code, service_type")
-        .or(`carrier_tracking_number.eq.${trackingNumber},tracking_number.eq.${trackingNumber}`)
+      // Never interpolate an arbitrary reference into PostgREST filter syntax.
+      linkedQuery = linkedQuery.or(`carrier_tracking_number.eq.${trackingNumber},tracking_number.eq.${trackingNumber}`)
+      if (scope) {
+        linkedQuery = linkedQuery.eq("tenant_id", scope.tenantId)
+        if (scope.clientId) linkedQuery = linkedQuery.eq("client_id", scope.clientId)
+        // Staff may view multiple stores, but an individual timeline stays in its store.
+        else if (scope.shipment.client_id) linkedQuery = linkedQuery.eq("client_id", scope.shipment.client_id)
+        else linkedQuery = linkedQuery.eq("id", shipmentId)
+      }
+      const { data: linkedShipments } = await linkedQuery.limit(1)
 
       if (linkedShipments && linkedShipments.length > 0) {
         const linkedShipment = linkedShipments[0]
         const linkedId = linkedShipment.id
         const linkedIsCorreos = isCorreosShipment(linkedShipment) || /^\d{16}$/.test(trackingNumber.trim())
 
-        const { data: linkedEvents, error: evtErr } = await supabase
+        let linkedEventsQuery = supabase
           .from("tracking_events")
           .select("*")
           .eq("shipment_id", linkedId)
-          .order("created_at", { ascending: true })
+        if (scope) linkedEventsQuery = linkedEventsQuery.eq("tenant_id", scope.tenantId)
+        const { data: linkedEvents, error: evtErr } = await linkedEventsQuery.order("created_at", { ascending: true })
 
         if (!evtErr && linkedEvents && linkedEvents.length > 0) {
           linkedEvents.forEach((ev: any) => {
@@ -982,11 +1008,12 @@ async function loadShipmentTrackingTimeline(
   // 2. Se ainda não existirem eventos na tabela tracking_events, verificar no audit_log
   if (events.length === 0) {
     try {
-      const { data: auditEvents } = await supabase
+      let auditQuery = supabase
         .from("audit_log")
         .select("*")
         .eq("entity_id", shipmentId)
-        .order("created_at", { ascending: true })
+      if (scope) auditQuery = auditQuery.eq("tenant_id", scope.tenantId)
+      const { data: auditEvents } = await auditQuery.order("created_at", { ascending: true })
 
       if (auditEvents && auditEvents.length > 0) {
         auditEvents.forEach((log: any) => {
@@ -1035,23 +1062,40 @@ async function loadShipmentTrackingTimeline(
 
 export async function getShipmentTrackingTimelineAction(shipmentId: string, trackingNumber?: string) {
   const ctx = await requireUser()
-  if (ctx.role === "client") {
-    if (!isValidUuid(shipmentId)) throw new Error("Acesso negado ao rastreio deste envio.")
-    const supabase = createAdminClient()
-    const { data: shipment } = await supabase.from("shipments")
-      .select("client_id").eq("id", shipmentId).maybeSingle()
-    let ownerId = shipment?.client_id
-    if (!ownerId) {
-      const { data: audit } = await supabase.from("audit_log")
-        .select("owner_id:details->>client_id")
-        .eq("action", "shipment_data")
-        .eq("details->>id", shipmentId)
-        .limit(1)
-      ownerId = audit?.[0]?.owner_id
-    }
-    if (ownerId !== ctx.client_id) throw new Error("Acesso negado ao rastreio deste envio.")
+  const denied = () => new Error("Acesso negado ao rastreio deste envio.")
+  if (!ctx.tenant_id || !["client", "employee", "admin"].includes(ctx.role || "") ||
+      (ctx.role === "client" && !ctx.client_id) || !isValidUuid(shipmentId) ||
+      (trackingNumber !== undefined && typeof trackingNumber !== "string")) throw denied()
+
+  const supabase = createAdminClient()
+  const clientId = ctx.role === "client" ? ctx.client_id! : undefined
+  const query = supabase.from("shipments")
+    .select("id, client_id, carrier_code, service_type, carrier_tracking_number, tracking_number")
+    .eq("id", shipmentId).eq("tenant_id", ctx.tenant_id)
+  const { data, error } = await query.maybeSingle()
+  // A failed authorization lookup must never fall back to stale ownership.
+  if (error) throw denied()
+  let shipment: TimelineShipment | null = data
+  // An existing row is authoritative; old audit data cannot override its owner.
+  if (shipment && clientId && shipment.client_id !== clientId) throw denied()
+  if (!shipment) {
+    const auditQuery = supabase.from("audit_log").select("details")
+      .eq("tenant_id", ctx.tenant_id).eq("action", "shipment_data").eq("details->>id", shipmentId)
+    // Check the latest snapshot's owner; filtering by owner first could select stale access.
+    const { data: audit, error: auditError } = await auditQuery.order("created_at", { ascending: false }).limit(1).maybeSingle()
+    if (auditError) throw denied()
+    shipment = audit?.details || null
   }
-  return loadShipmentTrackingTimeline(shipmentId, trackingNumber)
+  if (!shipment || shipment.id !== shipmentId || (clientId && shipment.client_id !== clientId)) throw denied()
+
+  const references = [shipment.carrier_tracking_number, shipment.ctt_object_id, shipment.tracking_number, shipment.reference]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+  const submitted = trackingNumber?.trim()
+  if (submitted && !references.includes(submitted)) throw denied()
+  // Every fallback uses the stored reference, never the caller's unverified input.
+  return loadShipmentTrackingTimeline(shipment.id, references[0], {
+    tenantId: ctx.tenant_id, clientId, shipment,
+  })
 }
 
 /**

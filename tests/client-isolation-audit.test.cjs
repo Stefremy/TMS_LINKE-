@@ -40,8 +40,8 @@ function harness({ ctx = ctxA, fallback = false, eventsOnA = false, failure } = 
       { id: SB, tenant_id: TENANT, client_id: B, tracking_number: 'LTK1000002', carrier_tracking_number: 'EQ000000002PT',
         status: 'pendente', sell_price: 90, recipient_name: 'Fictional recipient B', created_at: '2026-10-02', ctt_label_base64: 'LABEL-B' },
     ],
-    tracking_events: [{ id: 'private-event-b', shipment_id: SB, event_code: 'EMI', description: 'PRIVATE-B-EVENT', created_at: '2026-10-02' },
-      ...(eventsOnA ? [{ id: 'own-event-a', shipment_id: SA, event_code: 'EMI', description: 'OWN-A-EVENT', created_at: '2026-10-01' }] : [])],
+    tracking_events: [{ id: 'private-event-b', tenant_id: TENANT, shipment_id: SB, event_code: 'EMI', description: 'PRIVATE-B-EVENT', created_at: '2026-10-02' },
+      ...(eventsOnA ? [{ id: 'own-event-a', tenant_id: TENANT, shipment_id: SA, event_code: 'EMI', description: 'OWN-A-EVENT', created_at: '2026-10-01' }] : [])],
     audit_log: [statement(A), statement(B), { ...statement(A), tenant_id: FOREIGN, details: { ...statement(A).details, id: 'foreign-statement' } },
       ...(fallback ? services.map(service => ({ tenant_id: TENANT, action: 'servicos_linke_data', details: service, created_at: '2026-10-01' })) : [])],
     servicos_linke: fallback ? [] : services,
@@ -259,13 +259,136 @@ test('F01: anonymous catalog access stops before querying the database', async (
   assert.equal(h.db.queries.length, 0)
 })
 
-test('F02: owned shipment A combined with carrier reference B must not return B timeline events', async t => {
+for (const [owner, ownId, foreignRef] of [[A, SA, 'EQ000000002PT'], [B, SB, 'EQ000000001PT'],
+  [A, SA, 'LTK1000002'], [A, SA, 'unknown,tracking_number.eq.LTK1000002']]) {
+  test('F02: contradictory references are denied before reading events: ' + owner + '/' + foreignRef, async () => {
+    const h = harness({ ctx: { ...ctxA, client_id: owner }, eventsOnA: true })
+    await assert.rejects(h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(ownId, foreignRef), /negado/)
+    assert.equal(h.db.queries.some(q => q.table === 'tracking_events'), false)
+    assert.equal(h.db.writes.length, 0)
+  })
+}
+test('F02: original exploit with an empty own timeline and B reference is rejected before fallback', async () => {
   const h = harness()
-  const events = await h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA, 'EQ000000002PT')
-  const leaked = events.some(event => event.description === 'PRIVATE-B-EVENT')
-  t.diagnostic('Store B timeline returned through own store A shipment: ' + leaked)
-  assert.equal(leaked, false, 'The fallback tracking reference must be bound to the authorized shipment')
+  await assert.rejects(h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA, 'EQ000000002PT'), /negado/)
+  assert.equal(h.db.queries.some(q => q.table === 'tracking_events'), false)
+  assert.equal(h.db.writes.length, 0)
+  assert.equal(h.calls.providers.length, 0)
 })
+for (const ctx of [null, { ...ctxA, client_id: null }, { ...ctxA, tenant_id: '' }, { ...ctxA, role: null }]) {
+  test('F02: missing session or incomplete scope stops before database reads: ' + JSON.stringify(ctx), async () => {
+    const h = harness({ ctx })
+    await assert.rejects(h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA), /LOGIN_REQUIRED|negado/)
+    assert.equal(h.db.queries.length, 0)
+  })
+}
+test('F02: ownership lookup error never falls back to stale audit ownership', async () => {
+  const h = harness({ failure: q => q.table === 'shipments' ? { message: 'Simulated authorization failure' } : null })
+  h.db.tables.audit_log.push({ tenant_id: TENANT, action: 'shipment_data', details: { id: SB, client_id: A } })
+  await assert.rejects(h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SB), /negado/)
+  assert.equal(h.db.queries.length, 1)
+})
+test('F02: stale audit ownership cannot override an existing shipment or its latest snapshot', async () => {
+  const h = harness()
+  h.db.tables.audit_log.push({ tenant_id: TENANT, action: 'shipment_data', created_at: '2026-10-01', details: { id: SB, client_id: A } })
+  const action = h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction
+  await assert.rejects(action(SB), /negado/)
+  h.db.tables.shipments = h.db.tables.shipments.filter(s => s.id !== SB)
+  h.db.tables.audit_log.push({ tenant_id: TENANT, action: 'shipment_data', created_at: '2026-10-02', details: { id: SB, client_id: B } })
+  await assert.rejects(action(SB), /negado/)
+  assert.equal(h.db.queries.some(q => q.table === 'tracking_events'), false)
+})
+test('F02: a failed legacy ownership query denies access before events', async () => {
+  const h = harness({ failure: q => q.table === 'audit_log' ? { message: 'Simulated audit failure' } : null })
+  h.db.tables.shipments = []
+  await assert.rejects(h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA), /negado/)
+  assert.equal(h.db.queries.some(q => q.table === 'tracking_events'), false)
+})
+test('F02: a valid legacy shipment can resolve matching stored events in its own store', async () => {
+  const h = harness({ eventsOnA: true })
+  h.db.tables.audit_log.push({ tenant_id: TENANT, action: 'shipment_data', details: {
+    id: FOREIGN, client_id: A, carrier_tracking_number: 'EQ000000001PT',
+  } })
+  const result = await h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(FOREIGN, 'EQ000000001PT')
+  assert.deepEqual(result.map(e => e.description), ['OWN-A-EVENT'])
+})
+test('F02: Correos timelines and the legacy CTT object reference remain supported', async () => {
+  const h = harness({ eventsOnA: true, failure: q => q.table === 'shipments' && q.projection.includes('ctt_object_id')
+    ? { message: 'Optional ctt_object_id column is absent from the live shipments schema' } : null })
+  Object.assign(h.db.tables.shipments[0], { carrier_code: 'correos', carrier_tracking_number: '0000000000000001' })
+  const action = h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction
+  assert.deepEqual((await action(SA, '0000000000000001')).map(e => e.description), ['OWN-A-EVENT'])
+  h.db.tables.shipments = h.db.tables.shipments.filter(s => s.id !== SA)
+  h.db.tables.audit_log.push({ tenant_id: TENANT, action: 'shipment_data', details: {
+    id: SA, client_id: A, carrier_code: 'ctt', ctt_object_id: 'EQ000000001PT',
+  } })
+  assert.deepEqual((await action(SA, 'EQ000000001PT')).map(e => e.description), ['OWN-A-EVENT'])
+})
+test('F02: public exact-reference tracking keeps its separate intended behavior', async () => {
+  const h = harness({ ctx: null, eventsOnA: true })
+  h.db.tables.shipment_metadata = h.db.tables.shipments.map(s => ({ ...s, details: s }))
+  const result = await h.load('app/actions/shipments.ts').getPublicShipmentTrackingAction('LTK1000001')
+  assert.equal(result.success, true)
+  assert.deepEqual(result.timeline.map(e => e.description), ['OWN-A-EVENT'])
+  assert.equal(h.db.writes.length, 0)
+})
+for (const role of ['client', 'employee', 'admin']) {
+  test('F02: another tenant is denied even with matching client ownership: ' + role, async () => {
+    const h = harness({ ctx: { ...ctxA, role } })
+    h.db.tables.shipments[0].tenant_id = FOREIGN
+    await assert.rejects(h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA), /negado/)
+    assert.equal(h.db.queries.some(q => q.table === 'tracking_events'), false)
+  })
+}
+test('F02: own events and historical events are tenant scoped', async () => {
+  const h = harness({ eventsOnA: true })
+  h.db.tables.tracking_events.push({ tenant_id: FOREIGN, shipment_id: SA, description: 'FOREIGN-EVENT' })
+  let result = await h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA)
+  assert.deepEqual(result.map(e => e.description), ['OWN-A-EVENT'])
+  h.db.tables.tracking_events = []
+  h.db.tables.audit_log.push({ tenant_id: FOREIGN, entity_id: SA, details: { status: 'entregue', description: 'FOREIGN-AUDIT' } },
+    { tenant_id: TENANT, entity_id: SA, details: { status: 'entregue', description: 'OWN-AUDIT' } })
+  result = await h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA)
+  assert.deepEqual(result.map(e => e.description), ['OWN-AUDIT'])
+})
+test('F02: a shared carrier reference never links a timeline from another store or tenant', async () => {
+  const h = harness()
+  h.db.tables.shipments[1].carrier_tracking_number = 'EQ000000001PT'
+  h.db.tables.shipments.reverse()
+  assert.deepEqual(await h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA, 'EQ000000001PT'), [])
+  h.db.tables.shipments[0].client_id = A
+  h.db.tables.shipments[0].tenant_id = FOREIGN
+  assert.deepEqual(await h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA, 'EQ000000001PT'), [])
+})
+for (const reference of [undefined, 'EQ000000001PT', 'LTK1000001']) {
+  test('F02: own timeline works with an optional canonical reference: ' + reference, async () => {
+    const h = harness({ eventsOnA: true })
+    const result = await h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA, reference)
+    assert.deepEqual(result.map(e => e.description), ['OWN-A-EVENT'])
+  })
+}
+test('F02: legacy audit shipments require matching tenant and store', async () => {
+  const h = harness()
+  h.db.tables.shipments = h.db.tables.shipments.filter(s => s.id !== SA)
+  const legacy = { id: SA, client_id: A, carrier_tracking_number: 'EQ000000001PT', tracking_number: 'LTK1000001' }
+  h.db.tables.audit_log.push({ tenant_id: TENANT, action: 'shipment_data', details: legacy },
+    { tenant_id: TENANT, entity_id: SA, details: { status: 'entregue', description: 'OWN-LEGACY' } })
+  const result = await h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA, 'EQ000000001PT')
+  assert.deepEqual(result.map(e => e.description), ['OWN-LEGACY'])
+  legacy.client_id = B
+  await assert.rejects(h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA), /negado/)
+  legacy.client_id = A
+  h.db.tables.audit_log.find(row => row.action === 'shipment_data').tenant_id = FOREIGN
+  await assert.rejects(h.load('app/actions/shipments.ts').getShipmentTrackingTimelineAction(SA), /negado/)
+})
+for (const role of ['employee', 'admin']) {
+  test('F02: authorized staff retain access to both stores in their tenant: ' + role, async () => {
+    const h = harness({ ctx: { ...ctxA, role }, eventsOnA: true })
+    const actions = h.load('app/actions/shipments.ts')
+    assert.deepEqual((await actions.getShipmentTrackingTimelineAction(SA)).map(e => e.description), ['OWN-A-EVENT'])
+    assert.deepEqual((await actions.getShipmentTrackingTimelineAction(SB)).map(e => e.description), ['PRIVATE-B-EVENT'])
+  })
+}
 for (const [carrier, tracking] of [['ctt', 'EQ000000002PT'], ['correos', '0000000000000002']]) {
   test('F03: lookup failure must deny tracking sync before fetching or modifying B (' + carrier + ')', async t => {
     const h = harness({ failure: query => query.table === 'shipments' && query.projection === '*' && !query.write
