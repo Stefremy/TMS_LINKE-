@@ -2,8 +2,8 @@
 
 Data: 21/10/2026 (Europe/Lisbon)  
 Referência do código analisado: `ee40497299209caeb215eb8ce9c957fd1e9a9d0c`  
-Estado atualizado: F01–F04 corrigidas e validadas localmente após autorização; F02 também testada por HTTP com duas sessões reais de cliente. Permissões/RLS do Supabase publicado consultadas: P01 confirmado crítico, ainda sem alteração de grants.  
-O Passo 1 ainda não está concluído: falta resolver P01, rever os restantes pontos e validar o deployment final. [Resultados da verificação real](CLIENT_ISOLATION_SUPABASE_2026-10-21.md).
+Estado atualizado: F01–F04 corrigidas e validadas localmente após autorização; F02 também testada por HTTP com duas sessões reais de cliente. Permissões/RLS do Supabase publicado consultadas: P01 corrigido após autorização, com grants verificados no Supabase e acesso administrativo preservado.
+O Passo 1 ainda não está concluído: falta rever os restantes pontos e validar o deployment final. [Resultados da verificação real](CLIENT_ISOLATION_SUPABASE_2026-10-21.md).
 
 ## Resultado para decisão
 
@@ -59,7 +59,7 @@ Critério de aceitação: ambos os testes F01 passam, os clientes continuam a re
 
 ## F02 — Referência de rastreio não vinculada ao envio autorizado
 
-Código: [app/actions/shipments.ts](../app/actions/shipments.ts), funções `getShipmentTrackingTimelineAction` e `loadShipmentTrackingTimeline`.  
+Código: [app/actions/shipments.ts](../app/actions/shipments.ts), funções `getShipmentTrackingTimelineAction` e `loadShipmentTrackingTimeline`.
 Testes: casos F02 no ficheiro de auditoria. Corrigida na atualização final abaixo.
 
 Antes da correção, `getShipmentTrackingTimelineAction` confirmava que o ID inicial pertencia a A, mas passava a referência de rastreio recebida para a função de leitura. Se o envio inicial não tivesse eventos, o fallback procurava outro envio pela referência e lia os seus eventos sem voltar a confirmar a loja.
@@ -101,13 +101,13 @@ Os dois testes F04 falhavam antes da correção, preservando a evidência da rep
 
 ## Permissões e revisões complementares
 
-### P01 — Permissões da função de incremento de saldo — crítico confirmado
+### P01 — Permissões da função de incremento de saldo — corrigido no Supabase
 
 A migração [20261007000000_add_increment_balance.sql](../supabase/migrations/20261007000000_add_increment_balance.sql) define `increment_client_balance(uuid,numeric)` com `SECURITY DEFINER`, sem validação do solicitante, da loja ou da empresa no corpo. Não foi encontrada outra migração no repositório a restringir `EXECUTE` dessa função.
 
 **Atualização publicada confirmada em 21/10/2026:** a função mantém esse corpo sem autorização e permite efetivamente execução a `PUBLIC`, `anon` e `authenticated`. O risco crítico foi confirmado por ACL e definição publicada; não foi executado um incremento de saldo para demonstrar exploração.
 
-As consultas de metadados foram executadas numa forma consolidada equivalente ao [SQL de referência](../supabase/audits/20261021_client_isolation_readonly.sql). Foi preparada uma [proposta de restrição ainda não aplicada](../supabase/audits/proposals/20261021_restrict_increment_balance.sql). [Resultados e limites](CLIENT_ISOLATION_SUPABASE_2026-10-21.md).
+As consultas de metadados foram executadas numa forma consolidada equivalente ao [SQL de referência](../supabase/audits/20261021_client_isolation_readonly.sql). A proposta foi posteriormente autorizada e aplicada através da [migração de permissões](../supabase/migrations/20261021120000_restrict_increment_client_balance.sql); ver a atualização P01 abaixo. [Resultados e limites](CLIENT_ISOLATION_SUPABASE_2026-10-21.md).
 
 ### P02 — Filtros de empresa inconsistentes em percursos antigos
 
@@ -217,7 +217,7 @@ Autorização: corrigir F02, confirmar permissões do Supabase e testar com dois
 - ID e referência contraditórios são recusados antes de consultar eventos. Os fallbacks usam uma referência guardada, limitam envios relacionados à mesma empresa/loja e filtram eventos e audit log pela empresa.
 - O registo já autorizado é reutilizado na leitura para evitar outra consulta de metadados. A consulta nativa respeita o esquema efetivamente publicado, que não tem a coluna opcional `ctt_object_id`; essa referência continua suportada nos snapshots antigos.
 - Colaboradores mantêm acesso às lojas da própria empresa. O rastreio público por referência exata mantém o percurso separado e o teste de regressão; a política de campos públicos P03 continua por rever.
-- Não foram modificados preços, gravadores de rastreio ou integrações com transportadoras. A proposta de grants P01 foi guardada fora de `migrations` e não foi aplicada.
+- Não foram modificados preços, gravadores de rastreio ou integrações com transportadoras. Na etapa F02, a proposta de grants P01 foi guardada fora de `migrations` e ainda não tinha sido aplicada; a autorização e aplicação posteriores constam na atualização P01 abaixo.
 
 ### Validação final
 
@@ -232,15 +232,33 @@ Autorização: corrigir F02, confirmar permissões do Supabase e testar com dois
 | ESLint do teste de isolamento | Passou. |
 | ESLint de `app/actions/shipments.ts` comparado com `HEAD` | 33 erros e 6 avisos em ambos, com a mesma distribuição de regras; não representa lint global limpo. |
 | Duas sessões reais, HTTP local | Históricos próprios com 5 e 12 eventos; quatro tentativas cruzadas recusadas; sem sessão, redirecionamento para login. |
-| Supabase publicado | Inspeção de RLS/grants concluída para os objetos listados; P01 confirmado crítico e ainda por corrigir. |
+| Supabase publicado | Inspeção de RLS/grants concluída para os objetos listados; P01 confirmado crítico nessa fase, corrigido na atualização posterior abaixo. |
 
 Os [resultados detalhados e limites dos testes reais](CLIENT_ISOLATION_SUPABASE_2026-10-21.md) ficam registados separadamente. Não houve commit, push, deployment ou alteração de permissões nesta ronda.
 
+## Atualização — P01 autorizada e corrigida no Supabase em 21/10/2026
+
+O utilizador pediu expressamente para corrigir o risco crítico da função de saldo. Foi aplicada a [migração](../supabase/migrations/20261021120000_restrict_increment_client_balance.sql) em transação no projeto já auditado. Apenas foram alterados privilégios de execução; não foram modificadas políticas RLS nem executada a função de saldo.
+
+| Privilégio efetivo | Antes | Depois |
+| --- | --- | --- |
+| PUBLIC | Permitido | Bloqueado |
+| anon | Permitido | Bloqueado |
+| authenticated | Permitido | Bloqueado |
+| service_role | Permitido | Permitido |
+
+O [teste SQL de metadados](../supabase/audits/20261021_balance_function_permissions_readonly.sql) confirmou o resultado na base publicada. O hash da definição da função permaneceu `981c65c3761e33c107c18c91fcc159a1`, comprovando que o corpo não foi alterado. A migração contém verificações que abortam a transação se os privilégios efetivos não corresponderem ao esperado.
+
+O único chamador encontrado, o webhook Stripe, usa `createAdminClient()` e conserva o privilégio `service_role`. Não foi enviado um webhook real nem efetuado um carregamento para testar. A integridade financeira e a recuperação de falhas do webhook continuam no Passo 4.
+
+Após a alteração, `npm run test:security` voltou a passar: 137 testes, zero falhas. Não foram modificados ficheiros da aplicação Next.js, por isso não foi repetido o build nesta correção SQL.
+
+A mudança de permissões já está ativa no Supabase e não depende de um deploy Next.js. A migração foi guardada no repositório para repetição idempotente; a aplicação via editor/API não acrescentou um registo ao histórico do Supabase CLI. Não houve commit nem push nesta correção.
+
 ## Continuação proposta
 
-1. Rever e autorizar a proposta **P01**: restringir a função de saldo a `service_role`, preservando o chamador administrativo Stripe.
-2. Rever os filtros por empresa do catálogo e os restantes pontos P02/P03.
-3. Validar o deployment final e os restantes percursos do Passo 1 antes de concluir a auditoria e entregar a clientes.
+1. Rever os filtros por empresa do catálogo e os restantes pontos P02/P03.
+2. Validar o deployment final e os restantes percursos do Passo 1 antes de concluir a auditoria e entregar a clientes.
 
 Comando de reprodução de todos os resultados novos:
 

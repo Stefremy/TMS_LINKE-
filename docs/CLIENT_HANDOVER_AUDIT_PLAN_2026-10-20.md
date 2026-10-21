@@ -2,7 +2,7 @@
 
 Guardado em: 20/10/2026  
 Retoma prevista: 21/10/2026 (Europe/Lisbon)  
-Estado: Passo 1 em curso. F01–F04 corrigidas localmente após autorização. Auditoria de isolamento: 93/93; segurança: 137/137; build passou. F02 validada por HTTP com sessões reais de Stef Store e GO Linke. Permissões/RLS publicadas consultadas: P01 confirmado crítico na função de saldo; proposta de restrição ainda não aplicada. O site publicado não foi atualizado nesta ronda.
+Estado: Passo 1 em curso. F01–F04 corrigidas localmente após autorização. Auditoria de isolamento: 93/93; segurança: 137/137; build passou. F02 validada por HTTP com sessões reais de Stef Store e GO Linke. Permissões/RLS publicadas consultadas: P01 corrigido no Supabase: execução da função de saldo bloqueada a PUBLIC/anon/authenticated e mantida para service_role, com verificação de privilégios e corpo inalterado. O site publicado não foi atualizado nesta ronda.
 
 ## Objetivo
 
@@ -100,7 +100,7 @@ Começar apenas pelo **Passo 1 — Isolamento entre clientes**: analisar os cami
 
 Resultados da primeira ronda: [Auditoria de isolamento de 21/10/2026](CLIENT_ISOLATION_AUDIT_2026-10-21.md).
 
-Próxima ação proposta: rever e autorizar a correção P01 das permissões da função de saldo. A inspeção publicada confirmou execução por `anon` e `authenticated` de uma função `SECURITY DEFINER` sem verificação de loja/empresa. A [proposta SQL](../supabase/audits/proposals/20261021_restrict_increment_balance.sql) preserva `service_role`, usado pelo webhook Stripe; não foi aplicada nem foi executada a função de saldo. Antes de concluir o Passo 1 continuam a faltar a resolução deste risco, a revisão dos filtros por empresa do catálogo e a validação do deployment final.
+Próxima ação proposta: continuar a revisão dos filtros por empresa do catálogo e os pontos P02/P03; validar o deployment final antes de fechar o Passo 1. A P01 foi autorizada, aplicada no Supabase e verificada em 21/10/2026. A [migração de permissões](../supabase/migrations/20261021120000_restrict_increment_client_balance.sql) mantém o acesso administrativo do webhook Stripe e não altera o corpo da função nem saldos.
 
 Resultados da F02 e da verificação real: [Supabase e duas sessões de cliente — 21/10/2026](CLIENT_ISOLATION_SUPABASE_2026-10-21.md). O login temporário da GO Linke foi criado com autorização e apagado no fim. Não houve alteração de dados comerciais.
 

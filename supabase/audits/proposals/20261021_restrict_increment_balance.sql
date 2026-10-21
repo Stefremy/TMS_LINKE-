@@ -1,5 +1,6 @@
--- PROPOSTA PARA REVISÃO — NÃO APLICADA.
--- Não está em migrations e não deve ser executada sem autorização desta correção.
+-- Proposta original preservada para referência.
+-- Autorizada e aplicada em 21/10/2026 através da migração canónica:
+-- supabase/migrations/20261021120000_restrict_increment_client_balance.sql
 -- P01: remover execução pública da função de saldo; manter o webhook administrativo.
 -- Não executa a função, não altera o seu corpo e não modifica saldos.
 
