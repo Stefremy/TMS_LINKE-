@@ -4,8 +4,10 @@ import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { NovoEnvioPageClient } from "./NovoEnvioPageClient"
 
 export default async function NovoPage() {
-  const clients = await getClientesAction()
-  const servicosLinke = await getServicosLinkeAction()
+  const [clients, servicosLinke] = await Promise.all([
+    getClientesAction(),
+    getServicosLinkeAction(),
+  ])
   
   return (
     <div className="min-h-[calc(100vh-4rem)]">

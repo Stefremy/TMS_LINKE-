@@ -11,6 +11,7 @@ import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { useClientScope } from "./ClientScope"
+import { useTrackingPolling } from "@/lib/hooks/useTrackingPolling"
 import { ManifestDocuments } from "@/components/manifest-documents"
 import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
 
@@ -89,42 +90,20 @@ export function ClientShipmentsHistory() {
       const list = res?.allShipments || res?.recentShipments || []
       setShipments(list)
       
-      // Sincronização automática em segundo plano para envios em curso
-      const activeIds = list
-        .filter((s: any) => s.status !== "entregue" && s.status !== "devolvido" && s.status !== "cancelado")
-        .map((s: any) => s.id)
-        .filter(Boolean)
-
-      if (activeIds.length > 0) {
-        import("@/app/actions/shipments").then(({ syncActiveShipmentsBatchAction }) => {
-          const doSync = () => {
-            syncActiveShipmentsBatchAction(activeIds).then(r => {
-              if (r.updatedCount > 0 && active) {
-                getClientPortalStatsAction(currentClient.id, currentClient.short_name).then(fresh => {
-                  if (fresh && active) {
-                    setShipments(fresh.allShipments || fresh.recentShipments || [])
-                  }
-                })
-              }
-            }).catch(() => {})
-          }
-          
-          doSync()
-          
-          const interval = setInterval(() => {
-            if (active) doSync()
-          }, 300000)
-          
-          return () => clearInterval(interval)
-        })
-      }
-      
       if (!res) setLoadError(true)
       setLoading(false)
     }).catch(() => { if (active) { setLoadError(true); setLoading(false) } })
     return () => { active = false }
   }, [currentClient.id, currentClient.short_name])
 
+
+  const activeIds = React.useMemo(() => shipments
+    .filter(s => !["entregue", "devolvido", "cancelado"].includes(s.status))
+    .map(s => s.id).filter(Boolean) as string[], [shipments])
+  useTrackingPolling(activeIds, async signal => {
+    const fresh = await getClientPortalStatsAction(currentClient.id, currentClient.short_name)
+    if (fresh && !signal.aborted) setShipments(fresh.allShipments || fresh.recentShipments || [])
+  })
 
   const filteredShipments = React.useMemo(() => {
     return shipments.filter((item) => {

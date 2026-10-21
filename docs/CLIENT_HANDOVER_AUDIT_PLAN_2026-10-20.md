@@ -2,7 +2,7 @@
 
 Guardado em: 20/10/2026  
 Retoma prevista: 21/10/2026 (Europe/Lisbon)  
-Estado: planeado; esta auditoria ainda não foi iniciada.
+Estado: Passo 1 em curso. F01, F03 e F04 corrigidas localmente em 21/10/2026 após autorização. F04: 13 testes passaram; 137 testes de segurança e build passaram. Auditoria completa: 65 de 66 passaram; F02 e validação do Supabase publicado pendentes.
 
 ## Objetivo
 
@@ -93,6 +93,14 @@ Analisar e reproduzir problemas antes de propor correções:
 - Preparar verificações automáticas antes dos deployments.
 - Só considerar uma área validada quando os testes e as limitações estiverem documentados.
 
-## Como retomar amanhã
+## Estado para continuar
 
 Começar apenas pelo **Passo 1 — Isolamento entre clientes**: analisar os caminhos de acesso, apresentar os resultados e criar testes para os problemas encontrados. Não aplicar correções antes da autorização correspondente.
+
+
+Resultados da primeira ronda: [Auditoria de isolamento de 21/10/2026](CLIENT_ISOLATION_AUDIT_2026-10-21.md).
+
+Próxima ação proposta: obter autorização para corrigir F02 isoladamente (cronologia de outro cliente através de ID e referência combinados). F01, F03 e F04 concluídas localmente. Antes de concluir o Passo 1, resolver a F02, rever os filtros por empresa do catálogo, validar permissões/RLS no Supabase e testar HTTP com contas controladas.
+
+
+Revisão operacional posterior: [Navegação OPS e portal — 21/10/2026](NAVIGATION_PERFORMANCE_2026-10-21.md). Rastreio automático separado da fila das ações; filtros de segurança preservados. F02 continua pendente.

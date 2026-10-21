@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { useTrackingPolling } from "@/lib/hooks/useTrackingPolling"
 import { 
   Plus, 
   Package, 
@@ -30,7 +31,7 @@ import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDe
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
-import { deleteShipmentsBulkAction, syncShipmentTrackingAction, syncActiveShipmentsBatchAction } from "@/app/actions/shipments"
+import { deleteShipmentsBulkAction, syncShipmentTrackingAction } from "@/app/actions/shipments"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
@@ -82,43 +83,13 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
   const [isDeletingSelected, setIsDeletingSelected] = React.useState(false)
   const statusTabs = ["Todos", "Pendente", "Em Trânsito", "Em Distribuição", "Entregue", "Entregue (PUDO)", "Incidência", "Devolvido", "Cancelado"]
 
-  // Sincronização automática em segundo plano para envios em curso na página
-  React.useEffect(() => {
-    const activeIds = envios
-      .filter((e) => {
-        const s = (e.rawShipment?.status || e.status?.raw || "").toLowerCase()
-        return s !== "entregue" && s !== "devolvido" && s !== "cancelado"
-      })
-      .map((e) => e.rawId || e.rawShipment?.id)
-      .filter(Boolean) as string[]
+  const activeIds = React.useMemo(() => envios
+    .filter(e => !["entregue", "devolvido", "cancelado"].includes(
+      (e.rawShipment?.status || e.status?.raw || "").toLowerCase()))
+    .map(e => e.rawId || e.rawShipment?.id)
+    .filter(Boolean) as string[], [envios])
+  useTrackingPolling(activeIds, () => router.refresh())
 
-    if (activeIds.length === 0) return
-
-    let isMounted = true
-    syncActiveShipmentsBatchAction(activeIds)
-      .then((res) => {
-        if (isMounted && res.updatedCount > 0) {
-          router.refresh()
-        }
-      })
-      .catch(() => {})
-
-    // Polling periódico a cada 5 minutos (300000 ms)
-    const interval = setInterval(() => {
-      syncActiveShipmentsBatchAction(activeIds)
-        .then((res) => {
-          if (isMounted && res.updatedCount > 0) {
-            router.refresh()
-          }
-        })
-        .catch(() => {})
-    }, 300000)
-
-    return () => {
-      isMounted = false
-      clearInterval(interval)
-    }
-  }, [envios.length])
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {

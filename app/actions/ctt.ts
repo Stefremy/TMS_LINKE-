@@ -482,6 +482,7 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
       skipAuth: ctx.role !== "client",
       userRole: ctx.role,
       clientId: ctx.client_id,
+      tenantId: ctx.tenant_id,
     }
   )
 

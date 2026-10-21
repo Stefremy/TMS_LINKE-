@@ -381,12 +381,13 @@ export async function getBillingStatementsAction(clientId?: string) {
     targetClientId = ctx.client_id || undefined
   }
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('audit_log')
       .select('details, created_at')
       .eq('tenant_id', ctx.tenant_id)
       .eq('action', 'billing_statement')
-      .order('created_at', { ascending: false })
+    if (targetClientId) query = query.eq('details->>client_id', targetClientId)
+    const { data, error } = await query.order('created_at', { ascending: false })
 
     if (error || !data) return []
 

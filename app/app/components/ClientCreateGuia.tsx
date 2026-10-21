@@ -38,6 +38,7 @@ import { getServiceDisplayLabel } from "@/lib/services/ctt/service-identity"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { useClientScope } from "./ClientScope"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
+import { useRecipientAgenda } from "@/lib/hooks/useRecipientAgenda"
 
 export function ClientCreateGuia() {
   const { client: currentClient, basePath } = useClientScope()
@@ -54,20 +55,10 @@ export function ClientCreateGuia() {
   const [weight, setWeight] = React.useState("1.50")
 
   // Agenda de Destinatários states
-  const [savedRecipients, setSavedRecipients] = React.useState<any[]>([])
   const [saveToAgenda, setSaveToAgenda] = React.useState(false)
   const [showAgendaDropdown, setShowAgendaDropdown] = React.useState(false)
-
-  React.useEffect(() => {
-    if (currentClient?.id) {
-      import("@/app/actions/destinatarios")
-        .then((m) => m.getDestinatariosAction(currentClient.id))
-        .then((list) => {
-          setSavedRecipients(list || [])
-        })
-        .catch(() => {})
-    }
-  }, [currentClient?.id])
+  const { recipients: savedRecipients, loading: loadingAgenda, error: agendaError } =
+    useRecipientAgenda(currentClient.id, showAgendaDropdown)
 
   const handleSelectRecipient = (r: any) => {
     setRecipientName(r.name || "")
@@ -112,6 +103,9 @@ export function ClientCreateGuia() {
   })
 
   // Generation feedback & session history
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const submissionRef = React.useRef(false)
+  const pageTopRef = React.useRef<HTMLDivElement>(null)
   const [generatedGuia, setGeneratedGuia] = React.useState<string | null>(null)
   const [generatedLabelBase64, setGeneratedLabelBase64] = React.useState<string | null>(null)
   const [submitError, setSubmitError] = React.useState<string | null>(null)
@@ -127,6 +121,14 @@ export function ClientCreateGuia() {
     valor: string
     numericValue: number
   }>>([])
+
+  React.useEffect(() => {
+    if (!generatedGuia) return
+    pageTopRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    })
+  }, [generatedGuia])
 
   React.useEffect(() => {
     let active = true
@@ -204,6 +206,7 @@ export function ClientCreateGuia() {
 
   const handleCreateShipment = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submissionRef.current) return
     if (!recipientName) {
       alert("Por favor indique o nome do destinatário.")
       return
@@ -216,6 +219,9 @@ export function ClientCreateGuia() {
 
     const numericVal = parseFloat(calculatedPrice.total) || 0
     const chosenService = activeLinkeService?.name || "Linke Expresso 24H"
+
+    submissionRef.current = true
+    setIsSubmitting(true)
 
     // Clear previous errors
     setSubmitError(null)
@@ -332,6 +338,9 @@ export function ClientCreateGuia() {
       } else if (msg.toLowerCase().includes("serviço especial") || msg.toLowerCase().includes("subproduto")) {
         setFieldError("special")
       }
+    } finally {
+      submissionRef.current = false
+      setIsSubmitting(false)
     }
   }
 
@@ -342,7 +351,7 @@ export function ClientCreateGuia() {
     : "Sede Comercial da Empresa"
 
   return (
-    <div className="flex flex-col gap-6 max-w-6xl mx-auto">
+    <div ref={pageTopRef} className="flex flex-col gap-6 max-w-6xl mx-auto scroll-mt-20">
       
       {/* Navigation Breadcrumb & Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -486,7 +495,7 @@ export function ClientCreateGuia() {
 
       {/* Main Creation Card Form */}
       <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 p-4 sm:p-6 md:p-8">
-        <form onSubmit={handleCreateShipment} className="space-y-6">
+        <form onSubmit={handleCreateShipment} aria-busy={isSubmitting} className="space-y-6">
           
           {/* Remetente e Destinatário */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -565,14 +574,14 @@ export function ClientCreateGuia() {
               <div className="md:col-span-2 space-y-1.5 relative">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-slate-700">Nome do Destinatário *</label>
-                  {savedRecipients.length > 0 && (
+                  {currentClient.id && (
                     <button
                       type="button"
                       onClick={() => setShowAgendaDropdown(!showAgendaDropdown)}
                       className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <BookmarkCheck className="w-3.5 h-3.5" />
-                      Agenda ({savedRecipients.length})
+                      Agenda{savedRecipients.length > 0 ? ` (${savedRecipients.length})` : ""}
                     </button>
                   )}
                 </div>
@@ -589,6 +598,11 @@ export function ClientCreateGuia() {
                         ✕
                       </button>
                     </div>
+                    {loadingAgenda && <p role="status" className="p-3 text-slate-500">A carregar agenda…</p>}
+                    {agendaError && <p role="alert" className="p-3 text-red-700">{agendaError}</p>}
+                    {!loadingAgenda && !agendaError && savedRecipients.length === 0 && (
+                      <p className="p-3 text-slate-500">Ainda não existem destinatários nesta agenda.</p>
+                    )}
                     {savedRecipients.map((r) => (
                       <div
                         key={r.id}
@@ -987,11 +1001,13 @@ export function ClientCreateGuia() {
             </div>
 
             <button 
-              type="submit" 
-              className="w-full sm:w-auto justify-center bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white px-7 py-3.5 rounded-2xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+              type="submit"
+              disabled={isSubmitting}
+              aria-busy={isSubmitting}
+              className="w-full sm:w-auto justify-center bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white px-7 py-3.5 rounded-2xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:cursor-wait disabled:opacity-75 disabled:active:scale-100"
             >
-              <FileText className="w-4 h-4" />
-              <span>Criar Envio</span>
+              {isSubmitting ? <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin motion-reduce:animate-none" /> : <FileText aria-hidden="true" className="w-4 h-4" />}
+              <span>{isSubmitting ? "A criar envio…" : "Criar Envio"}</span>
             </button>
           </div>
 

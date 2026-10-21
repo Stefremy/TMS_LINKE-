@@ -9,6 +9,7 @@ export interface SyncOptions {
   skipAuth?: boolean
   userRole?: string | null
   clientId?: string | null
+  tenantId?: string | null
 }
 
 /**
@@ -20,48 +21,64 @@ export async function syncShipmentTracking(
   identifier: { trackingNumber?: string; shipmentId?: string; shipment?: any },
   options: SyncOptions = {}
 ): Promise<TrackingSyncResult> {
+  const isClient = options.userRole === "client"
+  const denied: TrackingSyncResult = {
+    success: false,
+    carrier: "ctt",
+    count: 0,
+    error: "Não autorizado a sincronizar este envio.",
+  }
+  if (isClient && (!options.clientId || !options.tenantId)) return denied
+
   const supabase = createAdminClient()
   const { trackingNumber, shipmentId, shipment } = identifier
 
-  // 1. Obter registo do envio
-  let targetShipment: any = shipment || null
+  // Client requests always reload ownership; supplied snapshots and skipAuth cannot bypass it.
+  let targetShipment: any = isClient ? null : shipment || null
+  const lookupId = shipmentId || (isClient ? shipment?.id : undefined)
+
+  async function findShipment(column: "id" | "tracking_number" | "carrier_tracking_number", value: string) {
+    let query = supabase.from("shipments").select("*").eq(column, value)
+    if (isClient) {
+      query = query.eq("tenant_id", options.tenantId!).eq("client_id", options.clientId!)
+    }
+    const { data, error } = await query.maybeSingle()
+    if (error) throw new Error("Shipment lookup failed")
+    return data
+  }
 
   if (!targetShipment) {
-    if (shipmentId) {
-      const { data } = await supabase.from("shipments").select("*").eq("id", shipmentId).maybeSingle()
-      targetShipment = data
-    } else if (trackingNumber) {
-    const cleanTrk = trackingNumber.trim()
-    const { data: d1 } = await supabase
-      .from("shipments")
-      .select("*")
-      .eq("tracking_number", cleanTrk)
-      .maybeSingle()
-
-    if (d1) {
-      targetShipment = d1
-    } else {
-      const { data: d2 } = await supabase
-        .from("shipments")
-        .select("*")
-        .eq("carrier_tracking_number", cleanTrk)
-        .maybeSingle()
-      targetShipment = d2
-    }
-  }
-  }
-
-  // 2. Validação de autorização para clientes
-  if (!options.skipAuth && options.userRole === "client" && options.clientId) {
-    if (targetShipment && targetShipment.client_id !== options.clientId) {
+    try {
+      if (lookupId) {
+        targetShipment = await findShipment("id", lookupId)
+      } else if (trackingNumber) {
+        const cleanTrk = trackingNumber.trim()
+        targetShipment = await findShipment("tracking_number", cleanTrk)
+        if (!targetShipment) {
+          targetShipment = await findShipment("carrier_tracking_number", cleanTrk)
+        }
+      }
+    } catch {
       return {
         success: false,
         carrier: "ctt",
         count: 0,
-        error: "Não autorizado a sincronizar este envio.",
+        error: "Não foi possível confirmar o acesso a este envio. Tente novamente.",
       }
     }
   }
+
+  // An error, missing record or missing ownership proof must stop before carrier calls or writes.
+  if (isClient && (
+    !targetShipment?.id ||
+    targetShipment.client_id !== options.clientId ||
+    targetShipment.tenant_id !== options.tenantId
+  )) return denied
+
+  const effectiveTrackingNumber = isClient
+    ? targetShipment.carrier_tracking_number || targetShipment.carrier_object_id ||
+      targetShipment.ctt_object_id || targetShipment.tracking_number
+    : trackingNumber
 
   const effectiveId = targetShipment?.id || shipmentId
   if (!effectiveId && !trackingNumber) {
@@ -76,7 +93,7 @@ export async function syncShipmentTracking(
   // 3. Determinar transportadora: Correos Express vs CTT Expresso
   const isCorreos =
     isCorreosShipment(targetShipment) ||
-    Boolean(trackingNumber && /^\d{16}$/.test(trackingNumber.trim()))
+    Boolean(effectiveTrackingNumber && /^\d{16}$/.test(effectiveTrackingNumber.trim()))
 
   if (isCorreos) {
     // ── CORREOS EXPRESS ──────────────────────────────────────────────────────────
@@ -84,7 +101,7 @@ export async function syncShipmentTracking(
       targetShipment?.carrier_tracking_number ||
       targetShipment?.carrier_object_id ||
       targetShipment?.tracking_number ||
-      trackingNumber
+      effectiveTrackingNumber
 
     if (!correosTracking) {
       return {
@@ -123,7 +140,7 @@ export async function syncShipmentTracking(
       targetShipment?.carrier_tracking_number ||
       targetShipment?.ctt_object_id ||
       targetShipment?.tracking_number ||
-      trackingNumber
+      effectiveTrackingNumber
 
     // Se começa por LTK e temos carrier_tracking_number real, usar o real
     if (cttTracking && (cttTracking.startsWith("LTK") || cttTracking.startsWith("LKT"))) {

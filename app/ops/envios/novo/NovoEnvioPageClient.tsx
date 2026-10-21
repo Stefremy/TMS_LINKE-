@@ -4,6 +4,7 @@ import * as React from "react"
 import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro, Download, FileText, ExternalLink, Check, Printer, BookmarkCheck } from "lucide-react"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
+import { useRecipientAgenda } from "@/lib/hooks/useRecipientAgenda"
 
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
@@ -25,6 +26,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   }, [clients])
 
   const [loading, setLoading] = React.useState(false)
+  const submissionRef = React.useRef(false)
+  const pageTopRef = React.useRef<HTMLDivElement>(null)
   const [success, setSuccess] = React.useState(false)
   const [shipmentResult, setShipmentResult] = React.useState<{
     guia?: string;
@@ -71,20 +74,18 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   const [recipientEmail, setRecipientEmail] = React.useState("")
 
   // Agenda de Destinatários
-  const [savedRecipients, setSavedRecipients] = React.useState<any[]>([])
   const [saveToAgenda, setSaveToAgenda] = React.useState(false)
   const [showAgendaDropdown, setShowAgendaDropdown] = React.useState(false)
+  const { recipients: savedRecipients, loading: loadingAgenda, error: agendaError } =
+    useRecipientAgenda(selectedClientId, showAgendaDropdown)
 
   React.useEffect(() => {
-    if (selectedClientId) {
-      import("@/app/actions/destinatarios")
-        .then((m) => m.getDestinatariosAction(selectedClientId))
-        .then((list) => setSavedRecipients(list || []))
-        .catch(() => {})
-    } else {
-      setSavedRecipients([])
-    }
-  }, [selectedClientId])
+    if (!success || !shipmentResult?.id) return
+    pageTopRef.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    })
+  }, [success, shipmentResult?.id])
 
   const handleSelectRecipient = (r: any) => {
     setRecipientName(r.name || "")
@@ -186,15 +187,18 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (submissionRef.current) return
     if (estimatedTier.error) {
       setErrorMsg(estimatedTier.error)
       return
     }
+    submissionRef.current = true
     setLoading(true)
+    setSuccess(false)
     setErrorMsg("")
-    
-    const formData = new FormData(e.currentTarget)
+
     try {
+      const formData = new FormData(e.currentTarget)
       const res = await emitClientGuiaAction({
         clientId: selectedClientId,
         clientName: isEditingSender ? senderName : (currentClient?.short_name || currentClient?.legal_name || "Operador"),
@@ -293,6 +297,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       
     } catch (err: any) {
       setErrorMsg(err.message || "Erro ao criar envio.")
+    } finally {
+      submissionRef.current = false
       setLoading(false)
     }
   }
@@ -323,7 +329,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] p-4 sm:p-6 lg:p-8 [--accent:#128A47] [--accent-hover:#0E6C37] [--accent-active:#0B572D] [--accent-soft:#EAF5EE] [--status-success:#128A47] [--status-success-soft:#EAF5EE] [--status-info:#596F7C] [--status-info-soft:#EBF0F2]">
+    <div ref={pageTopRef} className="mx-auto w-full max-w-[1440px] p-4 sm:p-6 lg:p-8 scroll-mt-20 [--accent:#128A47] [--accent-hover:#0E6C37] [--accent-active:#0B572D] [--accent-soft:#EAF5EE] [--status-success:#128A47] [--status-success-soft:#EAF5EE] [--status-info:#596F7C] [--status-info-soft:#EBF0F2]">
       <header className="mb-5">
         <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Novo envio</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
@@ -348,7 +354,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         </div>
 
         {/* Content */}
-        <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+        <form ref={formRef} onSubmit={handleSubmit} aria-busy={loading} className="flex flex-col flex-1 overflow-hidden">
           <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-8">
             
             {success && shipmentResult && (
@@ -686,7 +692,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       <MapPin className="w-4 h-4 text-[var(--accent)]" />
                       Destinatário
                     </h3>
-                    {savedRecipients.length > 0 && (
+                    {selectedClientId && (
                       <div className="relative">
                         <button
                           type="button"
@@ -694,7 +700,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                           className="text-[10px] font-semibold text-white flex items-center gap-1 cursor-pointer bg-[var(--accent)] hover:bg-[var(--accent-hover)] px-2 py-0.5 rounded border border-[var(--accent)]"
                         >
                           <BookmarkCheck className="w-3.5 h-3.5" />
-                          Agenda ({savedRecipients.length})
+                          Agenda{savedRecipients.length > 0 ? ` (${savedRecipients.length})` : ""}
                         </button>
 
                         {showAgendaDropdown && (
@@ -709,6 +715,11 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                                 ✕
                               </button>
                             </div>
+                            {loadingAgenda && <p role="status" className="p-3 text-[var(--text-secondary)]">A carregar agenda…</p>}
+                            {agendaError && <p role="alert" className="p-3 text-[var(--status-critical)]">{agendaError}</p>}
+                            {!loadingAgenda && !agendaError && savedRecipients.length === 0 && (
+                              <p className="p-3 text-[var(--text-secondary)]">Ainda não existem destinatários nesta agenda.</p>
+                            )}
                             {savedRecipients.map((r) => (
                               <div
                                 key={r.id}
@@ -1061,12 +1072,13 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 Cancelar
               </Button>
               <Button 
-                type="submit" 
+                type="submit"
+                aria-busy={loading}
                 disabled={loading}
                 className="shadow-xs text-[11px] h-auto px-5 py-2 font-bold flex items-center gap-2 bg-[var(--accent)] !bg-[#128A47] text-white hover:bg-[var(--accent-hover)] hover:!bg-[#0E6C37] border-none"
               >
-                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                Emitir Envio & Etiqueta
+                {loading ? <Loader2 aria-hidden="true" className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none" /> : <CheckCircle2 aria-hidden="true" className="w-3.5 h-3.5" />}
+                {loading ? "A criar envio…" : "Emitir Envio & Etiqueta"}
               </Button>
             </div>
           </form>

@@ -18,6 +18,8 @@ function createLoader(mocks) {
     }).outputText
     function localRequire(id) {
       if (Object.hasOwn(mocks, id)) return mocks[id]
+      // Tests run server modules directly; the Next build enforces this compile-time marker.
+      if (id === 'server-only') return {}
       if (!id.startsWith('@/') && !id.startsWith('.')) throw new Error(`Unmocked dependency: ${id}`)
       const base = id.startsWith('@/') ? path.join(root, id.slice(2)) : path.resolve(path.dirname(absolute), id)
       const resolved = [base, `${base}.ts`, `${base}.tsx`].find(p => fs.existsSync(p) && fs.statSync(p).isFile())

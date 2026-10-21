@@ -15,6 +15,7 @@ import { applyLinkeLogoToCorreosLabel } from "@/lib/services/correos/correos-lab
 import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "@/lib/services/shipments/shipment-utils"
 import { fetchShipments, fetchShipmentLabel, fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
 import { syncShipmentTracking, mapCorreosStatus } from "@/lib/services/tracking"
+import { syncAuthorizedShipmentBatch } from "@/lib/services/tracking/tracking-batch"
 import { publicUrl } from "@/lib/config/public-origins"
 import type { CTTShipment2Close, CTTCompleteShipmentOutput } from "@/lib/services/ctt/ctt-types"
 
@@ -42,7 +43,16 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   const ctx = await requireUser()
 
   const effectiveClientId = ctx.role === "client" ? ctx.client_id : clientId
-  const allShipments = await getShipmentsAction({ includeLabels: false, limit: 100000, clientId: effectiveClientId || undefined })
+  const [{ getBillingStatementsAction }, { getClientesAction }] = await Promise.all([
+    import("@/app/actions/moloni"),
+    import("@/app/actions/clientes"),
+  ])
+  // Independent reads share the verified session; do not scan every store for one profile.
+  const [allShipments, allStatements, profiles] = await Promise.all([
+    getShipmentsAction({ includeLabels: false, limit: 100000, clientId: effectiveClientId || undefined }),
+    getBillingStatementsAction(effectiveClientId || undefined),
+    effectiveClientId ? getClientesAction(effectiveClientId) : Promise.resolve([]),
+  ])
 
   let clientShipments = allShipments
 
@@ -60,17 +70,8 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
     // Removed fallback that exposed all shipments when a client had none
   }
 
-  const { getBillingStatementsAction } = await import("@/app/actions/moloni")
-  const allStatements = await getBillingStatementsAction()
-  
-  const { getClienteByIdAction } = await import("@/app/actions/clientes")
-  let clientBillingType = "conta_corrente"
-  if (effectiveClientId) {
-    const client = await getClienteByIdAction(effectiveClientId)
-    if (client) {
-      clientBillingType = client.billing_type || "conta_corrente"
-    }
-  }
+  const client = profiles.find(profile => profile.id === effectiveClientId)
+  const clientBillingType = client?.billing_type || "conta_corrente"
 
   let totalDebt = 0
   
@@ -1064,6 +1065,7 @@ export async function syncShipmentTrackingAction(trackingNumber: string, shipmen
       skipAuth: ctx.role !== "client",
       userRole: ctx.role,
       clientId: ctx.client_id,
+      tenantId: ctx.tenant_id,
     }
   )
 
@@ -1107,54 +1109,15 @@ export async function syncAllActiveShipmentsTrackingAction() {
  * Sincroniza em segundo plano uma lista de envios visíveis ativos (sem bloquear a página)
  */
 export async function syncActiveShipmentsBatchAction(shipmentIds: string[]) {
-  if (!shipmentIds || shipmentIds.length === 0) return { updatedCount: 0 }
-
-  const cleanIds = Array.from(new Set(shipmentIds.filter(Boolean))).slice(0, 50)
-  let updatedCount = 0
-
-  const supabase = createAdminClient()
-  const { data: activeShipments } = await supabase
-    .from("shipments")
-    .select("*")
-    .in("id", cleanIds)
-    // Only track shipments that are not delivered or canceled
-    .not("status", "in", '("entregue","cancelado","devolvido")')
-
-  if (!activeShipments || activeShipments.length === 0) {
-    return { updatedCount: 0 }
-  }
-
-  // Chunk requests into batches of 5 to avoid overloading the CTT API and network bottlenecks
-  const chunkSize = 5
-  for (let i = 0; i < activeShipments.length; i += chunkSize) {
-    const chunk = activeShipments.slice(i, i + chunkSize)
-    
-    await Promise.allSettled(
-      chunk.map(async (shipment: any) => {
-        try {
-          // Strict 3.5s timeout per tracking sync to prevent API hangs from halting the entire batch
-          const timeoutPromise = new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3500))
-          const syncPromise = syncShipmentTracking({ shipmentId: shipment.id, shipment }, { skipAuth: true })
-          
-          const res = await Promise.race([syncPromise, timeoutPromise])
-          if (res && res.success && (res.count > 0 || res.latestStatus)) {
-            updatedCount++
-          }
-        } catch (err: any) {
-          console.warn(`[Sync Active Batch] Erro/Timeout ao sincronizar envio ${shipment.id}:`, err?.message)
-        }
-      })
-    )
-  }
-
-  if (updatedCount > 0) {
+  const ctx = await requireUser()
+  const result = await syncAuthorizedShipmentBatch(ctx, shipmentIds)
+  if (result.updatedCount > 0) {
     revalidatePath("/ops/envios")
     revalidatePath("/ops")
     revalidatePath("/app", "layout")
     revalidatePath("/app/[storeSlug]/envios", "page")
   }
-
-  return { updatedCount }
+  return result
 }
 
 

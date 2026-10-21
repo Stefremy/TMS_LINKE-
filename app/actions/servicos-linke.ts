@@ -512,9 +512,10 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
 /**
  * Obtém todos os Serviços Linke configurados
  */
-export async function getServicosLinkeAction(skipRedaction: boolean = false): Promise<ServicoLinke[]> {
+export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
   const ctx = await requireUser()
-  const isClient = ctx.role === "client" && !skipRedaction
+  // Authorization and cost redaction must depend only on the verified session.
+  const isClient = ctx.role === "client"
   const supabase = createAdminClient()
 
   // 0. Obter lista de IDs eliminados (tombstones)
