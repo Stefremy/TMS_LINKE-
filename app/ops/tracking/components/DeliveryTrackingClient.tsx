@@ -34,22 +34,44 @@ import {
   ChevronRight
 } from "lucide-react"
 
+import Link from "next/link"
+
 interface DeliveryTrackingClientProps {
   initialShipments?: TrackingShipment[]
+  isClientPortal?: boolean
+  baseTrackingPath?: string
+  clientName?: string
+  newShipmentHref?: string
 }
 
-export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingClientProps) {
+export function DeliveryTrackingClient({ 
+  initialShipments,
+  isClientPortal = false,
+  baseTrackingPath,
+  clientName,
+  newShipmentHref
+}: DeliveryTrackingClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const urlSearch = searchParams.get("search") || ""
   
   const allShipments = useMemo(() => {
+    if (isClientPortal) {
+      return initialShipments || []
+    }
     return initialShipments && initialShipments.length > 0 ? initialShipments : DEMO_TRACKING_SHIPMENTS
-  }, [initialShipments])
+  }, [initialShipments, isClientPortal])
 
-  const [selectedShipmentId, setSelectedShipmentId] = useState<string>(allShipments[0]?.id || "LTK-8921-PT")
+  const [selectedShipmentId, setSelectedShipmentId] = useState<string>(allShipments[0]?.id || "")
   const [searchQuery, setSearchQuery] = useState(urlSearch)
   const [statusFilter, setStatusFilter] = useState<"all" | ShipmentStatus>("all")
+
+  // Keep selected shipment ID in sync when shipments change
+  useEffect(() => {
+    if (allShipments.length > 0 && (!selectedShipmentId || !allShipments.some(s => s.id === selectedShipmentId))) {
+      setSelectedShipmentId(allShipments[0].id)
+    }
+  }, [allShipments, selectedShipmentId])
 
   // Sync search input to URL after typing
   useEffect(() => {
@@ -63,11 +85,12 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
       } else {
         currentParams.delete("search")
       }
-      const newUrl = currentParams.toString() ? `?${currentParams.toString()}` : "/ops/tracking"
+      const basePath = baseTrackingPath || "/ops/tracking"
+      const newUrl = currentParams.toString() ? `${basePath}?${currentParams.toString()}` : basePath
       router.push(newUrl)
     }, 500)
     return () => clearTimeout(timer)
-  }, [searchQuery])
+  }, [searchQuery, urlSearch, baseTrackingPath, router])
   const [isDocModalOpen, setIsDocModalOpen] = useState(false)
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false)
 
@@ -111,6 +134,42 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
     })
   }, [allShipments, statusFilter, searchQuery])
 
+  if (allShipments.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-2xl text-center shadow-xs min-h-[380px]">
+        <div className="w-14 h-14 rounded-2xl bg-[var(--surface-muted)] text-[var(--accent)] flex items-center justify-center mb-4 border border-[var(--border-subtle)] shadow-2xs">
+          <Truck className="w-7 h-7" />
+        </div>
+        <h3 className="text-base font-bold text-[var(--text-primary)]">Nenhum envio em trânsito no momento</h3>
+        <p className="text-xs text-[var(--text-secondary)] mt-1.5 max-w-md leading-relaxed">
+          {searchQuery 
+            ? "Não foram encontrados envios correspondentes ao termo de pesquisa introduzido."
+            : "Assim que registar novos envios, poderá acompanhar a localização em tempo real no mapa com o percurso geolocalizado entre a origem e o destino."}
+        </p>
+        <div className="flex items-center gap-3 mt-5">
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="px-3.5 py-2 text-xs font-semibold bg-[var(--surface-muted)] hover:bg-[var(--surface-dim)] text-[var(--text-secondary)] rounded-lg transition-colors cursor-pointer"
+            >
+              Limpar Pesquisa
+            </button>
+          )}
+          {newShipmentHref && (
+            <Link
+              href={newShipmentHref}
+              className="px-4 py-2 text-xs font-bold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+            >
+              <Package className="w-4 h-4" />
+              <span>Criar Novo Envio</span>
+            </Link>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4 min-h-[calc(100vh-120px)]">
       {/* Top Banner Notice */}
@@ -119,7 +178,9 @@ export function DeliveryTrackingClient({ initialShipments }: DeliveryTrackingCli
           <span className="flex h-2 w-2 relative">
             <span className="relative inline-flex rounded-full h-2 w-2 bg-[#477D68]"></span>
           </span>
-          <span className="font-bold text-[var(--text-primary)]">Posto de Controlo de Rastreio por Pickagens & Checkpoints</span>
+          <span className="font-bold text-[var(--text-primary)]">
+            {isClientPortal ? `Rastreio & Mapeamento de Envios • ${clientName || "Minha Conta"}` : "Posto de Controlo de Rastreio por Pickagens & Checkpoints"}
+          </span>
           <span className="text-[var(--text-tertiary)]">•</span>
           <span className="text-[11px] font-medium text-[var(--text-secondary)]">
             Itinerário geolocalizado com mapa real OpenStreetMap / CartoDB com base nas leituras dos hubs da transportadora.

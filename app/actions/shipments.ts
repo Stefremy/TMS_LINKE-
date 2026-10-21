@@ -186,6 +186,12 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
     pct: totalCount > 0 ? Math.round((count / totalCount) * 100) : 0
   }))
 
+  const clientStatements = allStatements
+    .filter((stmt: any) => !effectiveClientId || stmt.client_id === effectiveClientId)
+    .sort((a: any, b: any) => new Date(b.created_at || b.period_end || 0).getTime() - new Date(a.created_at || a.period_end || 0).getTime())
+
+  const latestInvoice = clientStatements.find((stmt: any) => stmt.moloni_document_number || stmt.moloni_document_id || stmt.statement_number)
+
   return {
     totalCount,
     totalRevenue,
@@ -200,6 +206,16 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
     destinationRegions,
     recentShipments: clientShipments.slice(0, 5),
     allShipments: clientShipments.slice(0, 500),
+    latestInvoice: latestInvoice ? {
+      id: String(latestInvoice.id),
+      statement_number: latestInvoice.statement_number ? String(latestInvoice.statement_number) : undefined,
+      moloni_document_number: latestInvoice.moloni_document_number ? String(latestInvoice.moloni_document_number) : undefined,
+      total_value: Number(latestInvoice.total_value || 0),
+      status: latestInvoice.status,
+      created_at: latestInvoice.created_at,
+      hasReceipt: !!latestInvoice.moloni_receipt_pdf,
+    } : null,
+    pendingInvoicesCount: clientStatements.filter((s: any) => !s.moloni_receipt_pdf && s.status !== "paid").length,
   }
 }
 

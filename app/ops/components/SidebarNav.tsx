@@ -17,7 +17,6 @@ import {
   Users,
   Receipt,
   Euro,
-  Navigation,
   Tags,
   MessageSquare
 } from "lucide-react"
@@ -42,7 +41,6 @@ const navConfig: NavSection[] = [
       { title: "Visão geral", href: "/ops", icon: LayoutDashboard },
       { title: "Novo Envio", href: "/ops/envios/novo", icon: PackagePlus },
       { title: "Envios", href: "/ops/envios", icon: Package },
-      { title: "Tracking & Mapa", href: "/ops/tracking", icon: Navigation },
       { title: "Recolhas", href: "/ops/envios/recolhas", icon: CalendarCheck },
       { title: "Calendário", href: "/ops/calendario", icon: CalendarDays },
       { title: "Chat da Equipa", href: "/ops/chat", icon: MessageSquare },

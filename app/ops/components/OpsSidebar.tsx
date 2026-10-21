@@ -15,7 +15,8 @@ import {
   User,
   LogOut,
   LayoutDashboard,
-  Package
+  Package,
+  CalendarCheck
 } from "lucide-react"
 import { SidebarNav } from "./SidebarNav"
 import styles from "./SidebarPattern.module.css"
@@ -95,13 +96,6 @@ export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?
         </div>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/ops/tracking"
-            className="min-h-11 min-w-11 flex items-center justify-center p-2 rounded-lg text-[var(--text-secondary)] hover:text-blue-600 hover:bg-blue-50 transition-colors"
-            title="Tracking & Mapa"
-          >
-            <MapPin className="w-4 h-4" />
-          </Link>
           <Link
             href="/ops/envios/novo"
             className="tms-brand-cta min-h-11 flex items-center gap-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 transition-all"
@@ -281,16 +275,16 @@ export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?
         </Link>
 
         <Link
-          href="/ops/tracking"
-          aria-current={pathname.startsWith("/ops/tracking") ? "page" : undefined}
+          href="/ops/envios/recolhas"
+          aria-current={pathname.startsWith("/ops/envios/recolhas") ? "page" : undefined}
           className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
-            pathname.startsWith("/ops/tracking")
+            pathname.startsWith("/ops/envios/recolhas")
               ? "text-[var(--accent)] font-bold"
               : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
           }`}
         >
-          <MapPin className={`w-5 h-5 mb-0.5 ${pathname.startsWith("/ops/tracking") ? "text-[var(--accent)] stroke-[2.5]" : ""}`} />
-          <span className="text-[11px] tracking-tight">Tracking</span>
+          <CalendarCheck className={`w-5 h-5 mb-0.5 ${pathname.startsWith("/ops/envios/recolhas") ? "text-[var(--accent)] stroke-[2.5]" : ""}`} />
+          <span className="text-[11px] tracking-tight">Recolhas</span>
         </Link>
 
         <button

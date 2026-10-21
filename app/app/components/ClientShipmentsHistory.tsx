@@ -469,11 +469,6 @@ export function ClientShipmentsHistory() {
                               title="Clique para ver os detalhes do envio e rastreio interno"
                             >
                               <span>{primaryDisplay}</span>
-                              {linkeRef && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded font-sans font-bold leading-none">
-                                  Ref Linke
-                                </span>
-                              )}
                             </button>
                             {secondaryDisplay && (
                               <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-600 mt-0.5" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Objeto / Guia CTT Expresso"}>

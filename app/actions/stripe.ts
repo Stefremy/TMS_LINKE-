@@ -61,6 +61,11 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
 
     // 3. Create Stripe Checkout Session
     const stripe = await getStripe()
+    const { getPortalDestination } = await import("@/lib/client-portal/access")
+    const destination = await getPortalDestination(client.id).catch(() => "")
+    const successUrl = destination ? `${origin}${destination}?topup=success` : `${origin}/app?topup=success`
+    const cancelUrl = destination ? `${origin}${destination}?topup=cancelled` : `${origin}/app?topup=cancelled`
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card', 'mb_way', 'multibanco'],
       // payment_method_types: ['mb_way', 'card'],
@@ -83,8 +88,8 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
         },
       ],
       mode: 'payment',
-      success_url: `${origin}/app?topup=success`,
-      cancel_url: `${origin}/app?topup=cancelled`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       client_reference_id: transaction.id,
       metadata: {
         transaction_id: transaction.id,

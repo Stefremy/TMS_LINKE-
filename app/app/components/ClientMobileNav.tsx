@@ -15,13 +15,15 @@ import {
   FileText,
   UserCheck,
   HelpCircle,
-  LogOut
+  LogOut,
+  MapPin
 } from "lucide-react"
 import { useClientScope } from "./ClientScope"
 import { ClientAccountDetailsModal } from "./ClientAccountDetailsModal"
 import { ClientProfileSidebar } from "./ClientImpersonationBanner"
 import { ClientSidebarNav } from "./ClientSidebarNav"
 import { signout } from "@/app/login/actions"
+import sidebarStyles from "@/app/ops/components/SidebarPattern.module.css"
 
 export function ClientMobileNav() {
   const [isOpen, setIsOpen] = React.useState(false)
@@ -39,6 +41,7 @@ export function ClientMobileNav() {
   const navTabs = [
     { href: basePath, label: "Painel", icon: Home, exact: true },
     { href: `${basePath}/criar-guia`, label: "Novo Envio", icon: PlusCircle },
+    { href: `${basePath}/tracking`, label: "Mapa", icon: MapPin },
     { href: `${basePath}/envios`, label: "Envios", icon: Package },
     { href: `${basePath}/faturas`, label: "Faturas", icon: FileText },
   ]
@@ -87,7 +90,7 @@ export function ClientMobileNav() {
       {/* ─── MOBILE DRAWER & BACKDROP (compact layout) ─────────────────────────────── */}
       <MobileDrawer open={isOpen} onClose={closeMobileMenu} label="Menu da área do cliente" id="client-mobile-menu">
           {/* Header */}
-          <div className="tms-drawer-header shrink-0 p-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-muted)]/50">
+          <div className={`tms-drawer-header shrink-0 p-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-muted)]/50 ${sidebarStyles.mobilePattern}`}>
             <div className="flex flex-col">
               <Image
                 src="/Linke-logo.png"
@@ -112,7 +115,7 @@ export function ClientMobileNav() {
             </button>
           </div>
 
-          <div className="tms-drawer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className={`tms-drawer-scroll ${sidebarStyles.pattern} relative min-h-0 flex-1 overflow-y-auto overscroll-contain`}>
             {/* Profile badge in drawer */}
             <div className="pt-3">
               <ClientProfileSidebar onOpenDetails={() => { closeMobileMenu(); setIsAccountOpen(true) }} />

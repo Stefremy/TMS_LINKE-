@@ -1,4 +1,4 @@
-export const PORTAL_SECTIONS = ["criar-guia", "destinatarios", "envios", "faturas", "recolhas", "carregamentos"] as const
+export const PORTAL_SECTIONS = ["criar-guia", "destinatarios", "envios", "faturas", "recolhas", "carregamentos", "tracking"] as const
 export type PortalSection = typeof PORTAL_SECTIONS[number]
 const RESERVED = new Set<string>([...PORTAL_SECTIONS, "selecionar", "login", "ativar"])
 

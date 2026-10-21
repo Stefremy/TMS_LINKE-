@@ -11,14 +11,6 @@ export function TrackingQuickBar() {
   return (
     <div className="flex items-center gap-1.5">
       <Link
-        href="/ops/tracking"
-        className="flex items-center gap-2 px-3 py-1.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-medium text-[var(--text-primary)] transition-colors cursor-pointer"
-        title="Tracking e Mapa em Tempo Real"
-      >
-        <MapPin className="w-3.5 h-3.5 text-[var(--text-tertiary)]" strokeWidth={1.75} />
-        <span className="hidden sm:inline">Tracking & Mapa</span>
-      </Link>
-      <Link
         href="/tracking"
         target="_blank"
         className="hidden md:flex items-center gap-1 px-2 py-1.5 text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"

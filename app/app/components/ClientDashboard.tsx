@@ -20,7 +20,10 @@ import {
   FileText,
   Download,
   Undo2,
-  Trash2
+  Trash2,
+  X,
+  Bell,
+  Truck
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { syncCttTrackingAction, closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
@@ -59,6 +62,16 @@ export function ClientDashboard() {
     destinationRegions: Array<{ region: string; count: string; pct: number }>
     recentShipments: any[]
     allShipments?: any[]
+    latestInvoice?: {
+      id: string
+      statement_number?: string
+      moloni_document_number?: string
+      total_value: number
+      status?: string
+      created_at?: string
+      hasReceipt?: boolean
+    } | null
+    pendingInvoicesCount?: number
   }>({
     totalCount: 0,
     totalRevenue: 0,
@@ -77,7 +90,18 @@ export function ClientDashboard() {
     destinationRegions: [],
     recentShipments: [],
     allShipments: [],
+    latestInvoice: null,
+    pendingInvoicesCount: 0,
   })
+
+  const [dismissedInvoiceId, setDismissedInvoiceId] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`dismissed_inv_${currentClient.id}`)
+      if (saved) setDismissedInvoiceId(saved)
+    } catch {}
+  }, [currentClient.id])
 
   const [shipments, setShipments] = React.useState<any[]>([])
   const [searchTerm, setSearchTerm] = React.useState("")
@@ -371,162 +395,214 @@ export function ClientDashboard() {
         clientId={currentClient?.id || ""} 
       />
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* KPI 1: Envios do Mês */}
-        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--border-strong)] transition-all duration-150">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-              {stats.currentPeriodName ? `Envios de ${stats.currentPeriodName.split(" ")[0]}` : "Volume de Envios"}
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0">
-              <Package className="w-4 h-4" strokeWidth={1.75} />
+      {/* Notificação de Nova Fatura Emitida */}
+      {stats.latestInvoice && dismissedInvoiceId !== stats.latestInvoice.id && (
+        <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-emerald-50/60 border border-blue-200 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <FileText className="w-5 h-5" />
             </div>
-          </div>
-          <div>
-            <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
-              {stats.monthCount !== undefined ? stats.monthCount : stats.totalCount}
-            </span>
-            <p className="text-[11px] text-[var(--text-tertiary)] mt-1.5">
-              {stats.monthDeliveredCount !== undefined ? `${stats.monthDeliveredCount} entregues este mês` : `${stats.deliveredCount} entregues no destino`}
-            </p>
-          </div>
-        </div>
-
-        {/* KPI 2: Faturação / Consumo do Período */}
-        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--border-strong)] transition-all duration-150">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-              {currentClient?.billing_type === 'pay_as_you_go' ? 'Consumo do Mês' : 'Faturação do Mês'}
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0">
-              <Receipt className="w-4 h-4" strokeWidth={1.75} />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
-                {(stats.monthRevenue !== undefined ? stats.monthRevenue : stats.totalRevenue).toFixed(2)}€
-              </span>
-              <span className="text-[11px] text-[var(--text-tertiary)] font-medium">+ IVA</span>
-            </div>
-            <p className="text-[11px] text-[var(--text-tertiary)] mt-1.5 capitalize">
-              {stats.currentPeriodName ? stats.currentPeriodName : `Condições: ${paymentTerms}`}
-            </p>
-          </div>
-        </div>
-
-        {/* KPI 3: Desconto Real */}
-        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--border-strong)] transition-all duration-150">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">Desconto Contratual</span>
-            <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0">
-              <Percent className="w-4 h-4" strokeWidth={1.75} />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">{discountPct}%</span>
-              <span className="text-[11px] text-[var(--text-secondary)] bg-[var(--surface-muted)] border border-[var(--border-subtle)] px-2 py-0.5 rounded-md font-medium">
-                Comb: {fuelPct}%
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)] mt-1.5">
-              <span>{activeServices.length} serviços autorizados</span>
-              <div className="flex items-center gap-1">
-                <div className="w-4 h-4 rounded-full bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 shadow-2xs">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={getCarrierLogo("ctt") || ""} alt="CTT Expresso" className="max-w-full max-h-full object-contain" />
-                </div>
-                <span className="text-[10px] font-semibold text-[var(--text-secondary)]">CTT Expresso</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900 bg-blue-100 px-2 py-0.5 rounded">
+                  Nova Fatura Emitida
+                </span>
+                {stats.latestInvoice.hasReceipt ? (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                    Liquidada / Recibo Emitido
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                    Pendente de Pagamento
+                  </span>
+                )}
               </div>
+              <p className="text-xs sm:text-sm text-slate-800 font-medium mt-1">
+                A fatura oficial <strong className="font-semibold text-slate-900">{stats.latestInvoice.moloni_document_number || stats.latestInvoice.statement_number}</strong> no valor de <strong className="font-semibold text-slate-900">{stats.latestInvoice.total_value.toFixed(2)}€</strong> (+ IVA) já se encontra disponível.
+              </p>
             </div>
           </div>
-        </div>
-
-        {/* KPI 4: Crédito (Saldo Disponível) */}
-        <div className="bg-[var(--surface-bg)] rounded-xl p-5 border border-[var(--border-subtle)] shadow-2xs flex flex-col justify-between hover:border-[var(--border-strong)] transition-all duration-150">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-              {currentClient?.billing_type === 'pay_as_you_go' ? 'Saldo Disponível' : 'Crédito Disponível'}
-            </span>
-            <div className="w-8 h-8 rounded-lg bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-4 h-4" strokeWidth={1.75} />
-            </div>
-          </div>
-          <div>
-            {currentClient?.billing_type === 'pay_as_you_go' ? (
-              <>
-                <div className="flex items-baseline justify-between mb-1.5 mt-2">
-                  <span className={`text-4xl font-bold tracking-tight font-mono tabular-nums ${
-                    availableCredit < 0 ? "text-amber-600" : "text-[var(--text-primary)]"
-                  }`}>
-                    {availableCredit.toFixed(2)}€
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsTopUpOpen(true)}
-                    className="text-xs bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold px-2.5 py-1 rounded-md transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
-                  >
-                    <PlusCircle className="w-3.5 h-3.5" />
-                    <span>Carregar</span>
-                  </button>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)] mt-3 pt-2 border-t border-[var(--border-subtle)]">
-                  <span>{availableCredit < 0 ? "Em descoberto (limite -2.00€)" : "Descoberto até -2.00€ permitido"}</span>
-                  <Link
-                    href={`${basePath}/carregamentos`}
-                    className="text-[var(--accent)] hover:underline font-semibold flex items-center gap-0.5"
-                  >
-                    <span>Ver Histórico</span>
-                    <ChevronRight className="w-3 h-3" />
-                  </Link>
-                </div>
-              </>
-            ) : creditLimit > 0 ? (
-              <>
-                <div className="flex items-baseline justify-between mb-1.5">
-                  <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
-                    {availableCredit.toFixed(2)}€
-                  </span>
-                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
-                    Number(usedCreditPct) >= 90
-                      ? "text-[var(--status-critical)] bg-[var(--status-critical-soft)] border-[rgba(239,68,68,0.2)]"
-                      : Number(usedCreditPct) >= 75
-                        ? "text-[var(--status-warning)] bg-[var(--status-warning-soft)] border-[rgba(245,158,11,0.2)]"
-                        : "text-[var(--accent)] bg-[var(--accent-soft)] border-[rgba(18,138,71,0.2)]"
-                  }`}>
-                    {usedCreditPct}% consumido
-                  </span>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden my-2">
-                  <div
-                    className={`h-1.5 rounded-full transition-all duration-500 ${
-                      Number(usedCreditPct) >= 90
-                        ? "bg-[var(--status-critical)]"
-                        : Number(usedCreditPct) >= 75
-                          ? "bg-[var(--status-warning)]"
-                          : "bg-[var(--accent)]"
-                    }`}
-                    style={{ width: `${Math.min(Number(usedCreditPct) || 0, 100)}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-[var(--text-tertiary)] mt-1">
-                  <span>Plafond: <strong className="text-[var(--text-secondary)] font-mono font-semibold">{creditLimit.toLocaleString("pt-PT")}€</strong></span>
-                  <span>Usado: <strong className="text-[var(--text-secondary)] font-mono font-semibold">{stats.totalRevenue.toFixed(2)}€</strong></span>
-                </div>
-              </>
-            ) : (
-              <>
-                <span className="text-3xl font-bold tracking-tight text-[var(--text-primary)] font-mono">Sem Limite</span>
-                <p className="text-[11px] text-[var(--text-tertiary)] mt-1.5">Conta com faturação direta sem teto fixo</p>
-              </>
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <Link
+              href={`${basePath}/faturas`}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Ver Fatura</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+            {stats.latestInvoice.id && (
+              <a
+                href={`/api/statements/${encodeURIComponent(String(stats.latestInvoice.statement_number || stats.latestInvoice.id))}/moloni-pdf`}
+                target="_blank"
+                rel="noreferrer"
+                download={`Fatura_${String(stats.latestInvoice.moloni_document_number || stats.latestInvoice.statement_number || 'Doc').replace(/[\/\\]/g, '_')}.pdf`}
+                className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Descarregar PDF oficial da AT"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <span className="hidden sm:inline">Descarregar</span>
+              </a>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                setDismissedInvoiceId(stats.latestInvoice?.id || 'dismissed')
+                try {
+                  localStorage.setItem(`dismissed_inv_${currentClient.id}`, stats.latestInvoice?.id || '')
+                } catch {}
+              }}
+              className="text-slate-400 hover:text-slate-600 p-1.5 rounded-md hover:bg-white/60 transition-colors cursor-pointer"
+              title="Dispensar aviso"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Indicadores Principais (Estilo Visão Geral TMS Linke) */}
+      <section aria-label="Indicadores principais" className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] shadow-2xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
+          
+          {/* KPI 1: Envios do Mês */}
+          <div className="min-w-0 border-t-4 p-4 sm:p-5 flex flex-col justify-between" style={{ borderTopColor: "#008A4B" }}>
+            <div className="flex items-center gap-2.5 text-sm font-medium text-[var(--text-primary)]">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white bg-[#008A4B] shadow-2xs">
+                <Package aria-hidden="true" className="w-4 h-4" strokeWidth={2} />
+              </span>
+              <span className="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                {stats.currentPeriodName ? `Envios de ${stats.currentPeriodName.split(" ")[0]}` : "Volume de Envios"}
+              </span>
+            </div>
+            <div className="mt-3.5">
+              <div className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
+                {stats.monthCount !== undefined ? stats.monthCount : stats.totalCount}
+              </div>
+              <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate">
+                {stats.monthDeliveredCount !== undefined ? `${stats.monthDeliveredCount} entregues este mês` : `${stats.deliveredCount} entregues no destino`}
+              </p>
+            </div>
+          </div>
+
+          {/* KPI 2: Faturação / Consumo do Período */}
+          <div className="min-w-0 border-t-4 p-4 sm:p-5 flex flex-col justify-between" style={{ borderTopColor: "#155EEF" }}>
+            <div className="flex items-center gap-2.5 text-sm font-medium text-[var(--text-primary)]">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white bg-[#155EEF] shadow-2xs">
+                <Receipt aria-hidden="true" className="w-4 h-4" strokeWidth={2} />
+              </span>
+              <span className="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                {currentClient?.billing_type === 'pay_as_you_go' ? 'Consumo do Mês' : 'Faturação do Mês'}
+              </span>
+            </div>
+            <div className="mt-3.5">
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
+                  {(stats.monthRevenue !== undefined ? stats.monthRevenue : stats.totalRevenue).toFixed(2)}€
+                </span>
+                <span className="text-[11px] text-[var(--text-tertiary)] font-medium">+ IVA</span>
+              </div>
+              <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate capitalize">
+                {stats.currentPeriodName ? stats.currentPeriodName : `Condições: ${paymentTerms}`}
+              </p>
+            </div>
+          </div>
+
+          {/* KPI 3: Em Distribuição / Trânsito */}
+          <div className="min-w-0 border-t-4 p-4 sm:p-5 flex flex-col justify-between" style={{ borderTopColor: "#FA8072" }}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 text-sm font-medium text-[var(--text-primary)]">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white bg-[#FA8072] shadow-2xs">
+                  <Truck aria-hidden="true" className="w-4 h-4" strokeWidth={2} />
+                </span>
+                <span className="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                  Em Distribuição
+                </span>
+              </div>
+              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                em rota
+              </span>
+            </div>
+            <div className="mt-3.5">
+              <div className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
+                {shipments.filter(s => s.status === "em_transito" || s.status === "em_distribuicao").length}
+              </div>
+              <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate">
+                {shipments.filter(s => s.status === "pendente").length} pendentes de recolha • {stats.deliveryRate}% taxa sucesso
+              </p>
+            </div>
+          </div>
+
+          {/* KPI 4: Saldo / Crédito Disponível */}
+          <div className="min-w-0 border-t-4 p-4 sm:p-5 flex flex-col justify-between" style={{ borderTopColor: "#007F8B" }}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 text-sm font-medium text-[var(--text-primary)]">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white bg-[#007F8B] shadow-2xs">
+                  <ShieldCheck aria-hidden="true" className="w-4 h-4" strokeWidth={2} />
+                </span>
+                <span className="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                  {currentClient?.billing_type === 'pay_as_you_go' ? 'Saldo Disponível' : 'Crédito Disponível'}
+                </span>
+              </div>
+              {currentClient?.billing_type === 'pay_as_you_go' && (
+                <button
+                  type="button"
+                  onClick={() => setIsTopUpOpen(true)}
+                  className="text-[10px] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold px-2 py-0.5 rounded transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+                >
+                  <PlusCircle className="w-3 h-3" />
+                  <span>Carregar</span>
+                </button>
+              )}
+            </div>
+            <div className="mt-3.5">
+              <div className="flex items-baseline gap-2">
+                <span className={`text-2xl sm:text-[28px] leading-none font-bold tracking-tight font-mono tabular-nums ${
+                  availableCredit < 0 ? "text-amber-600" : "text-[var(--text-primary)]"
+                }`}>
+                  {availableCredit.toFixed(2)}€
+                </span>
+                {currentClient?.billing_type === 'pay_as_you_go' && availableCredit < 0 && (
+                  <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                    Descoberto
+                  </span>
+                )}
+                {currentClient?.billing_type !== 'pay_as_you_go' && creditLimit > 0 && (
+                  <span className="text-[11px] text-[var(--text-tertiary)] font-medium">
+                    / {creditLimit.toLocaleString("pt-PT")}€
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate">
+                {currentClient?.billing_type === 'pay_as_you_go'
+                  ? (availableCredit <= -2.0 ? "Limite de descoberto atingido (-2.00€)" : "Descoberto até -2.00€ permitido")
+                  : `Usado: ${stats.totalRevenue.toFixed(2)}€ (${usedCreditPct}% consumido)`}
+              </p>
+            </div>
           </div>
         </div>
 
-      </div>
+        {/* Barra Secundária de Indicadores (Estilo Visão Geral) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/60 divide-x divide-[var(--border-subtle)]">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+            <span className="text-xs text-[var(--text-secondary)]">Taxa de Sucesso</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)] tabular-nums font-mono">{stats.deliveryRate}%</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+            <span className="text-xs text-[var(--text-secondary)]">Serviços Ativos</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)] tabular-nums">{activeServices.length} autorizados</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+            <span className="text-xs text-[var(--text-secondary)]">Operadores</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">CTT Expresso</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+            <span className="text-xs text-[var(--text-secondary)]">Estado da Conta</span>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded ${availableCredit < -2 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
+              {availableCredit < -2 ? 'Bloqueada (-2€)' : 'Ativa / Regular'}
+            </span>
+          </div>
+        </div>
+      </section>
 
       {/* MANIFEST ALERT IF CLOSED */}
       {manifestData && (
@@ -743,6 +819,13 @@ export function ClientDashboard() {
                         >
                           Ver
                         </button>
+                        <Link
+                          href={`${basePath}/tracking?search=${encodeURIComponent(shipment.tracking_number || shipment.id)}`}
+                          className="p-1.5 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-md border border-[var(--border-subtle)] transition-colors"
+                          title="Ver no Mapa"
+                        >
+                          <MapPin className="w-3.5 h-3.5" />
+                        </Link>
                         <button
                           type="button"
                           onClick={() => printLabel(shipment)}
@@ -826,11 +909,6 @@ export function ClientDashboard() {
                                 title="Clique para ver os detalhes do envio e rastreio interno"
                               >
                                 <span>{primaryDisplay}</span>
-                                {linkeRef && (
-                                  <span className="text-[9px] px-1.5 py-0.5 bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)] rounded font-sans font-bold leading-none uppercase tracking-wider">
-                                    Ref Linke
-                                  </span>
-                                )}
                               </button>
                               {secondaryDisplay && (
                                 <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-[var(--text-secondary)] mt-0.5" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Objeto / Guia CTT Expresso"}>
@@ -942,6 +1020,14 @@ export function ClientDashboard() {
                                 <Eye className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
                                 <span>Ver Detalhes</span>
                               </button>
+                              <Link
+                                href={`${basePath}/tracking?search=${encodeURIComponent(shipment.tracking_number || shipment.id)}`}
+                                onClick={() => setOpenDropdownId(null)}
+                                className="w-full px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <MapPin className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                <span>Ver no Mapa</span>
+                              </Link>
 
                             </div>
                           )}

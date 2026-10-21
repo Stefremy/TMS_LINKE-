@@ -105,9 +105,20 @@ export default function FaturasClient({
                           <FileText className="w-5 h-5" />
                         </div>
                         <div>
-                          <p className="font-bold text-slate-800 text-sm group-hover:text-emerald-600 transition-colors">
-                            {stmt.statement_number}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-slate-800 text-sm group-hover:text-emerald-600 transition-colors">
+                              {stmt.statement_number}
+                            </p>
+                            {stmt.moloni_receipt_pdf || stmt.status === "paid" ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                                Paga
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                                Pendente
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
                             <Package className="w-3 h-3" />
                             {stmt.shipments_count} Envios Faturados

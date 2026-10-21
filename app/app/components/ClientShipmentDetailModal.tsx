@@ -33,6 +33,8 @@ import {
   ExternalLink
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import Link from "next/link"
+import { useClientScope } from "./ClientScope"
 import { 
   getShipmentTrackingTimelineAction,
   getShipmentLabelAction,
@@ -56,6 +58,7 @@ export function ClientShipmentDetailModal({
   onClose, 
   onUpdateShipment 
 }: ClientShipmentDetailModalProps) {
+  const { basePath } = useClientScope()
   // ALL hooks must be called unconditionally before any early return (Rules of Hooks)
   const [currentShipment, setCurrentShipment] = React.useState(shipment)
   const [activeTab, setActiveTab] = React.useState<"dados" | "tracking">("tracking")
@@ -409,6 +412,16 @@ export function ClientShipmentDetailModal({
               <Download className="w-3.5 h-3.5 text-slate-500" />
               <span>Descarregar PDF</span>
             </button>
+
+            <Link
+              href={`${basePath}/tracking?search=${encodeURIComponent(carrierTracking || internalRef || currentShipment.id)}`}
+              onClick={onClose}
+              className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Abrir no Mapa Interativo Leaflet"
+            >
+              <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Ver no Mapa</span>
+            </Link>
 
 
             <button 

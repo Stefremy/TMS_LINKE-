@@ -14,6 +14,9 @@ import { signout } from "@/app/login/actions"
 import type { requirePortalStore } from "@/lib/client-portal/access"
 import { ClientScopeProvider } from "./ClientScope"
 import { ClientMobileNav } from "./ClientMobileNav"
+import { DashboardBackdrop } from "@/app/ops/components/DashboardBackdrop"
+import backdropStyles from "@/app/ops/components/DashboardBackdrop.module.css"
+import sidebarStyles from "@/app/ops/components/SidebarPattern.module.css"
 
 export function ClientPortalShell({ children, store }: {
   children: React.ReactNode
@@ -34,8 +37,8 @@ export function ClientPortalShell({ children, store }: {
       </Suspense>
 
       <div className="tms-workspace flex-1 flex flex-col min-w-0">
-        {/* Desktop Sidebar */}
-        <aside className="tms-desktop-only tms-sidebar w-60 bg-[var(--surface-bg)] border-r border-[var(--border-subtle)] flex-col shrink-0">
+        {/* Desktop Sidebar with Ops Route & Hub SVG Pattern */}
+        <aside className={`tms-desktop-only tms-sidebar ${sidebarStyles.pattern} relative w-60 bg-[var(--surface-bg)] border-r border-[var(--border-subtle)] flex flex-col shrink-0 select-none`}>
           
           {/* Logo Area */}
           <div className="pt-7 pb-5 px-5">
@@ -69,13 +72,13 @@ export function ClientPortalShell({ children, store }: {
               </div>
             </div>
             {isEmployee ? (
-              <Link href="/ops/entidades/clientes" className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[var(--text-tertiary)]">
+              <Link href="/ops/entidades/clientes" className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Sair para o TMS</span>
               </Link>
             ) : (
               <form action={signout}>
-                <button type="submit" className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[var(--text-tertiary)]">
+                <button type="submit" className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Terminar sessão</span>
                 </button>
@@ -101,8 +104,9 @@ export function ClientPortalShell({ children, store }: {
             </Suspense>
           </header>
 
-          {/* Page Content */}
-          <main className="tms-main flex-1">
+          {/* Page Content with Visão Geral Backdrop */}
+          <main className={`tms-main flex-1 bg-[var(--canvas-bg)] ${backdropStyles.dashboard} relative isolate min-h-0`}>
+            <DashboardBackdrop />
             {children}
           </main>
         </div>
