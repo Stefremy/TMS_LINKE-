@@ -109,3 +109,31 @@ test('Opening account details closes the navigation and renders the account moda
   assert.equal(nodes.find(n=>n.type==='account').props.isOpen,true)
   assert.ok(!flatten(drawer.props.children).some(n=>n.type==='account'))
 })
+
+test('account details escape the sidebar via a native modal and restore focus and scrolling on close',t=>{
+  const previous={document:global.document}
+  let shown=0,focused=0,restored=0,closed=0
+  const dialog={open:false,showModal(){this.open=true;shown++},close(){this.open=false;closed++},querySelector:()=>({focus(){focused++}})}
+  global.document={body:{style:{overflow:'auto'}},activeElement:{isConnected:true,focus(){restored++}}}
+  t.after(()=>{global.document=previous.document})
+  const effects=[]
+  const jsx=(type,props)=>({type,props})
+  const load=createLoader({
+    react:{useState:initial=>[initial,()=>{}],useMemo:fn=>fn(),useRef:()=>({current:dialog}),useEffect:fn=>effects.push(fn)},
+    'react/jsx-runtime':{jsx,jsxs:jsx},
+    'lucide-react':new Proxy({},{get:(_,name)=>name}),
+    '@/app/actions/servicos-linke':{getServicosLinkeAction:async()=>[]},
+    './ClientChangePasswordForm':{ClientChangePasswordForm:()=>null},
+  })
+  const Modal=load('app/app/components/ClientAccountDetailsModal.tsx').ClientAccountDetailsModal
+  const node=Modal({isOpen:true,onClose:()=>{closed++},client:{id:'a',short_name:'Store A'}})
+  assert.equal(node.type,'dialog');assert.equal(node.props['aria-label'],'Detalhes da conta')
+  const cleanup=effects[0]()
+  assert.equal(shown,1);assert.equal(focused,1);assert.equal(document.body.style.overflow,'hidden')
+  let prevented=false
+  node.props.onCancel({preventDefault(){prevented=true}})
+  assert.equal(prevented,true);assert.equal(closed,1)
+  node.props.onClick({target:{},currentTarget:dialog});assert.equal(closed,1)
+  node.props.onClick({target:dialog,currentTarget:dialog});assert.equal(closed,2)
+  cleanup();assert.equal(dialog.open,false);assert.equal(document.body.style.overflow,'auto');assert.equal(restored,1)
+})

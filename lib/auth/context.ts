@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { DEFAULT_COLABORADORES } from "@/app/ops/entidades/colaboradores/types"
+import { enforcePortalSuspension } from '@/lib/client-portal/suspension'
 
 export const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
@@ -70,6 +71,7 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
         client_id = clientUser.client_id
       }
     }
+    if (client_id) await enforcePortalSuspension(metadata.tenant_id || LINKE_TENANT_ID, client_id)
     return {
       user,
       role: 'client',
@@ -142,6 +144,7 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
     }
   }
 
+  if (role === 'client' && client_id) await enforcePortalSuspension(LINKE_TENANT_ID, client_id)
   return {
     user,
     role,

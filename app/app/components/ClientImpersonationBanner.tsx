@@ -35,7 +35,7 @@ export function ClientImpersonationBanner() {
 import { ClientAccountDetailsModal } from "./ClientAccountDetailsModal"
 
 export function ClientProfileSidebar({ onOpenDetails }: { onOpenDetails?: () => void } = {}) {
-  const { client } = useClientScope()
+  const { client, isEmployee } = useClientScope()
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false)
   const displayName = client.short_name
   const storeSubtitle = client?.legal_name && client.legal_name.toLowerCase() !== displayName.toLowerCase()
@@ -86,6 +86,7 @@ export function ClientProfileSidebar({ onOpenDetails }: { onOpenDetails?: () => 
       </div>
 
       <ClientAccountDetailsModal
+        canChangePassword={!isEmployee}
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
         client={client}

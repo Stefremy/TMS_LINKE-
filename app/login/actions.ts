@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
+import { redirect, unstable_rethrow } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthContext } from '@/lib/auth/context'
 import { clientLoginPath, safePortalReturn } from '@/lib/client-portal/login-paths'
@@ -56,7 +56,8 @@ async function authenticate(formData: FormData, portal: boolean) {
         await discardLoginSession(supabase)
       }
     }
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error)
     // Provider failures do not reveal technical details or credentials.
     if (authenticated && supabase) {
       destination = failure

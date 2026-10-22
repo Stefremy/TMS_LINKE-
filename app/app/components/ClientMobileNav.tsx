@@ -161,7 +161,7 @@ export function ClientMobileNav() {
           </div>
       </MobileDrawer>
 
-      <ClientAccountDetailsModal isOpen={isAccountOpen} onClose={() => setIsAccountOpen(false)} client={client} userAvatar={null} />
+      <ClientAccountDetailsModal isOpen={isAccountOpen} onClose={() => setIsAccountOpen(false)} client={client} userAvatar={null} canChangePassword={!isEmployee} />
 
       {/* ─── MOBILE BOTTOM NAVIGATION BAR (compact layout) ─────────────────────────── */}
       <nav

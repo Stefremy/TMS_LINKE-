@@ -26,11 +26,12 @@ function harness(ctx = { user: { id: 'fixture-user' }, role: 'client', client_id
       } }
     } },
     '@/lib/auth/context': { getAuthContext: async () => {
+      if (options.suspended) redirect('/conta-suspensa')
       if (options.contextError) throw new Error('private account detail')
       return ctx
     } },
     'next/cache': { revalidatePath: () => calls.revalidate++ },
-    'next/navigation': { redirect },
+    'next/navigation': { redirect, unstable_rethrow: error => { if (error?.digest?.startsWith('NEXT_REDIRECT')) throw error } },
     'next/headers': { cookies: async () => ({
       set: (name, value, attributes) => calls.cookies.set(name, { value, ...attributes }),
       get: name => calls.cookies.get(name), delete: name => calls.cookies.delete(name),
@@ -212,4 +213,12 @@ test('proxy sends anonymous store links to client login, keeps Ops login separat
     assert.equal(response.location, expected ? `http://fixture.invalid${expected}` : undefined)
     assert.ok(response.cookies.getAll().some(c => c.name === 'fixture-refresh'))
   }
+})
+
+
+test('a valid suspended login reaches the suspension notice instead of being swallowed as a bad password',async()=>{
+  const h=harness(undefined,{suspended:true})
+  await assert.rejects(h.actions.clientLogin(h.form),/REDIRECT:\/conta-suspensa/)
+  assert.equal(h.calls.signOut,0)
+  assert.equal(h.calls.revalidate,0)
 })

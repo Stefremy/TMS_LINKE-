@@ -9,30 +9,51 @@ import {
   X, 
   CreditCard,
   Copy,
-  Check
+  Check,
+  LockKeyhole
 } from "lucide-react"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
+import { ClientChangePasswordForm } from './ClientChangePasswordForm'
 
 interface ClientAccountDetailsModalProps {
   isOpen: boolean
   onClose: () => void
   client: Cliente | null
   userAvatar?: string | null
+  canChangePassword?: boolean
 }
 
-type TabType = "geral" | "morada" | "contactos" | "comercial" | "servicos"
+type TabType = "geral" | "morada" | "contactos" | "comercial" | "servicos" | "seguranca"
 
 export function ClientAccountDetailsModal({
   isOpen,
   onClose,
   client,
-  userAvatar
+  userAvatar,
+  canChangePassword = false
 }: ClientAccountDetailsModalProps) {
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [copiedField, setCopiedField] = React.useState<string | null>(null)
   const [servicosLinke, setServicosLinke] = React.useState<any[]>([])
+  const dialogRef = React.useRef<HTMLDialogElement>(null)
+
+  React.useEffect(() => {
+    const dialog = dialogRef.current
+    if (!isOpen || !client || !dialog) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    // The browser's top layer escapes the sidebar's isolated stacking context.
+    dialog.showModal()
+    document.body.style.overflow = 'hidden'
+    dialog.querySelector<HTMLButtonElement>('[data-account-close]')?.focus()
+    return () => {
+      if (dialog.open) dialog.close()
+      document.body.style.overflow = previousOverflow
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true })
+    }
+  }, [isOpen, client, onClose])
 
   React.useEffect(() => {
     if (!isOpen) return
@@ -105,12 +126,16 @@ export function ClientAccountDetailsModal({
     { id: "contactos", label: "Contactos", icon: Phone },
     { id: "comercial", label: "Condições & Saldo", icon: CreditCard },
     { id: "servicos", label: "Transportadoras", icon: Truck },
+    ...(canChangePassword ? [{ id: 'seguranca', label: 'Segurança', icon: LockKeyhole }] : []),
   ]
 
   return (
-    <div className="tms-modal-overlay fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+    <dialog ref={dialogRef} aria-label="Detalhes da conta" aria-modal="true"
+      onCancel={event => { event.preventDefault(); onClose() }}
+      onClick={event => { if (event.target === event.currentTarget) onClose() }}
+      className="tms-modal-overlay fixed inset-0 m-0 h-[100dvh] w-screen max-h-none max-w-none border-0 bg-black/60 backdrop-blur-xs z-50 hidden open:flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
       <div 
-        className="tms-modal-fit bg-[var(--surface-bg)] rounded-2xl shadow-[var(--shadow-layer)] w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden border border-[var(--border-subtle)]"
+        className={`tms-modal-fit bg-[var(--surface-bg)] rounded-2xl shadow-[var(--shadow-layer)] w-full ${canChangePassword ? 'max-w-4xl' : 'max-w-3xl'} max-h-[92vh] flex flex-col overflow-hidden border border-[var(--border-subtle)]`}
         onClick={(e) => e.stopPropagation()}
       >
         
@@ -162,6 +187,8 @@ export function ClientAccountDetailsModal({
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
+              data-account-close
+              aria-label="Fechar detalhes da conta"
               onClick={onClose}
               className="p-2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded-lg transition-colors cursor-pointer"
             >
@@ -195,6 +222,7 @@ export function ClientAccountDetailsModal({
 
         {/* ===================== TAB CONTENT ===================== */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-[var(--canvas-bg)] space-y-4">
+          {activeTab === 'seguranca' && canChangePassword && <ClientChangePasswordForm />}
           
           {/* TAB 1: IDENTIDADE & GERAL */}
           {activeTab === "geral" && (
@@ -541,6 +569,6 @@ export function ClientAccountDetailsModal({
         </div>
 
       </div>
-    </div>
+    </dialog>
   )
 }

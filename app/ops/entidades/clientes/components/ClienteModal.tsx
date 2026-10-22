@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { ClientPortalAccessControl } from './ClientPortalAccessControl'
 import { 
   X, 
   Save, 
@@ -1697,6 +1698,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
 
         </div>
 
+        {initialData && canManageAccess && <div className="px-6 pb-4 bg-[var(--surface-bg)]"><ClientPortalAccessControl key={initialData.id} clientId={initialData.id} disabled={isSaving} /></div>}
         {/* ===================== FOOTER BUTTONS ===================== */}
         <div className="px-6 py-3.5 border-t border-[var(--border-subtle)] bg-[var(--surface-bg)] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
