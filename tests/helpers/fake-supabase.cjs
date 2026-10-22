@@ -92,7 +92,40 @@ function fakeSupabase(tables, failure, options = {}) {
     }
     return query
   }
-  const client = { from }
+  // Application-contract mocks only. The actual financial SQL (rollback, permissions,
+  // constraints and serialized reservations) is executed in wallet-sql.test.cjs.
+  async function rpc(name, p) {
+    if (name === 'save_client_financial_profile') {
+      const profiles = (tables.audit_log || []).filter(r => r.tenant_id === p.p_tenant && r.action === 'client_data' && r.details.id === p.p_client)
+      const owner = (tables.clients || []).find(r => r.id === p.p_client && r.tenant_id === p.p_tenant)
+      if (!owner || p.p_details.id !== p.p_client) return { data: null, error: { message: 'Client binding mismatch' } }
+      const inserted = await from('audit_log').insert({ id: `fixture-profile-${queries.length}`, tenant_id: p.p_tenant, action: 'client_data', details: p.p_details })
+      if (inserted.error) return inserted
+      if (profiles.length) {
+        const deleted = await from('audit_log').delete().eq('tenant_id', p.p_tenant).eq('action', 'client_data').in('id', profiles.map(r => r.id))
+        if (deleted.error) return deleted
+      }
+      return { data: null, error: null }
+    }
+    if (name === 'reserve_shipment_wallet') {
+      const profile = (tables.audit_log || []).find(r => r.tenant_id === p.p_tenant && r.action === 'client_data' && r.details.id === p.p_client)
+      if (!profile) return { data: null, error: { message: 'Profile missing' } }
+      if (profile.details.billing_type !== 'pay_as_you_go') return { data: { reserved: false }, error: null }
+      const rows = (tables.shipments || []).filter(s => s.tenant_id === p.p_tenant && s.client_id === p.p_client && s.status !== 'anulado')
+      const holds = (tables.wallet_reservations || []).filter(r => r.tenant_id === p.p_tenant && r.client_id === p.p_client && r.state !== 'released' && !rows.some(s => s.id === r.shipment_id))
+      const balance = Number(profile.details.credit_limit) - rows.reduce((n,s) => n + Number(s.sell_price),0) - holds.reduce((n,r) => n+r.amount,0)
+      if (balance - p.p_amount < -2) return { data: { refused: true, balance }, error: null }
+      ;(tables.wallet_reservations ||= []).push({ shipment_id: p.p_shipment, tenant_id: p.p_tenant, client_id: p.p_client, amount: p.p_amount, state: 'reserved' })
+      return { data: { reserved: true, balance }, error: null }
+    }
+    if (name === 'transition_wallet_reservation') {
+      const row = (tables.wallet_reservations || []).find(r => r.shipment_id === p.p_shipment && r.tenant_id === p.p_tenant && r.client_id === p.p_client && r.state === p.p_from)
+      if (row) Object.assign(row, { state: p.p_to, result: p.p_result })
+      return { data: Boolean(row), error: null }
+    }
+    throw new Error(`Unmocked RPC: ${name}`)
+  }
+  const client = { from, rpc }
   return { client, queries, writes, createAdminClient() { adminClients++; return client }, get adminClients() { return adminClients } }
 }
 

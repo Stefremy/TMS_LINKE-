@@ -112,3 +112,20 @@ Revisão operacional posterior: [Navegação OPS e portal — 21/10/2026](NAVIGA
 Foi autorizada e implementada localmente a discriminação de transporte, combustível e cada serviço especial nas novas emissões manuais e automáticas. Recupera componentes históricas sob o âmbito da loja e reconcilia exatamente o total sem IVA, sem aplicar preços atuais a envios antigos. Documentos fiscais já emitidos não são reconstruídos para adicionar linhas. Ainda precisa de publicação.
 
 [Diagnóstico, implementação, arredondamento de IVA e validação](INVOICE_FUEL_BREAKDOWN_2026-10-22.md). Testes finais: faturação 53, recorrentes 34, segurança 138 e isolamento 93 passaram; build passou. Não houve emissão real nem alterações de saldos. Esta correção não conclui a auditoria de integridade financeira do Passo 4.
+
+## Verificação de Stripe, wallet e recibos — 22/10/2026
+
+Foi autorizada a verificação do ponto financeiro prioritário. Foram acrescentados 36 testes: 14 controlos passaram e 22 casos reproduziram problemas, agrupados em SW01–SW11. O diagnóstico inclui perda da etapa de crédito após pagamento, validação incompleta da associação Stripe/transação, dupla contagem de combustível, efeitos de recibos no saldo, concorrência de consumo e repetição/valor de recibos.
+
+[Relatório, evidência, limites e ordem de correção](STRIPE_WALLET_AUDIT_2026-10-22.md). Na fase inicial, `npm run test:stripe-audit` devolvia saída 1 para reproduzir as falhas. Não foram alterados código financeiro, preços ou dados de produção. O Passo 4 continua aberto. Próxima correção proposta: SW01 com as validações de associação SW02, antes de qualquer reconciliação de pagamentos antigos.
+
+
+## Correções financeiras autorizadas — 22/10/2026
+
+SW01–SW11 implementadas localmente: liquidação Stripe atómica, associação ao checkout, montantes e âmbito da empresa, cálculo sem combustível duplicado, reservas SQL de saldo e recibos com tentativa persistida, bloqueio por fatura, recuperação e remanescente bruto Moloni. Recibos e notas de crédito partilham proteção contra operações concorrentes.
+
+Validação: 80 testes financeiros (incluindo 20 SQL), 158 de segurança, 61 de faturação, 34 de recorrência e 36 de notas de crédito passaram — 369 no total. Build passou. [Correções, limites e passos de ativação](FINANCIAL_CORRECTIONS_2026-10-22.md).
+
+**Pendente antes de fechar esta parte do Passo 4:** aplicar/verificar a migração e publicar o código, testar com duas ligações PostgreSQL independentes e fornecedores em ambiente de teste, e reconciliar o histórico. Não houve alteração de dinheiro ou dados comerciais de produção, emissão real, commit, push ou deployment nesta ronda.
+
+A bateria adicional de isolamento mantém oito falhas de rastreio F03/F04 também reproduzidas em HEAD (85/93 passaram). Os testes não foram desativados e esta ronda não alterou o rastreio. A pendência está descrita no relatório das correções; não equivale a certificar o isolamento completo.

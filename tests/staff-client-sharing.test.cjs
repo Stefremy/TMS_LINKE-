@@ -25,7 +25,7 @@ function harness(failure) {
         details: { id: FOREIGN, short_name: 'Foreign company private store' } },
     ],
   }
-  const db = fakeSupabase(tables, failure)
+  const db = fakeSupabase(tables, failure, {persistInserts:true})
   const load = createLoader({
     '@supabase/ssr': { createServerClient: () => ({ auth: { getUser: async () => ({ data: { user } }) } }) },
     'next/headers': { cookies: async () => ({ getAll: () => [], get: () => undefined }) },
@@ -65,12 +65,7 @@ test('a saved client created by either colleague is available to the other on a 
     const before = h.db.writes.length
     const saved = await h.actions.saveClienteAction({ id, short_name: `Store by ${creator.id}` })
     assert.equal(saved.success, true)
-    // The test database records inserts; materialize the accepted payloads to
-    // exercise the subsequent independent account read with persisted data.
-    for (const write of h.db.writes.slice(before).filter(w => w.kind === 'insert')) {
-      assert.equal(write.value.tenant_id, TENANT)
-      h.tables[write.table].push({ id: `fixture-${id}`, created_at: '2026-10-14', ...write.value })
-    }
+    for (const write of h.db.writes.slice(before).filter(w => w.kind === 'insert')) assert.equal(write.value.tenant_id, TENANT)
     h.setUser(viewer)
     const result = await h.actions.getClientesAction()
     assert.equal(result.find(c => c.id === id)?.short_name, `Store by ${creator.id}`)

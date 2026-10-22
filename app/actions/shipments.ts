@@ -28,7 +28,8 @@ export async function getShipmentLabelAction(shipmentId: string): Promise<string
 }
 
 import { createShipment, dispatchShipment } from "@/lib/services/shipments/shipment-creator"
-import { currentAccountOutstanding, loadClientShipmentsForBalance, loadClientStatementsForBalance, payAsYouGoBalance, payAsYouGoRefusal, payAsYouGoSpent } from "@/lib/billing/client-balance"
+import { currentAccountOutstanding } from "@/lib/billing/client-balance"
+import { reserveWallet, transitionWallet, walletSnapshot, type WalletReservation } from "@/lib/billing/wallet"
 import { deleteShipment, deleteShipmentsBulk } from "@/lib/services/shipments/shipment-deleter"
 
 export async function createShipmentAction(formData: FormData) {
@@ -84,15 +85,17 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   const monthDeliveredCount = monthShipments.filter((s: any) => s.status === "entregue").length
   const monthRevenue = monthShipments
     .filter((s: any) => s.status !== "anulado")
-    .reduce((acc: number, s: any) => acc + (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0)), 0)
+    .reduce((acc: number, s: any) => acc + Number(s.sell_price || 0), 0)
 
   const clientStatementsForBalance = allStatements.filter((stmt: any) => !effectiveClientId || stmt.client_id === effectiveClientId)
 
   // The two billing models are computed by separate, independent functions (lib/billing/client-balance.ts):
-  //  - pay_as_you_go: wallet debits (unsettled shipments)
+  //  - pay_as_you_go: shipment consumption plus outstanding reservations
   //  - conta_corrente: invoiced amounts still owed (pending shipments + unpaid statements)
-  const totalDebt = clientBillingType === "pay_as_you_go"
-    ? payAsYouGoSpent(clientShipments, clientStatementsForBalance)
+  const wallet = clientBillingType === "pay_as_you_go" && effectiveClientId
+    ? await walletSnapshot(createAdminClient(), ctx.tenant_id, effectiveClientId) : null
+  const totalDebt = wallet
+    ? wallet.spent + wallet.reserved
     : currentAccountOutstanding(clientShipments, clientStatementsForBalance)
 
   const totalCount = clientShipments.length
@@ -164,6 +167,7 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   return {
     totalCount,
     totalRevenue,
+    walletBalance: wallet?.balance,
     monthCount,
     monthDeliveredCount,
     monthRevenue,
@@ -217,6 +221,9 @@ export async function emitClientGuiaAction(data: {
   heightCm?: number
   observations?: string
 }) {
+  let reservation: WalletReservation | undefined
+  let submitted = false
+  let confirmedRejection = false
   try {
     const ctx = await requireUser()
 
@@ -289,21 +296,6 @@ export async function emitClientGuiaAction(data: {
       computedSpecialAmount = specials.amount
       computedSpecialDesc = specials.items.length > 0 ? JSON.stringify(specials.items) : null
 
-      // Wallet validation applies ONLY to pay_as_you_go. Conta corrente clients are invoiced and never touch this logic.
-      if (matchedClient.billing_type === "pay_as_you_go") {
-        let balance: number
-        try {
-          const [pastShipments, statements] = await Promise.all([
-            loadClientShipmentsForBalance(supabase, ctx.tenant_id, validatedClientId as string),
-            loadClientStatementsForBalance(supabase, ctx.tenant_id, validatedClientId as string),
-          ])
-          balance = payAsYouGoBalance(matchedClient.credit_limit, pastShipments, statements)
-        } catch {
-          throw new ShipmentPricingUnavailableError()
-        }
-        const refusal = payAsYouGoRefusal(balance, computedSellPrice + computedFuelAmount)
-        if (refusal) throw new ShipmentPricingError(refusal)
-      }
 
     } catch (pricingErr) {
       return { success: false, error: pricingErr instanceof ShipmentPricingError || pricingErr instanceof ShipmentPricingUnavailableError
@@ -314,6 +306,7 @@ export async function emitClientGuiaAction(data: {
       id: shipmentId,
       tenant_id: (await getTenantId()),
       client_id: validatedClientId,
+      billing_type: "conta_corrente",
       tracking_number: trackingNumber,
       service_type: data.serviceName || "CTT Expresso 24H",
       status: "pendente",
@@ -343,6 +336,9 @@ export async function emitClientGuiaAction(data: {
       updated_at: now,
     }
 
+    reservation = await reserveWallet(supabase, ctx.tenant_id, matchedClient.id, shipmentId, computedSellPrice, trackingNumber)
+    shipmentData.billing_type = reservation.reserved ? 'pay_as_you_go' : 'conta_corrente'
+
     // ─── STEP 1: Call carrier API — only write to DB if carrier accepts ──────────
     let realGuia = trackingNumber
     let labelBase64: string | null = null
@@ -354,6 +350,8 @@ export async function emitClientGuiaAction(data: {
         const cleanPostal = (zip?: string) => (zip || "").trim()
         const creds = await resolveCorreosCredentials(data.webserviceConnectionId)
         const correosService = new CorreosShipmentService()
+        await transitionWallet(supabase, reservation, 'reserved', 'submitted')
+        submitted = true
         const result = await correosService.createShipment(creds, {
           ref: trackingNumber,
           fecha: new Date().toLocaleDateString("pt-PT").replace(/\//g, ""),
@@ -413,6 +411,7 @@ export async function emitClientGuiaAction(data: {
             labelBase64 = await applyLinkeLogoToCorreosLabel(labelBase64)
           }
         } else {
+          confirmedRejection = typeof result.codigoRetorno === 'number' && result.codigoRetorno !== 0 && !result.datosResultado
           throw new Error(`Correos Express: ${result.mensajeRetorno || "Erro desconhecido"} (Código ${result.codigoRetorno})`)
         }
       } catch (e: any) {
@@ -433,6 +432,8 @@ export async function emitClientGuiaAction(data: {
         if (data.observations) obsLines.push(data.observations)
         const observations = obsLines.length > 0 ? obsLines.join(" | ").substring(0, 40) : undefined
 
+        await transitionWallet(supabase, reservation, 'reserved', 'submitted')
+        submitted = true
         const cttResult = await cttProvider.createShipment({
           reference: trackingNumber,
           sender: {
@@ -462,6 +463,7 @@ export async function emitClientGuiaAction(data: {
         })
 
         if (!cttResult.success) {
+          confirmedRejection = cttResult.confirmedRejection === true
           const raw = cttResult.error || ""
           console.error("[CTT] Raw error:", raw)
           // Show exact CTT error — prefix with [CTT] so it's clear but not hidden
@@ -488,6 +490,11 @@ export async function emitClientGuiaAction(data: {
         throw new Error("Erro de ligação aos CTT: " + (e?.message || "Tente novamente."))
       }
     }
+
+    await transitionWallet(supabase, reservation, submitted ? 'submitted' : 'reserved', 'consumed', {
+      shipment: shipmentData, carrier_tracking_number: realGuia, carrier_code: carrierCode,
+      label_base64: labelBase64, ctt_close_data: cttCloseData || null,
+    })
 
     let dbErrorMessage: string | null = null
 
@@ -562,45 +569,20 @@ export async function emitClientGuiaAction(data: {
       })
     } catch {}
 
-    // ─── STEP 3: Deduct from client credit ──────────────────────────────────────
-    if (validatedClientId && computedSellPrice > 0) {
+    // Wallet consumption is represented by the shipment and its reservation, never a second decrement.
+    if (reservation.reserved && (reservation.balanceBefore ?? 0) >= 15 && matchedClient.email) {
       try {
-        const { data: clientData } = await supabase
-          .from("clientes")
-          .select("credit_limit, email")
-          .eq("id", validatedClientId)
-          .single()
-          
-        if (clientData && typeof clientData.credit_limit === "number") {
-          const newCredit = Math.max(0, clientData.credit_limit - computedSellPrice)
-          await supabase
-            .from("clientes")
-            .update({ credit_limit: newCredit })
-            .eq("id", validatedClientId)
-
-          if (clientData.credit_limit >= 15 && newCredit < 15 && clientData.email) {
-            try {
-              const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
-              const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
-              const html = compileTemplate(emailTemplates.low_balance, {
-                current_balance: newCredit.toFixed(2),
-                topup_url: publicUrl("/app", "portal")
-              })
-              sendEmail({
-                to: clientData.email,
-                subject: "Linke | Aviso de Saldo Baixo",
-                html,
-              }).catch(err => console.error("Error sending low balance email:", err))
-            } catch (e) {
-              console.error("Failed to dispatch low balance email:", e)
-            }
-          }
+        const after = await walletSnapshot(supabase, ctx.tenant_id, matchedClient.id)
+        if (after.balance < 15) {
+          const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
+          const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
+          void sendEmail({ to: matchedClient.email, subject: "Linke | Aviso de Saldo Baixo",
+            html: compileTemplate(emailTemplates.low_balance, { current_balance: after.balance.toFixed(2), topup_url: publicUrl("/app", "portal") })
+          }).catch(error => console.warn("Low balance email pending", error))
         }
-      } catch (e: any) {
-        console.warn("Failed to decrement client credit:", e.message)
-      }
+      } catch (error) { console.warn("Low balance notification pending", error) }
     }
-    
+
     // ─── STEP 4: Send Tracking Email Notification ───────────────────────────────
     if (data.recipientEmail && !dbErrorMessage) {
       try {
@@ -641,6 +623,13 @@ export async function emitClientGuiaAction(data: {
     }
   } catch (err: any) {
     console.error("emitClientGuiaAction error:", err)
+    if (reservation?.reserved && (!submitted || confirmedRejection)) {
+      try { await transitionWallet(createAdminClient(), reservation, submitted ? 'submitted' : 'reserved', 'released') }
+      catch { return { success: false, error: `O pedido ${reservation.shipment} ficou por confirmar. Não repita antes de verificar o saldo e a transportadora.` } }
+    }
+    if (reservation?.reserved && submitted && !confirmedRejection) {
+      return { success: false, error: `O resultado do pedido ${reservation.shipment} ficou por confirmar. O saldo permanece reservado; confirme na transportadora antes de repetir. ${err.message || ''}` }
+    }
     return {
       success: false,
       error: err.message || "Erro interno ao criar envio.",

@@ -131,6 +131,7 @@ export class CttProvider implements CarrierProvider {
 
       return {
         success: false,
+        confirmedRejection: Boolean(result.ErrorsList?.length),
         error: result.ErrorsList?.map(e => e.Message).join(', ') || "Failed to create shipment"
       }
     } catch (err: any) {

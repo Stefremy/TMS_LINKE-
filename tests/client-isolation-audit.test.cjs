@@ -671,7 +671,7 @@ test('F04: authenticated empty or malformed batches do not query shipments', asy
 })
 
 for (const billingType of ['conta_corrente', 'pay_as_you_go']) {
-  test('PERF: portal reads run concurrently with the signed-in store and preserve ' + billingType + ' totals', async () => {
+  test('PERF: portal reads run concurrently with the signed-in store and preserve ' + billingType + ' selling totals', async () => {
     const h = harness()
     const started = []
     const release = {}
@@ -684,6 +684,12 @@ for (const billingType of ['conta_corrente', 'pay_as_you_go']) {
     }
     h.mocks['@/app/actions/moloni'] = { getBillingStatementsAction: id => read('statements', id) }
     h.mocks['@/app/actions/clientes'].getClientesAction = id => read('profile', id)
+    const walletCalls=[]
+    h.db.client.rpc=async(name,args)=>{
+      walletCalls.push({name,args})
+      assert.equal(name,'client_wallet_snapshot');assert.deepEqual(args,{p_tenant:TENANT,p_client:A})
+      return{data:{credit:100,spent:30,reserved:0,balance:70},error:null}
+    }
     const pending = h.load('app/actions/shipments.ts').getClientPortalStatsAction(B, 'Fictional B')
     await new Promise(resolve => setImmediate(resolve))
     assert.deepEqual(started.map(([name]) => name).sort(), ['profile', 'shipments', 'statements'])
@@ -696,7 +702,9 @@ for (const billingType of ['conta_corrente', 'pay_as_you_go']) {
       { id: 'cancelled-own', client_id: A, status: 'anulado', sell_price: 100 },
     ])
     const result = await pending
-    assert.equal(result.totalRevenue, billingType === 'pay_as_you_go' ? 32 : 16)
+    assert.equal(result.totalRevenue, billingType === 'pay_as_you_go' ? 30 : 15)
+    assert.equal(walletCalls.length,billingType === 'pay_as_you_go'?1:0)
+    assert.equal(result.walletBalance,billingType === 'pay_as_you_go'?70:undefined)
     assert.equal(result.totalCount, 3)
     assert.equal(result.deliveredCount, 1)
   })

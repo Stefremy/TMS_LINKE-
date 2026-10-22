@@ -10,6 +10,7 @@
  */
 
 export type BalanceShipment = {
+  billing_type?: "conta_corrente" | "pay_as_you_go"
   sell_price?: unknown
   fuel_tax_amount?: unknown
   status?: string | null
@@ -33,8 +34,8 @@ const money = (value: unknown) => {
   const n = Number(value)
   return Number.isFinite(n) ? n : 0
 }
-const shipmentValue = (s: BalanceShipment) => money(s.sell_price) + money(s.fuel_tax_amount)
-const isCancelled = (s: BalanceShipment) => s.status === "anulado"
+const shipmentValue = (s: BalanceShipment) => money(s.sell_price)
+const isCancelled = (s: BalanceShipment) => ["anulado", "cancelado", "cancelled", "canceled"].includes((s.status || "").toLowerCase())
 
 /** A statement is settled when it has a receipt or is explicitly paid. */
 export function isStatementSettled(stmt: BalanceStatement): boolean {
@@ -43,19 +44,19 @@ export function isStatementSettled(stmt: BalanceStatement): boolean {
 
 // ───────────────────────── PAY AS YOU GO (wallet) ─────────────────────────
 
-/** Sum of wallet debits: live shipments not yet settled by a paid statement. */
-export function payAsYouGoSpent(shipments: BalanceShipment[], statements: BalanceStatement[]): number {
-  const settled = new Set(statements.filter(isStatementSettled).map(s => s.id).filter(Boolean) as string[])
+/** Selling totals already include fuel/extras. A receipt documents payment; it is not a wallet top-up. */
+export function payAsYouGoSpent(shipments: BalanceShipment[], _statements: BalanceStatement[]): number {
+  // Preserve the caller contract while deliberately ignoring receipt/statement state.
+  void _statements
   let spent = 0
   for (const s of shipments) {
-    if (isCancelled(s)) continue
-    if (s.billing_statement_id && settled.has(s.billing_statement_id)) continue
+    if (isCancelled(s) || s.billing_type === "conta_corrente") continue
     spent += shipmentValue(s)
   }
   return Number(spent.toFixed(2))
 }
 
-/** Wallet balance = topped-up money − unsettled shipments. May go down to the overdraft limit. */
+/** Wallet balance = topped-up money − shipment consumption. May go down to the overdraft limit. */
 export function payAsYouGoBalance(creditLimit: unknown, shipments: BalanceShipment[], statements: BalanceStatement[]): number {
   return Number((money(creditLimit) - payAsYouGoSpent(shipments, statements)).toFixed(2))
 }
@@ -92,7 +93,7 @@ type Db = { from: (table: string) => any }
 /** Live shipments of one client. Select only balance-relevant columns to eliminate base64 egress. */
 export async function loadClientShipmentsForBalance(db: Db, tenantId: string, clientId: string): Promise<BalanceShipment[]> {
   const { data, error } = await db.from("shipments")
-    .select("sell_price, fuel_tax_amount, status, billing_statement_id")
+    .select("sell_price, status, billing_statement_id")
     .eq("tenant_id", tenantId)
     .eq("client_id", clientId)
   if (error) throw new Error("Não foi possível validar o saldo.")

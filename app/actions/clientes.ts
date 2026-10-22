@@ -341,24 +341,16 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
   }
 
   // Check every write before the UI can invite a client to a supposedly saved store.
-  const { data: oldProfiles, error: oldProfilesError } = await supabase.from("audit_log").select("id")
-    .eq("tenant_id", ctx.tenant_id).eq("action", "client_data").eq("details->>id", id)
-  if (oldProfilesError) throw new Error("Não foi possível verificar os detalhes anteriores da loja.")
   const registryWrite = registered
     ? supabase.from("clients").update({ name: fullRecord.short_name }).eq("id", id).eq("tenant_id", ctx.tenant_id).select("id").maybeSingle()
     : supabase.from("clients").insert({ id, tenant_id: ctx.tenant_id, name: fullRecord.short_name })
   const { data: savedRegistry, error: saveError } = await registryWrite
   if (saveError || (registered && !savedRegistry)) throw new Error("Não foi possível gravar a loja.")
-  // Keep previous snapshots until the new profile has been persisted successfully.
-  const { error: profileSaveError } = await supabase.from("audit_log").insert({
-    tenant_id: ctx.tenant_id, action: "client_data", details: fullRecord,
+  const { error: profileSaveError } = await supabase.rpc('save_client_financial_profile', {
+    p_tenant: ctx.tenant_id, p_client: id, p_details: fullRecord,
+    p_expected_credit: previous?.details?.credit_limit ?? null,
   })
-  if (profileSaveError) throw new Error("Não foi possível gravar os detalhes da loja. Tente novamente.")
-  if (oldProfiles?.length) {
-    const { error: cleanupError } = await supabase.from("audit_log").delete()
-      .eq("tenant_id", ctx.tenant_id).eq("action", "client_data").in("id", oldProfiles.map((p: { id: string }) => p.id))
-    if (cleanupError) throw new Error("Não foi possível concluir a gravação da loja. Tente novamente.")
-  }
+  if (profileSaveError) throw new Error("Não foi possível gravar os detalhes. O saldo pode ter mudado; atualize a ficha e tente novamente.")
   const { error: restoreError } = await supabase.from("audit_log").delete()
     .eq("tenant_id", ctx.tenant_id).eq("action", "deleted_client").eq("details->>id", id)
   if (restoreError) throw new Error("Não foi possível repor a loja. Tente novamente.")

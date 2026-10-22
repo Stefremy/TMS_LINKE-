@@ -6,7 +6,7 @@ import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPrici
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
-import { loadClientShipmentsForBalance, loadClientStatementsForBalance, payAsYouGoBalance, payAsYouGoRefusal } from "@/lib/billing/client-balance"
+import { reserveWallet, transitionWallet, type WalletReservation } from "@/lib/billing/wallet"
 
 export async function createShipment(formData: FormData) {
   
@@ -56,6 +56,7 @@ export async function createShipment(formData: FormData) {
   let computedBasePrice: number
   let computedTierLabel = "Standard"
   const weightKg = Number(formData.get("weight_kg"))
+  let reservation: WalletReservation | undefined
 
   try {
     validateShipmentPricingInput({ weightKg })
@@ -74,24 +75,11 @@ export async function createShipment(formData: FormData) {
     computedBasePrice = priceResult.basePrice
     computedTierLabel = priceResult.tierLabel || "Standard"
 
-    // Wallet check applies ONLY to pay_as_you_go. Conta corrente clients are invoiced and never touch this logic.
-    if (matchedClient.billing_type === "pay_as_you_go") {
-      let balance: number
-      try {
-        const [pastShipments, statements] = await Promise.all([
-          loadClientShipmentsForBalance(supabase, ctx.tenant_id, client_id),
-          loadClientStatementsForBalance(supabase, ctx.tenant_id, client_id),
-        ])
-        balance = payAsYouGoBalance(matchedClient.credit_limit, pastShipments, statements)
-      } catch {
-        throw new ShipmentPricingUnavailableError()
-      }
-      const refusal = payAsYouGoRefusal(balance, computedSellPrice + computedFuelAmount)
-      if (refusal) return { success: false, error: refusal }
-    }
+    reservation = await reserveWallet(supabase, ctx.tenant_id, matchedClient.id, shipmentId, computedSellPrice, trackingNumber)
+
   } catch (pricingErr) {
     return { success: false, error: pricingErr instanceof ShipmentPricingError || pricingErr instanceof ShipmentPricingUnavailableError
-      ? pricingErr.message : "Não foi possível validar a tarifa. Tente novamente ou contacte o suporte." }
+      ? pricingErr.message : pricingErr instanceof Error ? pricingErr.message : "Não foi possível validar a tarifa. Tente novamente ou contacte o suporte." }
   }
 
   const shipmentData = {
@@ -119,23 +107,17 @@ export async function createShipment(formData: FormData) {
     updated_at: now,
   }
 
-  // 1. Insert into shipments table
-  try {
-    await supabase.from("shipments").insert(shipmentData)
-  } catch (err: any) {
-    console.error("Error inserting shipment into table:", err?.message)
+  // At least one durable shipment record must exist before reporting success.
+  const native = await supabase.from("shipments").insert(shipmentData)
+  const audit = await supabase.from("audit_log").insert({tenant_id: ctx.tenant_id, action: "shipment_data", details: {...shipmentData, billing_type: reservation?.reserved ? "pay_as_you_go" : "conta_corrente"}})
+  if (native.error && audit.error) {
+    if (native.error.code && audit.error.code) {
+      await transitionWallet(supabase, reservation, 'reserved', 'released')
+      return { success: false, error: "Não foi possível guardar o envio. Nenhum pedido foi enviado à transportadora." }
+    }
+    return { success: false, error: `A gravação do pedido ${shipmentId} ficou por confirmar. Nenhum pedido foi enviado à transportadora; confirme o saldo reservado antes de repetir.` }
   }
-
-  // 2. Dual-write to audit_log
-  try {
-    await supabase.from("audit_log").insert({
-      tenant_id: (await getTenantId()),
-      action: "shipment_data",
-      details: shipmentData,
-    })
-  } catch (err: any) {
-    console.warn("Could not save shipment to audit_log:", err?.message)
-  }
+  await transitionWallet(supabase, reservation, 'reserved', 'consumed')
 
   // 3. Create package info
   try {

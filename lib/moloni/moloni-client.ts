@@ -735,6 +735,7 @@ export class MoloniClient {
   }) {
     const roundTo2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
     const finalValue = roundTo2(Number(data.value));
+    if (!Number.isFinite(finalValue) || finalValue <= 0) throw new Error("Valor do recibo inválido.");
 
     // Resolver paymentMethodId real do Moloni
     let paymentMethodId = data.paymentMethodId;
@@ -793,16 +794,8 @@ export class MoloniClient {
       payload.notes = data.notes;
     }
 
-    let result;
-    try {
-      result = await this.request("receipts/insert", payload);
-    } catch (err: any) {
-      console.warn("Could not insert status 1 receipt:", err?.message);
-      payload.status = 0;
-      result = await this.request("receipts/insert", payload);
-    }
-    
-    return result;
+    // A timeout may happen after fiscal creation. Never retry the insert as another document.
+    return this.request("receipts/insert", payload);
   }
 
   /**

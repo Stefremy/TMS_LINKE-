@@ -7,15 +7,16 @@ const CLIENT = '22222222-2222-2222-2222-222222222222'
 const SHIPMENT = '44444444-4444-4444-4444-444444444444'
 const connection = (details = {}) => ({tenant_id: TENANT, action: 'moloni_connection_config', created_at:'2026-10-15', details:{company_id:'42',refresh_token:'saved-refresh',...details}})
 function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false, clientDueDays=undefined, shipmentRows, fiscalDocument}={}) {
-  const db = fakeSupabase({audit_log: [...(connected ? [connection()] : []), ...existing], shipments:shipmentRows || [
+  const db = fakeSupabase({clients:[{id:CLIENT,tenant_id:TENANT}],audit_log: [...(connected ? [connection()] : []), ...existing], shipments:shipmentRows || [
     {id:SHIPMENT,client_id:CLIENT,tenant_id:TENANT,sell_price:3.91,service_type:'Nacional'}
-  ]}, q=>failArchive&&q.write?.kind==='insert'&&q.write.value.action==='billing_statement'?{message:'unavailable'}:null)
+  ]}, q=>failArchive&&q.write?.kind==='insert'&&q.write.value.action==='billing_statement'?{message:'unavailable'}:null,{persistInserts:Boolean(fiscalDocument||existing.some(r=>r.action==='credit_note'))})
   let claims = 0
   db.client.rpc = async (name) => { claims++; assert.equal(name, 'claim_billing_shipments'); return { data: null, error: null } }
   let issued = 0, lastInvoicePayload, lastReceiptPayload
   const load = createLoader({
+    'node:crypto':require('node:crypto'),
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
-    '@/lib/auth/context':{getTenantId:async()=>TENANT,requireEmployee:async()=>({tenant_id:TENANT}),requireUser:async()=>({tenant_id:TENANT})},
+    '@/lib/auth/context':{getTenantId:async()=>TENANT,requireEmployee:async()=>({tenant_id:TENANT,user:{id:'finance'},role:'employee',permissions:['Faturação & Contas Correntes']}),requireUser:async()=>({tenant_id:TENANT})},
     '@/lib/config/public-origins':{moloniRedirectUri:()=> 'https://fixture.invalid/callback'},
     '@/app/actions/clientes':{getClientesAction:async()=>[{id:CLIENT,tenant_id:TENANT,nif:'999999990',payment_due_days:clientDueDays}]},
     '@/app/actions/shipments':{},
@@ -23,7 +24,13 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
     '@/app/actions/billing-config':{getBillingConfigAction:async()=>({defaultVatRate:23})},
     'next/cache':{revalidatePath(){}},
     '@/lib/moloni/moloni-client':{MoloniClient:class {
-      async request(endpoint){assert.equal(endpoint,'documents/getOne');return fiscalDocument}
+      async request(endpoint,payload){
+        assert.equal(endpoint,'documents/getOne')
+        if(payload.document_id===321)return{document_id:321,company_id:42,status:1,customer_id:lastReceiptPayload.customerId,
+          document_type:{saft_code:'RC'},notes:lastReceiptPayload.notes,net_value:lastReceiptPayload.value,
+          associated_documents:[{associated_id:123,value:lastReceiptPayload.value}]}
+        return {document_type:{saft_code:'FT'},taxes_value:2.3,...fiscalDocument}
+      }
       async createReceipt(payload){lastReceiptPayload=payload;return {document_id:321}}
       async getCustomerByVat(){return {customer_id:1}}
       async updateCustomer(){}
@@ -303,5 +310,5 @@ test('a credit-note operation awaiting confirmation prevents a new receipt',asyn
   const h=invoiceHarness({existing:[{id:'credit-statement',tenant_id:TENANT,action:'billing_statement',details:{id:'credit-statement',client_id:CLIENT,moloni_document_id:123,total_value:10}},
     {id:'nc',tenant_id:TENANT,action:'credit_note',details:{client_id:CLIENT,invoice_document_id:123,company_id:'42',state:'review_required'}}]})
   const result=await h.load('app/actions/moloni.ts').emitMoloniReceiptForStatementAction('credit-statement')
-  assert.equal(result.success,false);assert.match(result.error,/nota de crédito em curso/);assert.equal(h.lastReceiptPayload,undefined)
+  assert.equal(result.success,false);assert.match(result.error,/nota de crédito/);assert.equal(h.lastReceiptPayload,undefined)
 })

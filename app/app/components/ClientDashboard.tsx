@@ -55,6 +55,7 @@ export function ClientDashboard() {
     currentPeriodName?: string
     totalCount: number
     totalRevenue: number
+    walletBalance?: number
     deliveredCount: number
     deliveryRate: number
     weeklyVolume: Array<{ day: string; count: number; height: string }>
@@ -287,7 +288,7 @@ export function ClientDashboard() {
   const activeServices = (currentClient?.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING).filter(s => s.is_enabled)
 
   // Real credit calculation
-  const rawBalance = creditLimit - stats.totalRevenue
+  const rawBalance = currentClient?.billing_type === "pay_as_you_go" && stats.walletBalance !== undefined ? stats.walletBalance : creditLimit - stats.totalRevenue
   const availableCredit = currentClient?.billing_type === 'pay_as_you_go' 
     ? rawBalance 
     : Math.max(rawBalance, 0)

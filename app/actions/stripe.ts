@@ -22,6 +22,11 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
       throw new Error("Não autorizado a carregar esta conta.")
     }
 
+    const cents = Math.round(amountEuro * 100)
+    if (typeof amountEuro !== "number" || !Number.isFinite(amountEuro) || !Number.isSafeInteger(cents)
+      || cents < 100 || Math.abs(amountEuro * 100 - cents) > 1e-7) {
+      throw new Error("Indique um montante válido de pelo menos 1€, com no máximo duas casas decimais.")
+    }
     const supabase = createAdminClient()
 
     console.log("[Stripe Action] Received clientId:", clientId, "Amount:", amountEuro)
@@ -31,6 +36,7 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
       .from('clients')
       .select('*')
       .eq('id', clientId)
+      .eq('tenant_id', ctx.tenant_id)
       .single()
 
     if (clientErr || !client) {
@@ -82,7 +88,7 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
               name: 'Carregamento de Saldo - TMS Linke',
               description: `Carregamento para a conta ${client.legal_name || client.short_name}`,
             },
-            unit_amount: Math.round(amountEuro * 100), // Stripe usa cêntimos
+            unit_amount: cents, // Stripe usa cêntimos
           },
           quantity: 1,
         },
@@ -96,13 +102,18 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
         client_id: client.id,
         tenant_id: client.tenant_id
       }
-    })
+    }, { idempotencyKey: `tms-topup-${transaction.id}` })
 
     // 4. Update Transaction with Stripe Session ID
-    await supabase
+    const { data: bound, error: bindingError } = await supabase
       .from('client_transactions')
       .update({ stripe_session_id: session.id })
-      .eq('id', transaction.id)
+      .eq('id', transaction.id).eq('tenant_id', ctx.tenant_id).eq('client_id', client.id)
+      .eq('status', 'pending').select('id').maybeSingle()
+    if (bindingError || !bound || !session.url) {
+      // Keep the durable transaction for reconciliation; do not expose an unbound payment URL.
+      throw new Error(`Não foi possível preparar o pagamento. Referência: ${transaction.id}. Confirme esta tentativa antes de repetir.`)
+    }
 
     return { success: true, url: session.url }
   } catch (error: any) {

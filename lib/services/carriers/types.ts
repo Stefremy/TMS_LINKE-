@@ -26,6 +26,8 @@ export interface ShipmentInput {
 
 export interface ShipmentResult {
   success: boolean
+  /** Only true when the carrier explicitly rejected creation, never for transport errors. */
+  confirmedRejection?: boolean
   trackingNumber?: string
   carrierShipmentId?: string
   labelBase64?: string

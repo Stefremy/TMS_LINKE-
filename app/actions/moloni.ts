@@ -1,5 +1,4 @@
 "use server"
-import {creditInvoicePayment} from "@/lib/billing/credit-notes/products"
 
 import {loadInvoiceCredits, invoiceCreditSummary} from "@/lib/billing/credit-notes/balances"
 import { createAdminClient } from "@/lib/supabase/server"
@@ -1021,101 +1020,19 @@ export async function getCustomInvoicesAction() {
 /**
  * Emite um Recibo no Moloni para uma fatura existente
  */
-export async function emitReceiptAction(statementId: string, clientId: string, moloniDocumentId: number, totalValue: number) {
+export async function emitReceiptAction(statementId: string, clientId: string, moloniDocumentId: number, _totalValue: number) {
+  // Keep the legacy call signature; the fiscal remainder always comes from Moloni.
+  void _totalValue
   const ctx = await requireEmployee()
   try {
-    const supabase = createAdminClient()
-    
-    const allClients = await getClientesAction()
-    const client = allClients.find((c: any) => c.id === clientId)
-      
-    if (!client) throw new Error("Cliente não encontrado no TMS.")
-
-    let moloniConfig: any = null
-    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-      moloniConfig = {
-        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-        companyId: process.env.MOLONI_COMPANY_ID,
-      }
-    } else {
-      const { data: mLogs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("action", "moloni_connection_config")
-        .order("created_at", { ascending: false })
-        .limit(1)
-      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
-        moloniConfig = {
-          refreshToken: mLogs[0].details.refresh_token,
-          companyId: mLogs[0].details.company_id,
-        }
-      }
-    }
-
-    if (!moloniConfig) {
-      throw new Error("Conta Moloni não está ligada.")
-    }
-
-    const moloni = new MoloniClient(moloniConfig)
-    
-    let moloniCustomerId = null
-    if (client.nif) {
-      const moloniCust = await moloni.getCustomerByVat(client.nif)
-      if (moloniCust) moloniCustomerId = moloniCust.customer_id
-    }
-    
-    if (!moloniCustomerId) {
-      throw new Error("Cliente não encontrado no Moloni para emitir o recibo.")
-    }
-
-    const creditNotes = (await loadInvoiceCredits(supabase, ctx.tenant_id, clientId)).filter(n => n.invoice_document_id === Number(moloniDocumentId))
-    if (creditNotes.some(n => !['issued','cancelled'].includes(n.state))) throw new Error('Confirme ou cancele a nota de crédito em curso antes de emitir recibo.')
-    if (creditNotes.some(n => n.state === 'issued')) {
-      if (creditNotes.some(n => n.company_id !== String(moloniConfig.companyId))) throw new Error('Confirme a empresa Moloni associada à nota de crédito antes de emitir recibo.')
-      const fiscal = await moloni.request('documents/getOne', {document_id:Number(moloniDocumentId)})
-      const payment = creditInvoicePayment(fiscal, String(moloniConfig.companyId), Number(moloniDocumentId))
-      totalValue = payment.value
-      moloniCustomerId = payment.customerId
-    }
-    const documentSetId = await moloni.getDocumentSet()
-
-    const dateNow = new Date().toISOString().split("T")[0]
-
-    const receiptRes = await moloni.createReceipt({
-      customerId: moloniCustomerId,
-      documentSetId: documentSetId,
-      date: dateNow,
-      invoiceId: moloniDocumentId,
-      value: totalValue
-    })
-
-    console.log("Moloni receiptRes:", receiptRes);
-
-    if (!receiptRes || !receiptRes.document_id) {
-        throw new Error(`O recibo foi criado ou ocorreu um erro, mas não foi devolvido o ID do documento. Resposta: ${JSON.stringify(receiptRes)}`);
-    }
-
-    const receiptId = receiptRes.document_id
-    const receiptPdfUrl = await moloni.getDocumentPDFLink(receiptId)
-
-    // Save to audit_log
-    const { data: logs } = await supabase.from('audit_log').select('*').eq('id', statementId).single()
-    if (logs && logs.details) {
-      const newDetails = {
-        ...logs.details,
-        moloni_receipt_id: receiptId,
-        moloni_receipt_pdf: receiptPdfUrl
-      }
-      await supabase.from('audit_log').update({ details: newDetails }).eq('id', statementId)
-    }
-
-    return { success: true, receiptId, receiptPdfUrl }
-  } catch (err: any) {
-    console.error("emitReceiptAction error:", err)
-    return { success: false, error: err.message || "Erro desconhecido ao emitir o recibo" }
+    const { emitStatementReceipt } = await import("@/lib/billing/receipts")
+    const result = await emitStatementReceipt(createAdminClient(), ctx, statementId, {}, {client: clientId, invoice: moloniDocumentId})
+    revalidatePath("/ops/faturacao/contas-corrente")
+    return result
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : "Não foi possível confirmar o recibo." }
   }
 }
-
 
 export async function getMoloniPaymentMethodsAction() {
   await requireEmployee()
@@ -1157,160 +1074,13 @@ export async function emitMoloniReceiptForStatementAction(
 ) {
   const ctx = await requireEmployee()
   try {
-    const supabase = createAdminClient()
-
-    let moloniConfig: any = null
-    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-      moloniConfig = {
-        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-        companyId: process.env.MOLONI_COMPANY_ID,
-      }
-    } else {
-      const { data: mLogs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("action", "moloni_connection_config")
-        .eq("tenant_id", ctx.tenant_id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
-        moloniConfig = {
-          refreshToken: mLogs[0].details.refresh_token,
-          companyId: mLogs[0].details.company_id,
-        }
-      }
-    }
-
-    if (!moloniConfig) {
-      return { success: false, error: "Moloni não está ligado" }
-    }
-    const moloni = new MoloniClient(moloniConfig)
-
-    // Obter Extrato
-    const { data: logs, error } = await supabase
-      .from('audit_log')
-      .select('*')
-      .eq('action', 'billing_statement')
-      .eq('tenant_id', ctx.tenant_id)
-      .order('created_at', { ascending: false })
-
-    if (error || !logs) throw new Error("Extrato não encontrado.")
-
-    const match = logs.find((l: any) => 
-      l.id === statementId || 
-      l.details?.id === statementId ||
-      l.details?.statement_number === statementId
-    )
-
-    if (!match || !match.details) {
-      throw new Error("Extrato não encontrado.")
-    }
-
-    const stmt = match.details
-
-    if (!stmt.moloni_document_id) {
-      return { success: false, error: "Extrato ainda não foi faturado no Moloni (Fatura em falta)." }
-    }
-    if (stmt.moloni_receipt_pdf) {
-      return { success: false, error: "Este extrato já tem um recibo emitido." }
-    }
-
-    const creditNotes = (await loadInvoiceCredits(supabase, ctx.tenant_id, stmt.client_id)).filter(n => n.invoice_document_id === Number(stmt.moloni_document_id))
-    if (creditNotes.some(n => !['issued','cancelled'].includes(n.state))) throw new Error('Confirme ou cancele a nota de crédito em curso antes de emitir recibo.')
-    const hasIssuedCredit = creditNotes.some(n => n.state === 'issued')
-    const documentSetId = await moloni.getDocumentSet()
-    
-    // Obter cliente
-    const allClients = await getClientesAction()
-    const client: any = allClients.find((c: any) => c.id === stmt.client_id) || {
-      legal_name: stmt.client_name,
-      short_name: stmt.client_name,
-      nif: "999999990"
-    }
-
-    // Verificar ou Criar cliente no Moloni
-    let moloniCustomerId = null
-    if (!hasIssuedCredit && client.nif && client.nif !== "999999990") {
-      const moloniCust = await moloni.getCustomerByVat(client.nif)
-      if (moloniCust) {
-        moloniCustomerId = moloniCust.customer_id
-      }
-    }
-
-    if (!hasIssuedCredit && !moloniCustomerId) {
-      moloniCustomerId = await moloni.createCustomer({
-        vat: client.nif || "999999990",
-        number: `C${Date.now()}`,
-        name: client.legal_name || client.short_name || stmt.client_name || "Cliente TMS",
-        address: (client as any).address || "Desconhecida",
-        zipCode: (client as any).postal_code || "0000-000",
-        city: (client as any).city || "Desconhecida",
-        email: client.email || (client as any).billing_email || "",
-        phone: client.phone || ""
-      })
-    }
-
-    const dateNow = opts?.date || new Date().toISOString().split("T")[0]
-
-    let receiptValue = Number(stmt.total_value || 0)
-    if (hasIssuedCredit) {
-      if (creditNotes.some(n => n.company_id !== String(moloniConfig.companyId))) throw new Error('Confirme a empresa Moloni associada à nota de crédito antes de emitir recibo.')
-      const fiscal = await moloni.request('documents/getOne', {document_id:Number(stmt.moloni_document_id)})
-      const payment = creditInvoicePayment(fiscal, String(moloniConfig.companyId), Number(stmt.moloni_document_id))
-      receiptValue = payment.value
-      moloniCustomerId = payment.customerId
-    } else if (stmt.period_statement_id) {
-      const fiscalDocument = await moloni.request('documents/getOne', { document_id: Number(stmt.moloni_document_id) })
-      const { automaticInvoicePayment } = await import('@/lib/billing/recurring-invoices')
-      const payment = automaticInvoicePayment(fiscalDocument, Number(stmt.moloni_document_id))
-      receiptValue = payment.value
-      moloniCustomerId = payment.customerId
-    }
-
-    // Criar o recibo
-    const receiptRes = await moloni.createReceipt({
-      customerId: moloniCustomerId,
-      date: dateNow,
-      documentSetId: documentSetId,
-      invoiceId: stmt.moloni_document_id,
-      value: receiptValue,
-      paymentMethodId: opts?.paymentMethodId,
-      notes: opts?.notes,
-    })
-
-    const moloniReceiptId = receiptRes.document_id
-
-    if (!moloniReceiptId) {
-      throw new Error(`Falha ao emitir recibo. Resposta do Moloni: ${JSON.stringify(receiptRes)}`)
-    }
-
-    let moloniReceiptPdf = null
-    try {
-      moloniReceiptPdf = await moloni.getDocumentPDFLink(moloniReceiptId)
-    } catch (e: any) {
-      console.warn("Nao foi possivel obter PDF do recibo", e)
-    }
-
-    stmt.moloni_receipt_id = moloniReceiptId
-    stmt.moloni_receipt_pdf = moloniReceiptPdf || ""
-    stmt.status = "paid"
-
-    const { error: updateErr } = await supabase
-      .from('audit_log')
-      .update({ details: stmt })
-      .eq('id', match.id)
-      .eq('tenant_id', ctx.tenant_id)
-
-    if (updateErr) {
-      console.warn("Erro ao atualizar o statement no audit_log", updateErr)
-    }
-
+    const { emitStatementReceipt } = await import("@/lib/billing/receipts")
+    const result = await emitStatementReceipt(createAdminClient(), ctx, statementId, opts)
     revalidatePath("/ops/faturacao/contas-corrente")
-
-    return { success: true, moloniReceiptPdf }
-  } catch (err: any) {
-    console.error("emitMoloniReceiptForStatementAction error:", err)
-    return { success: false, error: err.message || "Erro ao emitir recibo no Moloni" }
+    revalidatePath("/app", "layout")
+    return result
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : "Não foi possível confirmar o recibo." }
   }
 }
 

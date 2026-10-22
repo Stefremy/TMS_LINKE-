@@ -105,7 +105,7 @@ function service(carrier = 'CTT') {
     ] }],
   }
 }
-function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = clientContext } = {}) {
+function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = clientContext, carrierResult, carrierError } = {}) {
   const tables = {
     clients: [{ id: CLIENT, tenant_id: TENANT, name: 'Fixture' }],
     audit_log: [{ tenant_id: TENANT, action: 'client_data', details: { id: CLIENT, short_name: 'Fixture', billing_type: 'conta_corrente' } }],
@@ -124,6 +124,8 @@ function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = cl
       async initialize() {}
       async createShipment(payload) {
         providerCalls.push({ carrier: 'CTT', payload })
+        if(carrierError)throw Error(carrierError)
+        if(carrierResult)return carrierResult
         return { success: true, trackingNumber: 'DD123456789PT', rawResponse: {
           Status: 1, ShipmentData: [{ FirstObject: 'DD123456789PT', LastObject: 'DD123456790PT' }],
         } }
@@ -498,4 +500,35 @@ test('preview percentage supplements use the same COD base, transport base and c
   assert.deepEqual(preview.specialItems, [{ name: 'COD', amount: 3.01 }, { name: 'Seguro', amount: 0.68 }])
   assert.equal(preview.totalPrice, 10.44)
   assert.equal((await emit(h, input)).sellPrice, preview.totalPrice)
+})
+
+
+function walletShipmentHarness(options={}) {
+ return shipmentHarness({...options,adjust:t=>{
+  t.audit_log[0].details.billing_type='pay_as_you_go';t.audit_log[0].details.credit_limit=20
+  t.audit_log[0].details.default_linke_table_id='service-a'
+ }})
+}
+test('wallet carrier emission: confirmed rejection releases the reservation',async()=>{
+ const h=walletShipmentHarness({carrierResult:{success:false,confirmedRejection:true,error:'Fixture rejected'}})
+ assert.equal((await emit(h)).success,false);assert.equal(h.providerCalls.length,1)
+ assert.equal(h.tables.wallet_reservations[0].state,'released')
+})
+test('wallet carrier emission: a transport timeout retains submitted credit for reconciliation',async()=>{
+ const h=walletShipmentHarness({carrierError:'Fixture timeout'})
+ const result=await emit(h)
+ assert.equal(result.success,false);assert.match(result.error,/saldo permanece reservado/)
+ assert.equal(h.tables.wallet_reservations[0].state,'submitted')
+})
+test('wallet carrier emission: no carrier request is made without a successful reservation',async()=>{
+ const h=walletShipmentHarness();h.db.client.rpc=async()=>({error:{message:'Fixture unavailable'},data:null})
+ assert.equal((await emit(h)).success,false);assert.equal(h.providerCalls.length,0)
+})
+test('wallet carrier emission: confirmed acceptance keeps a recoverable result even if shipment inserts fail',async()=>{
+ const h=walletShipmentHarness({failure:q=>q.write?.kind==='insert'&&['shipments','audit_log'].includes(q.table)?{message:'Fixture write failure'}:null})
+ const result=await emit(h)
+ assert.equal(h.providerCalls.length,1);assert.equal(h.tables.wallet_reservations[0].state,'consumed')
+ assert.equal(h.tables.wallet_reservations[0].result.carrier_tracking_number,'DD123456789PT')
+ assert.equal(h.tables.wallet_reservations[0].result.shipment.sell_price,9)
+ assert.ok(result.dbWarning)
 })

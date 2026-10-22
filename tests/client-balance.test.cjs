@@ -5,15 +5,15 @@ const b = createLoader({})('lib/billing/client-balance.ts')
 
 const ship = (sell_price, billing_statement_id = null, status = 'entregue') => ({ sell_price, billing_statement_id, status })
 
-test('pay as you go: wallet = top-ups minus unsettled shipments; settled and cancelled shipments never debit', () => {
+test('pay as you go: wallet = top-ups minus selling totals; receipts do not refund consumption', () => {
   const statements = [{ id: 'paid', moloni_receipt_pdf: 'x' }, { id: 'open', moloni_document_id: 1, total_value: 4 }]
   const shipments = [ship(10, 'paid'), ship(4, 'open'), ship(3), ship(9, null, 'anulado')]
-  assert.equal(b.payAsYouGoSpent(shipments, statements), 7)
-  assert.equal(b.payAsYouGoBalance(6.15, shipments, statements), -0.85)
+  assert.equal(b.payAsYouGoSpent(shipments, statements), 17)
+  assert.equal(b.payAsYouGoBalance(6.15, shipments, statements), -10.85)
 })
 
-test('pay as you go: a statement marked paid without receipt is also settled (same rule as the portal)', () => {
-  assert.equal(b.payAsYouGoSpent([ship(5, 's')], [{ id: 's', status: 'paid' }]), 0)
+test('pay as you go: a statement marked paid does not itself refund prepaid shipments', () => {
+  assert.equal(b.payAsYouGoSpent([ship(5, 's')], [{ id: 's', status: 'paid' }]), 5)
 })
 
 test('pay as you go: overdraft limit of -2.00€ is enforced exactly', () => {
@@ -40,7 +40,7 @@ test('the two models are independent: a wallet balance never reads statements as
   assert.equal(b.payAsYouGoSpent(shipments, statements), 15)
   assert.equal(b.currentAccountOutstanding(shipments, statements), 15)
   assert.equal(b.currentAccountOutstanding(shipments, [{ id: 'x', status: 'paid' }]), 10)
-  assert.equal(b.payAsYouGoSpent(shipments, [{ id: 'x', status: 'paid' }]), 10)
+  assert.equal(b.payAsYouGoSpent(shipments, [{ id: 'x', status: 'paid' }]), 15)
 })
 
 test('loaders fail closed: a read error throws instead of being treated as "nothing paid"', async () => {

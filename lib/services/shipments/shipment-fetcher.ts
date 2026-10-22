@@ -4,7 +4,9 @@ import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "./s
 import { applyLinkeLogoToCorreosLabel, isCorreosPdfLabel } from "@/lib/services/correos/correos-label-customizer"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
 
-export const SHIPMENT_LIST_COLUMNS = "id, tenant_id, client_id, tracking_number, reference, carrier_tracking_number, ctt_object_id, sender_name, sender_address, sender_zip, sender_city, sender_phone, recipient_name, recipient_address, recipient_zip, recipient_city, recipient_phone, recipient_email, recipient_nif, weight, service_type, return_service, has_cod, cod_amount, cod_iban, notes, status, created_at, updated_at, carrier_code, carrier_name, carrier_object_id, has_insurance, insurance_value, insurance_currency, custom_attrs, fuel_tax_amount, base_price, sell_price, cost_price, margin, markup, extra_fee, transport_guide_id, transport_guide_number, ctt_delivery_note_id, ops_substatus"
+// Native columns only. Display aliases (reference, carrier_name, ctt_object_id) are derived
+// below; optional pricing/label snapshots are stored separately in audit_log.
+export const SHIPMENT_LIST_COLUMNS = "id, tenant_id, client_id, tracking_number, carrier_tracking_number, carrier_code, sender_name, sender_address, sender_zip3, sender_zip4, sender_phone, recipient_name, recipient_address, recipient_zip3, recipient_zip4, recipient_phone, recipient_email, service_type, buy_price, sell_price, billing_statement_id, status, ops_substatus, created_at, updated_at"
 
 /**
  * Fetches shipments from the DB shipments table without downloading heavy base64 label blobs unless requested.
@@ -143,10 +145,12 @@ export async function fetchPaginatedShipments(options: {
   status?: string
 } = {}) {
   const ctx = await requireUser()
+  if (!ctx.tenant_id) throw new Error("Conta sem empresa associada.")
+  if (ctx.role === "client" && !ctx.client_id) throw new Error("Cliente não identificado.")
   const supabase = createAdminClient()
   
-  const page = options.page || 1
-  const pageSize = options.pageSize || 50
+  const page = Number.isSafeInteger(options.page) && options.page! > 0 ? options.page! : 1
+  const pageSize = Number.isSafeInteger(options.pageSize) && options.pageSize! > 0 ? Math.min(options.pageSize!, 200) : 50
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
   
@@ -155,7 +159,9 @@ export async function fetchPaginatedShipments(options: {
     let q = supabase
       .from("shipments")
       .select(selectCols, { count: 'estimated' })
+      .eq("tenant_id", ctx.tenant_id)
       .order("created_at", { ascending: false })
+      .order("id")
 
     if (ctx.role === "client") {
       q = q.eq("client_id", ctx.client_id)
@@ -179,7 +185,7 @@ export async function fetchPaginatedShipments(options: {
     return q.range(from, to)
   }
 
-  let { data, count, error } = (await buildQuery()) as any
+  const { data, count, error } = await buildQuery()
 
   if (error) {
     console.error("Error fetching paginated shipments:", error?.message || error?.code || JSON.stringify(error))

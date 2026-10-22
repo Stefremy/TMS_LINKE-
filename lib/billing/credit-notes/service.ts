@@ -1,4 +1,5 @@
 import 'server-only'
+import { claimInvoiceFinancialLock, releaseInvoiceFinancialLock } from '../invoice-financial-lock'
 import { createHash } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AuthContext } from '@/lib/auth/context'
@@ -83,6 +84,7 @@ async function release(db:SupabaseClient,tenantId:string,note:CreditNote) {
   const {error}=await db.from('audit_log').delete().eq('tenant_id',tenantId).eq('action','credit_note_lock')
     .eq('id',lockId(tenantId,note.company_id,note.invoice_document_id)).eq('details->>operation_id',note.id)
   if (error) throw new CreditNoteError('Documento guardado. Não foi possível libertar a operação; consulte a equipa de suporte.')
+  await releaseInvoiceFinancialLock(db,tenantId,note.company_id,note.invoice_document_id,note.id)
 }
 function cleanNote(note:CreditNote) {
   // Auth tokens, provider payloads and invoice-wide data never enter a client DTO.
@@ -116,9 +118,19 @@ export async function prepareCredit(db:SupabaseClient,ctx:AuthContext,source:Cre
     invoice_number:String(info.details.moloni_document_number || info.details.invoice_number || info.details.statement_number || info.documentId),
     invoice_document_id:info.documentId,company_id:info.company,customer_id:customer,state:'preparing',reason:reason.trim(),
     date:lisbonDate(),created_at:new Date().toISOString(),created_by:ctx.user.id,reference,payload,lines:products.map(p=>({name:p.name,qty:p.qty,price:p.price}))}
+  try { await claimInvoiceFinancialLock(db,ctx.tenant_id,info.company,info.documentId,id) }
+  catch { throw new CreditNoteError('Esta fatura tem uma operação financeira em preparação ou por confirmar. Consulte o resultado antes de repetir.') }
+  try { await creditSource(db,ctx.tenant_id,info.source) }
+  catch(error) {
+    await releaseInvoiceFinancialLock(db,ctx.tenant_id,info.company,info.documentId,id)
+    throw error
+  }
   const {error:claimError}=await db.from('audit_log').insert({id:lockId(ctx.tenant_id,info.company,info.documentId),tenant_id:ctx.tenant_id,action:'credit_note_lock',
     details:{operation_id:id,invoice_document_id:info.documentId,client_id:note.client_id}})
-  if (claimError) throw new CreditNoteError('Esta fatura tem uma nota de crédito em preparação ou por confirmar. Consulte Notas de Crédito antes de repetir.')
+  if (claimError) {
+    await releaseInvoiceFinancialLock(db,ctx.tenant_id,info.company,info.documentId,id)
+    throw new CreditNoteError('Esta fatura tem uma nota de crédito em preparação ou por confirmar. Consulte Notas de Crédito antes de repetir.')
+  }
   const {error:writeError}=await db.from('audit_log').insert({id,tenant_id:ctx.tenant_id,action:'credit_note',details:note})
   if (writeError) {await release(db,ctx.tenant_id,note);throw new CreditNoteError('Não foi possível guardar a preparação. Nenhum pedido de criação foi enviado ao Moloni.')}
   note=await saveNote(db,ctx.tenant_id,note,{...note,state:'creating',phase:'create'})
