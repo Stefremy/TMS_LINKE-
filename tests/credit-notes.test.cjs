@@ -125,6 +125,17 @@ test('foreign invoice references, wrong company, mismatched monetary values and 
   await assert.rejects(prepare(h));assert.equal(h.inserts,0)
  }
 })
+test('invoices with receipt already issued (receipt PDF, receipt ID, paid status, FR type or settled) refuse credit note issuance',async()=>{
+ for(const kind of ['receipt_pdf','receipt_id','paid_status','fr_type','rc_type','settled']){
+  const h=harness(kind==='fr_type'?{invoice:{document_type:{saft_code:'FR'}}}:kind==='rc_type'?{invoice:{document_type:{saft_code:'RC'}}}:kind==='settled'?{invoice:{reconciled_value:12.3}}:{})
+  const row=h.tables.audit_log.find(r=>r.id===SOURCE)
+  if(kind==='receipt_pdf')row.details.moloni_receipt_pdf='https://fixture.invalid/rc.pdf'
+  if(kind==='receipt_id')row.details.moloni_receipt_id=999
+  if(kind==='paid_status')row.details.status='paid'
+  await assert.rejects(prepare(h),/recibo|liquidada|Fatura-Recibo|faturas oficiais/i)
+  assert.equal(h.inserts,0)
+ }
+})
 test('client listing ignores a forged requested client ID and includes only their issued notes',async()=>{
  const h=harness();await prepare(h);await h.actions.confirmCreditNoteAction(OP)
  h.tables.audit_log.push({id:'other',tenant_id:TENANT,action:'credit_note',details:{...h.note,id:'other',client_id:'other-store'}})

@@ -21,3 +21,8 @@ export function useClientScope(): Scope {
   if (!scope) throw new Error("Área de cliente sem conta selecionada")
   return scope
 }
+
+/** For components shared with Ops, which render outside any client portal scope. */
+export function useOptionalClientScope(): Scope | null {
+  return React.useContext(ClientScopeContext)
+}

@@ -28,6 +28,7 @@ export async function getShipmentLabelAction(shipmentId: string): Promise<string
 }
 
 import { createShipment, dispatchShipment } from "@/lib/services/shipments/shipment-creator"
+import { currentAccountOutstanding, loadClientShipmentsForBalance, loadClientStatementsForBalance, payAsYouGoBalance, payAsYouGoRefusal, payAsYouGoSpent } from "@/lib/billing/client-balance"
 import { deleteShipment, deleteShipmentsBulk } from "@/lib/services/shipments/shipment-deleter"
 
 export async function createShipmentAction(formData: FormData) {
@@ -85,46 +86,14 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
     .filter((s: any) => s.status !== "anulado")
     .reduce((acc: number, s: any) => acc + (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0)), 0)
 
-  // Extratos com recibo emitido/pagos (períodos fechados e liquidados)
-  const paidStatementIds = new Set(
-    allStatements
-      .filter((stmt: any) => (!effectiveClientId || stmt.client_id === effectiveClientId) && (stmt.moloni_receipt_pdf || stmt.status === "paid"))
-      .map((stmt: any) => stmt.id)
-  )
+  const clientStatementsForBalance = allStatements.filter((stmt: any) => !effectiveClientId || stmt.client_id === effectiveClientId)
 
-  let totalDebt = 0
-  
-  if (clientBillingType === "pay_as_you_go") {
-    // Para Pay As You Go: apenas envios em aberto (que não pertençam a extratos com recibo emitido)
-    // debitam da carteira do período.
-    clientShipments.forEach((s: any) => {
-      if (s.billing_statement_id && paidStatementIds.has(s.billing_statement_id)) {
-        return // Já liquidado no seu respetivo extrato/período
-      }
-      if (s.status !== "anulado") {
-        totalDebt += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
-      }
-    })
-  } else {
-    // Para Conta Corrente:
-    // 1. Envios pendentes de faturação (billing_statement_id === null)
-    clientShipments.forEach((s: any) => {
-      if (!s.billing_statement_id && s.status !== "anulado") {
-        totalDebt += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
-      }
-    })
-
-    // 2. Extratos faturados mas não pagos (sem recibo)
-    allStatements.forEach((stmt: any) => {
-      if (effectiveClientId && stmt.client_id === effectiveClientId) {
-        if (stmt.moloni_document_id && !stmt.moloni_receipt_pdf && stmt.status !== "paid") {
-          totalDebt += Number(stmt.outstanding_value ?? stmt.total_value ?? 0)
-        } else if (!stmt.is_pro_forma && !stmt.moloni_document_id && stmt.status !== "paid") {
-          totalDebt += Number(stmt.outstanding_value ?? stmt.total_value ?? 0)
-        }
-      }
-    })
-  }
+  // The two billing models are computed by separate, independent functions (lib/billing/client-balance.ts):
+  //  - pay_as_you_go: wallet debits (unsettled shipments)
+  //  - conta_corrente: invoiced amounts still owed (pending shipments + unpaid statements)
+  const totalDebt = clientBillingType === "pay_as_you_go"
+    ? payAsYouGoSpent(clientShipments, clientStatementsForBalance)
+    : currentAccountOutstanding(clientShipments, clientStatementsForBalance)
 
   const totalCount = clientShipments.length
   // Change totalRevenue to reflect the real Debt (Used Balance)
@@ -320,42 +289,20 @@ export async function emitClientGuiaAction(data: {
       computedSpecialAmount = specials.amount
       computedSpecialDesc = specials.items.length > 0 ? JSON.stringify(specials.items) : null
 
-      // Wallet and -2.00€ overdraft validation for pay_as_you_go clients
+      // Wallet validation applies ONLY to pay_as_you_go. Conta corrente clients are invoiced and never touch this logic.
       if (matchedClient.billing_type === "pay_as_you_go") {
-        const { data: pastShipments, error: walletError } = await supabase
-          .from("shipments")
-          .select("sell_price, fuel_tax_amount, status, billing_statement_id")
-          .eq("tenant_id", ctx.tenant_id)
-          .eq("client_id", validatedClientId)
-
-        if (walletError) throw new ShipmentPricingUnavailableError()
-
-        const { data: paidStatements } = await supabase
-          .from("billing_statements")
-          .select("id")
-          .eq("tenant_id", ctx.tenant_id)
-          .eq("client_id", validatedClientId)
-          .not("moloni_receipt_pdf", "is", null)
-
-        const paidSet = new Set((paidStatements || []).map((p: any) => p.id))
-        let totalSpent = 0
-        ;(pastShipments || []).forEach((s: any) => {
-          if (s.billing_statement_id && paidSet.has(s.billing_statement_id)) return
-          if (s.status !== "anulado") {
-            totalSpent += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
-          }
-        })
-
-        const currentBalance = (Number(matchedClient.credit_limit) || 0) - totalSpent
-        const finalShipmentCost = Number((computedSellPrice + computedFuelAmount).toFixed(2))
-        const projectedBalance = Number((currentBalance - finalShipmentCost).toFixed(2))
-        const OVERDRAFT_LIMIT = -2.00
-
-        if (projectedBalance < OVERDRAFT_LIMIT) {
-          throw new ShipmentPricingError(
-            `Saldo Insuficiente: Este envio tem o custo de ${finalShipmentCost.toFixed(2)}€, mas o seu saldo atual é de ${currentBalance.toFixed(2)}€. O limite máximo de descoberto autorizado é de -2,00€ (o saldo ficaria em ${projectedBalance.toFixed(2)}€). Por favor, efetue um carregamento para continuar.`
-          )
+        let balance: number
+        try {
+          const [pastShipments, statements] = await Promise.all([
+            loadClientShipmentsForBalance(supabase, ctx.tenant_id, validatedClientId as string),
+            loadClientStatementsForBalance(supabase, ctx.tenant_id, validatedClientId as string),
+          ])
+          balance = payAsYouGoBalance(matchedClient.credit_limit, pastShipments, statements)
+        } catch {
+          throw new ShipmentPricingUnavailableError()
         }
+        const refusal = payAsYouGoRefusal(balance, computedSellPrice + computedFuelAmount)
+        if (refusal) throw new ShipmentPricingError(refusal)
       }
 
     } catch (pricingErr) {

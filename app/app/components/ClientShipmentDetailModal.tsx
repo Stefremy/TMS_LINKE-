@@ -34,7 +34,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
-import { useClientScope } from "./ClientScope"
+import { useOptionalClientScope } from "./ClientScope"
 import { 
   getShipmentTrackingTimelineAction,
   getShipmentLabelAction,
@@ -58,7 +58,8 @@ export function ClientShipmentDetailModal({
   onClose, 
   onUpdateShipment 
 }: ClientShipmentDetailModalProps) {
-  const { basePath } = useClientScope()
+  // Outside the client portal (Ops) there is no store scope: fall back to the Ops tracking page.
+  const basePath = useOptionalClientScope()?.basePath ?? "/ops"
   // ALL hooks must be called unconditionally before any early return (Rules of Hooks)
   const [currentShipment, setCurrentShipment] = React.useState(shipment)
   const [activeTab, setActiveTab] = React.useState<"dados" | "tracking">("tracking")

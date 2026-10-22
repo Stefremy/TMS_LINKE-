@@ -1004,6 +1004,9 @@ export async function getCustomInvoicesAction() {
       items: log.details?.items || [],
       moloni_document_id: log.details?.moloni_document_id || null,
       moloni_document_pdf: log.details?.moloni_document_pdf || null,
+      moloni_receipt_id: log.details?.moloni_receipt_id || null,
+      moloni_receipt_pdf: log.details?.moloni_receipt_pdf || null,
+      status: log.details?.status || null,
       pdf_url: `/api/custom-invoices/${encodeURIComponent(log.details?.invoice_number || log.details?.id || log.id)}/pdf`,
       created_at: log.created_at
     })

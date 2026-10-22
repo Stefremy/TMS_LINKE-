@@ -1,0 +1,105 @@
+/**
+ * Client balance rules.
+ *
+ * Two billing models exist and MUST NOT share logic:
+ *  - pay_as_you_go  → prepaid wallet (credit_limit holds the topped-up money, shipments debit it).
+ *  - conta_corrente → invoiced account (shipments are billed in statements, there is no wallet).
+ *
+ * Everything here is pure (no I/O) except the explicit loaders, which take a Supabase client
+ * and THROW on read failures so callers fail closed instead of treating "unknown" as "paid".
+ */
+
+export type BalanceShipment = {
+  sell_price?: unknown
+  fuel_tax_amount?: unknown
+  status?: string | null
+  billing_statement_id?: string | null
+}
+
+export type BalanceStatement = {
+  id?: string | null
+  status?: string | null
+  is_pro_forma?: boolean | null
+  moloni_document_id?: unknown
+  moloni_receipt_id?: unknown
+  moloni_receipt_pdf?: unknown
+  outstanding_value?: unknown
+  total_value?: unknown
+}
+
+export const PAY_AS_YOU_GO_OVERDRAFT_LIMIT = -2
+
+const money = (value: unknown) => {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+const shipmentValue = (s: BalanceShipment) => money(s.sell_price) + money(s.fuel_tax_amount)
+const isCancelled = (s: BalanceShipment) => s.status === "anulado"
+
+/** A statement is settled when it has a receipt or is explicitly paid. */
+export function isStatementSettled(stmt: BalanceStatement): boolean {
+  return stmt.status === "paid" || Boolean(stmt.moloni_receipt_id || stmt.moloni_receipt_pdf)
+}
+
+// ───────────────────────── PAY AS YOU GO (wallet) ─────────────────────────
+
+/** Sum of wallet debits: live shipments not yet settled by a paid statement. */
+export function payAsYouGoSpent(shipments: BalanceShipment[], statements: BalanceStatement[]): number {
+  const settled = new Set(statements.filter(isStatementSettled).map(s => s.id).filter(Boolean) as string[])
+  let spent = 0
+  for (const s of shipments) {
+    if (isCancelled(s)) continue
+    if (s.billing_statement_id && settled.has(s.billing_statement_id)) continue
+    spent += shipmentValue(s)
+  }
+  return Number(spent.toFixed(2))
+}
+
+/** Wallet balance = topped-up money − unsettled shipments. May go down to the overdraft limit. */
+export function payAsYouGoBalance(creditLimit: unknown, shipments: BalanceShipment[], statements: BalanceStatement[]): number {
+  return Number((money(creditLimit) - payAsYouGoSpent(shipments, statements)).toFixed(2))
+}
+
+/** Returns null when the new shipment is allowed, otherwise the user-facing refusal. */
+export function payAsYouGoRefusal(balance: number, shipmentCost: number): string | null {
+  const cost = Number(shipmentCost.toFixed(2))
+  const projected = Number((balance - cost).toFixed(2))
+  if (projected >= PAY_AS_YOU_GO_OVERDRAFT_LIMIT) return null
+  return `Saldo Insuficiente: Este envio tem o custo de ${cost.toFixed(2)}€, mas o seu saldo atual é de ${balance.toFixed(2)}€. O limite máximo de descoberto autorizado é de -2,00€ (o saldo ficaria em ${projected.toFixed(2)}€). Por favor, efetue um carregamento para continuar.`
+}
+
+// ───────────────────────── CONTA CORRENTE (invoiced) ─────────────────────────
+
+/** Amount the client owes: shipments not yet on a statement + issued statements still unpaid. */
+export function currentAccountOutstanding(shipments: BalanceShipment[], statements: BalanceStatement[]): number {
+  let debt = 0
+  for (const s of shipments) {
+    if (!s.billing_statement_id && !isCancelled(s)) debt += shipmentValue(s)
+  }
+  for (const stmt of statements) {
+    if (isStatementSettled(stmt)) continue
+    const outstanding = money(stmt.outstanding_value ?? stmt.total_value)
+    if (stmt.moloni_document_id) debt += outstanding
+    else if (!stmt.is_pro_forma) debt += outstanding
+  }
+  return Number(debt.toFixed(2))
+}
+
+// ───────────────────────── Loaders (fail closed) ─────────────────────────
+
+type Db = { from: (table: string) => any }
+
+/** Live shipments of one client. `select *` so a not-yet-migrated column can never break the read. */
+export async function loadClientShipmentsForBalance(db: Db, tenantId: string, clientId: string): Promise<BalanceShipment[]> {
+  const { data, error } = await db.from("shipments").select("*").eq("tenant_id", tenantId).eq("client_id", clientId)
+  if (error) throw new Error("Não foi possível validar o saldo.")
+  return (data || []) as BalanceShipment[]
+}
+
+/** Statements live in audit_log (the only place with receipts), same source the portal displays. */
+export async function loadClientStatementsForBalance(db: Db, tenantId: string, clientId: string): Promise<BalanceStatement[]> {
+  const { data, error } = await db.from("audit_log").select("details")
+    .eq("tenant_id", tenantId).eq("action", "billing_statement").eq("details->>client_id", clientId)
+  if (error) throw new Error("Não foi possível validar o saldo.")
+  return (data || []).map((row: { details?: BalanceStatement }) => row.details || {}) as BalanceStatement[]
+}

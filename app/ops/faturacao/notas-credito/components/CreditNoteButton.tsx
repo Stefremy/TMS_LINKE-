@@ -6,10 +6,18 @@ import {previewCreditNoteAction,prepareCreditNoteAction,confirmCreditNoteAction,
 import type {CreditNoteDto} from '@/lib/billing/credit-notes/service'
 import {creditMoney,CREDIT_STATE_LABELS,type CreditSource,type CreditPreview} from '@/lib/billing/credit-notes/types'
 
-export function CreditNoteButton({source,resume,className}:{source:CreditSource;resume?:CreditNoteDto;className?:string}) {
+export function CreditNoteButton({source,resume,className,label}:{source:CreditSource;resume?:CreditNoteDto;className?:string;label?:string}) {
   const [open,setOpen]=useState(false)
+  const defaultLabel = resume ? 'Consultar / Retomar' : 'Nota de crédito'
   return <>
-    <button type="button" onClick={e=>{e.stopPropagation();setOpen(true)}} className={className||'inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)]'}><Undo2 className="h-4 w-4" aria-hidden="true" />{resume?'Consultar / Retomar':'Emitir nota de crédito'}</button>
+    <button
+      type="button"
+      onClick={e=>{e.stopPropagation();setOpen(true)}}
+      className={className||'whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2.5 py-1.5 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] cursor-pointer transition-colors'}
+    >
+      <Undo2 className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+      <span className="whitespace-nowrap">{label || defaultLabel}</span>
+    </button>
     {open&&<CreditNoteDialog source={source} initial={resume} onClose={()=>setOpen(false)} />}
   </>
 }
@@ -62,7 +70,8 @@ export function CreditNoteDialog({source,initial,onClose}:{source:CreditSource;i
       <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-4">
         <button type="button" disabled={pending} onClick={onClose} className="rounded-lg border border-[var(--border-subtle)] px-4 py-2 text-sm disabled:opacity-50">Fechar</button>
         {!note&&preview&&<button type="button" disabled={pending||!selected||reason.trim().length<5} onClick={()=>act('prepare')} className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Preparar rascunho</button>}
-        {note?.state==='draft'&&<><button type="button" disabled={pending} onClick={()=>{if(confirm('Cancelar e eliminar apenas este rascunho no Moloni?'))act('cancel')}} className="rounded-lg border border-[var(--border-subtle)] px-4 py-2 text-sm disabled:opacity-50">Cancelar rascunho</button><button type="button" disabled={pending} onClick={()=>act('issue')} className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Confirmar emissão</button></>}
+        {(note?.state==='draft'||note?.state==='review_required')&&<button type="button" disabled={pending} onClick={()=>{if(confirm('Cancelar esta operação de nota de crédito?'))act('cancel')}} className="rounded-lg border border-[var(--border-subtle)] px-4 py-2 text-sm disabled:opacity-50">Cancelar tentativa</button>}
+        {note?.state==='draft'&&<button type="button" disabled={pending} onClick={()=>act('issue')} className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Confirmar emissão</button>}
         {note&&note.state!=='cancelled'&&<button type="button" disabled={pending} onClick={()=>act('refresh')} className="rounded-lg border border-[var(--border-subtle)] px-4 py-2 text-sm disabled:opacity-50">Consultar Moloni</button>}
       </footer>
     </div>

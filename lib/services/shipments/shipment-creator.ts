@@ -6,6 +6,7 @@ import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPrici
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
+import { loadClientShipmentsForBalance, loadClientStatementsForBalance, payAsYouGoBalance, payAsYouGoRefusal } from "@/lib/billing/client-balance"
 
 export async function createShipment(formData: FormData) {
   
@@ -73,39 +74,20 @@ export async function createShipment(formData: FormData) {
     computedBasePrice = priceResult.basePrice
     computedTierLabel = priceResult.tierLabel || "Standard"
 
-    // SECURITY WALLET CHECK: Block creation if pay_as_you_go client exceeds -2.00€ overdraft
+    // Wallet check applies ONLY to pay_as_you_go. Conta corrente clients are invoiced and never touch this logic.
     if (matchedClient.billing_type === "pay_as_you_go") {
-      const { data: pastShipments, error: walletError } = await supabase.from("shipments").select("sell_price, fuel_tax_amount, status, billing_statement_id")
-        .eq("tenant_id", ctx.tenant_id).eq("client_id", client_id)
-      if (walletError) throw new ShipmentPricingUnavailableError()
-
-      const { data: paidStatements } = await supabase
-        .from("billing_statements")
-        .select("id")
-        .eq("tenant_id", ctx.tenant_id)
-        .eq("client_id", client_id)
-        .not("moloni_receipt_pdf", "is", null)
-
-      const paidSet = new Set((paidStatements || []).map((p: any) => p.id))
-
-      let totalSpent = 0
-      ;(pastShipments || []).forEach((s: any) => {
-        if (s.billing_statement_id && paidSet.has(s.billing_statement_id)) return
-        if (s.status !== "anulado") {
-          totalSpent += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
-        }
-      })
-      const currentBalance = (Number(matchedClient.credit_limit) || 0) - totalSpent
-      const newShipmentCost = Number((computedSellPrice + computedFuelAmount).toFixed(2))
-      const projectedBalance = Number((currentBalance - newShipmentCost).toFixed(2))
-      const OVERDRAFT_LIMIT = -2.00
-
-      if (projectedBalance < OVERDRAFT_LIMIT) {
-        return {
-          success: false,
-          error: `Saldo Insuficiente: Este envio tem o custo de ${newShipmentCost.toFixed(2)}€, mas o seu saldo atual é de ${currentBalance.toFixed(2)}€. O limite máximo de descoberto autorizado é de -2,00€ (o saldo ficaria em ${projectedBalance.toFixed(2)}€). Por favor, efetue um carregamento para continuar.`
-        }
+      let balance: number
+      try {
+        const [pastShipments, statements] = await Promise.all([
+          loadClientShipmentsForBalance(supabase, ctx.tenant_id, client_id),
+          loadClientStatementsForBalance(supabase, ctx.tenant_id, client_id),
+        ])
+        balance = payAsYouGoBalance(matchedClient.credit_limit, pastShipments, statements)
+      } catch {
+        throw new ShipmentPricingUnavailableError()
       }
+      const refusal = payAsYouGoRefusal(balance, computedSellPrice + computedFuelAmount)
+      if (refusal) return { success: false, error: refusal }
     }
   } catch (pricingErr) {
     return { success: false, error: pricingErr instanceof ShipmentPricingError || pricingErr instanceof ShipmentPricingUnavailableError

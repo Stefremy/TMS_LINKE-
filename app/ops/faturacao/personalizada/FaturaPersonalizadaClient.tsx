@@ -50,6 +50,9 @@ interface CustomInvoiceHistoryItem {
   items: any[]
   moloni_document_id?: number | null
   moloni_document_pdf?: string | null
+  moloni_receipt_id?: number | string | null
+  moloni_receipt_pdf?: string | null
+  status?: string | null
   pdf_url: string
   created_at: string
 }
@@ -955,7 +958,9 @@ export default function FaturaPersonalizadaClient({
                     </td>
                     <td className="py-2.5 px-3 text-center">
                       <div className="flex flex-wrap items-center justify-center gap-1.5">
-                        {inv.moloni_document_id && <CreditNoteButton source={{id:inv.audit_id||inv.id,kind:"custom_invoice"}} />}
+                        {inv.moloni_document_id && !inv.moloni_receipt_pdf && !inv.moloni_receipt_id && inv.status !== 'paid' && (
+                          <CreditNoteButton source={{id:inv.audit_id||inv.id,kind:"custom_invoice"}} />
+                        )}
                         <a
                           href={inv.pdf_url}
                           download={`${inv.invoice_number.replace(/[\/\\]/g, "_")}.pdf`}

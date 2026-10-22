@@ -683,6 +683,12 @@ export default function ContasCorrenteClient({
                                 <span className="text-xs font-black text-[var(--text-primary)] font-mono">
                                   {Number(stmt.outstanding_value ?? stmt.total_value ?? 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                                 </span>
+                                {stmt.moloni_document_id && !stmt.is_pro_forma && !stmt.moloni_receipt_pdf && !stmt.moloni_receipt_id && stmt.status !== 'paid' && (
+                                  <CreditNoteButton
+                                    source={{id: stmt.audit_id || stmt.id, kind: 'billing_statement'}}
+                                    className="whitespace-nowrap shrink-0 px-2.5 py-1 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-primary)] font-semibold text-[11px] rounded-md border border-[var(--border-subtle)] transition-colors inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                  />
+                                )}
                                 {stmt.moloni_document_id && !stmt.is_pro_forma && (
                                   <button
                                     onClick={(e) => {
@@ -932,7 +938,9 @@ export default function ContasCorrenteClient({
                                           </button>
                                       )}
 
-                                      {stmt.moloni_document_id && !stmt.is_pro_forma && <CreditNoteButton source={{id:stmt.audit_id||stmt.id,kind:'billing_statement'}} className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)]" />}
+                                      {stmt.moloni_document_id && !stmt.is_pro_forma && !stmt.moloni_receipt_pdf && !stmt.moloni_receipt_id && stmt.status !== 'paid' && (
+                                        <CreditNoteButton source={{id:stmt.audit_id||stmt.id,kind:'billing_statement'}} className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)]" />
+                                      )}
                                       {/* Fatura Moloni (If emitted) */}
                                       {(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
                                         <>

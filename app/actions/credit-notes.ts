@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import {unstable_rethrow} from 'next/navigation'
 import {CreditNoteError,creditInvoicePayment} from '@/lib/billing/credit-notes/products'
 import { revalidatePath } from 'next/cache'
-import { creditInvoice, creditSource, creditMoloni, creditNoteDto, prepareCredit, finishCredit, readCreditNote, refreshCredit, type CreditNoteDto } from '@/lib/billing/credit-notes/service'
+import { creditInvoice, creditSource, creditMoloni, creditNoteDto, prepareCredit, finishCredit, readCreditNote, refreshCredit, activeCreditNoteForSource, type CreditNoteDto } from '@/lib/billing/credit-notes/service'
 import type { CreditSource, CreditSelection, CreditNote } from '@/lib/billing/credit-notes/types'
 
 async function respond<T>(operation:()=>Promise<T>):Promise<{success:true;data:T}|{success:false;error:string}> {
@@ -21,8 +21,10 @@ async function finance() {
 function invalidate() {revalidatePath('/ops/faturacao/notas-credito');revalidatePath('/ops/faturacao/contas-corrente');revalidatePath('/app','layout')}
 export async function previewCreditNoteAction(source:CreditSource) {
   return respond(async()=>{
-  const ctx=await finance()
-  const info=await creditInvoice(createAdminClient(),ctx.tenant_id,source)
+  const ctx=await finance(),db=createAdminClient()
+  const info=await creditInvoice(db,ctx.tenant_id,source)
+  const existing=await activeCreditNoteForSource(db,ctx.tenant_id,info.documentId)
+  if (existing) return creditNoteDto(existing)
   return {source:info.source,clientName:String(info.details.client_name || info.invoice.entity_name || 'Cliente'),
     invoiceNumber:String(info.details.moloni_document_number || info.details.invoice_number || info.details.statement_number || info.documentId),lines:info.lines}
   })
