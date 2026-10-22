@@ -143,3 +143,26 @@ test('a failed invoice read is an error rather than zero revenue; optional cycle
   assert.equal(result.cyclesUnavailable, true)
   assert.equal(result.invoices.length, 1)
 })
+
+
+test('issued credits reduce outstanding debt and overdue amounts without rewriting original invoice totals', () => {
+  const invoice = log(1, { due_date: '2026-10-01' })
+  const credit = (id, net, extra = {}) => ({ id, action: 'credit_note', created_at: '2026-10-19', details: {
+    state: 'issued', source: { kind: 'billing_statement', id: 'audit-1' }, client_id: 'store-a', invoice_document_id: 1, net, ...extra } })
+  const partial = normalize([invoice, credit('nc1', 2), credit('draft', 5, { state: 'draft' }), credit('other-client', 8, { client_id: 'store-b' }), credit('other-invoice', 8, { invoice_document_id: 2 })])
+  assert.equal(partial.invoices[0].amountCents, 1000)
+  assert.equal(partial.invoices[0].creditedCents, 200)
+  let summary = summarizeBillingStatistics(partial.invoices, partial.today, '', partial.today)
+  assert.equal(summary.totals.billed, 1000); assert.equal(summary.totals.overdue, 800); assert.equal(summary.totals.open, 800)
+  assert.equal(summary.aging.reduce((s, a) => s + a.amount, 0), 800)
+  const full = normalize([invoice, credit('nc1', 2), credit('nc2', 8)])
+  assert.equal(full.invoices[0].state, 'credited')
+  assert.equal(filterStatisticsInvoices(full.invoices, {start:'',end:'',client:'',state:'open'}).length, 0)
+  assert.equal(filterStatisticsInvoices(full.invoices, {start:'',end:'',client:'',state:'credited'}).length, 1)
+  summary = summarizeBillingStatistics(full.invoices, full.today, '', full.today)
+  assert.equal(summary.totals.open, 0);assert.equal(summary.totals.overdue, 0);assert.equal(summary.totals.paid, 0)
+  assert.equal(summary.aging.reduce((s,a) => s + a.count, 0), 0)
+  assert.match(billingStatisticsCsv(full.invoices), /Creditada/)
+  assert.equal(invoice.details.total_value, 10)
+  assert.throws(() => normalize([invoice, credit('nc3', 11)]), /excedem/)
+})

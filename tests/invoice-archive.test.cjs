@@ -58,6 +58,7 @@ test('The invoice page renders store folders and an archive shortcut before open
     'next/link':{__esModule:true,default:({children,...props})=>React.createElement('a',props,children)},
     'next/navigation':{useRouter:()=>({refresh(){}})},
     'lucide-react':require('lucide-react'),
+    '../notas-credito/components/CreditNoteButton':{CreditNoteButton:()=>null},
     './MoloniConnectModal':{MoloniConnectModal:()=>null},
   })
   const Component=load('app/ops/faturacao/contas-corrente/ContasCorrenteClient.tsx').default

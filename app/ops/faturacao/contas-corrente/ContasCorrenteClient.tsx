@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import {CreditNoteButton} from "../notas-credito/components/CreditNoteButton"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Building, FolderOpen, FileText, ChevronDown, ChevronRight, Euro, Plug, ReceiptText, Loader2, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X, Mail, Send } from "lucide-react"
@@ -152,9 +153,20 @@ export default function ContasCorrenteClient({
   const invoicedIds = React.useMemo(() => new Set<string>(statements.filter(s => (s.moloni_document_id || s.moloni_document_pdf) && !s.is_pro_forma).flatMap(s => s.shipment_ids || [])), [statements])
   const archiveDocumentCount = archiveGroups.reduce((count, group) => count + group.statements.length, 0)
   const hasArchiveDocuments = periodStatements.length > 0 || statements.some(stmt => !stmt.is_pro_forma && (stmt.moloni_document_id || stmt.moloni_document_pdf || isInvoicePaid(stmt)))
-  const unpaidStatements = React.useMemo(() => statements?.filter((s: any) => s.status !== 'paid' && !s.moloni_receipt_pdf && !s.moloni_receipt_id && !s.is_pro_forma && Boolean(s.moloni_document_id)) || [], [statements])
+  const unpaidStatements = React.useMemo(() => statements?.filter((s: any) => Number(s.outstanding_value ?? s.total_value ?? 0) > 0 && s.status !== 'paid' && !s.moloni_receipt_pdf && !s.moloni_receipt_id && !s.is_pro_forma && Boolean(s.moloni_document_id)) || [], [statements])
 
-  const handleEmitReceipt = (stmt: any) => {
+  const handleEmitReceipt = async (stmt: any) => {
+    if (Number(stmt.credited_total || 0) > 0) {
+      try {
+        const {previewCreditAdjustedReceiptAction} = await import('@/app/actions/credit-notes')
+        const result = await previewCreditAdjustedReceiptAction({id:stmt.audit_id||stmt.id,kind:'billing_statement'})
+        if (!result.success) {alert(result.error);return}
+        stmt = {...stmt,receipt_amount:result.data.remainingTotal}
+      } catch {
+        alert('Não foi possível confirmar o valor por liquidar no Moloni. Tente novamente antes de emitir o recibo.')
+        return
+      }
+    }
     if (!moloniConfig?.isConnected) {
       setIsMoloniModalOpen(true)
       return
@@ -232,7 +244,7 @@ export default function ContasCorrenteClient({
     clients.forEach(c => {
       if (periodClientFilter && c.id !== periodClientFilter) return
       const clientUnpaid = unpaidByStore.get(`store:${c.id}`) || []
-      const unpaidTotal = clientUnpaid.reduce((acc: number, s: any) => acc + Number(s.total_value || 0), 0)
+      const unpaidTotal = clientUnpaid.reduce((acc: number, s: any) => acc + Number(s.outstanding_value ?? s.total_value ?? 0), 0)
 
       map.set(c.id, { 
         client: c, 
@@ -651,6 +663,8 @@ export default function ContasCorrenteClient({
                             <div key={stmt.id} className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 hover:bg-[var(--surface-muted)]/50 transition-colors">
                               <div>
                                 <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
+                                {stmt.credit_notes?.map((note:{id:string;number?:string;total?:number})=><a key={note.id} href={`/api/credit-notes/${note.id}/pdf`} className="mt-1 block text-xs font-medium text-[var(--accent)]">{note.number || 'Nota de crédito'} · {Number(note.total||0).toFixed(2)} €</a>)}
+                                {stmt.credit_pending && <span className="mt-1 block text-xs text-amber-800">Nota de crédito em preparação / por confirmar</span>}
                                 {formatFTNumber(stmt.moloni_document_number) && (
                                   <p className="text-xs font-medium text-[var(--text-secondary)] font-mono mt-1 flex items-center gap-1.5">
                                     <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 shrink-0" />
@@ -667,7 +681,7 @@ export default function ContasCorrenteClient({
                               </div>
                               <div className="flex items-center gap-3">
                                 <span className="text-xs font-black text-[var(--text-primary)] font-mono">
-                                  {Number(stmt.total_value || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                                  {Number(stmt.outstanding_value ?? stmt.total_value ?? 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                                 </span>
                                 {stmt.moloni_document_id && !stmt.is_pro_forma && (
                                   <button
@@ -804,6 +818,8 @@ export default function ContasCorrenteClient({
                               </div>
                               <div>
                                 <p className="text-xs font-bold text-[var(--text-primary)] font-mono">{stmt.statement_number}</p>
+                                {stmt.credit_notes?.map((note:{id:string;number?:string;total?:number})=><a key={note.id} href={`/api/credit-notes/${note.id}/pdf`} className="mt-1 block text-xs font-medium text-[var(--accent)]">{note.number || 'Nota de crédito'} · {Number(note.total||0).toFixed(2)} €</a>)}
+                                {stmt.credit_pending && <span className="mt-1 block text-xs text-amber-800">Nota de crédito em preparação / por confirmar</span>}
                                 {formatFTNumber(stmt.moloni_document_number) && (
                                   <p className="text-xs font-medium text-[var(--text-secondary)] font-mono mt-1 flex items-center gap-1.5">
                                     <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 shrink-0" />
@@ -916,6 +932,7 @@ export default function ContasCorrenteClient({
                                           </button>
                                       )}
 
+                                      {stmt.moloni_document_id && !stmt.is_pro_forma && <CreditNoteButton source={{id:stmt.audit_id||stmt.id,kind:'billing_statement'}} className="flex w-full items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)]" />}
                                       {/* Fatura Moloni (If emitted) */}
                                       {(stmt.moloni_document_pdf || stmt.moloni_document_id) && (
                                         <>
@@ -971,7 +988,7 @@ export default function ContasCorrenteClient({
                                           <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--accent)]" />
                                           Descarregar Recibo
                                         </a>
-                                      ) : (stmt.moloni_document_id && !stmt.is_pro_forma) ? (
+                                      ) : (stmt.moloni_document_id && !stmt.is_pro_forma && !stmt.credit_pending && Number(stmt.outstanding_value ?? stmt.total_value ?? 0)>0) ? (
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation()
@@ -986,7 +1003,7 @@ export default function ContasCorrenteClient({
                                       ) : (
                                         <div className="flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[var(--text-tertiary)] cursor-not-allowed opacity-60" title="O recibo estará disponível após a fatura ser emitida">
                                           <Download aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
-                                          Recibo (Pendente)
+                                          {stmt.credit_pending ? 'Confirmar nota de crédito' : Number(stmt.credited_total||0)>0 && Number(stmt.outstanding_value??0)<=0 ? 'Fatura creditada' : 'Recibo (Pendente)'}
                                         </div>
                                       )}
 
@@ -1164,7 +1181,7 @@ export default function ContasCorrenteClient({
               <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: 'var(--accent-soft)', border: '1px solid rgba(18,138,71,0.15)' }}>
                 <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Valor a receber</span>
                 <span className="text-base font-bold" style={{ color: 'var(--accent)' }}>
-                  {Number(receiptModalStmt.total_value || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                  {Number(receiptModalStmt.receipt_amount ?? receiptModalStmt.total_value ?? 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                 </span>
               </div>
 

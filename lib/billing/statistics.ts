@@ -9,11 +9,11 @@ export interface BillingStatsCycle {
   invoice_document_id: number | string | null
   invoice_payload: { date?: string; expiration_date?: string } | null
 }
-export type InvoiceState = "paid" | "open" | "overdue"
+export type InvoiceState = "paid" | "open" | "overdue" | "credited"
 export interface StatisticsInvoice {
   id: string; reference: string; clientKey: string; clientName: string; clientVat: string
   kind: "transport" | "custom"; issuedDate: string; dueDate: string | null
-  amountCents: number | null; paid: boolean; state: InvoiceState; pdfUrl: string | null; receiptNeedsReview: boolean
+  creditedCents?: number; amountCents: number | null; paid: boolean; state: InvoiceState; pdfUrl: string | null; receiptNeedsReview: boolean
 }
 export interface BillingStatisticsData {
   invoices: StatisticsInvoice[]; today: string; updatedAt: string
@@ -81,6 +81,16 @@ export function normalizeBillingStatistics(logs: BillingLog[], clients: BillingS
   const byCycle = new Map(cycles.map(cycle => [fiscalId(cycle.invoice_document_id), cycle.invoice_payload]))
   const seenRecords = new Set<string>(), seenFiscal = new Set<string>()
   const invoices: StatisticsInvoice[] = []
+  const creditsByInvoice = new Map<string, number>()
+  const creditKey = (kind: unknown, source: unknown, client: unknown, document: unknown) => JSON.stringify([kind, source, client, fiscalId(document)])
+  for (const log of logs) {
+    const credit = log.details, source = credit?.source as Record<string, unknown> | undefined
+    if (log.action !== 'credit_note' || credit?.state !== 'issued' || !source || typeof source.id !== 'string' || !['billing_statement', 'custom_invoice'].includes(String(source.kind))) continue
+    const value = cents(credit.net)
+    if (value === null) throw new Error('Nota de crédito sem valor líquido confirmado.')
+    const key = creditKey(source.kind, source.id, credit.client_id, credit.invoice_document_id)
+    creditsByInvoice.set(key, (creditsByInvoice.get(key) || 0) + value)
+  }
   // Stable ordering also keeps the same authoritative row when the timestamps match.
   const ordered = [...logs].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))
   for (const log of ordered) {
@@ -117,9 +127,12 @@ export function normalizeBillingStatistics(logs: BillingLog[], clients: BillingS
     const confirmedPaid = state === "paid" || Boolean(fiscalId(d.moloni_receipt_id))
     const receiptNeedsReview = !confirmedPaid && receiptMatchesInvoice(receipt, text(d.moloni_document_pdf), id)
     const paid = confirmedPaid || Boolean(receipt && !receiptNeedsReview)
-    invoices.push({ id, reference: text(d.moloni_document_number) || text(d.invoice_number) || text(d.statement_number) || `Moloni #${id}`,
+    const creditedCents = creditsByInvoice.get(creditKey(log.action, log.id, clientId, id)) || 0
+    if (amountCents !== null && creditedCents > amountCents + 1) throw new Error('As notas de crédito excedem o valor original da fatura.')
+    const credited = creditedCents > 0 && amountCents !== null && creditedCents >= amountCents
+    invoices.push({ id, creditedCents, reference: text(d.moloni_document_number) || text(d.invoice_number) || text(d.statement_number) || `Moloni #${id}`,
       clientKey, clientName: name, clientVat: vat, kind: log.action === "custom_invoice" ? "custom" : "transport",
-      issuedDate, dueDate, amountCents, paid, state: paid ? "paid" : dueDate && dueDate < today ? "overdue" : "open",
+      issuedDate, dueDate, amountCents, paid, state: paid ? "paid" : credited ? "credited" : dueDate && dueDate < today ? "overdue" : "open",
       pdfUrl: pdfUrl(d.moloni_document_pdf), receiptNeedsReview })
   }
   return { invoices, today, updatedAt: now.toISOString(), coverage }
@@ -128,7 +141,11 @@ export function normalizeBillingStatistics(logs: BillingLog[], clients: BillingS
 export function filterStatisticsInvoices(invoices: StatisticsInvoice[], filters: BillingStatisticsFilters): StatisticsInvoice[] {
   return invoices.filter(invoice => (!filters.start || invoice.issuedDate >= filters.start) && (!filters.end || invoice.issuedDate <= filters.end)
     && (!filters.client || invoice.clientKey === filters.client)
-    && (filters.state === "all" || (filters.state === "open" ? !invoice.paid : invoice.state === filters.state)))
+    && (filters.state === "all" || (filters.state === "open" ? !invoice.paid && invoice.state !== "credited" : invoice.state === filters.state)))
+}
+
+export function invoiceOutstandingCents(invoice: StatisticsInvoice): number | null {
+  return invoice.amountCents === null ? null : invoice.paid ? 0 : Math.max(0, invoice.amountCents - (invoice.creditedCents || 0))
 }
 
 export function summarizeBillingStatistics(invoices: StatisticsInvoice[], today: string, start: string, end: string) {
@@ -158,12 +175,13 @@ export function summarizeBillingStatistics(invoices: StatisticsInvoice[], today:
     const amount = invoice.amountCents
     totals.billed += amount; group.billed += amount
     if (invoice.paid) { totals.paid += amount; group.paid += amount }
-    else {
-      totals.open += amount; group.open += amount
-      if (invoice.state === "overdue") { totals.overdue += amount; group.overdue += amount }
+    else if (invoiceOutstandingCents(invoice)! > 0) {
+      const outstanding = invoiceOutstandingCents(invoice)!
+      totals.open += outstanding; group.open += outstanding
+      if (invoice.state === "overdue") { totals.overdue += outstanding; group.overdue += outstanding }
       const days = invoice.dueDate ? Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${invoice.dueDate}T12:00:00Z`)) / 86400000) : null
       const bucket = aging[days === null ? 4 : days <= 0 ? 0 : days <= 30 ? 1 : days <= 60 ? 2 : 3]
-      bucket.amount += amount; bucket.count++
+      bucket.amount += outstanding; bucket.count++
     }
     if (month) { month.billed += amount; month.known++; if (invoice.paid) month.paid += amount }
   }
@@ -172,9 +190,9 @@ export function summarizeBillingStatistics(invoices: StatisticsInvoice[], today:
 
 export function billingStatisticsCsv(invoices: StatisticsInvoice[]): string {
   const euro = (value: number | null) => value === null ? "Sem valor líquido registado" : (value / 100).toFixed(2).replace(".", ",")
-  const rows = [["Fatura", "Cliente", "NIF", "Tipo", "Emissão / registo", "Vencimento", "Estado no TMS", "Valor sem IVA (EUR)", "Verificação do recibo"],
+  const rows = [["Fatura", "Cliente", "NIF", "Tipo", "Emissão / registo", "Vencimento", "Estado no TMS", "Valor sem IVA (EUR)", "Creditado sem IVA (EUR)", "Por liquidar sem IVA (EUR)", "Verificação do recibo"],
     ...invoices.map(i => [i.reference, i.clientName, i.clientVat, i.kind === "custom" ? "Avulsa" : "Transporte", i.issuedDate,
-      i.dueDate || "Sem vencimento registado", i.state === "paid" ? "Liquidada" : i.state === "overdue" ? "Vencida" : "Por liquidar", euro(i.amountCents), i.receiptNeedsReview ? "O PDF do recibo coincide com a fatura; confirmar liquidação" : ""])]
+      i.dueDate || "Sem vencimento registado", i.state === "paid" ? "Liquidada" : i.state === "overdue" ? "Vencida" : i.state === "credited" ? "Creditada" : "Por liquidar", euro(i.amountCents), euro(i.creditedCents || 0), euro(invoiceOutstandingCents(i)), i.receiptNeedsReview ? "O PDF do recibo coincide com a fatura; confirmar liquidação" : ""])]
   // Prevent spreadsheet formulas in user-authored client names and references.
   return "\uFEFF" + rows.map(row => row.map(value => {
     const safe = /^[\s]*[=+\-@]/.test(value) ? `'${value}` : value

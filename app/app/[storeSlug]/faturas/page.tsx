@@ -1,4 +1,5 @@
 import * as React from "react"
+import {listCreditNotesAction} from "@/app/actions/credit-notes"
 import FaturasClient from "../../faturas/FaturasClient"
 import { getBillingStatementsAction } from "@/app/actions/moloni"
 import { getClientTransactionsAction } from "@/app/actions/stripe"
@@ -17,9 +18,10 @@ export default async function FaturasPage({
   const { client: targetClient } = await requirePortalStore(storeSlug)
   const resolvedSearchParams = searchParams ? await searchParams : {}
 
-  const [statements, transactions] = await Promise.all([
+  const [statements, transactions, creditNotes] = await Promise.all([
     targetClient ? getBillingStatementsAction(targetClient.id) : Promise.resolve([]),
     targetClient ? getClientTransactionsAction(targetClient.id) : Promise.resolve([]),
+    targetClient ? listCreditNotesAction(targetClient.id) : Promise.resolve([]),
   ])
 
   const initialTab = resolvedSearchParams?.tab === "carregamentos" ? "carregamentos" : "faturas"
@@ -35,7 +37,8 @@ export default async function FaturasPage({
         </div>
         
         <FaturasClient 
-          statements={statements || []} 
+          statements={statements || []}
+          creditNotes={creditNotes}
           transactions={transactions || []}
           initialTab={initialTab}
         />

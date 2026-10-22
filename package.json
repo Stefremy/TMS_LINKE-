@@ -11,6 +11,7 @@
     "test:security": "node --test tests/security.test.cjs tests/reconciliation-security.test.cjs tests/client-action-security.test.cjs tests/portal-slug-security.test.cjs tests/client-login-security.test.cjs tests/client-invitation-security.test.cjs tests/staff-client-sharing.test.cjs tests/client-suspension.test.cjs tests/client-change-password.test.cjs",
     "test:mobile": "node --test tests/mobile-navigation.test.cjs",
     "test:tracking": "node --test tests/tracking-map.test.cjs",
+    "test:credit-notes": "node --test tests/credit-notes.test.cjs",
     "test:billing": "node --test tests/moloni-invoicing.test.cjs tests/invoice-charge-breakdown.test.cjs tests/invoice-archive.test.cjs tests/billing-statistics.test.cjs tests/statement-pdf.test.cjs",
     "test:recurring": "node --test tests/recurring-statements.test.cjs tests/recurring-invoices.test.cjs",
     "test:reports": "node --test tests/operational-reports.test.cjs",

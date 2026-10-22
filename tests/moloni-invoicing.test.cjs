@@ -6,13 +6,13 @@ const TENANT = '11111111-1111-1111-1111-111111111111'
 const CLIENT = '22222222-2222-2222-2222-222222222222'
 const SHIPMENT = '44444444-4444-4444-4444-444444444444'
 const connection = (details = {}) => ({tenant_id: TENANT, action: 'moloni_connection_config', created_at:'2026-10-15', details:{company_id:'42',refresh_token:'saved-refresh',...details}})
-function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false, clientDueDays=undefined, shipmentRows}={}) {
+function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false, clientDueDays=undefined, shipmentRows, fiscalDocument}={}) {
   const db = fakeSupabase({audit_log: [...(connected ? [connection()] : []), ...existing], shipments:shipmentRows || [
     {id:SHIPMENT,client_id:CLIENT,tenant_id:TENANT,sell_price:3.91,service_type:'Nacional'}
   ]}, q=>failArchive&&q.write?.kind==='insert'&&q.write.value.action==='billing_statement'?{message:'unavailable'}:null)
   let claims = 0
   db.client.rpc = async (name) => { claims++; assert.equal(name, 'claim_billing_shipments'); return { data: null, error: null } }
-  let issued = 0, lastInvoicePayload
+  let issued = 0, lastInvoicePayload, lastReceiptPayload
   const load = createLoader({
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
     '@/lib/auth/context':{getTenantId:async()=>TENANT,requireEmployee:async()=>({tenant_id:TENANT}),requireUser:async()=>({tenant_id:TENANT})},
@@ -22,6 +22,8 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
     '@/app/actions/billing-config':{getBillingConfigAction:async()=>({defaultVatRate:23})},
     'next/cache':{revalidatePath(){}},
     '@/lib/moloni/moloni-client':{MoloniClient:class {
+      async request(endpoint){assert.equal(endpoint,'documents/getOne');return fiscalDocument}
+      async createReceipt(payload){lastReceiptPayload=payload;return {document_id:321}}
       async getCustomerByVat(){return {customer_id:1}}
       async updateCustomer(){}
       async getTaxId(){return 1}
@@ -32,7 +34,7 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
       async getDocumentNumber(){return 'FT 2026/123'}
     }},
   })
-  return {db,load, get claims(){return claims}, get lastInvoicePayload(){return lastInvoicePayload}, get issued(){return issued}, emit:status=>load('app/actions/moloni.ts').internalEmitInvoice(
+  return {db,load, get lastReceiptPayload(){return lastReceiptPayload}, get claims(){return claims}, get lastInvoicePayload(){return lastInvoicePayload}, get issued(){return issued}, emit:status=>load('app/actions/moloni.ts').internalEmitInvoice(
     {id:CLIENT,tenant_id:TENANT,nif:'999999990'},[{id:SHIPMENT,status,sell_price:3.91,service_type:'Nacional'}])}
 }
 
@@ -176,6 +178,7 @@ test('Each mounted invoice button owns its loading state, from either row and af
     react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
     'next/link':{default:'link'},'next/navigation':{useRouter:()=>({refresh(){}})},
     'lucide-react':new Proxy({},{get:(_,name)=>String(name)}),
+    '../notas-credito/components/CreditNoteButton':{CreditNoteButton:()=>null},
     './MoloniConnectModal':{MoloniConnectModal:'modal'},
     '@/app/actions/moloni':{emitInvoiceAction:clientId=>{calls.push(clientId);return new Promise((resolve,reject)=>{resolveAction=resolve;rejectAction=reject})}},
   })
@@ -282,4 +285,22 @@ test('Invoice and proforma payloads use the selected payment deadline in Moloni'
     assert.equal(inserts[0].payload.maturity_date_id,77)
     assert.equal(inserts[0].payload.expiration_date,'2026-10-26')
   }
+})
+
+
+test('receipts after credit notes use the authoritative Moloni remainder, including VAT, instead of the original TMS total',async()=>{
+  const existing=[{id:'credit-statement',tenant_id:TENANT,action:'billing_statement',details:{id:'credit-statement',client_id:CLIENT,moloni_document_id:123,total_value:10}},
+    {id:'nc',tenant_id:TENANT,action:'credit_note',details:{client_id:CLIENT,invoice_document_id:123,company_id:'42',state:'issued'}}]
+  for(const mode of ['statement','legacy']){
+    const h=invoiceHarness({existing:structuredClone(existing),fiscalDocument:{document_id:123,company_id:42,status:1,customer_id:7,net_value:12.3,reconciled_value:2.46}})
+    const action=h.load('app/actions/moloni.ts')
+    const result=mode==='statement'?await action.emitMoloniReceiptForStatementAction('credit-statement'):await action.emitReceiptAction('credit-statement',CLIENT,123,100)
+    assert.equal(result.success,true);assert.equal(h.lastReceiptPayload.value,9.84);assert.equal(h.lastReceiptPayload.customerId,7)
+  }
+})
+test('a credit-note operation awaiting confirmation prevents a new receipt',async()=>{
+  const h=invoiceHarness({existing:[{id:'credit-statement',tenant_id:TENANT,action:'billing_statement',details:{id:'credit-statement',client_id:CLIENT,moloni_document_id:123,total_value:10}},
+    {id:'nc',tenant_id:TENANT,action:'credit_note',details:{client_id:CLIENT,invoice_document_id:123,company_id:'42',state:'review_required'}}]})
+  const result=await h.load('app/actions/moloni.ts').emitMoloniReceiptForStatementAction('credit-statement')
+  assert.equal(result.success,false);assert.match(result.error,/nota de crédito em curso/);assert.equal(h.lastReceiptPayload,undefined)
 })

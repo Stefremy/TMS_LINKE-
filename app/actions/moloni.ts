@@ -1,5 +1,7 @@
 "use server"
+import {creditInvoicePayment} from "@/lib/billing/credit-notes/products"
 
+import {loadInvoiceCredits, invoiceCreditSummary} from "@/lib/billing/credit-notes/balances"
 import { createAdminClient } from "@/lib/supabase/server"
 import { MoloniClient } from "@/lib/moloni/moloni-client"
 import { revalidatePath } from "next/cache"
@@ -302,7 +304,7 @@ export async function getBillingStatementsAction(clientId?: string) {
   try {
     let query = supabase
       .from('audit_log')
-      .select('details, created_at')
+      .select('id, details, created_at')
       .eq('tenant_id', ctx.tenant_id)
       .eq('action', 'billing_statement')
     if (targetClientId) query = query.eq('details->>client_id', targetClientId)
@@ -313,6 +315,7 @@ export async function getBillingStatementsAction(clientId?: string) {
     let statements = data.map((d: any) => ({
       id: d.details?.id,
       ...d.details,
+      audit_id: d.id,
       created_at: d.details?.created_at || d.created_at
     }))
 
@@ -320,7 +323,8 @@ export async function getBillingStatementsAction(clientId?: string) {
       statements = statements.filter((s: any) => s.client_id === targetClientId)
     }
 
-    return statements
+    const notes = await loadInvoiceCredits(supabase, ctx.tenant_id, targetClientId)
+    return statements.map((stmt: {id?:string; audit_id?:string; client_id?:string; total_value?:unknown}) => ({...stmt,...invoiceCreditSummary(stmt, 'billing_statement', notes)}))
   } catch (err) {
     console.error("getBillingStatementsAction error:", err)
     return []
@@ -970,12 +974,13 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
  * Obtém a lista de faturas personalizadas emitidas anteriormente
  */
 export async function getCustomInvoicesAction() {
-  await requireEmployee()
+  const ctx = await requireEmployee()
   try {
     const supabase = createAdminClient()
     const { data: logs, error } = await supabase
       .from('audit_log')
       .select('id, created_at, details')
+      .eq('tenant_id', ctx.tenant_id)
       .eq('action', 'custom_invoice')
       .order('created_at', { ascending: false })
 
@@ -983,7 +988,10 @@ export async function getCustomInvoicesAction() {
       return []
     }
 
-    return logs.map((log: any) => ({
+    const creditNotes = await loadInvoiceCredits(supabase, ctx.tenant_id)
+    const mapInvoice = (log: any) => ({
+      audit_id: log.id,
+      client_id: log.details?.client_id,
       id: log.details?.id || log.id,
       invoice_number: log.details?.invoice_number || `FAT-${log.id.slice(0, 8)}`,
       client_name: log.details?.client_name || "Cliente Desconhecido",
@@ -998,7 +1006,8 @@ export async function getCustomInvoicesAction() {
       moloni_document_pdf: log.details?.moloni_document_pdf || null,
       pdf_url: `/api/custom-invoices/${encodeURIComponent(log.details?.invoice_number || log.details?.id || log.id)}/pdf`,
       created_at: log.created_at
-    }))
+    })
+    return logs.map(mapInvoice).map((invoice: ReturnType<typeof mapInvoice>) => ({...invoice,...invoiceCreditSummary(invoice, "custom_invoice", creditNotes)}))
   } catch (err: any) {
     console.warn("getCustomInvoicesAction error:", err)
     return []
@@ -1009,7 +1018,7 @@ export async function getCustomInvoicesAction() {
  * Emite um Recibo no Moloni para uma fatura existente
  */
 export async function emitReceiptAction(statementId: string, clientId: string, moloniDocumentId: number, totalValue: number) {
-  await requireEmployee()
+  const ctx = await requireEmployee()
   try {
     const supabase = createAdminClient()
     
@@ -1055,6 +1064,15 @@ export async function emitReceiptAction(statementId: string, clientId: string, m
       throw new Error("Cliente não encontrado no Moloni para emitir o recibo.")
     }
 
+    const creditNotes = (await loadInvoiceCredits(supabase, ctx.tenant_id, clientId)).filter(n => n.invoice_document_id === Number(moloniDocumentId))
+    if (creditNotes.some(n => !['issued','cancelled'].includes(n.state))) throw new Error('Confirme ou cancele a nota de crédito em curso antes de emitir recibo.')
+    if (creditNotes.some(n => n.state === 'issued')) {
+      if (creditNotes.some(n => n.company_id !== String(moloniConfig.companyId))) throw new Error('Confirme a empresa Moloni associada à nota de crédito antes de emitir recibo.')
+      const fiscal = await moloni.request('documents/getOne', {document_id:Number(moloniDocumentId)})
+      const payment = creditInvoicePayment(fiscal, String(moloniConfig.companyId), Number(moloniDocumentId))
+      totalValue = payment.value
+      moloniCustomerId = payment.customerId
+    }
     const documentSetId = await moloni.getDocumentSet()
 
     const dateNow = new Date().toISOString().split("T")[0]
@@ -1133,7 +1151,7 @@ export async function emitMoloniReceiptForStatementAction(
   statementId: string,
   opts?: { date?: string; paymentMethodId?: number; notes?: string }
 ) {
-  await requireEmployee()
+  const ctx = await requireEmployee()
   try {
     const supabase = createAdminClient()
 
@@ -1148,6 +1166,7 @@ export async function emitMoloniReceiptForStatementAction(
         .from("audit_log")
         .select("details")
         .eq("action", "moloni_connection_config")
+        .eq("tenant_id", ctx.tenant_id)
         .order("created_at", { ascending: false })
         .limit(1)
       if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
@@ -1168,6 +1187,7 @@ export async function emitMoloniReceiptForStatementAction(
       .from('audit_log')
       .select('*')
       .eq('action', 'billing_statement')
+      .eq('tenant_id', ctx.tenant_id)
       .order('created_at', { ascending: false })
 
     if (error || !logs) throw new Error("Extrato não encontrado.")
@@ -1191,6 +1211,9 @@ export async function emitMoloniReceiptForStatementAction(
       return { success: false, error: "Este extrato já tem um recibo emitido." }
     }
 
+    const creditNotes = (await loadInvoiceCredits(supabase, ctx.tenant_id, stmt.client_id)).filter(n => n.invoice_document_id === Number(stmt.moloni_document_id))
+    if (creditNotes.some(n => !['issued','cancelled'].includes(n.state))) throw new Error('Confirme ou cancele a nota de crédito em curso antes de emitir recibo.')
+    const hasIssuedCredit = creditNotes.some(n => n.state === 'issued')
     const documentSetId = await moloni.getDocumentSet()
     
     // Obter cliente
@@ -1203,14 +1226,14 @@ export async function emitMoloniReceiptForStatementAction(
 
     // Verificar ou Criar cliente no Moloni
     let moloniCustomerId = null
-    if (client.nif && client.nif !== "999999990") {
+    if (!hasIssuedCredit && client.nif && client.nif !== "999999990") {
       const moloniCust = await moloni.getCustomerByVat(client.nif)
       if (moloniCust) {
         moloniCustomerId = moloniCust.customer_id
       }
     }
 
-    if (!moloniCustomerId) {
+    if (!hasIssuedCredit && !moloniCustomerId) {
       moloniCustomerId = await moloni.createCustomer({
         vat: client.nif || "999999990",
         number: `C${Date.now()}`,
@@ -1226,7 +1249,13 @@ export async function emitMoloniReceiptForStatementAction(
     const dateNow = opts?.date || new Date().toISOString().split("T")[0]
 
     let receiptValue = Number(stmt.total_value || 0)
-    if (stmt.period_statement_id) {
+    if (hasIssuedCredit) {
+      if (creditNotes.some(n => n.company_id !== String(moloniConfig.companyId))) throw new Error('Confirme a empresa Moloni associada à nota de crédito antes de emitir recibo.')
+      const fiscal = await moloni.request('documents/getOne', {document_id:Number(stmt.moloni_document_id)})
+      const payment = creditInvoicePayment(fiscal, String(moloniConfig.companyId), Number(stmt.moloni_document_id))
+      receiptValue = payment.value
+      moloniCustomerId = payment.customerId
+    } else if (stmt.period_statement_id) {
       const fiscalDocument = await moloni.request('documents/getOne', { document_id: Number(stmt.moloni_document_id) })
       const { automaticInvoicePayment } = await import('@/lib/billing/recurring-invoices')
       const payment = automaticInvoicePayment(fiscalDocument, Number(stmt.moloni_document_id))
@@ -1266,6 +1295,7 @@ export async function emitMoloniReceiptForStatementAction(
       .from('audit_log')
       .update({ details: stmt })
       .eq('id', match.id)
+      .eq('tenant_id', ctx.tenant_id)
 
     if (updateErr) {
       console.warn("Erro ao atualizar o statement no audit_log", updateErr)

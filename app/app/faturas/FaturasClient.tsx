@@ -1,10 +1,13 @@
 "use client"
 
 import * as React from "react"
+import type {CreditNoteDto} from "@/lib/billing/credit-notes/service"
+import {CreditNotesList} from "@/app/ops/faturacao/notas-credito/components/CreditNotesList"
 import { FileText, Download, ChevronDown, ChevronRight, Eye, Calendar, Package, CreditCard, Wallet } from "lucide-react"
 import { ClientCarregamentosHistory, type ClientTransactionItem } from "@/app/app/components/ClientCarregamentosHistory"
 
 interface FaturasClientProps {
+  creditNotes?: CreditNoteDto[]
   statements: any[]
   transactions?: ClientTransactionItem[]
   initialTab?: "faturas" | "carregamentos"
@@ -13,13 +16,14 @@ interface FaturasClientProps {
 }
 
 export default function FaturasClient({ 
-  statements = [], 
+  statements = [],
+  creditNotes = [],
   transactions = [], 
   initialTab = "faturas",
   availableCredit,
   creditLimit
 }: FaturasClientProps) {
-  const [activeTab, setActiveTab] = React.useState<"faturas" | "carregamentos">(initialTab)
+  const [activeTab, setActiveTab] = React.useState<"faturas" | "carregamentos" | "creditos">(initialTab)
   const [expandedStatement, setExpandedStatement] = React.useState<string | null>(null)
   const [openActionMenuId, setOpenActionMenuId] = React.useState<string | null>(null)
 
@@ -62,7 +66,10 @@ export default function FaturasClient({
             {transactions.length}
           </span>
         </button>
+        <button type="button" onClick={()=>setActiveTab('creditos')} className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-2.5 text-xs font-semibold ${activeTab==='creditos'?'bg-[var(--accent)] text-white':'bg-[var(--surface-muted)] text-[var(--text-secondary)]'}`}>Notas de crédito ({creditNotes.length})</button>
       </div>
+
+      {activeTab === "creditos" && <CreditNotesList notes={creditNotes} clientView />}
 
       {/* Tab: Carregamentos */}
       {activeTab === "carregamentos" && (

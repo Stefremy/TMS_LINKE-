@@ -118,9 +118,9 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
     allStatements.forEach((stmt: any) => {
       if (effectiveClientId && stmt.client_id === effectiveClientId) {
         if (stmt.moloni_document_id && !stmt.moloni_receipt_pdf && stmt.status !== "paid") {
-          totalDebt += Number(stmt.total_value || 0)
+          totalDebt += Number(stmt.outstanding_value ?? stmt.total_value ?? 0)
         } else if (!stmt.is_pro_forma && !stmt.moloni_document_id && stmt.status !== "paid") {
-          totalDebt += Number(stmt.total_value || 0)
+          totalDebt += Number(stmt.outstanding_value ?? stmt.total_value ?? 0)
         }
       }
     })

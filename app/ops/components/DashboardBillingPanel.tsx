@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { CheckCircle2, Clock, FileText, AlertTriangle } from "lucide-react"
-import type { StatisticsInvoice } from "@/lib/billing/statistics"
+import { invoiceOutstandingCents, type StatisticsInvoice } from "@/lib/billing/statistics"
 
 type BillingGroup = "billed" | "paid" | "open" | "overdue"
 type BillingTotals = {
@@ -63,7 +63,7 @@ export function DashboardBillingPanel({ totals, recent }: Props) {
                               <span className="max-w-[65%] truncate text-[11px] font-semibold text-[#155EEF]">{invoice.reference}</span>
                               <span className="truncate text-[10px] text-[var(--text-tertiary)]">{invoice.clientName}</span>
                             </div>
-                            <span className="shrink-0 text-[11px] font-medium tabular-nums text-[var(--text-primary)]">{invoice.amountCents === null ? "Sem dados" : money(invoice.amountCents)}</span>
+                            <span className="shrink-0 text-[11px] font-medium tabular-nums text-[var(--text-primary)]">{invoice.amountCents === null ? "Sem dados" : money(metric.id === "open" || metric.id === "overdue" ? invoiceOutstandingCents(invoice)! : invoice.amountCents)}</span>
                           </a>
                         </li>
                       ))}

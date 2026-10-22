@@ -12,7 +12,7 @@ export async function loadBillingStatistics(preloadedClients?: any[]) {
     const logs: BillingLog[] = []
     for (let offset = 0; ; offset += 1000) {
       const { data, error } = await db.from("audit_log").select("id, action, created_at, details")
-        .eq("tenant_id", ctx.tenant_id).in("action", ["billing_statement", "custom_invoice"])
+        .eq("tenant_id", ctx.tenant_id).in("action", ["billing_statement", "custom_invoice", "credit_note"])
         .order("created_at", { ascending: false }).order("id").range(offset, offset + 999)
       if (error || !data) throw new Error("Não foi possível carregar os documentos de faturação.")
       logs.push(...data as BillingLog[])

@@ -67,7 +67,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
   const recentBillingInvoices = {
     billed: orderedBillingInvoices.slice(0, 3),
     paid: orderedBillingInvoices.filter(invoice => invoice.paid).slice(0, 3),
-    open: orderedBillingInvoices.filter(invoice => !invoice.paid).slice(0, 3),
+    open: orderedBillingInvoices.filter(invoice => !invoice.paid && invoice.state !== "credited").slice(0, 3),
     overdue: orderedBillingInvoices.filter(invoice => invoice.state === "overdue").slice(0, 3),
   }
 

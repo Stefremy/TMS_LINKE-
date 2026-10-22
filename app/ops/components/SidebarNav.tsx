@@ -70,6 +70,7 @@ const navConfig: NavSection[] = [
         subItems: [
           { title: "Contas Corrente", href: "/ops/faturacao/contas-corrente" },
           { title: "Faturação Clientes", href: "/ops/faturacao/clientes" },
+          { title: "Notas de Crédito", href: "/ops/faturacao/notas-credito" },
           { title: "Análise Estatística", href: "/ops/faturacao/estatistica" },
           { title: "Configuração Faturação", href: "/ops/configuracao/faturacao" },
         ]

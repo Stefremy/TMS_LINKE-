@@ -36,12 +36,12 @@ export default async function EntidadesClientesPage() {
       if (stmt.client_id === c.id) {
         // Se tem fatura Moloni mas não tem recibo
         if (stmt.moloni_document_id && !stmt.moloni_receipt_pdf) {
-          unpaidStatementsTotal += Number(stmt.total_value || 0)
+          unpaidStatementsTotal += Number(stmt.outstanding_value ?? stmt.total_value ?? 0)
         }
         // Se for Fatura Completa interna (sem Moloni) também é não pago?
         else if (!stmt.is_pro_forma && !stmt.moloni_document_id) {
            // Assumimos não pago porque não tem sistema de recibo no TMS puro
-           unpaidStatementsTotal += Number(stmt.total_value || 0)
+           unpaidStatementsTotal += Number(stmt.outstanding_value ?? stmt.total_value ?? 0)
         }
       }
     })

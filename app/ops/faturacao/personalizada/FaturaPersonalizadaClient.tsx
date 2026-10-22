@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import {CreditNoteButton} from "../notas-credito/components/CreditNoteButton"
 import Link from "next/link"
 import { 
   FileText, 
@@ -34,7 +35,10 @@ interface Client {
 }
 
 interface CustomInvoiceHistoryItem {
+  audit_id?: string
   id: string
+  credit_notes?: {id:string;number?:string;total?:number}[]
+  credit_pending?: boolean
   invoice_number: string
   client_name: string
   client_vat?: string
@@ -921,6 +925,8 @@ export default function FaturaPersonalizadaClient({
                   <tr key={inv.id} className="hover:bg-[var(--surface-muted)]/50 transition-colors">
                     <td className="py-2.5 px-3 font-mono font-bold text-[var(--text-primary)]">
                       {inv.invoice_number}
+                      {inv.credit_notes?.map(note=><a key={note.id} href={`/api/credit-notes/${note.id}/pdf`} className="mt-1 block text-xs font-medium text-[var(--accent)]">{note.number || 'Nota de crédito'} · {Number(note.total||0).toFixed(2)} €</a>)}
+                      {inv.credit_pending && <span className="mt-1 block text-xs font-normal text-amber-800">Nota de crédito por confirmar</span>}
                     </td>
                     <td className="py-2.5 px-3 font-mono text-[var(--text-tertiary)]">
                       {inv.invoice_date}
@@ -948,7 +954,8 @@ export default function FaturaPersonalizadaClient({
                       {inv.total_value.toFixed(2)} €
                     </td>
                     <td className="py-2.5 px-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="flex flex-wrap items-center justify-center gap-1.5">
+                        {inv.moloni_document_id && <CreditNoteButton source={{id:inv.audit_id||inv.id,kind:"custom_invoice"}} />}
                         <a
                           href={inv.pdf_url}
                           download={`${inv.invoice_number.replace(/[\/\\]/g, "_")}.pdf`}

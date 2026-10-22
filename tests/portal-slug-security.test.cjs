@@ -62,6 +62,7 @@ function harness(ctx = client, { adjust, failure } = {}) {
       return [{ id, short_name: id === A ? 'Stef Store' : 'Store B' }]
     } },
     '@/app/actions/destinatarios': { getDestinatariosAction: async id => { calls.recipients.push(id); return [] } },
+    '@/app/actions/credit-notes': {listCreditNotesAction:async()=>[]},
     '@/app/actions/moloni': { getBillingStatementsAction: async id => { calls.statements.push(id); return [] } },
     '../components/ClientDashboard': { ClientDashboard: 'Dashboard' },
     '../../components/ClientCreateGuia': { ClientCreateGuia: 'Create' },

@@ -14,7 +14,7 @@ function matchesLike(value, pattern) {
   return new RegExp(`^${source}$`, 'i').test(String(value ?? ''))
 }
 
-function fakeSupabase(tables, failure) {
+function fakeSupabase(tables, failure, options = {}) {
   const queries = []
   const writes = []
   let adminClients = 0
@@ -49,6 +49,16 @@ function fakeSupabase(tables, failure) {
               : filter.kind === 'in' ? filter.value.includes(value) : value === filter.value
           }))
           if (state.write) {
+            if (state.write.kind === 'insert' && options.persistInserts) {
+              const entries = (Array.isArray(state.write.value) ? state.write.value : [state.write.value])
+                .map(value => ({ created_at: new Date().toISOString(), ...structuredClone(value) }))
+              if (entries.some(value => value.id && (tables[table] || []).some(row => row.id === value.id))) {
+                return { data: null, error: { code: '23505', message: 'Duplicate primary key' } }
+              }
+              tables[table] ||= []
+              tables[table].push(...entries)
+              rows = entries
+            }
             writes.push(state.write)
             if (state.write.kind === 'delete') tables[table] = (tables[table] || []).filter(row => !rows.includes(row))
             else if (state.write.kind === 'update') rows.forEach(row => Object.assign(row, structuredClone(state.write.value)))
