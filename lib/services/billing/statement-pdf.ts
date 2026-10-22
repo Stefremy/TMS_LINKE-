@@ -77,24 +77,32 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
     let basePrice = s.base_price != null ? Number(s.base_price) : 0
     let fuelTax = s.fuel_tax_amount != null ? Number(s.fuel_tax_amount) : 0
 
-    // Extract special fees description
-    let specialDesc = ""
-    if (s.special_fees_description) {
-      if (typeof s.special_fees_description === "string" && s.special_fees_description.startsWith("[")) {
-        try {
-          const parsed = JSON.parse(s.special_fees_description)
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            specialDesc = parsed.map((p: { name?: string; service?: string }) => p.name || p.service || "Extra").join(", ")
+    // Itemize only when the recorded descriptions reconcile with the saved extra total.
+    // Legacy text remains visible in full, without inventing a per-service price.
+    let specialDetails: { name: string; amount?: number }[] = []
+    const description = s.special_fees_description?.trim() || ""
+    if (specialFees > 0 && description.startsWith("[")) {
+      try {
+        const parsed: unknown = JSON.parse(description)
+        if (Array.isArray(parsed) && parsed.length) {
+          const entries = parsed.map((value: unknown) => {
+            if (!value || typeof value !== "object") throw new Error("Invalid supplement")
+            const item = value as { name?: unknown; service?: unknown; amount?: unknown }
+            const amount = typeof item.amount === "number" ? item.amount : NaN
+            if (!Number.isFinite(amount) || amount < 0) throw new Error("Invalid supplement amount")
+            const name = typeof item.name === "string" ? item.name : typeof item.service === "string" ? item.service : "Servico adicional"
+            return { name: safeStr(name), amount }
+          })
+          if (entries.reduce((total, entry) => total + Math.round(entry.amount * 100), 0) === Math.round(specialFees * 100)) {
+            specialDetails = entries
+          } else {
+            specialDetails = entries.map(entry => ({ name: entry.name }))
           }
-        } catch {
-          specialDesc = s.special_fees_description
         }
-      } else {
-        specialDesc = s.special_fees_description
-      }
+      } catch { /* Display legacy descriptions below without changing any amounts. */ }
     }
-    if (specialFees > 0 && !specialDesc) {
-      specialDesc = "Taxa Especial"
+    if (specialFees > 0 && !specialDetails.length) {
+      specialDetails = [{ name: safeStr(description || "Servicos adicionais") }]
     }
 
     // Fallback: reverse engineer base price and fuel tax from sell_price if not explicitly stored
@@ -118,15 +126,15 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
       tracking: safeStr(s.tracking_number || s.reference || `ENV-${(s.id || "").slice(0, 8).toUpperCase()}`),
       service: safeStr(s.service_type || "Transporte"),
       weightKg: s.weight_kg ? Number(s.weight_kg) : undefined,
-      recipientName: safeStr((s.recipient_name || "Destinatario").slice(0, 22)),
-      recipientCity: safeStr((s.recipient_city || "").slice(0, 16)),
+      recipientName: safeStr(s.recipient_name || "Destinatario"),
+      recipientCity: safeStr(s.recipient_city || ""),
       basePrice,
       fuelTax,
       specialFees,
       hasBase: !isPeriodStatement || s.base_price != null,
       hasFuel: !isPeriodStatement || s.fuel_tax_amount != null,
       hasSpecial: !isPeriodStatement || s.special_fees_amount != null,
-      specialDesc: safeStr(specialDesc.slice(0, 20)),
+      specialDetails,
       sellPrice
     }
   })
@@ -142,7 +150,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
   // Page geometry
   const pageWidth = 595.28
   const pageHeight = 841.89
-  const rowHeight = 23
+  const rowHeight = 32
   const tableHeaderHeight = 20
   const summaryBoxHeight = 100
   const footerReservedHeight = 45
@@ -236,7 +244,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
       const logoDims = logo.scale(logoScale)
       page.drawImage(logo, { x: 35, y: 795 + (32 - logoDims.height) / 2, width: logoDims.width, height: logoDims.height })
     }
-    page.drawText(`EXTRATO DISCRIMINATIVO ${statementNum}  |  ${safeStr((data.clientName || "").slice(0, 30))}`, {
+    page.drawText(fitText(`EXTRATO DISCRIMINATIVO ${statementNum}  |  ${safeStr(data.clientName)}`, 400, 8, fontBold), {
       x: 160,
       y: 806,
       size: 8,
@@ -332,80 +340,94 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
   let tableTopY = 668
   drawTableHeader(currentPage, tableTopY)
 
-  let currentY = tableTopY - rowHeight
-
-  // Minimum bottom boundary when summary is on this page vs not on this page
-  const minBoundaryWithSummary = summaryBoxHeight + footerReservedHeight + 15
-  const minBoundaryWithoutSummary = footerReservedHeight + 10
+  // currentY is the top of the next row, so variable-height details cannot overlap.
+  let currentY = tableTopY
+  const bottomBoundary = footerReservedHeight + 10
+  const nextTablePage = () => {
+    currentPage = doc.addPage([pageWidth, pageHeight])
+    pages.push(currentPage)
+    drawSubsequentPageHeader(currentPage)
+    tableTopY = 765
+    drawTableHeader(currentPage, tableTopY)
+    currentY = tableTopY
+  }
+  const fitText = (text: string, width: number, size: number, font = fontNormal) => {
+    if (font.widthOfTextAtSize(text, size) <= width) return text
+    let fitted = text
+    while (fitted && font.widthOfTextAtSize(fitted + "...", size) > width) fitted = fitted.slice(0, -1)
+    return fitted + "..."
+  }
+  const wrapText = (text: string, width: number, size: number) => {
+    const lines: string[] = []
+    let line = ""
+    // Character-level wrapping also handles long references with no spaces.
+    for (const word of text.split(/\s+/)) {
+      if (line && fontNormal.widthOfTextAtSize(line + " " + word, size) <= width) {
+        line += " " + word
+        continue
+      }
+      if (line) { lines.push(line); line = "" }
+      for (const char of word) {
+        if (line && fontNormal.widthOfTextAtSize(line + char, size) > width) {
+          lines.push(line); line = ""
+        }
+        line += char
+      }
+    }
+    if (line) lines.push(line)
+    return lines.length ? lines : ["Servico adicional"]
+  }
+  const drawDetailsHeading = (tracking: string, continuation: boolean) => {
+    currentPage.drawText(fitText(continuation ? `SERVICOS ADICIONAIS - ${tracking} (continuacao)` : "SERVICOS ADICIONAIS", 466, 7, fontBold), {
+      x: 96, y: currentY - 12, size: 7, font: fontBold, color: c(0.30, 0.35, 0.42),
+    })
+    currentY -= 20
+  }
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
-    const remainingItems = items.length - i
-    const neededSpaceForSummary = remainingItems <= 1 ? minBoundaryWithSummary : minBoundaryWithoutSummary
-
-    // Need new page?
-    if (currentY < neededSpaceForSummary) {
-      currentPage = doc.addPage([pageWidth, pageHeight])
-      pages.push(currentPage)
-      drawSubsequentPageHeader(currentPage)
-      tableTopY = 765
-      drawTableHeader(currentPage, tableTopY)
-      currentY = tableTopY - rowHeight
-    }
-
-    // Draw Row Background
-    const isEven = i % 2 === 0
-    currentPage.drawRectangle({
-      x: 25,
-      y: currentY,
-      width: 545.28,
-      height: rowHeight,
-      color: isEven ? c(1, 1, 1) : c(0.97, 0.98, 0.99),
-      borderColor: c(0.90, 0.92, 0.94),
-      borderWidth: 0.5
-    })
-
-    const line1Y = currentY + 12
-    const line2Y = currentY + 3.5
-    const midY = currentY + 7.5
-
-    // Col 1: #
+    const detailRows = item.specialDetails.flatMap(detail => wrapText(detail.name, 370, 8).map((text, index) => ({
+      text, amount: index === 0 ? detail.amount : undefined,
+    })))
+    const detailHeight = detailRows.length ? 28 + detailRows.length * 13 : 0
+    // Keep a whole shipment together when it fits on a fresh page. Oversized
+    // supplement lists flow across pages with their shipment reference repeated.
+    const blockHeight = rowHeight + detailHeight
+    const required = blockHeight <= 765 - bottomBoundary ? blockHeight : rowHeight + 33
+    if (currentY - required < bottomBoundary) nextTablePage()
+    const rowBottom = currentY - rowHeight
+    currentPage.drawRectangle({ x: 25, y: rowBottom, width: 545.28, height: rowHeight,
+      color: i % 2 === 0 ? c(1, 1, 1) : c(0.97, 0.98, 0.99),
+      borderColor: c(0.90, 0.92, 0.94), borderWidth: 0.5 })
+    const line1Y = currentY - 12
+    const line2Y = currentY - 24
+    const midY = currentY - 18
     currentPage.drawText(String(item.index), { x: 29, y: midY, size: 7.5, font: fontBold, color: c(0.06, 0.09, 0.16) })
-
-    // Col 2: Date
     currentPage.drawText(item.date, { x: 48, y: midY, size: 7, font: fontNormal, color: c(0.35, 0.40, 0.48) })
-
-    // Col 3: Tracking / Service
-    currentPage.drawText(item.tracking, { x: 96, y: line1Y, size: 7.5, font: fontBold, color: c(0.06, 0.09, 0.16) })
-    const servWithWeight = `${item.service}${item.weightKg ? ` (${item.weightKg}kg)` : ""}`
-    currentPage.drawText(servWithWeight.slice(0, 26), { x: 96, y: line2Y, size: 6.5, font: fontNormal, color: c(0.48, 0.52, 0.58) })
-
-    // Col 4: Recipient / Destination
-    currentPage.drawText(item.recipientName, { x: 236, y: line1Y, size: 7.5, font: fontNormal, color: c(0.12, 0.15, 0.20) })
-    if (item.recipientCity) {
-      currentPage.drawText(item.recipientCity, { x: 236, y: line2Y, size: 6.5, font: fontNormal, color: c(0.48, 0.52, 0.58) })
-    }
-
-    // Col 5: Base Tabela
+    currentPage.drawText(fitText(item.tracking, 130, 7.5, fontBold), { x: 96, y: line1Y, size: 7.5, font: fontBold, color: c(0.06, 0.09, 0.16) })
+    const service = `${item.service}${item.weightKg ? ` (${item.weightKg}kg)` : ""}`
+    currentPage.drawText(fitText(service, 130, 7), { x: 96, y: line2Y, size: 7, font: fontNormal, color: c(0.40, 0.44, 0.50) })
+    currentPage.drawText(fitText(item.recipientName, 98, 7.5), { x: 236, y: line1Y, size: 7.5, font: fontNormal, color: c(0.12, 0.15, 0.20) })
+    if (item.recipientCity) currentPage.drawText(fitText(item.recipientCity, 98, 7), { x: 236, y: line2Y, size: 7, font: fontNormal, color: c(0.40, 0.44, 0.50) })
     drawRightText(currentPage, item.hasBase ? fmtCurrency(item.basePrice) : "-", 395, midY, 7.5, fontNormal, c(0.15, 0.18, 0.22))
-
-    // Col 6: Taxa Combustível
     drawRightText(currentPage, item.hasFuel ? fmtCurrency(item.fuelTax) : "-", 450, midY, 7.5, fontNormal, c(0.15, 0.18, 0.22))
-
-    // Col 7: Extras
-    if (item.specialFees > 0) {
-      drawRightText(currentPage, fmtCurrency(item.specialFees), 502, line1Y, 7.5, fontBold, c(0.15, 0.18, 0.22))
-      if (item.specialDesc) {
-        drawRightText(currentPage, item.specialDesc, 502, line2Y, 6, fontNormal, c(0.45, 0.50, 0.56))
-      }
-    } else {
-      drawRightText(currentPage, "-", 502, midY, 7.5, fontNormal, c(0.55, 0.58, 0.62))
-    }
-
-    // Col 8: Total Líquido
+    drawRightText(currentPage, item.specialFees > 0 ? fmtCurrency(item.specialFees) : "-", 502, midY, 7.5, fontBold, c(0.15, 0.18, 0.22))
     drawRightText(currentPage, fmtCurrency(item.sellPrice), 562, midY, 8, fontBold, c(0.06, 0.09, 0.16))
-
-    currentY -= rowHeight
+    currentY = rowBottom
+    if (detailRows.length) {
+      drawDetailsHeading(item.tracking, false)
+      for (const row of detailRows) {
+        if (currentY - 13 < bottomBoundary) {
+          nextTablePage()
+          drawDetailsHeading(item.tracking, true)
+        }
+        currentPage.drawText(row.text, { x: 104, y: currentY - 9, size: 8, font: fontNormal, color: c(0.25, 0.30, 0.36) })
+        if (row.amount !== undefined) drawRightText(currentPage, fmtCurrency(row.amount), 562, currentY - 9, 8, fontNormal, c(0.25, 0.30, 0.36))
+        currentY -= 13
+      }
+      currentY -= 8
+      currentPage.drawLine({ start: { x: 96, y: currentY + 3 }, end: { x: 562, y: currentY + 3 }, thickness: 0.5, color: c(0.85, 0.88, 0.92) })
+    }
   }
 
   // Draw Summary Box

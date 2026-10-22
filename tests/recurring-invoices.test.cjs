@@ -5,8 +5,8 @@ const {fakeSupabase}=require('./helpers/fake-supabase.cjs')
 const TENANT='11111111-1111-1111-1111-111111111111', CLIENT='22222222-2222-2222-2222-222222222222'
 const client={id:CLIENT,tenant_id:TENANT,nif:'999999990',address:'Morada de teste',postal_code:'1000-001',city:'Lisboa',billing_type:'conta_corrente',short_name:'Teste'}
 const statement={id:'cycle',client_id:CLIENT,client_name:'Teste',period_start:'2026-10-01',period_end:'2026-10-08',shipments:[{id:'s1',sell_price:3.91,service_type:'CTT'},{id:'s2',sell_price:4.50,service_type:'CTT'}]}
-function harness({failInsert=false,failPdf=false,failFinish=false,missingConfig=false,blocked=false}={}){
- const rows={audit_log:[{id:'period',tenant_id:TENANT,action:'period_statement',details:statement},
+function harness({failInsert=false,failPdf=false,failFinish=false,missingConfig=false,blocked=false,period=statement,snapshots=[]}={}){
+ const rows={audit_log:[{id:'period',tenant_id:TENANT,action:'period_statement',details:period},...snapshots,
    ...(!missingConfig?[{id:'config',tenant_id:TENANT,action:'moloni_connection_config',details:{company_id:'42',refresh_token:'saved'}}]:[])],recurring_statement_cycles:[]}
  const db=fakeSupabase(rows), calls=[],rpcs=[]
  const cycle={id:'cycle',statement_id:'period',client_id:CLIENT,invoice_status:'pending',invoice_token:'token',invoice_document_id:null,invoice_statement_id:'invoice'}
@@ -52,6 +52,17 @@ test('automatic invoicing creates one closed invoice with the exact period, conf
  assert.equal(p.products[0].taxes[0].value,23);assert.equal(p.maturity_date_id,4);assert.match(p.notes,/01\/10\/2026 a 07\/10\/2026/)
  const finish=h.rpcs.find(c=>c.name==='finish_recurring_invoice');assert.equal(finish.args.p_document,123)
  assert.equal(await h.ensureRecurringInvoice(TENANT,'cycle',client,h.api),true)
+ assert.equal(h.calls.filter(c=>c.name==='invoices/insert').length,1)
+})
+test('automatic invoices also preserve historical fuel and each charged extra',async()=>{
+ const period={...statement,shipments:[{id:'s1',sell_price:6.5,service_type:'CTT'}]}
+ const snapshots=[{id:'historical',tenant_id:TENANT,action:'shipment_data',created_at:'2026-10-01',details:{
+  id:'s1',client_id:CLIENT,sell_price:6.5,base_price:4,fuel_tax_amount:0.5,special_fees_amount:2,
+  special_fees_description:JSON.stringify([{name:'Seguro',amount:1.5},{name:'SMS',amount:0.5}])}}]
+ const h=harness({period,snapshots});assert.equal(await h.ensureRecurringInvoice(TENANT,'cycle',client,h.api),true)
+ const products=h.calls.find(c=>c.name==='invoices/insert').payload.products
+ assert.deepEqual(products.map(p=>p.price),[4,0.5,1.5,0.5]);assert.match(products[2].name,/Seguro/)
+ assert.equal(products.reduce((n,p)=>n+Math.round(p.price*100),0),650)
  assert.equal(h.calls.filter(c=>c.name==='invoices/insert').length,1)
 })
 test('a lost insert response never triggers a second insert or a fallback draft',async()=>{

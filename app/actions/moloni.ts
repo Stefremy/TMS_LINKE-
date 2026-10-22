@@ -10,6 +10,9 @@ import { getBillingConfigAction } from "@/app/actions/billing-config"
 import { paymentDueDays } from "@/lib/billing/payment-terms"
 import { addCalendarDays, lisbonDate } from "@/lib/billing/recurring-periods"
 import { moloniRedirectUri } from "@/lib/config/public-origins"
+import { buildShipmentInvoiceLines } from "@/lib/billing/shipment-invoice-lines"
+import { hydrateShipmentCharges } from "@/lib/services/billing/shipment-charge-snapshots"
+import { canInvoiceShipment } from "@/lib/billing/shipment-eligibility"
 
 const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 
@@ -35,7 +38,10 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
   const { data: authoritativeShipments, error: shipmentError } = await supabase.from('shipments').select('*')
     .eq('tenant_id', ctx.tenant_id).eq('client_id', client.id).in('id', selectedIds)
   if (shipmentError || authoritativeShipments?.length !== selectedIds.length) throw new Error("Envios não encontrados neste cliente.")
-  shipments = authoritativeShipments
+  if (authoritativeShipments.some((s: { status?: string | null }) => !canInvoiceShipment(s))) {
+    throw new Error("A seleção inclui envios cancelados, anulados ou em rascunho. Estes envios não podem ser faturados. Atualize a página e selecione apenas envios válidos.")
+  }
+  shipments = await hydrateShipmentCharges(supabase, ctx.tenant_id, client.id, authoritativeShipments)
 
   
 
@@ -123,99 +129,11 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
           billingConfig.articleSummary
         )
 
-        // C. Preparar Linhas da Fatura
-        let products: any[] = []
-        
-        const shouldGroup = typeof groupShipments === "boolean"
-          ? groupShipments
-          : (billingConfig.defaultGrouping === "grouped")
-
-        if (shouldGroup) {
-          // Simplificada: Agrupadas por serviço e soma total para evitar faturas com muitas páginas
-          const groupedShipments: Record<string, { qty: number, totalSell: number }> = {}
-          for (const s of shipments) {
-            const rawName = (s.service_type || "").trim() || billingConfig.articleDesignation || "Transporte / Logística"
-            const serviceName = rawName.toLowerCase().startsWith("serviço") ? rawName : `Serviço ${rawName}`
-            if (!groupedShipments[serviceName]) {
-              groupedShipments[serviceName] = { qty: 0, totalSell: 0 }
-            }
-            groupedShipments[serviceName].qty += 1
-            groupedShipments[serviceName].totalSell += Number(s.sell_price || 0)
-          }
-
-          for (const [serviceName, data] of Object.entries(groupedShipments)) {
-            const totalPrice = Math.round(data.totalSell * 100) / 100
-            if (totalPrice > 0) {
-              products.push({
-                productId: productId,
-                name: `${serviceName} (${data.qty} envios)`,
-                summary: billingConfig.articleSummary || `Consolidação de ${data.qty} envios realizados no período.`,
-                qty: 1, 
-                price: totalPrice,
-                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-              })
-            }
-          }
-        } else {
-          // Completa: Listadas uma a uma
-          for (const s of shipments) {
-            const serviceName = s.service_type || "Transporte / Logística"
-            const trackingBase = s.tracking_number || s.reference || `ENV-${(s.id || "").slice(0, 8).toUpperCase()}`
-            const weightStr = billingConfig.includeWeightInName !== false && s.weight_kg ? ` (Peso: ${s.weight_kg}kg)` : ""
-            const trackingPrefix = billingConfig.includeTrackingInName !== false ? `Envio ${trackingBase}` : "Envio"
-            const serviceSuffix = billingConfig.includeServiceNameInName !== false ? ` - ${serviceName}` : ""
-            const lineName = `${trackingPrefix}${serviceSuffix}${weightStr}`
-
-            let summaryText = ""
-            if (billingConfig.includeDestinationInSummary !== false && s.recipient_name) {
-              const citySuffix = billingConfig.includeCityInSummary !== false && s.recipient_city ? ` (${s.recipient_city})` : ""
-              summaryText = `Destino: ${s.recipient_name}${citySuffix}`
-            }
-
-            const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
-            const specialFees = Number(s.special_fees_amount || 0)
-
-            if (hasFuelTax) {
-              products.push({
-                productId: productId,
-                name: lineName,
-                summary: summaryText,
-                qty: 1,
-                price: Number(s.base_price || 0),
-                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-              })
-              products.push({
-                productId: productId,
-                name: `Taxa de Combustível - Envio ${trackingBase}`,
-                summary: ``,
-                qty: 1,
-                price: Number(s.fuel_tax_amount || 0),
-                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-              })
-            } else {
-              products.push({
-                productId: productId,
-                name: lineName,
-                summary: summaryText,
-                qty: 1,
-                price: Number(s.sell_price || 0) - specialFees,
-                taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-              })
-            }
-
-            if (specialFees > 0) {
-              const desc = s.special_fees_description || "Serviços Especiais"
-              products.push({
-                productId: productId,
-                name: `Taxa Especial (${desc}) - Envio ${trackingBase}`,
-                summary: ``,
-                qty: 1,
-                price: specialFees,
-                taxes: [{ tax_id: taxId, value: 23 }]
-              })
-            }
-          }
-        }
+        // Separate recorded charges without changing the verified shipment totals.
+        const products = buildShipmentInvoiceLines(shipments, {
+          ...billingConfig, productId, taxId, vatRate: billingConfig.defaultVatRate || 23,
+          grouped: typeof groupShipments === "boolean" ? groupShipments : billingConfig.defaultGrouping === "grouped",
+        })
 
         const validProducts = products.filter((p: any) => p.price > 0)
         
@@ -306,6 +224,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
           sell_price: Number(s.sell_price || 0),
           base_price: s.base_price != null ? Number(s.base_price) : undefined,
           fuel_tax_amount: s.fuel_tax_amount != null ? Number(s.fuel_tax_amount) : undefined,
+          fuel_rate_pct: s.fuel_rate_pct != null ? Number(s.fuel_rate_pct) : undefined,
           special_fees_amount: s.special_fees_amount != null ? Number(s.special_fees_amount) : undefined,
           special_fees_description: s.special_fees_description || undefined,
           weight_kg: s.weight_kg != null ? Number(s.weight_kg) : undefined,
@@ -536,7 +455,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
  * Emite a fatura oficial no Moloni para um extrato previamente criado
  */
 export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string, groupShipments: boolean = true, isProForma: boolean = false) {
-  await requireEmployee()
+  const ctx = await requireEmployee()
   try {
     const supabase = createAdminClient()
     
@@ -544,6 +463,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     const { data: logs, error } = await supabase
       .from('audit_log')
       .select('*')
+      .eq('tenant_id', ctx.tenant_id)
       .eq('action', 'billing_statement')
       .order('created_at', { ascending: false })
 
@@ -562,7 +482,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     const stmt = match.details
 
     // Se já tiver fatura emitida no Moloni (e NÃO for pró-forma), devolver o link existente
-    if (stmt.moloni_document_pdf && !stmt.is_pro_forma) {
+    if ((stmt.moloni_document_id || stmt.moloni_document_pdf) && !stmt.is_pro_forma) {
       return {
         success: true,
         moloniDocumentId: stmt.moloni_document_id,
@@ -570,6 +490,8 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
         alreadyEmitted: true
       }
     }
+
+    stmt.shipments = await hydrateShipmentCharges(supabase, ctx.tenant_id, stmt.client_id, stmt.shipments || [])
 
     // 2. Verificar se o Moloni está configurado
     let moloniConfig: any = null
@@ -654,100 +576,14 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       billingConfig.articleSummary
     )
 
-    // 6. Preparar linhas dos envios
+    // Same separation for a previously saved, not-yet-issued statement.
     const shipments = stmt.shipments || []
-    let products: any[] = []
-    
-    const shouldGroup = typeof groupShipments === "boolean"
-      ? groupShipments
-      : (billingConfig.defaultGrouping === "grouped")
-
-    if (shouldGroup) {
-      // Simplificada: Agrupadas por serviço e soma total
-      const groupedShipments: Record<string, { qty: number, totalSell: number }> = {}
-      
-      for (const s of shipments) {
-        const rawName = (s.service_type || "").trim() || billingConfig.articleDesignation || "Transporte / Logística"
-        const serviceName = rawName.toLowerCase().startsWith("serviço") ? rawName : `Serviço ${rawName}`
-        if (!groupedShipments[serviceName]) {
-          groupedShipments[serviceName] = { qty: 0, totalSell: 0 }
-        }
-        groupedShipments[serviceName].qty += 1
-        groupedShipments[serviceName].totalSell += Number(s.sell_price || 0)
-      }
-
-      for (const [serviceName, data] of Object.entries(groupedShipments)) {
-        const totalPrice = Math.round(data.totalSell * 100) / 100
-        if (totalPrice > 0) {
-          products.push({
-            productId: productId,
-            name: `${serviceName} (${data.qty} envios)`,
-            summary: billingConfig.articleSummary || `Consolidação de ${data.qty} envios realizados no período.`,
-            qty: 1, 
-            price: totalPrice,
-            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-          })
-        }
-      }
-    } else {
-      // Completa: Listadas uma a uma
-      for (const s of shipments) {
-        const serviceName = s.service_type || "Transporte / Logística"
-        const trackingBase = s.tracking_number || s.reference || `ENV-${(s.id || "").slice(0, 8).toUpperCase()}`
-        const weightStr = billingConfig.includeWeightInName !== false && s.weight_kg ? ` (Peso: ${s.weight_kg}kg)` : ""
-        const trackingPrefix = billingConfig.includeTrackingInName !== false ? `Envio ${trackingBase}` : "Envio"
-        const serviceSuffix = billingConfig.includeServiceNameInName !== false ? ` - ${serviceName}` : ""
-        const lineName = `${trackingPrefix}${serviceSuffix}${weightStr}`
-
-        let summaryText = ""
-        if (billingConfig.includeDestinationInSummary !== false && s.recipient_name) {
-          const citySuffix = billingConfig.includeCityInSummary !== false && s.recipient_city ? ` (${s.recipient_city})` : ""
-          summaryText = `Destino: ${s.recipient_name}${citySuffix}`
-        }
-
-        const hasFuelTax = Number(s.fuel_tax_amount || 0) > 0
-        const specialFees = Number(s.special_fees_amount || 0)
-
-        if (hasFuelTax) {
-          products.push({
-            productId: productId,
-            name: lineName,
-            summary: summaryText,
-            qty: 1,
-            price: Number(s.base_price || 0),
-            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-          })
-          products.push({
-            productId: productId,
-            name: `Taxa de Combustível - Envio ${trackingBase}`,
-            summary: ``,
-            qty: 1,
-            price: Number(s.fuel_tax_amount || 0),
-            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-          })
-        } else {
-          products.push({
-            productId: productId,
-            name: lineName,
-            summary: summaryText,
-            qty: 1,
-            price: Number(s.sell_price || 0) - specialFees,
-            taxes: [{ tax_id: taxId, value: billingConfig.defaultVatRate || 23 }]
-          })
-        }
-
-        if (specialFees > 0) {
-          const desc = s.special_fees_description || "Serviços Especiais"
-          products.push({
-            productId: productId,
-            name: `Taxa Especial (${desc}) - Envio ${trackingBase}`,
-            summary: ``,
-            qty: 1,
-            price: specialFees,
-            taxes: [{ tax_id: taxId, value: 23 }]
-          })
-        }
-      }
+    const products = buildShipmentInvoiceLines(shipments, {
+      ...billingConfig, productId, taxId, vatRate: billingConfig.defaultVatRate || 23,
+      grouped: typeof groupShipments === "boolean" ? groupShipments : billingConfig.defaultGrouping === "grouped",
+    })
+    if (shipments.length && Math.round(Number(stmt.total_value) * 100) !== products.reduce((n, p) => n + Math.round(p.price * 100), 0)) {
+      throw new Error("A discriminação não corresponde ao total do extrato. Confirme os valores antes de faturar.")
     }
 
     const validProducts = products.filter((p: any) => p.price > 0)

@@ -6,11 +6,12 @@ const TENANT = '11111111-1111-1111-1111-111111111111'
 const CLIENT = '22222222-2222-2222-2222-222222222222'
 const SHIPMENT = '44444444-4444-4444-4444-444444444444'
 const connection = (details = {}) => ({tenant_id: TENANT, action: 'moloni_connection_config', created_at:'2026-10-15', details:{company_id:'42',refresh_token:'saved-refresh',...details}})
-function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false, clientDueDays=undefined}={}) {
-  const db = fakeSupabase({audit_log: [...(connected ? [connection()] : []), ...existing], shipments:[
+function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false, clientDueDays=undefined, shipmentRows}={}) {
+  const db = fakeSupabase({audit_log: [...(connected ? [connection()] : []), ...existing], shipments:shipmentRows || [
     {id:SHIPMENT,client_id:CLIENT,tenant_id:TENANT,sell_price:3.91,service_type:'Nacional'}
   ]}, q=>failArchive&&q.write?.kind==='insert'&&q.write.value.action==='billing_statement'?{message:'unavailable'}:null)
-  db.client.rpc = async (name) => { assert.equal(name, 'claim_billing_shipments'); return { data: null, error: null } }
+  let claims = 0
+  db.client.rpc = async (name) => { claims++; assert.equal(name, 'claim_billing_shipments'); return { data: null, error: null } }
   let issued = 0, lastInvoicePayload
   const load = createLoader({
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
@@ -31,9 +32,59 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
       async getDocumentNumber(){return 'FT 2026/123'}
     }},
   })
-  return {db,load, get lastInvoicePayload(){return lastInvoicePayload}, get issued(){return issued}, emit:status=>load('app/actions/moloni.ts').internalEmitInvoice(
+  return {db,load, get claims(){return claims}, get lastInvoicePayload(){return lastInvoicePayload}, get issued(){return issued}, emit:status=>load('app/actions/moloni.ts').internalEmitInvoice(
     {id:CLIENT,tenant_id:TENANT,nif:'999999990'},[{id:SHIPMENT,status,sell_price:3.91,service_type:'Nacional'}])}
 }
+
+test('cancelled and draft shipments are rejected from authoritative rows before claiming or issuing, even with a forged pending status',async()=>{
+  for (const status of ['cancelado','anulado','rascunho','draft','cancelled','canceled']) {
+    const h=invoiceHarness({shipmentRows:[{id:SHIPMENT,tenant_id:TENANT,client_id:CLIENT,status,sell_price:3.91}]})
+    await assert.rejects(h.emit('pendente'),/cancelados, anulados ou em rascunho/)
+    assert.equal(h.claims,0);assert.equal(h.issued,0);assert.equal(h.db.writes.length,0)
+  }
+})
+
+test('manual billing page excludes cancelled test fixtures and drafts while keeping pending and delivered shipments',async()=>{
+  const shipments=['cancelado','anulado','rascunho','draft','cancelled','canceled','pendente','entrada_rede','entregue']
+    .map((status,i)=>({id:String(i),client_id:CLIENT,status,sell_price:3.91}))
+  const jsx=(type,props)=>({type,props})
+  const load=createLoader({
+    react:{},
+    'react/jsx-runtime':{jsx,jsxs:jsx},
+    '@/lib/auth/context':{requirePermission:async()=>({tenant_id:TENANT,role:'admin'})},
+    '@/app/actions/clientes':{getClientesAction:async()=>[]},
+    '@/app/actions/shipments':{getShipmentsAction:async()=>shipments},
+    '@/app/actions/moloni':{getBillingStatementsAction:async()=>[],getMoloniConfigAction:async()=>({})},
+    '@/lib/billing/recurring-statements':{recurringPreview:async()=>[],loadPeriodStatements:async()=>[]},
+    './ContasCorrenteClient':{default:()=>null},
+    './RecurringStatementsPanel':{RecurringStatementsPanel:()=>null},
+  })
+  const page=await load('app/ops/faturacao/contas-corrente/page.tsx').default()
+  assert.deepEqual(page.props.children.props.shipments.map(s=>s.status),['pendente','entrada_rede','entregue'])
+})
+
+test('grouped invoices recover historical fuel and itemized supplements without changing the charged total',async()=>{
+ const snapshot={id:SHIPMENT,client_id:CLIENT,sell_price:6.5,base_price:4,fuel_tax_amount:0.5,
+  special_fees_amount:2,special_fees_description:JSON.stringify([{name:'Frágil',amount:1.5},{name:'SMS',amount:0.5}])}
+ const h=invoiceHarness({shipmentRows:[{id:SHIPMENT,tenant_id:TENANT,client_id:CLIENT,sell_price:6.5,service_type:'Nacional'}],
+  existing:[{tenant_id:TENANT,action:'shipment_data',created_at:'2026-10-01',details:snapshot}]})
+ const result=await h.emit('pending');assert.equal(result.success,true)
+ const lines=h.lastInvoicePayload.products
+ assert.deepEqual(lines.map(l=>l.price),[4,0.5,1.5,0.5])
+ assert.match(lines[1].name,/Combustível/);assert.match(lines[2].name,/Frágil/);assert.match(lines[3].name,/SMS/)
+ assert.equal(lines.reduce((n,l)=>n+Math.round(l.price*100),0),650)
+ const saved=h.db.writes.find(w=>w.kind==='insert'&&w.value.action==='billing_statement').value.details
+ assert.equal(saved.total_value,6.5);assert.equal(saved.shipments[0].fuel_tax_amount,0.5)
+ assert.equal(saved.shipments[0].special_fees_amount,2)
+})
+
+test('a previously issued invoice is never rebuilt or reissued to add breakdown, even if its PDF is missing',async()=>{
+ const h=invoiceHarness({existing:[{id:'old-statement',tenant_id:TENANT,action:'billing_statement',
+  details:{id:'old-statement',client_id:CLIENT,moloni_document_id:28,total_value:12.21,shipments:[]}}]})
+ const result=await h.load('app/actions/moloni.ts').emitMoloniInvoiceForStatementAction('old-statement')
+ assert.equal(result.alreadyEmitted,true);assert.equal(result.moloniDocumentId,28)
+ assert.equal(h.issued,0);assert.equal(h.db.writes.length,0)
+})
 
 test('Moloni refusal is returned as failure, without statement or billed-shipment writes',async()=>{
   const h=invoiceHarness({failInvoice:true});const result=await h.emit('pending')

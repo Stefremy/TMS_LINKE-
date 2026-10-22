@@ -4,6 +4,8 @@ import { DEFAULT_BILLING_CONFIG, type BillingConfig } from '@/app/actions/billin
 import { addCalendarDays, lisbonDate, periodLabel, shipmentTotal, type RecurringClient } from './recurring-periods'
 import { paymentDueDays, moloniMaturityDateId } from './payment-terms'
 import type { PeriodStatement } from './recurring-statements'
+import { buildShipmentInvoiceLines, shipmentChargeBreakdown } from './shipment-invoice-lines'
+import { hydrateShipmentCharges } from '@/lib/services/billing/shipment-charge-snapshots'
 
 interface InvoiceCycle { id: string; statement_id: string; client_id: string; invoice_status: string; invoice_token: string; invoice_document_id: number }
 
@@ -19,6 +21,7 @@ export async function buildRecurringInvoice(moloni: MoloniClient, client: Recurr
     throw new Error('Complete NIF, morada, localidade e código postal na ficha do cliente.')
   }
   if (!(shipmentTotal(statement.shipments) > 0)) throw new Error('O período não tem um valor positivo para faturar.')
+  statement.shipments.forEach(shipmentChargeBreakdown)
   const existing = await moloni.getCustomerByVat(client.nif)
   const customer = existing?.customer_id || await moloni.createCustomer({ vat: client.nif,
     number: `TMS-${client.id}`, name: client.legal_name || client.short_name || statement.client_name,
@@ -29,23 +32,19 @@ export async function buildRecurringInvoice(moloni: MoloniClient, client: Recurr
   const series = config.defaultDocumentSetId || await moloni.getDocumentSet()
   const product = await moloni.getGenericProductId(tax, config.articleReference, config.articleDesignation, config.articleSummary)
   if (!tax || !series || !product || !customer) throw new Error('Configuração Moloni incompleta.')
-  const groups = new Map<string, { count: number; cents: number }>()
-  for (const shipment of statement.shipments) {
-    const service = shipment.service_type || config.articleDesignation
-    const key = config.defaultGrouping === 'grouped' ? service : `${shipment.tracking_number || shipment.id} · ${service}`
-    const group = groups.get(key) || { count: 0, cents: 0 }
-    group.count++; group.cents += Math.round(Number(shipment.sell_price) * 100); groups.set(key, group)
-  }
+  const products = buildShipmentInvoiceLines(statement.shipments, {
+    ...config, productId: product, taxId: tax, vatRate: rate, grouped: config.defaultGrouping === 'grouped',
+  })
   const date = lisbonDate()
   const paymentDays = paymentDueDays(client.payment_due_days, config.defaultPaymentDays)
   const maturityId = await moloniMaturityDateId(moloni, paymentDays)
   return { customer_id: customer, date, expiration_date: addCalendarDays(date, paymentDays),
     maturity_date_id: maturityId, document_set_id: series, status: 1,
     your_reference: `TMS-PERIOD-${statement.id}`, notes: `Período de envios: ${periodLabel(statement.period_start, statement.period_end)}`,
-    products: [...groups].filter(([, g]) => g.cents > 0).map(([name, g]) => ({ product_id: product,
-      name: config.defaultGrouping === 'grouped' ? `${name} (${g.count} envios)` : name,
-      summary: config.articleSummary || '', qty: 1, price: g.cents / 100, discount: 0,
-      taxes: [{ tax_id: tax, value: rate, order: 1, cumulative: 0 }] })) }
+    products: products.map(line => ({ product_id: line.productId, name: line.name,
+      summary: line.summary, qty: line.qty, price: line.price, discount: 0,
+      taxes: line.taxes.map(tax => ({ ...tax, order: 1, cumulative: 0 })) })) }
+
 }
 
 export async function ensureRecurringInvoice(tenantId: string, id: string, client: RecurringClient, db: SupabaseClient) {
@@ -63,7 +62,9 @@ export async function ensureRecurringInvoice(tenantId: string, id: string, clien
       .eq('action', 'moloni_billing_settings').order('created_at', { ascending: false }).limit(1).maybeSingle()
     if (configError) throw new Error('Configuração de faturação indisponível.')
     const moloni = await moloniForTenant(db, tenantId)
-    const payload = await buildRecurringInvoice(moloni, client, doc.details as PeriodStatement, { ...DEFAULT_BILLING_CONFIG, ...saved?.details })
+    const statement = doc.details as PeriodStatement
+    const prepared = { ...statement, shipments: await hydrateShipmentCharges(db, tenantId, client.id, statement.shipments) }
+    const payload = await buildRecurringInvoice(moloni, client, prepared, { ...DEFAULT_BILLING_CONFIG, ...saved?.details })
     const { data: armed, error: armError } = await db.rpc('arm_recurring_invoice', {
       p_tenant: tenantId, p_id: id, p_token: cycle.invoice_token, p_payload: payload,
     })

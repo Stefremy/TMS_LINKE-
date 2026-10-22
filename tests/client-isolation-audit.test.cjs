@@ -66,6 +66,7 @@ function harness({ ctx = ctxA, fallback = false, eventsOnA = false, failure } = 
     'next/cache': { revalidatePath() {} },
     'next/headers': { headers: async () => new Headers() },
     '@/lib/config/public-origins': { checkoutReturnOrigin: () => 'https://fixture.invalid', publicUrl: path => 'https://fixture.invalid' + path },
+    '@/lib/client-portal/access': { getPortalDestination: async () => '/app/fixture-store' },
     '@/lib/pricing/calculate-shipment-price': {},
     '@/lib/pricing/calculate-shipment-quote': {},
     '@/lib/pricing/shipment-pricing-context': {},

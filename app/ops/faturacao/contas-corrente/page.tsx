@@ -6,6 +6,7 @@ import ContasCorrenteClient from "./ContasCorrenteClient"
 import { requirePermission } from '@/lib/auth/context'
 import { recurringPreview, loadPeriodStatements } from '@/lib/billing/recurring-statements'
 import { RecurringStatementsPanel } from './RecurringStatementsPanel'
+import { canInvoiceShipment } from '@/lib/billing/shipment-eligibility'
 
 export const dynamic = "force-dynamic"
 
@@ -29,7 +30,7 @@ export default async function ContasCorrentePage() {
   })
 
   // Apenas envios pendentes de faturação
-  const pendingShipments = shipments.filter((s: any) => !invoicedShipmentIds.has(s.id))
+  const pendingShipments = shipments.filter((s: { id: string; status?: string | null }) => canInvoiceShipment(s) && !invoicedShipmentIds.has(s.id))
   
   return (
     <div className="space-y-6">

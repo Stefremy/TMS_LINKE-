@@ -106,3 +106,9 @@ Resultados da F02 e da verificação real: [Supabase e duas sessões de cliente 
 
 
 Revisão operacional posterior: [Navegação OPS e portal — 21/10/2026](NAVIGATION_PERFORMANCE_2026-10-21.md). Rastreio automático separado da fila das ações; filtros de segurança preservados. A correção F02 reutiliza o registo autorizado na leitura dos eventos para evitar repetir a consulta do envio.
+
+## Atualização de faturação — 22/10/2026
+
+Foi autorizada e implementada localmente a discriminação de transporte, combustível e cada serviço especial nas novas emissões manuais e automáticas. Recupera componentes históricas sob o âmbito da loja e reconcilia exatamente o total sem IVA, sem aplicar preços atuais a envios antigos. Documentos fiscais já emitidos não são reconstruídos para adicionar linhas. Ainda precisa de publicação.
+
+[Diagnóstico, implementação, arredondamento de IVA e validação](INVOICE_FUEL_BREAKDOWN_2026-10-22.md). Testes finais: faturação 53, recorrentes 34, segurança 138 e isolamento 93 passaram; build passou. Não houve emissão real nem alterações de saldos. Esta correção não conclui a auditoria de integridade financeira do Passo 4.
