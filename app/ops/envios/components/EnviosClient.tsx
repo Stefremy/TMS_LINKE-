@@ -559,7 +559,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                   <th className="px-3 py-2.5">Destinatário</th>
                   <th className="px-3 py-2.5">Serviço</th>
                   <th className="px-3 py-2.5">Remessa</th>
-                  <th className="px-3 py-2.5">Entrega</th>
+                  <th className="px-3 py-2.5">Recolha / Entrega</th>
                   <th className="px-3 py-2.5">Estado</th>
                   <th className="px-3 py-2.5">Valor</th>
                   <th className="px-4 py-2.5 text-right">Ações</th>
@@ -688,9 +688,16 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                   </div>
                 </td>
 
-                {/* Entrega Column */}
+                {/* Collection and delivery dates */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5">
+                    <div className="mb-1 flex items-center gap-1 whitespace-nowrap text-[10px] text-[var(--text-secondary)]" title={envio.pickup ? "Data de recolha confirmada pelo rastreio" : "Ainda não existe confirmação de recolha no rastreio"}>
+                      <Package className="h-3 w-3 shrink-0 text-[var(--text-tertiary)]" />
+                      <span>Recolha:</span>
+                      {envio.pickup ? (
+                        <span className="font-semibold text-[var(--text-primary)]">{envio.pickup.date} <span className="font-mono font-normal text-[var(--text-secondary)]">{envio.pickup.time}</span></span>
+                      ) : <span className="text-[var(--text-tertiary)]">Por confirmar</span>}
+                    </div>
                     <div className="flex items-center gap-1 font-semibold text-[var(--text-primary)] text-[11px]">
                       <Truck className="w-3 h-3 text-[var(--text-tertiary)]" />
                       <span>{envio.delivery?.date || "--/--/----"}</span>

@@ -4,6 +4,7 @@ import { getClientesAction } from "@/app/actions/clientes"
 import { EnviosClient } from "./components/EnviosClient"
 
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
+import { pickupDateDisplay } from "@/lib/services/shipments/shipment-pickup-dates"
 
 export default async function EnviosPage(props: { searchParams?: Promise<{ page?: string, search?: string, status?: string }> }) {
   const searchParams = await props.searchParams || {}
@@ -100,6 +101,7 @@ export default async function EnviosPage(props: { searchParams?: Promise<{ page?
       date: s.status === 'entregue' ? new Date(s.updated_at || s.created_at).toLocaleDateString('pt-PT') : "--/--/----", 
       time: s.status === 'entregue' ? new Date(s.updated_at || s.created_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : "--:--" 
     },
+    pickup: pickupDateDisplay(s.picked_up_at),
     status: { 
       label: statusCfg.label, 
       raw: s.status,

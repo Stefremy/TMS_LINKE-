@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth/context"
 import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "./shipment-utils"
 import { applyLinkeLogoToCorreosLabel, isCorreosPdfLabel } from "@/lib/services/correos/correos-label-customizer"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
+import { loadShipmentPickupDates } from "./shipment-pickup-dates"
 
 // Native columns only. Display aliases (reference, carrier_name, ctt_object_id) are derived
 // below; optional pricing/label snapshots are stored separately in audit_log.
@@ -192,6 +193,13 @@ export async function fetchPaginatedShipments(options: {
     return { data: [], total: 0, page, pageSize, totalPages: 0 }
   }
 
+  let pickupDates = new Map<string, string>()
+  try {
+    pickupDates = await loadShipmentPickupDates(supabase, ctx.tenant_id, (data || []).map((row: { id: string }) => row.id))
+  } catch {
+    console.warn("As datas de recolha não estão disponíveis nesta consulta.")
+  }
+
   const mapped = (data || []).map((row: any) => {
     const s = row.details || row
     const isCorreos = isCorreosShipment(s)
@@ -202,6 +210,7 @@ export async function fetchPaginatedShipments(options: {
     
     return {
       ...s,
+      picked_up_at: pickupDates.get(s.id) || null,
       status: normalizedStatus,
       reference: linkeRef,
       carrier_code: isCorreos ? "correos" : (s.carrier_code || "ctt"),

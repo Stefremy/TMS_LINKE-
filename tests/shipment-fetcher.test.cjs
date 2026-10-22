@@ -13,8 +13,8 @@ const row=(id,client=A,tenant=TENANT)=>({id,tenant_id:tenant,client_id:client,tr
   sender_name:'Fixture sender',sender_zip4:'4800',sender_zip3:'001',recipient_name:'Fixture recipient',
   sell_price:4.15,buy_price:3,billing_statement_id:'statement-fixture'})
 
-function harness({ctx={role:'employee',tenant_id:TENANT,client_id:null},rows=[row('a'),row('b',B),row('foreign',A,OTHER_TENANT)],failure}={}) {
-  const db=fakeSupabase({shipments:rows},q=>{
+function harness({ctx={role:'employee',tenant_id:TENANT,client_id:null},rows=[row('a'),row('b',B),row('foreign',A,OTHER_TENANT)],events=[],failure}={}) {
+  const db=fakeSupabase({shipments:rows,tracking_events:events},q=>{
     if(q.table==='shipments'&&q.projection!=='*') {
       const unknown=q.projection.split(',').map(s=>s.trim()).find(column=>!nativeColumns.has(column))
       if(unknown)return{code:'42703',message:`column shipments.${unknown} does not exist`}
@@ -47,7 +47,7 @@ test('pagination preserves the count and deterministic ordering when creation ti
 test('client pagination filters both the company and the signed-in store',async()=>{
   const h=harness({ctx:{role:'client',tenant_id:TENANT,client_id:A}})
   assert.deepEqual((await h.api.fetchPaginatedShipments()).data.map(s=>s.id),['a'])
-  assert.ok(h.db.queries.every(q=>q.filters.some(f=>f.field==='tenant_id'&&f.value===TENANT)&&q.filters.some(f=>f.field==='client_id'&&f.value===A)))
+  assert.ok(h.db.queries.filter(q=>q.table==='shipments').every(q=>q.filters.some(f=>f.field==='tenant_id'&&f.value===TENANT)&&q.filters.some(f=>f.field==='client_id'&&f.value===A)))
 })
 test('the same native projection works for unpaginated portal and billing lists',async()=>{
   const h=harness({ctx:{role:'client',tenant_id:TENANT,client_id:A}})
@@ -75,4 +75,43 @@ test('an unrelated database failure cannot return data from another tenant or a 
   const h=harness({failure:()=>({code:'08006',message:'Fixture connection failure'})})
   const result=await h.api.fetchPaginatedShipments()
   assert.equal(result.total,0);assert.deepEqual(result.data,[]);assert.equal(h.db.queries.length,1)
+})
+
+
+test('pickup dates come from the earliest confirmed scan, scoped to the authorized company and page',async()=>{
+ const events=[
+  {id:'arrival',tenant_id:TENANT,shipment_id:'a',event_code:'EMO',description:'Chegada ao No Cliente',timestamp:'2026-10-22T09:00:00Z'},
+  {id:'first',tenant_id:TENANT,shipment_id:'a',event_code:'EMP',timestamp:'2026-10-22T11:00:00Z'},
+  {id:'later',tenant_id:TENANT,shipment_id:'a',event_code:'EMP',timestamp:'2026-10-22T15:00:00Z'},
+  {id:'foreign',tenant_id:OTHER_TENANT,shipment_id:'a',event_code:'EMP',timestamp:'2026-10-21T08:00:00Z'},
+  {id:'store-b',tenant_id:TENANT,shipment_id:'b',event_code:'EMP',timestamp:'2026-10-20T08:00:00Z'},
+ ]
+ const h=harness({ctx:{role:'client',tenant_id:TENANT,client_id:A},events})
+ const result=await h.api.fetchPaginatedShipments()
+ assert.equal(result.data[0].picked_up_at,'2026-10-22T11:00:00.000Z')
+ const queries=h.db.queries.filter(q=>q.table==='tracking_events')
+ assert.equal(queries.length,1)
+ assert.ok(queries[0].filters.some(f=>f.field==='tenant_id'&&f.value===TENANT))
+ assert.deepEqual(queries[0].filters.find(f=>f.field==='shipment_id').value,['a'])
+})
+test('an unavailable tracking table leaves the shipment visible with no invented pickup date',async()=>{
+ const h=harness({failure:q=>q.table==='tracking_events'?{message:'Fixture read failed'}:null})
+ const result=await h.api.fetchPaginatedShipments()
+ assert.equal(result.data.length,2);assert.equal(result.data[0].picked_up_at,null)
+})
+const pickup=createLoader({})('lib/services/shipments/shipment-pickup-dates.ts')
+test('collection recognition excludes label creation, customer-node arrival and failed pickup requests',()=>{
+ for(const description of ['Envio criado','Chegada ao Nó Cliente','Recolha não efetuada','Não recolhido','Recogida solicitada','Recogida fallida','Pendente de recolha']) {
+  assert.equal(pickup.confirmedPickupTimestamp({shipment_id:'a',description,timestamp:'2026-10-22T10:00:00Z'}),null,description)
+ }
+ assert.equal(pickup.confirmedPickupTimestamp({shipment_id:'a',event_code:'EMP',timestamp:'invalid'}),null)
+})
+test('explicit collection confirmations from CTT and Correos are supported',()=>{
+ for(const description of ['Recolha Efetuada (Braga)','Recolhido','Recogido (Madrid)','Recogida realizada']) {
+  assert.equal(pickup.confirmedPickupTimestamp({shipment_id:'a',description,timestamp:'2026-10-22T10:00:00Z'}),'2026-10-22T10:00:00.000Z')
+ }
+})
+test('pickup display uses Lisbon date/time instead of the server timezone and handles missing dates',()=>{
+ assert.deepEqual(pickup.pickupDateDisplay('2026-10-22T23:30:00Z'),{date:'23/10/2026',time:'00:30'})
+ assert.equal(pickup.pickupDateDisplay(null),null);assert.equal(pickup.pickupDateDisplay('invalid'),null)
 })
