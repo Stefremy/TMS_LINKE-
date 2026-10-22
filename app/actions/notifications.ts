@@ -31,8 +31,9 @@ export async function getOperationalNotificationsAction(): Promise<OperationalNo
       clients,
       connections
     ] = await Promise.all([
-      supabase.from("shipments").select("id, created_at, ops_substatus, ctt_manifest_pdf")
+      supabase.from("shipments").select("id, created_at, ops_substatus")
         .eq("tenant_id", ctx.tenant_id).eq("status", "pendente").in("carrier_code", ["ctt", "ctt_expresso"])
+        .is("ctt_manifest_pdf", null)
         .order("created_at", { ascending: true }),
       supabase.from("shipments").select("id, tracking_number, sender_name, recipient_name, service_type, created_at, status")
         .eq("tenant_id", ctx.tenant_id).order("created_at", { ascending: false }).limit(5),
@@ -40,8 +41,8 @@ export async function getOperationalNotificationsAction(): Promise<OperationalNo
       getCarrierConnectionsAction().catch(() => []),
     ])
 
-    const pendingShipments = pendingRows?.filter((s: { ctt_manifest_pdf?: string; ops_substatus?: string }) =>
-      !s.ctt_manifest_pdf && !["manifesto_fechado", "expedido"].includes(s.ops_substatus || ""))
+    const pendingShipments = pendingRows?.filter((s: { ops_substatus?: string }) =>
+      !["manifesto_fechado", "expedido"].includes(s.ops_substatus || ""))
     // Manifest closure and physical shipment status are independent.
     if (pendingShipments && pendingShipments.length > 0) {
       notifications.push({

@@ -15,6 +15,7 @@ import { moloniRedirectUri } from "@/lib/config/public-origins"
 import { buildShipmentInvoiceLines } from "@/lib/billing/shipment-invoice-lines"
 import { hydrateShipmentCharges } from "@/lib/services/billing/shipment-charge-snapshots"
 import { canInvoiceShipment } from "@/lib/billing/shipment-eligibility"
+import { SHIPMENT_LIST_COLUMNS } from "@/lib/services/shipments/shipment-fetcher"
 
 const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 
@@ -37,7 +38,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
   if (!persistedClient) throw new Error("Cliente não encontrado nesta empresa.")
   client = { ...persistedClient, tenant_id: ctx.tenant_id }
   const selectedIds = [...new Set(shipments.map((s: any) => s.id))]
-  const { data: authoritativeShipments, error: shipmentError } = await supabase.from('shipments').select('*')
+  const { data: authoritativeShipments, error: shipmentError } = await supabase.from('shipments').select(SHIPMENT_LIST_COLUMNS)
     .eq('tenant_id', ctx.tenant_id).eq('client_id', client.id).in('id', selectedIds)
   if (shipmentError || authoritativeShipments?.length !== selectedIds.length) throw new Error("Envios não encontrados neste cliente.")
   if (authoritativeShipments.some((s: { status?: string | null }) => !canInvoiceShipment(s))) {
@@ -1504,7 +1505,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
       throw new Error("Selecione envios válidos para faturar.")
     }
     const ids = [...new Set(shipmentIds)]
-    const { data: dbShipments, error } = await supabase.from("shipments").select("*")
+    const { data: dbShipments, error } = await supabase.from("shipments").select(SHIPMENT_LIST_COLUMNS)
       .eq("tenant_id", ctx.tenant_id).eq("client_id", clientId).in("id", ids)
     if (error || dbShipments?.length !== ids.length) throw new Error("Não foi possível validar os envios deste cliente.")
     const shipments = dbShipments || []

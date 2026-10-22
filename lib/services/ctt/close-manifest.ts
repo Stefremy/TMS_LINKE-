@@ -43,7 +43,9 @@ export async function closeCttManifest(tenantId: string, shipmentIds?: string[],
   }
   const ids = [...new Set(shipmentIds)]
   const supabase = createAdminClient()
-  let query = supabase.from('shipments').select('*').eq('tenant_id', tenantId).in('id', ids)
+  let query = supabase.from('shipments')
+    .select('id, status, carrier_code, carrier_tracking_number, ctt_object_id, tracking_number, ops_substatus, service_type')
+    .eq('tenant_id', tenantId).in('id', ids)
   if (clientId) query = query.eq('client_id', clientId)
   const { data: rows, error } = await query
   const shipments = rows as ManifestShipment[] | null

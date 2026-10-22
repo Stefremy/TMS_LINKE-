@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { isDateKey, lisbonDate } from '@/lib/billing/recurring-periods'
 import { recurringPreview, loadPeriodStatements, sendRecurringStatementTest } from '@/lib/billing/recurring-statements'
+import { SHIPMENT_LIST_COLUMNS } from '@/lib/services/shipments/shipment-fetcher'
 
 const permission = 'Faturação & Contas Correntes'
 
@@ -26,7 +27,7 @@ export async function getPeriodShipmentsForBillingAction(id: string) {
     .eq('action', 'period_statement').eq('id', id).single()
   if (error || !record?.details) throw new Error('Extrato não encontrado.')
   const statement = record.details
-  const { data: shipments, error: shipmentError } = await db.from('shipments').select('*')
+  const { data: shipments, error: shipmentError } = await db.from('shipments').select(SHIPMENT_LIST_COLUMNS)
     .eq('tenant_id', ctx.tenant_id).eq('client_id', statement.client_id).in('id', statement.shipment_ids)
   const { data: invoices, error: invoiceError } = await db.from('audit_log').select('details')
     .eq('tenant_id', ctx.tenant_id).eq('action', 'billing_statement').eq('details->>client_id', statement.client_id)

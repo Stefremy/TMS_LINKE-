@@ -30,7 +30,7 @@ export async function syncAuthorizedShipmentBatch(ctx: AuthContext, shipmentIds:
   let activeShipments: BatchShipment[] | null
   try {
     let query = supabase.from("shipments")
-      .select("*")
+      .select("id, tenant_id, client_id, tracking_number, reference, carrier_tracking_number, carrier_object_id, ctt_object_id, carrier_code, service_type, status, ops_substatus, recipient_phone, recipient_email, recipient_name, updated_at, created_at")
       .eq("tenant_id", ctx.tenant_id)
       .in("id", cleanIds)
     if (ctx.role === "client") query = query.eq("client_id", ctx.client_id!)

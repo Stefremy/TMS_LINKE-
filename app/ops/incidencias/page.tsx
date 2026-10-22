@@ -2,6 +2,7 @@ import { getShipmentsAction } from "@/app/actions/shipments"
 import { getClientesAction } from "@/app/actions/clientes"
 import { IncidenciasClient, IncidentShipment } from "./IncidenciasClient"
 import { CTT_NON_DELIVERY_REASONS } from "@/lib/services/ctt/ctt-types"
+import { SHIPMENT_LIST_COLUMNS } from "@/lib/services/shipments/shipment-fetcher"
 
 export const metadata = {
   title: "Incidências Operacionais | Linke TMS",
@@ -12,7 +13,7 @@ export default async function IncidenciasPage() {
   const supabase = await import("@/lib/supabase/server").then(m => m.createAdminClient())
   
   const [ { data: dbShipments }, clients ] = await Promise.all([
-    supabase.from("shipments").select("*").eq("status", "incidencia").order("created_at", { ascending: false }),
+    supabase.from("shipments").select(SHIPMENT_LIST_COLUMNS).eq("status", "incidencia").order("created_at", { ascending: false }),
     getClientesAction()
   ])
   const shipments = dbShipments || []

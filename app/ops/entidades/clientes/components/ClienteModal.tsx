@@ -667,23 +667,6 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                   className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md p-3 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
                 />
               </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <input
-                  type="checkbox"
-                  id="client_active"
-                  checked={formData.is_active ?? true}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  disabled={formData.code === "CL001"}
-                  title={formData.code === "CL001" ? "A Conta GO Linke (CL001) é protegida e não pode ser desativada." : undefined}
-                  className="w-4 h-4 rounded border-[var(--border-strong)] accent-[var(--accent)] text-[var(--accent)] focus:ring-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-                <label htmlFor="client_active" className={`text-xs font-bold cursor-pointer ${formData.code === "CL001" ? "text-[var(--text-tertiary)]" : "text-[var(--text-primary)]"}`}>
-                  {formData.code === "CL001"
-                    ? "🔒 Conta GO Linke — Protegida (não pode ser desativada)"
-                    : "Cliente Ativo (Pode emitir guias e realizar envios)"}
-                </label>
-              </div>
             </div>
           )}
 

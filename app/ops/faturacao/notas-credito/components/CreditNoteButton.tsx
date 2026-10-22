@@ -1,7 +1,7 @@
 'use client'
 import {useEffect,useRef,useState} from 'react'
 import {useRouter} from 'next/navigation'
-import {Undo2,X,Loader2,ExternalLink} from 'lucide-react'
+import {Undo2,X,Loader2,ExternalLink,Download} from 'lucide-react'
 import {previewCreditNoteAction,prepareCreditNoteAction,confirmCreditNoteAction,cancelCreditNoteDraftAction,refreshCreditNoteAction} from '@/app/actions/credit-notes'
 import type {CreditNoteDto} from '@/lib/billing/credit-notes/service'
 import {creditMoney,CREDIT_STATE_LABELS,type CreditSource,type CreditPreview} from '@/lib/billing/credit-notes/types'
@@ -64,7 +64,12 @@ export function CreditNoteDialog({source,initial,onClose}:{source:CreditSource;i
           <ul className="space-y-2 text-sm">{note.lines.map((line,i)=><li key={i} className="flex justify-between gap-4"><span>{line.name}</span><span className="shrink-0 text-[var(--text-secondary)]">{line.qty} × {creditMoney(line.price)}</span></li>)}</ul>
           <p className="text-sm leading-6"><strong>Motivo:</strong> {note.reason}</p>
           <p className="text-xs leading-6 text-[var(--text-secondary)]">{note.state==='draft'?'Pode fechar e retomar este rascunho em Notas de Crédito. Ao confirmar, será emitida a nota de crédito oficial no Moloni. ':''}Esta operação não faz reembolsos Stripe nem carregamentos de saldo.</p>
-          {note.document_id&&<a href={`/api/credit-notes/${note.id}/pdf`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)]"><ExternalLink className="h-4 w-4" />{note.state==='issued'?'Abrir nota de crédito':'Ver PDF do rascunho'}</a>}
+          {note.document_id&&note.state==='issued'&&(
+            <a href={`/api/credit-notes/${note.id}/pdf`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-sm font-semibold text-[var(--accent)] hover:bg-[var(--surface-subtle)] transition-colors">
+              <Download className="h-4 w-4" />
+              <span>Descarregar Nota de Crédito (PDF)</span>
+            </a>
+          )}
         </>}
       </div>
       <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-4">

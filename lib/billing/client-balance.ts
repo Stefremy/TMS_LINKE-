@@ -89,9 +89,12 @@ export function currentAccountOutstanding(shipments: BalanceShipment[], statemen
 
 type Db = { from: (table: string) => any }
 
-/** Live shipments of one client. `select *` so a not-yet-migrated column can never break the read. */
+/** Live shipments of one client. Select only balance-relevant columns to eliminate base64 egress. */
 export async function loadClientShipmentsForBalance(db: Db, tenantId: string, clientId: string): Promise<BalanceShipment[]> {
-  const { data, error } = await db.from("shipments").select("*").eq("tenant_id", tenantId).eq("client_id", clientId)
+  const { data, error } = await db.from("shipments")
+    .select("sell_price, fuel_tax_amount, status, billing_statement_id")
+    .eq("tenant_id", tenantId)
+    .eq("client_id", clientId)
   if (error) throw new Error("Não foi possível validar o saldo.")
   return (data || []) as BalanceShipment[]
 }

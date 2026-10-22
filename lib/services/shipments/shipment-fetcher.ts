@@ -4,8 +4,10 @@ import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "./s
 import { applyLinkeLogoToCorreosLabel, isCorreosPdfLabel } from "@/lib/services/correos/correos-label-customizer"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
 
+export const SHIPMENT_LIST_COLUMNS = "id, tenant_id, client_id, tracking_number, reference, carrier_tracking_number, ctt_object_id, sender_name, sender_address, sender_zip, sender_city, sender_phone, recipient_name, recipient_address, recipient_zip, recipient_city, recipient_phone, recipient_email, recipient_nif, weight, service_type, return_service, has_cod, cod_amount, cod_iban, notes, status, created_at, updated_at, carrier_code, carrier_name, carrier_object_id, has_insurance, insurance_value, insurance_currency, custom_attrs, fuel_tax_amount, base_price, sell_price, cost_price, margin, markup, extra_fee, transport_guide_id, transport_guide_number, ctt_delivery_note_id, ops_substatus"
+
 /**
- * Fetches all shipments from the DB shipments table.
+ * Fetches shipments from the DB shipments table without downloading heavy base64 label blobs unless requested.
  */
 export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
   const ctx = await requireUser()
@@ -13,9 +15,10 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
   const supabase = createAdminClient()
 
   try {
+    const selectCols = options.includeLabels ? "*" : SHIPMENT_LIST_COLUMNS
     let shipmentsQuery = supabase
       .from("shipments")
-      .select("*")
+      .select(selectCols)
       .eq("tenant_id", ctx.tenant_id)
       .order("created_at", { ascending: false })
       
@@ -60,7 +63,7 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
         carrier_name: isCorreos ? "Correos Express" : (s.carrier_name || "CTT Expresso"),
         carrier_tracking_number: s.carrier_tracking_number || (isCorreos ? s.carrier_object_id : null),
         ctt_object_id: cttCode,
-        has_label: true,
+        has_label: Boolean(s.carrier_tracking_number || s.ctt_object_id || s.carrier_object_id),
       }
     })
   } catch (err: any) {
@@ -148,9 +151,10 @@ export async function fetchPaginatedShipments(options: {
   const to = from + pageSize - 1
   
   const buildQuery = () => {
+    const selectCols = options.includeLabels ? "*" : SHIPMENT_LIST_COLUMNS
     let q = supabase
       .from("shipments")
-      .select("*", { count: 'estimated' })
+      .select(selectCols, { count: 'estimated' })
       .order("created_at", { ascending: false })
 
     if (ctx.role === "client") {

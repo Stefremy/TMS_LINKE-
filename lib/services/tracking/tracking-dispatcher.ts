@@ -37,8 +37,10 @@ export async function syncShipmentTracking(
   let targetShipment: any = isClient ? null : shipment || null
   const lookupId = shipmentId || (isClient ? shipment?.id : undefined)
 
+  const TRACKING_SELECT_COLS = "id, tenant_id, client_id, tracking_number, reference, carrier_tracking_number, carrier_object_id, ctt_object_id, carrier_code, service_type, status, ops_substatus, recipient_phone, recipient_email, recipient_name, updated_at, created_at"
+
   async function findShipment(column: "id" | "tracking_number" | "carrier_tracking_number", value: string) {
-    let query = supabase.from("shipments").select("*").eq(column, value)
+    let query = supabase.from("shipments").select(TRACKING_SELECT_COLS).eq(column, value)
     if (isClient) {
       query = query.eq("tenant_id", options.tenantId!).eq("client_id", options.clientId!)
     }
