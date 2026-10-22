@@ -41,7 +41,7 @@ export async function creditSource(db:SupabaseClient,tenantId:string,source:Cred
   if (error || !client) throw new CreditNoteError('Cliente da fatura não encontrado nesta empresa.')
   return {details,source:{id:String(found.id),kind:source.kind},documentId:positiveId(details.moloni_document_id)}
 }
-export async function creditInvoice(db:SupabaseClient,tenantId:string,source:CreditSource) {
+async function creditInvoiceDocument(db:SupabaseClient,tenantId:string,source:CreditSource) {
   const original=await creditSource(db,tenantId,source)
   const {company,moloni}=await creditMoloni(db,tenantId,original.details.moloni_company_id ? String(original.details.moloni_company_id):undefined)
   const invoice=record(await moloni.request('documents/getOne',{document_id:original.documentId}))
@@ -60,9 +60,12 @@ export async function creditInvoice(db:SupabaseClient,tenantId:string,source:Cre
       throw new CreditNoteError('Esta fatura já se encontra liquidada ou totalmente creditada no Moloni.')
     }
   }
-  const available=await moloni.request('documents/getUnrelatedProducts',{document_id:original.documentId})
-  const lines=availableCreditLines(invoice,available)
-  return {...original,company,moloni,invoice,lines,type}
+  return {...original,company,moloni,invoice,type}
+}
+export async function creditInvoice(db:SupabaseClient,tenantId:string,source:CreditSource) {
+  const info=await creditInvoiceDocument(db,tenantId,source)
+  const available=await info.moloni.request('documents/getUnrelatedProducts',{document_id:info.documentId})
+  return {...info,lines:availableCreditLines(info.invoice,available)}
 }
 export async function readCreditNote(db:SupabaseClient,tenantId:string,id:string) {
   if (!uuid.test(id)) throw new CreditNoteError('Nota de crédito inválida.')
@@ -140,9 +143,10 @@ function validateCreditDocument(note:CreditNote,document:Record<string,unknown>)
   return {total,tax,net:Number((total-tax).toFixed(2))}
 }
 export async function activeCreditNoteForSource(db:SupabaseClient,tenantId:string,documentId:number) {
-  const {data}=await db.from('audit_log').select('details').eq('tenant_id',tenantId).eq('action','credit_note')
+  const {data,error}=await db.from('audit_log').select('details').eq('tenant_id',tenantId).eq('action','credit_note')
     .eq('details->>invoice_document_id',documentId)
     .order('created_at',{ascending:false}).limit(1).maybeSingle()
+  if (error) throw new CreditNoteError('Não foi possível consultar as notas de crédito em curso.')
   if (!data?.details) return null
   const note=data.details as CreditNote
   if (['draft','review_required'].includes(note.state)) return note
@@ -154,11 +158,8 @@ export async function refreshCredit(db:SupabaseClient,tenantId:string,note:Credi
   if (!note.document_id) {
     const found:unknown=await moloni.request('creditNotes/getAll',{our_reference:note.reference,qty:50,offset:0})
     if (!Array.isArray(found)) throw new CreditNoteError('Não foi possível consultar o Moloni.')
-    if (found.length===0) {
-      const cancelled=await saveNote(db,tenantId,note,{...note,state:'cancelled',error:undefined})
-      await release(db,tenantId,cancelled)
-      return cancelled
-    }
+    // A search can lag behind an in-flight request. Absence does not prove cancellation.
+    if (found.length===0) throw new CreditNoteError('O Moloni ainda não confirmou esta tentativa. Aguarde e consulte novamente; não repita a criação.')
     if (found.length!==1 || record(found[0]).our_reference!==note.reference) throw new CreditNoteError('Não foi encontrado um único documento para esta tentativa. Confirme no Moloni antes de repetir.')
     note=await saveNote(db,tenantId,note,{...note,document_id:positiveId(record(found[0]).document_id)})
   }
@@ -197,29 +198,34 @@ export async function finishCredit(db:SupabaseClient,tenantId:string,id:string,d
   if (note.state==='issued') {await release(db,tenantId,note);return cleanNote(note)}
   if (note.state==='cancelled') {await release(db,tenantId,note);return cleanNote(note)}
   if (decision==='cancel') {
+    if (note.state!=='draft' && !(note.state==='review_required' && note.phase==='create')) {
+      throw new CreditNoteError('Esta operação está em curso ou precisa de confirmação no Moloni. Consulte o resultado antes de cancelar.')
+    }
     const {moloni}=await creditMoloni(db,tenantId,note.company_id)
     if (!note.document_id) {
       const found:unknown=await moloni.request('creditNotes/getAll',{our_reference:note.reference,qty:50,offset:0})
-      if (Array.isArray(found) && found.length===0) {
-        const cancelled=await saveNote(db,tenantId,note,{...note,state:'cancelled',error:undefined})
-        await release(db,tenantId,cancelled)
-        return cleanNote(cancelled)
-      }
-      if (Array.isArray(found) && found.length===1) {
+      if (Array.isArray(found) && found.length===0) throw new CreditNoteError('O Moloni ainda não confirmou esta tentativa. Aguarde e consulte novamente antes de cancelar.')
+      if (Array.isArray(found) && found.length===1 && record(found[0]).our_reference===note.reference) {
         note=await saveNote(db,tenantId,note,{...note,document_id:positiveId(record(found[0]).document_id)})
       } else {
         throw new CreditNoteError('Esta tentativa precisa de confirmação no Moloni antes de cancelar.')
       }
     }
     const doc=record(await moloni.request('documents/getOne',{document_id:note.document_id}))
-    const totals=validateCreditDocument(note,doc)
+    validateCreditDocument(note,doc)
     if (Number(doc.status)!==0) return cleanNote(await refreshCredit(db,tenantId,note))
     note=await saveNote(db,tenantId,note,{...note,state:'cancelling',phase:'cancel'})
-    const result=record(await moloni.request('creditNotes/delete',{document_id:note.document_id}))
-    if (Number(result.valid)!==1) throw new CreditNoteError('Cancelamento não confirmado')
-    const cancelled=await saveNote(db,tenantId,note,{...note,state:'cancelled',error:undefined})
-    await release(db,tenantId,cancelled)
-    return cleanNote(cancelled)
+    try {
+      const result=record(await moloni.request('creditNotes/delete',{document_id:note.document_id}))
+      if (Number(result.valid)!==1) throw new CreditNoteError('Cancelamento não confirmado')
+      const cancelled=await saveNote(db,tenantId,note,{...note,state:'cancelled',error:undefined})
+      await release(db,tenantId,cancelled)
+      return cleanNote(cancelled)
+    } catch {
+      const review={...note,state:'review_required' as const,error:'Não foi possível confirmar o cancelamento no Moloni. Consulte o resultado antes de continuar.'}
+      try {await saveNote(db,tenantId,note,review)} catch { /* The cancelling state also blocks competing mutations. */ }
+      return cleanNote(review)
+    }
   }
   if (note.state!=='draft' || !note.document_id) throw new CreditNoteError('Esta tentativa precisa de confirmação no Moloni. Não repita a emissão.')
   const {moloni}=await creditMoloni(db,tenantId,note.company_id)
@@ -228,13 +234,22 @@ export async function finishCredit(db:SupabaseClient,tenantId:string,id:string,d
   if (Number(doc.status)!==0) return cleanNote(await refreshCredit(db,tenantId,note))
   assertUnchangedDraft(note,doc)
   if (Math.round(totals.total*100)!==Math.round(amount(note.total)*100)) throw new CreditNoteError('O valor do rascunho mudou. Consulte novamente o Moloni antes de confirmar.')
+  // The invoice may have received a payment after the operator prepared the draft.
+  const original=await creditInvoiceDocument(db,tenantId,note.source)
+  if (original.company!==note.company_id || original.documentId!==note.invoice_document_id || positiveId(original.invoice.customer_id)!==note.customer_id) {
+    throw new CreditNoteError('A associação à fatura original mudou. Confirme os documentos no Moloni.')
+  }
+  if (original.invoice.reconciled_value!=null) {
+    const remaining=Math.round((amount(original.invoice.net_value)-amount(original.invoice.reconciled_value))*100)
+    if (Math.round(totals.total*100)>remaining) throw new CreditNoteError('O valor a creditar excede o valor por liquidar na fatura. Confirme os pagamentos no Moloni.')
+  }
   note=await saveNote(db,tenantId,note,{...note,state:'closing',phase:'close'})
   try {
     const associated=record((note.payload.associated_documents as unknown[])[0])
     const value=Number(associated.value)===0 ? 0 : totals.total
     const result=record(await moloni.request('creditNotes/update',{...note.payload,document_id:note.document_id,status:1,
       associated_documents:[{associated_id:note.invoice_document_id,value}]}))
-    if (positiveId(result.document_id)!==note.document_id) throw new CreditNoteError('Emissão não confirmada')
+    if (Number(result.valid)!==1) throw new CreditNoteError('Emissão não confirmada')
     return cleanNote(await refreshCredit(db,tenantId,note))
   } catch {
     const review={...note,state:'review_required' as const,error:'Não foi possível confirmar o resultado no Moloni. O pedido não será repetido automaticamente.'}

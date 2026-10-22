@@ -20,17 +20,18 @@ function harness(options={}) {
    }
    if(endpoint==='documents/getUnrelatedProducts')return structuredClone(options.available||[line])
    if(endpoint==='creditNotes/insert'){
-    insertCount++;const id=next++,p=payload.products[0],net=Number((p.qty*p.price*(1-p.discount/100)).toFixed(2)),tax=Number((net*.23).toFixed(2))
+    insertCount++;if(options.beforeInsert)await options.beforeInsert();const id=next++,p=payload.products[0],net=Number((p.qty*p.price*(1-p.discount/100)).toFixed(2)),tax=Number((net*.23).toFixed(2))
     docs.set(id,{...structuredClone(payload),document_id:id,company_id:42,document_type:{saft_code:'NC'},document_set:{name:'2026'},number:1,net_value:net+tax,taxes_value:tax})
     if(options.insertTimeout)throw Error('Timeout after insert')
     return{document_id:id}
    }
    if(endpoint==='creditNotes/update'){
-    closeCount++;Object.assign(docs.get(payload.document_id),structuredClone(payload),{status:1})
+    closeCount++;if(options.beforeClose)await options.beforeClose();Object.assign(docs.get(payload.document_id),structuredClone(payload),{status:options.pendingClose?0:1})
     if(options.closeTimeout)throw Error('Timeout after close')
-    return{document_id:payload.document_id}
+    return{valid:1}
    }
-   if(endpoint==='creditNotes/delete'){docs.delete(payload.document_id);return{valid:1}}
+   if(endpoint==='creditNotes/delete'){docs.delete(payload.document_id);if(options.deleteTimeout)throw Error('Timeout after delete');return{valid:1}}
+   if(endpoint==='creditNotes/getAll'&&options.searchResults)return structuredClone(options.searchResults());
    if(endpoint==='creditNotes/getAll')return [...docs.values()].filter(d=>d.our_reference===payload.our_reference).map(d=>({document_id:d.document_id,our_reference:d.our_reference}))
    throw Error(`Unexpected endpoint ${endpoint}`)
   }
@@ -216,4 +217,130 @@ test('the receipt preview after a credit uses the remaining gross amount from Mo
  assert.equal(h.calls.some(c=>c.endpoint.endsWith('/insert')),false)
  const settled=harness({invoice:{reconciled_value:12.3}})
  await assert.rejects(settled.actions.previewCreditAdjustedReceiptAction(source),/integralmente liquidada/)
+})
+
+
+function deferred() { let resolve; const promise=new Promise(r=>{resolve=r}); return {promise,resolve} }
+const SECOND_OP='55555555-5555-4555-8555-555555555555'
+function hasLock(h) { return h.tables.audit_log.some(row=>row.action==='credit_note_lock') }
+
+test('refresh during an in-flight insert cannot treat an empty search as cancellation or release its lock',async()=>{
+ const entered=deferred(),resume=deferred()
+ const h=harness({beforeInsert:async()=>{entered.resolve();await resume.promise}})
+ const preparing=prepare(h);await entered.promise
+ try {
+  assert.equal(h.note.state,'creating')
+  await assert.rejects(h.actions.refreshCreditNoteAction(OP),/confirm|consult|aguard/i)
+  assert.equal(hasLock(h),true)
+  await assert.rejects(h.actions.prepareCreditNoteAction(source,SECOND_OP,[{id:101,qty:1}],'Segundo pedido'),/preparação ou por confirmar/)
+ } finally {resume.resolve();await preparing}
+ assert.equal(h.inserts,1);assert.equal(h.docs.size,1);assert.equal(h.note.state,'draft')
+})
+test('cancelling during an in-flight insert cannot unlock the invoice before creation finishes',async()=>{
+ const entered=deferred(),resume=deferred()
+ const h=harness({beforeInsert:async()=>{entered.resolve();await resume.promise}})
+ const preparing=prepare(h);await entered.promise
+ try {
+  await assert.rejects(h.actions.cancelCreditNoteDraftAction(OP),/confirmação|curso|aguard/i)
+  assert.equal(hasLock(h),true);assert.equal(h.calls.some(c=>c.endpoint==='creditNotes/delete'),false)
+ } finally {resume.resolve();await preparing}
+ assert.equal(h.note.state,'draft');assert.equal(h.inserts,1)
+})
+test('an empty or delayed provider search after a creation timeout preserves uncertainty and prevents another draft',async()=>{
+ let hidden=true
+ const h=harness({insertTimeout:true,searchResults:()=>hidden?[]:[{document_id:900,our_reference:`TMS-NC-${OP}`}]})
+ assert.equal((await prepare(h)).state,'review_required')
+ await assert.rejects(h.actions.refreshCreditNoteAction(OP),/confirm|consult|aguard/i)
+ await assert.rejects(h.actions.cancelCreditNoteDraftAction(OP),/confirm|consult|aguard/i)
+ assert.equal(h.note.state,'review_required');assert.equal(hasLock(h),true)
+ await assert.rejects(h.actions.prepareCreditNoteAction(source,SECOND_OP,[{id:101,qty:1}],'Segundo pedido'),/preparação ou por confirmar/)
+ hidden=false
+ assert.equal((await h.actions.refreshCreditNoteAction(OP)).state,'draft');assert.equal(h.inserts,1)
+})
+test('a cancellation racing a fiscal close cannot delete its draft or replace the closing state',async()=>{
+ const entered=deferred(),resume=deferred()
+ const h=harness({beforeClose:async()=>{entered.resolve();await resume.promise}});await prepare(h)
+ const closing=h.actions.confirmCreditNoteAction(OP);await entered.promise
+ try {
+  assert.equal(h.note.state,'closing')
+  await assert.rejects(h.actions.cancelCreditNoteDraftAction(OP),/confirmação|curso|aguard/i)
+  assert.equal(h.calls.some(c=>c.endpoint==='creditNotes/delete'),false)
+ } finally {resume.resolve();await closing}
+ assert.equal(h.note.state,'issued');assert.equal(h.closes,1)
+})
+test('an uncertain close remains protected against cancellation even if a provider read still reports draft',async()=>{
+ const h=harness({closeTimeout:true});await prepare(h);await h.actions.confirmCreditNoteAction(OP)
+ h.docs.get(900).status=0
+ await assert.rejects(h.actions.cancelCreditNoteDraftAction(OP),/confirmação|curso|aguard/i)
+ assert.equal(hasLock(h),true);assert.equal(h.calls.some(c=>c.endpoint==='creditNotes/delete'),false)
+})
+test('a lost delete response never causes a second automatic delete and keeps the invoice protected',async()=>{
+ const h=harness({deleteTimeout:true});await prepare(h)
+ assert.equal((await h.actions.cancelCreditNoteDraftAction(OP)).state,'review_required')
+ await assert.rejects(h.actions.cancelCreditNoteDraftAction(OP))
+ assert.equal(h.calls.filter(c=>c.endpoint==='creditNotes/delete').length,1)
+ assert.equal(hasLock(h),true);assert.notEqual(h.note.state,'cancelled')
+})
+test('a receipt or full settlement recorded after draft preparation blocks fiscal credit confirmation',async()=>{
+ for(const change of ['tms_receipt','moloni_settlement']) {
+  const h=harness();await prepare(h)
+  if(change==='tms_receipt')h.tables.audit_log.find(r=>r.id===SOURCE).details.moloni_receipt_id=321
+  else h.invoice.reconciled_value=12.3
+  await assert.rejects(h.actions.confirmCreditNoteAction(OP),/recibo|liquidada|creditada/i)
+  assert.equal(h.closes,0);assert.equal(h.note.state,'draft')
+ }
+})
+test('partial availability from earlier credits caps the new selection rather than the original quantity',async()=>{
+ const h=harness({available:[{...line,qty:0.5}]})
+ await assert.rejects(h.actions.prepareCreditNoteAction(source,OP,[{id:101,qty:1}],'Quantidade já creditada'),/superior à disponível/)
+ assert.equal(h.inserts,0);assert.equal(h.db.writes.length,0)
+ const draft=await h.actions.prepareCreditNoteAction(source,OP,[{id:101,qty:0.5}],'Crédito parcial válido')
+ assert.equal(draft.state,'draft');assert.equal(draft.net,2.5)
+})
+test('custom invoices bind the credit to the original gross total and canonical invoice record',async()=>{
+ const h=harness(),row=h.tables.audit_log.find(r=>r.id===SOURCE)
+ row.action='custom_invoice';row.details.total_value=12.3;row.details.invoice_number='FT DEMO/28'
+ const draft=await h.actions.prepareCreditNoteAction({id:SOURCE,kind:'custom_invoice'},OP,[{id:101,qty:1}],'Correção de serviço avulso')
+ assert.equal(draft.source.kind,'custom_invoice');assert.equal(draft.invoice_number,'FT DEMO/28');assert.equal(draft.state,'draft')
+ assert.equal((await h.actions.confirmCreditNoteAction(OP)).state,'issued');assert.equal(h.closes,1)
+ assert.equal(row.details.total_value,12.3)
+})
+test('all mutations and receipt previews reject client callers before touching the database or provider',async()=>{
+ const h=harness();await prepare(h)
+ h.setContext({...clientContext})
+ const clientsBefore=h.db.adminClients,callsBefore=h.calls.length,writesBefore=h.db.writes.length
+ for(const call of [()=>h.actions.confirmCreditNoteAction(OP),()=>h.actions.cancelCreditNoteDraftAction(OP),()=>h.actions.refreshCreditNoteAction(OP),()=>h.actions.previewCreditAdjustedReceiptAction(source)])await assert.rejects(call(),/permissão/)
+ assert.equal(h.db.adminClients,clientsBefore);assert.equal(h.calls.length,callsBefore);assert.equal(h.db.writes.length,writesBefore)
+})
+test('mixed original VAT rates, fractional quantities, discounts and exemptions survive selection exactly',()=>{
+ const {availableCreditLines,selectedCreditProducts}=createLoader({})('lib/billing/credit-notes/products.ts')
+ const items=[{...line,discount:10},{...line,document_product_id:102,product_id:6,name:'Serviço reduzido',price:4,qty:1,taxes:[{tax_id:3,value:6,order:1,cumulative:0}]},{...line,document_product_id:103,product_id:7,qty:1,price:2,taxes:[],exemption_reason:'M01'}]
+ const products=selectedCreditProducts(availableCreditLines({products:items},items),[{id:101,qty:0.5},{id:102,qty:1},{id:103,qty:1}],10)
+ assert.deepEqual(products.map(p=>[p.related_id,p.qty,p.price,p.discount,p.taxes,p.exemption_reason]),items.map((p,i)=>[p.document_product_id,i===0?0.5:1,p.price,p.discount||0,p.taxes,p.exemption_reason||'']))
+})
+
+
+test('a partial external settlement that leaves less than the draft total blocks confirmation',async()=>{
+ const h=harness();await prepare(h);h.invoice.reconciled_value=8
+ await assert.rejects(h.actions.confirmCreditNoteAction(OP),/valor|liquidada|creditada/i)
+ assert.equal(h.closes,0);assert.equal(h.note.state,'draft');assert.equal(hasLock(h),true)
+})
+test('a successful update acknowledgement cannot mark an unconfirmed provider draft as issued',async()=>{
+ const h=harness({pendingClose:true});await prepare(h)
+ assert.equal((await h.actions.confirmCreditNoteAction(OP)).state,'review_required')
+ assert.equal(h.note.state,'review_required');assert.equal(hasLock(h),true)
+ await assert.rejects(h.actions.confirmCreditNoteAction(OP),/confirmação/)
+ assert.equal(h.closes,1)
+})
+test('a finance employee from another tenant cannot read, confirm or cancel a stored note',async()=>{
+ const h=harness();await prepare(h)
+ h.setContext({user:{id:'other-staff'},role:'employee',tenant_id:'other-tenant',permissions:['Faturação & Contas Correntes']})
+ const calls=h.calls.length,writes=h.db.writes.length
+ for(const call of [()=>h.actions.confirmCreditNoteAction(OP),()=>h.actions.cancelCreditNoteDraftAction(OP),()=>h.actions.refreshCreditNoteAction(OP)])await assert.rejects(call(),/não encontrada nesta empresa/)
+ assert.equal(h.calls.length,calls);assert.equal(h.db.writes.length,writes)
+})
+test('a failure to read existing operations cannot be presented as an empty new preparation',async()=>{
+ const h=harness({failure:q=>!q.write&&q.table==='audit_log'&&q.filters.some(f=>f.field==='action'&&f.value==='credit_note')?{message:'database unavailable'}:null})
+ await assert.rejects(h.actions.previewCreditNoteAction(source),/consultar|operação/)
+ assert.equal(h.inserts,0);assert.equal(h.db.writes.length,0)
 })

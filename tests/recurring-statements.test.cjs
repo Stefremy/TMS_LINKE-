@@ -215,6 +215,7 @@ test('recurring server actions reject unauthorized access before reading or writ
   let touched = false
   const denied = async () => { throw Error('Forbidden') }
   const load = createLoader({ '@/lib/auth/context': { requireAdmin: denied, requirePermission: denied },
+    '@/lib/services/shipments/shipment-fetcher': { SHIPMENT_LIST_COLUMNS: '*' },
     '@/lib/supabase/server': { createAdminClient: () => { touched = true; throw Error('Unexpected database access') } },
     'next/cache': { revalidatePath: () => { touched = true } },
     '@/lib/billing/recurring-statements': { recurringPreview: () => { touched = true }, loadPeriodStatements: () => { touched = true }, sendRecurringStatementTest: () => { touched = true } } })

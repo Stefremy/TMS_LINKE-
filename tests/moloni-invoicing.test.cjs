@@ -19,6 +19,7 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
     '@/lib/config/public-origins':{moloniRedirectUri:()=> 'https://fixture.invalid/callback'},
     '@/app/actions/clientes':{getClientesAction:async()=>[{id:CLIENT,tenant_id:TENANT,nif:'999999990',payment_due_days:clientDueDays}]},
     '@/app/actions/shipments':{},
+    '@/lib/services/shipments/shipment-fetcher':{SHIPMENT_LIST_COLUMNS:'*'},
     '@/app/actions/billing-config':{getBillingConfigAction:async()=>({defaultVatRate:23})},
     'next/cache':{revalidatePath(){}},
     '@/lib/moloni/moloni-client':{MoloniClient:class {

@@ -1,7 +1,7 @@
 'use client'
 import {useEffect,useRef,useState} from 'react'
 import {useRouter} from 'next/navigation'
-import {Undo2,X,Loader2,ExternalLink,Download} from 'lucide-react'
+import {Undo2,X,Loader2,Download} from 'lucide-react'
 import {previewCreditNoteAction,prepareCreditNoteAction,confirmCreditNoteAction,cancelCreditNoteDraftAction,refreshCreditNoteAction} from '@/app/actions/credit-notes'
 import type {CreditNoteDto} from '@/lib/billing/credit-notes/service'
 import {creditMoney,CREDIT_STATE_LABELS,type CreditSource,type CreditPreview} from '@/lib/billing/credit-notes/types'
@@ -75,7 +75,7 @@ export function CreditNoteDialog({source,initial,onClose}:{source:CreditSource;i
       <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[var(--border-subtle)] px-5 py-4">
         <button type="button" disabled={pending} onClick={onClose} className="rounded-lg border border-[var(--border-subtle)] px-4 py-2 text-sm disabled:opacity-50">Fechar</button>
         {!note&&preview&&<button type="button" disabled={pending||!selected||reason.trim().length<5} onClick={()=>act('prepare')} className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Preparar rascunho</button>}
-        {(note?.state==='draft'||note?.state==='review_required')&&<button type="button" disabled={pending} onClick={()=>{if(confirm('Cancelar esta operação de nota de crédito?'))act('cancel')}} className="rounded-lg border border-[var(--border-subtle)] px-4 py-2 text-sm disabled:opacity-50">Cancelar tentativa</button>}
+        {(note?.state==='draft'||(note?.state==='review_required'&&note.phase==='create'&&note.document_id))&&<button type="button" disabled={pending} onClick={()=>{if(confirm('Cancelar esta operação de nota de crédito?'))act('cancel')}} className="rounded-lg border border-[var(--border-subtle)] px-4 py-2 text-sm disabled:opacity-50">Cancelar tentativa</button>}
         {note?.state==='draft'&&<button type="button" disabled={pending} onClick={()=>act('issue')} className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Confirmar emissão</button>}
         {note&&note.state!=='cancelled'&&<button type="button" disabled={pending} onClick={()=>act('refresh')} className="rounded-lg border border-[var(--border-subtle)] px-4 py-2 text-sm disabled:opacity-50">Consultar Moloni</button>}
       </footer>
