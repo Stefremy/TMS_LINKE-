@@ -20,7 +20,8 @@ import {
   Download,
   Loader2,
   CheckCircle2,
-  BookmarkCheck
+  BookmarkCheck,
+  PauseCircle
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
@@ -42,7 +43,7 @@ import { useRecipientAgenda } from "@/lib/hooks/useRecipientAgenda"
 import { ClientTopUpModal } from "./ClientTopUpModal"
 
 export function ClientCreateGuia() {
-  const { client: currentClient, basePath } = useClientScope()
+  const { client: currentClient, basePath, isSuspended } = useClientScope()
   const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>([])
   const [loadingClient, setLoadingClient] = React.useState(true)
 
@@ -208,6 +209,10 @@ export function ClientCreateGuia() {
 
   const handleCreateShipment = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSuspended) {
+      setSubmitError("A sua conta encontra-se suspensa para a criação de novos envios. Contacte geral@linke.pt para reativar.")
+      return
+    }
     if (submissionRef.current) return
     if (!recipientName) {
       alert("Por favor indique o nome do destinatário.")
@@ -498,6 +503,17 @@ export function ClientCreateGuia() {
       {/* Main Creation Card Form */}
       <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 p-4 sm:p-6 md:p-8">
         <form onSubmit={handleCreateShipment} aria-busy={isSubmitting} className="space-y-6">
+          {isSuspended && (
+            <div role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <PauseCircle className="h-5 w-5 text-amber-700 shrink-0" />
+                <h3 className="text-sm font-bold">Conta Suspensa para Criação de Novos Envios</h3>
+              </div>
+              <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+                A sua conta está temporariamente suspensa para emitir novas guias. Pode consultar os seus envios anteriores, faturas e conta-corrente. Para desbloquear a emissão, contacte geral@linke.pt.
+              </p>
+            </div>
+          )}
           
           {/* Remetente e Destinatário */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1004,12 +1020,16 @@ export function ClientCreateGuia() {
 
             <button 
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isSuspended}
               aria-busy={isSubmitting}
-              className="w-full sm:w-auto justify-center bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white px-7 py-3.5 rounded-2xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:cursor-wait disabled:opacity-75 disabled:active:scale-100"
+              className={`w-full sm:w-auto justify-center px-7 py-3.5 rounded-2xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center gap-2 ${
+                isSuspended
+                  ? "bg-amber-700 text-white cursor-not-allowed opacity-80"
+                  : "bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white cursor-pointer disabled:cursor-wait disabled:opacity-75 disabled:active:scale-100"
+              }`}
             >
-              {isSubmitting ? <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin motion-reduce:animate-none" /> : <FileText aria-hidden="true" className="w-4 h-4" />}
-              <span>{isSubmitting ? "A criar envio…" : "Criar Envio"}</span>
+              {isSubmitting ? <Loader2 aria-hidden="true" className="w-4 h-4 animate-spin motion-reduce:animate-none" /> : isSuspended ? <PauseCircle aria-hidden="true" className="w-4 h-4" /> : <FileText aria-hidden="true" className="w-4 h-4" />}
+              <span>{isSubmitting ? "A criar envio…" : isSuspended ? "Criação de Envios Suspensa" : "Criar Envio"}</span>
             </button>
           </div>
 

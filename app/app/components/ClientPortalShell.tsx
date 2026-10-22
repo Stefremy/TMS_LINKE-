@@ -18,13 +18,15 @@ import { DashboardBackdrop } from "@/app/ops/components/DashboardBackdrop"
 import backdropStyles from "@/app/ops/components/DashboardBackdrop.module.css"
 import sidebarStyles from "@/app/ops/components/SidebarPattern.module.css"
 
-export function ClientPortalShell({ children, store }: {
+export function ClientPortalShell({ children, store, isSuspended = false, accessStatus = "active" }: {
   children: React.ReactNode
   store: Awaited<ReturnType<typeof requirePortalStore>>
+  isSuspended?: boolean
+  accessStatus?: "active" | "suspended" | "blocked"
 }) {
   const { client, isEmployee, basePath } = store
   return (
-    <ClientScopeProvider key={client.id} value={{ client, isEmployee, basePath }}>
+    <ClientScopeProvider key={client.id} value={{ client, isEmployee, basePath, isSuspended, accessStatus }}>
     <div className="tms-shell bg-[var(--canvas-bg)] flex flex-col text-[var(--text-primary)]">
       {/* Top Admin Impersonation Bar */}
       <Suspense fallback={null}>

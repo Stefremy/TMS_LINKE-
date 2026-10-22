@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/auth/context'
 import { createAdminClient } from '@/lib/supabase/server'
-import { readPortalSuspension } from '@/lib/client-portal/suspension'
+import { readPortalAccess, readPortalSuspension, type ClientPortalAccessStatus } from '@/lib/client-portal/suspension'
 
 async function requireManagedClient(id: string) {
   const ctx = await requireAdmin()
@@ -16,7 +16,7 @@ async function requireManagedClient(id: string) {
 
 export async function getClientPortalAccessAction(id: string) {
   const { ctx } = await requireManagedClient(id)
-  return { blocked: await readPortalSuspension(ctx.tenant_id, id) }
+  return readPortalAccess(ctx.tenant_id, id)
 }
 
 export async function setClientPortalBlockedAction(id: string, blocked: boolean) {
@@ -30,4 +30,17 @@ export async function setClientPortalBlockedAction(id: string, blocked: boolean)
   revalidatePath('/ops/entidades/clientes')
   revalidatePath('/app', 'layout')
   return { blocked }
+}
+
+export async function setClientPortalSuspendedAction(id: string, suspended: boolean) {
+  const { ctx, db } = await requireManagedClient(id)
+  if (typeof suspended !== 'boolean') throw new Error('Estado de suspensão inválido.')
+  const { error } = await db.from('audit_log').insert({
+    tenant_id: ctx.tenant_id, action: 'client_portal_access',
+    details: { id, blocked: false, suspended, changed_by: ctx.user.id },
+  })
+  if (error) throw new Error('Não foi possível alterar a suspensão do cliente. Tente novamente.')
+  revalidatePath('/ops/entidades/clientes')
+  revalidatePath('/app', 'layout')
+  return { suspended }
 }

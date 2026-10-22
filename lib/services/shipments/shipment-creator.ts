@@ -14,6 +14,13 @@ export async function createShipment(formData: FormData) {
   const supabase = createAdminClient()
   
   const rawClientId = ctx.role === "client" ? ctx.client_id! : (formData.get("client_id") as string)
+  if (rawClientId && ctx.role === "client") {
+    const { readPortalAccess } = await import("@/lib/client-portal/suspension")
+    const access = await readPortalAccess(ctx.tenant_id, rawClientId).catch(() => null)
+    if (access && (access.suspended || access.blocked)) {
+      throw new Error("A sua conta encontra-se suspensa para a criação de novos envios. Contacte geral@linke.pt para reativar.")
+    }
+  }
   let service_type = (formData.get("service_type") as string) || "CTT Expresso 24H"
   
   // Sender

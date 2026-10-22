@@ -72,7 +72,7 @@ interface ClienteModalProps {
   onSaved: (saved: Cliente) => void
 }
 
-type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario"
+type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario" | "acesso"
 type PrecarioSubTab = "servicos_linke" | "suplementares" | "geral"
 
 export function ClienteModal({ initialData, servicosLinke = [], canManageAccess = false, defaultPaymentDays = 30, onManageAccess, onClose, onSaved }: ClienteModalProps) {
@@ -427,6 +427,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
             { id: "contactos", label: "Contactos", icon: Phone },
             { id: "comercial", label: "Condições & Crédito", icon: Euro },
             { id: "precario", label: "Preços & Serviços", icon: Percent, badge: `${visibleAssignedTablesCount} serviços` },
+            ...(canManageAccess ? [{ id: "acesso", label: "Acesso à Área do Cliente", icon: ShieldCheck }] : []),
           ].map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -457,15 +458,6 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
 
         {/* ===================== FORM CONTENT ===================== */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[var(--canvas-bg)]">
-          {initialData && canManageAccess && onManageAccess && <div className="mb-5 flex flex-col gap-3 rounded-xl border border-[#C9D7CD] bg-[#F4F7F4] p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-[#244C35]">Acesso à Área do Cliente</h2>
-              <p className="mt-1 text-xs leading-5 text-[#4D6254]">Envie um link para o cliente definir ou alterar a própria palavra-passe. A atual continua válida até ele guardar uma nova.</p>
-            </div>
-            <button type="button" disabled={isSaving} onClick={onManageAccess} className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#246B45] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[#1D5839] disabled:opacity-50">
-              <Mail className="h-4 w-4" />Enviar email de palavra-passe
-            </button>
-          </div>}
           {saveError && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{saveError}</p>}
           {invitationMessage && <p role="status" className="mb-4 rounded-lg border border-[#C9D7CD] bg-[#F4F7F4] p-3 text-sm text-[#315B43]">{invitationMessage}</p>}
           
@@ -1695,10 +1687,88 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
             </div>
           )}
 
+          {/* TAB 6: ACESSO À ÁREA DO CLIENTE */}
+          {activeTab === "acesso" && canManageAccess && (
+            <div className="space-y-6 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
+              <div>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">Acesso à Área do Cliente</h3>
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  Faça a gestão das credenciais de acesso, suspensão de novos envios e bloqueio total ao portal do cliente sem alterar os dados comerciais.
+                </p>
+              </div>
+
+              {initialData ? (
+                <div className="space-y-6">
+                  {/* Email de Palavra-Passe */}
+                  {onManageAccess && (
+                    <div className="flex flex-col gap-3 rounded-xl border border-[#C9D7CD] bg-[#F4F7F4] p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h4 className="text-xs font-bold text-[#244C35] uppercase tracking-wide">Credenciais e Palavra-passe</h4>
+                        <p className="mt-1 text-xs leading-5 text-[#4D6254]">
+                          Envie um link para o cliente definir ou alterar a própria palavra-passe. A atual continua válida até ele guardar uma nova.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={onManageAccess}
+                        className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#246B45] px-4 py-2.5 text-xs font-semibold text-white hover:bg-[#1D5839] disabled:opacity-50 cursor-pointer transition shadow-2xs"
+                      >
+                        <Mail className="h-4 w-4" />
+                        Enviar email de palavra-passe
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Controlos de Bloqueio e Suspensão */}
+                  <ClientPortalAccessControl key={initialData.id} clientId={initialData.id} disabled={isSaving} />
+                </div>
+              ) : (
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)]/50 p-5 space-y-4">
+                  <div className="rounded-lg border border-[#C9D7CD] bg-[#F4F7F4] p-4">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-[#244C35] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={sendInvitation}
+                        disabled={isSaving}
+                        onChange={(e) => {
+                          setSendInvitation(e.target.checked)
+                          if (!invitationEmail) setInvitationEmail(formData.email || "")
+                        }}
+                      />
+                      Enviar convite de acesso ao criar a loja
+                    </label>
+                    <p className="mt-2 text-xs leading-5 text-[#4D6254]">
+                      O cliente recebe um email e escolhe a própria palavra-passe. Usa este acesso apenas para esta loja.
+                    </p>
+                    {sendInvitation && (
+                      <div className="mt-3">
+                        <label htmlFor="invitation-email-tab" className="mb-1 block text-xs font-semibold text-[#244C35]">
+                          Email de acesso do cliente
+                        </label>
+                        <input
+                          id="invitation-email-tab"
+                          type="email"
+                          required
+                          maxLength={254}
+                          disabled={isSaving}
+                          value={invitationEmail}
+                          onChange={(e) => setInvitationEmail(e.target.value)}
+                          placeholder="nome@loja.pt"
+                          className="w-full rounded-md border border-[#B8CCBF] bg-white px-3 py-2 text-sm text-slate-900 focus:border-[#246B45] focus:outline-none focus:ring-2 focus:ring-[#246B45]/15"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    As opções de bloqueio total e suspensão de criação de novos envios ficam disponíveis imediatamente após gravar a ficha do cliente.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
-
-        {initialData && canManageAccess && <div className="px-6 pb-4 bg-[var(--surface-bg)]"><ClientPortalAccessControl key={initialData.id} clientId={initialData.id} disabled={isSaving} /></div>}
         {/* ===================== FOOTER BUTTONS ===================== */}
         <div className="px-6 py-3.5 border-t border-[var(--border-subtle)] bg-[var(--surface-bg)] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">

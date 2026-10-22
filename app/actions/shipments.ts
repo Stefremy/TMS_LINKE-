@@ -253,6 +253,17 @@ export async function emitClientGuiaAction(data: {
 
     const finalClientId = ctx.role === "client" ? ctx.client_id! : data.clientId
 
+    if (finalClientId) {
+      const { readPortalAccess } = await import("@/lib/client-portal/suspension")
+      const access = await readPortalAccess(ctx.tenant_id, finalClientId).catch(() => null)
+      if (access && (access.suspended || access.blocked)) {
+        return {
+          success: false,
+          error: "A sua conta encontra-se suspensa para a criação de novos envios. Contacte geral@linke.pt para reativar.",
+        }
+      }
+    }
+
     const supabase = createAdminClient()
     const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
     const shipmentId = crypto.randomUUID()
