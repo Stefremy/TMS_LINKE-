@@ -32,6 +32,8 @@ import { FloatingCalculatorWidget } from "./components/FloatingCalculatorWidget"
 import { LocalWeather } from "./components/LocalWeather"
 import { HeaderClockDate } from "./components/HeaderClockDate"
 import { DashboardBillingPanel } from "./components/DashboardBillingPanel"
+import { DashboardCalendarWidget } from "./components/DashboardCalendarWidget"
+import { lisbonDate } from "@/lib/billing/recurring-periods"
 
 function getMonthName(date: Date) {
   return date.toLocaleString('pt-PT', { month: 'long', year: 'numeric' })
@@ -297,6 +299,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
           <LocalWeather />
           <HeaderClockDate />
           <FloatingCalculatorWidget placement="inline" />
+          <DashboardCalendarWidget initialDate={lisbonDate(now)} />
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <DateRangePicker 

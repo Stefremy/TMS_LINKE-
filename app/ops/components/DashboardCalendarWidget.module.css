@@ -1,0 +1,30 @@
+.widget { text-decoration: none; }
+.dateBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 52px;
+  overflow: hidden;
+  border: 1px solid var(--border-default, var(--border-subtle));
+  border-radius: 7px;
+  background: var(--surface-bg);
+}
+.weekday {
+  width: 100%;
+  padding: 3px 0;
+  background: var(--status-critical, #b04740);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+}
+.day { font-size: 25px; font-weight: 650; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.reading { display: flex; flex-direction: column; gap: 4px; min-width: 0; line-height: 1.25; }
+.month { font-size: 14px; font-weight: 650; text-transform: capitalize; white-space: nowrap; }
+.status { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+.dot { width: 5px; height: 5px; flex-shrink: 0; border-radius: 50%; background: var(--accent); }
+.event { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--text-tertiary, var(--text-secondary)); }
