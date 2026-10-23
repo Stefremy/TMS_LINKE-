@@ -87,6 +87,7 @@ const navConfig: NavSection[] = [
         ]
       },
       { title: "Documentos", href: "/ops/documentos", icon: FileText },
+      { title: "Mensagens aos clientes", href: "/ops/mensagens", icon: MessageSquare },
     ]
   },
   {
@@ -115,14 +116,15 @@ const navConfig: NavSection[] = [
 interface SidebarNavProps {
   collapsed?: boolean
   canAccessDocuments?: boolean
+  canSendMessages?: boolean
 }
 
-export function SidebarNav({ collapsed = false, canAccessDocuments = false }: SidebarNavProps) {
+export function SidebarNav({ collapsed = false, canAccessDocuments = false, canSendMessages = false }: SidebarNavProps) {
   const pathname = usePathname()
   const visibleNavConfig = React.useMemo(() => navConfig.map((section) => ({
     ...section,
-    items: section.items.filter((item) => canAccessDocuments || item.href !== "/ops/documentos"),
-  })), [canAccessDocuments])
+    items: section.items.filter((item) => (canAccessDocuments || item.href !== "/ops/documentos") && (canSendMessages || item.href !== "/ops/mensagens")),
+  })), [canAccessDocuments, canSendMessages])
   
   // Track open state of multiple accordions
   const [openItems, setOpenItems] = React.useState<Record<string, boolean>>({})

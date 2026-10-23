@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.client_messages (
  UNIQUE(tenant_id,client_id,source_key), UNIQUE(id,tenant_id,client_id)
 );
 CREATE INDEX IF NOT EXISTS client_messages_page ON public.client_messages(tenant_id,client_id,created_at DESC,id DESC);
+CREATE INDEX IF NOT EXISTS client_messages_kind_page ON public.client_messages(tenant_id,client_id,kind,created_at DESC,id DESC);
 CREATE TABLE IF NOT EXISTS public.client_message_reads (
  message_id uuid NOT NULL, tenant_id uuid NOT NULL, client_id uuid NOT NULL, user_id uuid NOT NULL,
  read_at timestamptz NOT NULL DEFAULT clock_timestamp(), PRIMARY KEY(message_id,user_id),
@@ -29,18 +30,20 @@ END $$;
 DROP TRIGGER IF EXISTS client_message_scope ON public.client_messages;
 CREATE TRIGGER client_message_scope BEFORE INSERT OR UPDATE ON public.client_messages FOR EACH ROW EXECUTE FUNCTION public.assert_client_message_scope();
 
-CREATE OR REPLACE FUNCTION public.client_message_page(p_tenant uuid,p_client uuid,p_user uuid,p_before timestamptz DEFAULT NULL,p_before_id uuid DEFAULT NULL,p_unread boolean DEFAULT false,p_limit integer DEFAULT 20)
+DROP FUNCTION IF EXISTS public.client_message_page(uuid,uuid,uuid,timestamptz,uuid,boolean,integer);
+CREATE OR REPLACE FUNCTION public.client_message_page(p_tenant uuid,p_client uuid,p_user uuid,p_before timestamptz DEFAULT NULL,p_before_id uuid DEFAULT NULL,p_unread boolean DEFAULT false,p_limit integer DEFAULT 20,p_kind text DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE result jsonb; unread_count bigint; page_size integer:=least(greatest(COALESCE(p_limit,20),0),30);
 BEGIN
  IF p_user IS NULL OR NOT EXISTS(SELECT 1 FROM public.clients WHERE id=p_client AND tenant_id=p_tenant) THEN RAISE EXCEPTION 'Invalid message scope'; END IF;
+ IF p_kind IS NOT NULL AND p_kind NOT IN ('info','invoice','payment','incident','weight') THEN RAISE EXCEPTION 'Invalid message kind'; END IF;
  IF (p_before IS NULL)<>(p_before_id IS NULL) THEN RAISE EXCEPTION 'Invalid cursor'; END IF;
  SELECT count(*) INTO unread_count FROM public.client_messages m WHERE m.tenant_id=p_tenant AND m.client_id=p_client
   AND NOT EXISTS(SELECT 1 FROM public.client_message_reads r WHERE r.message_id=m.id AND r.user_id=p_user);
  SELECT COALESCE(jsonb_agg(to_jsonb(page) ORDER BY page.created_at DESC,page.id DESC),'[]'::jsonb) INTO result FROM (
   SELECT m.id,m.kind,m.title,m.body,m.section,m.reference,m.created_at,r.read_at
   FROM public.client_messages m LEFT JOIN public.client_message_reads r ON r.message_id=m.id AND r.user_id=p_user
-  WHERE m.tenant_id=p_tenant AND m.client_id=p_client AND (NOT p_unread OR r.message_id IS NULL)
+  WHERE m.tenant_id=p_tenant AND m.client_id=p_client AND (NOT p_unread OR r.message_id IS NULL) AND (p_kind IS NULL OR m.kind=p_kind)
    AND (p_before IS NULL OR (m.created_at,m.id)<(p_before,p_before_id))
   ORDER BY m.created_at DESC,m.id DESC LIMIT page_size+1
  ) page;
@@ -77,7 +80,7 @@ CREATE OR REPLACE FUNCTION public.notify_client_system_event() RETURNS trigger L
 DECLARE c uuid; k text; title text; body text; section text; ref text; kind text; info jsonb;
 BEGIN
  IF TG_TABLE_NAME='client_transactions' THEN
-  IF NEW.status<>'paid' OR NEW.credited_at IS NULL THEN RETURN NEW; END IF;
+  IF NEW.status<>'paid' OR NEW.credited_at IS NULL OR NEW.amount<=0 OR NEW.amount::text IN ('NaN','Infinity','-Infinity') THEN RETURN NEW; END IF;
   c:=NEW.client_id; k:='payment:'||NEW.id::text; kind:='payment'; title:='Carregamento confirmado'; section:='carregamentos';
   body:='O carregamento de '||replace(NEW.amount::text,'.',',')||' € foi confirmado e creditado na sua conta.';
  ELSIF TG_TABLE_NAME='shipments' THEN
@@ -89,14 +92,14 @@ BEGIN
  ELSE
   info:=NEW.details;
   IF NEW.action='shipment_weight_adjustment' THEN
-   SELECT client_id INTO c FROM public.shipments WHERE tenant_id=NEW.tenant_id AND id::text=info->>'shipment_id' AND client_id::text=info->>'client_id';
+   SELECT client_id,COALESCE(tracking_number,carrier_tracking_number,id::text) INTO c,ref FROM public.shipments WHERE tenant_id=NEW.tenant_id AND id::text=info->>'shipment_id' AND client_id::text=info->>'client_id';
    IF c IS NULL THEN RETURN NEW; END IF;
-   k:='weight:'||NEW.id::text;kind:='weight';title:='Ajuste de escalão por peso';section:='envios';ref:=info->>'shipment_id';
+   k:='weight:'||NEW.id::text;kind:='weight';title:='Ajuste de escalão por peso';section:='envios';
    body:='O peso de cobrança passou de '||COALESCE(info->>'previousWeightKg','—')||' kg para '||COALESCE(info->>'weightKg','—')||' kg. O preço passou de '||COALESCE(info->>'previousPrice','—')||' € para '||COALESCE(info->>'price','—')||' € (sem IVA). Diferença: '||COALESCE(info->>'difference','—')||' €.';
   ELSIF NEW.action='billing_statement' THEN
-   IF COALESCE(info->>'moloni_document_id','')='' OR COALESCE(info->>'is_pro_forma','false')='true' THEN RETURN NEW; END IF;
+   IF COALESCE(info->>'moloni_document_id','')!~'^[1-9][0-9]*$' OR COALESCE(info->>'is_pro_forma','false')='true' THEN RETURN NEW; END IF;
    c:=(info->>'client_id')::uuid;ref:=COALESCE(info->>'moloni_document_number',info->>'statement_number','');section:='faturas';
-   IF COALESCE(info->>'moloni_receipt_id','')<>'' THEN
+   IF COALESCE(info->>'moloni_receipt_id','')~'^[1-9][0-9]*$' THEN
     k:='receipt:'||(info->>'moloni_receipt_id');kind:='payment';title:='Pagamento registado';body:='O pagamento da fatura '||ref||' foi registado. O respetivo recibo está disponível em Faturas e Extratos.';
    ELSE
     k:='invoice:'||(info->>'moloni_document_id');kind:='invoice';title:='Nova fatura disponível';body:='A fatura '||ref||' está disponível para consulta em Faturas e Extratos.';
@@ -118,6 +121,6 @@ CREATE TRIGGER client_message_payment_event AFTER INSERT OR UPDATE ON public.cli
 DROP TRIGGER IF EXISTS client_message_incident_event ON public.shipments;
 CREATE TRIGGER client_message_incident_event AFTER INSERT OR UPDATE ON public.shipments FOR EACH ROW EXECUTE FUNCTION public.notify_client_system_event();
 
-REVOKE ALL ON FUNCTION public.assert_client_message_scope(),public.notify_client_system_event(),public.client_message_page(uuid,uuid,uuid,timestamptz,uuid,boolean,integer),public.mark_client_messages_read(uuid,uuid,uuid,uuid[]),public.send_client_message(uuid,uuid,uuid,uuid,text,text) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.client_message_page(uuid,uuid,uuid,timestamptz,uuid,boolean,integer),public.mark_client_messages_read(uuid,uuid,uuid,uuid[]),public.send_client_message(uuid,uuid,uuid,uuid,text,text) TO service_role;
+REVOKE ALL ON FUNCTION public.assert_client_message_scope(),public.notify_client_system_event(),public.client_message_page(uuid,uuid,uuid,timestamptz,uuid,boolean,integer,text),public.mark_client_messages_read(uuid,uuid,uuid,uuid[]),public.send_client_message(uuid,uuid,uuid,uuid,text,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.client_message_page(uuid,uuid,uuid,timestamptz,uuid,boolean,integer,text),public.mark_client_messages_read(uuid,uuid,uuid,uuid[]),public.send_client_message(uuid,uuid,uuid,uuid,text,text) TO service_role;
 COMMIT;

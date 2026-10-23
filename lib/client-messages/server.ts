@@ -15,9 +15,11 @@ export async function listClientMessages(db: SupabaseClient, ctx: AuthContext | 
   const scope = await authorizeMessageClient(db, ctx, clientId)
   const at = params.get('before'), id = params.get('beforeId')
   if (!!at !== !!id || at && (!Number.isFinite(Date.parse(at)) || !messageUuid(id))) throw new ClientMessageError('Página de mensagens inválida.')
+  const kind = params.get('kind')
+  if (kind && !['info','invoice','payment','incident','weight'].includes(kind)) throw new ClientMessageError('Tipo de mensagem inválido.')
   const { data, error } = await db.rpc('client_message_page', {
     p_tenant: scope.tenant, p_client: scope.client, p_user: scope.user,
-    p_before: at, p_before_id: id, p_unread: params.get('unread') === '1', p_limit: params.get('summary') === '1' ? 0 : 20,
+    p_before: at, p_before_id: id, p_unread: params.get('unread') === '1', p_limit: params.get('summary') === '1' ? 0 : 20, p_kind: kind,
   })
   if (error) {
     if (error.code === 'PGRST202' || error.code === 'PGRST205' || error.code === '42883' || error.code === '42P01') {
@@ -33,7 +35,6 @@ export async function markClientMessagesRead(db: SupabaseClient, ctx: AuthContex
   if (!Array.isArray(ids) || !ids.length || ids.length > 50 || ids.some(id => !messageUuid(id))) throw new ClientMessageError('Seleção de mensagens inválida.')
   const { error } = await db.rpc('mark_client_messages_read', { p_tenant: scope.tenant, p_client: scope.client, p_user: scope.user, p_ids: [...new Set(ids)] })
   if (error) {
-    if (error.code === 'PGRST202' || error.code === 'PGRST205' || error.code === '42883' || error.code === '42P01') return
     throw new ClientMessageError('Não foi possível marcar as mensagens como lidas.', 503)
   }
 }

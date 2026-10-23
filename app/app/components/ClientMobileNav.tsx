@@ -21,6 +21,7 @@ import {
 import { useClientScope } from "./ClientScope"
 import { ClientAccountDetailsModal } from "./ClientAccountDetailsModal"
 import { ClientProfileSidebar } from "./ClientImpersonationBanner"
+import { ClientMessageBell } from "./ClientMessages"
 import { ClientSidebarNav } from "./ClientSidebarNav"
 import { signout } from "@/app/login/actions"
 import sidebarStyles from "@/app/ops/components/SidebarPattern.module.css"
@@ -72,12 +73,14 @@ export function ClientMobileNav() {
               style={{ height: "auto" }}
               priority
             />
-            <span className="text-[10px] font-bold text-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 rounded-full border border-[rgba(18,138,71,0.2)] truncate max-w-[130px]">
+            <span className="hidden min-[440px]:inline text-[10px] font-bold text-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 rounded-full border border-[rgba(18,138,71,0.2)] truncate max-w-[130px]">
               {client.short_name}
             </span>
           </Link>
         </div>
 
+        <div className="flex shrink-0 items-center gap-1">
+        <ClientMessageBell />
         <Link
           href={`${basePath}/criar-guia`}
           className="min-h-11 flex items-center gap-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 transition-all shrink-0"
@@ -85,6 +88,7 @@ export function ClientMobileNav() {
           <Plus className="w-3.5 h-3.5" strokeWidth={3} />
           <span>Novo</span>
         </Link>
+        </div>
       </div>
 
       {/* ─── MOBILE DRAWER & BACKDROP (compact layout) ─────────────────────────────── */}

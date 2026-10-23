@@ -10,18 +10,22 @@ import {
   Scale, 
   Info, 
   CheckCheck, 
-  RefreshCw, 
   ExternalLink, 
   MailCheck,
   CheckCircle2,
   Clock
 } from "lucide-react"
 import type { ClientMessage, MessageKind, MessageSection } from "@/lib/client-messages/types"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
+import { useClientMessageCounter } from "./ClientMessages"
+import type { MessageCursor, MessagePage } from "@/lib/client-messages/types"
 import { useClientScope } from "./ClientScope"
 
 type Props = {
   initialMessages?: ClientMessage[]
   initialUnreadCount?: number
+  initialNext?: MessageCursor | null
+  initialError?: string
 }
 
 const KIND_CONFIG: Record<MessageKind, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -30,7 +34,7 @@ const KIND_CONFIG: Record<MessageKind, { label: string; icon: React.ComponentTyp
     icon: FileText,
   },
   payment: {
-    label: "Carregamento",
+    label: "Pagamento",
     icon: CreditCard,
   },
   incident: {
@@ -47,59 +51,80 @@ const KIND_CONFIG: Record<MessageKind, { label: string; icon: React.ComponentTyp
   },
 }
 
-export function ClientInbox({ initialMessages = [], initialUnreadCount = 0 }: Props) {
-  const { client, basePath } = useClientScope()
+export function ClientInbox({ initialMessages = [], initialUnreadCount = 0, initialNext = null, initialError = "" }: Props) {
+  const { client, basePath, isEmployee } = useClientScope()
+  const counter = useClientMessageCounter()
   const [messages, setMessages] = React.useState<ClientMessage[]>(initialMessages)
   const [unreadCount, setUnreadCount] = React.useState(initialUnreadCount)
   const [filter, setFilter] = React.useState<"all" | "unread" | "invoice" | "incident" | "payment" | "weight">("all")
   const [loading, setLoading] = React.useState(false)
   const [markingAll, setMarkingAll] = React.useState(false)
+  const [next, setNext] = React.useState<MessageCursor | null>(initialNext)
+  const [error, setError] = React.useState(initialError)
+  const generation = React.useRef(0)
+
+  const readPage = React.useCallback(async (cursor: MessageCursor | null, signal?: AbortSignal) => {
+    const params = new URLSearchParams({ clientId: client.id })
+    if (filter === "unread") params.set('unread', '1')
+    else if (filter !== "all") params.set('kind', filter)
+    if (cursor) { params.set('before', cursor.at); params.set('beforeId', cursor.id) }
+    const response = await fetch(`/api/client-messages?${params}`, { cache: 'no-store', signal })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || 'Não foi possível carregar as mensagens.')
+    return data as MessagePage
+  }, [client.id, filter])
 
   const fetchMessages = React.useCallback(async () => {
-    if (!client?.id) return
+    const request = ++generation.current
     setLoading(true)
     try {
-      const res = await fetch(`/api/client-messages?clientId=${encodeURIComponent(client.id)}`)
-      if (res.ok) {
-        const data = await res.json()
-        if (Array.isArray(data.messages)) {
-          setMessages(data.messages)
-          setUnreadCount(typeof data.unreadCount === "number" ? data.unreadCount : 0)
-        }
-      }
-    } catch (err) {
-      console.warn("Failed to refresh messages:", err)
-    } finally {
-      setLoading(false)
-    }
-  }, [client?.id])
+      const data = await readPage(null)
+      if (request !== generation.current) return
+      setMessages(data.messages); setUnreadCount(data.unreadCount); setNext(data.next); setError('')
+    } catch (cause) { if (request === generation.current) setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as mensagens.') }
+    finally { if (request === generation.current) setLoading(false) }
+  }, [readPage])
+
+  // Store-keyed layout remounts the inbox when changing stores. Filters are fetched on the server.
+  const first = React.useRef(true)
+  const invalidate = React.useCallback(() => { generation.current++ }, [])
+  React.useEffect(() => {
+    if (first.current) { first.current = false; return invalidate }
+    void fetchMessages()
+    return invalidate
+  }, [fetchMessages, invalidate])
+
+  async function more() {
+    if (!next || loading) return
+    const request = generation.current
+    setLoading(true)
+    try {
+      const data = await readPage(next)
+      if (request !== generation.current) return
+      setMessages(previous => [...new Map([...previous, ...data.messages].map(m => [m.id, m])).values()])
+      setUnreadCount(data.unreadCount); setNext(data.next); setError('')
+    } catch (cause) { if (request === generation.current) setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as mensagens.') }
+    finally { if (request === generation.current) setLoading(false) }
+  }
 
   const handleMarkAsRead = async (ids: string[]) => {
-    if (!client?.id || !ids.length) return
-    setMessages(prev => prev.map(m => ids.includes(m.id) ? { ...m, read_at: m.read_at || new Date().toISOString() } : m))
-    setUnreadCount(prev => Math.max(0, prev - ids.length))
-
-    try {
-      await fetch("/api/client-messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "read", clientId: client.id, ids }),
-      })
-    } catch (err) {
-      console.warn("Failed to mark messages as read:", err)
-    }
-  }
-
-  const handleMarkAllRead = async () => {
-    const unreadIds = messages.filter(m => !m.read_at).map(m => m.id)
-    if (!unreadIds.length) return
+    if (!ids.length || markingAll) return
+    const request = generation.current
     setMarkingAll(true)
     try {
-      await handleMarkAsRead(unreadIds)
-    } finally {
-      setMarkingAll(false)
-    }
+      const response = await fetch('/api/client-messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'read', clientId: client.id, ids }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Não foi possível guardar a leitura.')
+      if (request === generation.current) {
+        const newlyRead = messages.filter(m => ids.includes(m.id) && !m.read_at).length
+        setMessages(previous => previous.map(m => ids.includes(m.id) ? { ...m, read_at: m.read_at || new Date().toISOString() } : m))
+        setUnreadCount(previous => Math.max(0, previous - newlyRead)); setError('')
+      } else void fetchMessages()
+      void counter?.refresh()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível guardar a leitura.') }
+    finally { setMarkingAll(false) }
   }
+  const handleMarkAllRead = () => handleMarkAsRead(messages.filter(m => !m.read_at).slice(0, 50).map(m => m.id))
 
   const filteredMessages = React.useMemo(() => {
     return messages.filter(m => {
@@ -120,20 +145,7 @@ export function ClientInbox({ initialMessages = [], initialUnreadCount = 0 }: Pr
     return null
   }
 
-  const formatDate = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr)
-      if (isNaN(d.getTime())) return dateStr
-      const now = new Date()
-      const isToday = d.toDateString() === now.toDateString()
-      if (isToday) {
-        return `Hoje às ${d.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}`
-      }
-      return d.toLocaleDateString("pt-PT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
-    } catch {
-      return dateStr
-    }
-  }
+  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', dateStyle: 'short', timeStyle: 'short' })
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl mx-auto font-sans">
@@ -167,11 +179,11 @@ export function ClientInbox({ initialMessages = [], initialUnreadCount = 0 }: Pr
             <button
               type="button"
               onClick={handleMarkAllRead}
-              disabled={markingAll}
+              disabled={markingAll || loading}
               className="px-3 py-1.5 text-xs font-semibold rounded-md border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-primary)] hover:bg-[rgba(0,0,0,0.05)] transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
             >
               <CheckCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>{markingAll ? "A marcar..." : "Marcar todas como lidas"}</span>
+              <span>{markingAll ? "A marcar..." : "Marcar estas como lidas"}</span>
             </button>
           )}
 
@@ -182,29 +194,31 @@ export function ClientInbox({ initialMessages = [], initialUnreadCount = 0 }: Pr
             className="p-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[rgba(0,0,0,0.05)] transition-all cursor-pointer disabled:opacity-50"
             title="Atualizar mensagens"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshIcon className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
 
+      {isEmployee && <p className="text-xs text-[var(--text-secondary)]">Está a consultar esta loja. As suas leituras não alteram o estado de leitura do cliente.</p>}
+      {error && <p role="alert" className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 text-sm text-[var(--status-critical)]">{error}</p>}
       {/* Filter Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs border-b border-[var(--border-subtle)]">
         <button
           type="button"
           onClick={() => setFilter("all")}
-          className={`px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+          className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
             filter === "all"
               ? "bg-[var(--accent)] text-white font-semibold shadow-2xs"
               : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
           }`}
         >
-          Todas ({messages.length})
+          Todas
         </button>
 
         <button
           type="button"
           onClick={() => setFilter("unread")}
-          className={`px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+          className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
             filter === "unread"
               ? "bg-[var(--accent)] text-white font-semibold shadow-2xs"
               : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
@@ -221,7 +235,7 @@ export function ClientInbox({ initialMessages = [], initialUnreadCount = 0 }: Pr
         <button
           type="button"
           onClick={() => setFilter("invoice")}
-          className={`px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+          className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
             filter === "invoice"
               ? "bg-[var(--accent)] text-white font-semibold shadow-2xs"
               : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
@@ -233,19 +247,19 @@ export function ClientInbox({ initialMessages = [], initialUnreadCount = 0 }: Pr
         <button
           type="button"
           onClick={() => setFilter("payment")}
-          className={`px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+          className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
             filter === "payment"
               ? "bg-[var(--accent)] text-white font-semibold shadow-2xs"
               : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
           }`}
         >
-          Carregamentos
+          Pagamentos
         </button>
 
         <button
           type="button"
           onClick={() => setFilter("incident")}
-          className={`px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+          className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
             filter === "incident"
               ? "bg-[var(--accent)] text-white font-semibold shadow-2xs"
               : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
@@ -257,7 +271,7 @@ export function ClientInbox({ initialMessages = [], initialUnreadCount = 0 }: Pr
         <button
           type="button"
           onClick={() => setFilter("weight")}
-          className={`px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+          className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
             filter === "weight"
               ? "bg-[var(--accent)] text-white font-semibold shadow-2xs"
               : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
@@ -329,7 +343,7 @@ export function ClientInbox({ initialMessages = [], initialUnreadCount = 0 }: Pr
                       </div>
                     </div>
 
-                    <p className="text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-line">
+                    <p className="text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-line break-words">
                       {msg.body}
                     </p>
 
@@ -378,6 +392,7 @@ export function ClientInbox({ initialMessages = [], initialUnreadCount = 0 }: Pr
           })}
         </div>
       )}
+      {next && <div className="text-center"><button type="button" disabled={loading} onClick={() => void more()} className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-4 py-2 text-xs font-medium text-[var(--text-primary)] disabled:opacity-50">{loading ? 'A carregar…' : 'Ver mensagens anteriores'}</button></div>}
     </div>
   )
 }

@@ -13,6 +13,7 @@ import { ClientSidebarNav, ClientTopHeaderAction } from "./ClientSidebarNav"
 import { signout } from "@/app/login/actions"
 import type { requirePortalStore } from "@/lib/client-portal/access"
 import { ClientScopeProvider } from "./ClientScope"
+import { ClientMessagesProvider } from "./ClientMessages"
 import { ClientMobileNav } from "./ClientMobileNav"
 import { DashboardBackdrop } from "@/app/ops/components/DashboardBackdrop"
 import backdropStyles from "@/app/ops/components/DashboardBackdrop.module.css"
@@ -27,6 +28,7 @@ export function ClientPortalShell({ children, store, isSuspended = false, access
   const { client, isEmployee, basePath } = store
   return (
     <ClientScopeProvider key={client.id} value={{ client, isEmployee, basePath, isSuspended, accessStatus }}>
+    <ClientMessagesProvider>
     <div className="tms-shell bg-[var(--canvas-bg)] flex flex-col text-[var(--text-primary)]">
       {/* Top Admin Impersonation Bar */}
       <Suspense fallback={null}>
@@ -114,6 +116,7 @@ export function ClientPortalShell({ children, store, isSuspended = false, access
         </div>
       </div>
     </div>
+    </ClientMessagesProvider>
     </ClientScopeProvider>
   )
 }

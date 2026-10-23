@@ -1,20 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { 
-  CreditCard, 
-  CheckCircle2, 
-  Clock, 
-  XCircle, 
-  PlusCircle, 
-  ArrowUpRight, 
-  ShieldCheck, 
-  Wallet, 
-  Receipt,
-  Calendar,
-  AlertCircle
-} from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { CreditCard, CheckCircle2, Clock, XCircle, PlusCircle, ArrowUpRight, Wallet, Calendar } from "lucide-react"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 import { useClientScope } from "@/app/app/components/ClientScope"
 
@@ -37,7 +24,6 @@ interface ClientCarregamentosHistoryProps {
 export function ClientCarregamentosHistory({ 
   transactions = [], 
   availableCredit,
-  creditLimit 
 }: ClientCarregamentosHistoryProps) {
   const { client } = useClientScope()
   const [isTopUpOpen, setIsTopUpOpen] = React.useState(false)
@@ -46,7 +32,6 @@ export function ClientCarregamentosHistory({
   const paidTransactions = transactions.filter(t => t.status === "paid")
   const totalPaidAmount = paidTransactions.reduce((acc, t) => acc + Number(t.amount || 0), 0)
   const pendingTransactions = transactions.filter(t => t.status === "pending")
-  const lastTransaction = paidTransactions[0] || transactions[0]
 
   const filteredTransactions = transactions.filter(t => {
     if (statusFilter === "todos") return true
@@ -64,85 +49,33 @@ export function ClientCarregamentosHistory({
         />
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Saldo Disponível */}
-        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs">
-          <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)] font-bold uppercase tracking-wider mb-2">
-            <span>Saldo Disponível</span>
-            <div className="w-7 h-7 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center">
-              <Wallet className="w-4 h-4" />
-            </div>
+      <section aria-label="Resumo da carteira" className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+        <div className="grid grid-cols-1 gap-px bg-[var(--border-subtle)] sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "Saldo disponível", value: `${(availableCredit !== undefined ? availableCredit : (client?.credit_limit ?? 0)).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`, icon: Wallet, color: "#155EEF", description: "Utilizado nos novos envios" },
+            { label: "Total carregado", value: `${totalPaidAmount.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`, icon: ArrowUpRight, color: "#187744", description: `${paidTransactions.length} carregamento(s) confirmado(s)` },
+            { label: "Em processamento", value: pendingTransactions.length, icon: Clock, color: "#965A28", description: pendingTransactions.length ? "A aguardar confirmação de pagamento" : "Sem pagamentos pendentes" },
+          ].map(item => <div key={item.label} className="min-w-0 border-t-[3px] bg-[var(--surface-bg)] p-5" style={{ borderTopColor: item.color }}>
+            <div className="flex items-center gap-2.5 text-sm font-medium text-[var(--text-secondary)]"><item.icon aria-hidden="true" className="h-4 w-4 shrink-0" />{item.label}</div>
+            <div className="mt-3 text-[28px] font-semibold leading-none tracking-tight text-[var(--text-primary)] tabular-nums">{item.value}</div>
+            <p className="mt-2 text-xs text-[var(--text-tertiary)]">{item.description}</p>
+          </div>)}
+          <div className="flex flex-col justify-between border-t-[3px] border-[var(--accent)] bg-[var(--surface-bg)] p-5">
+            <div><h2 className="text-sm font-semibold text-[var(--text-primary)]">Carregar carteira</h2><p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">Cartão, MB WAY ou Multibanco. Saldo disponível após confirmação do pagamento.</p></div>
+            <button type="button" onClick={() => setIsTopUpOpen(true)} className="mt-4 inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]">
+              <PlusCircle aria-hidden="true" className="h-4 w-4" />Novo carregamento
+            </button>
           </div>
-          <div className="text-2xl sm:text-3xl font-black font-mono text-[var(--text-primary)]">
-            {(availableCredit !== undefined ? availableCredit : (client?.credit_limit ?? 0)).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
-          </div>
-          <p className="text-[11px] text-[var(--text-tertiary)] mt-1">
-            Utilizado automaticamente nos novos envios
-          </p>
         </div>
-
-        {/* Total Carregado */}
-        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs">
-          <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)] font-bold uppercase tracking-wider mb-2">
-            <span>Total Carregado</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-              <ArrowUpRight className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-600">
-            {totalPaidAmount.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
-          </div>
-          <p className="text-[11px] text-[var(--text-tertiary)] mt-1">
-            {paidTransactions.length} {paidTransactions.length === 1 ? "carregamento confirmado" : "carregamentos confirmados"}
-          </p>
-        </div>
-
-        {/* Carregamentos Pendentes */}
-        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 shadow-2xs">
-          <div className="flex items-center justify-between text-xs text-[var(--text-tertiary)] font-bold uppercase tracking-wider mb-2">
-            <span>Em Processamento</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl sm:text-3xl font-black font-mono text-slate-800">
-            {pendingTransactions.length}
-          </div>
-          <p className="text-[11px] text-[var(--text-tertiary)] mt-1">
-            {pendingTransactions.length > 0 ? "A aguardar confirmação bancária" : "Nenhum pagamento pendente"}
-          </p>
-        </div>
-
-        {/* Ação Rápida: Carregar */}
-        <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-xl p-5 text-white shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-100 mb-1">
-              <span>Recarregar Carteira</span>
-              <ShieldCheck className="w-4 h-4 text-emerald-200" />
-            </div>
-            <p className="text-xs text-emerald-100 mt-1 leading-relaxed">
-              Carregamento instantâneo via Stripe com Cartão, MB WAY ou Multibanco.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsTopUpOpen(true)}
-            className="mt-4 w-full bg-white hover:bg-emerald-50 text-emerald-800 font-bold text-xs py-2.5 px-3 rounded-lg flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] cursor-pointer"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Novo Carregamento</span>
-          </button>
-        </div>
-      </div>
+      </section>
 
       {/* Transactions Table Section */}
-      <div className="bg-[var(--surface-bg)] rounded-2xl border border-[var(--border-subtle)] overflow-hidden shadow-2xs">
+      <div className="bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] overflow-hidden">
         {/* Header & Filter Bar */}
         <div className="p-5 border-b border-[var(--border-subtle)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-[var(--surface-muted)]/30">
           <div>
-            <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-[var(--accent)]" />
+            <h3 className="text-base font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-[var(--text-secondary)]" />
               <span>Histórico de Carregamentos</span>
             </h3>
             <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
@@ -153,6 +86,7 @@ export function ClientCarregamentosHistory({
           <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] p-1 rounded-lg border border-[var(--border-subtle)] text-xs">
             <button
               type="button"
+              aria-pressed={statusFilter === "todos"}
               onClick={() => setStatusFilter("todos")}
               className={`px-3 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
                 statusFilter === "todos"
@@ -164,22 +98,24 @@ export function ClientCarregamentosHistory({
             </button>
             <button
               type="button"
+              aria-pressed={statusFilter === "paid"}
               onClick={() => setStatusFilter("paid")}
               className={`px-3 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
                 statusFilter === "paid"
-                  ? "bg-emerald-600 text-white"
-                  : "text-[var(--text-secondary)] hover:text-emerald-700"
+                  ? "bg-[#187744] text-white"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
               Pagos ({paidTransactions.length})
             </button>
             <button
               type="button"
+              aria-pressed={statusFilter === "pending"}
               onClick={() => setStatusFilter("pending")}
               className={`px-3 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
                 statusFilter === "pending"
-                  ? "bg-amber-600 text-white"
-                  : "text-[var(--text-secondary)] hover:text-amber-700"
+                  ? "bg-[#965A28] text-white"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
               Pendentes ({pendingTransactions.length})
@@ -252,7 +188,7 @@ export function ClientCarregamentosHistory({
                       {/* Método */}
                       <td className="py-3.5 px-4 text-[var(--text-secondary)]">
                         <div className="flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5 text-[var(--accent)]" />
+                          <CreditCard className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
                           <span className="font-semibold text-[var(--text-primary)]">Stripe Checkout</span>
                           <span className="text-[10px] text-[var(--text-tertiary)]">(Cartão / MB WAY)</span>
                         </div>
@@ -264,8 +200,8 @@ export function ClientCarregamentosHistory({
                       </td>
 
                       {/* Valor */}
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-sm whitespace-nowrap">
-                        <span className={isPaid ? "text-emerald-600" : isPending ? "text-amber-600" : "text-slate-500"}>
+                      <td className="py-3.5 px-4 text-right font-semibold tabular-nums text-sm whitespace-nowrap">
+                        <span className="text-[var(--text-primary)]">
                           +{Number(tx.amount || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                         </span>
                       </td>
@@ -273,25 +209,25 @@ export function ClientCarregamentosHistory({
                       {/* Estado Badge */}
                       <td className="py-3.5 px-5 text-center whitespace-nowrap">
                         {isPaid && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[#187744] text-white">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                             <span>Confirmado</span>
                           </span>
                         )}
                         {isPending && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                            <Clock className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Aguardando Pagamento</span>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[#965A28] text-white">
+                            <Clock className="w-3.5 h-3.5 shrink-0" />
+                            <span>A aguardar pagamento</span>
                           </span>
                         )}
                         {isFailed && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[#B83B38] text-white">
+                            <XCircle className="w-3.5 h-3.5 shrink-0" />
                             <span>Cancelado</span>
                           </span>
                         )}
                         {!isPaid && !isPending && !isFailed && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
                             <span>{tx.status}</span>
                           </span>
                         )}

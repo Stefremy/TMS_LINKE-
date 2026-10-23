@@ -69,6 +69,11 @@ test('Client mobile navigation preserves scoped store links and keeps OPS access
   assert.match(client,/<dialog[^>]+id="client-mobile-menu"/)
   assert.match(client,/href="\/app\/store-a\/criar-guia"/)
   assert.match(client,/aria-current="page"/)
+  const navigation=client.match(/<nav\b[^>]*>[\s\S]*?<\/nav>/)?.[0]
+  assert.ok(navigation,'Client sidebar navigation must be rendered')
+  const destinations=[...navigation.matchAll(/href="([^"]+)"/g)].map(match=>match[1])
+  assert.equal(destinations.length,new Set(destinations).size,'Sidebar destinations must be unique')
+  assert.equal(destinations.filter(href=>href==='/app/store-a/mensagens').length,1)
   assert.ok(!client.includes('href="/ops/'))
   assert.ok(render(true).includes('href="/ops/entidades/clientes"'))
 })
@@ -95,6 +100,7 @@ test('Opening account details closes the navigation and renders the account moda
     './ClientImpersonationBanner':{ClientProfileSidebar:'profile'},
     './ClientAccountDetailsModal':{ClientAccountDetailsModal:'account'},
     './ClientSidebarNav':{ClientSidebarNav:'navigation'},
+    './ClientMessages':{ClientMessageBell:'message-bell'},
     '@/components/ui/mobile-drawer':{MobileDrawer:'drawer'},
     '@/app/login/actions':{signout:async()=>{}},
   })

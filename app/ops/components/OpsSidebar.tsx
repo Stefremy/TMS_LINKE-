@@ -23,7 +23,7 @@ import styles from "./SidebarPattern.module.css"
 import { APP_VERSION } from "@/lib/config/version"
 import { signout } from "@/app/login/actions"
 
-export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?: boolean }) {
+export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false }: { canAccessDocuments?: boolean; canSendMessages?: boolean }) {
   const [isCollapsed, setIsCollapsed] = React.useState(false)
   const [isMobileOpen, setIsMobileOpen] = React.useState(false)
   const pathname = usePathname()
@@ -137,7 +137,7 @@ export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?
           <div className={`tms-drawer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain ${styles.pattern} ${styles.mobilePattern}`}>
             {/* Scrollable Navigation */}
             <div className="py-2">
-              <SidebarNav collapsed={false} canAccessDocuments={canAccessDocuments} />
+              <SidebarNav collapsed={false} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} />
             </div>
 
             {/* Drawer Footer Actions */}
@@ -207,7 +207,7 @@ export function OpsSidebar({ canAccessDocuments = false }: { canAccessDocuments?
         </div>
 
         {/* Navigation */}
-        <SidebarNav collapsed={isCollapsed} canAccessDocuments={canAccessDocuments} />
+        <SidebarNav collapsed={isCollapsed} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} />
 
         {/* Bottom Sidebar Action: Recolher painel */}
         <div className={`pb-4 pt-2 ${isCollapsed ? "px-2" : "px-4"}`}>

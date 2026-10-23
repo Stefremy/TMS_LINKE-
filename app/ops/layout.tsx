@@ -8,6 +8,7 @@ import { TrackingQuickBar } from "./components/TrackingQuickBar"
 import { OpsPageSurface } from "./components/OpsPageSurface"
 import { signout } from "@/app/login/actions"
 import { requireEmployee } from "@/lib/auth/context"
+import { canSendClientMessages } from "@/lib/client-messages/types"
 import { canAccessStaffDocuments } from "@/lib/auth/staff-documents"
 import { 
   Plus,
@@ -35,7 +36,7 @@ export default async function OpsLayout({
   return (
     <div className="tms-shell tms-workspace bg-[var(--canvas-bg)] flex flex-col text-[var(--text-primary)]">
       {/* Interactive Collapsible Sidebar */}
-      <OpsSidebar canAccessDocuments={canAccessStaffDocuments(authContext)} />
+      <OpsSidebar canAccessDocuments={canAccessStaffDocuments(authContext)} canSendMessages={canSendClientMessages(authContext)} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
