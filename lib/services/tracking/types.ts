@@ -37,6 +37,7 @@ export interface TrackingSyncResult {
   success: boolean
   carrier: "correos" | "ctt"
   count: number
+  measurementsUpdated?: boolean
   latestStatus?: TmsDisplayStatus
   event?: NormalizedTrackingEvent
   error?: string

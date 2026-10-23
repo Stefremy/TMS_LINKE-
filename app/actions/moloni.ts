@@ -18,12 +18,14 @@ import { SHIPMENT_LIST_COLUMNS } from "@/lib/services/shipments/shipment-fetcher
 
 const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 
-async function claimManualInvoiceShipments(clientId: string, shipmentIds: string[]) {
+async function claimManualInvoiceShipments(clientId: string, shipmentIds: string[], expected?: { id: string; sell_price?: unknown }[]) {
   const ctx = await requireEmployee()
-  const { error } = await createAdminClient().rpc('claim_billing_shipments', {
-    p_tenant: ctx.tenant_id, p_client: clientId, p_emission: crypto.randomUUID(), p_shipments: shipmentIds,
+  const guarded = expected && process.env.CARRIER_WEIGHT_REPRICING_ENABLED === 'true'
+  const { error } = await createAdminClient().rpc(guarded ? 'claim_weight_safe_billing_shipments' : 'claim_billing_shipments', {
+    p_tenant: ctx.tenant_id, p_client: clientId, p_emission: crypto.randomUUID(),
+    ...(guarded ? { p_expected: expected.map(s => ({ id: s.id, price: Number(s.sell_price) })) } : { p_shipments: shipmentIds }),
   })
-  if (error) throw new Error('Estes envios já estão faturados ou têm uma emissão em curso/por confirmar. Não repita a emissão.')
+  if (error) throw new Error('Os preços ou o estado de faturação destes envios mudaram, ou existe uma emissão em curso/por confirmar. Atualize a página antes de emitir; não repita uma emissão por confirmar.')
 }
 
 /**
@@ -147,7 +149,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
         const paymentDays = paymentDueDays(client.payment_due_days, billingConfig.defaultPaymentDays === undefined ? 30 : billingConfig.defaultPaymentDays)
         const expirationDate = addCalendarDays(dateNow, paymentDays)
 
-        if (!isProForma) await claimManualInvoiceShipments(client.id, shipments.map((s: any) => s.id))
+        if (!isProForma) await claimManualInvoiceShipments(client.id, shipments.map((s: any) => s.id), shipments)
 
         // D. Emitir Fatura ou Fatura Pró-Forma
         let invoiceRes;

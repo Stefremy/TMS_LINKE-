@@ -12,7 +12,6 @@ import {
   Printer,
   Users,
   FileText,
-  RefreshCw,
   Barcode,
   Check,
   Loader2,
@@ -20,6 +19,7 @@ import {
   Download,
   X
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { emitCttShipmentAction, closeCttShipmentsAction } from "@/app/actions/ctt"
 import { syncAllActiveShipmentsTrackingAction } from "@/app/actions/shipments"
 
@@ -209,7 +209,7 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
                 onClick={handleSyncTracking}
                 className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-green-50 hover:text-green-700 rounded text-[13px] text-slate-700 font-medium transition-colors"
               >
-                <RefreshCw className="w-4 h-4 text-green-600" />
+                <RefreshIcon className="w-4 h-4 text-green-600" />
                 Sincronizar Estados Agora
               </button>
             </div>
@@ -410,7 +410,7 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded bg-green-100 flex items-center justify-center text-green-600">
-                  <RefreshCw className="w-5 h-5" />
+                  <RefreshIcon className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-800">Sincronização de Estados</h3>

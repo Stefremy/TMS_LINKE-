@@ -28,15 +28,17 @@ export async function authorizeMeasurementShipment(db: SupabaseClient, ctx: Scop
 }
 
 export async function readShipmentMeasurements(db: SupabaseClient, shipment: MeasurementShipment): Promise<ShipmentMeasurementsSummary> {
-  const [audit, packages, measurements] = await Promise.all([
-    db.from('audit_log').select('weight:details->weight_kg,length:details->length_cm,width:details->width_cm,height:details->height_cm')
+  const [audit, packages, measurements, adjustments] = await Promise.all([
+    db.from('audit_log').select('billingWeight:details->billing_weight_kg,weight:details->weight_kg,length:details->length_cm,width:details->width_cm,height:details->height_cm')
       .eq('tenant_id', shipment.tenant_id).eq('action', 'shipment_data').eq('details->>id', shipment.id)
       .order('created_at', { ascending: false }).limit(1).maybeSingle(),
     db.from('packages').select('weight_g,dimensions').eq('tenant_id', shipment.tenant_id).eq('shipment_id', shipment.id).limit(100),
     db.from('audit_log').select('details').eq('tenant_id', shipment.tenant_id).eq('action', CARRIER_MEASUREMENTS_ACTION)
       .eq('details->>shipment_id', shipment.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    db.from('audit_log').select('details').eq('tenant_id', shipment.tenant_id).eq('action', 'shipment_weight_adjustment')
+      .eq('details->>shipment_id', shipment.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ])
-  if (audit.error || packages.error || measurements.error) throw new Error('Não foi possível carregar as medições do envio.')
+  if (audit.error || packages.error || measurements.error || adjustments.error) throw new Error('Não foi possível carregar as medições do envio.')
   const packageWeights = (packages.data || []).map(row => positiveMeasurement(row.weight_g))
   const grams = packageWeights.length > 0 && packageWeights.every(value => value !== null)
     ? packageWeights.reduce<number>((sum, value) => sum + value!, 0) : null
@@ -45,6 +47,12 @@ export async function readShipmentMeasurements(db: SupabaseClient, shipment: Mea
   const saved = measurements.data?.details
   return {
     carrier,
+    billingWeightKg: positiveMeasurement(audit.data?.billingWeight),
+    ...(adjustments.data?.details ? { weightAdjustment: {
+      status: 'adjusted' as const, message: 'Escalão ajustado automaticamente ao peso da transportadora.',
+      weightKg: adjustments.data.details.weightKg, previousWeightKg: adjustments.data.details.previousWeightKg,
+      price: adjustments.data.details.price, previousPrice: adjustments.data.details.previousPrice, difference: adjustments.data.details.difference,
+    } } : {}),
     declared: {
       weightKg: positiveMeasurement(audit.data?.weight) ?? (grams !== null ? grams / 1000 : null),
       lengthCm: positiveMeasurement(audit.data?.length) ?? positiveMeasurement(dimensions?.length_cm),

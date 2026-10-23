@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CalendarClock, Mail, RefreshCw, ChevronDown } from 'lucide-react'
+import { CalendarClock, Mail, ChevronDown } from 'lucide-react'
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import type { RecurringPreview } from '@/lib/billing/recurring-statements'
 import { periodLabel } from '@/lib/billing/recurring-periods'
 import { configureRecurringStatementsAction, previewRecurringStatementsAction, sendRecurringTestEmailAction } from '@/app/actions/recurring-statements'
@@ -40,7 +41,7 @@ export function RecurringStatementsPanel({ initialPreview, canManage }: { initia
           <label className="text-xs font-semibold text-[var(--text-secondary)]">Simular fecho em
             <input type="date" value={date} onChange={e => setDate(e.target.value)} className="block mt-1 px-3 py-2 border border-[var(--border-subtle)] rounded-lg bg-[var(--surface-muted)] text-[var(--text-primary)]" />
           </label>
-          <button disabled={!!busy || !date} type="button" onClick={() => perform('preview', async () => setPreview(await previewRecurringStatementsAction(date)))} className="inline-flex items-center gap-2 border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-xs font-semibold text-[var(--text-primary)] disabled:opacity-50"><RefreshCw aria-hidden="true" strokeWidth={1.75} className={`w-4 h-4 ${busy === 'preview' ? 'animate-spin' : ''}`} />Pré-visualizar</button>
+          <button disabled={!!busy || !date} type="button" onClick={() => perform('preview', async () => setPreview(await previewRecurringStatementsAction(date)))} className="inline-flex items-center gap-2 border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-xs font-semibold text-[var(--text-primary)] disabled:opacity-50"><RefreshIcon aria-hidden="true" strokeWidth={2} className={`w-4 h-4 ${busy === 'preview' ? 'animate-spin' : ''}`} />Pré-visualizar</button>
           <p className="text-[11px] text-[var(--text-tertiary)]">A simulação usa os envios já existentes e não envia emails.</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">

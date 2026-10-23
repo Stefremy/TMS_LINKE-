@@ -20,6 +20,8 @@ export type SavedCarrierMeasurements = {
 export type ShipmentMeasurementsSummary = {
   carrier: 'ctt' | 'correos'
   declared: { weightKg: number | null; lengthCm: number | null; widthCm: number | null; heightCm: number | null }
+  weightAdjustment?: import('@/lib/billing/carrier-weight-pricing').WeightAdjustmentResult
+  billingWeightKg?: number | null
   observations: SavedCarrierMeasurements[]
 }
 

@@ -76,7 +76,7 @@ export async function syncAuthorizedShipmentBatch(ctx: AuthContext, shipmentIds:
           const statusChanged = Boolean(res.latestStatus && res.latestStatus !== normalizedStatus)
           const substatusChanged = Boolean(res.event &&
             (res.event.eventCode || "").toLowerCase().substring(0, 50) !== (shipment.ops_substatus || ""))
-          if (res.success && (res.count > 0 || statusChanged || substatusChanged)) updatedCount++
+          if (res.success && (res.count > 0 || res.measurementsUpdated || statusChanged || substatusChanged)) updatedCount++
         } catch (err: unknown) {
           console.warn(`[Sync Active Batch] Erro/Timeout ao sincronizar envio ${shipment.id}:`,
             err instanceof Error ? err.message : "Erro desconhecido")

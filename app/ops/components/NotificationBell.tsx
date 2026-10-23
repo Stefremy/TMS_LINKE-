@@ -13,10 +13,10 @@ import {
   ExternalLink, 
   Check, 
   Trash2, 
-  RefreshCw, 
   X,
   Radio
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { getOperationalNotificationsAction, OperationalNotification } from "@/app/actions/notifications"
 
 const READ_STORAGE_KEY = "linke_notifications_read_ids_v1"
@@ -282,7 +282,7 @@ export function NotificationBell() {
                 title="Atualizar"
                 className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 rounded-lg transition-colors cursor-pointer"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin text-emerald-600" : ""}`} />
+                <RefreshIcon className={`w-4 h-4 ${refreshing ? "animate-spin text-emerald-600" : ""}`} />
               </button>
               <button
                 type="button"
@@ -342,7 +342,7 @@ export function NotificationBell() {
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
             {loading ? (
               <div className="p-8 text-center text-slate-400 text-xs">
-                <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-emerald-600" />
+                <RefreshIcon className="w-5 h-5 animate-spin mx-auto mb-2 text-emerald-600" />
                 <span>A carregar notificações...</span>
               </div>
             ) : visibleNotifications.length === 0 ? (

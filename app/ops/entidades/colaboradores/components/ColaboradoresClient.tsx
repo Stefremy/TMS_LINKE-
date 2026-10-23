@@ -15,7 +15,6 @@ import {
   Eye,
   Edit,
   Trash2,
-  RefreshCw,
   CheckCircle2,
   LayoutGrid,
   List,
@@ -23,6 +22,7 @@ import {
   ChevronRight,
   Key,
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { Colaborador, DEPARTMENTS, ACCESS_LEVELS } from "../types"
 import { ColaboradorModal } from "./ColaboradorModal"
 import { ColaboradorDetailsModal } from "./ColaboradorDetailsModal"
@@ -278,7 +278,7 @@ export function ColaboradoresClient({
             className="p-2.5 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] shadow-sm transition-colors"
             title="Atualizar lista"
           >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshIcon className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
           </button>
 
           <button

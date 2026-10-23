@@ -25,11 +25,11 @@ import {
   Calculator,
   Sliders,
   Zap,
-  RefreshCw,
   ArrowRight,
   TrendingUp,
   Tag
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { PortugalFlag, SpainFlag, EuFlag, DestinationBadge } from "./DestinationIcons"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
 import { getCarrierLogo } from "@/lib/carrier-logos"
@@ -1843,7 +1843,7 @@ export function ServicoModal({
               >
                 {saving ? (
                   <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <RefreshIcon className="w-4 h-4 animate-spin" />
                     <span>A Gravar...</span>
                   </>
                 ) : (

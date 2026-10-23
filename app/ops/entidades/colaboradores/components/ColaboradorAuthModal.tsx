@@ -9,12 +9,12 @@ import {
   EyeOff,
   Copy,
   Check,
-  RefreshCw,
   Loader2,
   CheckCircle2,
   Lock,
   UserCheck
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { Colaborador, ACCESS_LEVELS, AVAILABLE_PERMISSIONS } from "../types"
 import { setColaboradorCredentialsAction } from "@/app/actions/auth"
 import { saveColaboradorAction } from "@/app/actions/colaboradores"
@@ -212,7 +212,7 @@ Link de Acesso: http://localhost:3000/ops`
                 onClick={handleGeneratePassword}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:underline cursor-pointer"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshIcon className="w-4 h-4" />
                 Gerar Password Segura
               </button>
             </div>

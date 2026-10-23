@@ -21,7 +21,6 @@ import {
   Trash2,
   CreditCard,
   Sparkles,
-  RefreshCw,
   ArrowUpRight,
   ArrowDownLeft,
   Check,
@@ -32,6 +31,7 @@ import {
   Shield,
   Lock,
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { SalarioRecord, MONTH_NAMES } from "../types"
 import { SalarioModal } from "./SalarioModal"
 import { SalarioReceiptModal } from "./SalarioReceiptModal"
@@ -451,7 +451,7 @@ export function SalariosClient({ initialSalarios, isSuperAdmin = false }: Salari
             className="p-2.5 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] shadow-2xs transition-colors"
             title="Atualizar dados"
           >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshIcon className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>

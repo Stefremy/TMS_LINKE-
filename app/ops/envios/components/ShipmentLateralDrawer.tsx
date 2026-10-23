@@ -12,7 +12,6 @@ import {
   MoreHorizontal, 
   Download, 
   Printer, 
-  RefreshCw, 
   CheckCircle2, 
   Clock, 
   MapPin, 
@@ -24,6 +23,7 @@ import {
   Layers,
   ChevronRight
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { getShipmentTrackingTimelineAction, regenerateCttLabelAction, getShipmentLabelAction } from "@/app/actions/shipments"
@@ -341,13 +341,14 @@ export function ShipmentLateralDrawer({
 
         <Button
           variant="outline"
-          size="sm"
+          size="icon"
           onClick={handleSyncTracking}
           disabled={isSyncing}
+          aria-label="Sincronizar rastreio"
           title="Sincronizar Rastreio"
-          className="h-7 w-7 p-0 bg-[var(--surface-bg)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)] shadow-2xs shrink-0 ml-auto"
+          className="h-8 w-8 bg-[var(--surface-bg)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)] shadow-2xs shrink-0 ml-auto"
         >
-          <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin text-[var(--accent)]" : "text-[var(--text-secondary)]"}`} />
+          <RefreshIcon className={`w-4 h-4 ${isSyncing ? "animate-spin text-[var(--accent)]" : "text-[var(--text-secondary)]"}`} />
         </Button>
       </div>
 
@@ -474,7 +475,9 @@ export function ShipmentLateralDrawer({
           </div>
         </div>
 
-        <CarrierMeasurementsPanel shipmentId={shipment.rawId || shipment.id} syncing={isSyncing} />
+        <CarrierMeasurementsPanel shipmentId={shipment.rawId || shipment.id} syncing={isSyncing}
+          previous={shipment.parcel_summary || shipment.rawShipment?.parcel_summary}
+          onUpdated={(summary, price) => onUpdateShipment?.({ ...shipment, parcel_summary: summary, ...(price !== undefined ? { sell_price: price } : {}) })} />
 
         {/* Carga & Métricas Faturação */}
         <div className="space-y-2">

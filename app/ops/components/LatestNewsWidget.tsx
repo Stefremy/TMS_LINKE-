@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Newspaper, ArrowUpRight, RefreshCw, Clock, TrendingUp, AlertCircle } from "lucide-react"
+import { Newspaper, ArrowUpRight, Clock, TrendingUp, AlertCircle } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { NEWS_CATEGORIES, type NewsCategory, type NewsItem } from "@/lib/news-categories"
 
 const REFRESH_INTERVAL_MS = 3 * 60 * 60 * 1000
@@ -91,7 +92,7 @@ export function LatestNewsWidget() {
         </div>
         <button type="button" onClick={refreshNews} disabled={loading || refreshing} title="Atualizar notícias" aria-label="Atualizar notícias"
           className="absolute right-0 top-0 rounded-lg p-1.5 text-[var(--text-tertiary)] transition-colors hover:bg-[#B45309]/10 hover:text-[#8A3F05] disabled:opacity-50 sm:static">
-          <RefreshCw aria-hidden="true" className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          <RefreshIcon aria-hidden="true" className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
         </button>
       </div>
     </div>

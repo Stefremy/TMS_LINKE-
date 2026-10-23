@@ -52,3 +52,21 @@ Este retorno inclui dados de criação do envio e não distingue peso declarado 
 - Secção renderizada em desktop e 375 px, com dados fictícios CTT, Correos e estado vazio; sem overflow horizontal.
 
 O snapshot comunicado pela transportadora não é uma confirmação do peso/valor efetivamente faturado. Uma futura reconciliação financeira deve usar as unidades confirmadas, o contrato aplicável e o discriminativo de faturação.
+
+## Peso nas listas do OPS e da Área do Cliente
+
+- A coluna de volumes/peso do OPS apresenta o peso declarado guardado e, por baixo, o peso da transportadora a verde quando existe um valor válido.
+- O mesmo componente é usado no dashboard e histórico da Área do Cliente, nas tabelas e nos cartões de telemóvel.
+- CTT usa o rótulo **Real CTT**; Correos usa **Peso Correos**, preservando a distinção entre peso comunicado e pesagem física certificada.
+- Nas listas, os valores sem unidade confirmada aparecem apenas com o rótulo e o valor; o tooltip mantém o contexto. Só valores com unidade confirmada `g` ou `kg` são apresentados/convertidos em kg.
+- Removido o peso fixo `1.00 kg` da listagem OPS: a declaração é lida do snapshot ou dos volumes guardados. Na ausência de registo, aparece **Peso não registado**.
+- Os dados são lidos em lotes de até 100 IDs já autorizados, com filtros de empresa e projeções JSON compactas. Não se consulta a transportadora por linha nem se carregam etiquetas/contactos para obter pesos.
+- A consulta manual no modal/barra lateral comunica a alteração à lista. A sincronização em lote também sinaliza alterações apenas de medição, mesmo sem novos scans ou mudança de estado; o polling atualiza a lista nesse caso.
+- Valores declarados e preços não são substituídos pelos dados da transportadora.
+
+Testes adicionais: `tests/parcel-weight-list.test.cjs` cobre separação dos valores, seleção do snapshot mais recente, isolamento por empresa/IDs autorizados, unidades, ausência/erro de dados, consultas em lote, atualização manual e ordem/cor da célula partilhada. O teste de navegação cobre alterações apenas de peso. A auditoria de isolamento mantém as verificações de empresa/loja com as projeções explícitas atuais do dispatcher.
+
+
+## Ajuste de preço por escalão
+
+A automatização posterior está descrita em [CARRIER_WEIGHT_REPRICING_2026-10-23.md](CARRIER_WEIGHT_REPRICING_2026-10-23.md). Fica desligada por omissão e exige a nova migração. O registo de medições continua independente; não presume unidades CTT nem reescreve documentos emitidos.

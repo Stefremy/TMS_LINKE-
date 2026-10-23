@@ -53,15 +53,16 @@ test('background tracking API rejects invalid selections and reports a failed da
   assert.equal((await h.route.POST(request())).status, 503)
 })
 test('unchanged tracking no longer causes refresh; new events or changed state still refresh', async () => {
-  for (const [count, latestStatus, code, expected] of [[0, 'em_transito', 'EMA', 0],
-    [1, 'em_transito', 'EMA', 1], [0, 'entregue', 'EMI', 1], [0, 'em_transito', 'EMF', 1]]) {
+  for (const [count, latestStatus, code, expected, measurementsUpdated] of [[0, 'em_transito', 'EMA', 0, false],
+    [1, 'em_transito', 'EMA', 1], [0, 'entregue', 'EMI', 1], [0, 'em_transito', 'EMF', 1],
+    [0, 'em_transito', 'EMA', 1, true]]) {
     const db = auditDatabase({ shipments: [{ id: 'shipment-a', tenant_id: ctx.tenant_id,
       client_id: ctx.client_id, status: 'entrada_rede', ops_substatus: 'ema' }] })
     const calls = []
     const { syncAuthorizedShipmentBatch } = createLoader({
       '@/lib/supabase/server': { createAdminClient: () => db.client },
       '@/lib/services/tracking': { syncShipmentTracking: async (...args) => {
-        calls.push(args); return { success: true, count, latestStatus, event: { eventCode: code } }
+        calls.push(args); return { success: true, count, latestStatus, measurementsUpdated, event: { eventCode: code } }
       } },
     })('lib/services/tracking/tracking-batch.ts')
     assert.equal((await syncAuthorizedShipmentBatch(ctx, ['shipment-a'])).updatedCount, expected)

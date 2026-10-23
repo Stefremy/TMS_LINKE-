@@ -6,7 +6,7 @@ import { DashboardBackdrop } from "./DashboardBackdrop"
 import styles from "./DashboardBackdrop.module.css"
 
 const decoratedPages = new Set([
-  "/ops", "/ops/envios", "/ops/envios/novo", "/ops/tracking", "/ops/envios/recolhas", "/ops/calendario",
+  "/ops", "/ops/incidencias", "/ops/envios", "/ops/envios/novo", "/ops/tracking", "/ops/envios/recolhas", "/ops/calendario",
   "/ops/entidades/clientes", "/ops/entidades/fornecedores", "/ops/entidades/colaboradores",
   "/ops/configuracao/servicos", "/ops/faturacao/contas-corrente", "/ops/faturacao/clientes", "/ops/faturacao/notas-credito", "/ops/faturacao/estatistica",
   "/ops/tesouraria/reembolsos", "/ops/tesouraria/reconciliacao",

@@ -4,6 +4,8 @@ import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "./s
 import { applyLinkeLogoToCorreosLabel, isCorreosPdfLabel } from "@/lib/services/correos/correos-label-customizer"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
 import { loadShipmentPickupDates } from "./shipment-pickup-dates"
+import { loadShipmentParcelSummaries } from './shipment-parcel-summaries'
+import type { ParcelSummary } from './parcel-summary'
 
 // Native columns only. Display aliases (reference, carrier_name, ctt_object_id) are derived
 // below; optional pricing/label snapshots are stored separately in audit_log.
@@ -194,11 +196,15 @@ export async function fetchPaginatedShipments(options: {
   }
 
   let pickupDates = new Map<string, string>()
-  try {
-    pickupDates = await loadShipmentPickupDates(supabase, ctx.tenant_id, (data || []).map((row: { id: string }) => row.id))
-  } catch {
-    console.warn("As datas de recolha não estão disponíveis nesta consulta.")
-  }
+  let parcelSummaries = new Map<string, ParcelSummary>()
+  const [pickupResult, parcelResult] = await Promise.allSettled([
+    loadShipmentPickupDates(supabase, ctx.tenant_id, (data || []).map((row: { id: string }) => row.id)),
+    loadShipmentParcelSummaries(supabase, ctx.tenant_id, data || []),
+  ])
+  if (pickupResult.status === 'fulfilled') pickupDates = pickupResult.value
+  else console.warn('As datas de recolha não estão disponíveis nesta consulta.')
+  if (parcelResult.status === 'fulfilled') parcelSummaries = parcelResult.value
+  else console.warn('Os pesos dos volumes não estão disponíveis nesta consulta.')
 
   const mapped = (data || []).map((row: any) => {
     const s = row.details || row
@@ -211,6 +217,7 @@ export async function fetchPaginatedShipments(options: {
     return {
       ...s,
       picked_up_at: pickupDates.get(s.id) || null,
+      parcel_summary: parcelSummaries.get(s.id) || null,
       status: normalizedStatus,
       reference: linkeRef,
       carrier_code: isCorreos ? "correos" : (s.carrier_code || "ctt"),

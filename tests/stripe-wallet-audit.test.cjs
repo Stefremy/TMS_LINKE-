@@ -182,9 +182,9 @@ function shipmentHarness() {
   '@/lib/supabase/server':{createAdminClient:()=>db.client},'next/cache':{revalidatePath(){}},
   '@/lib/auth/context':{requireUser:async()=>ctx,requireEmployee:async()=>ctx,getTenantId:async()=>TENANT},
   '@/lib/client-portal/suspension':{readPortalAccess:async()=>({suspended:false,blocked:false})},
-  '@/lib/pricing/calculate-shipment-price':{calculateShipmentPrice:()=>({sellPrice:3,buyPrice:2,basePrice:3,fuelSurchargeAmount:0,tierLabel:'Fixture'})},
+  '@/lib/pricing/calculate-shipment-price':{resolveZoneCode:()=> 'PT-CONT',calculateShipmentPrice:()=>({sellPrice:3,buyPrice:2,basePrice:3,fuelSurchargeAmount:0,tierLabel:'Fixture'})},
   '@/lib/pricing/shipment-pricing-context':{validateShipmentPricingInput(){},ShipmentPricingError:PricingError,ShipmentPricingUnavailableError:PricingError,
-   loadShipmentPricingContext:async()=>({client:{id:A,tenant_id:TENANT,billing_type:'pay_as_you_go',credit_limit:1},service:{id:'fixture-service',name:'Fixture service'}})},
+   loadShipmentPricingContext:async()=>({client:{id:A,tenant_id:TENANT,billing_type:'pay_as_you_go',credit_limit:1},service:{id:'fixture-service',name:'Fixture service',fuel_surcharge_pct:0,zones:[{zone_code:'PT-CONT',zone_name:'Continente',tiers:[]}]}})},
   '@/lib/services/carriers/credentials':{},'@/lib/services/carriers/ctt-provider':{},'@/lib/label-utils':{},
  })
  const create=()=>{const form=new FormData();form.set('weight_kg','1');form.set('length_cm','30');form.set('width_cm','20');form.set('height_cm','10');return load('lib/services/shipments/shipment-creator.ts').createShipment(form)}

@@ -15,11 +15,11 @@ import {
   ExternalLink, 
   CheckCircle2, 
   AlertCircle, 
-  RefreshCw,
   Search,
   Layers,
   ArrowRight
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { emitCustomInvoiceAction, CustomInvoiceItemInput } from "@/app/actions/moloni"
 
 interface Client {
@@ -859,7 +859,7 @@ export default function FaturaPersonalizadaClient({
             >
               {isSubmitting ? (
                 <>
-                  <RefreshCw aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 animate-spin" />
+                  <RefreshIcon aria-hidden="true" strokeWidth={2} className="w-4 h-4 animate-spin" />
                   A Emitir Fatura...
                 </>
               ) : (

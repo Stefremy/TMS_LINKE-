@@ -6,7 +6,6 @@ import {
   Building2,
   Store,
   Search,
-  RefreshCw,
   Download,
   MapPin,
   Clock,
@@ -23,6 +22,7 @@ import {
   Sparkles,
   Globe2
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { CTTPontoEntrega } from "@/lib/services/ctt"
 import { getPontosPickupCttAction } from "@/app/actions/ctt"
 import { PontoDetailsModal } from "./PontoDetailsModal"
@@ -253,7 +253,7 @@ export function PontosPickupClient({
             disabled={isRefreshing}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-60 text-white rounded-xl text-sm font-semibold shadow-sm transition-all"
           >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshIcon className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
             {isRefreshing ? "A sincronizar..." : "Sincronizar CTT"}
           </button>
         </div>

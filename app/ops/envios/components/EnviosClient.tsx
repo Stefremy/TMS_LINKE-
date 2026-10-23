@@ -1,4 +1,5 @@
 "use client"
+import { ShipmentParcelWeight } from '@/components/shipments/ShipmentParcelWeight'
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -14,13 +15,13 @@ import {
   ChevronDown,
   Edit2,
   FileText,
-  RefreshCw,
   Loader2,
   CheckCircle2,
   AlertCircle,
   Trash2,
   Lock
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 
 import { ActionMenu } from "./ActionMenu"
 import { FerramentasMenu } from "./FerramentasMenu"
@@ -401,7 +402,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
               disabled={isSyncingSelected}
               className="bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-primary)] px-3 py-2 rounded-lg text-xs font-medium border border-[var(--border-strong)] transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
-              {isSyncingSelected ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {isSyncingSelected ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshIcon className="w-4 h-4" />}
               <span>Sincronizar Tracking</span>
             </button>
 
@@ -498,6 +499,8 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                         </p>
                       </div>
                     </div>
+
+                    {viewMode === 'envios' && <ShipmentParcelWeight summary={envio.parcel_summary || envio.rawShipment?.parcel_summary} />}
 
                     {/* Bottom Row: Service + Price + Actions */}
                     <div className="flex items-center justify-between pt-0.5 text-xs">
@@ -682,10 +685,10 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
 
                 {/* Remessa Column */}
                 <td className="px-3 py-3 align-top">
-                  <div className="flex flex-col gap-0.5">
+                  {viewMode === 'envios' ? <ShipmentParcelWeight summary={envio.parcel_summary || envio.rawShipment?.parcel_summary} /> : <div className="flex flex-col gap-0.5">
                     <span className="font-semibold text-[var(--text-primary)] text-[11px]">{envio.package?.count || "1 Caixa"}</span>
                     <span className="text-[var(--text-tertiary)] text-[10px] font-medium">{envio.package?.weight || "-"}</span>
-                  </div>
+                  </div>}
                 </td>
 
                 {/* Collection and delivery dates */}
@@ -838,6 +841,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
           onClose={() => setSelectedShipment(null)}
           onUpdateShipment={(updated) => {
             setSelectedShipment(updated)
+            router.refresh()
           }}
         />
       )}

@@ -6,7 +6,6 @@ import {
   Receipt, 
   Cloud, 
   Save, 
-  RefreshCw, 
   CheckCircle2, 
   AlertCircle, 
   Eye, 
@@ -19,6 +18,7 @@ import {
   HelpCircle,
   ExternalLink
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { 
   saveBillingConfigAction, 
   syncMoloniArticleAction 
@@ -318,7 +318,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails }: BillingCon
                     disabled={syncing || !moloniDetails?.isConnected}
                     className="px-3.5 py-1.5 rounded bg-white hover:bg-slate-50 border border-slate-300 text-xs font-semibold text-slate-700 flex items-center gap-1.5 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${syncing ? "animate-spin" : ""}`} />
+                    <RefreshIcon className={`w-4 h-4 text-slate-600 ${syncing ? "animate-spin" : ""}`} />
                     <span>{syncing ? "A Sincronizar..." : "Criar / Atualizar Artigo no Moloni"}</span>
                   </button>
 

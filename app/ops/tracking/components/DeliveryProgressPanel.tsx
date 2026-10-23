@@ -4,7 +4,6 @@ import React, { useState } from "react"
 import { TrackingShipment } from "../types"
 import { hasCheckpointLocation, getMappedCheckpoints } from "../map-points"
 import {
-  RefreshCw,
   CheckCircle2,
   Circle,
   Clock,
@@ -16,6 +15,7 @@ import {
   ArrowRight,
   Truck
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 
 interface DeliveryProgressPanelProps {
   shipment: TrackingShipment
@@ -58,7 +58,7 @@ export function DeliveryProgressPanel({ shipment, onRefresh }: DeliveryProgressP
             className="p-1.5 rounded-lg border border-[var(--border-subtle)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[#477D68] transition-colors disabled:opacity-50"
             title="Atualizar leituras da transportadora"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-[#477D68]" : ""}`} />
+            <RefreshIcon className={`w-4 h-4 ${isRefreshing ? "animate-spin text-[#477D68]" : ""}`} />
           </button>
         </div>
 

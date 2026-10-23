@@ -1,4 +1,5 @@
 "use client"
+import { ShipmentParcelWeight } from '@/components/shipments/ShipmentParcelWeight'
 
 import * as React from "react"
 import Link from "next/link"
@@ -399,6 +400,8 @@ export function ClientShipmentsHistory() {
                       </div>
                     </div>
 
+                    <ShipmentParcelWeight summary={envio.parcel_summary} />
+
                     {/* Bottom Row: Value & Action Buttons */}
                     <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
                       <div className="font-bold font-mono text-slate-900">
@@ -444,7 +447,7 @@ export function ClientShipmentsHistory() {
                   <th className="pb-3">Guia</th>
                   <th className="pb-3">Destinatário</th>
                   <th className="pb-3">Morada</th>
-                  <th className="pb-3">Serviço CTT</th>
+                  <th className="pb-3">Serviço / Peso</th>
                   <th className="pb-3">Estado</th>
                   <th className="pb-3 text-right">Valor</th>
                   <th className="pb-3 text-center">Ações</th>
@@ -511,6 +514,7 @@ export function ClientShipmentsHistory() {
                         ) : null}
                         <span className="text-xs font-semibold text-slate-700">{envio.service_type || "CTT Expresso"}</span>
                       </div>
+                      <div className="mt-1.5"><ShipmentParcelWeight summary={envio.parcel_summary} /></div>
                     </td>
                     <td className="py-3">
                       {(() => {

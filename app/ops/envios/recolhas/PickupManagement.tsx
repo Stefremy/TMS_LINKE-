@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { Search, Loader2, X, Copy, ExternalLink, Calendar, MapPin, Clock, Ban, RefreshCw, FileText } from "lucide-react"
+import { Search, Loader2, X, Copy, ExternalLink, Calendar, MapPin, Clock, Ban, FileText } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { searchPickupsAction, searchCttPickupsAction, getPickupDetailsAction, getCttPickupDetailsAction, markPickupCollectedAction, refreshPickupParcelsAction } from "@/app/actions/pickups"
 import { CTT_PICKUP_PORTAL_URL, PICKUP_PAGE_SIZE, type PickupSummary } from "@/lib/pickup-management"
 
@@ -214,7 +215,7 @@ export function PickupDetailsDialog({ selected, onClose, onUpdated }: { selected
             {objectData.objects_unavailable_reason && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{objectData.objects_unavailable_reason} Peça aos CTT para ativar a consulta de objetos (GetRecolha) neste contrato.</p>}
             {!!objectData.objects?.length ? <ul className="grid gap-2 sm:grid-cols-2">{objectData.objects.map(code => <li key={code} className="select-text break-all rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2 font-mono text-sm font-semibold">{code}</li>)}</ul> : !objectData.objects_unavailable_reason && <p className="text-sm text-[var(--text-secondary)]">{objectData.objects_checked_at ? "Os CTT ainda não devolveram objetos associados nesta consulta. Isto não confirma que a recolha esteja vazia ou não tenha sido efetuada." : "Ainda não foi obtida uma lista dos CTT. Marcar a recolha como realizada não associa encomendas automaticamente."}</p>}
             {objectData.objects_checked_at && <p className="text-xs text-[var(--text-secondary)]">Última consulta: {new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Lisbon" }).format(new Date(objectData.objects_checked_at))} · Origem: CTT</p>}
-            <button onClick={() => void consultCtt()} disabled={loading || remoteLoading || !pickup.ctt_pickup_id} className={buttonClass}><RefreshCw className={`h-4 w-4 ${remoteLoading ? "animate-spin" : ""}`} />{remoteLoading ? "A consultar os CTT…" : "Atualizar objetos e detalhes nos CTT"}</button>
+            <button onClick={() => void consultCtt()} disabled={loading || remoteLoading || !pickup.ctt_pickup_id} className={buttonClass}><RefreshIcon className={`h-4 w-4 ${remoteLoading ? "animate-spin" : ""}`} />{remoteLoading ? "A consultar os CTT…" : "Atualizar objetos e detalhes nos CTT"}</button>
             {parcelError && <p role="alert" className="text-sm text-red-700">{parcelError} A última lista guardada, se existir, foi mantida.</p>}
             <p className="text-xs text-[var(--text-secondary)]">A consulta requer autorização CTT. Os códigos só aparecem quando os CTT os disponibilizarem para esta referência.</p>
           </section>}

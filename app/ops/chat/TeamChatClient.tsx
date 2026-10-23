@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Film, Hash, LockKeyhole, MessageSquare, Plus, RefreshCw, Search, Send, Smile, Users, X } from "lucide-react"
+import { Film, Hash, LockKeyhole, MessageSquare, Plus, Search, Send, Smile, Users, X } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { CHAT_MAX_LENGTH, DEFAULT_CHANNELS, mergeChatMessages, type ChatChannel, type ChatMember, type ChatPage } from "@/lib/team-chat"
 import { CURATED_GIFS, EMOJI_CATEGORIES, isOnlyEmojis, parseGifMessage, type GifItem } from "@/lib/team-chat-media"
 import styles from "./TeamChat.module.css"
@@ -406,7 +407,7 @@ export function TeamChatClient({ initial, initialError }: { initial: ChatPage; i
               <p>{recipient ? "Visível apenas aos dois participantes" : currentChannel.description || "Canal público para a equipa"}</p>
             </div>
           </div>
-          <button type="button" className={styles.refresh} aria-label="Atualizar conversa" onClick={() => setRetry(value => value + 1)}><RefreshCw size={17} /></button>
+          <button type="button" className={styles.refresh} aria-label="Atualizar conversa" onClick={() => setRetry(value => value + 1)}><RefreshIcon size={17} /></button>
         </div>
 
         {error && <div className={styles.error} role="alert">{error}{blocked && " Volte a iniciar sessão se necessário."}</div>}

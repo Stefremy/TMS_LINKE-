@@ -23,17 +23,22 @@ async function handle(request: Request, route: RouteContext, refresh: boolean) {
     const db = createAdminClient()
     const shipment = await authorizeMeasurementShipment(db, ctx, id)
     if (!shipment) return reply({ error: 'Sem acesso a este envio.' }, 403)
+    let adjustment
     if (refresh) {
       // Always use the authorized stored reference; never accept a tracking
-      // number from the caller. This operation does not update status or prices.
+      // number from the caller. Repricing is server-controlled and preserves issued documents.
       const tracking = shipment.carrier_tracking_number || shipment.ctt_object_id || shipment.tracking_number
       if (!tracking || /^L[TK]{2}/i.test(tracking)) return reply({ error: 'Este envio ainda não tem uma referência da transportadora.' }, 422)
       const result = isCorreosShipment(shipment)
         ? await fetchCorreosTrackingEvents(tracking) : await fetchCttTrackingEvents(tracking)
       if (!result.success) return reply({ error: 'Não foi possível consultar a transportadora. Tente novamente.' }, 502)
       await saveCarrierMeasurements(db, shipment, result.events)
+      if (process.env.CARRIER_WEIGHT_REPRICING_ENABLED === 'true') {
+        const { reconcileCarrierWeight } = await import('@/lib/billing/reconcile-carrier-weight')
+        adjustment = await reconcileCarrierWeight(db, shipment.tenant_id, shipment.id)
+      }
     }
-    return reply(await readShipmentMeasurements(db, shipment))
+    return reply({ ...await readShipmentMeasurements(db, shipment), ...(adjustment ? { weightAdjustment: adjustment } : {}) })
   } catch {
     return reply({ error: 'Não foi possível carregar as medições. Tente novamente.' }, 503)
   }

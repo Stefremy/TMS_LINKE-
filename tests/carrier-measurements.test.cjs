@@ -203,6 +203,7 @@ test('tracking sync stores new measurements even when the scan already exists', 
   const res = await recorder.recordTrackingEvents(h.db.client, ID, h.tables.shipments[0], [event({ ...measured, width: { value: 30, unit: null } })])
   assert.equal(res.success, true)
   assert.equal(res.count, 0)
+  assert.equal(res.measurementsUpdated, true)
   assert.equal(h.db.writes.length, 1)
   assert.equal(h.db.writes[0].value.action, 'shipment_carrier_measurements')
   assert.equal(h.db.writes[0].value.details.measurements.width.value, 30)

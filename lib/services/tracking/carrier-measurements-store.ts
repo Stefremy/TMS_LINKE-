@@ -18,7 +18,7 @@ export async function saveCarrierMeasurements(
 ) {
   const measured = events.filter(event => event.measurements)
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-  if (!measured.length || !shipment.id || !shipment.tenant_id) return
+  if (!measured.length || !shipment.id || !shipment.tenant_id) return false
   const carrier = measured[0].carrierCode
   const { data: previous, error } = await db.from('audit_log').select('id,details')
     .eq('tenant_id', shipment.tenant_id).eq('action', CARRIER_MEASUREMENTS_ACTION)
@@ -32,7 +32,7 @@ export async function saveCarrierMeasurements(
   // Fill only absent fields from the previous response, never from declared data.
   const measurements = latestCarrierReadings([...incoming, ...(previous?.details?.carrier === carrier ? [previous.details] : [])])!
   const details: SavedCarrierMeasurements = { ...incoming[0], measurements }
-  if (previous?.details?.carrier === carrier && measurementKey(previous.details.measurements) === measurementKey(measurements)) return
+  if (previous?.details?.carrier === carrier && measurementKey(previous.details.measurements) === measurementKey(measurements)) return false
 
   // Existing audit JSON storage avoids requiring a new production column. A
   // deterministic key makes identical concurrent refreshes idempotent.
@@ -42,4 +42,5 @@ export async function saveCarrierMeasurements(
     id, tenant_id: shipment.tenant_id, action: CARRIER_MEASUREMENTS_ACTION, details, created_at: now,
   }, { onConflict: 'id', ignoreDuplicates: true })
   if (insertError) throw new Error('Não foi possível guardar as medições da transportadora.')
+  return true
 }

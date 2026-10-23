@@ -56,6 +56,7 @@ export async function recordTrackingEvents(
 
   // 2. Inserir novos eventos em tracking_events com deduplicação
   let insertedCount = 0
+  let measurementsUpdated = false
   try {
     const { data: shipmentExists } = await supabase
       .from("shipments")
@@ -65,7 +66,12 @@ export async function recordTrackingEvents(
 
     if (shipmentExists) {
       try {
-        await saveCarrierMeasurements(supabase, shipmentExists, sortedEvents)
+        measurementsUpdated = await saveCarrierMeasurements(supabase, shipmentExists, sortedEvents)
+        if (process.env.CARRIER_WEIGHT_REPRICING_ENABLED === 'true' && sortedEvents.some(event => event.measurements)) {
+          const { reconcileCarrierWeight } = await import('@/lib/billing/reconcile-carrier-weight')
+          const adjustment = await reconcileCarrierWeight(supabase, shipmentExists.tenant_id, shipmentId)
+          measurementsUpdated ||= adjustment.status === 'adjusted'
+        }
       } catch (error) {
         console.warn('[Tracking Recorder] Medições não guardadas:', error instanceof Error ? error.message : 'Erro de gravação')
       }
@@ -148,6 +154,7 @@ export async function recordTrackingEvents(
     success: true,
     carrier,
     count: insertedCount,
+    measurementsUpdated,
     latestStatus: lastEvent.displayStatus,
     event: lastEvent,
   }

@@ -5,6 +5,7 @@ import { EnviosClient } from "./components/EnviosClient"
 
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { pickupDateDisplay } from "@/lib/services/shipments/shipment-pickup-dates"
+import { formatDeclaredWeight } from '@/lib/services/shipments/parcel-summary'
 
 export default async function EnviosPage(props: { searchParams?: Promise<{ page?: string, search?: string, status?: string }> }) {
   const searchParams = await props.searchParams || {}
@@ -64,6 +65,7 @@ export default async function EnviosPage(props: { searchParams?: Promise<{ page?
     return {
       rawId: s.id,
       rawShipment: s,
+      parcel_summary: s.parcel_summary,
       billing_statement_id: s.billing_statement_id,
       trk: { 
         id: carrierCode, 
@@ -94,8 +96,8 @@ export default async function EnviosPage(props: { searchParams?: Promise<{ page?
       textColor: "text-white" 
     },
     package: { 
-      count: "1 Vol.", // Em produção deve vir da contagem de packages para este shipment
-      weight: "1.00 kg" 
+      count: s.parcel_summary?.volumeCount ? `${s.parcel_summary.volumeCount} Vol.` : '—',
+      weight: formatDeclaredWeight(s.parcel_summary?.declaredWeightKg)
     },
     delivery: { 
       date: s.status === 'entregue' ? new Date(s.updated_at || s.created_at).toLocaleDateString('pt-PT') : "--/--/----", 

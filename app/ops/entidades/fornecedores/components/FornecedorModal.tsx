@@ -32,9 +32,9 @@ import {
   UploadCloud,
   Download,
   AlertTriangle,
-  RefreshCw,
   Search
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { saveFornecedorAction, deleteFornecedorAction } from "@/app/actions/fornecedores"
 import { 
   Fornecedor, 
@@ -1487,7 +1487,7 @@ export function FornecedorModal({
                     onClick={handlePreFillPriceTable}
                     className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
-                    <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                    <RefreshIcon className="w-4 h-4 text-slate-500" />
                     Pré-preencher com Markup
                   </button>
 

@@ -1,4 +1,5 @@
 "use client"
+import { ShipmentParcelWeight } from '@/components/shipments/ShipmentParcelWeight'
 
 import * as React from "react"
 import Link from "next/link"
@@ -803,6 +804,8 @@ export function ClientDashboard() {
                       </div>
                     </div>
 
+                    <ShipmentParcelWeight summary={shipment.parcel_summary} />
+
                     {/* Bottom Row: Date, Price & Quick Actions */}
                     <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)]/60 text-xs">
                       <div className="flex items-baseline gap-2">
@@ -939,6 +942,7 @@ export function ClientDashboard() {
                             {shipment.service_type || "CTT Expresso"}
                           </span>
                         </div>
+                        <div className="mt-1.5"><ShipmentParcelWeight summary={shipment.parcel_summary} /></div>
                       </td>
 
                       {/* Destinatário */}

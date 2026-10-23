@@ -3,7 +3,8 @@
 import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { BarChart3, Download, RefreshCw, FileText, CheckCircle2, Clock, AlertCircle, ArrowRight, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react"
+import { BarChart3, Download, FileText, CheckCircle2, Clock, AlertCircle, ArrowRight, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { billingStatisticsCsv, filterStatisticsInvoices, summarizeBillingStatistics, type BillingStatisticsData, type BillingStatisticsFilters } from "@/lib/billing/statistics"
 
@@ -57,7 +58,7 @@ export function BillingStatisticsClient({ data }: { data: BillingStatisticsData 
           <p className="mt-1 text-xs text-[var(--text-secondary)]">Transporte e serviços avulsos · Valores sem IVA · Liquidação atual no TMS</p></div>
       </div>
       <div className="flex items-center gap-2">
-        <button onClick={() => startRefresh(() => router.refresh())} disabled={refreshing} className={`${input} inline-flex items-center gap-2 disabled:opacity-50`}><RefreshCw aria-hidden="true" className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />Atualizar</button>
+        <button onClick={() => startRefresh(() => router.refresh())} disabled={refreshing} className={`${input} inline-flex items-center gap-2 disabled:opacity-50`}><RefreshIcon aria-hidden="true" className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />Atualizar</button>
         <button onClick={exportCsv} disabled={!selected.length || invalidRange} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#155EEF] px-4 text-sm font-semibold text-white hover:bg-[#124BC0] disabled:opacity-50"><Download aria-hidden="true" className="h-4 w-4" />Exportar CSV</button>
       </div>
     </header>

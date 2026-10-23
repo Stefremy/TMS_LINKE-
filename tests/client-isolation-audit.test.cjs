@@ -2,6 +2,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { createLoader } = require('./helpers/load-typescript.cjs')
 const { auditDatabase } = require('./helpers/client-isolation-audit-db.cjs')
+const ownershipRead = query => query.table === 'shipments' && !query.write &&
+  (query.projection === '*' || query.projection?.split(',').map(column => column.trim()).includes('client_id'))
 
 // These tests assert the intended security boundary. Unfixed findings deliberately fail.
 // Only fictional records and mocked integration responses are used.
@@ -57,6 +59,7 @@ function harness({ ctx = ctxA, fallback = false, eventsOnA = false, failure } = 
   }
   const mapCorreosStatus = () => ({ eventName: 'Fixture delivery', displayStatus: 'entregue', isTerminal: true, isIncidencia: false })
   const mocks = {
+    'node:crypto': require('node:crypto'),
     'server-only': {},
     '@/lib/auth/context': {
       requireUser, getAuthContext: async () => ctx, getTenantId: async () => (await requireUser()).tenant_id,
@@ -392,7 +395,7 @@ for (const role of ['employee', 'admin']) {
 }
 for (const [carrier, tracking] of [['ctt', 'EQ000000002PT'], ['correos', '0000000000000002']]) {
   test('F03: lookup failure must deny tracking sync before fetching or modifying B (' + carrier + ')', async t => {
-    const h = harness({ failure: query => query.table === 'shipments' && query.projection === '*' && !query.write
+    const h = harness({ failure: query => ownershipRead(query)
       && query.filters.some(filter => filter.name === 'id' && filter.value === SB) ? { message: 'Simulated lookup failure' } : null })
     const result = await h.load('app/actions/shipments.ts').syncShipmentTrackingAction(tracking, SB)
     const statusB = h.db.tables.shipments.find(row => row.id === SB).status
@@ -457,7 +460,7 @@ for (const [file, action] of [
         assert.ok(h.db.writes.every(write => write.table === 'shipments'
           ? write.filters.some(filter => filter.name === 'id' && filter.value === SA)
           : write.value.shipment_id === SA))
-        const lookups = h.db.queries.filter(query => query.table === 'shipments' && query.projection === '*' && !query.write)
+        const lookups = h.db.queries.filter(ownershipRead)
         assert.ok(lookups.length > 0)
         for (const query of lookups) {
           assert.ok(query.filters.some(filter => filter.name === 'tenant_id' && filter.value === TENANT))
@@ -584,7 +587,7 @@ for (const owner of [A, B]) {
     assert.ok(h.db.writes.every(write => write.table === 'shipments'
       ? write.filters.some(filter => filter.name === 'id' && filter.value === own.id)
       : write.value.shipment_id === own.id))
-    const lookups = h.db.queries.filter(query => query.table === 'shipments' && query.projection === '*' && !query.write)
+    const lookups = h.db.queries.filter(ownershipRead)
     assert.ok(lookups.length >= 2, 'Client ownership must also be checked by the dispatcher')
     for (const query of lookups) {
       assert.ok(query.filters.some(filter => filter.name === 'client_id' && filter.value === owner))
@@ -601,7 +604,7 @@ for (const role of ['employee', 'admin']) {
     assert.equal(result.updatedCount, 2)
     assert.deepEqual(h.calls.providers.map(call => call.tracking).sort(), ['EQ000000001PT', 'EQ000000002PT'])
     assert.equal(h.db.tables.shipments.find(row => row.id === FOREIGN).status, 'pendente')
-    assert.ok(h.db.queries.filter(query => query.table === 'shipments' && query.projection === '*')
+    assert.ok(h.db.queries.filter(ownershipRead)
       .every(query => query.filters.some(filter => filter.name === 'tenant_id' && filter.value === TENANT)))
   })
 }
@@ -631,7 +634,7 @@ test('F04: returned errors and thrown exceptions stop the batch before side effe
   }
 })
 test('F04: a failed ownership recheck cannot use the earlier batch snapshot', async () => {
-  const h = harness({ failure: query => query.table === 'shipments' && query.projection === '*'
+  const h = harness({ failure: query => ownershipRead(query)
     && query.filters.some(filter => filter.name === 'id' && filter.kind === 'eq') ? { message: 'Recheck failed' } : null })
   const result = await h.load('app/actions/shipments.ts').syncActiveShipmentsBatchAction([SA])
   assert.equal(result.updatedCount, 0)
@@ -640,7 +643,7 @@ test('F04: a failed ownership recheck cannot use the earlier batch snapshot', as
 })
 test('F04: ownership changes before the client recheck stop that shipment', async () => {
   const h = harness({ failure: query => {
-    if (query.table === 'shipments' && query.projection === '*'
+    if (ownershipRead(query)
       && query.filters.some(filter => filter.name === 'id' && filter.value === SA)) {
       h.db.tables.shipments.find(row => row.id === SA).client_id = B
     }

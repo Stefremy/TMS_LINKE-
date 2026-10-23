@@ -9,7 +9,6 @@ import {
   Search,
   Download,
   MapPin,
-  RefreshCw,
   Copy,
   Check,
   ChevronLeft,
@@ -20,6 +19,7 @@ import {
   Trash2,
   BookmarkCheck,
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { Destinatario } from "../types"
 import { DestinatarioDetailsModal } from "./DestinatarioDetailsModal"
 import { NovoDestinatarioModal } from "./NovoDestinatarioModal"
@@ -410,7 +410,7 @@ export function DestinatariosClient({
             disabled={isRefreshing}
             className="px-2.5 py-1.5 h-auto text-[11px] font-medium shadow-xs"
           >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 opacity-70 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshIcon className={`w-4 h-4 mr-1.5 ${isRefreshing ? "animate-spin" : ""}`} />
             {isRefreshing ? "A carregar..." : "Atualizar"}
           </Button>
 

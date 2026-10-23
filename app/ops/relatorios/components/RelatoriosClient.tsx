@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, Lightbulb, Package, Printer, RefreshCw, Truck } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, CheckCircle2, Download, Lightbulb, Package, Printer, Truck } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { getRelatoriosDataAction } from "@/app/actions/relatorios"
 import { REPORT_PERIODS } from "@/lib/reports/operational-reports"
 import type { OperationalReport, ReportGroup } from "@/lib/reports/operational-reports"
@@ -88,7 +89,7 @@ export function RelatoriosClient({ initialData }: { initialData: OperationalRepo
         <p className="mt-1 text-sm text-slate-500">Envios, clientes e margem estimada a partir dos registos do TMS.</p>
         <p className="mt-2 text-xs text-slate-500">Atualizado em {timestamp(data.updatedAt)} · Hora de Lisboa</p></div>
       <div className="flex flex-wrap gap-2 print:hidden">
-        <button className={button} disabled={loading} onClick={() => refresh()}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />{loading ? "A atualizar…" : "Atualizar"}</button>
+        <button className={button} disabled={loading} onClick={() => refresh()}><RefreshIcon className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />{loading ? "A atualizar…" : "Atualizar"}</button>
         <button className={button} disabled={loading} onClick={exportCsv}><Download className="h-4 w-4" />Exportar CSV</button>
         <button className={button} disabled={loading} onClick={() => window.print()}><Printer className="h-4 w-4" />Imprimir</button>
       </div>

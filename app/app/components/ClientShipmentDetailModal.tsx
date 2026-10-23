@@ -23,7 +23,6 @@ import {
   ArrowRight,
   History,
   Check,
-  RefreshCw,
   AlertTriangle,
   Trash2,
   Undo2,
@@ -32,6 +31,7 @@ import {
   Share2,
   ExternalLink
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { useOptionalClientScope } from "./ClientScope"
@@ -460,7 +460,7 @@ export function ClientShipmentDetailModal({
               className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 font-medium px-3 py-1 rounded-md flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50 text-xs"
               title={isCorreos ? "Consultar API Correos Express para obter novas leituras de tracking" : "Consultar API dos CTT para obter novas leituras de tracking"}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-slate-600" : "text-slate-500"}`} />
+              <RefreshIcon className={`w-4 h-4 ${isSyncing ? "animate-spin text-slate-600" : "text-slate-500"}`} />
               <span>{isSyncing ? "A Sincronizar..." : "Sincronizar"}</span>
             </button>
           </div>
@@ -616,7 +616,7 @@ export function ClientShipmentDetailModal({
                         disabled={isSyncing}
                         className="px-3 py-1 bg-[var(--status-critical)] hover:opacity-90 disabled:opacity-50 text-white rounded-md font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5"
                       >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+                        <RefreshIcon className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`} />
                         <span>Verificar Atualização</span>
                       </button>
                     </div>
@@ -815,7 +815,13 @@ export function ClientShipmentDetailModal({
 
               </div>
 
-              <CarrierMeasurementsPanel shipmentId={currentShipment.rawId || currentShipment.id} syncing={isSyncing} />
+              <CarrierMeasurementsPanel shipmentId={currentShipment.rawId || currentShipment.id} syncing={isSyncing}
+                previous={currentShipment.parcel_summary}
+                onUpdated={(summary, price) => {
+                  const updated = { ...currentShipment, parcel_summary: summary, ...(price !== undefined ? { sell_price: price } : {}) }
+                  setCurrentShipment(updated)
+                  onUpdateShipment?.(updated)
+                }} />
 
               {/* 3. Telefone, Email e Volumes */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

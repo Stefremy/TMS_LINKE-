@@ -18,7 +18,7 @@
     "test:reports": "node --test tests/operational-reports.test.cjs",
     "test:domains": "node --test tests/domain-routing.test.cjs",
     "test:manifests": "node --test tests/ctt-manifest.test.cjs tests/ctt-close-protocol.test.cjs",
-    "test:finance": "node --test tests/stripe-wallet-audit.test.cjs tests/wallet-sql.test.cjs tests/client-balance.test.cjs"
+    "test:finance": "node --test tests/stripe-wallet-audit.test.cjs tests/wallet-sql.test.cjs tests/client-balance.test.cjs tests/carrier-weight-pricing.test.cjs tests/carrier-weight-adjustment-sql.test.cjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.6",

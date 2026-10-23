@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { captureWeightPricingBasis, type WeightPricingBasis } from "@/lib/billing/carrier-weight-pricing"
 import { calculateShipmentPrice } from "@/lib/pricing/calculate-shipment-price"
 import { calculateShipmentSpecialFees, resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
 import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
@@ -16,6 +17,7 @@ import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "@/l
 import { fetchShipments, fetchShipmentLabel, fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
 import { syncShipmentTracking, mapCorreosStatus } from "@/lib/services/tracking"
 import { syncAuthorizedShipmentBatch } from "@/lib/services/tracking/tracking-batch"
+import { loadShipmentParcelSummaries } from '@/lib/services/shipments/shipment-parcel-summaries'
 import { publicUrl } from "@/lib/config/public-origins"
 import type { CTTShipment2Close, CTTCompleteShipmentOutput } from "@/lib/services/ctt/ctt-types"
 
@@ -164,6 +166,11 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
 
   const latestInvoice = clientStatements.find((stmt: any) => stmt.moloni_document_number || stmt.moloni_document_id || stmt.statement_number)
 
+  const visibleShipments = clientShipments.slice(0, 500)
+  const parcelSummaries = await loadShipmentParcelSummaries(createAdminClient(), ctx.tenant_id, visibleShipments)
+    .catch(() => new Map())
+  const displayShipments = visibleShipments.map(shipment => ({ ...shipment, parcel_summary: parcelSummaries.get(shipment.id) || null }))
+
   return {
     totalCount,
     totalRevenue,
@@ -177,8 +184,8 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
     weeklyVolume,
     serviceBreakdown,
     destinationRegions,
-    recentShipments: clientShipments.slice(0, 5),
-    allShipments: clientShipments.slice(0, 500),
+    recentShipments: displayShipments.slice(0, 5),
+    allShipments: displayShipments,
     latestInvoice: latestInvoice ? {
       id: String(latestInvoice.id),
       statement_number: latestInvoice.statement_number ? String(latestInvoice.statement_number) : undefined,
@@ -260,6 +267,7 @@ export async function emitClientGuiaAction(data: {
     let computedFuelAmount = 0
     let computedBasePrice: number
     let computedSpecialDesc: string | null = null
+    let weightPricingBasis: WeightPricingBasis
     let matchedClient: any = {}
     let carrierCode: "ctt" | "correos"
     try {
@@ -286,6 +294,7 @@ export async function emitClientGuiaAction(data: {
       data = { ...data, serviceName: chosenService.name, subProductId: chosenService.webservice_service_code,
         webserviceConnectionId: chosenService.webservice_connection_id }
 
+      weightPricingBasis = captureWeightPricingBasis(matchedClient, chosenService, recipientCountry, recipientPostal)
       computedSellPrice = priceResult.sellPrice
       computedBuyPrice = priceResult.buyPrice
       computedFuelAmount = priceResult.fuelSurchargeAmount
@@ -307,6 +316,7 @@ export async function emitClientGuiaAction(data: {
       tenant_id: (await getTenantId()),
       client_id: validatedClientId,
       billing_type: "conta_corrente",
+      weight_pricing_basis: weightPricingBasis,
       tracking_number: trackingNumber,
       service_type: data.serviceName || "CTT Expresso 24H",
       status: "pendente",

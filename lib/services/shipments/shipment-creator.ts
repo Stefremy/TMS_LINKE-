@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
+import { captureWeightPricingBasis, type WeightPricingBasis } from "@/lib/billing/carrier-weight-pricing"
 import { calculateShipmentPrice } from "@/lib/pricing/calculate-shipment-price"
 import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
@@ -55,6 +56,7 @@ export async function createShipment(formData: FormData) {
   let computedFuelAmount = 0
   let computedBasePrice: number
   let computedTierLabel = "Standard"
+  let weightPricingBasis: WeightPricingBasis
   const weightKg = Number(formData.get("weight_kg"))
   const lengthCm = Number(formData.get('length_cm'))
   const widthCm = Number(formData.get('width_cm'))
@@ -72,6 +74,7 @@ export async function createShipment(formData: FormData) {
     const recipientCountry = (formData.get("recipient_country") as string) || "PT"
     const priceResult = calculateShipmentPrice(weightKg, { ...matchedClient, default_linke_table_id: service.id },
       [service], recipientCountry, recipient_zip, { requireConfiguredTariff: true })
+    weightPricingBasis = captureWeightPricingBasis(matchedClient, service, recipientCountry, recipient_zip)
     computedSellPrice = priceResult.sellPrice
     computedBuyPrice = priceResult.buyPrice
     computedFuelAmount = priceResult.fuelSurchargeAmount || 0
@@ -102,6 +105,7 @@ export async function createShipment(formData: FormData) {
     recipient_zip4,
     buy_price: computedBuyPrice,
     sell_price: computedSellPrice,
+    weight_pricing_basis: weightPricingBasis,
     weight_kg: weightKg,
     length_cm: lengthCm,
     width_cm: widthCm,

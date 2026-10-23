@@ -2,37 +2,13 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { 
-  AlertTriangle, 
-  Search, 
-  Filter, 
-  RefreshCw, 
-  MapPin, 
-  Phone, 
-  Clock, 
-  Calendar, 
-  User, 
-  Building2, 
-  CheckCircle2, 
-  ExternalLink, 
-  RotateCcw, 
-  Eye, 
-  ChevronRight, 
-  Truck, 
-  ArrowUpRight, 
-  ShieldAlert, 
-  Copy, 
-  Check, 
-  SlidersHorizontal,
-  Package,
-  XCircle,
-  AlertCircle
+import {
+  AlertTriangle, Search, MapPin, Phone, Clock, User,
+  CheckCircle2, Eye, Truck, ShieldAlert, Copy, Check, Package,
 } from "lucide-react"
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { getCarrierLogo } from "@/lib/carrier-logos"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
-import { TratarIncidenciaModal } from "./components/TratarIncidenciaModal"
 import { syncCttTrackingAction } from "@/app/actions/ctt"
 
 export interface IncidentShipment {
@@ -59,7 +35,7 @@ export interface IncidentShipment {
   sla_hours: number
   status_tratamento: "pendente" | "reagendado" | "morada_atualizada" | "em_resolucao"
   attempts_count: number
-  rawShipment: any
+  rawShipment: Record<string, unknown>
 }
 
 interface IncidenciasClientProps {
@@ -69,22 +45,15 @@ interface IncidenciasClientProps {
 
 export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClientProps) {
   const router = useRouter()
-  const [incidents, setIncidents] = React.useState<IncidentShipment[]>(initialIncidents)
+  const incidents = initialIncidents
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedFilter, setSelectedFilter] = React.useState<string>("todos")
   const [selectedClientId, setSelectedClientId] = React.useState<string>("all")
-  const [selectedIds, setSelectedIds] = React.useState<string[]>([])
   
   // Modals state
-  const [modalShipment, setModalShipment] = React.useState<any | null>(null)
-  const [tratarModalShipment, setTratarModalShipment] = React.useState<any | null>(null)
+  const [modalShipment, setModalShipment] = React.useState<IncidentShipment["rawShipment"] | IncidentShipment | null>(null)
   const [isSyncing, setIsSyncing] = React.useState(false)
   const [copiedId, setCopiedId] = React.useState<string | null>(null)
-
-  // Keep state in sync with server revalidations
-  React.useEffect(() => {
-    setIncidents(initialIncidents)
-  }, [initialIncidents])
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text)
@@ -100,8 +69,8 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
         await syncCttTrackingAction("", idToSync)
       }
       router.refresh()
-    } catch (err: any) {
-      console.warn("Sync error:", err?.message)
+    } catch (err) {
+      console.warn("Sync error:", err instanceof Error ? err.message : "Erro desconhecido")
     } finally {
       setIsSyncing(false)
     }
@@ -153,158 +122,79 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
     return { total, ausentes, moradas, avarias, criticalSla }
   }, [incidents])
 
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(filteredIncidents.map(i => i.id))
-    } else {
-      setSelectedIds([])
-    }
-  }
-
-  const handleToggleRow = (id: string) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-  }
+  const indicators = [
+    { label: "Incidências ativas", value: stats.total, icon: AlertTriangle, color: "#DC2626", description: "Ocorrências por resolver" },
+    { label: "Destinatário ausente", value: stats.ausentes, icon: User, color: "#B45309", description: "Ausência no local de entrega" },
+    { label: "Morada incorreta", value: stats.moradas, icon: MapPin, color: "#155EEF", description: "Morada incompleta ou incorreta" },
+    { label: "Avarias / Outros", value: stats.avarias, icon: ShieldAlert, color: "#FA8072", iconColor: "#B94438", description: "Danos ou avarias comunicados" },
+  ]
+  const hasFilters = Boolean(searchQuery || selectedFilter !== "todos" || selectedClientId !== "all")
 
   return (
-    <div className="flex flex-col gap-6">
-      
-      {/* Top Header Card */}
-      <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-6 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-6">
+      <header className="flex flex-col justify-between gap-4 border-b border-[var(--border-subtle)] pb-5 lg:flex-row lg:items-end">
         <div>
-          <div className="flex items-center gap-2.5 mb-1.5">
-            <div className="w-8 h-8 rounded-lg bg-red-700 text-white border border-red-700 flex items-center justify-center font-bold">
-              <AlertTriangle className="w-4.5 h-4.5" />
-            </div>
-            <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
-              Gestão de Incidências Operacionais
-            </h1>
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-              stats.total > 0 
-                ? "bg-red-700 text-white"
-                : "bg-emerald-700 text-white"
-            }`}>
-              {stats.total} Ativas
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">Incidências</h1>
+            <span className={`rounded-md px-2 py-1 text-xs font-semibold ${stats.total > 0 ? "bg-red-700 text-white" : "bg-[var(--surface-bg)] text-[var(--text-secondary)] border border-[var(--border-subtle)]"}`}>
+              {stats.total} ativas
             </span>
           </div>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Controlo e resolução de entregas não conseguidas, moradas incompletas e devoluções na rede CTT Expresso.
-          </p>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">Acompanhe as ocorrências e resolva os envios que precisam de atenção.</p>
         </div>
-
-        <div className="flex items-center gap-2.5">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSyncAll}
-            disabled={isSyncing}
-            className="text-xs font-semibold h-9 px-3.5 border-[var(--border-strong)] bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-primary)] shadow-2xs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isSyncing ? "animate-spin text-[var(--accent)]" : "text-[var(--text-secondary)]"}`} />
-            Sincronizar CTT Tracking
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button variant="outline" size="sm" onClick={handleSyncAll} disabled={isSyncing || incidents.length === 0} className="h-9">
+            <RefreshIcon aria-hidden="true" className={`mr-1.5 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "A sincronizar…" : "Sincronizar CTT"}
           </Button>
-
-          <Button
-            size="sm"
-            onClick={() => router.push('/ops/envios')}
-            className="text-xs font-semibold h-9 px-3.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white shadow-2xs"
-          >
-            <Package className="w-3.5 h-3.5 mr-1.5" />
-            Ver Todos os Envios
+          <Button size="sm" onClick={() => router.push('/ops/envios')} className="h-9">
+            <Package aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+            Ver envios
           </Button>
         </div>
-      </div>
+      </header>
 
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Total Incidências Card */}
-        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 flex flex-col relative overflow-hidden shadow-2xs">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
-              Incidências Ativas
-            </span>
-            <div className={`w-8 h-8 rounded-md flex items-center justify-center border ${
-              stats.total > 0
-                ? "bg-red-700 text-white border-red-700"
-                : "bg-emerald-700 text-white border-emerald-700"
-            }`}>
-              {stats.total > 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+      <section aria-label="Resumo das incidências" className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+        <div className="grid grid-cols-2 gap-px bg-[var(--border-subtle)] xl:grid-cols-4">
+          {indicators.map(indicator => (
+            <div key={indicator.label} className="min-w-0 border-t-4 bg-[var(--surface-bg)] p-4 sm:p-5" style={{ borderTopColor: indicator.color }}>
+              <div className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-[var(--text-primary)]">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white" style={{ backgroundColor: indicator.iconColor || indicator.color }}>
+                  <indicator.icon aria-hidden="true" className="h-4 w-4" strokeWidth={2} />
+                </span>
+                {indicator.label}
+              </div>
+              <div className="mt-3 text-[28px] font-semibold leading-none tracking-tight text-[var(--text-primary)] tabular-nums">{indicator.value}</div>
+              <p className="mt-2 text-xs text-[var(--text-tertiary)]">{indicator.description}</p>
             </div>
-          </div>
-          <div className="flex items-baseline gap-2 mt-auto">
-            <span className="text-3xl font-bold text-[var(--text-primary)]">{stats.total}</span>
-            <span className={`text-xs font-medium ${stats.criticalSla > 0 ? "text-[var(--status-critical)]" : "text-[var(--text-tertiary)]"}`}>
-              {stats.criticalSla > 0 ? `${stats.criticalSla} em SLA Crítico (>24h)` : "Sem incumprimento de SLA"}
-            </span>
-          </div>
+          ))}
         </div>
-
-        {/* Destinatário Ausente */}
-        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 flex flex-col relative overflow-hidden shadow-2xs">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
-              Destinatário Ausente
-            </span>
-            <div className="w-8 h-8 rounded-md bg-amber-700 text-white flex items-center justify-center border border-amber-700">
-              <User className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2 mt-auto">
-            <span className="text-3xl font-bold text-[var(--text-primary)]">{stats.ausentes}</span>
-            <span className="text-xs font-medium text-[var(--text-secondary)]">
-              Aguardam reagendamento de 2ª tentativa
-            </span>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/60 px-4 py-3 text-xs sm:px-5">
+          <span className="flex items-center gap-2 text-[var(--text-secondary)]"><Clock aria-hidden="true" className="h-3.5 w-3.5" />Tempo desde a última atualização</span>
+          <span className={`font-medium ${stats.criticalSla > 0 ? "text-[var(--status-critical)]" : "text-[var(--text-secondary)]"}`}>
+            {stats.criticalSla > 0 ? `${stats.criticalSla} com 24h ou mais` : "Sem ocorrências com 24h ou mais"}
+          </span>
         </div>
-
-        {/* Morada Incompleta */}
-        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 flex flex-col relative overflow-hidden shadow-2xs">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
-              Morada Incorreta / Incompleta
-            </span>
-            <div className="w-8 h-8 rounded-md bg-blue-700 text-white flex items-center justify-center border border-blue-700">
-              <MapPin className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2 mt-auto">
-            <span className="text-3xl font-bold text-[var(--text-primary)]">{stats.moradas}</span>
-            <span className="text-xs font-medium text-[var(--text-secondary)]">
-              Requer retificação de morada/contacto
-            </span>
-          </div>
-        </div>
-
-        {/* Avarias & Extravios */}
-        <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] p-5 flex flex-col relative overflow-hidden shadow-2xs">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
-              Avarias / Outros Motivos
-            </span>
-            <div className="w-8 h-8 rounded-md bg-violet-700 text-white flex items-center justify-center border border-violet-700">
-              <ShieldAlert className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2 mt-auto">
-            <span className="text-3xl font-bold text-[var(--text-primary)]">{stats.avarias}</span>
-            <span className="text-xs font-medium text-[var(--text-secondary)]">
-              Em averiguação técnica com o CTT
-            </span>
-          </div>
-        </div>
-
-      </div>
+      </section>
 
       {/* Main Content Table Section */}
-      <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-sm overflow-hidden flex flex-col">
+      <div className="min-w-0 overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] flex flex-col">
         
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border-subtle)] px-4 py-4 sm:px-5">
+          <div>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Envios com incidência</h2>
+            <p className="mt-1 text-xs text-[var(--text-tertiary)]">Consulte o motivo, o histórico e as ações disponíveis para cada envio.</p>
+          </div>
+          <span className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2 py-1 text-xs font-medium text-[var(--text-secondary)] tabular-nums">{filteredIncidents.length} resultado(s)</span>
+        </div>
         {/* Toolbar & Filters */}
-        <div className="p-4 border-b border-[var(--border-subtle)] flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-[var(--surface-bg)]">
-          
+        <div className="flex min-w-0 flex-col gap-3 border-b border-[var(--border-subtle)] p-4 sm:px-5">
           {/* Quick Filter Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 text-xs font-medium">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-medium">
             <button
+              type="button"
               onClick={() => setSelectedFilter("todos")}
+              aria-pressed={selectedFilter === "todos"}
               className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer shrink-0 ${
                 selectedFilter === "todos"
                   ? "bg-[var(--accent)] text-white font-semibold"
@@ -315,7 +205,9 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
             </button>
 
             <button
+              type="button"
               onClick={() => setSelectedFilter("destinatario_ausente")}
+              aria-pressed={selectedFilter === "destinatario_ausente"}
               className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer shrink-0 ${
                 selectedFilter === "destinatario_ausente"
                   ? "bg-amber-700 text-white font-semibold"
@@ -326,7 +218,9 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
             </button>
 
             <button
+              type="button"
               onClick={() => setSelectedFilter("morada_incorreta")}
+              aria-pressed={selectedFilter === "morada_incorreta"}
               className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer shrink-0 ${
                 selectedFilter === "morada_incorreta"
                   ? "bg-blue-700 text-white font-semibold"
@@ -337,10 +231,12 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
             </button>
 
             <button
+              type="button"
               onClick={() => setSelectedFilter("avaria_dano")}
+              aria-pressed={selectedFilter === "avaria_dano"}
               className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer shrink-0 ${
                 selectedFilter === "avaria_dano"
-                  ? "bg-violet-700 text-white font-semibold"
+                  ? "bg-[#B94438] text-white font-semibold"
                   : "bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
             >
@@ -349,23 +245,25 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
           </div>
 
           {/* Search & Client Filter */}
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex-1 sm:w-64">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Pesquisar envio, destinatário..."
-                className="w-full h-8 pl-8.5 pr-3 rounded-md bg-[var(--canvas-bg)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)]"
+                aria-label="Pesquisar incidências"
+                placeholder="Pesquisar guia, destinatário, motivo ou cliente…"
+                className="w-full h-9 pl-8.5 pr-3 rounded-md bg-[var(--canvas-bg)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
 
             {clients.length > 0 && (
               <select
+                aria-label="Filtrar por cliente"
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
-                className="h-8 px-2.5 rounded-md bg-[var(--canvas-bg)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                className="h-9 w-full sm:w-auto sm:max-w-64 px-2.5 rounded-md bg-[var(--canvas-bg)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
               >
                 <option value="all">Todos os Clientes</option>
                 {clients.map(c => (
@@ -377,74 +275,35 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
 
         </div>
 
-        {/* Bulk Action Header (if items selected) */}
-        {selectedIds.length > 0 && (
-          <div className="px-5 py-2.5 bg-amber-700 border-b border-amber-800 flex items-center justify-between text-xs text-white animate-in fade-in">
-            <span className="font-semibold text-white">
-              {selectedIds.length} envio(s) com incidência selecionado(s)
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  const first = incidents.find(i => selectedIds.includes(i.id))
-                  if (first) setTratarModalShipment(first.rawShipment || first)
-                }}
-                className="h-7 text-xs bg-white text-amber-800 border-white hover:bg-amber-50 font-semibold"
-              >
-                <RotateCcw className="w-3 h-3 mr-1" />
-                Tratar em Lote
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setSelectedIds([])}
-                className="h-7 text-xs text-white hover:bg-amber-800"
-              >
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Table View */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
+          <table aria-label="Lista de envios com incidência" className={`w-full text-left border-collapse text-xs ${filteredIncidents.length ? "min-w-[1100px]" : ""}`}>
+            {filteredIncidents.length > 0 && <thead>
               <tr className="border-b border-[var(--border-subtle)] bg-[var(--canvas-bg)] text-[var(--text-secondary)] font-semibold text-[11px] uppercase tracking-wider">
-                <th className="py-3 px-4 w-10 text-center">
-                  <input
-                    type="checkbox"
-                    checked={filteredIncidents.length > 0 && selectedIds.length === filteredIncidents.length}
-                    onChange={handleSelectAll}
-                    className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-0 cursor-pointer"
-                  />
-                </th>
                 <th className="py-3 px-4">Envio / Nº Rastreio</th>
                 <th className="py-3 px-4">Cliente</th>
                 <th className="py-3 px-4">Destinatário & Localidade</th>
                 <th className="py-3 px-4">Motivo da Incidência</th>
                 <th className="py-3 px-4">Tempo / SLA</th>
                 <th className="py-3 px-4">Estado Tratamento</th>
-                <th className="py-3 px-4 text-right">Ações Operacionais</th>
+                <th className="py-3 px-4 text-right">Detalhes</th>
               </tr>
-            </thead>
+            </thead>}
             <tbody className="divide-y divide-[var(--border-subtle)] bg-[var(--surface-bg)]">
               {filteredIncidents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-[var(--text-secondary)]">
-                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-                      <div className="w-12 h-12 rounded-full bg-emerald-700 text-white flex items-center justify-center mb-3">
-                        <CheckCircle2 className="w-6 h-6" />
+                  <td colSpan={7} className="py-12 text-center text-[var(--text-secondary)]">
+                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto px-4">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-secondary)]">
+                        {hasFilters ? <Search aria-hidden="true" className="h-6 w-6" /> : <CheckCircle2 aria-hidden="true" className="h-6 w-6" />}
                       </div>
                       <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                        Sem Incidências Pendentes
+                        {hasFilters ? "Nenhuma incidência encontrada" : "Sem incidências pendentes"}
                       </h3>
                       <p className="text-xs text-[var(--text-tertiary)] mt-1">
-                        Todos os envios em circulação encontram-se operacionais ou os filtros aplicados não retornaram resultados.
+                        {hasFilters ? "Experimente outra pesquisa ou limpe os filtros para ver todas as ocorrências." : "As novas ocorrências aparecerão aqui para acompanhamento e resolução."}
                       </p>
-                      {(searchQuery || selectedFilter !== "todos" || selectedClientId !== "all") && (
+                      {hasFilters && (
                         <button
                           onClick={() => {
                             setSearchQuery("")
@@ -461,7 +320,6 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                 </tr>
               ) : (
                 filteredIncidents.map((item) => {
-                  const isSelected = selectedIds.includes(item.id)
                   const carrierTracking = item.ctt_object_id || item.tracking_number
                   const internalRef = item.reference || item.tracking_number
                   
@@ -472,20 +330,8 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                   return (
                     <tr 
                       key={item.id}
-                      className={`hover:bg-[var(--surface-muted)] transition-colors group ${
-                        isSelected ? "bg-amber-50/40" : ""
-                      }`}
+                      className="hover:bg-[var(--surface-muted)] transition-colors group"
                     >
-                      {/* Checkbox */}
-                      <td className="py-3.5 px-4 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleRow(item.id)}
-                          className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-0 cursor-pointer"
-                        />
-                      </td>
-
                       {/* Envio / AWB */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-start gap-2.5">
@@ -494,15 +340,17 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                           </div>
                           <div>
                             <div className="flex items-center gap-1.5">
-                              <span 
+                              <button
+                                type="button"
                                 onClick={() => setModalShipment(item.rawShipment)}
                                 className="font-mono text-xs font-bold text-[var(--text-primary)] hover:text-[var(--accent)] hover:underline cursor-pointer"
                               >
                                 {carrierTracking}
-                              </span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleCopy(carrierTracking, item.id)}
+                                aria-label={`Copiar código ${carrierTracking}`}
                                 title="Copiar código"
                                 className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
                               >
@@ -591,7 +439,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                           </span>
                         </div>
                         <span className="text-[10px] text-[var(--text-tertiary)] block mt-1">
-                          {isSlaCritical ? "SLA Excedido (>24h)" : "Em janela operacional"}
+                          {isSlaCritical ? "SLA Excedido (≥24h)" : "Em janela operacional"}
                         </span>
                       </td>
 
@@ -608,7 +456,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                           </span>
                         )}
                         {item.status_tratamento === "morada_atualizada" && (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-700 text-white border border-violet-700 inline-block">
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-700 text-white border border-blue-700 inline-block">
                             Morada Atualizada
                           </span>
                         )}
@@ -623,20 +471,12 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <Button
-                            size="sm"
-                            onClick={() => setTratarModalShipment(item.rawShipment || item)}
-                            className="h-7 text-xs font-semibold px-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white shadow-2xs"
-                          >
-                            <RotateCcw className="w-3 h-3 mr-1" />
-                            Tratar
-                          </Button>
-
-                          <Button
-                            size="sm"
+                            size="icon"
                             variant="outline"
                             onClick={() => setModalShipment(item.rawShipment || item)}
+                            aria-label={`Ver detalhes do envio ${carrierTracking}`}
                             title="Ver histórico e eventos de rastreio"
-                            className="h-7 w-7 p-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                            className="h-8 w-8 shrink-0 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </Button>
@@ -652,16 +492,16 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
         </div>
 
         {/* Footer Info */}
-        <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex items-center justify-between text-xs text-[var(--text-secondary)]">
+        <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/60 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
           <span>Mostrando <strong>{filteredIncidents.length}</strong> de <strong>{incidents.length}</strong> ocorrências operacionais</span>
-          <div className="flex items-center gap-4 text-[11px] text-[var(--text-tertiary)]">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-[var(--text-tertiary)]">
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[var(--status-critical)]"></span>
-              Crítico (&gt;24h)
+              Crítico (≥24h)
             </span>
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              Aviso (12h-24h)
+              Aviso (12–24h)
             </span>
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -683,17 +523,6 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
         />
       )}
 
-      {/* Tratar Incidência Modal */}
-      {tratarModalShipment && (
-        <TratarIncidenciaModal
-          shipment={tratarModalShipment}
-          isOpen={Boolean(tratarModalShipment)}
-          onClose={() => setTratarModalShipment(null)}
-          onSuccess={() => {
-            router.refresh()
-          }}
-        />
-      )}
 
     </div>
   )

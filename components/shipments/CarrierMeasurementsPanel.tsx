@@ -1,16 +1,25 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { RefreshCw, Ruler, Scale } from 'lucide-react'
+import { useEffect, useEffectEvent, useState } from 'react'
+import { Ruler, Scale } from 'lucide-react'
+import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { formatCarrierReading, latestCarrierReadings, type ShipmentMeasurementsSummary } from '@/lib/services/tracking/carrier-measurements'
+import type { ParcelSummary } from '@/lib/services/shipments/parcel-summary'
+import { parcelSummaryFromDetail } from '@/lib/services/shipments/parcel-summary'
 
-export function CarrierMeasurementsPanel({ shipmentId, syncing = false }: { shipmentId: string; syncing?: boolean }) {
+export function CarrierMeasurementsPanel({ shipmentId, syncing = false, previous, onUpdated }: {
+  shipmentId: string; syncing?: boolean; previous?: ParcelSummary | null; onUpdated?: (summary: ParcelSummary, adjustedPrice?: number) => void
+}) {
   const [loaded, setLoaded] = useState<{ id: string; data: ShipmentMeasurementsSummary } | null>(null)
   const [failure, setFailure] = useState<{ id: string; message: string } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const data = loaded?.id === shipmentId ? loaded.data : null
   const error = failure?.id === shipmentId ? failure.message : null
   const loading = !data && !error
+  const onStoredSummary = useEffectEvent((summary: ShipmentMeasurementsSummary) => {
+    const next = parcelSummaryFromDetail(summary, previous)
+    if (JSON.stringify(previous?.carrierWeight ?? null) !== JSON.stringify(next.carrierWeight)) onUpdated?.(next, summary.weightAdjustment?.status === 'adjusted' ? summary.weightAdjustment.price : undefined)
+  })
 
   useEffect(() => {
     if (!shipmentId || syncing) return
@@ -22,6 +31,7 @@ export function CarrierMeasurementsPanel({ shipmentId, syncing = false }: { ship
         if (!controller.signal.aborted) {
           setLoaded({ id: shipmentId, data: summary })
           setFailure(null)
+          onStoredSummary(summary)
         }
       })
       .catch(() => { if (!controller.signal.aborted) setFailure({ id: shipmentId, message: 'Não foi possível carregar as medições.' }) })
@@ -38,6 +48,7 @@ export function CarrierMeasurementsPanel({ shipmentId, syncing = false }: { ship
       const summary = await response.json()
       if (!response.ok) throw new Error(summary.error || 'Não foi possível consultar a transportadora.')
       setLoaded({ id: shipmentId, data: summary })
+      onUpdated?.(parcelSummaryFromDetail(summary, previous), summary.weightAdjustment?.status === 'adjusted' ? summary.weightAdjustment.price : undefined)
     } catch (cause) {
       setFailure({ id: shipmentId, message: cause instanceof Error ? cause.message : 'Não foi possível consultar a transportadora.' })
     } finally { setRefreshing(false) }
@@ -57,7 +68,7 @@ export function CarrierMeasurementsPanel({ shipmentId, syncing = false }: { ship
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
       <h3 className="flex items-center gap-2 text-xs font-semibold text-[var(--text-primary)]"><Scale className="h-4 w-4 text-[var(--accent)]" aria-hidden="true" />Pesos e medidas</h3>
       <button type="button" onClick={() => void refresh()} disabled={refreshing || loading || syncing} className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border-subtle)] px-2 py-1.5 text-[10px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] disabled:opacity-50">
-        <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} aria-hidden="true" />{refreshing ? 'A consultar…' : `Consultar ${carrier}`}
+        <RefreshIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} aria-hidden="true" />{refreshing ? 'A consultar…' : `Consultar ${carrier}`}
       </button>
     </div>
     {loading && !data ? <p role="status" className="text-xs text-[var(--text-secondary)]">A carregar pesos e medidas…</p> : data && <>
@@ -78,8 +89,17 @@ export function CarrierMeasurementsPanel({ shipmentId, syncing = false }: { ship
       {consulted && <p className="mt-2 text-[10px] text-[var(--text-tertiary)]">Dados obtidos em {new Date(consulted).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon', dateStyle: 'short', timeStyle: 'short' })}.</p>}
       {measured && <p className="mt-2 text-[10px] leading-relaxed text-[var(--text-tertiary)]">{data?.carrier === 'correos'
         ? 'A API Correos não distingue valores declarados de medições físicas.'
-        : 'Campos V3 apresentados como recebidos; as unidades aguardam confirmação CTT. O evento não confirma quando foi feita a pesagem.'} Estes valores não confirmam o peso faturado nem alteram a cobrança.</p>}
+        : 'Campos V3 apresentados como recebidos; as unidades aguardam confirmação CTT. O evento não confirma quando foi feita a pesagem.'} A cobrança usa apenas pesos com unidade validada e a tarifa original do envio.</p>}
     </>}
+    {data?.weightAdjustment && <div role="status" className="mt-3 border-t border-[var(--border-subtle)] pt-3 text-xs text-[var(--text-secondary)]">
+      <p className="font-semibold text-[var(--text-primary)]">{data.weightAdjustment.status === 'adjusted' ? 'Ajuste automático de escalão' : 'Ajuste de peso'}</p>
+      <p className="mt-1">{data.weightAdjustment.message}</p>
+      {data.weightAdjustment.status === 'adjusted' && <dl className="mt-2 space-y-2">
+        {row('Peso usado na cobrança', `${number(data.weightAdjustment.weightKg!)} kg`)}
+        {row('Preço anterior → ajustado', `${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(data.weightAdjustment.previousPrice!)} → ${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(data.weightAdjustment.price!)}`)}
+        {row('Diferença (sem IVA)', `+${new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(data.weightAdjustment.difference!)}`)}
+      </dl>}
+    </div>}
     {error && <p role="alert" className="mt-3 text-xs text-[var(--status-critical)]">{error}</p>}
   </section>
 }
