@@ -251,9 +251,9 @@ export function ClientCreateGuia() {
         recipientEmail,
         weightKg: parseFloat(weight) || 1.0,
         volumesCount: parseInt(volumesCount) || 1,
-        lengthCm: parseInt(lengthCm) || 0,
-        widthCm: parseInt(widthCm) || 0,
-        heightCm: parseInt(heightCm) || 0,
+        lengthCm: Number(lengthCm),
+        widthCm: Number(widthCm),
+        heightCm: Number(heightCm),
         serviceId: activeLinkeService?.id,
         serviceName: chosenService,
         subProductId: activeLinkeService?.webservice_service_code,
@@ -417,7 +417,7 @@ export function ClientCreateGuia() {
             </div>
             {dbWarning && (
               <div className="mt-2 p-3 bg-[var(--status-warning-soft)] text-[var(--status-warning)] text-xs font-medium rounded-md border border-[var(--status-warning)]">
-                <strong>Aviso de Sistema:</strong> O envio foi gerado na transportadora, mas houve um erro ao guardar na base de dados: {dbWarning}. Por favor verifique ou crie novamente para que apareça na lista.
+                <strong>Envio aceite — gravação a verificar:</strong> {dbWarning} Não volte a criar este envio. Confirme o registo no histórico ou contacte o suporte.
               </div>
             )}
           </div>
@@ -825,11 +825,14 @@ export function ClientCreateGuia() {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Comp. (cm)</label>
+              <label htmlFor="field-length-cm" className="block text-xs font-bold text-slate-700">Comp. (cm) *</label>
               <input 
+                id="field-length-cm"
+                name="length_cm"
+                required
                 type="number" 
-                min="0"
-                step="1"
+                min="0.1"
+                step="any"
                 placeholder="Ex: 10"
                 value={lengthCm}
                 onChange={(e) => setLengthCm(e.target.value)}
@@ -838,11 +841,14 @@ export function ClientCreateGuia() {
             </div>
             
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Largura (cm)</label>
+              <label htmlFor="field-width-cm" className="block text-xs font-bold text-slate-700">Largura (cm) *</label>
               <input 
+                id="field-width-cm"
+                name="width_cm"
+                required
                 type="number" 
-                min="0"
-                step="1"
+                min="0.1"
+                step="any"
                 placeholder="Ex: 10"
                 value={widthCm}
                 onChange={(e) => setWidthCm(e.target.value)}
@@ -851,11 +857,14 @@ export function ClientCreateGuia() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Altura (cm)</label>
+              <label htmlFor="field-height-cm" className="block text-xs font-bold text-slate-700">Altura (cm) *</label>
               <input 
+                id="field-height-cm"
+                name="height_cm"
+                required
                 type="number" 
-                min="0"
-                step="1"
+                min="0.1"
+                step="any"
                 placeholder="Ex: 10"
                 value={heightCm}
                 onChange={(e) => setHeightCm(e.target.value)}

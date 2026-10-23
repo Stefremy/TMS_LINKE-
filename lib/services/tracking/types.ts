@@ -1,3 +1,5 @@
+import type { CarrierMeasurements } from './carrier-measurements'
+
 export type NormalizedTmsStatus =
   | "pendente"
   | "entrada_rede"
@@ -27,6 +29,7 @@ export interface NormalizedTrackingEvent {
   isTerminal: boolean
   isIncidencia: boolean
   carrierCode: "correos" | "ctt"
+  measurements?: CarrierMeasurements
   rawEvent?: any
 }
 

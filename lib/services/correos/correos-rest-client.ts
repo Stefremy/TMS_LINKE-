@@ -9,7 +9,8 @@ export class CorreosRestClient {
   async request<T>(
     endpoint: string,
     credentials: Omit<CorreosCredentials, "environment" | "solicitante" | "codRte">,
-    body: Record<string, any>
+    body: Record<string, any>,
+    timeoutMs?: number
   ): Promise<T> {
     const authString = `${credentials.user}:${credentials.pass}`
     const authBase64 = Buffer.from(authString).toString("base64")
@@ -54,6 +55,8 @@ export class CorreosRestClient {
         console.error("Correos API Request Failed:", error.message)
         reject(error)
       })
+
+      if (timeoutMs) req.setTimeout(timeoutMs, () => req.destroy(new Error('Tempo limite excedido ao contactar a Correos Express.')))
 
       req.write(JSON.stringify(body))
       req.end()

@@ -1,5 +1,6 @@
 import { NormalizedTrackingEvent, TrackingSyncResult } from "./types"
 import { getTenantId } from "@/lib/auth/context"
+import { saveCarrierMeasurements } from './carrier-measurements-store'
 
 /**
  * Grava eventos de tracking normalizados na base de dados (tracking_events, shipments, audit_log).
@@ -58,11 +59,16 @@ export async function recordTrackingEvents(
   try {
     const { data: shipmentExists } = await supabase
       .from("shipments")
-      .select("id")
+      .select("id,tenant_id")
       .eq("id", shipmentId)
       .maybeSingle()
 
     if (shipmentExists) {
+      try {
+        await saveCarrierMeasurements(supabase, shipmentExists, sortedEvents)
+      } catch (error) {
+        console.warn('[Tracking Recorder] Medições não guardadas:', error instanceof Error ? error.message : 'Erro de gravação')
+      }
       const { data: existingEvents } = await supabase
         .from("tracking_events")
         .select("event_code, timestamp, description")

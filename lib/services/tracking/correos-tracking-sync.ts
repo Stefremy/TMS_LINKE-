@@ -2,6 +2,7 @@ import { CorreosTrackingService } from "../correos/correos-tracking.service"
 import { resolveCorreosCredentials } from "../carriers/credentials"
 import { CorreosCredentials, CorreosTrackingOutput } from "../correos/types"
 import { NormalizedTrackingEvent, NormalizedTmsStatus, TmsDisplayStatus } from "./types"
+import { parseCorreosMeasurements } from './carrier-measurements'
 
 /**
  * Converte data e hora da resposta Correos Express para ISO 8601 UTC.
@@ -322,6 +323,10 @@ export async function fetchCorreosTrackingEvents(
 
     // Ordenar cronologicamente do mais antigo para o mais recente
     events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+
+    // These are shipment-level values, not per-checkpoint measurements.
+    const measurements = parseCorreosMeasurements(result as unknown as Record<string, unknown>)
+    if (events.length && measurements) events[events.length - 1].measurements = measurements
 
     return {
       success: true,

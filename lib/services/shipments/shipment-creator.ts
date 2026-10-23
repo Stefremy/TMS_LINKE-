@@ -56,10 +56,13 @@ export async function createShipment(formData: FormData) {
   let computedBasePrice: number
   let computedTierLabel = "Standard"
   const weightKg = Number(formData.get("weight_kg"))
+  const lengthCm = Number(formData.get('length_cm'))
+  const widthCm = Number(formData.get('width_cm'))
+  const heightCm = Number(formData.get('height_cm'))
   let reservation: WalletReservation | undefined
 
   try {
-    validateShipmentPricingInput({ weightKg })
+    validateShipmentPricingInput({ weightKg, lengthCm, widthCm, heightCm })
     const { client: matchedClient, service } = await loadShipmentPricingContext(supabase, ctx, client_id, {
       serviceId: (formData.get("service_id") as string) || undefined,
       serviceName: (formData.get("service_type") as string) || undefined,
@@ -100,6 +103,9 @@ export async function createShipment(formData: FormData) {
     buy_price: computedBuyPrice,
     sell_price: computedSellPrice,
     weight_kg: weightKg,
+    length_cm: lengthCm,
+    width_cm: widthCm,
+    height_cm: heightCm,
     base_price: computedBasePrice,
     fuel_tax_amount: computedFuelAmount,
     tier_label: computedTierLabel,
@@ -108,7 +114,15 @@ export async function createShipment(formData: FormData) {
   }
 
   // At least one durable shipment record must exist before reporting success.
-  const native = await supabase.from("shipments").insert(shipmentData)
+  // Declared parcel data belongs to packages.dimensions; pricing snapshots and
+  // optional fields stay in audit JSON, not unsupported shipment columns.
+  const native = await supabase.from("shipments").insert({
+    id: shipmentId, tenant_id: shipmentData.tenant_id, client_id,
+    tracking_number: trackingNumber, service_type, status: 'rascunho',
+    sender_name, sender_address: shipmentData.sender_address, sender_zip3, sender_zip4,
+    recipient_name, recipient_address: shipmentData.recipient_address, recipient_zip3, recipient_zip4,
+    buy_price: computedBuyPrice, sell_price: computedSellPrice, created_at: now, updated_at: now,
+  })
   const audit = await supabase.from("audit_log").insert({tenant_id: ctx.tenant_id, action: "shipment_data", details: {...shipmentData, billing_type: reservation?.reserved ? "pay_as_you_go" : "conta_corrente"}})
   if (native.error && audit.error) {
     if (native.error.code && audit.error.code) {
@@ -120,13 +134,16 @@ export async function createShipment(formData: FormData) {
   await transitionWallet(supabase, reservation, 'reserved', 'consumed')
 
   // 3. Create package info
+  let dbWarning: string | undefined
   try {
-    await supabase.from("packages").insert({
+    const { error } = await supabase.from("packages").insert({
       tenant_id: (await getTenantId()),
       shipment_id: shipmentId,
-      weight_g: 1000
+      weight_g: Math.round(weightKg * 1000),
+      dimensions: { length_cm: lengthCm, width_cm: widthCm, height_cm: heightCm, unit: 'cm' },
     })
-  } catch {}
+    if (error) dbWarning = 'O rascunho foi guardado, mas é necessário confirmar a gravação do volume. Não crie outro envio para repetir.'
+  } catch { dbWarning = 'O rascunho foi guardado; a gravação do volume ficou por confirmar. Não crie outro envio para repetir.' }
 
   try {
     revalidatePath("/ops/envios")
@@ -135,7 +152,7 @@ export async function createShipment(formData: FormData) {
     revalidatePath("/app/[storeSlug]/envios", "page")
   } catch {}
 
-  return { success: true, id: shipmentId, guia: trackingNumber }
+  return { success: true, id: shipmentId, guia: trackingNumber, dbWarning }
 }
 
 export async function dispatchShipment(shipmentId: string) {

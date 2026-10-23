@@ -56,6 +56,7 @@ export async function fetchCttTrackingEvents(
         isTerminal: Boolean(e.isFinal),
         isIncidencia: rawStatus === "incidencia" || Boolean(e.rawEvent?.reasonCode),
         carrierCode: "ctt",
+        measurements: e.rawEvent?.measurements,
         rawEvent: e.rawEvent || e,
       }
     })

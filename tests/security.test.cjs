@@ -148,9 +148,76 @@ function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = cl
 function shipmentInput(extra = {}) {
   return { clientId: OTHER, serviceId: 'service-a', serviceName: 'forged service name',
     recipientName: 'Fixture', recipientAddress: 'Fixture street', recipientCountry: 'PT', recipientPostal: '4000-001',
-    weightKg: 1, volumesCount: 1, calculatedPrice: 0.01, subProductId: 'forged-code', webserviceConnectionId: 'forged-connection', ...extra }
+    weightKg: 1, volumesCount: 1, lengthCm: 30.5, widthCm: 20, heightCm: 10, calculatedPrice: 0.01, subProductId: 'forged-code', webserviceConnectionId: 'forged-connection', ...extra }
+}
+function withDimensions(form) {
+  form.set('length_cm', '30.5'); form.set('width_cm', '20'); form.set('height_cm', '10')
+  return form
 }
 async function emit(h, extra) { return h.load('app/actions/shipments.ts').emitClientGuiaAction(shipmentInput(extra)) }
+
+for (const role of ['client', 'employee', 'admin']) {
+  test(`${role}: missing or invalid C/L/A is rejected before reserving funds or contacting a carrier`, async () => {
+    for (const field of ['lengthCm', 'widthCm', 'heightCm']) {
+      for (const value of [undefined, null, 0, -1, 0.05, NaN, Infinity, '20']) {
+        const h = shipmentHarness({ ctx: { ...clientContext, role } })
+        const result = await emit(h, { clientId: CLIENT, [field]: value })
+        assert.equal(result.success, false, `${field}=${value}`)
+        assert.match(result.error, /Dimensões obrigatórias/)
+        assert.equal(h.providerCalls.length, 0)
+        assert.equal(h.credentials.length, 0)
+        assert.equal(h.db.writes.length, 0)
+      }
+    }
+  })
+}
+
+for (const carrier of ['CTT', 'Correos']) {
+  test(`${carrier}: validated decimal dimensions are saved in the native packages JSONB schema and the full snapshot`, async () => {
+    const h = shipmentHarness({ carrier })
+    const result = await emit(h)
+    assert.equal(result.success, true)
+    const row = h.db.writes.find(w => w.table === 'packages').value
+    assert.deepEqual(row.dimensions, { length_cm: 30.5, width_cm: 20, height_cm: 10, unit: 'cm' })
+    assert.equal(row.weight_g, 1000)
+    assert.equal(row.tenant_id, TENANT)
+    const snapshot = h.db.writes.find(w => w.table === 'audit_log' && w.value.action === 'shipment_data').value.details
+    assert.equal(snapshot.length_cm, 30.5)
+    assert.equal(snapshot.width_cm, 20)
+    assert.equal(snapshot.height_cm, 10)
+    assert.equal(row.shipment_id, snapshot.id)
+  })
+}
+
+test('draft FormData cannot omit any dimension and retains valid decimal dimensions', async () => {
+  for (const field of ['length_cm', 'width_cm', 'height_cm']) {
+    const h = shipmentHarness(), form = withDimensions(new FormData())
+    form.set('weight_kg', '1'); form.set('service_id', 'service-a'); form.delete(field)
+    const result = await h.load('lib/services/shipments/shipment-creator.ts').createShipment(form)
+    assert.equal(result.success, false)
+    assert.match(result.error, /Dimensões obrigatórias/)
+    assert.equal(h.db.writes.length, 0)
+  }
+  const h = shipmentHarness(), form = withDimensions(new FormData())
+  form.set('weight_kg', '2.5'); form.set('service_id', 'service-a')
+  assert.equal((await h.load('lib/services/shipments/shipment-creator.ts').createShipment(form)).success, true)
+  assert.deepEqual(h.db.writes.find(w => w.table === 'packages').value.dimensions,
+    { length_cm: 30.5, width_cm: 20, height_cm: 10, unit: 'cm' })
+  assert.equal(h.db.writes.find(w => w.table === 'packages').value.weight_g, 2500)
+  const native = h.db.writes.find(w => w.table === 'shipments').value
+  for (const unsupported of ['length_cm', 'width_cm', 'height_cm', 'weight_kg', 'base_price', 'tier_label']) {
+    assert.equal(Object.hasOwn(native, unsupported), false)
+  }
+})
+
+test('a failed parcel write after carrier acceptance reports a warning instead of asking for a duplicate emission', async () => {
+  const h = shipmentHarness({ failure: q => q.table === 'packages' && q.write ? { message: 'Fixture package write failure' } : null })
+  const result = await emit(h)
+  assert.equal(result.success, true)
+  assert.match(result.dbWarning, /aceite pela transportadora/)
+  assert.equal(h.providerCalls.length, 1)
+  assert.equal(h.db.writes.find(w => w.table === 'audit_log' && w.value.action === 'shipment_data').value.details.length_cm, 30.5)
+})
 
 test('the withdrawn point/Locky table stays out of persisted and legacy catalogs for every role', async () => {
   for (const role of ['client', 'employee', 'admin']) {
@@ -185,7 +252,7 @@ test('withdrawn tables cannot emit labels or create drafts even from stale clien
       } })
       const result = await emit(h, { clientId: CLIENT, serviceId: target.id })
       assert.equal(result.success, false)
-      const form = new FormData()
+      const form = withDimensions(new FormData())
       form.set('client_id', CLIENT)
       form.set('weight_kg', '1')
       form.set('service_id', target.id)
@@ -206,7 +273,7 @@ for (const carrier of ['CTT', 'Correos']) {
     const result = await emit(h, { assigned_linke_service_ids: ['service-a'] })
     assert.equal(result.success, false)
     assert.match(result.error, /não autorizado/)
-    const form = new FormData()
+    const form = withDimensions(new FormData())
     form.set('weight_kg', '1')
     form.set('service_id', 'service-a')
     form.set('assigned_linke_service_ids', '["service-a"]')
@@ -303,7 +370,7 @@ test('carrier routing uses persisted configuration when the service has a generi
 test('legacy FormData creation: tariff failures produce no shipment, package or audit writes', async () => {
   for (const options of [{}, { failure: () => ({ message: 'database unavailable' }) }]) {
     const h = shipmentHarness(options)
-    const form = new FormData()
+    const form = withDimensions(new FormData())
     form.set('weight_kg', options.failure ? '1' : '0')
     form.set('service_id', 'service-a')
     const result = await h.load('lib/services/shipments/shipment-creator.ts').createShipment(form)
@@ -315,7 +382,7 @@ test('legacy FormData creation: tariff failures produce no shipment, package or 
 
 test('legacy FormData creation: valid configured tariff still creates a draft', async () => {
   const h = shipmentHarness()
-  const form = new FormData()
+  const form = withDimensions(new FormData())
   form.set('weight_kg', '1')
   form.set('service_id', 'service-a')
   const result = await h.load('lib/services/shipments/shipment-creator.ts').createShipment(form)
@@ -473,7 +540,7 @@ test('missing additional-kg anchor and uncovered weights fail before dispatch', 
 
 test('draft creation honors persisted negotiated tariffs rather than submitted amounts', async () => {
   const h = shipmentHarness({ adjust: t => setCustomPrices(t, [6]) })
-  const form = new FormData()
+  const form = withDimensions(new FormData())
   form.set('weight_kg', '1')
   form.set('service_id', 'service-a')
   form.set('sell_price', '0.01')

@@ -1,5 +1,6 @@
 import { CTT_TRACKING_EVENTS, CTT_NON_DELIVERY_REASONS, CTT_SITUATIONS, CTTTrackingEvent } from "./ctt-types"
 import { CTTSoapClient } from "./ctt-soap-client"
+import { parseCttMeasurements, type CarrierMeasurements } from "../tracking/carrier-measurements"
 
 export interface ParsedTrackingEvent {
   eventCode: string
@@ -12,6 +13,7 @@ export interface ParsedTrackingEvent {
   timestamp: string
   location?: string
   isTerminal: boolean
+  measurements?: CarrierMeasurements
 }
 
 /**
@@ -181,7 +183,7 @@ export class CTTTrackingService {
            }
          }
          const loc = evt._DescricaoNoEvento || "Rede CTT"
-         return this.parseEvent(code, reason, sit, loc, date)
+         return { ...this.parseEvent(code, reason, sit, loc, date), measurements: parseCttMeasurements(evt) }
       })
 
     } catch (error: any) {

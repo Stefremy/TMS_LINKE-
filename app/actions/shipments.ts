@@ -216,9 +216,9 @@ export async function emitClientGuiaAction(data: {
   isReturn?: boolean
   selectedSpecialServices?: string[]
   codValue?: number
-  lengthCm?: number
-  widthCm?: number
-  heightCm?: number
+  lengthCm: number
+  widthCm: number
+  heightCm: number
   observations?: string
 }) {
   let reservation: WalletReservation | undefined
@@ -329,9 +329,11 @@ export async function emitClientGuiaAction(data: {
       special_fees_amount: computedSpecialAmount || 0,
       special_fees_description: computedSpecialDesc,
       cod_value: data.codValue || 0,
-      length_cm: data.lengthCm || 0,
-      width_cm: data.widthCm || 0,
-      height_cm: data.heightCm || 0,
+      length_cm: data.lengthCm,
+      weight_kg: data.weightKg,
+      package_count: data.volumesCount || 1,
+      width_cm: data.widthCm,
+      height_cm: data.heightCm,
       created_at: now,
       updated_at: now,
     }
@@ -562,12 +564,19 @@ export async function emitClientGuiaAction(data: {
 
     // Insert package record
     try {
-      await supabase.from("packages").insert({
+      const { error: packageError } = await supabase.from("packages").insert({
         tenant_id: (await getTenantId()),
         shipment_id: shipmentId,
-        weight_g: Math.round((data.weightKg || 1) * 1000)
+        weight_g: Math.round(data.weightKg * 1000),
+        dimensions: { length_cm: data.lengthCm, width_cm: data.widthCm, height_cm: data.heightCm, unit: 'cm' },
       })
-    } catch {}
+      if (packageError) {
+        console.warn('Declared parcel dimensions could not be saved in packages:', packageError.message)
+        if (!dbErrorMessage) dbErrorMessage = 'O envio foi aceite pela transportadora; verifique a gravação do volume antes de repetir qualquer emissão.'
+      }
+    } catch {
+      if (!dbErrorMessage) dbErrorMessage = 'O envio foi aceite pela transportadora; a gravação do volume ficou por confirmar. Não repita a emissão.'
+    }
 
     // Wallet consumption is represented by the shipment and its reservation, never a second decrement.
     if (reservation.reserved && (reservation.balanceBefore ?? 0) >= 15 && matchedClient.email) {

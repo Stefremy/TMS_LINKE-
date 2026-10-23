@@ -46,6 +46,7 @@ import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CTT_TRACKING_EVENTS, CTT_NON_DELIVERY_REASONS, CTT_SITUATIONS } from "@/lib/services/ctt/ctt-types"
+import { CarrierMeasurementsPanel } from '@/components/shipments/CarrierMeasurementsPanel'
 
 interface ClientShipmentDetailModalProps {
   shipment: any
@@ -308,7 +309,6 @@ export function ClientShipmentDetailModal({
   const recipientCity = currentShipment.recipient_city || ""
   const recipientPhone = currentShipment.recipient_phone || "Não especificado"
   const recipientEmail = currentShipment.recipient_email || "Não especificado"
-  const weightKg = currentShipment.weight_kg || currentShipment.weight || "1.00"
   const volumes = currentShipment.volumes_count || currentShipment.volumes || 1
   const serviceType = currentShipment.service_type || "CTT Expresso 24H"
 
@@ -780,8 +780,8 @@ export function ClientShipmentDetailModal({
                 </div>
               </div>
 
-              {/* 2. Morada, CP, Cidade e Peso */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* 2. Morada, CP e Cidade */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2 space-y-1.5">
                   <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Morada de Entrega</label>
                   <div className="relative">
@@ -813,16 +813,9 @@ export function ClientShipmentDetailModal({
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Peso Total</label>
-                  <input 
-                    type="text" 
-                    disabled
-                    value={`${weightKg} kg`}
-                    className="w-full px-3 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-mono font-bold text-[var(--text-primary)] cursor-not-allowed select-none" 
-                  />
-                </div>
               </div>
+
+              <CarrierMeasurementsPanel shipmentId={currentShipment.rawId || currentShipment.id} syncing={isSyncing} />
 
               {/* 3. Telefone, Email e Volumes */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

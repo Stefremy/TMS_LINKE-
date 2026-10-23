@@ -42,6 +42,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
     volumes?: number;
     sellPrice?: number;
     atCode?: string;
+    dbWarning?: string | null;
     moloniDoc?: {
       id?: number;
       number?: string;
@@ -214,9 +215,9 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         recipientEmail: (formData.get("recipient_email") as string) || recipientEmail || undefined,
         weightKg: Number(formData.get("weight_kg")) || 1,
         volumesCount: Number(formData.get("volumes")) || 1,
-        lengthCm: Number(formData.get("length_cm")) || 0,
-        widthCm: Number(formData.get("width_cm")) || 0,
-        heightCm: Number(formData.get("height_cm")) || 0,
+        lengthCm: Number(formData.get("length_cm")),
+        widthCm: Number(formData.get("width_cm")),
+        heightCm: Number(formData.get("height_cm")),
         serviceId: activeLinkeService?.id,
         serviceName: activeLinkeService?.name || "Linke Expresso 24H",
         subProductId: activeLinkeService?.webservice_service_code,
@@ -234,6 +235,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         guia: (res as any).guia,
         id: (res as any).id,
         labelBase64: (res as any).labelBase64,
+        dbWarning: res.dbWarning,
         clientName: currentClient?.short_name || currentClient?.legal_name || "Operador",
         recipientName: formData.get("recipient_name") as string,
         recipientCity: formData.get("recipient_city") as string,
@@ -378,7 +380,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                   </div>
                   {(shipmentResult as any).dbWarning && (
                     <div className="mt-2 p-3 bg-amber-50 text-amber-700 text-xs font-medium rounded-md border border-amber-200">
-                      <strong>Aviso de Sistema:</strong> O envio foi gerado na transportadora, mas houve um erro ao guardar na base de dados: {(shipmentResult as any).dbWarning}. Por favor verifique ou crie novamente para que apareça na lista.
+                      <strong>Envio aceite — gravação a verificar:</strong> {(shipmentResult as any).dbWarning} Não volte a criar este envio. Confirme o registo no histórico ou contacte o suporte.
                     </div>
                   )}
                 </div>
@@ -528,35 +530,41 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Comp. (cm)</label>
+                    <label htmlFor="ops-length-cm" className="text-[11px] font-semibold text-[var(--text-secondary)]">Comp. (cm) *</label>
                     <input
+                      id="ops-length-cm"
+                      required
                       type="number"
                       name="length_cm"
-                      min="0"
-                      step="1"
-                      placeholder="0"
+                      min="0.1"
+                      step="any"
+                      placeholder="Ex.: 30"
                       className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Largura (cm)</label>
+                    <label htmlFor="ops-width-cm" className="text-[11px] font-semibold text-[var(--text-secondary)]">Largura (cm) *</label>
                     <input
+                      id="ops-width-cm"
+                      required
                       type="number"
                       name="width_cm"
-                      min="0"
-                      step="1"
-                      placeholder="0"
+                      min="0.1"
+                      step="any"
+                      placeholder="Ex.: 20"
                       className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Altura (cm)</label>
+                    <label htmlFor="ops-height-cm" className="text-[11px] font-semibold text-[var(--text-secondary)]">Altura (cm) *</label>
                     <input
+                      id="ops-height-cm"
+                      required
                       type="number"
                       name="height_cm"
-                      min="0"
-                      step="1"
-                      placeholder="0"
+                      min="0.1"
+                      step="any"
+                      placeholder="Ex.: 10"
                       className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs"
                     />
                   </div>

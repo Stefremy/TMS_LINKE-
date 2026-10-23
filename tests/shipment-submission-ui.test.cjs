@@ -38,13 +38,13 @@ function hooks() {
     dispose() { cleanup.forEach(callback => callback?.()) } }
 }
 function harness(t, portal) {
-  const h = hooks(), result = deferred(), calls = { create: 0, agenda: [], scroll: [] }
+  const h = hooks(), result = deferred(), calls = { create: 0, agenda: [], scroll: [], inputs: [] }
   const previous = { window: global.window, document: global.document, FormData: global.FormData }
   global.window = { matchMedia: () => ({ matches: false }) }
   global.document = { getElementById: () => ({ focus() {} }) }
   global.FormData = class {
     get(name) { return ({ recipient_name: 'Fixture recipient', recipient_address: 'Fixture street',
-      recipient_zip: '4000-001', recipient_city: 'Porto', weight_kg: '1', volumes: '1' })[name] || '' }
+      recipient_zip: '4000-001', recipient_city: 'Porto', weight_kg: '1', volumes: '1', length_cm: '30.5', width_cm: '20', height_cm: '10' })[name] || '' }
   }
   t.after(() => { h.dispose(); Object.assign(global, previous) })
   const jsx = (type, props) => ({ type, props: props || {} })
@@ -53,7 +53,7 @@ function harness(t, portal) {
     'next/link': { __esModule: true, default: 'a' },
     'lucide-react': new Proxy({}, { get: (_, name) => name }),
     '@/components/ui/button': { Button: 'button' }, '@/components/ui/badge': { Badge: 'span' },
-    '@/app/actions/shipments': { emitClientGuiaAction: () => { calls.create++; return result.promise } },
+    '@/app/actions/shipments': { emitClientGuiaAction: input => { calls.create++; calls.inputs.push(input); return result.promise } },
     '@/app/actions/servicos-linke': { getServicosLinkeAction: async () => [service] },
     '@/app/actions/destinatarios': { getDestinatariosAction: async id => { calls.agenda.push(id); return [] } },
     '@/app/actions/ctt': {}, '@/lib/label-utils': {},
@@ -66,7 +66,7 @@ function harness(t, portal) {
     '@/lib/carrier-logos': { getCarrierLogo: () => null },
     '@/lib/services/geo/international-zones': { OFFICIAL_LINKE_ZONES: [] },
     '@/lib/hooks/usePostalCodeLookup': { usePostalCodeLookup: () => ({ lookup: value => value, loading: false }) },
-    './ClientScope': { useClientScope: () => ({ client, basePath: '/app/fixture-a' }) },
+    './ClientScope': { useClientScope: () => ({ client, basePath: '/app/fixture-a', isSuspended: false }) },
   })
   const Component = portal ? load('app/app/components/ClientCreateGuia.tsx').ClientCreateGuia :
     load('app/ops/envios/novo/NovoEnvioPageClient.tsx').NovoEnvioPageClient
@@ -83,7 +83,12 @@ function harness(t, portal) {
     render()
     await new Promise(resolve => setImmediate(resolve))
     let nodes = render()
-    if (portal) nodes.find(node => node.props.id === 'field-recipient-name').props.onChange({ target: { value: 'Fixture recipient' } })
+    if (portal) {
+      nodes.find(node => node.props.id === 'field-recipient-name').props.onChange({ target: { value: 'Fixture recipient' } })
+      for (const [id, value] of [['field-length-cm', '30.5'], ['field-width-cm', '20'], ['field-height-cm', '10']]) {
+        nodes.find(node => node.props.id === id).props.onChange({ target: { value } })
+      }
+    }
     return render()
   } }
 }
@@ -96,6 +101,7 @@ for (const portal of [true, false]) {
     const first = form.props.onSubmit({ preventDefault() {}, currentTarget: {} })
     await form.props.onSubmit({ preventDefault() {}, currentTarget: {} })
     assert.equal(h.calls.create, 1)
+    assert.deepEqual([h.calls.inputs[0].lengthCm, h.calls.inputs[0].widthCm, h.calls.inputs[0].heightCm], [30.5, 20, 10])
     const pending = h.render().find(node => node.props.type === 'submit')
     assert.equal(pending.props.disabled, true)
     assert.match(textOf(pending), /A criar envio/)
@@ -117,6 +123,26 @@ for (const portal of [true, false]) {
     assert.equal(h.calls.create, 1)
     assert.equal(h.calls.scroll.length, 0)
     assert.match(after.map(textOf).join(' '), /Simulated carrier timeout/)
+  })
+  test(name + ': all three parcel dimensions are required, positive and accept decimals', async t => {
+    const h = harness(t, portal), nodes = await h.ready()
+    for (const name of ['length_cm', 'width_cm', 'height_cm']) {
+      const field = nodes.find(node => node.type === 'input' && node.props.name === name)
+      assert.ok(field, `${name} must be present`)
+      assert.equal(field.props.required, true)
+      assert.equal(Number(field.props.min), 0.1)
+      assert.equal(field.props.step, 'any')
+    }
+  })
+  test(name + ': a storage warning after acceptance is visible and never suggests creating the parcel again', async t => {
+    const h = harness(t, portal), nodes = await h.ready()
+    const submission = nodes.find(node => node.type === 'form').props.onSubmit({ preventDefault() {}, currentTarget: {} })
+    h.result.resolve({ success: true, id: 'shipment-a', guia: 'EQ-FIXTURE', sellPrice: 9, dbWarning: 'Confirme a gravação do volume.' })
+    await submission
+    const message = h.render().map(textOf).join(' ')
+    assert.match(message, /Confirme a gravação do volume/)
+    assert.match(message, /Não volte a criar este envio/)
+    assert.doesNotMatch(message, /crie novamente/)
   })
 }
 test('recipient agenda loads on demand and discards a late response from a different store', async () => {

@@ -10,9 +10,12 @@
   padding: 12px 18px 12px 16px;
   border: 1px solid var(--border-default, var(--border-subtle));
   border-radius: 15px;
-  background: var(--surface-bg);
+  background:
+    linear-gradient(120deg, rgb(255 255 255 / 24%), rgb(255 255 255 / 8%) 42%, transparent 43%),
+    linear-gradient(180deg, rgb(255 255 255 / 15%), transparent 50%, rgb(0 0 0 / 4.5%)),
+    var(--surface-bg);
   color: var(--text-primary);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 15%), 0 4px 14px rgb(0 0 0 / 5%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 60%), inset 0 -1px 0 rgb(0 0 0 / 4%), 0 4px 14px rgb(0 0 0 / 7%);
   text-align: left;
   cursor: pointer;
   transition: border-color 180ms ease, box-shadow 180ms ease;
@@ -21,7 +24,7 @@
 .button:hover,
 .button[aria-expanded="true"] {
   border-color: var(--accent);
-  box-shadow: 0 5px 16px rgb(0 0 0 / 9%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 65%), inset 0 -1px 0 rgb(0 0 0 / 4%), 0 5px 16px rgb(0 0 0 / 10%);
 }
 
 .button:focus-visible {

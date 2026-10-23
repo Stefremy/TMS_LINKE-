@@ -187,7 +187,7 @@ function shipmentHarness() {
    loadShipmentPricingContext:async()=>({client:{id:A,tenant_id:TENANT,billing_type:'pay_as_you_go',credit_limit:1},service:{id:'fixture-service',name:'Fixture service'}})},
   '@/lib/services/carriers/credentials':{},'@/lib/services/carriers/ctt-provider':{},'@/lib/label-utils':{},
  })
- const create=()=>{const form=new FormData();form.set('weight_kg','1');return load('lib/services/shipments/shipment-creator.ts').createShipment(form)}
+ const create=()=>{const form=new FormData();form.set('weight_kg','1');form.set('length_cm','30');form.set('width_cm','20');form.set('height_cm','10');return load('lib/services/shipments/shipment-creator.ts').createShipment(form)}
  return{tables,create}
 }
 test('CONTROL: one draft costing 3 EUR can use a 1 EUR wallet down to the allowed -2 EUR',async()=>{

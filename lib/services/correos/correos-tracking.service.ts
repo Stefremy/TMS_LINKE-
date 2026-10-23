@@ -29,6 +29,6 @@ export class CorreosTrackingService {
       gestionCompleta: "S"
     }
 
-    return this.client.request<CorreosTrackingOutput>(endpoint, creds, payload)
+    return this.client.request<CorreosTrackingOutput>(endpoint, creds, payload, 20000)
   }
 }

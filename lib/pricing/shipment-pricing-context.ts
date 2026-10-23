@@ -18,8 +18,8 @@ export function validateShipmentPricingInput(input: {
     throw new ShipmentPricingError("Número de volumes inválido.")
   }
   for (const dimension of [input.lengthCm, input.widthCm, input.heightCm]) {
-    if (dimension !== undefined && (!Number.isFinite(dimension) || dimension < 0)) {
-      throw new ShipmentPricingError("Dimensões inválidas.")
+    if (typeof dimension !== 'number' || !Number.isFinite(dimension) || dimension < 0.1) {
+      throw new ShipmentPricingError("Dimensões obrigatórias. Indique comprimento, largura e altura em cm, todos iguais ou superiores a 0,1.")
     }
   }
   if (input.codValue !== undefined && (!Number.isFinite(input.codValue) || input.codValue < 0 ||

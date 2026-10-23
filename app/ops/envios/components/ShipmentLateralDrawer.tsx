@@ -30,6 +30,7 @@ import { getShipmentTrackingTimelineAction, regenerateCttLabelAction, getShipmen
 import { syncCttTrackingAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { Button } from "@/components/ui/button"
+import { CarrierMeasurementsPanel } from '@/components/shipments/CarrierMeasurementsPanel'
 
 interface ShipmentLateralDrawerProps {
   shipment: any | null
@@ -162,18 +163,8 @@ export function ShipmentLateralDrawer({
   const taxaIva = (parsedPrice * 0.19).toFixed(2)
   const totalFormatado = parsedPrice.toFixed(2)
 
-  // Safe Volumes e Peso
+  // Declared weight and carrier measurements are loaded separately on demand.
   const volumesCount = shipment.package_count || shipment.volumes_count || shipment.package?.count || 1
-  let parsedPeso = 1.0
-  try {
-    const rawPeso = shipment.weight_kg || shipment.declared_weight || shipment.package?.weight
-    if (rawPeso) {
-      const val = parseFloat(String(rawPeso).replace(/[^0-9.,]/g, "").replace(",", "."))
-      if (!isNaN(val) && val > 0) parsedPeso = val
-    }
-  } catch {}
-  const pesoReal = parsedPeso.toFixed(2)
-  const pesoTaxavel = (parsedPeso * 1.15).toFixed(2)
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text)
@@ -483,6 +474,8 @@ export function ShipmentLateralDrawer({
           </div>
         </div>
 
+        <CarrierMeasurementsPanel shipmentId={shipment.rawId || shipment.id} syncing={isSyncing} />
+
         {/* Carga & Métricas Faturação */}
         <div className="space-y-2">
           <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider block">
@@ -493,16 +486,6 @@ export function ShipmentLateralDrawer({
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-[var(--text-secondary)]">Volumes:</span>
               <span className="font-semibold text-[var(--text-primary)] font-mono">{volumesCount} caixa(s)</span>
-            </div>
-
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-[var(--text-secondary)]">Peso Real:</span>
-              <span className="font-semibold text-[var(--text-primary)] font-mono">{pesoReal} kg</span>
-            </div>
-
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-[var(--text-secondary)]">Peso Taxável (Volumétrico):</span>
-              <span className="font-semibold text-[var(--text-primary)] font-mono">{pesoTaxavel} kg</span>
             </div>
 
             <div className="border-t border-[var(--border-subtle)] pt-2 space-y-1 text-[11px]">
