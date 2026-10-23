@@ -30,7 +30,7 @@ export async function getShipmentLabelAction(shipmentId: string): Promise<string
 }
 
 import { createShipment, dispatchShipment } from "@/lib/services/shipments/shipment-creator"
-import { currentAccountOutstanding } from "@/lib/billing/client-balance"
+import { currentAccountOutstanding, payAsYouGoSpent, payAsYouGoBalance, isPrepaidShipment } from "@/lib/billing/client-balance"
 import { reserveWallet, transitionWallet, walletSnapshot, type WalletReservation } from "@/lib/billing/wallet"
 import { deleteShipment, deleteShipmentsBulk } from "@/lib/services/shipments/shipment-deleter"
 
@@ -91,14 +91,26 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
 
   const clientStatementsForBalance = allStatements.filter((stmt: any) => !effectiveClientId || stmt.client_id === effectiveClientId)
 
-  // The two billing models are computed by separate, independent functions (lib/billing/client-balance.ts):
-  //  - pay_as_you_go: shipment consumption plus outstanding reservations
-  //  - conta_corrente: invoiced amounts still owed (pending shipments + unpaid statements)
-  const wallet = clientBillingType === "pay_as_you_go" && effectiveClientId
-    ? await walletSnapshot(createAdminClient(), ctx.tenant_id, effectiveClientId) : null
+  let wallet = null
+  if (clientBillingType === "pay_as_you_go" && effectiveClientId) {
+    try {
+      wallet = await walletSnapshot(createAdminClient(), ctx.tenant_id, effectiveClientId)
+    } catch {
+      wallet = null
+    }
+  }
+
   const totalDebt = wallet
     ? wallet.spent + wallet.reserved
-    : currentAccountOutstanding(clientShipments, clientStatementsForBalance)
+    : clientBillingType === "pay_as_you_go"
+      ? payAsYouGoSpent(clientShipments, clientStatementsForBalance, client?.pay_as_you_go_since)
+      : currentAccountOutstanding(clientShipments, clientStatementsForBalance)
+
+  const walletBalance = wallet
+    ? wallet.balance
+    : clientBillingType === "pay_as_you_go"
+      ? payAsYouGoBalance(client?.credit_limit, clientShipments, clientStatementsForBalance, client?.pay_as_you_go_since)
+      : undefined
 
   const totalCount = clientShipments.length
   // Change totalRevenue to reflect the real Debt (Used Balance)
@@ -169,12 +181,17 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   const visibleShipments = clientShipments.slice(0, 500)
   const parcelSummaries = await loadShipmentParcelSummaries(createAdminClient(), ctx.tenant_id, visibleShipments)
     .catch(() => new Map())
-  const displayShipments = visibleShipments.map(shipment => ({ ...shipment, parcel_summary: parcelSummaries.get(shipment.id) || null }))
+  const displayShipments = visibleShipments.map(shipment => ({
+    ...shipment,
+    parcel_summary: parcelSummaries.get(shipment.id) || null,
+    // Prepaid shipments are settled from the wallet: no invoice, shown as paid.
+    ...(isPrepaidShipment(client, shipment) && shipment.status !== "anulado" ? { payment_status: "paid" as const } : {}),
+  }))
 
   return {
     totalCount,
     totalRevenue,
-    walletBalance: wallet?.balance,
+    walletBalance,
     monthCount,
     monthDeliveredCount,
     monthRevenue,
@@ -592,7 +609,7 @@ export async function emitClientGuiaAction(data: {
     if (reservation.reserved && (reservation.balanceBefore ?? 0) >= 15 && matchedClient.email) {
       try {
         const after = await walletSnapshot(supabase, ctx.tenant_id, matchedClient.id)
-        if (after.balance < 15) {
+        if (after && after.balance < 15) {
           const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
           const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
           void sendEmail({ to: matchedClient.email, subject: "Linke | Aviso de Saldo Baixo",

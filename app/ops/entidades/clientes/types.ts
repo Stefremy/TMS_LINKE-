@@ -82,6 +82,8 @@ export interface Cliente {
    * - "pay_as_you_go": Pré-pagamento via Wallet/Stripe (saldo carregado antecipadamente)
    */
   billing_type?: "conta_corrente" | "pay_as_you_go"
+  /** ISO date from which shipments consume the prepaid wallet; earlier ones stay on the invoiced model. */
+  pay_as_you_go_since?: string
   city: string
   address: string
   postal_code: string

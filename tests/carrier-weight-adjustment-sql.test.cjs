@@ -6,7 +6,7 @@ before(async()=>{
  db=await PGlite.create();await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated;CREATE ROLE service_role;
  CREATE TABLE public.clients(id uuid PRIMARY KEY,tenant_id uuid NOT NULL);
  CREATE TABLE public.audit_log(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid NOT NULL,action text NOT NULL,details jsonb,created_at timestamptz DEFAULT clock_timestamp());
- CREATE TABLE public.shipments(id uuid PRIMARY KEY,tenant_id uuid NOT NULL,client_id uuid,status text,carrier_code text,sell_price numeric,buy_price numeric,billing_statement_id uuid);
+ CREATE TABLE public.shipments(id uuid PRIMARY KEY,tenant_id uuid NOT NULL,client_id uuid,status text,carrier_code text,sell_price numeric,buy_price numeric,billing_statement_id uuid,created_at timestamptz DEFAULT now());
  CREATE TABLE public.billing_emission_claims(tenant_id uuid,shipment_id uuid,emission_id uuid,PRIMARY KEY(tenant_id,shipment_id));`)
  await db.exec(fs.readFileSync('supabase/migrations/20260921100000_client_transactions.sql','utf8'))
  await db.exec(fs.readFileSync('supabase/migrations/20261022180000_atomic_wallet_operations.sql','utf8'))

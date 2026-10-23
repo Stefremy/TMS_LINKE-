@@ -406,6 +406,7 @@ export function ClientShipmentsHistory() {
                     <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
                       <div className="font-bold font-mono text-slate-900">
                         {envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
+                        {envio.payment_status === "paid" && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-sans font-bold">Pago</span>}
                       </div>
 
                       <div className="flex items-center gap-1.5">
@@ -528,6 +529,7 @@ export function ClientShipmentsHistory() {
                     </td>
                     <td className="py-3 text-right font-mono font-bold text-slate-900">
                       {envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
+                      {envio.payment_status === "paid" && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-sans font-bold">Pago</span>}
                     </td>
                     <td className="py-3 text-center relative action-dropdown">
                       <button 

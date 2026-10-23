@@ -14,6 +14,7 @@ import { moloniRedirectUri } from "@/lib/config/public-origins"
 import { buildShipmentInvoiceLines } from "@/lib/billing/shipment-invoice-lines"
 import { hydrateShipmentCharges } from "@/lib/services/billing/shipment-charge-snapshots"
 import { canInvoiceShipment } from "@/lib/billing/shipment-eligibility"
+import { isPrepaidShipment } from "@/lib/billing/client-balance"
 import { SHIPMENT_LIST_COLUMNS } from "@/lib/services/shipments/shipment-fetcher"
 
 const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
@@ -44,6 +45,9 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
   if (shipmentError || authoritativeShipments?.length !== selectedIds.length) throw new Error("Envios não encontrados neste cliente.")
   if (authoritativeShipments.some((s: { status?: string | null }) => !canInvoiceShipment(s))) {
     throw new Error("A seleção inclui envios cancelados, anulados ou em rascunho. Estes envios não podem ser faturados. Atualize a página e selecione apenas envios válidos.")
+  }
+  if (authoritativeShipments.some((s: { created_at?: string | null }) => isPrepaidShipment(client, s))) {
+    throw new Error("Os envios de clientes em pré-pagamento são pagos pela wallet e não são faturados. Remova-os da seleção.")
   }
   shipments = await hydrateShipmentCharges(supabase, ctx.tenant_id, client.id, authoritativeShipments)
 

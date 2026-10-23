@@ -16,7 +16,7 @@ before(async () => {
     CREATE TABLE public.clients(id uuid PRIMARY KEY,tenant_id uuid NOT NULL,name text);
     CREATE TABLE public.audit_log(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid NOT NULL,action text NOT NULL,details jsonb,created_at timestamptz DEFAULT now());
     CREATE TYPE public.shipment_status AS ENUM ('rascunho','pendente','entregue','anulado');
-    CREATE TABLE public.shipments(id uuid PRIMARY KEY,tenant_id uuid NOT NULL,client_id uuid,status public.shipment_status,sell_price numeric);
+    CREATE TABLE public.shipments(id uuid PRIMARY KEY,tenant_id uuid NOT NULL,client_id uuid,status public.shipment_status,sell_price numeric,created_at timestamptz DEFAULT now());
   `)
   await db.exec(fs.readFileSync('supabase/migrations/20260921100000_client_transactions.sql','utf8'))
   const migration = fs.readFileSync('supabase/migrations/20261022180000_atomic_wallet_operations.sql','utf8')

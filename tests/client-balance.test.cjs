@@ -12,6 +12,24 @@ test('pay as you go: wallet = top-ups minus selling totals; receipts do not refu
   assert.equal(b.payAsYouGoBalance(6.15, shipments, statements), -10.85)
 })
 
+test('pay as you go: shipments before the prepaid start date stay on the previous model', () => {
+  const old = { ...ship(100), created_at: '2026-10-12T10:00:00Z' }
+  const fresh = { ...ship(4.15), created_at: '2026-10-21T09:00:00Z' }
+  const since = '2026-10-21T00:00:00.000Z'
+  assert.equal(b.payAsYouGoSpent([old, fresh], [], since), 4.15)
+  assert.equal(b.payAsYouGoBalance(6.15, [old, fresh], [], since), 2)
+  assert.equal(b.payAsYouGoSpent([old, fresh], []), 104.15)
+})
+
+test('models never mix: only post-start shipments of a prepaid client are prepaid; invoiced clients never are', () => {
+  const prepaid = { billing_type: 'pay_as_you_go', pay_as_you_go_since: '2026-10-21T00:00:00.000Z' }
+  assert.equal(b.isPrepaidShipment(prepaid, { created_at: '2026-10-21T09:00:00Z' }), true)
+  assert.equal(b.isPrepaidShipment(prepaid, { created_at: '2026-10-12T09:00:00Z' }), false)
+  assert.equal(b.isPrepaidShipment({ billing_type: 'pay_as_you_go' }, { created_at: '2026-01-01T00:00:00Z' }), true)
+  assert.equal(b.isPrepaidShipment({ billing_type: 'conta_corrente', pay_as_you_go_since: '2026-10-21T00:00:00Z' }, { created_at: '2026-10-22T00:00:00Z' }), false)
+  assert.equal(b.isPrepaidShipment(undefined, { created_at: '2026-10-22T00:00:00Z' }), false)
+})
+
 test('pay as you go: a statement marked paid does not itself refund prepaid shipments', () => {
   assert.equal(b.payAsYouGoSpent([ship(5, 's')], [{ id: 's', status: 'paid' }]), 5)
 })

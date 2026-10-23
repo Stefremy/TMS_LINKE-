@@ -15,6 +15,7 @@ export type BalanceShipment = {
   fuel_tax_amount?: unknown
   status?: string | null
   billing_statement_id?: string | null
+  created_at?: string | null
 }
 
 export type BalanceStatement = {
@@ -45,20 +46,38 @@ export function isStatementSettled(stmt: BalanceStatement): boolean {
 // ───────────────────────── PAY AS YOU GO (wallet) ─────────────────────────
 
 /** Selling totals already include fuel/extras. A receipt documents payment; it is not a wallet top-up. */
-export function payAsYouGoSpent(shipments: BalanceShipment[], _statements: BalanceStatement[]): number {
+export function payAsYouGoSpent(shipments: BalanceShipment[], _statements: BalanceStatement[], since?: string | null): number {
   // Preserve the caller contract while deliberately ignoring receipt/statement state.
   void _statements
+  const start = since ? Date.parse(since) : NaN
   let spent = 0
   for (const s of shipments) {
     if (isCancelled(s) || s.billing_type === "conta_corrente") continue
+    // Shipments before the prepaid start belonged to the previous (invoiced) model.
+    if (Number.isFinite(start) && s.created_at && Date.parse(s.created_at) < start) continue
     spent += shipmentValue(s)
   }
   return Number(spent.toFixed(2))
 }
 
 /** Wallet balance = topped-up money − shipment consumption. May go down to the overdraft limit. */
-export function payAsYouGoBalance(creditLimit: unknown, shipments: BalanceShipment[], statements: BalanceStatement[]): number {
-  return Number((money(creditLimit) - payAsYouGoSpent(shipments, statements)).toFixed(2))
+export function payAsYouGoBalance(creditLimit: unknown, shipments: BalanceShipment[], statements: BalanceStatement[], since?: string | null): number {
+  return Number((money(creditLimit) - payAsYouGoSpent(shipments, statements, since)).toFixed(2))
+}
+
+/**
+ * True when a shipment belongs to the prepaid model: the client is pay_as_you_go and the shipment was
+ * created on/after the prepaid start. Such shipments are paid from the wallet (shown as "Pago") and are
+ * NEVER invoiced or put on a conta corrente statement; earlier ones stay on the invoiced model.
+ */
+export function isPrepaidShipment(
+  client: { billing_type?: string | null; pay_as_you_go_since?: string | null } | null | undefined,
+  shipment: { created_at?: string | null },
+): boolean {
+  if (client?.billing_type !== "pay_as_you_go") return false
+  const start = client.pay_as_you_go_since ? Date.parse(client.pay_as_you_go_since) : NaN
+  if (!Number.isFinite(start) || !shipment.created_at) return true
+  return Date.parse(shipment.created_at) >= start
 }
 
 /** Returns null when the new shipment is allowed, otherwise the user-facing refusal. */
@@ -93,7 +112,7 @@ type Db = { from: (table: string) => any }
 /** Live shipments of one client. Select only balance-relevant columns to eliminate base64 egress. */
 export async function loadClientShipmentsForBalance(db: Db, tenantId: string, clientId: string): Promise<BalanceShipment[]> {
   const { data, error } = await db.from("shipments")
-    .select("sell_price, status, billing_statement_id")
+    .select("sell_price, status, billing_statement_id, created_at")
     .eq("tenant_id", tenantId)
     .eq("client_id", clientId)
   if (error) throw new Error("Não foi possível validar o saldo.")

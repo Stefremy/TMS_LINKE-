@@ -927,7 +927,10 @@ export function ClientShipmentDetailModal({
         {/* Modal Footer */}
         <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-3">
           <div className="text-[11px] text-[var(--text-secondary)] font-bold uppercase tracking-wider">
-            Total Faturado: <strong className="text-[var(--text-primary)] font-mono text-sm ml-1">{currentShipment.sell_price ? `${Number(currentShipment.sell_price).toFixed(2)}€` : "0.00€"}</strong>
+            {currentShipment.payment_status === "paid" ? "Total Pago" : "Total Faturado"}: <strong className="text-[var(--text-primary)] font-mono text-sm ml-1">{currentShipment.sell_price ? `${Number(currentShipment.sell_price).toFixed(2)}€` : "0.00€"}</strong>
+            {currentShipment.payment_status === "paid" && (
+              <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold normal-case tracking-normal">Pago</span>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

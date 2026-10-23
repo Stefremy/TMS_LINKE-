@@ -520,9 +520,6 @@ export function ClientDashboard() {
                   Em Distribuição
                 </span>
               </div>
-              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                em rota
-              </span>
             </div>
             <div className="mt-3.5">
               <div className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">

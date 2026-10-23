@@ -19,14 +19,23 @@ export async function listClientMessages(db: SupabaseClient, ctx: AuthContext | 
     p_tenant: scope.tenant, p_client: scope.client, p_user: scope.user,
     p_before: at, p_before_id: id, p_unread: params.get('unread') === '1', p_limit: params.get('summary') === '1' ? 0 : 20,
   })
-  if (error || !data) throw new ClientMessageError('Não foi possível carregar as mensagens. Tente novamente.', 503)
+  if (error) {
+    if (error.code === 'PGRST202' || error.code === 'PGRST205' || error.code === '42883' || error.code === '42P01') {
+      return { messages: [], unreadCount: 0, next: null }
+    }
+    throw new ClientMessageError('Não foi possível carregar as mensagens. Tente novamente.', 503)
+  }
+  if (!data) return { messages: [], unreadCount: 0, next: null }
   return data as MessagePage
 }
 export async function markClientMessagesRead(db: SupabaseClient, ctx: AuthContext | null, clientId: string, ids: unknown) {
   const scope = await authorizeMessageClient(db, ctx, clientId)
   if (!Array.isArray(ids) || !ids.length || ids.length > 50 || ids.some(id => !messageUuid(id))) throw new ClientMessageError('Seleção de mensagens inválida.')
   const { error } = await db.rpc('mark_client_messages_read', { p_tenant: scope.tenant, p_client: scope.client, p_user: scope.user, p_ids: [...new Set(ids)] })
-  if (error) throw new ClientMessageError('Não foi possível marcar as mensagens como lidas.', 503)
+  if (error) {
+    if (error.code === 'PGRST202' || error.code === 'PGRST205' || error.code === '42883' || error.code === '42P01') return
+    throw new ClientMessageError('Não foi possível marcar as mensagens como lidas.', 503)
+  }
 }
 export async function sendClientMessage(db: SupabaseClient, ctx: AuthContext | null, input: Record<string, unknown>) {
   if (!canSendClientMessages(ctx)) throw new ClientMessageError('Sem permissão para enviar avisos aos clientes.', 403)

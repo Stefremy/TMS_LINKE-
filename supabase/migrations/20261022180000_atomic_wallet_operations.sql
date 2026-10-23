@@ -58,7 +58,7 @@ END $$;
 -- a recovered audit-only shipment still consumes funds. Receipt status never changes consumption.
 CREATE OR REPLACE FUNCTION public.client_wallet_snapshot(p_tenant uuid,p_client uuid)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
-DECLARE profile jsonb; spent numeric; held numeric; credit numeric; invalid_charges bigint;
+DECLARE profile jsonb; spent numeric; held numeric; credit numeric; invalid_charges bigint; since timestamptz;
 BEGIN
   PERFORM 1 FROM public.clients WHERE id=p_client AND tenant_id=p_tenant;
   IF NOT FOUND THEN RAISE EXCEPTION 'Client not found in tenant'; END IF;
@@ -66,21 +66,22 @@ BEGIN
     AND details->>'id'=p_client::text ORDER BY created_at DESC,id DESC LIMIT 1;
   IF profile IS NULL OR profile->>'credit_limit' IS NULL THEN RAISE EXCEPTION 'Balance profile missing'; END IF;
   credit := (profile->>'credit_limit')::numeric;
+  since := NULLIF(profile->>'pay_as_you_go_since','')::timestamptz;
   IF credit::text IN ('NaN','Infinity','-Infinity') THEN RAISE EXCEPTION 'Invalid balance'; END IF;
   WITH audit_shipments AS (
     SELECT DISTINCT ON (details->>'id') details->>'id' id,details->>'status' status,
-      (details->>'sell_price')::numeric price,details->>'billing_type' billing_type
+      (details->>'sell_price')::numeric price,details->>'billing_type' billing_type,created_at
     FROM public.audit_log a WHERE tenant_id=p_tenant AND action='shipment_data' AND details->>'client_id'=p_client::text
     ORDER BY details->>'id',created_at DESC,a.id DESC
   ), all_shipments AS (
     SELECT s.id::text,s.status::text,s.sell_price price,
       CASE WHEN EXISTS (SELECT 1 FROM public.wallet_reservations r WHERE r.shipment_id=s.id AND r.tenant_id=p_tenant AND r.client_id=p_client)
         THEN 'pay_as_you_go' ELSE (SELECT a.billing_type FROM audit_shipments a WHERE a.id=s.id::text) END billing_type
-      FROM public.shipments s WHERE tenant_id=p_tenant AND client_id=p_client
+      FROM public.shipments s WHERE tenant_id=p_tenant AND client_id=p_client AND (since IS NULL OR s.created_at>=since)
     UNION ALL
     SELECT a.id,a.status,a.price,CASE WHEN EXISTS (
       SELECT 1 FROM public.wallet_reservations r WHERE r.shipment_id::text=a.id AND r.tenant_id=p_tenant AND r.client_id=p_client
-    ) THEN 'pay_as_you_go' ELSE a.billing_type END FROM audit_shipments a WHERE NOT EXISTS (
+    ) THEN 'pay_as_you_go' ELSE a.billing_type END FROM audit_shipments a WHERE (since IS NULL OR a.created_at>=since) AND NOT EXISTS (
       SELECT 1 FROM public.shipments s WHERE s.id::text=a.id AND s.tenant_id=p_tenant AND s.client_id=p_client
     )
   ), charges AS (

@@ -310,6 +310,11 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     nif: cliente.nif?.trim() || "",
     category: cliente.category || "Cliente Conta Corrente",
     billing_type: cliente.billing_type || "conta_corrente",
+    pay_as_you_go_since: (cliente.billing_type || "conta_corrente") === "pay_as_you_go"
+      ? (previous?.details?.billing_type === "pay_as_you_go"
+          ? previous?.details?.pay_as_you_go_since || cliente.pay_as_you_go_since
+          : cliente.pay_as_you_go_since || new Date().toISOString())
+      : undefined,
     city: cliente.city?.trim() || "Portugal",
     address: cliente.address?.trim() || "",
     postal_code: cliente.postal_code?.trim() || "",

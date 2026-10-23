@@ -7,6 +7,7 @@ import { requirePermission } from '@/lib/auth/context'
 import { recurringPreview, loadPeriodStatements } from '@/lib/billing/recurring-statements'
 import { RecurringStatementsPanel } from './RecurringStatementsPanel'
 import { canInvoiceShipment } from '@/lib/billing/shipment-eligibility'
+import { isPrepaidShipment } from '@/lib/billing/client-balance'
 
 export const dynamic = "force-dynamic"
 
@@ -29,8 +30,10 @@ export default async function ContasCorrentePage() {
     }
   })
 
-  // Apenas envios pendentes de faturação
-  const pendingShipments = shipments.filter((s: { id: string; status?: string | null }) => canInvoiceShipment(s) && !invoicedShipmentIds.has(s.id))
+  // Apenas envios pendentes de faturação (pré-pagos são pagos pela wallet e nunca são faturados)
+  const clientsById = new Map(clients.map((c: { id: string }) => [c.id, c]))
+  const pendingShipments = shipments.filter((s: { id: string; status?: string | null; client_id?: string; created_at?: string | null }) =>
+    canInvoiceShipment(s) && !invoicedShipmentIds.has(s.id) && !isPrepaidShipment(clientsById.get(s.client_id || "") as never, s))
   
   return (
     <div className="space-y-6">

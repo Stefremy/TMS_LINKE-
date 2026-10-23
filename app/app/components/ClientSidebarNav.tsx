@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, FileText, Search, Plus, UserCheck, CreditCard, Bell, MapPin } from "lucide-react"
+import { Home, FileText, Search, Plus, UserCheck, CreditCard, Bell, MapPin, Inbox } from "lucide-react"
 import { useClientScope } from "./ClientScope"
 
 export function ClientSidebarNav() {
@@ -18,6 +18,7 @@ export function ClientSidebarNav() {
     { href: `${basePath}/destinatarios`, label: "Destinatários", icon: UserCheck },
     { href: `${basePath}/faturas`, label: "Faturas e Extratos", icon: FileText, hasBadge: true },
     { href: `${basePath}/carregamentos`, label: "Carregamentos", icon: CreditCard },
+    { href: `${basePath}/mensagens`, label: "Caixa de Entrada", icon: Inbox },
   ]
 
   return (
@@ -124,13 +125,20 @@ export function ClientTopHeaderAction() {
                 </div>
               </Link>
             </div>
-            <div className="px-4 pt-2 border-t border-slate-100 text-center">
+            <div className="px-4 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <Link
+                href={`${basePath}/mensagens`}
+                onClick={() => setShowNotifications(false)}
+                className="text-[var(--accent)] font-semibold hover:underline"
+              >
+                Caixa de Entrada →
+              </Link>
               <Link
                 href={`${basePath}/faturas`}
                 onClick={() => setShowNotifications(false)}
-                className="text-[11px] text-blue-600 font-semibold hover:underline"
+                className="text-slate-500 font-medium hover:underline"
               >
-                Ver todas as faturas →
+                Faturas
               </Link>
             </div>
           </div>
