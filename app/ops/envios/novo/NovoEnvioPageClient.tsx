@@ -10,7 +10,7 @@ import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { Button } from "@/components/ui/button"
 import { OFFICIAL_LINKE_ZONES } from "@/lib/services/geo/international-zones"
-import { resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
+import { getServiceDestinationCountries, getServiceDestinationZone } from "@/lib/services/service-destinations"
 import { calculateShipmentQuote, getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
 import { CttExportFields } from "@/components/shipments/CttExportFields"
@@ -91,11 +91,17 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   }, [success, shipmentResult?.id])
 
   const handleSelectRecipient = (r: any) => {
+    const country = (r.country || "PT").trim().toUpperCase()
+    if (!destinationCountries.some(option => option.code === country)) {
+      setErrorMsg("O país deste destinatário não está disponível no serviço selecionado. Escolha outro serviço antes de carregar o destinatário.")
+      setShowAgendaDropdown(false)
+      return
+    }
     setRecipientName(r.name || "")
     setRecipientAddress(r.address || "")
     setRecipientZip(r.postal_code || "")
     setRecipientCity(r.city || "")
-    setRecipientCountry(r.country || "PT")
+    setRecipientCountry(country)
     setRecipientPhone(r.phone || "")
     setRecipientEmail(r.email || "")
     setShowAgendaDropdown(false)
@@ -134,25 +140,12 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
     }
   })
 
-  const resolvedDestinationZone = React.useMemo(() => resolveZoneCode(recipientCountry, recipientZip),
-    [recipientCountry, recipientZip])
-
   const availableServicos = React.useMemo(() => {
     let active = servicosLinke.filter((s) => s.is_active !== false)
     if (Array.isArray(currentClient?.assigned_linke_service_ids)) {
       active = active.filter(s => currentClient!.assigned_linke_service_ids!.includes(s.id))
     }
     if (active.length === 0) return []
-
-    // Prioritize services that explicitly cover the destination zone
-    const targetZone = resolvedDestinationZone
-    active = [...active].sort((a, b) => {
-      const aCovers = (a.allowed_zones || []).includes(targetZone) || a.zones.some(z => z.zone_code === targetZone)
-      const bCovers = (b.allowed_zones || []).includes(targetZone) || b.zones.some(z => z.zone_code === targetZone)
-      if (aCovers && !bCovers) return -1
-      if (!aCovers && bCovers) return 1
-      return 0
-    })
 
     if (currentClient?.default_linke_table_id) {
       const match = active.find((s) => s.id === currentClient.default_linke_table_id)
@@ -161,9 +154,22 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       }
     }
     return active
-  }, [servicosLinke, currentClient, resolvedDestinationZone])
+  }, [servicosLinke, currentClient])
 
   const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
+  const destinationCountries = React.useMemo(() => getServiceDestinationCountries(activeLinkeService), [activeLinkeService])
+  const resolvedDestinationZone = activeLinkeService ? getServiceDestinationZone(activeLinkeService, recipientCountry, recipientZip) : ""
+  const resetRecipientPostal = recipientPostalLookup.reset
+
+  React.useEffect(() => {
+    if (!activeLinkeService || destinationCountries.some(country => country.code === recipientCountry)) return
+    const nextCountry = destinationCountries.length === 1 ? destinationCountries[0].code : ""
+    if (recipientCountry === nextCountry) return
+    setRecipientCountry(nextCountry)
+    setRecipientZip("")
+    setRecipientCity("")
+    resetRecipientPostal()
+  }, [activeLinkeService, destinationCountries, recipientCountry, resetRecipientPostal])
   const isCorreos = (activeLinkeService?.preferred_carrier_name || activeLinkeService?.name || "").toLowerCase().includes("correos")
   const carrierDisplayName = activeLinkeService ? (isCorreos ? "Correos Express" : "CTT Expresso") : "Transportadora"
 
@@ -179,6 +185,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   const estimatedTier = React.useMemo(() => {
     try {
       if (!currentClient || !activeLinkeService) throw new Error("Selecione um cliente e um serviço disponível.")
+      if (!destinationCountries.length) throw new Error("Este serviço não tem países de destino com tarifas configuradas.")
+      if (!destinationCountries.some(country => country.code === recipientCountry)) throw new Error("Selecione um país disponível para este serviço.")
       const quote = calculateShipmentQuote(weightKg, currentClient, activeLinkeService,
         recipientCountry, recipientZip, activeSpecialServices, codValue)
       return { label: quote.tierLabel, sell: quote.totalPrice, buy: quote.buyPrice, error: null }
@@ -186,7 +194,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       return { label: "Preço indisponível", sell: 0, buy: 0,
         error: error instanceof Error ? error.message : "Não foi possível calcular a tarifa." }
     }
-  }, [weightKg, currentClient, activeLinkeService, recipientCountry, recipientZip, activeSpecialServices, codValue])
+  }, [weightKg, currentClient, activeLinkeService, destinationCountries, recipientCountry, recipientZip, activeSpecialServices, codValue])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -423,7 +431,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                     </>
                   ) : (
                     <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl font-semibold">
-                      Sem etiqueta gerada — usa "Solicitar" no detalhe do envio
+                      Envio criado. A etiqueta oficial não está disponível. Consulte o envio {shipmentResult.guia} no portal da transportadora ou contacte o apoio para obter a etiqueta.
                     </span>
                   )}
                   <button
@@ -767,6 +775,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                         <select 
                           name="recipient_country" 
                           value={recipientCountry}
+                          disabled={!destinationCountries.length}
                           onChange={(e) => {
                             const c = e.target.value
                             setRecipientCountry(c)
@@ -777,92 +786,10 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                           required 
                           className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] font-semibold focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs cursor-pointer"
                         >
-                          <optgroup label="Península Ibérica">
-                            <option value="PT">Portugal (PT)</option>
-                            <option value="ES">Espanha (ES)</option>
-                          </optgroup>
-                          <optgroup label="Europa 1 (EU 1)">
-                            <option value="DE">Alemanha (DE)</option>
-                            <option value="FR">França (FR)</option>
-                            <option value="IT">Itália (IT)</option>
-                            <option value="GB">Reino Unido (GB)</option>
-                            <option value="BE">Bélgica (BE)</option>
-                            <option value="NL">Holanda (NL)</option>
-                            <option value="AT">Áustria (AT)</option>
-                            <option value="SE">Suécia (SE)</option>
-                            <option value="DK">Dinamarca (DK)</option>
-                            <option value="IE">Irlanda (IE)</option>
-                            <option value="LU">Luxemburgo (LU)</option>
-                            <option value="MC">Mónaco (MC)</option>
-                          </optgroup>
-                          <optgroup label="Europa 2 (EU 2)">
-                            <option value="PL">Polónia (PL)</option>
-                            <option value="CZ">República Checa (CZ)</option>
-                            <option value="RO">Roménia (RO)</option>
-                            <option value="BG">Bulgária (BG)</option>
-                            <option value="HU">Hungria (HU)</option>
-                            <option value="HR">Croácia (HR)</option>
-                            <option value="SK">Eslováquia (SK)</option>
-                            <option value="SI">Eslovénia (SI)</option>
-                            <option value="EE">Estónia (EE)</option>
-                            <option value="LV">Letónia (LV)</option>
-                            <option value="LT">Lituânia (LT)</option>
-                            <option value="UA">Ucrânia (UA)</option>
-                          </optgroup>
-                          <optgroup label="Europa 3 (EU 3)">
-                            <option value="CH">Suíça (CH)</option>
-                            <option value="NO">Noruega (NO)</option>
-                            <option value="FI">Finlândia (FI)</option>
-                            <option value="GR">Grécia (GR)</option>
-                            <option value="AD">Andorra (AD)</option>
-                            <option value="GI">Gibraltar (GI)</option>
-                            <option value="LI">Liechtenstein (LI)</option>
-                          </optgroup>
-                          <optgroup label="América do Norte (NA)">
-                            <option value="US">Estados Unidos (US)</option>
-                            <option value="CA">Canadá (CA)</option>
-                            <option value="MX">México (MX)</option>
-                            <option value="PR">Porto Rico (PR)</option>
-                          </optgroup>
-                          <optgroup label="América do Sul (SA)">
-                            <option value="BR">Brasil (BR)</option>
-                            <option value="AR">Argentina (AR)</option>
-                            <option value="CL">Chile (CL)</option>
-                            <option value="CO">Colômbia (CO)</option>
-                            <option value="PE">Peru (PE)</option>
-                            <option value="UY">Uruguai (UY)</option>
-                            <option value="VE">Venezuela (VE)</option>
-                            <option value="PA">Panamá (PA)</option>
-                          </optgroup>
-                          <optgroup label="Oriente 1 (O1)">
-                            <option value="JP">Japão (JP)</option>
-                            <option value="KR">Coreia do Sul (KR)</option>
-                            <option value="SG">Singapura (SG)</option>
-                            <option value="HK">Hong Kong (HK)</option>
-                            <option value="TH">Tailândia (TH)</option>
-                            <option value="TW">Taiwan (TW)</option>
-                            <option value="EG">Egito (EG)</option>
-                          </optgroup>
-                          <optgroup label="Oriente 2 (O2)">
-                            <option value="CN">China (CN)</option>
-                            <option value="AU">Austrália (AU)</option>
-                            <option value="AE">Emiratos Árabes Unidos (AE)</option>
-                            <option value="IN">Índia (IN)</option>
-                            <option value="IL">Israel (IL)</option>
-                            <option value="TR">Turquia (TR)</option>
-                            <option value="NZ">Nova Zelândia (NZ)</option>
-                            <option value="QA">Qatar (QA)</option>
-                          </optgroup>
-                          <optgroup label="África (A)">
-                            <option value="AO">Angola (AO)</option>
-                            <option value="CV">Cabo Verde (CV)</option>
-                            <option value="MZ">Moçambique (MZ)</option>
-                            <option value="ZA">África do Sul (ZA)</option>
-                            <option value="MA">Marrocos (MA)</option>
-                            <option value="NG">Nigéria (NG)</option>
-                            <option value="SN">Senegal (SN)</option>
-                            <option value="TN">Tunísia (TN)</option>
-                          </optgroup>
+                          <option value="">{destinationCountries.length ? "Selecione o país" : "Sem destinos configurados"}</option>
+                          {destinationCountries.map(country => (
+                            <option key={country.code} value={country.code}>{country.name} ({country.code})</option>
+                          ))}
                         </select>
                         {resolvedDestinationZone && (
                           <div className="pt-0.5 flex items-center gap-1.5 text-[10px] text-[var(--text-secondary)] font-medium">

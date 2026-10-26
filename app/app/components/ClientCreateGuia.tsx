@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
-import { resolveZoneCode, isZoneAllowedByService } from "@/lib/pricing/calculate-shipment-price"
+import { getServiceDestinationCountries, getServiceDestinationZone } from "@/lib/services/service-destinations"
 import { getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
 import { calculateClientShipmentPreview } from "@/lib/pricing/calculate-client-shipment-preview"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
@@ -66,11 +66,17 @@ export function ClientCreateGuia() {
     useRecipientAgenda(currentClient.id, showAgendaDropdown)
 
   const handleSelectRecipient = (r: any) => {
+    const country = (r.country || "PT").trim().toUpperCase()
+    if (!destinationCountries.some(option => option.code === country)) {
+      setSubmitError("O país deste destinatário não está disponível no serviço selecionado. Escolha outro serviço antes de carregar o destinatário.")
+      setShowAgendaDropdown(false)
+      return
+    }
     setRecipientName(r.name || "")
     setRecipientAddress(r.address || "")
     setRecipientPostal(r.postal_code || "")
     setRecipientCity(r.city || "")
-    setRecipientCountry(r.country || "PT")
+    setRecipientCountry(country)
     setRecipientPhone(r.phone || "")
     setRecipientEmail(r.email || "")
     setShowAgendaDropdown(false)
@@ -144,7 +150,8 @@ export function ClientCreateGuia() {
       const allowed = (currentClient.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter(w => w.is_enabled)
       const defWs = allowed.find(w => w.is_default) || allowed[0]
       if (defWs) setSelectedCarrierCode(defWs.code)
-      const services = (servicos || []).filter(s => s.is_active !== false)
+      const services = (servicos || []).filter(s => s.is_active !== false &&
+        (!Array.isArray(currentClient.assigned_linke_service_ids) || currentClient.assigned_linke_service_ids.includes(s.id)))
       const selected = services.find(s => s.id === currentClient.default_linke_table_id) || services[0]
       if (selected) setSelectedServiceId(selected.id)
       
@@ -177,6 +184,18 @@ export function ClientCreateGuia() {
 
   // Active chosen Linke service
   const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
+  const destinationCountries = React.useMemo(() => getServiceDestinationCountries(activeLinkeService), [activeLinkeService])
+  const resetRecipientPostal = postalLookup.reset
+
+  React.useEffect(() => {
+    if (!activeLinkeService || destinationCountries.some(country => country.code === recipientCountry)) return
+    const nextCountry = destinationCountries.length === 1 ? destinationCountries[0].code : ""
+    if (recipientCountry === nextCountry) return
+    setRecipientCountry(nextCountry)
+    setRecipientPostal("")
+    setRecipientCity("")
+    resetRecipientPostal()
+  }, [activeLinkeService, destinationCountries, recipientCountry, resetRecipientPostal])
 
   // Available special services fees
   const specialFeesList: ClientSpecialServiceFee[] = React.useMemo(() => {
@@ -190,9 +209,11 @@ export function ClientCreateGuia() {
 
   // Compute live simulated price using exact Linke Table tiers & client special services
   const calculatedPrice = React.useMemo(() => {
-    const destinationZone = resolveZoneCode(recipientCountry, recipientPostal)
+    const destinationZone = activeLinkeService ? getServiceDestinationZone(activeLinkeService, recipientCountry, recipientPostal) : ""
     try {
       if (!activeLinkeService) throw new Error("Selecione um serviço disponível.")
+      if (!destinationCountries.length) throw new Error("Este serviço não tem países de destino com tarifas configuradas.")
+      if (!destinationCountries.some(country => country.code === recipientCountry)) throw new Error("Selecione um país disponível para este serviço.")
       const quote = calculateClientShipmentPreview(Number(weight), currentClient, activeLinkeService,
         recipientCountry, recipientPostal, activeSpecialServices, Number(codAmount))
       return {
@@ -208,7 +229,7 @@ export function ClientCreateGuia() {
         blockedReason: error instanceof Error ? error.message : "Não foi possível calcular a tarifa.",
       }
     }
-  }, [currentClient, activeLinkeService, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount])
+  }, [currentClient, activeLinkeService, destinationCountries, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount])
 
   const handleCreateShipment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -487,7 +508,7 @@ export function ClientCreateGuia() {
               </>
             ) : (
               <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl font-semibold">
-                Sem etiqueta gerada — usa "Solicitar" no detalhe do envio
+                Envio criado. A etiqueta oficial não está disponível. Consulte o envio {generatedGuia} no portal {isCorreosService ? "Correos Express" : "CTT"} ou contacte o apoio para obter a etiqueta.
               </span>
             )}
             <button
@@ -519,6 +540,60 @@ export function ClientCreateGuia() {
             </div>
           )}
           
+          {/* SELEÇÃO DO SERVIÇO LINKE */}
+          <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-900 flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={getCarrierLogo(activeLinkeService?.preferred_carrier_name || "ctt") || ""}
+                    alt="Transportadora"
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+                <span>Serviço de Transporte Linke</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">
+                  {activeLinkeService?.category || "Nacional"}
+                </span>
+              </div>
+            </div>
+
+            <div className="relative">
+              <select
+                aria-label="Serviço de Transporte Linke"
+                value={activeLinkeService?.id || ""}
+                onChange={(e) => setSelectedServiceId(e.target.value)}
+                disabled={!availableServicos.length}
+                className={`w-full pl-3.5 pr-8 py-3 bg-white border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 cursor-pointer shadow-2xs ${
+                  calculatedPrice.isBlocked
+                    ? "border-amber-400 text-amber-900 focus:ring-amber-500 bg-amber-50/30"
+                    : "border-slate-300 text-slate-900 focus:ring-emerald-500"
+                }`}
+              >
+                {!availableServicos.length && <option value="">Sem serviços autorizados</option>}
+                {availableServicos.map(service => (
+                  <option key={service.id} value={service.id}>{getClientServiceLabel(service)}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+
+            <p className="text-[11px] text-slate-500">Escolha o serviço primeiro. Os países de destino são apresentados conforme a cobertura e as tarifas desta tabela.</p>
+
+            {calculatedPrice.isBlocked && (
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-bold">Preço indisponível para este envio</div>
+                  <div className="text-[11px] text-amber-800 mt-0.5">{calculatedPrice.blockedReason}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Remetente e Destinatário */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             
@@ -657,7 +732,10 @@ export function ClientCreateGuia() {
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-700">País de Destino *</label>
                 <select
+                  name="recipient_country"
                   value={recipientCountry}
+                  required
+                  disabled={!destinationCountries.length}
                   onChange={(e) => {
                     const c = e.target.value
                     setRecipientCountry(c)
@@ -667,11 +745,10 @@ export function ClientCreateGuia() {
                   }}
                   className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
                 >
-                  <option value="PT">Portugal</option>
-                  <option value="ES">Espanha</option>
-                  <option value="FR">França</option>
-                  <option value="DE">Alemanha</option>
-                  <option value="IT">Itália</option>
+                  <option value="">{destinationCountries.length ? "Selecione o país" : "Sem destinos configurados"}</option>
+                  {destinationCountries.map(country => (
+                    <option key={country.code} value={country.code}>{country.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -893,61 +970,6 @@ export function ClientCreateGuia() {
             <p className="text-[10px] text-slate-400">
               Máximo de 40 caracteres suportados pela transportadora.
             </p>
-          </div>
-
-          {/* SELEÇÃO DO SERVIÇO LINKE */}
-          <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-900 flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img 
-                    src={getCarrierLogo(activeLinkeService?.preferred_carrier_name || "ctt") || ""} 
-                    alt="Transportadora" 
-                    className="max-w-full max-h-full object-contain" 
-                  />
-                </div>
-                <span>Serviço de Transporte Linke</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">
-                  {activeLinkeService?.category || "Nacional"}
-                </span>
-              </div>
-            </div>
-
-            <div className="relative">
-              <select 
-                value={selectedServiceId}
-                onChange={(e) => setSelectedServiceId(e.target.value)}
-                className={`w-full pl-3.5 pr-8 py-3 bg-white border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 cursor-pointer shadow-2xs ${
-                  calculatedPrice.isBlocked
-                    ? "border-amber-400 text-amber-900 focus:ring-amber-500 bg-amber-50/30"
-                    : "border-slate-300 text-slate-900 focus:ring-emerald-500"
-                }`}
-              >
-                {availableServicos.map((service) => {
-                  const destZone = resolveZoneCode(recipientCountry, recipientPostal)
-                  const coversZone = isZoneAllowedByService(service.allowed_zones, destZone)
-                  return (
-                    <option key={service.id} value={service.id}>
-                      {getClientServiceLabel(service)}{!coversZone ? " — Indisponível para este destino" : ""}
-                    </option>
-                  )
-                })}
-              </select>
-              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
-
-            {calculatedPrice.isBlocked && (
-              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs">
-                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-                <div className="flex-1">
-                  <div className="font-bold">Preço indisponível para este envio</div>
-                  <div className="text-[11px] text-amber-800 mt-0.5">{calculatedPrice.blockedReason}</div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* SERVIÇOS ESPECIAIS E SUPLEMENTARES */}

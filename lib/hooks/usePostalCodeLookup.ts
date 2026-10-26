@@ -19,12 +19,14 @@ export function usePostalCodeLookup(options?: {
   const [status, setStatus] = useState<"idle" | "loading" | "valid" | "invalid">("idle")
   const [info, setInfo] = useState<PostalLookupInfo | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+  const requestVersionRef = useRef(0)
   const countryRef = useRef(options?.country || "PT")
   countryRef.current = options?.country || "PT"
   const onFoundRef = useRef(options?.onFound)
   onFoundRef.current = options?.onFound
 
   const lookup = useCallback((raw: string, countryOverride?: string) => {
+    const requestVersion = ++requestVersionRef.current
     const currentCountry = (countryOverride || countryRef.current || "PT").toUpperCase()
     let val = raw.trim()
 
@@ -63,6 +65,7 @@ export function usePostalCodeLookup(options?: {
         const res = await fetch(`/api/geo/postal-code?code=${encodeURIComponent(val)}&country=${currentCountry}`)
         if (res.ok) {
           const data = await res.json()
+          if (requestVersion !== requestVersionRef.current || currentCountry !== countryRef.current) return
           if (data.found) {
             setStatus("valid")
             setInfo(data)
@@ -70,19 +73,28 @@ export function usePostalCodeLookup(options?: {
             return
           }
         }
+        if (requestVersion !== requestVersionRef.current || currentCountry !== countryRef.current) return
         if ((isPT && cleanDigits.length >= 7) || (isES && cleanDigits.length >= 5)) {
           setStatus("invalid")
         } else {
           setStatus("idle")
         }
       } catch {
-        setStatus("idle")
+        if (requestVersion === requestVersionRef.current) setStatus("idle")
       } finally {
-        setLoading(false)
+        if (requestVersion === requestVersionRef.current) setLoading(false)
       }
     }, 150)
 
     return val
+  }, [])
+
+  const reset = useCallback(() => {
+    requestVersionRef.current++
+    if (timerRef.current) clearTimeout(timerRef.current)
+    setLoading(false)
+    setStatus("idle")
+    setInfo(null)
   }, [])
 
   return {
@@ -90,6 +102,6 @@ export function usePostalCodeLookup(options?: {
     loading,
     status,
     info,
-    reset: () => { setStatus("idle"); setInfo(null); }
+    reset,
   }
 }

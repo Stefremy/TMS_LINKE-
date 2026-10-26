@@ -2,7 +2,10 @@ const test=require('node:test'), assert=require('node:assert/strict')
 const {createLoader}=require('./helpers/load-typescript.cjs')
 const {fakeSupabase}=require('./helpers/fake-supabase.cjs')
 const crypto=require('node:crypto')
-const pure=createLoader({})('lib/billing/carrier-weight-pricing.ts')
+const loadPure=createLoader({})
+const pure=loadPure('lib/billing/carrier-weight-pricing.ts')
+const {calculateShipmentPrice}=loadPure('lib/pricing/calculate-shipment-price.ts')
+const {buildOfficialCeTruckZones}=loadPure('lib/services/geo/international-zones.ts')
 const T='11111111-1111-1111-1111-111111111111', C='22222222-2222-2222-2222-222222222222', S='33333333-3333-4333-8333-333333333333'
 const tier=(max,price,cost)=>({id:String(max),label:`Até ${max} kg`,weight_max:max,sell_price:price,cost_price:cost,margin_pct:20,enabled:true})
 const service={id:'svc',name:'CTT Teste',is_active:true,fuel_surcharge_pct:10,zones:[{zone_code:'PT-CONT',zone_name:'Continente',tiers:[tier(2,4,2),tier(5,6,4),tier(10,9,6),tier(20,12,9)]},{zone_code:'ES-PENIN',zone_name:'Espanha',tiers:[tier(10,15,9)]}]}
@@ -25,6 +28,38 @@ test('client overrides and zone-specific prices are frozen without credentials o
  assert.equal(b.service.zones.length,1);assert.equal(b.service.webservice_connection_id,undefined);assert.equal(b.client.email,undefined)
  const p=pure.planWeightAdjustment({...input(),basis:b,basePrice:5,fuelAmount:0.5,sellPrice:7});assert.equal(p.price,12.5)
  const es=pure.captureWeightPricingBasis({custom_tier_overrides:{svc:[5]}},service,'ES','28001');assert.equal(es.client.custom_tier_overrides,undefined)
+})
+test('CE shipments capture the same road tariff as their quote and retain it for weight adjustments',()=>{
+ const ce={id:'negotiated-ce',name:'CE Cliente',code:'CE-CLIENTE',webservice_service_code:'ENCF008.02',
+  webservice_connection_id:'private-connection',is_active:true,zones:buildOfficialCeTruckZones(),allowed_zones:['Zona 2','Zona 3'],fuel_surcharge_pct:12.5}
+ for(const [country,zone] of [['FI','Zona 3'],['PL','Zona 3'],['FR','Zona 2'],['AT','Zona 2']]){
+  const client={default_linke_table_id:ce.id}
+  const quote=calculateShipmentPrice(1,client,[ce],country,'00100',{requireConfiguredTariff:true})
+  const captured=pure.captureWeightPricingBasis(client,ce,country,'00100')
+  assert.equal(captured.service.zones.length,1);assert.equal(captured.service.zones[0].zone_code,zone)
+  assert.equal(captured.service.webservice_service_code,'ENCF008.02')
+  assert.equal(captured.service.webservice_connection_id,undefined)
+  assert.deepEqual(calculateShipmentPrice(1,captured.client,[captured.service],country,'00100',{requireConfiguredTariff:true}),quote)
+  const increased=calculateShipmentPrice(6,client,[ce],country,'00100',{requireConfiguredTariff:true})
+  const adjustment=pure.planWeightAdjustment({basis:captured,previousWeightKg:1,weightKg:6,
+   sellPrice:quote.sellPrice,buyPrice:quote.buyPrice,basePrice:quote.basePrice,fuelAmount:quote.fuelSurchargeAmount,specialAmount:0})
+  assert.equal(adjustment.price,increased.sellPrice)
+ }
+ // Legacy service identities must also survive in a private client's captured table.
+ const legacy={...ce,webservice_service_code:undefined,code:'LK-CE-STD'}
+ const captured=pure.captureWeightPricingBasis({},legacy,'FI','00100')
+ assert.equal(calculateShipmentPrice(1,captured.client,[captured.service],'FI','00100',{requireConfiguredTariff:true}).isFallback,false)
+})
+test('European zone aliases also capture the quoted tariff rather than failing after pricing',()=>{
+ const air={...service,zones:[{zone_code:'EU-Z3',tiers:[tier(10,20,10)]}],allowed_zones:['EU 3']}
+ const quote=calculateShipmentPrice(1,{default_linke_table_id:air.id},[air],'FI','00100',{requireConfiguredTariff:true})
+ const captured=pure.captureWeightPricingBasis({},air,'FI','00100')
+ assert.equal(captured.service.zones[0].zone_code,'EU-Z3')
+ assert.equal(calculateShipmentPrice(1,captured.client,[captured.service],'FI','00100',{requireConfiguredTariff:true}).sellPrice,quote.sellPrice)
+})
+test('CE countries outside the road contract cannot inherit an air-zone tariff',()=>{
+ const ce={...service,webservice_service_code:'ENCF008.02',zones:buildOfficialCeTruckZones()}
+ assert.throws(()=>calculateShipmentPrice(1,{default_linke_table_id:ce.id},[ce],'RO','010101',{requireConfiguredTariff:true}),/Tarifa não configurada|Serviço indisponível/)
 })
 test('unknown CTT units never become kilograms; explicit g/kg conversion is required',()=>{
  assert.equal(pure.weightInKg({value:6000,unit:null}),null)

@@ -368,6 +368,8 @@ export function resolveInternationalZone(rawCountry: string): string | null {
   if (COUNTRY_TO_ZONE_MAP[clean]) {
     return COUNTRY_TO_ZONE_MAP[clean]
   }
+  // Some ISO codes have suffixed keys to distinguish them from zone abbreviations.
+  if (COUNTRY_TO_ZONE_MAP[`${clean}_ISO`]) return COUNTRY_TO_ZONE_MAP[`${clean}_ISO`]
 
   // Tenta encontrar por inclusão de substring
   for (const [key, zone] of Object.entries(COUNTRY_TO_ZONE_MAP)) {

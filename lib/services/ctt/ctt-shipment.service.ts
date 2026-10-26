@@ -394,9 +394,9 @@ export class CTTShipmentService {
     if (!labelNode?.LabelData) return []
     const list = Array.isArray(labelNode.LabelData) ? labelNode.LabelData : [labelNode.LabelData]
     return list.map((l: any) => ({
-      FileName: l.FileName,
-      Label: l.Label,
-      BestEncoding: l.BestEncoding,
+      FileName: this.getText(l.FileName),
+      Label: this.getText(l.Label),
+      BestEncoding: this.getText(l.BestEncoding),
     }))
   }
 

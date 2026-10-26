@@ -77,67 +77,47 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
   }
 }
 
-import { generateTransportLabelPdfBase64 } from "./transport-label-generator"
+import { getCttShipmentLabel } from "@/lib/services/ctt/shipment-label"
 
-/** Retrieve a label only when the user explicitly opens or prints that shipment. */
+/** Retrieve only saved official carrier labels, never create another shipment or a substitute label. */
 export async function fetchShipmentLabel(identifier: string): Promise<string | null> {
   const ctx = await requireUser()
-  if (!identifier) return null
-
-  const cleanId = String(identifier).trim()
+  const cleanId = String(identifier || "").trim()
+  if (!ctx.tenant_id || !cleanId || cleanId.length > 160 || !/^[A-Za-z0-9._/-]+$/.test(cleanId)) return null
+  if (ctx.role === "client" && !ctx.client_id) return null
   const supabase = createAdminClient()
-  let label: string | null = null
-  const isUuid = isValidUuid(cleanId)
 
-  // 1. Query shipments table directly
   try {
-    let query = supabase.from("shipments").select("*")
-    if (isUuid) {
-      query = query.eq("id", cleanId)
-    } else {
-      query = query.or(`tracking_number.eq.${cleanId},carrier_tracking_number.eq.${cleanId}`)
+    let query = supabase.from("shipments").select("*").eq("tenant_id", ctx.tenant_id)
+    if (ctx.role === "client") query = query.eq("client_id", ctx.client_id)
+    query = isValidUuid(cleanId) ? query.eq("id", cleanId)
+      : query.or(`tracking_number.eq.${cleanId},carrier_tracking_number.eq.${cleanId}`)
+    const { data: shipment } = await query.limit(1).maybeSingle()
+    let snapshot: any = null
+    const fields = shipment || isValidUuid(cleanId) ? ["id"] : ["carrier_tracking_number", "ctt_object_id", "tracking_number"]
+    for (const field of fields) {
+      let logs = supabase.from("audit_log").select("details").eq("tenant_id", ctx.tenant_id)
+        .eq("action", "shipment_data").eq(`details->>${field}`, shipment?.id || cleanId)
+      if (ctx.role === "client") logs = logs.eq("details->>client_id", ctx.client_id)
+      const { data, error } = await logs.order("created_at", { ascending: false }).limit(1).maybeSingle()
+      if (error) return null
+      if (data?.details) { snapshot = data.details; break }
     }
-    const { data: shipment } = await query.maybeSingle()
-    if (shipment) {
-      if (ctx.role === "client" && shipment.client_id !== ctx.client_id) {
-        return null
-      }
-
-      let existingLabel = shipment.ctt_label_base64 || shipment.carrier_label_base64 || null
-      
-      if (!existingLabel) {
-        // As labels are heavily stored in audit_log due to schema size limits
-        const { data: auditLogs } = await supabase
-          .from("audit_log")
-          .select("details")
-          .eq("action", "shipment_data")
-          .contains("details", { id: shipment.id })
-          .limit(1)
-        
-        if (auditLogs && auditLogs.length > 0 && auditLogs[0].details?.ctt_label_base64) {
-          existingLabel = auditLogs[0].details.ctt_label_base64
-        }
-      }
-
-      if (existingLabel) {
-        if (existingLabel.trimStart().startsWith("^XA")) {
-          existingLabel = await convertZplToPdfBase64(existingLabel)
-        }
-        if (await isCorreosPdfLabel(existingLabel)) {
-          existingLabel = await applyLinkeLogoToCorreosLabel(existingLabel)
-        }
-        return existingLabel
-      }
-
-      // Generate printable transport label as temporary fallback (do not save to DB)
-      label = await generateTransportLabelPdfBase64(shipment)
-      return label
+    const saved = snapshot || shipment
+    if (!saved) return null
+    let label = saved.ctt_label_base64 || saved.carrier_label_base64 || saved.labelBase64 ||
+      shipment?.ctt_label_base64 || shipment?.carrier_label_base64 || null
+    if (!label && saved.ctt_documents) {
+      label = getCttShipmentLabel({ FirstObject: saved.carrier_tracking_number, DocumentsList: saved.ctt_documents })?.data || null
     }
+    if (!label) return null
+    if (label.trimStart().startsWith("^XA")) label = await convertZplToPdfBase64(label)
+    if (isCorreosShipment(saved) && await isCorreosPdfLabel(label)) label = await applyLinkeLogoToCorreosLabel(label)
+    return label
   } catch (err: any) {
-    console.warn("fetchShipmentLabel: shipments table query error:", err?.message)
+    console.warn("fetchShipmentLabel: label lookup failed:", err?.message)
+    return null
   }
-
-  return label
 }
 
 export async function fetchPaginatedShipments(options: { 

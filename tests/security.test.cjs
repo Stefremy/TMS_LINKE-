@@ -105,7 +105,7 @@ function service(carrier = 'CTT') {
     ] }],
   }
 }
-function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = clientContext, carrierResult, carrierError } = {}) {
+function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = clientContext, carrierResult, carrierError, savedLabel=null } = {}) {
   const tables = {
     clients: [{ id: CLIENT, tenant_id: TENANT, name: 'Fixture' }],
     audit_log: [{ tenant_id: TENANT, action: 'client_data', details: { id: CLIENT, short_name: 'Fixture', billing_type: 'conta_corrente' } }],
@@ -115,7 +115,8 @@ function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = cl
   const db = fakeSupabase(tables, failure)
   const providerCalls = [], credentials = []
   const load = createLoader({
-    '@/lib/auth/context': { requireUser: async () => ctx, getTenantId: async () => ctx.tenant_id },
+    '@/lib/auth/context': { requireUser: async () => ctx, getTenantId: async () => ctx.tenant_id,
+      requireEmployee:async()=>{if(ctx.role==='client')throw Error('STAFF_REQUIRED');return ctx} },
     '@/lib/supabase/server': { createAdminClient: () => db.createAdminClient() },
     'next/cache': { revalidatePath() {} },
     '@/app/actions/fornecedores': {}, '@/app/actions/ctt': {},
@@ -138,8 +139,8 @@ function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = cl
       resolveCttCredentials: async id => { credentials.push(id); return {} },
       resolveCorreosCredentials: async id => { credentials.push(id); return {} },
     },
-    '@/lib/label-utils': {}, '@/lib/services/correos/correos-label-customizer': {},
-    '@/lib/services/shipments/shipment-utils': {}, '@/lib/services/shipments/shipment-fetcher': {},
+    '@/lib/label-utils': {convertZplToPdfBase64:async value=>value}, '@/lib/services/correos/correos-label-customizer': {},
+    '@/lib/services/shipments/shipment-utils': {}, '@/lib/services/shipments/shipment-fetcher': {fetchShipmentLabel:async()=>savedLabel},
     '@/lib/services/tracking': {}, '@/lib/services/shipments/shipment-creator': {},
     '@/lib/services/shipments/shipment-deleter': {},
   })
@@ -150,6 +151,29 @@ function shipmentInput(extra = {}) {
     recipientName: 'Fixture', recipientAddress: 'Fixture street', recipientCountry: 'PT', recipientPostal: '4000-001',
     weightKg: 1, volumesCount: 1, lengthCm: 30.5, widthCm: 20, heightCm: 10, calculatedPrice: 0.01, subProductId: 'forged-code', webserviceConnectionId: 'forged-connection', ...extra }
 }
+test('requesting an existing CTT label never creates another carrier shipment or changes tracking',async()=>{
+ for(const savedLabel of [null,'JVBERi0xLjQK']){
+  const h=shipmentHarness({ctx:{...clientContext,role:'employee'},savedLabel})
+  const result=await h.load('app/actions/shipments.ts').regenerateCttLabelAction(UUID)
+  assert.equal(result.success,Boolean(savedLabel));assert.equal(result.labelBase64,savedLabel||undefined)
+  assert.equal(h.providerCalls.length,0);assert.equal(h.credentials.length,0);assert.equal(h.db.writes.length,0)
+ }
+})
+test('carrier-provided CE PDF documents are returned and saved at shipment creation',async()=>{
+ const pdf=Buffer.from('%PDF-1.4\nFixture').toString('base64')
+ const documents=[{FileName:'CE000000001PT.pdf',File:pdf}]
+ const h=shipmentHarness({carrierResult:{success:true,trackingNumber:'CE000000001PT',rawResponse:{Status:1,ShipmentData:[{
+  FirstObject:'CE000000001PT',LastObject:'CE000000001PT',LabelList:[],DocumentsList:documents,
+ }]} }})
+ // A PDF requires no ZPL conversion or external service.
+ const api=h.load('app/actions/shipments.ts')
+ const result=await api.emitClientGuiaAction(shipmentInput())
+ assert.equal(result.success,true,result.error)
+ assert.equal(result.labelBase64,pdf)
+ const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+ assert.deepEqual(saved.ctt_documents,documents);assert.equal(saved.ctt_label_base64,pdf)
+ assert.equal(saved.carrier_tracking_number,'CE000000001PT')
+})
 function withDimensions(form) {
   form.set('length_cm', '30.5'); form.set('width_cm', '20'); form.set('height_cm', '10')
   return form
@@ -174,6 +198,51 @@ test('CTT client and OPS emissions keep the selected Spanish destination through
     assert.equal(saved.recipient_city, 'Madrid')
     assert.deepEqual(saved.ctt_export_details, { exportType: 'Permanent', contentType: 'Goods', declaredValue: 25.5 })
     assert.deepEqual(h.providerCalls[0].payload.cttExportDetails, saved.ctt_export_details)
+  }
+})
+
+test('CE Finland shipments reach the carrier and preserve the validated road tariff in native and audit storage',async()=>{
+  const {buildOfficialCeTruckZones}=createLoader({})('lib/services/geo/international-zones.ts')
+  for(const role of ['client','employee','admin']){
+    for(const auditOnly of [false,true]){
+      const h=shipmentHarness({ctx:{...clientContext,role},failure:auditOnly?q=>q.table==='servicos_linke'?{code:'PGRST205'}:null:undefined,
+        adjust:t=>{
+          const s=t.servicos_linke[0]
+          s.webservice_service_code='ENCF008.02';s.allowed_zones=['Zona 2','Zona 3'];s.zones=buildOfficialCeTruckZones()
+          if(auditOnly)t.audit_log.push({tenant_id:TENANT,action:'servicos_linke_data',details:s})
+        }})
+      const result=await emit(h,{clientId:CLIENT,recipientCountry:'FI',recipientPostal:'00100',recipientCity:'Helsínquia',
+        cttExportDetails:{exportType:'Permanent',contentType:'Goods',declaredValue:25}})
+      assert.equal(result.success,true,result.error)
+      assert.equal(h.providerCalls.length,1)
+      assert.equal(h.providerCalls[0].payload.recipient.country,'FI')
+      assert.equal(h.providerCalls[0].payload.recipient.zip,'00100')
+      const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+      assert.equal(saved.recipient_country,'FI')
+      assert.equal(saved.weight_pricing_basis.service.zones[0].zone_code,'Zona 3')
+      assert.equal(saved.weight_pricing_basis.service.webservice_service_code,'ENCF008.02')
+      assert.equal(saved.weight_pricing_basis.service.webservice_connection_id,undefined)
+      assert.equal(result.sellPrice,17.92)
+    }
+  }
+})
+
+test('Correos client and OPS emissions preserve the chosen country and postal code',async()=>{
+  for(const role of ['client','employee']){
+    for(const [country,postal,zone] of [['ES','28013','ES-PENIN'],['FR','75001','EU 1'],['US','10001','NA']]){
+      const h=shipmentHarness({carrier:'Correos',ctx:{...clientContext,role},adjust:t=>{
+        t.servicos_linke[0].allowed_zones=[zone]
+        t.servicos_linke[0].zones[0].zone_code=zone
+      }})
+      const result=await emit(h,{clientId:CLIENT,recipientCountry:country,recipientPostal:postal})
+      assert.equal(result.success,true)
+      const destination=h.providerCalls[0].payload.destinatario
+      assert.equal(destination.paisISO,country)
+      assert.equal(destination.cpInternacional,postal)
+      assert.equal(destination.cpNacional,country==='ES'?postal:'')
+      const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+      assert.equal(saved.recipient_country,country)
+    }
   }
 })
 

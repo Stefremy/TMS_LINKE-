@@ -1,6 +1,6 @@
 import type { Cliente } from '@/app/ops/entidades/clientes/types'
 import type { ServicoLinke } from '@/app/ops/configuracao/servicos/types'
-import { calculateShipmentPrice, resolveZoneCode } from '@/lib/pricing/calculate-shipment-price'
+import { calculateShipmentPrice, findExactZone, resolveServiceZoneCode } from '@/lib/pricing/calculate-shipment-price'
 import type { CarrierReading } from '@/lib/services/tracking/carrier-measurements'
 
 export type WeightPricingBasis = {
@@ -13,11 +13,12 @@ export type WeightAdjustmentResult = {
 
 /** Freeze only the selected tariff zone, overrides and fuel rate, never credentials or personal data. */
 export function captureWeightPricingBasis(client: Partial<Cliente>, service: ServicoLinke, country: string, postal: string): WeightPricingBasis {
-  const zone = service.zones.find(z => z.zone_code === resolveZoneCode(country, postal))
+  const zone = findExactZone(service.zones, resolveServiceZoneCode(service, country, postal))
   if (!zone) throw new Error('Zona tarifária não encontrada.')
   const overrides = service.zones[0]?.zone_code === zone.zone_code ? client.custom_tier_overrides?.[service.id] : undefined
   return structuredClone({ version: 1, country, postal,
-    service: { id: service.id, name: service.name, is_active: true, zones: [zone], allowed_zones: [zone.zone_code],
+    service: { id: service.id, name: service.name, code: service.code, webservice_service_code: service.webservice_service_code,
+      is_active: true, zones: [zone], allowed_zones: [zone.zone_code],
       fuel_surcharge_pct: service.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5 },
     client: { default_linke_table_id: service.id, ...(overrides ? { custom_tier_overrides: { [service.id]: overrides } } : {}) },
   }) as WeightPricingBasis

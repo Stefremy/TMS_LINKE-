@@ -34,7 +34,6 @@ import {
   Zap,
   ShieldCheck,
   Package,
-  UserCheck,
   SlidersHorizontal,
   ArrowRight,
   Upload,
@@ -49,7 +48,6 @@ import { paymentDueDays } from "@/lib/billing/payment-terms"
 import { normalizeStoreSlug } from "@/lib/client-portal/paths"
 import type { ServicoLinke, PriceTierLinke } from "@/app/ops/configuracao/servicos/types"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
-import { getServiceDisplayLabel } from "@/lib/services/ctt/service-identity"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { 
   Cliente, 
@@ -261,7 +259,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   }
 
   const handleResetPricing = () => {
-    if (confirm("Repor taxas adicionais, combustível, desconto geral e escalões personalizados para os valores padrão? A tabela base, os serviços autorizados e os preços definidos por serviço serão mantidos.")) {
+    if (confirm("Repor taxas adicionais, combustível, desconto geral e escalões personalizados para os valores padrão? Os serviços autorizados e os preços definidos por serviço serão mantidos.")) {
       setFormData((prev) => ({
         ...prev,
         pricing: {
@@ -346,12 +344,6 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     !(formData.assigned_linke_service_ids || []).includes(service.id))
   const visibleAssignedTablesCount = assignedServices.length
   const activeSpecialFeesCount = specialFeesList.filter((fee) => fee.is_enabled).length
-  const selectedBaseTable = servicosLinke.find((service) => service.id === formData.default_linke_table_id)
-  const selectedBaseTableLabel = selectedBaseTable
-    ? getServiceDisplayLabel(selectedBaseTable)
-    : formData.default_linke_table_id
-      ? "Tabela selecionada"
-      : "Não definida"
 
   const renderServiceAuthorization = (servico: ServicoLinke) => {
     const isAssigned = (formData.assigned_linke_service_ids || []).includes(servico.id)
@@ -1308,11 +1300,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
             <div className="space-y-4">
               
               {/* Resumo da configuração de preços */}
-              <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
-                <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3.5 py-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Tabela base</p>
-                  <p className="mt-1 truncate text-xs font-semibold text-[var(--text-primary)]" title={selectedBaseTableLabel}>{selectedBaseTableLabel}</p>
-                </div>
+              <div className="grid grid-cols-2 xl:grid-cols-3 gap-2.5">
                 <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3.5 py-3">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Serviços autorizados</p>
                   <p className="mt-1 text-xs font-semibold text-[var(--text-primary)]">{visibleAssignedTablesCount} de {servicosLinke.length}</p>
@@ -1374,7 +1362,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                   <button
                     type="button"
                     onClick={handleResetPricing}
-                    title="Repõe taxas adicionais, ajustes gerais e escalões personalizados. Mantém a tabela base e os serviços autorizados."
+                    title="Repõe taxas adicionais, ajustes gerais e escalões personalizados. Mantém os serviços autorizados."
                     className="px-2.5 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg flex items-center gap-1.5 font-medium transition-colors cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
@@ -1383,82 +1371,12 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                 </div>
               </div>
               <p className="-mt-2 px-1 text-[10px] text-[var(--text-tertiary)]">
-                A reposição afeta taxas adicionais, ajustes gerais e escalões personalizados. A tabela base, os serviços autorizados e os preços definidos por serviço são mantidos.
+                A reposição afeta taxas adicionais, ajustes gerais e escalões personalizados. Os serviços autorizados e os preços definidos por serviço são mantidos.
               </p>
 
-              {/* SUBTAB 1: TABELAS LINKE & SERVIÇOS AUTORIZADOS */}
+              {/* SUBTAB 1: SERVIÇOS AUTORIZADOS */}
               {precarioSubTab === "servicos_linke" && (
                 <div className="space-y-4">
-                  {/* Caixa Select de Tabela Linke Principal */}
-                  <div className="bg-[var(--surface-bg)] p-5 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)] space-y-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Package className="w-4 h-4 text-[var(--accent)]" />
-                          <h3 className="font-bold text-sm text-[var(--text-primary)]">
-                            Tabela de preços base
-                          </h3>
-                        </div>
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Define os preços de referência usados para calcular o custo dos serviços deste cliente.
-                        </p>
-                      </div>
-
-                      {/* Select Box */}
-                      <div className="min-w-[280px]">
-                        <select
-                          value={formData.default_linke_table_id || ""}
-                          onChange={(e) => {
-                            const tableId = e.target.value
-                            const table = servicosLinke.find((s) => s.id === tableId)
-                            setFormData((prev) => ({
-                              ...prev,
-                              default_linke_table_id: tableId,
-                              assigned_linke_service_ids: tableId && !(prev.assigned_linke_service_ids || []).includes(tableId)
-                                ? [...(prev.assigned_linke_service_ids || []), tableId]
-                                : prev.assigned_linke_service_ids || [],
-                              assigned_linke_profile: table?.pricing_profile || "Standard / Geral",
-                              volume_discount_pct: table?.discount_vs_standard_pct || 0,
-                            }))
-                          }}
-                          className="w-full px-3.5 py-2 bg-[var(--surface-muted)] border border-[var(--border-strong)] rounded-lg text-xs font-bold text-[var(--text-primary)] focus:bg-[var(--surface-bg)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-all cursor-pointer"
-                        >
-                          <option value="">-- Selecione a tabela base --</option>
-                          {servicosLinke.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {getServiceDisplayLabel(s)} ({s.pricing_profile}) - {s.preferred_carrier_name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Volume Discount Field */}
-                    <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-2">
-                        <UserCheck className="w-4 h-4 text-[var(--accent)]" />
-                        <span className="text-[var(--text-secondary)]">
-                          Perfil Selecionado: <strong className="text-[var(--text-primary)]">{formData.assigned_linke_profile || "Standard / Geral"}</strong>
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-[var(--text-secondary)] font-medium">Desconto de Volume Adicional:</span>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min="0"
-                            max="50"
-                            value={formData.volume_discount_pct ?? 0}
-                            onChange={(e) => setFormData({ ...formData, volume_discount_pct: parseFloat(e.target.value) || 0 })}
-                            className="w-16 px-2 py-1 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded text-center text-xs font-mono font-bold text-[var(--accent)] focus:bg-[var(--surface-bg)] focus:outline-none"
-                          />
-                          <span className="font-bold text-[var(--text-secondary)]">%</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Grid de Serviços Linke Autorizados */}
                   <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)] overflow-hidden">
                     <div className="px-5 py-3 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-3">

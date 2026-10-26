@@ -124,6 +124,13 @@ export function isZoneAllowedByService(allowedZones: string[] | undefined, zoneC
   return false
 }
 
+/** Resolve the tariff zone using the selected carrier product, including CE road zones. */
+export function resolveServiceZoneCode(service: Partial<ServicoLinke> | null | undefined, country: string, postal?: string): string {
+  if (!country) return ""
+  const isCeTruck = service?.webservice_service_code === "ENCF008.02" || service?.code === "LK-CE-STD" || service?.id === "srv_linke_ce_std"
+  return isCeTruck ? resolveCeTruckZone(country) || "" : resolveZoneCode(country, postal)
+}
+
 /**
  * Finds the correct weight tier for a given weight in kg.
  * Tiers are sorted by weight_max ascending; first tier where weightKg <= weight_max wins.
@@ -138,7 +145,7 @@ function findTier(tiers: PriceTierLinke[], weightKg: number): PriceTierLinke | n
 /**
  * Finds the exact matching zone from a service's zones array by zone_code.
  */
-function findExactZone(zones: ZonePriceMatrix[], zoneCode: string): ZonePriceMatrix | null {
+export function findExactZone(zones: ZonePriceMatrix[], zoneCode: string): ZonePriceMatrix | null {
   if (!zones || zones.length === 0) return null
   const exact = zones.find((z) => z.zone_code === zoneCode)
   if (exact) return exact
@@ -219,9 +226,7 @@ export function calculateShipmentPrice(
   options: { requireConfiguredTariff?: boolean } = {}
 ): PriceResult {
   const clientTable = resolveClientTable(client, allServicos)
-  const isCeTruck = clientTable?.webservice_service_code === "ENCF008.02" || clientTable?.code === "LK-CE-STD" || clientTable?.id === "srv_linke_ce_std"
-  const ceZone = isCeTruck ? resolveCeTruckZone(recipientCountry) : null
-  const zoneCode = ceZone || resolveZoneCode(recipientCountry, recipientPostal)
+  const zoneCode = resolveServiceZoneCode(clientTable, recipientCountry, recipientPostal)
 
   if (options.requireConfiguredTariff) {
     if (!Number.isFinite(weightKg) || weightKg <= 0) throw new ShipmentPricingError("Peso inválido.")
@@ -267,8 +272,7 @@ export function calculateShipmentPrice(
   if ((!zone || !zone.tiers || zone.tiers.length === 0) && allServicos && allServicos.length > 0) {
     const alternativeTable = allServicos.find(
       (s) => {
-        const isAltCeTruck = s.webservice_service_code === "ENCF008.02" || s.code === "LK-CE-STD" || s.id === "srv_linke_ce_std"
-        const targetZone = isAltCeTruck ? (resolveCeTruckZone(recipientCountry) || zoneCode) : zoneCode
+        const targetZone = resolveServiceZoneCode(s, recipientCountry, recipientPostal)
         return (
           s.is_active !== false &&
           isZoneAllowedByService(s.allowed_zones, targetZone) &&
@@ -278,8 +282,7 @@ export function calculateShipmentPrice(
     )
     if (alternativeTable) {
       effectiveTable = alternativeTable
-      const isAltCeTruck = alternativeTable.webservice_service_code === "ENCF008.02" || alternativeTable.code === "LK-CE-STD" || alternativeTable.id === "srv_linke_ce_std"
-      const targetZone = isAltCeTruck ? (resolveCeTruckZone(recipientCountry) || zoneCode) : zoneCode
+      const targetZone = resolveServiceZoneCode(alternativeTable, recipientCountry, recipientPostal)
       zone = findExactZone(alternativeTable.zones, targetZone) ||
              (targetZone.startsWith("EU-") ? alternativeTable.zones.find((z) => z.zone_code.startsWith("EU-")) : null) || null
       isDifferentTable = true

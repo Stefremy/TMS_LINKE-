@@ -1,6 +1,7 @@
 import { CarrierProvider, ShipmentInput, ShipmentResult, PickupInput, PickupResult, TrackingResult, type Address } from './types'
 import { CTTShipmentService, CTTPickupService, CTTTrackingService, CTTConnectionCredentials, CTTAddressData, CTTShipmentData } from '../ctt'
 import { validateCttExportDetails } from '../ctt/export-details'
+import { getCttShipmentLabel } from '../ctt/shipment-label'
 
 export class CttProvider implements CarrierProvider {
   private creds!: CTTConnectionCredentials
@@ -125,12 +126,13 @@ export class CttProvider implements CarrierProvider {
       
       if (result.Status === 1) {
         const shipmentOutput = result.ShipmentData?.[0]
+        const label = getCttShipmentLabel(shipmentOutput)
         return {
           success: true,
           trackingNumber: shipmentOutput?.FirstObject,
           carrierShipmentId: result.DeliveryNoteId,
-          labelBase64: shipmentOutput?.LabelList?.[0]?.Label,
-          labelFormat: 'zpl', // CTT typically returns ZPL
+          labelBase64: label?.data,
+          labelFormat: label?.format,
           rawResponse: result
         }
       }

@@ -20,7 +20,8 @@ import { syncShipmentTracking, mapCorreosStatus } from "@/lib/services/tracking"
 import { syncAuthorizedShipmentBatch } from "@/lib/services/tracking/tracking-batch"
 import { loadShipmentParcelSummaries } from '@/lib/services/shipments/shipment-parcel-summaries'
 import { publicUrl } from "@/lib/config/public-origins"
-import type { CTTShipment2Close, CTTCompleteShipmentOutput } from "@/lib/services/ctt/ctt-types"
+import type { CTTShipment2Close, CTTCompleteShipmentOutput, CTTDocumentData } from "@/lib/services/ctt/ctt-types"
+import { getCttShipmentLabel } from "@/lib/services/ctt/shipment-label"
 
 export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
   return fetchShipments(options)
@@ -383,6 +384,7 @@ export async function emitClientGuiaAction(data: {
     // ─── STEP 1: Call carrier API — only write to DB if carrier accepts ──────────
     let realGuia = trackingNumber
     let labelBase64: string | null = null
+    let cttDocuments: CTTDocumentData[] = []
     let cttCloseData: (CTTShipment2Close & { shipmentId: string; connectionId?: string }) | undefined
 
     if (carrierCode === "correos") {
@@ -410,9 +412,9 @@ export async function emitClientGuiaAction(data: {
             nombre: data.recipientName,
             direccion: data.recipientAddress,
             poblacion: data.recipientCity || "Portugal",
-            cpNacional: "",
+            cpNacional: data.recipientCountry === "ES" ? cleanPostal(data.recipientPostal) : "",
             cpInternacional: cleanPostal(data.recipientPostal || "1000-001"),
-            paisISO: "PT",
+            paisISO: data.recipientCountry || "PT",
             contacto: data.recipientName,
             telefono: data.recipientPhone || "920000000",
             email: data.recipientEmail
@@ -514,6 +516,7 @@ export async function emitClientGuiaAction(data: {
 
         realGuia = cttResult.trackingNumber || trackingNumber
         const emitted = (cttResult.rawResponse as CTTCompleteShipmentOutput | undefined)?.ShipmentData?.[0]
+        cttDocuments = emitted?.DocumentsList || []
         if (emitted?.FirstObject && emitted.LastObject) {
           cttCloseData = {
             shipmentId,
@@ -523,7 +526,7 @@ export async function emitClientGuiaAction(data: {
             SubProductCode: data.subProductId || "EMSF056.01",
           }
         }
-        const rawZpl = cttResult.labelBase64 || ""
+        const rawZpl = cttResult.labelBase64 || getCttShipmentLabel(emitted)?.data || ""
         labelBase64 = rawZpl ? await convertZplToPdfBase64(rawZpl) : null
       } catch (e: any) {
         if (confirmedRejection || e.message?.includes("rejeitaram") || e.message?.includes("inválido") || e.message?.includes("suportado")) {
@@ -536,6 +539,7 @@ export async function emitClientGuiaAction(data: {
     await transitionWallet(supabase, reservation, submitted ? 'submitted' : 'reserved', 'consumed', {
       shipment: shipmentData, carrier_tracking_number: realGuia, carrier_code: carrierCode,
       label_base64: labelBase64, ctt_close_data: cttCloseData || null,
+      ctt_documents: cttDocuments,
     })
 
     let dbErrorMessage: string | null = null
@@ -591,6 +595,7 @@ export async function emitClientGuiaAction(data: {
           ...shipmentData,
           id: shipmentId,
           ctt_label_base64: labelBase64,
+          ctt_documents: cttDocuments,
           ctt_close_data: cttCloseData,
           carrier_tracking_number: realGuia,
           carrier_code: carrierCode
@@ -686,120 +691,14 @@ export async function emitClientGuiaAction(data: {
   }
 }
 
-/**
- * Re-solicita e regenera a etiqueta oficial CTT a partir dos Web Services CTT
- */
+/** Retrieve an existing official label without creating another carrier shipment. */
 export async function regenerateCttLabelAction(shipmentId: string) {
-  
   await requireEmployee()
-
-  const supabase = createAdminClient()
-  
-  // Encontrar o envio
-  const { data: dbShipments } = await supabase.from("shipments").select("*").or(`id.eq.${shipmentId},tracking_number.eq.${shipmentId}`).limit(1)
-  const shipment = dbShipments?.[0]
-
-  if (!shipment) {
-    throw new Error("Envio não encontrado para reemitir etiqueta.")
-  }
-
-  // zip3 = 3-digit extension (e.g. "001"), zip4 = 4-digit prefix (e.g. "4610")
-  // Correct format: "4610-001" = ${zip4}-${zip3}
-  const senderZip = shipment.sender_zip4
-    ? `${shipment.sender_zip4}-${shipment.sender_zip3 || "001"}`
-    : shipment.sender_zip3
-    ? `${shipment.sender_zip3}-001`
-    : "1000-001"
-  const recipientZip = shipment.recipient_zip4
-    ? `${shipment.recipient_zip4}-${shipment.recipient_zip3 || "001"}`
-    : shipment.recipient_zip3
-    ? `${shipment.recipient_zip3}-001`
-    : "1000-001"
-
-  const cttCreds2 = await resolveCttCredentials()
-  const cttProvider2 = new CttProvider()
-  await cttProvider2.initialize(cttCreds2)
-  const cttRes = await cttProvider2.createShipment({
-    reference: shipment.tracking_number || shipment.id.substring(0, 8).toUpperCase(),
-    sender: {
-      name: shipment.sender_name || "Remetente",
-      address: shipment.sender_address || "Sede Comercial",
-      city: shipment.sender_city || "Portugal",
-      zip: senderZip,
-      phone: shipment.sender_phone || "910000000",
-      email: shipment.sender_email,
-      country: "PT"
-    },
-    recipient: {
-      name: shipment.recipient_name || "Destinatário",
-      address: shipment.recipient_address || "Morada de Entrega",
-      city: shipment.recipient_city || "Portugal",
-      zip: recipientZip,
-      phone: shipment.recipient_phone || "920000000",
-      email: shipment.recipient_email,
-      country: "PT"
-    },
-    weightKg: Number(shipment.weight_kg) || 1,
-    volumes: Number(shipment.volumes_count) || 1,
-    subProduct: shipment.service_type || "EMSF056.01",
-    autoClose: false
-  })
-
-  if (cttRes.success && cttRes.labelBase64) {
-    const updatedGuia = cttRes.trackingNumber || shipment.tracking_number
-
-    try {
-      await supabase.from("shipments").update({
-        // Keep tracking_number as the internal LTK ref — only update the carrier (CTT EQ) number
-        carrier_tracking_number: updatedGuia,
-        updated_at: new Date().toISOString(),
-      }).eq("id", shipment.id)
-    } catch {}
-
-    try {
-      const { data: existingLogs } = await supabase
-        .from("audit_log")
-        .select("id, details")
-        .eq("action", "shipment_data")
-      
-      const targetLog = existingLogs?.find((l: any) => l.details?.id === shipment.id)
-      if (targetLog) {
-        await supabase.from("audit_log").update({
-          details: {
-            ...targetLog.details,
-            id: shipment.id,
-            tracking_number: updatedGuia,
-            ctt_object_id: updatedGuia,
-            carrier_tracking_number: updatedGuia,
-            ctt_label_base64: cttRes.labelBase64,
-            updated_at: new Date().toISOString(),
-          }
-        }).eq("id", targetLog.id)
-      }
-    } catch {}
-  }
-
-  try {
-    revalidatePath("/app", "layout")
-    revalidatePath("/app/[storeSlug]/envios", "page")
-    revalidatePath("/ops/envios")
-  } catch {}
-
-  // Extract the error message string from cttRes (which may have .error or .errors)
-  const errorStr: string = (() => {
-    const r = cttRes as any
-    if (typeof r.error === 'string') return r.error
-    if (Array.isArray(r.errors) && r.errors.length > 0) {
-      return r.errors.map((e: any) => `${e.ErrorCode ? `[${e.ErrorCode}] ` : ''}${e.Message || 'Erro desconhecido'}`).join('; ')
-    }
-    return 'Erro desconhecido na comunicação CTT'
-  })()
-
+  const labelBase64 = await fetchShipmentLabel(shipmentId)
   return {
-    success: cttRes.success,
-    error: errorStr,
-    labelBase64: cttRes.labelBase64,
-    trackingNumber: cttRes.trackingNumber || shipment.tracking_number
+    success: Boolean(labelBase64),
+    labelBase64: labelBase64 || undefined,
+    error: labelBase64 ? undefined : "A etiqueta oficial deste envio não está disponível. Obtenha-a no portal CTT ou contacte o apoio. Não volte a emitir o envio.",
   }
 }
 

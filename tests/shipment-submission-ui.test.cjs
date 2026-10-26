@@ -4,7 +4,9 @@ const { createLoader } = require('./helpers/load-typescript.cjs')
 
 const client = { id: 'store-a', short_name: 'Fixture A', legal_name: 'Fixture A',
   allowed_webservices: [], assigned_linke_service_ids: ['service-a'], pricing: {} }
-const service = { id: 'service-a', name: 'CTT Fixture', zones: [], is_active: true }
+const service = { id: 'service-a', name: 'CTT Fixture', allowed_zones: ['PT-CONT'], is_active: true,
+  zones: [{zone_code:'PT-CONT',tiers:[{weight_max:30,sell_price:8,cost_price:3,enabled:true}]}] }
+const destinations = createLoader({})('lib/services/service-destinations.ts')
 const flatten = node => Array.isArray(node) ? node.flatMap(flatten) :
   node && typeof node === 'object' ? [node, ...flatten(node.props?.children)] : []
 const textOf = node => Array.isArray(node) ? node.map(textOf).join('') :
@@ -62,6 +64,7 @@ function hooks() {
     },
     useRef(initial) { const i = cursor++; return slots[i] ||= { current: initial } },
     useMemo: callback => callback(),
+    useCallback: callback => callback,
     useEffect(callback, deps) {
       const i = cursor++
       if (!dependencies[i] || deps.some((value, n) => !Object.is(value, dependencies[i][n]))) {
@@ -75,7 +78,7 @@ function hooks() {
     dispose() { cleanup.forEach(callback => callback?.()) } }
 }
 function harness(t, portal, services = [service]) {
-  const h = hooks(), result = deferred(), calls = { create: 0, agenda: [], scroll: [], inputs: [] }
+  const h = hooks(), result = deferred(), calls = { create: 0, agenda: [], scroll: [], inputs: [], postalResets: 0 }
   const scopedClient = { ...client, assigned_linke_service_ids: services.map(s => s.id) }
   const previous = { window: global.window, document: global.document, FormData: global.FormData }
   global.window = { matchMedia: () => ({ matches: false }) }
@@ -96,6 +99,7 @@ function harness(t, portal, services = [service]) {
     '@/app/actions/destinatarios': { getDestinatariosAction: async id => { calls.agenda.push(id); return [] } },
     '@/app/actions/ctt': {}, '@/lib/label-utils': {},
     '@/lib/pricing/calculate-shipment-price': { resolveZoneCode: () => 'PT-CONT', isZoneAllowedByService: () => true },
+    '@/lib/services/service-destinations': destinations,
     '@/lib/pricing/calculate-shipment-quote': { getClientSpecialFees: () => [], calculateShipmentQuote: () => ({
       basePrice: 8, buyPrice: 3, fuelSurchargeAmount: 1, specialFeesAmount: 0, specialItems: [], totalPrice: 9, tierLabel: 'Fixture',
     }) },
@@ -106,7 +110,7 @@ function harness(t, portal, services = [service]) {
     '@/lib/services/ctt/service-identity': { getServiceDisplayLabel: () => 'CTT Fixture' },
     '@/lib/carrier-logos': { getCarrierLogo: () => null },
     '@/lib/services/geo/international-zones': { OFFICIAL_LINKE_ZONES: [] },
-    '@/lib/hooks/usePostalCodeLookup': { usePostalCodeLookup: () => ({ lookup: value => value, loading: false }) },
+    '@/lib/hooks/usePostalCodeLookup': { usePostalCodeLookup: () => ({ lookup: value => value, loading: false, reset(){calls.postalResets++} }) },
     './ClientScope': { useClientScope: () => ({ client: scopedClient, basePath: '/app/fixture-a', isSuspended: false }) },
   })
   const Component = portal ? load('app/app/components/ClientCreateGuia.tsx').ClientCreateGuia :
@@ -135,6 +139,39 @@ function harness(t, portal, services = [service]) {
 }
 for (const portal of [true, false]) {
   const name = portal ? 'client portal' : 'OPS'
+  test(name + ': service selection precedes the destination and switching services refreshes countries and clears incompatible postal data', async t => {
+    const international={...service,id:'service-intl',name:'International',allowed_zones:['EU 1','NA'],
+      zones:[{zone_code:'EU 1',tiers:[{weight_max:30,enabled:true}]},{zone_code:'NA',tiers:[{weight_max:30,enabled:true}]}]}
+    const h=harness(t,portal,[service,international])
+    let nodes=await h.ready()
+    const country=()=>nodes.find(n=>n.type==='select'&&n.props.name==='recipient_country')
+    const options=()=>flatten(country()).filter(n=>n.type==='option').map(n=>n.props.value).filter(Boolean)
+    const selectService=id=>portal
+      ? nodes.find(n=>n.type==='select'&&n.props['aria-label']==='Serviço de Transporte Linke').props.onChange({target:{value:id}})
+      : nodes.find(n=>n.type==='input'&&n.props.name==='service_type'&&n.props.value===id).props.onChange()
+    const serviceIndex=nodes.findIndex(n=>portal?n.props['aria-label']==='Serviço de Transporte Linke':n.props.name==='service_type')
+    assert.ok(serviceIndex<nodes.indexOf(country()))
+    assert.deepEqual(options(),['PT'])
+    selectService(international.id);h.render();nodes=h.render()
+    assert.equal(country().props.value,'')
+    assert.ok(options().includes('US'));assert.ok(options().includes('FR'))
+    assert.equal(options().includes('PT'),false);assert.equal(options().includes('ES'),false)
+    country().props.onChange({target:{value:'FR'}});nodes=h.render()
+    const postal=nodes.find(n=>portal?n.props.id==='field-recipient-postal':n.props.name==='recipient_zip')
+    postal.props.onChange({target:{value:'75001'}})
+    nodes=h.render();assert.equal(country().props.value,'FR')
+    selectService(service.id);h.render();nodes=h.render()
+    assert.deepEqual(options(),['PT']);assert.equal(country().props.value,'PT')
+    assert.equal(nodes.find(n=>portal?n.props.id==='field-recipient-postal':n.props.name==='recipient_zip').props.value,'')
+    assert.ok(h.calls.postalResets>0)
+  })
+  test(name + ': a service without configured destinations cannot be submitted',async t=>{
+    const h=harness(t,portal,[{...service,zones:[]}]);const nodes=await h.ready()
+    assert.equal(nodes.find(n=>n.type==='select'&&n.props.name==='recipient_country').props.disabled,true)
+    await nodes.find(n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}})
+    assert.equal(h.calls.create,0)
+    assert.match(h.render().map(textOf).join(' '),/Sem destinos configurados|países de destino com tarifas/)
+  })
   test(name + ': rapid double submit sends one request, shows loading, then scrolls to success and unlocks', async t => {
     const h = harness(t, portal), nodes = await h.ready()
     assert.deepEqual(h.calls.agenda, [], 'Opening the form must not load the full recipient history')
@@ -209,5 +246,24 @@ test('recipient agenda loads on demand and discards a late response from a diffe
   responses[0].resolve([{ id: 'a', name: 'Store A contact' }])
   await new Promise(resolve => setImmediate(resolve))
   assert.deepEqual(render('store-b', true).recipients.map(row => row.id), ['b'])
+  h.dispose()
+})
+
+test('changing service or country invalidates pending and in-flight postal lookups',async t=>{
+  const h=hooks(),response=deferred(),found=[]
+  t.mock.timers.enable({apis:['setTimeout']})
+  let requests=0
+  const load=createLoader({react:h.react,fetch:()=>{requests++;return response.promise}})
+  const {usePostalCodeLookup}=load('lib/hooks/usePostalCodeLookup.ts')
+  const render=country=>h.render(()=>usePostalCodeLookup({country,onFound:info=>found.push(info)}))
+  let lookup=render('PT')
+  lookup.lookup('4000-001');lookup.reset();t.mock.timers.tick(150)
+  assert.equal(requests,0)
+  lookup.lookup('4000-001');t.mock.timers.tick(150);assert.equal(requests,1)
+  lookup=render('FR');lookup.reset()
+  response.resolve({ok:true,json:async()=>({found:true,city:'Porto',country:'PT'})})
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.deepEqual(found,[])
+  lookup=render('FR');assert.equal(lookup.info,null);assert.equal(lookup.status,'idle');assert.equal(lookup.loading,false)
   h.dispose()
 })
