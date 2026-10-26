@@ -618,7 +618,7 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   },
 ]
 
-/** Read both storage paths before allowing an irreversible catalogue deletion or demotion. */
+/** Resolve the stored base-table marker and whether a catalogue entry exists. */
 async function readStoredServiceProtection(supabase: ReturnType<typeof createAdminClient>, id: string, tenantId: string) {
   if (isPrimordialServico({ id })) return { found: true, isProtected: true }
   const { data: native, error: nativeError } = await supabase.from("servicos_linke")
@@ -1004,8 +1004,7 @@ export async function toggleServicoLinkeStatusAction(id: string, is_active: bool
 }
 
 /**
- * Elimina um Serviço Linke
- * As tabelas base estão protegidas para todos os colaboradores, incluindo administradores.
+ * Elimina um Serviço Linke, incluindo tabelas base, para colaboradores autorizados.
  */
 export async function deleteServicoLinkeAction(id: string): Promise<{ success: boolean; error?: string }> {
   const ctx = await requireEmployee()
@@ -1014,16 +1013,23 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
   try {
     protection = await readStoredServiceProtection(supabase, id, ctx.tenant_id)
   } catch {
-    return { success: false, error: "Não foi possível verificar a proteção da tabela. A eliminação foi recusada." }
-  }
-  if (protection.isProtected) {
-    return {
-      success: false,
-      error: "Esta tabela base faz parte dos serviços essenciais da Linke e não pode ser eliminada.",
-    }
+    return { success: false, error: "Não foi possível verificar a tabela. Tente novamente." }
   }
   if (!protection.found) return { success: false, error: "Tabela não encontrada. A eliminação foi recusada." }
 
+  // Persist the tombstone first so default/fallback tables cannot reappear after a refresh.
+  try {
+    const { error } = await supabase.from("audit_log").insert({
+      tenant_id: ctx.tenant_id,
+      action: "deleted_servico_linke",
+      details: { id, deleted_at: new Date().toISOString() },
+    })
+    if (error) return { success: false, error: "Não foi possível eliminar esta tabela. Tente novamente." }
+  } catch {
+    return { success: false, error: "Não foi possível eliminar esta tabela. Tente novamente." }
+  }
+
+  // Best-effort cleanup: the tombstone also covers legacy schemas and referenced rows.
   try {
     await supabase.from("servicos_linke").delete().eq("id", id)
   } catch {}
@@ -1032,23 +1038,16 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
     const { data: logs } = await supabase
       .from("audit_log")
       .select("id, details")
+      .eq("tenant_id", ctx.tenant_id)
       .eq("action", "servicos_linke_data")
 
     if (logs) {
       for (const item of logs) {
         if (item.details?.id === id) {
-          await supabase.from("audit_log").delete().eq("id", item.id)
+          await supabase.from("audit_log").delete().eq("tenant_id", ctx.tenant_id).eq("id", item.id)
         }
       }
     }
-  } catch {}
-
-  try {
-    await supabase.from("audit_log").insert({
-      tenant_id: (await getTenantId()),
-      action: "deleted_servico_linke",
-      details: { id, deleted_at: new Date().toISOString() },
-    })
   } catch {}
 
   revalidatePath("/ops/configuracao/servicos")

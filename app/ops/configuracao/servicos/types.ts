@@ -58,7 +58,7 @@ export interface ServicoLinke {
   saturday_fee?: number
   return_guide_fee?: number
   
-  // Core/base table: deletion is blocked for every role, including administrators.
+  // Identifies a core/base table in the catalogue.
   is_primordial?: boolean
 
   created_at: string

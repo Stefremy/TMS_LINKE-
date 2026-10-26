@@ -12,7 +12,7 @@ const fixture = { id:'custom-a', code:'LK-CUSTOM-A', name:'Fixture table', is_ac
 function harness({ service=fixture, auditOnly=false, failure, role='admin' }={}) {
   const tables={ servicos_linke:auditOnly?[]:[service], audit_log:[{ id:'profile',tenant_id:T,
     action:'servicos_linke_data',details:service }] }
-  const db=fakeSupabase(tables,failure)
+  const db=fakeSupabase(tables,failure,{persistInserts:true})
   const ctx={role,tenant_id:T,user:{email:'stefano@linke.pt'},colaborador_id:'col-stefano-001'}
   const employee=async()=>{if(!['admin','employee'].includes(role))throw Error('Unauthorized');return ctx}
   const load=createLoader({
@@ -28,18 +28,19 @@ test('all built-in core IDs and codes remain protected even with a forged false 
   for(const code of types.PRIMORDIAL_SERVICE_CODES) assert.equal(types.isPrimordialServico({id:'other',code:` ${code.toLowerCase()} `,is_primordial:false}),true)
   assert.equal(types.isPrimordialServico(fixture),false)
 })
-for(const role of ['admin','employee']) test(`${role}: core services cannot be deleted, including the former Stefano exception`,async()=>{
-  const h=harness({role})
+for(const role of ['admin','employee']) test(`${role}: base service tables can be deleted and stay out of the catalogue`,async()=>{
   for(const id of types.PRIMORDIAL_SERVICE_IDS){
+    const h=harness({role,service:{...fixture,id,is_primordial:true}})
     const result=await h.actions.deleteServicoLinkeAction(id)
-    assert.equal(result.success,false);assert.match(result.error,/não pode ser eliminada/)
+    assert.equal(result.success,true)
+    assert.equal((await h.actions.getServicosLinkeAction()).some(s=>s.id===id),false)
+    assert.equal(h.db.writes[0].value.action,'deleted_servico_linke')
   }
-  assert.equal(h.db.writes.length,0,'no deletion or tombstone may be written')
 })
-for(const auditOnly of [false,true]) test(`persisted core flags are checked in ${auditOnly?'audit fallback':'native storage'} before any deletion`,async()=>{
+for(const auditOnly of [false,true]) test(`base flags allow deletion in ${auditOnly?'audit fallback':'native storage'}`,async()=>{
   const h=harness({auditOnly,service:{...fixture,is_primordial:true}})
-  assert.equal((await h.actions.deleteServicoLinkeAction(fixture.id)).success,false)
-  assert.equal(h.db.writes.length,0)
+  assert.equal((await h.actions.deleteServicoLinkeAction(fixture.id)).success,true)
+  assert.equal((await h.actions.getServicosLinkeAction()).some(s=>s.id===fixture.id),false)
 })
 test('editing or renaming a protected service cannot clear its core flag or change its supplied prices',async()=>{
   const h=harness({auditOnly:true,service:{...fixture,is_primordial:true}})
@@ -49,10 +50,10 @@ test('editing or renaming a protected service cannot clear its core flag or chan
   assert.equal(saved.data.zones[0].tiers[0].cost_price,10)
   assert.equal(h.db.writes.find(w=>w.kind==='upsert').value.is_primordial,true)
 })
-test('a stored core code also protects an arbitrary ID, even if its old flag is false',async()=>{
+test('a stored base service code allows deletion with an arbitrary ID',async()=>{
   const h=harness({service:{...fixture,code:'LK-DD-STD',is_primordial:false}})
-  assert.equal((await h.actions.deleteServicoLinkeAction(fixture.id)).success,false)
-  assert.equal(h.db.writes.length,0)
+  assert.equal((await h.actions.deleteServicoLinkeAction(fixture.id)).success,true)
+  assert.equal((await h.actions.getServicosLinkeAction()).some(s=>s.id===fixture.id),false)
 })
 test('native schemas without the protection column still save prices and retain the marker in the audit snapshot',async()=>{
   const h=harness({failure:q=>q.table==='servicos_linke'&&q.write?.kind==='upsert'&&'is_primordial' in q.write.value
@@ -62,19 +63,44 @@ test('native schemas without the protection column still save prices and retain 
   assert.equal(h.db.writes.find(w=>w.kind==='upsert').value.zones[0].tiers[0].sell_price,12)
   assert.equal(h.db.writes.find(w=>w.kind==='insert'&&w.value.action==='servicos_linke_data').value.details.is_primordial,true)
 })
-test('protection lookup failures refuse deletion before mutation',async()=>{
+test('lookup failures refuse deletion before mutation',async()=>{
   for(const table of ['servicos_linke','audit_log']){
     const h=harness({failure:q=>q.table===table&&!q.write?{code:'08006',message:'Connection unavailable'}:null})
     assert.equal((await h.actions.deleteServicoLinkeAction(fixture.id)).success,false)
     assert.equal(h.db.writes.length,0)
   }
 })
-test('legacy missing native table or UUID mismatch still preserves audit-only core services',async()=>{
+test('legacy missing native table or UUID mismatch still permits audit-only base deletion',async()=>{
   for(const code of ['PGRST205','22P02']){
     const h=harness({auditOnly:true,service:{...fixture,is_primordial:true},failure:q=>q.table==='servicos_linke'?{code}:null})
+    assert.equal((await h.actions.deleteServicoLinkeAction(fixture.id)).success,true)
+    assert.equal((await h.actions.getServicosLinkeAction()).some(s=>s.id===fixture.id),false)
+  }
+})
+test('a default-only base table stays deleted across repeated catalogue reads',async()=>{
+  const h=harness({auditOnly:true})
+  const id='srv_linke_dd_std'
+  assert.ok((await h.actions.getServicosLinkeAction()).some(s=>s.id===id))
+  assert.equal((await h.actions.deleteServicoLinkeAction(id)).success,true)
+  for(let i=0;i<2;i++) assert.equal((await h.actions.getServicosLinkeAction()).some(s=>s.id===id),false)
+})
+test('failure to persist deletion leaves the original table intact',async()=>{
+  for(const throws of [false,true]){
+    const h=harness({failure:q=>{
+      if(q.table!=='audit_log'||q.write?.kind!=='insert')return null
+      if(throws)throw Error('Connection unavailable')
+      return {code:'08006',message:'Connection unavailable'}
+    }})
     assert.equal((await h.actions.deleteServicoLinkeAction(fixture.id)).success,false)
     assert.equal(h.db.writes.length,0)
+    assert.ok((await h.actions.getServicosLinkeAction()).some(s=>s.id===fixture.id))
   }
+})
+test('a tombstone keeps referenced native rows hidden when physical cleanup fails',async()=>{
+  const h=harness({failure:q=>q.write?.kind==='delete'?{code:'23503',message:'Referenced row'}:null})
+  assert.equal((await h.actions.deleteServicoLinkeAction(fixture.id)).success,true)
+  assert.equal(h.tables.servicos_linke.length,1)
+  assert.equal((await h.actions.getServicosLinkeAction()).some(s=>s.id===fixture.id),false)
 })
 test('a new variant is not made core merely because its source table is core',async()=>{
   const h=harness({service:{...fixture,is_primordial:true}})
@@ -91,13 +117,17 @@ test('custom tables remain deletable; missing services and client sessions canno
   assert.equal(missing.db.writes.length,0)
   const client=harness({role:'client'});await assert.rejects(client.actions.deleteServicoLinkeAction(fixture.id),/Unauthorized/)
   assert.equal(client.db.writes.length,0)
+  await assert.rejects(client.actions.deleteServicoLinkeAction('srv_linke_dd_std'),/Unauthorized/)
+  assert.equal(client.db.writes.length,0)
 })
-test('the catalogue renders a protected label and no delete control for a core ID even with a stale false flag',()=>{
+test('the catalogue renders delete controls for both base and custom tables',()=>{
   const React=require('react'),{renderToStaticMarkup}=require('react-dom/server')
   const load=createLoader({react:React,'react/jsx-runtime':require('react/jsx-runtime'),'lucide-react':require('lucide-react')})
   const {TabelasLinkeTab}=load('app/ops/configuracao/servicos/components/TabelasLinkeTab.tsx')
   const render=service=>renderToStaticMarkup(React.createElement(TabelasLinkeTab,{mode:'linke_services',servicos:[service]}))
-  const protectedTable=render({...fixture,id:'srv_linke_dd_std',is_primordial:false})
-  assert.match(protectedTable,/Protegida/);assert.doesNotMatch(protectedTable,/title="Eliminar Tabela"/)
-  assert.match(render(fixture),/title="Eliminar Tabela"/)
+  for(const service of [fixture,{...fixture,id:'srv_linke_dd_std',is_primordial:false},{...fixture,is_primordial:true}]){
+    const markup=render(service)
+    assert.match(markup,/title="Eliminar Tabela"/)
+    assert.doesNotMatch(markup,/Protegida/)
+  }
 })

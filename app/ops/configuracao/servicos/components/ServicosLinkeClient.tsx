@@ -98,13 +98,17 @@ export function ServicosLinkeClient({
   }
 
   const handleDeleteServico = async (id: string) => {
-    const res = await deleteServicoLinkeAction(id)
-    if (res && res.success === false) {
-      showNotification(res.error || "Não foi possível eliminar esta tabela. As tabelas base estão protegidas.")
-      return
+    try {
+      const res = await deleteServicoLinkeAction(id)
+      if (!res.success) {
+        showNotification(res.error || "Não foi possível eliminar esta tabela. Tente novamente.")
+        return
+      }
+      setServicos((prev) => prev.filter((s) => s.id !== id))
+      showNotification("Tabela eliminada com sucesso.")
+    } catch {
+      showNotification("Não foi possível eliminar esta tabela. Tente novamente.")
     }
-    setServicos((prev) => prev.filter((s) => s.id !== id))
-    showNotification("Tabela eliminada com sucesso.")
   }
 
   const handleQuickMarkupChange = async (servicoId: string, markup: number) => {

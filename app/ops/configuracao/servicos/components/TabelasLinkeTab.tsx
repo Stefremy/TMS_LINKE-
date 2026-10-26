@@ -303,24 +303,19 @@ export function TabelasLinkeTab({
                       {currentServico.is_active ? "Desativar" : "Ativar"}
                     </button>
 
-                    {isPrimordialServico(currentServico) ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-500" title="Tabela essencial da Linke. A eliminação está bloqueada para todos os utilizadores.">
-                        <Lock className="h-3.5 w-3.5" />
-                        Protegida
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          if (confirm(`Eliminar a tabela '${currentServico.name}'?`)) {
-                            onDeleteServico(currentServico.id)
-                          }
-                        }}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                        title="Eliminar Tabela"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Eliminar a tabela '${currentServico.name}'?`)) {
+                          onDeleteServico(currentServico.id)
+                        }
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="Eliminar Tabela"
+                      aria-label={`Eliminar tabela ${currentServico.name}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
