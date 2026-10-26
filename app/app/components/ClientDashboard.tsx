@@ -30,6 +30,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { syncCttTrackingAction, closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
+import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 import { 
   getClientPortalStatsAction, 
   getShipmentLabelAction,
@@ -241,25 +242,7 @@ export function ClientDashboard() {
   }
 
   const fetchLabelForShipment = async (item: any, fallbackRef?: string): Promise<string | null> => {
-    let rawLabel = item?.ctt_label_base64 || item?.carrier_label_base64 || item?.labelBase64
-    if (!rawLabel) {
-      const candidates = [
-        item?.rawId,
-        item?.id,
-        item?.carrier_tracking_number,
-        item?.ctt_object_id,
-        item?.tracking_number,
-        fallbackRef,
-        item?.reference
-      ].filter(Boolean) as string[]
-
-      for (const idToSearch of Array.from(new Set(candidates))) {
-        try {
-          rawLabel = await getShipmentLabelAction(idToSearch)
-          if (rawLabel) break
-        } catch {}
-      }
-    }
+    const rawLabel = await fetchOfficialShipmentLabel(item, getShipmentLabelAction, [fallbackRef])
     return resolveLabel(rawLabel)
   }
 
@@ -268,7 +251,7 @@ export function ClientDashboard() {
     if (label) {
       printCttLabel(label)
     } else {
-      alert("Não foi possível carregar a etiqueta para este envio.")
+      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
     }
   }
 
@@ -276,9 +259,9 @@ export function ClientDashboard() {
     const label = await fetchLabelForShipment(shipmentItem, ref)
     if (label) {
       const carrier = (shipmentItem?.transportadora || shipmentItem?.servico || "").toLowerCase().includes("correos") ? "Correos" : "CTT"
-      downloadCttLabel(label, `${ref || "envio"}_Etiqueta_${carrier}.pdf`)
+      await downloadCttLabel(label, `${ref || "envio"}_Etiqueta_${carrier}.pdf`)
     } else {
-      alert("Não foi possível carregar a etiqueta para este envio.")
+      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
     }
   }
 

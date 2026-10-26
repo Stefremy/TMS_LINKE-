@@ -82,7 +82,6 @@ function harness({ ctx = ctxA, fallback = false, eventsOnA = false, failure } = 
     '@/lib/services/shipments/shipment-utils': utils,
     './shipment-utils': utils,
     '../shipments/shipment-utils': utils,
-    './transport-label-generator': { generateTransportLabelPdfBase64: async () => 'FICTIONAL-LABEL' },
     '@/lib/services/shipments/shipment-creator': {},
     '@/lib/services/shipments/shipment-deleter': {},
     '@/lib/services/tracking': { mapCorreosStatus },

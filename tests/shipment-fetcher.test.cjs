@@ -25,7 +25,6 @@ function harness({ctx={role:'employee',tenant_id:TENANT,client_id:null},rows=[ro
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
     '@/lib/auth/context':{requireUser:async()=>{if(!ctx)throw Error('LOGIN_REQUIRED');return ctx}},
     '@/lib/services/correos/correos-label-customizer':{},'@/lib/label-utils':{},
-    './transport-label-generator':{},
   })
   return{db,api:load('lib/services/shipments/shipment-fetcher.ts')}
 }

@@ -44,23 +44,22 @@ function retrieval({snapshot={},native={},otherOwner=false}={}){
  const client=otherOwner?'other-store':owner
  const db=fakeSupabase({shipments:[{id,tenant_id:tenant,client_id:client,carrier_tracking_number:'CE000000001PT',carrier_code:'ctt',...native}],
   audit_log:[{tenant_id:tenant,action:'shipment_data',created_at:'2026-10-26',details:{id,client_id:client,carrier_tracking_number:'CE000000001PT',carrier_code:'ctt',...snapshot}}]})
- let substitute=0
  const api=createLoader({'@/lib/supabase/server':{createAdminClient:()=>db.client},'@/lib/auth/context':{requireUser:async()=>({role:'client',tenant_id:tenant,client_id:owner})},
-  '@/lib/services/correos/correos-label-customizer':{},'@/lib/label-utils':{},'./transport-label-generator':{generateTransportLabelPdfBase64(){substitute++;return'NOT-OFFICIAL'}}})('lib/services/shipments/shipment-fetcher.ts')
- return{db,api,get substitute(){return substitute}}
+  '@/lib/services/correos/correos-label-customizer':{},'@/lib/label-utils':{}})('lib/services/shipments/shipment-fetcher.ts')
+ return{db,api}
 }
 test('stored carrier PDFs can be retrieved from the audit documents with the same tracking number',async()=>{
  const h=retrieval({snapshot:{ctt_documents:[{FileName:'guia.pdf',File:pdf}]}})
  assert.equal(await h.api.fetchShipmentLabel(id),pdf)
- assert.equal(h.db.writes.length,0);assert.equal(h.substitute,0)
+ assert.equal(h.db.writes.length,0)
  assert.ok(h.db.queries.every(q=>q.filters.some(f=>f.field==='tenant_id'&&f.value===tenant)))
 })
 test('missing official labels return unavailable and never generate substitute carrier labels',async()=>{
  const h=retrieval()
- assert.equal(await h.api.fetchShipmentLabel(id),null);assert.equal(h.substitute,0);assert.equal(h.db.writes.length,0)
+ assert.equal(await h.api.fetchShipmentLabel(id),null);assert.equal(h.db.writes.length,0)
 })
 test('another store cannot retrieve the stored PDF or document snapshot',async()=>{
  const h=retrieval({otherOwner:true,snapshot:{ctt_label_base64:pdf,ctt_documents:[{FileName:'guia.pdf',File:pdf}]}})
  assert.equal(await h.api.fetchShipmentLabel(id),null)
- assert.equal(h.substitute,0);assert.equal(h.db.writes.length,0)
+ assert.equal(h.db.writes.length,0)
 })

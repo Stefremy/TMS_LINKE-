@@ -302,7 +302,6 @@ test('shipment lists force client ownership and constrain staff store queries to
       './shipment-utils': { formatOrGenerateCttObjectId: () => '' },
       '@/lib/services/correos/correos-label-customizer': {},
       '@/lib/label-utils': {},
-      './transport-label-generator': {},
     })('lib/services/shipments/shipment-fetcher.ts')
     const result = await fetcher.fetchShipments({ clientId: ctx.role === 'client' ? B : A })
     assert.deepEqual(result.map(row => row.id), ['own'])

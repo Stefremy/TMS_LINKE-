@@ -10,6 +10,7 @@ import { getClientPortalStatsAction, getShipmentLabelAction, createReturnShipmen
 import { closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
+import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { useClientScope } from "./ClientScope"
@@ -41,25 +42,7 @@ export function ClientShipmentsHistory() {
   }
 
   const fetchLabelForShipment = async (item: any, fallbackRef?: string): Promise<string | null> => {
-    let rawLabel = item?.ctt_label_base64 || item?.carrier_label_base64 || item?.labelBase64
-    if (!rawLabel) {
-      const candidates = [
-        item?.rawId,
-        item?.id,
-        item?.carrier_tracking_number,
-        item?.ctt_object_id,
-        item?.tracking_number,
-        fallbackRef,
-        item?.reference
-      ].filter(Boolean) as string[]
-
-      for (const idToSearch of Array.from(new Set(candidates))) {
-        try {
-          rawLabel = await getShipmentLabelAction(idToSearch)
-          if (rawLabel) break
-        } catch {}
-      }
-    }
+    const rawLabel = await fetchOfficialShipmentLabel(item, getShipmentLabelAction, [fallbackRef])
     return resolveLabel(rawLabel)
   }
 
@@ -68,7 +51,7 @@ export function ClientShipmentsHistory() {
     if (label) {
       printCttLabel(label)
     } else {
-      alert("Não foi possível carregar a etiqueta para este envio.")
+      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
     }
   }
 
@@ -76,9 +59,9 @@ export function ClientShipmentsHistory() {
     const label = await fetchLabelForShipment(envioItem, ref)
     if (label) {
       const carrier = (envioItem?.transportadora || envioItem?.servico || "").toLowerCase().includes("correos") ? "Correos" : "CTT"
-      downloadCttLabel(label, `${ref || "envio"}_Etiqueta_${carrier}.pdf`)
+      await downloadCttLabel(label, `${ref || "envio"}_Etiqueta_${carrier}.pdf`)
     } else {
-      alert("Não foi possível carregar a etiqueta para este envio.")
+      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
     }
   }
 

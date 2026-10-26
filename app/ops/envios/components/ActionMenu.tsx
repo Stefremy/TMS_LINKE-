@@ -20,11 +20,11 @@ import {
   dispatchShipmentAction, 
   deleteShipmentAction, 
   createReturnShipmentAction,
-  regenerateCttLabelAction,
   getShipmentLabelAction
 } from "@/app/actions/shipments"
 import { convertZplToPdfAction, syncCttTrackingAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
+import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 
 interface ActionMenuProps {
   shipment?: any
@@ -86,34 +86,10 @@ export function ActionMenu({
   }
 
   const getOrFetchLabel = async (): Promise<string | null> => {
-    let rawLabel = shipment?.ctt_label_base64 || shipment?.carrier_label_base64 || shipment?.labelBase64
-    
-    if (!rawLabel) {
-      const candidates = [
-        shipment?.rawId,
-        shipment?.id,
-        effectiveId,
-        shipment?.carrier_tracking_number,
-        shipment?.ctt_object_id,
-        shipment?.tracking_number,
-        effectiveRef,
-        shipment?.reference
-      ].filter(Boolean) as string[]
-
-      const uniqueCandidates = Array.from(new Set(candidates))
-
-      for (const idToSearch of uniqueCandidates) {
-        try {
-          rawLabel = await getShipmentLabelAction(idToSearch)
-          if (rawLabel) break
-        } catch (e) {
-          console.warn(`Falha ao procurar etiqueta para ${idToSearch}:`, e)
-        }
-      }
-    }
+    const rawLabel = await fetchOfficialShipmentLabel(shipment, getShipmentLabelAction, [effectiveId, effectiveRef])
 
     if (!rawLabel) {
-      alert("Não foi possível carregar a etiqueta para este envio.")
+      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
       return null
     }
 
@@ -140,7 +116,7 @@ export function ActionMenu({
         const carrierCode = (shipment?.service_type || shipment?.carrier_name || "").toLowerCase().includes("correos")
           ? "Correos"
           : "CTT"
-        downloadCttLabel(label, `${effectiveRef}_Etiqueta_${carrierCode}.pdf`)
+        await downloadCttLabel(label, `${effectiveRef}_Etiqueta_${carrierCode}.pdf`)
       }
     } finally {
       setIsProcessing(false)

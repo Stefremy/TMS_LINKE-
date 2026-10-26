@@ -26,9 +26,10 @@ import {
 import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
-import { getShipmentTrackingTimelineAction, regenerateCttLabelAction, getShipmentLabelAction } from "@/app/actions/shipments"
+import { getShipmentTrackingTimelineAction, getShipmentLabelAction } from "@/app/actions/shipments"
 import { syncCttTrackingAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
+import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 import { Button } from "@/components/ui/button"
 import { CarrierMeasurementsPanel } from '@/components/shipments/CarrierMeasurementsPanel'
 
@@ -175,28 +176,13 @@ export function ShipmentLateralDrawer({
   const handleDownloadLabel = async () => {
     setIsPrinting(true)
     try {
-      let labelToDownload = shipment.ctt_label_base64
-      
-      if (!labelToDownload) {
-        const candidates = [
-          shipment.rawId,
-          shipment.id,
-          carrierCode !== "N/A" ? carrierCode : null,
-          shipment.tracking_number,
-          shipment.carrier_tracking_number,
-          internalRef
-        ].filter(Boolean) as string[]
-
-        for (const c of Array.from(new Set(candidates))) {
-          try {
-            labelToDownload = await getShipmentLabelAction(c)
-            if (labelToDownload) break
-          } catch {}
-        }
-      }
+      let labelToDownload = await fetchOfficialShipmentLabel(shipment, getShipmentLabelAction, [
+        carrierCode !== "N/A" ? carrierCode : null,
+        internalRef,
+      ])
 
       if (!labelToDownload) {
-        alert("Não foi possível carregar a etiqueta para este envio.")
+        alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
         return
       }
 
@@ -210,7 +196,7 @@ export function ShipmentLateralDrawer({
         }
       }
 
-      downloadCttLabel(labelToDownload, `etiqueta_${carrierCode}.pdf`)
+      await downloadCttLabel(labelToDownload, `etiqueta_${carrierCode}.pdf`)
     } catch (err: any) {
       alert("Erro ao descarregar etiqueta: " + err.message)
     } finally {
