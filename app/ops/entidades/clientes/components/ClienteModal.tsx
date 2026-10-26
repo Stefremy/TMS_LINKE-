@@ -340,8 +340,11 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   }
 
   const specialFeesList = formData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES
-  const visibleAssignedTablesCount = servicosLinke.filter(service =>
-    (formData.assigned_linke_service_ids || []).includes(service.id)).length
+  const assignedServices = servicosLinke.filter(service =>
+    (formData.assigned_linke_service_ids || []).includes(service.id))
+  const unassignedServices = servicosLinke.filter(service =>
+    !(formData.assigned_linke_service_ids || []).includes(service.id))
+  const visibleAssignedTablesCount = assignedServices.length
   const activeSpecialFeesCount = specialFeesList.filter((fee) => fee.is_enabled).length
   const selectedBaseTable = servicosLinke.find((service) => service.id === formData.default_linke_table_id)
   const selectedBaseTableLabel = selectedBaseTable
@@ -349,6 +352,267 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     : formData.default_linke_table_id
       ? "Tabela selecionada"
       : "Não definida"
+
+  const renderServiceAuthorization = (servico: ServicoLinke) => {
+    const isAssigned = (formData.assigned_linke_service_ids || []).includes(servico.id)
+    const carrierLogo = getCarrierLogo(servico.preferred_carrier_name)
+    const firstZone = servico.zones?.[0]
+    const tiers: PriceTierLinke[] = firstZone?.tiers || []
+    const tier1 = tiers[0]
+    const tier5 = tiers.find((t) => t.weight_max === 5) || tiers[1]
+    const isExpanded = expandedPriceServico === servico.id
+    const overrides = formData.custom_tier_overrides?.[servico.id]
+    const hasCustomPrices = !!(overrides && overrides.some((val, idx) => val !== undefined && tiers[idx] && Math.abs(val - tiers[idx].sell_price) > 0.001))
+
+    return (
+      <div
+        key={servico.id}
+        className={`rounded-xl border transition-all ${
+          isExpanded ? "col-span-1 md:col-span-2 shadow-sm ring-1 ring-[var(--accent)]/30" : "col-span-1 shadow-xs"
+        } ${
+          isAssigned
+            ? hasCustomPrices
+              ? "bg-amber-50/20 border-amber-400"
+              : "bg-[var(--accent-soft)]/40 border-[var(--accent)] ring-1 ring-[var(--accent)]/20"
+            : "bg-[var(--surface-bg)] border-[var(--border-subtle)] opacity-60 hover:opacity-100"
+        }`}
+      >
+        <div
+          onClick={() => {
+            const current = formData.assigned_linke_service_ids || []
+            const next = isAssigned
+              ? current.filter((id) => id !== servico.id)
+              : [...current, servico.id]
+            setFormData({ ...formData, assigned_linke_service_ids: next,
+              default_linke_table_id: isAssigned && formData.default_linke_table_id === servico.id
+                ? "" : formData.default_linke_table_id })
+          }}
+          className="p-3.5 flex items-start justify-between gap-3 cursor-pointer select-none"
+        >
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={isAssigned}
+              aria-label={`Autorizar ${servico.name}`}
+              onChange={() => {}} // Handled by div onClick
+              className="mt-1 w-4 h-4 rounded border-[var(--border-strong)] accent-[var(--accent)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
+            />
+
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {carrierLogo ? (
+                  <div className="w-6 h-6 rounded bg-[var(--surface-bg)] border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={carrierLogo} alt={servico.preferred_carrier_name} className="max-w-full max-h-full object-contain" />
+                  </div>
+                ) : null}
+                <span className="font-bold text-xs text-[var(--text-primary)]">{servico.name}</span>
+                <CttServiceBadge service={servico} />
+                {servico.is_active === false && <span className="text-[10px] font-medium text-[var(--text-secondary)]">Inativo no catálogo</span>}
+                {hasCustomPrices && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                    <Edit3 className="w-2.5 h-2.5" />
+                    Preços Custom
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{servico.code}</span>
+                <span className="text-[10px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-1.5 py-0.2 rounded border border-[var(--accent)]/20">
+                  {servico.pricing_profile}
+                </span>
+                <span className="text-[10px] text-[var(--text-tertiary)]">Trânsito: {servico.transit_time_label}</span>
+              </div>
+
+              {tier1 && !isExpanded && (
+                <div className="mt-2 text-[11px] text-[var(--text-secondary)] flex items-center gap-2 font-mono flex-wrap">
+                  {(() => {
+                     const price1 = overrides?.[0] ?? tier1.sell_price
+                     const is1Custom = overrides?.[0] !== undefined && Math.abs(overrides[0] - tier1.sell_price) > 0.001
+                     const price5 = tier5 ? (overrides?.[tiers.indexOf(tier5)] ?? tier5.sell_price) : null
+                     return (
+                       <>
+                         <span>
+                           Até 1kg:{" "}
+                           <strong className={is1Custom ? "text-amber-800 font-bold" : "text-[var(--accent)] font-bold"}>
+                             {price1.toFixed(2)}€
+                           </strong>
+                           {is1Custom && (
+                             <span className="text-[9px] text-[var(--text-tertiary)] line-through ml-1">
+                               {tier1.sell_price.toFixed(2)}€
+                             </span>
+                           )}
+                         </span>
+                         {tier5 && price5 !== null && (
+                           <span>
+                             • Até 5kg:{" "}
+                             <strong className="text-[var(--accent)] font-bold">
+                               {price5.toFixed(2)}€
+                             </strong>
+                           </span>
+                         )}
+                       </>
+                     )
+                   })()}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+            {isAssigned && tiers.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setExpandedPriceServico(isExpanded ? null : servico.id)
+                }}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isExpanded
+                    ? "bg-[var(--text-primary)] text-white border-[var(--text-primary)]"
+                    : hasCustomPrices
+                    ? "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200"
+                    : "bg-[var(--surface-bg)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+                }`}
+                title="Editar ou personalizar preços dos escalões deste serviço para este cliente"
+              >
+                <Edit3 className="w-3 h-3" />
+                <span>{isExpanded ? "Fechar Tabela" : hasCustomPrices ? "Ajustar Preços ✎" : "Ajustar Preços"}</span>
+                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+            )}
+
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              isAssigned ? "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/30" : "bg-[var(--surface-muted)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]"
+            }`}>
+              {isAssigned ? "Autorizado" : "Não autorizado"}
+            </span>
+          </div>
+        </div>
+
+        {/* Expanded Price Override Table */}
+        {isExpanded && isAssigned && (
+          <div
+            className="p-4 bg-[var(--surface-bg)] border-t border-[var(--border-subtle)] rounded-b-xl space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded bg-[var(--accent-soft)] text-[var(--accent)]">
+                  <Tag className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-[var(--text-primary)]">
+                    Personalização dos Escalões de Peso: {servico.name}
+                  </span>
+                  <p className="text-[11px] text-[var(--text-secondary)]">
+                    Preços para {firstZone?.zone_name || firstZone?.zone_code}, antes de combustível e extras. As outras zonas usam a tabela Linke.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {hasCustomPrices && (
+                  <button
+                    type="button"
+                    onClick={() => handleResetServiceTiers(servico.id)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Repor Padrão Linke
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] text-[var(--text-secondary)] font-semibold text-[11px]">
+                    <th className="py-2 px-3">Escalão</th>
+                    <th className="py-2 px-3 text-center">Peso Máx</th>
+                    <th className="py-2 px-3 text-right">Custo Parceiro</th>
+                    <th className="py-2 px-3 text-right">PVP Standard Linke</th>
+                    <th className="py-2 px-3 text-right bg-[var(--accent-soft)]/50 text-[var(--text-primary)] border-x border-[var(--border-subtle)]">
+                      PVP Cliente (€) <span className="text-[var(--accent)] font-normal">(Editável)</span>
+                    </th>
+                    <th className="py-2 px-3 text-right">Margem Bruta</th>
+                    <th className="py-2 px-3 text-center">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-subtle)]">
+                  {tiers.map((tier, tIdx) => {
+                    const currentVal = overrides?.[tIdx] !== undefined ? overrides[tIdx] : tier.sell_price
+                    const isOverridden = overrides?.[tIdx] !== undefined && Math.abs(overrides[tIdx] - tier.sell_price) > 0.001
+                    const marginEur = currentVal - tier.cost_price
+                    const marginPct = currentVal > 0 ? (marginEur / currentVal) * 100 : 0
+
+                    return (
+                      <tr key={tier.id || tIdx} className={`hover:bg-[var(--surface-muted)]/60 transition-colors ${isOverridden ? "bg-amber-50/40" : ""}`}>
+                        <td className="py-2 px-3 font-semibold text-[var(--text-primary)]">
+                          {tier.label || `Escalão ${tIdx + 1}`}
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono text-[var(--text-secondary)]">
+                          ≤ {tier.weight_max} kg
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono text-[var(--text-tertiary)]">
+                          {tier.cost_price.toFixed(2)}€
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono text-[var(--text-secondary)]">
+                          {tier.sell_price.toFixed(2)}€
+                        </td>
+                        <td className="py-1.5 px-3 text-right bg-[var(--accent-soft)]/30 border-x border-[var(--border-subtle)]">
+                          <div className="flex items-center justify-end gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={currentVal}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0
+                                handleTierPriceChange(servico.id, tIdx, val, tiers)
+                              }}
+                              className={`w-24 text-right font-mono font-bold text-xs px-2 py-1 rounded-md border shadow-2xs focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-all ${
+                                isOverridden
+                                  ? "border-amber-400 bg-amber-50/90 text-amber-950 ring-1 ring-amber-400/40"
+                                  : "border-[var(--border-subtle)] bg-[var(--surface-bg)] text-[var(--text-primary)] focus:border-[var(--border-strong)]"
+                              }`}
+                            />
+                            <span className="text-xs font-semibold text-[var(--text-secondary)]">€</span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono">
+                          <span className={marginEur >= 0 ? "text-[var(--accent)] font-semibold" : "text-rose-600 font-bold"}>
+                            {marginEur >= 0 ? "+" : ""}{marginEur.toFixed(2)}€
+                          </span>
+                          <span className="text-[10px] text-[var(--text-tertiary)] block">
+                            ({marginPct.toFixed(1)}%)
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {isOverridden ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                              <Edit3 className="w-2.5 h-2.5" />
+                              Custom
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                              Standard
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
@@ -1201,10 +1465,10 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                       <div>
                         <h4 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
                           <ShieldCheck className="w-4 h-4 text-[var(--accent)]" />
-                          Serviços que o cliente pode usar ({visibleAssignedTablesCount} de {servicosLinke.length})
+                          Serviços autorizados para este cliente ({visibleAssignedTablesCount})
                         </h4>
                         <p className="text-[11px] text-[var(--text-secondary)]">
-                          Marque os serviços e parceiros que este cliente tem permissão para usar ao criar envios.
+                          Os serviços abaixo estão autorizados. Abra «Adicionar serviços» para ativar outros.
                         </p>
                       </div>
 
@@ -1225,13 +1489,6 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                         )}
                         <button
                           type="button"
-                          onClick={() => setFormData({ ...formData, assigned_linke_service_ids: servicosLinke.map((s) => s.id) })}
-                          className="px-2.5 py-1 text-[11px] font-bold bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/30 rounded-md hover:bg-[var(--accent)] hover:text-white transition-colors cursor-pointer"
-                        >
-                          Selecionar Todos
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => setFormData({ ...formData, assigned_linke_service_ids: [], default_linke_table_id: "" })}
                           className="px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded-md transition-colors cursor-pointer"
                         >
@@ -1241,264 +1498,12 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     </div>
 
                     <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {servicosLinke.map((servico) => {
-                        const isAssigned = (formData.assigned_linke_service_ids || []).includes(servico.id)
-                        const carrierLogo = getCarrierLogo(servico.preferred_carrier_name)
-                        const firstZone = servico.zones?.[0]
-                        const tiers: PriceTierLinke[] = firstZone?.tiers || []
-                        const tier1 = tiers[0]
-                        const tier5 = tiers.find((t) => t.weight_max === 5) || tiers[1]
-                        const isExpanded = expandedPriceServico === servico.id
-                        const overrides = formData.custom_tier_overrides?.[servico.id]
-                        const hasCustomPrices = !!(overrides && overrides.some((val, idx) => val !== undefined && tiers[idx] && Math.abs(val - tiers[idx].sell_price) > 0.001))
-
-                        return (
-                          <div
-                            key={servico.id}
-                            className={`rounded-xl border transition-all ${
-                              isExpanded ? "col-span-1 md:col-span-2 shadow-sm ring-1 ring-[var(--accent)]/30" : "col-span-1 shadow-xs"
-                            } ${
-                              isAssigned
-                                ? hasCustomPrices
-                                  ? "bg-amber-50/20 border-amber-400"
-                                  : "bg-[var(--accent-soft)]/40 border-[var(--accent)] ring-1 ring-[var(--accent)]/20"
-                                : "bg-[var(--surface-bg)] border-[var(--border-subtle)] opacity-60 hover:opacity-100"
-                            }`}
-                          >
-                            <div
-                              onClick={() => {
-                                const current = formData.assigned_linke_service_ids || []
-                                const next = isAssigned
-                                  ? current.filter((id) => id !== servico.id)
-                                  : [...current, servico.id]
-                                setFormData({ ...formData, assigned_linke_service_ids: next,
-                                  default_linke_table_id: isAssigned && formData.default_linke_table_id === servico.id
-                                    ? "" : formData.default_linke_table_id })
-                              }}
-                              className="p-3.5 flex items-start justify-between gap-3 cursor-pointer select-none"
-                            >
-                              <div className="flex items-start gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={isAssigned}
-                                  onChange={() => {}} // Handled by div onClick
-                                  className="mt-1 w-4 h-4 rounded border-[var(--border-strong)] accent-[var(--accent)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
-                                />
-
-                                <div>
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    {carrierLogo ? (
-                                      <div className="w-6 h-6 rounded bg-[var(--surface-bg)] border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={carrierLogo} alt={servico.preferred_carrier_name} className="max-w-full max-h-full object-contain" />
-                                      </div>
-                                    ) : null}
-                                    <span className="font-bold text-xs text-[var(--text-primary)]">{servico.name}</span>
-                                    <CttServiceBadge service={servico} />
-                                    {hasCustomPrices && (
-                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
-                                        <Edit3 className="w-2.5 h-2.5" />
-                                        Preços Custom
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{servico.code}</span>
-                                    <span className="text-[10px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-1.5 py-0.2 rounded border border-[var(--accent)]/20">
-                                      {servico.pricing_profile}
-                                    </span>
-                                    <span className="text-[10px] text-[var(--text-tertiary)]">Trânsito: {servico.transit_time_label}</span>
-                                  </div>
-
-                                  {tier1 && !isExpanded && (
-                                    <div className="mt-2 text-[11px] text-[var(--text-secondary)] flex items-center gap-2 font-mono flex-wrap">
-                                      {(() => {
-                                         const price1 = overrides?.[0] ?? tier1.sell_price
-                                         const is1Custom = overrides?.[0] !== undefined && Math.abs(overrides[0] - tier1.sell_price) > 0.001
-                                         const price5 = tier5 ? (overrides?.[tiers.indexOf(tier5)] ?? tier5.sell_price) : null
-                                         return (
-                                           <>
-                                             <span>
-                                               Até 1kg:{" "}
-                                               <strong className={is1Custom ? "text-amber-800 font-bold" : "text-[var(--accent)] font-bold"}>
-                                                 {price1.toFixed(2)}€
-                                               </strong>
-                                               {is1Custom && (
-                                                 <span className="text-[9px] text-[var(--text-tertiary)] line-through ml-1">
-                                                   {tier1.sell_price.toFixed(2)}€
-                                                 </span>
-                                               )}
-                                             </span>
-                                             {tier5 && price5 !== null && (
-                                               <span>
-                                                 • Até 5kg:{" "}
-                                                 <strong className="text-[var(--accent)] font-bold">
-                                                   {price5.toFixed(2)}€
-                                                 </strong>
-                                               </span>
-                                             )}
-                                           </>
-                                         )
-                                       })()}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                {isAssigned && tiers.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setExpandedPriceServico(isExpanded ? null : servico.id)
-                                    }}
-                                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-md border transition-all flex items-center gap-1.5 cursor-pointer ${
-                                      isExpanded
-                                        ? "bg-[var(--text-primary)] text-white border-[var(--text-primary)]"
-                                        : hasCustomPrices
-                                        ? "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200"
-                                        : "bg-[var(--surface-bg)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
-                                    }`}
-                                    title="Editar ou personalizar preços dos escalões deste serviço para este cliente"
-                                  >
-                                    <Edit3 className="w-3 h-3" />
-                                    <span>{isExpanded ? "Fechar Tabela" : hasCustomPrices ? "Ajustar Preços ✎" : "Ajustar Preços"}</span>
-                                    {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                  </button>
-                                )}
-
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  isAssigned ? "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/30" : "bg-[var(--surface-muted)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]"
-                                }`}>
-                                  {isAssigned ? "Autorizado" : "Bloqueado"}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Expanded Price Override Table */}
-                            {isExpanded && isAssigned && (
-                              <div
-                                className="p-4 bg-[var(--surface-bg)] border-t border-[var(--border-subtle)] rounded-b-xl space-y-3"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[var(--border-subtle)]">
-                                  <div className="flex items-center gap-2">
-                                    <div className="p-1 rounded bg-[var(--accent-soft)] text-[var(--accent)]">
-                                      <Tag className="w-3.5 h-3.5" />
-                                    </div>
-                                    <div>
-                                      <span className="text-xs font-bold text-[var(--text-primary)]">
-                                        Personalização dos Escalões de Peso: {servico.name}
-                                      </span>
-                                      <p className="text-[11px] text-[var(--text-secondary)]">
-                                        Preços para {firstZone?.zone_name || firstZone?.zone_code}, antes de combustível e extras. As outras zonas usam a tabela Linke.
-                                      </p>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex items-center gap-2">
-                                    {hasCustomPrices && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleResetServiceTiers(servico.id)}
-                                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
-                                      >
-                                        <RotateCcw className="w-3 h-3" />
-                                        Repor Padrão Linke
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
-                                  <table className="w-full text-left text-xs border-collapse">
-                                    <thead>
-                                      <tr className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] text-[var(--text-secondary)] font-semibold text-[11px]">
-                                        <th className="py-2 px-3">Escalão</th>
-                                        <th className="py-2 px-3 text-center">Peso Máx</th>
-                                        <th className="py-2 px-3 text-right">Custo Parceiro</th>
-                                        <th className="py-2 px-3 text-right">PVP Standard Linke</th>
-                                        <th className="py-2 px-3 text-right bg-[var(--accent-soft)]/50 text-[var(--text-primary)] border-x border-[var(--border-subtle)]">
-                                          PVP Cliente (€) <span className="text-[var(--accent)] font-normal">(Editável)</span>
-                                        </th>
-                                        <th className="py-2 px-3 text-right">Margem Bruta</th>
-                                        <th className="py-2 px-3 text-center">Estado</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-[var(--border-subtle)]">
-                                      {tiers.map((tier, tIdx) => {
-                                        const currentVal = overrides?.[tIdx] !== undefined ? overrides[tIdx] : tier.sell_price
-                                        const isOverridden = overrides?.[tIdx] !== undefined && Math.abs(overrides[tIdx] - tier.sell_price) > 0.001
-                                        const marginEur = currentVal - tier.cost_price
-                                        const marginPct = currentVal > 0 ? (marginEur / currentVal) * 100 : 0
-
-                                        return (
-                                          <tr key={tier.id || tIdx} className={`hover:bg-[var(--surface-muted)]/60 transition-colors ${isOverridden ? "bg-amber-50/40" : ""}`}>
-                                            <td className="py-2 px-3 font-semibold text-[var(--text-primary)]">
-                                              {tier.label || `Escalão ${tIdx + 1}`}
-                                            </td>
-                                            <td className="py-2 px-3 text-center font-mono text-[var(--text-secondary)]">
-                                              ≤ {tier.weight_max} kg
-                                            </td>
-                                            <td className="py-2 px-3 text-right font-mono text-[var(--text-tertiary)]">
-                                              {tier.cost_price.toFixed(2)}€
-                                            </td>
-                                            <td className="py-2 px-3 text-right font-mono text-[var(--text-secondary)]">
-                                              {tier.sell_price.toFixed(2)}€
-                                            </td>
-                                            <td className="py-1.5 px-3 text-right bg-[var(--accent-soft)]/30 border-x border-[var(--border-subtle)]">
-                                              <div className="flex items-center justify-end gap-1">
-                                                <input
-                                                  type="number"
-                                                  step="0.01"
-                                                  min="0"
-                                                  value={currentVal}
-                                                  onChange={(e) => {
-                                                    const val = parseFloat(e.target.value) || 0
-                                                    handleTierPriceChange(servico.id, tIdx, val, tiers)
-                                                  }}
-                                                  className={`w-24 text-right font-mono font-bold text-xs px-2 py-1 rounded-md border shadow-2xs focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-all ${
-                                                    isOverridden
-                                                      ? "border-amber-400 bg-amber-50/90 text-amber-950 ring-1 ring-amber-400/40"
-                                                      : "border-[var(--border-subtle)] bg-[var(--surface-bg)] text-[var(--text-primary)] focus:border-[var(--border-strong)]"
-                                                  }`}
-                                                />
-                                                <span className="text-xs font-semibold text-[var(--text-secondary)]">€</span>
-                                              </div>
-                                            </td>
-                                            <td className="py-2 px-3 text-right font-mono">
-                                              <span className={marginEur >= 0 ? "text-[var(--accent)] font-semibold" : "text-rose-600 font-bold"}>
-                                                {marginEur >= 0 ? "+" : ""}{marginEur.toFixed(2)}€
-                                              </span>
-                                              <span className="text-[10px] text-[var(--text-tertiary)] block">
-                                                ({marginPct.toFixed(1)}%)
-                                              </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center">
-                                              {isOverridden ? (
-                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                                                  <Edit3 className="w-2.5 h-2.5" />
-                                                  Custom
-                                                </span>
-                                              ) : (
-                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
-                                                  Standard
-                                                </span>
-                                              )}
-                                            </td>
-                                          </tr>
-                                        )
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
+                      {assignedServices.map(renderServiceAuthorization)}
+                      {assignedServices.length === 0 && servicosLinke.length > 0 && (
+                        <p className="col-span-full rounded-lg border border-dashed border-[var(--border-subtle)] p-5 text-center text-xs text-[var(--text-secondary)]">
+                          Este cliente ainda não tem serviços autorizados. Abra «Adicionar serviços» para escolher.
+                        </p>
+                      )}
 
                       {servicosLinke.length === 0 && (
                         <div className="col-span-2 p-8 text-center text-[var(--text-tertiary)] text-xs">
@@ -1506,6 +1511,24 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                         </div>
                       )}
                     </div>
+                    {unassignedServices.length > 0 && (
+                      <details className="group border-t border-[var(--border-subtle)]">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] [&::-webkit-details-marker]:hidden">
+                          <span className="flex items-center gap-2"><Plus className="h-3.5 w-3.5" />Adicionar serviços <span className="font-normal text-[var(--text-tertiary)]">({unassignedServices.length} não autorizados)</span></span>
+                          <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+                        </summary>
+                        <div className="px-4 pb-4">
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)]">
+                            <p>Selecione um serviço para o autorizar. As alterações são aplicadas ao guardar a ficha.</p>
+                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, assigned_linke_service_ids: servicosLinke.map(s => s.id) }))}
+                              className="rounded-md border border-[var(--border-subtle)] px-2.5 py-1.5 font-semibold text-[var(--accent)] hover:bg-[var(--surface-muted)]">
+                              Autorizar todos
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{unassignedServices.map(renderServiceAuthorization)}</div>
+                        </div>
+                      </details>
+                    )}
                   </div>
                 </div>
               )}

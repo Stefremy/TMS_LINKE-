@@ -10,17 +10,18 @@ import {
   ShieldCheck, 
   Lock,
   Percent,
+  ChevronDown,
 } from "lucide-react"
 import { DestinationBadge } from "./DestinationIcons"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
 import { getCttServiceIdentity } from "@/lib/services/ctt/service-identity"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import type { ServicoLinke } from "../types"
+import { isPrimordialServico } from "../types"
 
 interface TabelasLinkeTabProps {
   mode?: "base" | "custom" | "linke_services"
   servicos: ServicoLinke[]
-  canDeletePrimordial?: boolean
   onEditServico: (servico: ServicoLinke) => void
   onDuplicateServico: (servico: ServicoLinke) => void
   onDeleteServico: (id: string) => void
@@ -31,7 +32,6 @@ interface TabelasLinkeTabProps {
 export function TabelasLinkeTab({
   mode = "base",
   servicos,
-  canDeletePrimordial = false,
   onEditServico,
   onDuplicateServico,
   onDeleteServico,
@@ -40,6 +40,7 @@ export function TabelasLinkeTab({
 }: TabelasLinkeTabProps) {
   const isLinkeServicesMode = mode === "linke_services" || mode === "custom"
   const [searchTerm, setSearchTerm] = React.useState("")
+  const [statusFilter, setStatusFilter] = React.useState<"active" | "inactive" | "all">("active")
   const [selectedCategory, setSelectedCategory] = React.useState<string>("Todas")
   const [selectedProfile, setSelectedProfile] = React.useState<string>("Todos os Perfis")
   const [sectionFilter, setSectionFilter] = React.useState<"all" | "og" | "custom">("all")
@@ -47,7 +48,7 @@ export function TabelasLinkeTab({
     servicos[0]?.id || ""
   )
 
-  const categories = ["Todas", "Nacional", "Ibérico", "Ilhas", "Internacional", "Especial / Recolhas", "Ponto / Locky", "Paletes / Carga"]
+  const categories = ["Todas", ...new Set(servicos.map(s => s.category))]
   const profiles = ["Todos os Perfis", "Standard / Geral", "VIP / Alto Volume", "E-Commerce PME", "Tabela Negociada Cliente"]
 
   const filteredServicos = servicos.filter((s) => {
@@ -64,234 +65,114 @@ export function TabelasLinkeTab({
     const matchesCategory = selectedCategory === "Todas" || s.category === selectedCategory
     const matchesProfile = selectedProfile === "Todos os Perfis" || s.pricing_profile === selectedProfile
 
-    return matchesSearch && matchesCategory && matchesProfile
+    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? s.is_active !== false : s.is_active === false)
+    return matchesSearch && matchesCategory && matchesProfile && matchesStatus
   })
 
-  const ogServicos = filteredServicos.filter((s) => Boolean(s.is_primordial))
-  const customServicos = filteredServicos.filter((s) => !s.is_primordial)
+  const ogServicos = filteredServicos.filter((s) => isPrimordialServico(s))
+  const customServicos = filteredServicos.filter((s) => !isPrimordialServico(s))
 
-  const currentServico = filteredServicos.find((s) => s.id === activeServicoId) || filteredServicos[0]
-  const [quickMarkupInput, setQuickMarkupInput] = React.useState<number>(currentServico?.global_markup_pct || 22)
+  const visibleServicos = filteredServicos.filter(s => sectionFilter === "all" || (sectionFilter === "og" ? isPrimordialServico(s) : !isPrimordialServico(s)))
+  const currentServico = visibleServicos.find((s) => s.id === activeServicoId) || visibleServicos[0]
+  const [quickMarkupInput, setQuickMarkupInput] = React.useState<number>(currentServico?.global_markup_pct ?? 22)
 
   React.useEffect(() => {
     if (currentServico) {
-      setQuickMarkupInput(currentServico.global_markup_pct || 22)
+      setQuickMarkupInput(currentServico.global_markup_pct ?? 22)
     }
   }, [currentServico?.id, currentServico?.global_markup_pct])
 
   const renderServiceCard = (servico: ServicoLinke) => {
     const isSelected = servico.id === currentServico?.id
-    const isOg = Boolean(servico.is_primordial)
+    const isOg = isPrimordialServico(servico)
 
     return (
-      <div
+      <button
+        type="button"
         key={servico.id}
         onClick={() => setActiveServicoId(servico.id)}
-        className={`p-3 rounded-lg border transition-all cursor-pointer text-xs ${
-          isSelected
-            ? "bg-[var(--surface-bg)] border-[#128A47] shadow-sm ring-1 ring-[#128A47]"
-            : "bg-white border-slate-200 hover:border-slate-300"
+        aria-pressed={isSelected}
+        className={`w-full rounded-lg border p-3 text-left text-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#128A47] ${
+          isSelected ? "border-[#128A47] bg-[var(--surface-bg)] ring-1 ring-[#128A47]" : "border-[var(--border-subtle)] bg-[var(--surface-bg)] hover:border-[var(--border-strong)]"
         }`}
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-start gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border-subtle)] bg-white p-1">
             {getCarrierLogo(servico.preferred_carrier_name) ? (
-              <div className="w-8 h-8 rounded-md flex items-center justify-center bg-white border border-slate-200 shadow-2xs shrink-0 p-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={getCarrierLogo(servico.preferred_carrier_name)!}
-                  alt={servico.preferred_carrier_name}
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            ) : (
-              <div
-                className="w-8 h-8 rounded-md flex items-center justify-center font-medium text-xs text-white shrink-0"
-                style={{ backgroundColor: servico.color || "#0f172a" }}
-              >
-                {servico.code.substring(0, 3)}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <h4 className="font-medium text-xs text-slate-900 truncate">
-                  {servico.name}
-                </h4>
-                {isOg && (
-                  <span title="Tabela Base Contratada" className="text-slate-400 shrink-0">
-                    <Lock className="w-2.5 h-2.5" />
-                  </span>
-                )}
-              </div>
-              <span className="text-[11px] text-slate-500 font-mono block truncate">
-                {servico.code}
-              </span>
-            </div>
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={getCarrierLogo(servico.preferred_carrier_name)!} alt={servico.preferred_carrier_name} className="max-h-full max-w-full object-contain" />
+            ) : <Package className="h-4 w-4 text-slate-500" />}
           </div>
-
-          <div className="flex items-center gap-1 shrink-0">
-            <span className={`w-1.5 h-1.5 rounded-full ${servico.is_active ? "bg-[#008A4B]" : "bg-slate-300"}`} />
-            <span className={`text-[10px] font-semibold ${servico.is_active ? "text-[#008A4B]" : "text-slate-500"}`}>
-              {servico.is_active ? "Ativo" : "Inativo"}
-            </span>
+          <div className="min-w-0 flex-1">
+            <span className="block font-semibold leading-5 text-[var(--text-primary)]">{servico.name}</span>
+            <span className="mt-0.5 block text-[11px] text-[var(--text-secondary)]">{servico.category} · {servico.preferred_carrier_name || "Transportador por definir"}</span>
           </div>
+          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${servico.is_active !== false ? "bg-[#128A47]" : "bg-slate-400"}`} title={servico.is_active !== false ? "Ativo" : "Inativo"} />
         </div>
-
-        {/* Tags */}
-        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-          <CttServiceBadge service={servico} />
-          {isOg ? (
-            <span className="text-[10px] font-semibold text-white bg-[#128A47] px-1.5 py-0.5 rounded">
-              Base Oficial
-            </span>
-          ) : (
-            <span className="text-[10px] font-semibold text-white bg-[#155EEF] border border-[#155EEF] px-1.5 py-0.5 rounded">
-              Personalizada
-            </span>
-          )}
-
-          {servico.webservice_service_code && (
-            <span className="text-[10px] font-mono text-slate-600 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded" title="Código de Subproduto WebService">
-              {servico.webservice_service_code}
-            </span>
-          )}
-
-          {servico.target_client_name && !isOg && (
-            <span className="text-[10px] text-slate-500 truncate max-w-[130px]" title={servico.target_client_name}>
-              {servico.target_client_name}
-            </span>
-          )}
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-[var(--text-tertiary)]">
+          <span className="inline-flex items-center gap-1">{isOg && <Lock className="h-2.5 w-2.5" />}{isOg ? "Tabela base" : "Personalizada"}</span>
+          {servico.target_client_name && <span>{servico.target_client_name}</span>}
+          {servico.is_active === false && <span>Inativo</span>}
+          {isSelected && <span className="ml-auto font-semibold text-[#128A47]">A consultar</span>}
         </div>
-
-        {/* Destination Coverage Badges */}
-        {servico.allowed_zones && servico.allowed_zones.length > 0 && (
-          <div className="mt-2 flex items-center gap-1 flex-wrap">
-            {servico.allowed_zones.slice(0, 3).map((z) => (
-              <span key={z} className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200/60">
-                <DestinationBadge code={z} showLabel={true} />
-              </span>
-            ))}
-            {servico.allowed_zones.length > 3 && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-medium">
-                +{servico.allowed_zones.length - 3}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-          <span className="truncate max-w-[140px]">{servico.preferred_carrier_name}</span>
-          <span className="font-medium text-slate-600 shrink-0">{servico.transit_time_label || "24h"}</span>
-        </div>
-      </div>
+      </button>
     )
   }
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-1 px-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-900">Catálogo de serviços e tabelas</h2>
-          <p className="text-xs text-slate-500">Escolha um serviço para consultar custos, preços de venda e margens.</p>
-        </div>
-        <span className="text-[11px] text-slate-500">{filteredServicos.length} resultado(s)</span>
-      </div>
-
-      {/* Top Filter Bar */}
-      <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs space-y-3">
-        <div className="flex flex-col md:flex-row gap-3 items-center justify-between w-full">
-          {/* Search Box */}
-          <div className="relative flex-1 w-full max-w-sm">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Pesquisar tabela, EQ / DD / DB ou transportador..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 transition-all"
-            />
+      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 shadow-2xs">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
+          <label className="min-w-0 flex-1 text-[11px] font-semibold text-[var(--text-secondary)]">
+            Pesquisar tabelas
+            <span className="relative mt-1 block">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-tertiary)]" />
+              <input type="search" placeholder="Nome, cliente ou transportador…" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                className="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] py-2 pl-9 pr-3 text-xs font-normal text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[#128A47]" />
+            </span>
+          </label>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:w-auto">
+            <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Estado
+              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="mt-1 block w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-2.5 py-2 text-xs font-normal text-[var(--text-primary)]">
+                <option value="active">Ativos ({servicos.filter(s => s.is_active !== false).length})</option>
+                <option value="inactive">Inativos ({servicos.filter(s => s.is_active === false).length})</option>
+                <option value="all">Todos ({servicos.length})</option>
+              </select>
+            </label>
+            <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Destino
+              <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)} className="mt-1 block w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-2.5 py-2 text-xs font-normal text-[var(--text-primary)]">
+                {categories.map(category => <option key={category} value={category}>{category === "Todas" ? "Todos os destinos" : category}</option>)}
+              </select>
+            </label>
+            <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Tipo de tabela
+              <select value={sectionFilter} onChange={e => setSectionFilter(e.target.value as typeof sectionFilter)} className="mt-1 block w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-2.5 py-2 text-xs font-normal text-[var(--text-primary)]">
+                <option value="all">Todas</option><option value="og">Tabelas base</option><option value="custom">Personalizadas</option>
+              </select>
+            </label>
+            <label className="text-[11px] font-semibold text-[var(--text-secondary)]">Perfil de preços
+              <select value={selectedProfile} onChange={e => setSelectedProfile(e.target.value)} className="mt-1 block w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-2.5 py-2 text-xs font-normal text-[var(--text-primary)]">
+                {profiles.map(profile => <option key={profile} value={profile}>{profile === "Todos os Perfis" ? "Todos os perfis" : profile}</option>)}
+              </select>
+            </label>
           </div>
-
-          {/* Segment Tabs (All / Base / Custom) */}
-          <div className="inline-flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200/60 shrink-0">
-            <button
-              type="button"
-              onClick={() => setSectionFilter("all")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                sectionFilter === "all"
-                  ? "bg-[#128A47] text-white shadow-sm"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Todas ({filteredServicos.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setSectionFilter("og")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
-                sectionFilter === "og"
-                  ? "bg-[#155EEF] text-white shadow-sm"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-                  <Lock className={`w-3 h-3 ${sectionFilter === "og" ? "text-white" : "text-slate-400"}`} />
-              Tabelas Base ({ogServicos.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setSectionFilter("custom")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                sectionFilter === "custom"
-                  ? "bg-[#007F8B] text-white shadow-sm"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Personalizadas ({customServicos.length})
-            </button>
-          </div>
-
-          {/* Profile Filter Selector */}
-          <div className="flex items-center gap-2 shrink-0">
-            <select
-              value={selectedProfile}
-              onChange={(e) => setSelectedProfile(e.target.value)}
-              className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900"
-            >
-              {profiles.map((prof) => (
-                <option key={prof} value={prof}>
-                  {prof}
-                </option>
-              ))}
-            </select>
-          </div>
-
         </div>
-
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-1 overflow-x-auto pt-2 border-t border-slate-100">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                selectedCategory === cat
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+        {(searchTerm || selectedCategory !== "Todas" || sectionFilter !== "all" || selectedProfile !== "Todos os Perfis" || statusFilter !== "active") && (
+          <button type="button" onClick={() => { setSearchTerm(""); setSelectedCategory("Todas"); setSectionFilter("all"); setSelectedProfile("Todos os Perfis"); setStatusFilter("active") }} className="mt-3 text-xs font-medium text-[var(--accent)] hover:underline">Limpar filtros</button>
+        )}
       </div>
 
       {/* Main Grid: Left Service Selector + Right Price Matrix */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         
         {/* Left Side: Services List */}
-        <div className="lg:col-span-4 space-y-3">
-          <div className="space-y-4 max-h-[750px] overflow-y-auto pr-1">
+        <div className="min-w-0 lg:col-span-4 space-y-3">
+          <div className="flex items-center justify-between px-1 text-xs"><h2 className="font-semibold text-[var(--text-primary)]">Escolha uma tabela</h2><span className="text-[var(--text-secondary)]">{visibleServicos.length} resultado(s)</span></div>
+          <select aria-label="Tabela a consultar" value={currentServico?.id || ""} onChange={e => setActiveServicoId(e.target.value)}
+            className="block w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2.5 text-xs text-[var(--text-primary)] lg:hidden">
+            {visibleServicos.length === 0 && <option value="">Nenhuma tabela encontrada</option>}
+            {visibleServicos.map(service => <option key={service.id} value={service.id}>{service.name} · {service.category}</option>)}
+          </select>
+          <div className="hidden space-y-4 max-h-[750px] overflow-y-auto pr-1 lg:block">
             {/* Tabelas Base Section */}
             {(sectionFilter === "all" || sectionFilter === "og") && ogServicos.length > 0 && (
               <div className="space-y-2">
@@ -335,7 +216,7 @@ export function TabelasLinkeTab({
               </div>
             )}
 
-            {filteredServicos.length === 0 && (
+            {visibleServicos.length === 0 && (
               <div className="p-8 text-center bg-white rounded-lg border border-dashed border-slate-200 text-slate-400 text-xs">
                 Nenhuma tabela encontrada para os filtros selecionados.
               </div>
@@ -344,13 +225,13 @@ export function TabelasLinkeTab({
         </div>
 
         {/* Right Side: Detailed Service View & Price Table */}
-        <div className="lg:col-span-8">
+        <div className="min-w-0 lg:col-span-8">
           {currentServico ? (
             <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
               
               {/* Header Details */}
               <div className="p-5 border-b border-slate-200/80">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 text-slate-700 border border-slate-200/80 shrink-0">
                       <Package className="w-5 h-5 text-slate-600" />
@@ -364,7 +245,7 @@ export function TabelasLinkeTab({
                           {currentServico.code}
                         </span>
                         <CttServiceBadge service={currentServico} />
-                        {currentServico.is_primordial ? (
+                        {isPrimordialServico(currentServico) ? (
                           <span className="px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200/80 text-xs font-medium rounded flex items-center gap-1">
                             <Lock className="w-3 h-3 text-slate-400" /> Tabela Base
                           </span>
@@ -384,14 +265,14 @@ export function TabelasLinkeTab({
                   </div>
 
                   {/* Actions Bar */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <button
                       onClick={() => onDuplicateServico(currentServico)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition-colors shadow-2xs"
                       title="Criar variante para cliente específico"
                     >
                       <Copy className="w-3.5 h-3.5 text-slate-400" />
-                      Duplicar
+                      Criar variante
                     </button>
 
                     <button
@@ -399,7 +280,7 @@ export function TabelasLinkeTab({
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition-colors shadow-2xs"
                     >
                       <Edit3 className="w-3.5 h-3.5 text-slate-400" />
-                      Editar
+                      Editar tabela
                     </button>
 
                     <button
@@ -409,29 +290,11 @@ export function TabelasLinkeTab({
                       {currentServico.is_active ? "Desativar" : "Ativar"}
                     </button>
 
-                    {/* Delete button: Protected if base table */}
-                    {currentServico.is_primordial ? (
-                      canDeletePrimordial ? (
-                        <button
-                          onClick={() => {
-                            if (confirm(`Eliminar a tabela base '${currentServico.name}'?`)) {
-                              onDeleteServico(currentServico.id)
-                            }
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="Eliminar Tabela Base (Admin)"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button
-                          disabled
-                          className="p-1.5 text-slate-300 rounded-lg cursor-not-allowed"
-                          title="Tabela base protegida contra eliminação"
-                        >
-                          <Lock className="w-4 h-4 text-slate-300" />
-                        </button>
-                      )
+                    {isPrimordialServico(currentServico) ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-500" title="Tabela essencial da Linke. A eliminação está bloqueada para todos os utilizadores.">
+                        <Lock className="h-3.5 w-3.5" />
+                        Protegida
+                      </span>
                     ) : (
                       <button
                         onClick={() => {
@@ -534,63 +397,72 @@ export function TabelasLinkeTab({
                 </div>
               </div>
 
-              {/* Quick Margin & Markup Adjustment Bar */}
-              <div className="bg-slate-50/70 border-b border-slate-200/80 px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200 shrink-0">
-                    <Percent className="w-3.5 h-3.5" />
+              <details key={`markup-${currentServico.id}`} className="group border-b border-slate-200/80">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50/60 px-5 py-3 text-xs font-semibold text-slate-700 [&::-webkit-details-marker]:hidden">
+                  <span className="flex items-center gap-2"><Percent className="h-3.5 w-3.5" />Ajustar margem e recalcular preços</span>
+                  <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                </summary>
+                {/* Quick Margin & Markup Adjustment Bar */}
+                <div className="bg-slate-50/70 border-b border-slate-200/80 px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200 shrink-0">
+                      <Percent className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-semibold text-slate-800">
+                        Acréscimo sobre o custo: +{currentServico.global_markup_pct ?? 20}%
+                      </span>
+                      <p className="text-[11px] text-slate-500">
+                        Ao aplicar, os preços de venda desta tabela serão recalculados a partir dos custos.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-semibold text-slate-800">
-                      Margem Base Linke: +{currentServico.global_markup_pct || 20}%
-                    </span>
-                    <p className="text-[11px] text-slate-500">
-                      Calcula o Preço de Venda Linke sobre o custo base de {currentServico.preferred_carrier_name}.
-                    </p>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-slate-500 font-medium">Atalhos:</span>
+                    {[18, 20, 22, 25, 28, 30].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => {
+                          setQuickMarkupInput(pct)
+                        }}
+                        className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
+                          quickMarkupInput === pct
+                            ? "bg-slate-900 text-white shadow-2xs"
+                            : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        +{pct}%
+                      </button>
+                    ))}
+
+                    <div className="inline-flex items-center gap-1 ml-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+                      <input
+                        type="number"
+                        value={quickMarkupInput}
+                        onChange={(e) => setQuickMarkupInput(parseFloat(e.target.value) || 0)}
+                        className="w-12 px-1.5 py-0.5 text-xs font-mono font-bold text-center text-slate-800 focus:outline-none"
+                      />
+                      <span className="text-xs text-slate-400 font-bold pr-1">%</span>
+                      <button
+                        type="button"
+                        onClick={() => onQuickMarkupChange(currentServico.id, quickMarkupInput)}
+                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-medium rounded-md transition-colors"
+                      >
+                        Aplicar margem
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] text-slate-500 font-medium">Atalhos:</span>
-                  {[18, 20, 22, 25, 28, 30].map((pct) => (
-                    <button
-                      key={pct}
-                      type="button"
-                      onClick={() => {
-                        setQuickMarkupInput(pct)
-                        onQuickMarkupChange(currentServico.id, pct)
-                      }}
-                      className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
-                        currentServico.global_markup_pct === pct
-                          ? "bg-slate-900 text-white shadow-2xs"
-                          : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-                      }`}
-                    >
-                      +{pct}%
-                    </button>
-                  ))}
-
-                  <div className="inline-flex items-center gap-1 ml-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
-                    <input
-                      type="number"
-                      value={quickMarkupInput}
-                      onChange={(e) => setQuickMarkupInput(parseFloat(e.target.value) || 0)}
-                      className="w-12 px-1.5 py-0.5 text-xs font-mono font-bold text-center text-slate-800 focus:outline-none"
-                    />
-                    <span className="text-xs text-slate-400 font-bold pr-1">%</span>
-                    <button
-                      type="button"
-                      onClick={() => onQuickMarkupChange(currentServico.id, quickMarkupInput)}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-medium rounded-md transition-colors"
-                    >
-                      Aplicar
-                    </button>
-                  </div>
-                </div>
-              </div>
+              </details>
 
               {/* Price Tables per Zone */}
               <div className="p-5 space-y-6">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div><h3 className="text-sm font-semibold text-slate-900">Preços por destino e peso</h3><p className="mt-1 text-xs text-slate-500">Valores base sem IVA, combustível e serviços adicionais.</p></div>
+                  <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">Combustível: {currentServico.fuel_surcharge_pct == null ? "Conforme cliente" : `${currentServico.fuel_surcharge_pct}%`}</span>
+                </div>
                 {currentServico.zones.map((zone, idx) => {
                   const tiers = zone.tiers || []
                   const costs = tiers.map(t => Number(t.cost_price || 0))

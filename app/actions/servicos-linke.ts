@@ -6,7 +6,7 @@ import { getFornecedoresAction, saveFornecedorAction } from "@/app/actions/forne
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
-import { getTenantId, getAuthContext, requireUser, requireEmployee } from "@/lib/auth/context"
+import { getTenantId, requireUser, requireEmployee } from "@/lib/auth/context"
 import { buildOfficialLinkeInternationalZones } from "@/lib/services/geo/international-zones"
 import { isTemporarilyWithdrawnService } from "@/lib/services/service-availability"
 
@@ -509,6 +509,25 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   },
 ]
 
+/** Read both storage paths before allowing an irreversible catalogue deletion or demotion. */
+async function readStoredServiceProtection(supabase: ReturnType<typeof createAdminClient>, id: string, tenantId: string) {
+  if (isPrimordialServico({ id })) return { found: true, isProtected: true }
+  const { data: native, error: nativeError } = await supabase.from("servicos_linke")
+    .select("*").eq("id", id).maybeSingle()
+  // Legacy services use text IDs and may exist only in audit_log when the native table uses UUIDs.
+  if (nativeError && !["42P01", "PGRST205", "22P02"].includes(nativeError.code)) {
+    throw new Error("Não foi possível verificar a proteção da tabela. Tente novamente.")
+  }
+  if (isPrimordialServico(native)) return { found: true, isProtected: true }
+  const { data: logs, error: auditError } = await supabase.from("audit_log").select("id, details")
+    .eq("tenant_id", tenantId).eq("action", "servicos_linke_data").eq("details->>id", id)
+  if (auditError) throw new Error("Não foi possível verificar a proteção da tabela. Tente novamente.")
+  return {
+    found: Boolean(native || logs?.length),
+    isProtected: (logs || []).some((log: { details?: Partial<ServicoLinke> }) => isPrimordialServico(log.details)),
+  }
+}
+
 /**
  * Obtém todos os Serviços Linke configurados
  */
@@ -640,10 +659,12 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
 export async function saveServicoLinkeAction(
   servico: Partial<ServicoLinke>
 ): Promise<{ success: boolean; data: ServicoLinke }> {
-  await requireEmployee()
+  const ctx = await requireEmployee()
   const supabase = createAdminClient()
 
   const id = servico.id || `srv_linke_${Date.now()}`
+  const isProtected = isPrimordialServico(servico) ||
+    (await readStoredServiceProtection(supabase, id, ctx.tenant_id)).isProtected
   
   // Processamento de zonas e escalões
   const processedZones = (servico.zones || []).map((zone) => ({
@@ -666,6 +687,7 @@ export async function saveServicoLinkeAction(
 
   const fullRecord: ServicoLinke = {
     id,
+    is_primordial: isProtected,
     code: servico.code || `LK-${Math.floor(100 + Math.random() * 900)}`,
     name: servico.name || "Novo Serviço Linke",
     description: servico.description || "",
@@ -726,7 +748,13 @@ export async function saveServicoLinkeAction(
 
   // 1. Tentar gravar na tabela
   try {
-    await supabase.from("servicos_linke").upsert(fullRecord)
+    const { error } = await supabase.from("servicos_linke").upsert(fullRecord)
+    if (error && ["PGRST204", "42703"].includes(error.code) && error.message.includes("is_primordial")) {
+      // Older native schemas keep this marker in the full audit snapshot instead.
+      const nativeRecord = { ...fullRecord }
+      delete nativeRecord.is_primordial
+      await supabase.from("servicos_linke").upsert(nativeRecord)
+    }
   } catch {}
 
   // 2. Gravar em audit_log
@@ -859,26 +887,24 @@ export async function toggleServicoLinkeStatusAction(id: string, is_active: bool
 
 /**
  * Elimina um Serviço Linke
- * Proteção de Segurança: As tabelas base primordiais (OG) só podem ser eliminadas pelo Administrador Principal (Stefano).
+ * As tabelas base estão protegidas para todos os colaboradores, incluindo administradores.
  */
 export async function deleteServicoLinkeAction(id: string): Promise<{ success: boolean; error?: string }> {
-  await requireEmployee()
-  const ctx = await getAuthContext()
-  const isStefano = Boolean(
-    ctx?.user?.email?.toLowerCase().includes("stefano") ||
-    ctx?.colaborador_id === "col-stefano-001"
-  )
-
-  const isPrimordial = isPrimordialServico({ id })
-
-  if (isPrimordial && !isStefano) {
+  const ctx = await requireEmployee()
+  const supabase = createAdminClient()
+  let protection: { found: boolean; isProtected: boolean }
+  try {
+    protection = await readStoredServiceProtection(supabase, id, ctx.tenant_id)
+  } catch {
+    return { success: false, error: "Não foi possível verificar a proteção da tabela. A eliminação foi recusada." }
+  }
+  if (protection.isProtected) {
     return {
       success: false,
-      error: "Esta é uma Tabela Base Primordial (OG). Apenas o Administrador Principal (Stefano) tem autorização para eliminá-la.",
+      error: "Esta tabela base faz parte dos serviços essenciais da Linke e não pode ser eliminada.",
     }
   }
-
-  const supabase = createAdminClient()
+  if (!protection.found) return { success: false, error: "Tabela não encontrada. A eliminação foi recusada." }
 
   try {
     await supabase.from("servicos_linke").delete().eq("id", id)

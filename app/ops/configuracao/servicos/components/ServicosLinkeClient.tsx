@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 
 import type { ServicoLinke } from "../types"
+import { isPrimordialServico } from "../types"
 import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 import { 
   saveServicoLinkeAction, 
@@ -29,7 +30,6 @@ interface ServicosLinkeClientProps {
   initialServicos: ServicoLinke[]
   initialFornecedores: Fornecedor[]
   initialWebservices?: any[]
-  canDeletePrimordial?: boolean
 }
 
 type TabType = "servicos_linke" | "matriz_margens" | "simulador"
@@ -38,7 +38,6 @@ export function ServicosLinkeClient({
   initialServicos,
   initialFornecedores,
   initialWebservices = [],
-  canDeletePrimordial = false,
 }: ServicosLinkeClientProps) {
   const [servicos, setServicos] = React.useState<ServicoLinke[]>(initialServicos)
   const [fornecedores] = React.useState<Fornecedor[]>(initialFornecedores)
@@ -101,7 +100,7 @@ export function ServicosLinkeClient({
   const handleDeleteServico = async (id: string) => {
     const res = await deleteServicoLinkeAction(id)
     if (res && res.success === false) {
-      showNotification(res.error || "Apenas o Administrador Principal (Stefano) tem autorização para eliminar tabelas base primordiais.")
+      showNotification(res.error || "Não foi possível eliminar esta tabela. As tabelas base estão protegidas.")
       return
     }
     setServicos((prev) => prev.filter((s) => s.id !== id))
@@ -134,12 +133,9 @@ export function ServicosLinkeClient({
 
   // Stats
   const totalServicos = servicos.length
-  const servicosAtivos = servicos.filter((s) => s.is_active).length
-  const baseServicesCount = servicos.filter((s) => s.is_primordial).length
-  const customServicesCount = servicos.filter((s) => !s.is_primordial).length
-  const avgMarkup = totalServicos > 0
-    ? (servicos.reduce((acc, s) => acc + (Number(s.global_markup_pct) || 0), 0) / totalServicos).toFixed(1)
-    : "0"
+  const servicosAtivos = servicos.filter((s) => s.is_active !== false).length
+  const baseServicesCount = servicos.filter(isPrimordialServico).length
+  const customServicesCount = servicos.filter((s) => !isPrimordialServico(s)).length
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-12">
@@ -160,10 +156,10 @@ export function ServicosLinkeClient({
             </div>
             <div>
               <h1 className="text-lg font-semibold text-[var(--text-primary)] tracking-tight">
-                Serviços & Tabelas de Preço
+                Tabelas de preços e serviços
               </h1>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                Custos base de fornecedores (CTT Expresso, Correos Express), margens e tarifários para clientes.
+                Consulte preços por destino e peso. Atribua as tabelas na ficha de cada cliente.
               </p>
             </div>
           </div>
@@ -180,33 +176,17 @@ export function ServicosLinkeClient({
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#128A47] hover:bg-[#0E6C37] text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            Novo Serviço / Tabela
+            Nova tabela
           </button>
           </div>
         )}
       </div>
 
-      {/* Resumo rápido: sempre visível antes das ferramentas de gestão */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <div className="bg-[var(--surface-bg)] p-3.5 rounded-xl border border-[var(--border-subtle)] border-t-4 border-t-[#008A4B] shadow-sm">
-          <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Serviços ativos</span>
-          <div className="mt-1 flex items-baseline gap-1.5">
-            <span className="text-xl font-bold text-[#008A4B]">{servicosAtivos}</span>
-            <span className="text-xs text-[var(--text-tertiary)]">de {totalServicos}</span>
-          </div>
-        </div>
-        <div className="bg-[var(--surface-bg)] p-3.5 rounded-xl border border-[var(--border-subtle)] border-t-4 border-t-[#155EEF] shadow-sm">
-          <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Tabelas base</span>
-          <div className="mt-1 text-xl font-bold text-[#155EEF]">{baseServicesCount}</div>
-        </div>
-        <div className="bg-[var(--surface-bg)] p-3.5 rounded-xl border border-[var(--border-subtle)] border-t-4 border-t-[#E76F61] shadow-sm">
-          <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Tabelas personalizadas</span>
-          <div className="mt-1 text-xl font-bold text-[#C94F45]">{customServicesCount}</div>
-        </div>
-        <div className="bg-[var(--surface-bg)] p-3.5 rounded-xl border border-[var(--border-subtle)] border-t-4 border-t-[#007F8B] shadow-sm">
-          <span className="text-[11px] font-semibold text-[var(--text-secondary)]">Margem média configurada</span>
-          <div className="mt-1 text-xl font-bold text-[#007F8B]">{avgMarkup}%</div>
-        </div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-xs text-[var(--text-secondary)]">
+        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#128A47]" /><strong className="font-semibold text-[var(--text-primary)]">{servicosAtivos}</strong> ativos</span>
+        <span><strong className="font-semibold text-[var(--text-primary)]">{baseServicesCount}</strong> tabelas base</span>
+        <span><strong className="font-semibold text-[var(--text-primary)]">{customServicesCount}</strong> personalizadas</span>
+        <span className="text-[var(--text-tertiary)]">{totalServicos - servicosAtivos} inativos</span>
       </div>
 
       {/* Navigation Tabs Bar */}
@@ -220,26 +200,26 @@ export function ServicosLinkeClient({
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
-          Serviços e tabelas
+          Tabelas de preços
         </button>
 
         <button
           onClick={() => setActiveTab("matriz_margens")}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             activeTab === "matriz_margens"
-              ? "bg-[#155EEF] text-white shadow-sm"
+              ? "bg-[#128A47] text-white shadow-sm"
               : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
           }`}
         >
           <Percent className="w-3.5 h-3.5" />
-          Margens dos fornecedores
+          Custos e margens
         </button>
 
         <button
           onClick={() => setActiveTab("simulador")}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             activeTab === "simulador"
-              ? "bg-[#007F8B] text-white shadow-sm"
+              ? "bg-[#128A47] text-white shadow-sm"
               : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
           }`}
         >
@@ -254,7 +234,6 @@ export function ServicosLinkeClient({
           <TabelasLinkeTab
             mode="linke_services"
             servicos={servicos}
-            canDeletePrimordial={canDeletePrimordial}
             onEditServico={(servico) => {
               setSelectedServicoForEdit(servico)
               setIsModalOpen(true)

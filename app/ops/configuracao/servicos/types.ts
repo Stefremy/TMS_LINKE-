@@ -58,7 +58,7 @@ export interface ServicoLinke {
   saturday_fee?: number
   return_guide_fee?: number
   
-  // Tabela Base Primordial (OG Vanilla) — Contrato original de referência protegido
+  // Core/base table: deletion is blocked for every role, including administrators.
   is_primordial?: boolean
 
   created_at: string
@@ -97,15 +97,15 @@ export const PRIMORDIAL_SERVICE_IDS = new Set([
   "b58461bb-0cad-4569-81ff-78f2fa85e832",
   "srv_linke_1789055906418",
   "srv_linke_1790600458234",
+  "srv_linke_1793009571268", // CTT Expresso Económico 48 (Guia EQ), promoted to core.
 ])
 
 export function isPrimordialServico(servico?: Partial<ServicoLinke> | null): boolean {
   if (!servico) return false
-  if (servico.is_primordial === false) return false
-  if (servico.is_primordial === true) return true
+  // Core identities cannot be downgraded by an editable flag or a stale payload.
   if (servico.id && PRIMORDIAL_SERVICE_IDS.has(servico.id)) return true
-  if (servico.code && PRIMORDIAL_SERVICE_CODES.has(servico.code.toUpperCase())) return true
-  return false
+  if (servico.code && PRIMORDIAL_SERVICE_CODES.has(servico.code.trim().toUpperCase())) return true
+  return servico.is_primordial === true
 }
 
 export interface ServicosStats {
