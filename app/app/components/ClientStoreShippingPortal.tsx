@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useClientScope } from "./ClientScope"
+import { getClientServiceLabel, getClientServiceName } from "@/lib/services/client-service-label"
 import { 
   DEFAULT_CLIENT_PRICING, 
   SYSTEM_AVAILABLE_WEBSERVICES, 
@@ -299,7 +300,7 @@ export function ClientStoreShippingPortal() {
                     </span>
                   </div>
                   <p className="text-xs text-emerald-800">
-                    O envio foi registado com o serviço <strong>{activeServiceObj?.service_name}</strong>.
+                    O envio foi registado com o serviço <strong>{getClientServiceName(activeServiceObj?.service_name)}</strong>.
                   </p>
                 </div>
               </div>
@@ -422,13 +423,12 @@ export function ClientStoreShippingPortal() {
                     >
                       {servicesPricingList.filter(s => s.is_enabled).map((service) => (
                         <option key={service.service_code} value={service.service_code}>
-                          [{service.category}] {service.service_name} — (SubProduto: {service.subproduct_id})
+                          {getClientServiceLabel({ category: service.category, name: service.service_name })}
                         </option>
                       ))}
                     </select>
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                   </div>
-                  <p className="text-[11px] text-slate-500">{activeServiceObj?.description}</p>
                 </div>
               </div>
             </div>

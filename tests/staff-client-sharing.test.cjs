@@ -111,6 +111,44 @@ test('a new store persists no table assignments until the team explicitly choose
   assert.equal(profile.default_linke_table_id, '')
 })
 
+test('two price tables and one default table survive saving and reloading the same client', async () => {
+  const h = harness()
+  const selected = ['ctt-portugal', 'ctt-spain']
+  await h.actions.saveClienteAction({ id: A, short_name: 'GO Linke fixture', credit_limit: 15000,
+    assigned_linke_service_ids: selected, default_linke_table_id: selected[0] })
+  const reloaded = (await h.actions.getClientesAction(A)).find(client => client.id === A)
+  assert.deepEqual(reloaded.assigned_linke_service_ids, selected)
+  assert.equal(reloaded.default_linke_table_id, selected[0])
+  assert.equal(reloaded.credit_limit, 15000)
+})
+
+for (const error of [
+  { code: 'PGRST202', message: 'Could not find the function public.save_client_financial_profile in the schema cache' },
+  { code: '42883', message: 'function public.save_client_financial_profile does not exist' },
+]) {
+  test(`missing client-save RPC reports the required setup instead of a balance conflict (${error.code})`, async () => {
+    const h = harness()
+    h.db.client.rpc = async () => ({ data: null, error })
+    await assert.rejects(h.actions.saveClienteAction({ id: A, short_name: 'GO Linke fixture',
+      assigned_linke_service_ids: ['ctt-portugal', 'ctt-spain'] }), e => /migração/.test(e.message) && !/saldo pode ter mudado/.test(e.message))
+    assert.ok(!h.db.writes.some(w => w.table === 'audit_log'))
+  })
+}
+
+test('only an actual financial-profile conflict asks the user to refresh the balance', async () => {
+  for (const [error, expected] of [
+    [{ code: 'P0001', message: 'Balance changed; refresh the client before saving' }, /saldo pode ter mudado/],
+    [{ code: '42501', message: 'private function permission error' }, /permissões/],
+    [{ code: 'XX000', message: 'private database details' }, /Não foi possível gravar/],
+  ]) {
+    const h = harness()
+    h.db.client.rpc = async () => ({ data: null, error })
+    await assert.rejects(h.actions.saveClienteAction({ id: A, short_name: 'Fixture' }), e => expected.test(e.message)
+      && !/private/.test(e.message) && (error.code === 'P0001' || !/saldo pode ter mudado/.test(e.message)))
+    assert.ok(!h.db.writes.some(w => w.table === 'audit_log'))
+  }
+})
+
 test('every colleague sees older clients beyond the former row limits and all database pages', async () => {
   const h = harness()
   for (let i = 0; i < 1050; i++) {

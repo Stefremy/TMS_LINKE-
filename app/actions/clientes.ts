@@ -355,7 +355,19 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     p_tenant: ctx.tenant_id, p_client: id, p_details: fullRecord,
     p_expected_credit: previous?.details?.credit_limit ?? null,
   })
-  if (profileSaveError) throw new Error("Não foi possível gravar os detalhes. O saldo pode ter mudado; atualize a ficha e tente novamente.")
+  if (profileSaveError) {
+    if (profileSaveError.code === "PGRST202" ||
+        (profileSaveError.code === "42883" && profileSaveError.message?.includes("save_client_financial_profile"))) {
+      throw new Error("Não foi possível gravar os detalhes: falta aplicar a migração de gravação de clientes no Supabase (20261026150000_client_profile_save.sql).")
+    }
+    if (profileSaveError.code === "P0001" && profileSaveError.message?.startsWith("Balance changed")) {
+      throw new Error("Não foi possível gravar os detalhes. O saldo pode ter mudado; atualize a ficha e tente novamente.")
+    }
+    if (profileSaveError.code === "42501") {
+      throw new Error("Não foi possível gravar os detalhes: verifique as permissões da função de gravação de clientes no Supabase.")
+    }
+    throw new Error("Não foi possível gravar os detalhes do cliente. Tente novamente ou contacte o administrador.")
+  }
   const { error: restoreError } = await supabase.from("audit_log").delete()
     .eq("tenant_id", ctx.tenant_id).eq("action", "deleted_client").eq("details->>id", id)
   if (restoreError) throw new Error("Não foi possível repor a loja. Tente novamente.")

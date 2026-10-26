@@ -38,7 +38,7 @@ import {
   SYSTEM_AVAILABLE_WEBSERVICES, 
   ClientSpecialServiceFee
 } from "@/app/ops/entidades/clientes/types"
-import { getServiceDisplayLabel } from "@/lib/services/ctt/service-identity"
+import { getClientServiceLabel, getClientServiceName } from "@/lib/services/client-service-label"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { useClientScope } from "./ClientScope"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
@@ -931,7 +931,7 @@ export function ClientCreateGuia() {
                   const coversZone = isZoneAllowedByService(service.allowed_zones, destZone)
                   return (
                     <option key={service.id} value={service.id}>
-                      {coversZone ? "✅" : "⚠️"} [{service.category}] {getServiceDisplayLabel(service)} — ({service.transit_time_label || "24h"}) {!coversZone ? `(Sem cobertura para ${destZone})` : ""}
+                      {getClientServiceLabel(service)}{!coversZone ? " — Indisponível para este destino" : ""}
                     </option>
                   )
                 })}
@@ -948,10 +948,6 @@ export function ClientCreateGuia() {
                 </div>
               </div>
             )}
-
-            <p className="text-[11px] text-slate-500 pl-1">
-              {activeLinkeService?.description || "Serviço expresso porta-a-porta com emissão integrada."}
-            </p>
           </div>
 
           {/* SERVIÇOS ESPECIAIS E SUPLEMENTARES */}
@@ -1119,7 +1115,7 @@ export function ClientCreateGuia() {
                         />
                       </div>
                     ) : null}
-                    <span>{item.servico}</span>
+                    <span>{getClientServiceName(item.servico)}</span>
                   </div>
                   <span>{item.data}</span>
                 </div>
@@ -1156,7 +1152,7 @@ export function ClientCreateGuia() {
                             />
                           </div>
                         ) : null}
-                        <span className="text-slate-700 font-medium">{item.servico}</span>
+                        <span className="text-slate-700 font-medium">{getClientServiceName(item.servico)}</span>
                       </div>
                     </td>
                     <td className="py-3 text-slate-500">{item.data}</td>

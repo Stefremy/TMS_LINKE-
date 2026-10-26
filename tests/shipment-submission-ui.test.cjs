@@ -9,6 +9,43 @@ const flatten = node => Array.isArray(node) ? node.flatMap(flatten) :
   node && typeof node === 'object' ? [node, ...flatten(node.props?.children)] : []
 const textOf = node => Array.isArray(node) ? node.map(textOf).join('') :
   node && typeof node === 'object' ? textOf(node.props?.children) : String(node ?? '')
+
+test('client service names omit product identities, transit promises and internal pricing profiles', () => {
+  const load = createLoader({})
+  const { getClientServiceName, getClientServiceLabel } = load('lib/services/client-service-label.ts')
+  for (const [name, expected] of [
+    ['Ctt expresso # (VIP / Alto Volume)', 'Ctt expresso #'],
+    ['Linke Ibérico 24H (Correos Paq 24)', 'Linke Ibérico'],
+    ['CTT 24/48 horas (Premium D+1)', 'CTT'],
+    ['Guia EQ · Económico 48 — Ctt expresso #', 'Ctt expresso #'],
+    ['Tabela 24 (Loja Norte)', 'Tabela 24 (Loja Norte)'],
+    ['CTT Para Amanhã', 'CTT'],
+  ]) assert.equal(getClientServiceName(name), expected)
+  const selected = { name: 'Ctt expresso # (VIP / Alto Volume)', category: 'Nacional',
+    preferred_carrier_name: 'CTT Expresso', webservice_service_code: 'ENCF008.01', transit_time_label: '48h' }
+  const before = JSON.stringify(selected)
+  assert.equal(getClientServiceLabel(selected), '[Nacional] Ctt expresso #')
+  assert.equal(getClientServiceLabel({ name: '[Nacional] CTT Em 2 Dias (48H) — Guia DB', category: 'Nacional' }), '[Nacional] CTT')
+  assert.match(load('lib/services/ctt/service-identity.ts').getServiceDisplayLabel(selected), /Guia EQ · Económico 48/)
+  assert.equal(JSON.stringify(selected), before)
+})
+
+test('client selector shows every assigned table simply and submits the unchanged service identity', async t => {
+  const services = [
+    { ...service, name: 'Ctt expresso # (VIP / Alto Volume)', category: 'Nacional',
+      transit_time_label: '48h', description: 'Internal negotiated volume discount' },
+    { ...service, id: 'service-b', name: 'Correos 24H', category: 'Ibérico', transit_time_label: '24h' },
+  ]
+  const h = harness(t, true, services), nodes = await h.ready()
+  const options = nodes.filter(n => n.type === 'option' && services.some(s => s.id === n.props.value))
+  assert.deepEqual(options.map(textOf), ['[Nacional] Ctt expresso #', '[Ibérico] Correos'])
+  assert.doesNotMatch(nodes.map(textOf).join(' '), /Internal negotiated volume discount|48h|Alto Volume/)
+  const submission = nodes.find(n => n.type === 'form').props.onSubmit({ preventDefault() {}, currentTarget: {} })
+  assert.equal(h.calls.inputs[0].serviceId, services[0].id)
+  assert.equal(h.calls.inputs[0].serviceName, services[0].name)
+  h.result.resolve({ success: true, id: 'shipment-a', guia: 'EQ-FIXTURE', sellPrice: 9 })
+  await submission
+})
 function deferred() {
   let resolve, reject
   const promise = new Promise((yes, no) => { resolve = yes; reject = no })
@@ -37,8 +74,9 @@ function hooks() {
     commit() { const current = [...effects.values()]; effects.clear(); current.forEach(callback => callback()) },
     dispose() { cleanup.forEach(callback => callback?.()) } }
 }
-function harness(t, portal) {
+function harness(t, portal, services = [service]) {
   const h = hooks(), result = deferred(), calls = { create: 0, agenda: [], scroll: [], inputs: [] }
+  const scopedClient = { ...client, assigned_linke_service_ids: services.map(s => s.id) }
   const previous = { window: global.window, document: global.document, FormData: global.FormData }
   global.window = { matchMedia: () => ({ matches: false }) }
   global.document = { getElementById: () => ({ focus() {} }) }
@@ -54,24 +92,27 @@ function harness(t, portal) {
     'lucide-react': new Proxy({}, { get: (_, name) => name }),
     '@/components/ui/button': { Button: 'button' }, '@/components/ui/badge': { Badge: 'span' },
     '@/app/actions/shipments': { emitClientGuiaAction: input => { calls.create++; calls.inputs.push(input); return result.promise } },
-    '@/app/actions/servicos-linke': { getServicosLinkeAction: async () => [service] },
+    '@/app/actions/servicos-linke': { getServicosLinkeAction: async () => services },
     '@/app/actions/destinatarios': { getDestinatariosAction: async id => { calls.agenda.push(id); return [] } },
     '@/app/actions/ctt': {}, '@/lib/label-utils': {},
     '@/lib/pricing/calculate-shipment-price': { resolveZoneCode: () => 'PT-CONT', isZoneAllowedByService: () => true },
     '@/lib/pricing/calculate-shipment-quote': { getClientSpecialFees: () => [], calculateShipmentQuote: () => ({
       basePrice: 8, buyPrice: 3, fuelSurchargeAmount: 1, specialFeesAmount: 0, specialItems: [], totalPrice: 9, tierLabel: 'Fixture',
     }) },
+    '@/lib/pricing/calculate-client-shipment-preview': { calculateClientShipmentPreview: () => ({
+      basePrice: 8, fuelSurchargeAmount: 1, specialFeesAmount: 0, specialItems: [], totalPrice: 9,
+    }) },
     '@/app/ops/entidades/clientes/types': { SYSTEM_AVAILABLE_WEBSERVICES: [] },
     '@/lib/services/ctt/service-identity': { getServiceDisplayLabel: () => 'CTT Fixture' },
     '@/lib/carrier-logos': { getCarrierLogo: () => null },
     '@/lib/services/geo/international-zones': { OFFICIAL_LINKE_ZONES: [] },
     '@/lib/hooks/usePostalCodeLookup': { usePostalCodeLookup: () => ({ lookup: value => value, loading: false }) },
-    './ClientScope': { useClientScope: () => ({ client, basePath: '/app/fixture-a', isSuspended: false }) },
+    './ClientScope': { useClientScope: () => ({ client: scopedClient, basePath: '/app/fixture-a', isSuspended: false }) },
   })
   const Component = portal ? load('app/app/components/ClientCreateGuia.tsx').ClientCreateGuia :
     load('app/ops/envios/novo/NovoEnvioPageClient.tsx').NovoEnvioPageClient
   const render = () => {
-    const nodes = flatten(h.render(() => portal ? Component() : Component({ clients: [client], servicosLinke: [service] })))
+    const nodes = flatten(h.render(() => portal ? Component() : Component({ clients: [scopedClient], servicosLinke: services })))
     for (const node of nodes) {
       if (node.props.ref && node.props.ref.current === null) node.props.ref.current =
         { scrollIntoView: options => calls.scroll.push(options), reset() {} }

@@ -16,6 +16,7 @@ import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { ClientChangePasswordForm } from './ClientChangePasswordForm'
+import { getClientServiceLabel } from "@/lib/services/client-service-label"
 
 interface ClientAccountDetailsModalProps {
   isOpen: boolean
@@ -530,24 +531,14 @@ export function ClientAccountDetailsModal({
                               />
                             </div>
                             <span className="font-semibold text-[var(--text-primary)] truncate text-[11px]">
-                              {srv.name}
+                              {getClientServiceLabel(srv)}
                             </span>
                           </div>
-                          <span className="text-[10px] font-mono font-bold text-[var(--accent)] bg-[var(--accent-soft)] px-1.5 py-0.2 rounded shrink-0">
-                            {srv.transit_time_label || "24h"}
-                          </span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-
-                <div className="pt-2">
-                  <span className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">Perfil de Tabela Linke</span>
-                  <div className="p-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg text-xs font-semibold text-[var(--text-primary)]">
-                    {client.assigned_linke_profile || "Standard / Geral"}
-                  </div>
-                </div>
               </div>
             </div>
           )}

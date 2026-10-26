@@ -1,5 +1,6 @@
 "use client"
 import { ShipmentParcelWeight } from '@/components/shipments/ShipmentParcelWeight'
+import { getClientServiceName } from '@/lib/services/client-service-label'
 
 import * as React from "react"
 import Link from "next/link"
@@ -796,7 +797,7 @@ export function ClientDashboard() {
                           </div>
                         ) : null}
                         <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
-                          {shipment.service_type || "CTT Expresso"}
+                          {getClientServiceName(shipment.service_type || "CTT Expresso")}
                         </span>
                       </div>
                     </div>
@@ -930,13 +931,13 @@ export function ClientDashboard() {
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img 
                                 src={getCarrierLogo(shipment.service_type || shipment.carrier || "ctt")!} 
-                                alt={shipment.service_type || "Transportadora"} 
+                                alt={getClientServiceName(shipment.service_type || "Transportadora")}
                                 className="max-w-full max-h-full object-contain" 
                               />
                             </div>
                           ) : null}
                           <span className="font-semibold text-[var(--text-secondary)] text-xs">
-                            {shipment.service_type || "CTT Expresso"}
+                            {getClientServiceName(shipment.service_type || "CTT Expresso")}
                           </span>
                         </div>
                         <div className="mt-1.5"><ShipmentParcelWeight summary={shipment.parcel_summary} /></div>

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { getClientServiceName } from "@/lib/services/client-service-label"
 import { 
   Building2, 
   MapPin, 
@@ -879,10 +880,7 @@ export function ClientShipmentDetailModal({
                     <Truck className="w-5 h-5 text-[var(--accent)]" />
                   )}
                   <div className="flex flex-col">
-                    <span className="font-bold text-xs text-[var(--text-primary)] uppercase tracking-wide">{serviceType}</span>
-                    <span className="text-[10px] text-[var(--text-tertiary)] font-semibold">
-                      Expedição integrada {isCorreos ? "Correos Express" : "CTT Expresso"} API
-                    </span>
+                    <span className="font-bold text-xs text-[var(--text-primary)] uppercase tracking-wide">{getClientServiceName(serviceType)}</span>
                   </div>
                 </div>
               </div>
