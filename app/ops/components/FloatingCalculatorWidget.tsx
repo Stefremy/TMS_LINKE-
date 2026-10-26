@@ -15,14 +15,13 @@ export function FloatingCalculatorWidget({ placement = "floating" }: { placement
           type="button"
           onClick={() => setIsOpen(open => !open)}
           title={isOpen ? "Fechar calculadora (Esc)" : "Abrir calculadora"}
-          aria-label={isOpen ? "Fechar calculadora" : "Abrir calculadora: contas e cálculo volumétrico"}
+          aria-label={isOpen ? "Fechar calculadora" : "Abrir calculadora"}
           aria-expanded={isOpen}
           className={`${styles.button} ${placement === "floating" ? styles.compact : ""}`}
         >
           <Calculator className={styles.icon} strokeWidth={1.75} aria-hidden="true" />
           <span className={styles.reading}>
             <span className={styles.title}>Calculadora</span>
-            <span className={styles.hint}>Contas e volumes</span>
           </span>
           {isOpen && <X className={styles.closeIcon} aria-hidden="true" />}
         </button>

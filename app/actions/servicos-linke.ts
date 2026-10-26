@@ -194,6 +194,52 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // 3b. CTT EXPRESSO ECONÓMICO 48 (Guia EQ) — ENCF008.01 — Grandes Contas
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: "srv_linke_1793009571268",
+    code: "LK-EQ-VIP",
+    name: "CTT Expresso Económico 48 (Guia EQ)",
+    description: "Tabela de preços personalizada com desconto de 1% para: Grandes Contas (>300 envios/mês)",
+    category: "Nacional",
+    color: "#6366f1",
+    is_active: true,
+    is_primordial: true,
+    pricing_profile: "VIP / Alto Volume",
+    target_client_name: "Grandes Contas (>300 envios/mês)",
+    discount_vs_standard_pct: 1,
+    preferred_carrier_id: "forn_2",
+    preferred_carrier_name: "CTT Expresso",
+    webservice_connection_id: "ctt_expresso",
+    webservice_service_code: "ENCF008.01",
+    transit_time_label: "48h",
+    global_markup_pct: 25.0,
+    fuel_surcharge_pct: 12.5,
+    cod_fee_pct: 2.5,
+    cod_min_fee: 2.50,
+    saturday_fee: 15,
+    return_guide_fee: 3.5,
+    allowed_zones: ["PT-CONT"],
+    created_at: "2026-10-26T10:12:51.268Z",
+    zones: [
+      {
+        zone_code: "PT-CONT",
+        zone_name: "Portugal Continental",
+        tiers: [
+          { id: "t_clone_1793009571268_0", label: "Até 1 Kg",            weight_max: 1,   cost_price: 2.81, margin_pct: 23, sell_price: 3.45, delivery_time: "48h", enabled: true },
+          { id: "t_clone_1793009571268_1", label: "Até 5 Kg",            weight_max: 5,   cost_price: 2.98, margin_pct: 22, sell_price: 3.65, delivery_time: "48h", enabled: true },
+          { id: "t_clone_1793009571268_2", label: "Até 10 Kg",           weight_max: 10,  cost_price: 3.28, margin_pct: 23, sell_price: 4.02, delivery_time: "48h", enabled: true },
+          { id: "t_clone_1793009571268_3", label: "Até 15 Kg",           weight_max: 15,  cost_price: 3.98, margin_pct: 23, sell_price: 4.88, delivery_time: "48h", enabled: true },
+          { id: "t_clone_1793009571268_4", label: "Até 20 Kg",           weight_max: 20,  cost_price: 4.68, margin_pct: 22, sell_price: 5.73, delivery_time: "48h", enabled: true },
+          { id: "t_clone_1793009571268_5", label: "Até 25 Kg",           weight_max: 25,  cost_price: 5.46, margin_pct: 23, sell_price: 6.69, delivery_time: "48h", enabled: true },
+          { id: "t_clone_1793009571268_6", label: "Até 30 Kg",           weight_max: 30,  cost_price: 6.19, margin_pct: 22, sell_price: 7.58, delivery_time: "48h", enabled: true },
+          { id: "t_clone_1793009571268_7", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.20, margin_pct: 25, sell_price: 0.25, delivery_time: "48h", enabled: true },
+        ],
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // 4. 19 MÚLTIPLO — Continente → Continente — EMSF010.01
   //    Para remessas de 10+ volumes com mesmo produto/origem/destino/data
   //    (código real validado contra a API CTT em produção — gera prefixo EG)
@@ -559,6 +605,13 @@ async function readStoredServiceProtection(supabase: ReturnType<typeof createAdm
   }
 }
 
+function getCarrierRank(s: Partial<ServicoLinke>): number {
+  const c = (s.preferred_carrier_name || "").toLowerCase()
+  if (c.includes("ctt")) return 1
+  if (c.includes("correos")) return 2
+  return 3
+}
+
 /**
  * Obtém todos os Serviços Linke configurados
  */
@@ -595,6 +648,7 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
     if (!error && data && data.length > 0) {
       return data
         .filter((s: any) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
+        .sort((a: any, b: any) => getCarrierRank(a) - getCarrierRank(b))
         .map((s: any) => ({
           ...s,
           is_primordial: isPrimordialServico(s),
@@ -653,6 +707,7 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
   const merged = Array.from(servicosMap.values())
   return merged
     .filter((s) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
+    .sort((a, b) => getCarrierRank(a) - getCarrierRank(b))
     .map((s) => ({
       ...s,
       is_primordial: isPrimordialServico(s),

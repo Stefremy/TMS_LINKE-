@@ -69,10 +69,23 @@ export function TabelasLinkeTab({
     return matchesSearch && matchesCategory && matchesProfile && matchesStatus
   })
 
-  const ogServicos = filteredServicos.filter((s) => isPrimordialServico(s))
-  const customServicos = filteredServicos.filter((s) => !isPrimordialServico(s))
+  const getCarrierRank = (s: Partial<ServicoLinke>) => {
+    const c = (s.preferred_carrier_name || "").toLowerCase()
+    if (c.includes("ctt")) return 1
+    if (c.includes("correos")) return 2
+    return 3
+  }
 
-  const visibleServicos = filteredServicos.filter(s => sectionFilter === "all" || (sectionFilter === "og" ? isPrimordialServico(s) : !isPrimordialServico(s)))
+  const ogServicos = filteredServicos
+    .filter((s) => isPrimordialServico(s))
+    .sort((a, b) => getCarrierRank(a) - getCarrierRank(b))
+  const customServicos = filteredServicos
+    .filter((s) => !isPrimordialServico(s))
+    .sort((a, b) => getCarrierRank(a) - getCarrierRank(b))
+
+  const visibleServicos = filteredServicos
+    .filter(s => sectionFilter === "all" || (sectionFilter === "og" ? isPrimordialServico(s) : !isPrimordialServico(s)))
+    .sort((a, b) => getCarrierRank(a) - getCarrierRank(b))
   const currentServico = visibleServicos.find((s) => s.id === activeServicoId) || visibleServicos[0]
   const [quickMarkupInput, setQuickMarkupInput] = React.useState<number>(currentServico?.global_markup_pct ?? 22)
 
