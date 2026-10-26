@@ -1,0 +1,18 @@
+# Private carrier manuals and internal documentation must stay on this computer.
+/CTT API/
+/correos api/
+/docs/
+
+# Local dependencies, build outputs, credentials and development files.
+/.git/
+/node_modules/
+/.next/
+/.vercel/
+/out/
+/build/
+/.env*
+!/.env.example
+*.pem
+*.tsbuildinfo
+.DS_Store
+*-debug.log*

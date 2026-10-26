@@ -698,3 +698,25 @@ test('wallet carrier emission: confirmed acceptance keeps a recoverable result e
  assert.equal(h.tables.wallet_reservations[0].result.shipment.sell_price,9)
  assert.ok(result.dbWarning)
 })
+
+for (const carrier of ['CTT','Correos']) {
+ test(`${carrier}: an active account-credit reservation keeps the shipment invoiced, never prepaid`,async()=>{
+  const h=shipmentHarness({carrier,adjust:t=>Object.assign(t.audit_log[0].details,{billing_type:'conta_corrente',credit_limit_enabled:true,credit_limit:10})})
+  const moves=[]
+  h.db.client.rpc=async(name,p)=>{
+   if(name==='reserve_current_account_credit')return {data:{reserved:true,balance:10},error:null}
+   assert.equal(name,'transition_credit_limit_reservation');moves.push([p.p_from,p.p_to]);return {data:true,error:null}
+  }
+  const result=await emit(h)
+  assert.equal(result.success,true);assert.equal(h.providerCalls.length,1)
+  assert.ok(moves.some(([,to])=>to==='consumed'))
+  assert.equal(h.db.writes.find(w=>w.table==='audit_log' && w.value?.action==='shipment_data').value.details.billing_type,'conta_corrente')
+ })
+ test(`${carrier}: insufficient account credit stops before contacting the carrier`,async()=>{
+  const h=shipmentHarness({carrier,adjust:t=>Object.assign(t.audit_log[0].details,{billing_type:'conta_corrente',credit_limit_enabled:true,credit_limit:0})})
+  h.db.client.rpc=async name=>{assert.equal(name,'reserve_current_account_credit');return {data:{refused:true,balance:0},error:null}}
+  const result=await emit(h)
+  assert.equal(result.success,false);assert.match(result.error,/Limite de crédito atingido/)
+  assert.equal(h.providerCalls.length,0)
+ })
+}

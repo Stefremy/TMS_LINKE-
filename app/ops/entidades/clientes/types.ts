@@ -99,6 +99,8 @@ export interface Cliente {
   payment_due_days?: number
   iban?: string
   credit_limit?: number
+  /** Explicit opt-in for Conta Corrente only; never disables the prepaid wallet. */
+  credit_limit_enabled?: boolean
   available_credit?: number
   balance?: string
   assigned_seller?: string

@@ -286,6 +286,7 @@ export function ClientDashboard() {
   const discountPct = currentClient?.pricing?.discount_pct ?? 0
   const fuelPct = currentClient?.pricing?.fuel_surcharge_pct ?? 12.5
   const creditLimit = currentClient?.credit_limit ?? 0
+  const unlimitedCredit = currentClient?.billing_type !== 'pay_as_you_go' && currentClient?.credit_limit_enabled !== true
   const paymentTerms = currentClient?.payment_terms || "Pronto Pagamento"
   const activeServices = (currentClient?.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING).filter(s => s.is_enabled)
 
@@ -559,14 +560,14 @@ export function ClientDashboard() {
                 <span className={`text-2xl sm:text-[28px] leading-none font-bold tracking-tight font-mono tabular-nums ${
                   availableCredit < 0 ? "text-amber-600" : "text-[var(--text-primary)]"
                 }`}>
-                  {availableCredit.toFixed(2)}€
+                  {unlimitedCredit ? 'Sem limite' : `${availableCredit.toFixed(2)}€`}
                 </span>
                 {currentClient?.billing_type === 'pay_as_you_go' && availableCredit < 0 && (
                   <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
                     Descoberto
                   </span>
                 )}
-                {currentClient?.billing_type !== 'pay_as_you_go' && creditLimit > 0 && (
+                {!unlimitedCredit && currentClient?.billing_type !== 'pay_as_you_go' && creditLimit > 0 && (
                   <span className="text-[11px] text-[var(--text-tertiary)] font-medium">
                     / {creditLimit.toLocaleString("pt-PT")}€
                   </span>
@@ -575,7 +576,7 @@ export function ClientDashboard() {
               <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate">
                 {currentClient?.billing_type === 'pay_as_you_go'
                   ? (availableCredit <= -2.0 ? "Limite de descoberto atingido (-2.00€)" : "Descoberto até -2.00€ permitido")
-                  : `Usado: ${stats.totalRevenue.toFixed(2)}€ (${usedCreditPct}% consumido)`}
+                  : unlimitedCredit ? `Por liquidar: ${stats.totalRevenue.toFixed(2)}€` : `Usado: ${stats.totalRevenue.toFixed(2)}€ (${usedCreditPct}% consumido)`}
               </p>
             </div>
           </div>

@@ -127,7 +127,7 @@ export async function createShipment(formData: FormData) {
     recipient_name, recipient_address: shipmentData.recipient_address, recipient_zip3, recipient_zip4,
     buy_price: computedBuyPrice, sell_price: computedSellPrice, created_at: now, updated_at: now,
   })
-  const audit = await supabase.from("audit_log").insert({tenant_id: ctx.tenant_id, action: "shipment_data", details: {...shipmentData, billing_type: reservation?.reserved ? "pay_as_you_go" : "conta_corrente"}})
+  const audit = await supabase.from("audit_log").insert({tenant_id: ctx.tenant_id, action: "shipment_data", details: {...shipmentData, billing_type: reservation?.reserved && reservation.kind !== 'credit_limit' ? "pay_as_you_go" : "conta_corrente"}})
   if (native.error && audit.error) {
     if (native.error.code && audit.error.code) {
       await transitionWallet(supabase, reservation, 'reserved', 'released')

@@ -449,7 +449,7 @@ export function ClientAccountDetailsModal({
                   <div>
                     <span className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">Limite de Crédito Concedido</span>
                     <div className="p-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg font-bold text-[var(--text-primary)]">
-                      {client.credit_limit ? `${client.credit_limit.toFixed(2)}€` : "Sem Limite Definido"}
+                      {client.billing_type === 'pay_as_you_go' ? 'Pré-pagamento' : client.credit_limit_enabled === true ? `${(client.credit_limit ?? 0).toFixed(2)}€` : "Sem limite"}
                     </div>
                   </div>
 

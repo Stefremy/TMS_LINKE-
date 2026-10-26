@@ -331,6 +331,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
       : paymentDueDays(cliente.payment_due_days, 0),
     iban: cliente.iban?.trim() || "",
     credit_limit: cliente.credit_limit ?? 5000,
+    credit_limit_enabled: cliente.credit_limit_enabled ?? previous?.details?.credit_limit_enabled ?? false,
     balance: cliente.balance || "0,00€",
     assigned_seller: cliente.assigned_seller?.trim() || "Gestão Comercial",
     observations: cliente.observations?.trim() || "",
@@ -343,6 +344,12 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     pricing: cliente.pricing || DEFAULT_CLIENT_PRICING,
     allowed_webservices: cliente.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.slice(0, 3),
     custom_tier_overrides: cliente.custom_tier_overrides || {},
+  }
+
+  if (typeof fullRecord.credit_limit_enabled !== 'boolean' ||
+    (fullRecord.billing_type !== 'pay_as_you_go' && fullRecord.credit_limit_enabled &&
+      (!Number.isFinite(fullRecord.credit_limit) || fullRecord.credit_limit! < 0))) {
+    throw new Error('Indique um limite de crédito válido, igual ou superior a zero.')
   }
 
   // Check every write before the UI can invite a client to a supposedly saved store.

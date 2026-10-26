@@ -122,6 +122,17 @@ test('two price tables and one default table survive saving and reloading the sa
   assert.equal(reloaded.credit_limit, 15000)
 })
 
+test('credit-limit activation persists and switching it off preserves the configured amount', async () => {
+  const h = harness()
+  for (const enabled of [true, false]) {
+    await h.actions.saveClienteAction({ id: A, short_name: 'Credit fixture', billing_type: 'conta_corrente', credit_limit: 15000, credit_limit_enabled: enabled })
+    const reloaded = (await h.actions.getClientesAction(A)).find(client => client.id === A)
+    assert.equal(reloaded.credit_limit_enabled, enabled)
+    assert.equal(reloaded.credit_limit, 15000)
+  }
+  await assert.rejects(h.actions.saveClienteAction({ id: A, credit_limit: -1, credit_limit_enabled: true }), /limite de crédito válido/)
+})
+
 for (const error of [
   { code: 'PGRST202', message: 'Could not find the function public.save_client_financial_profile in the schema cache' },
   { code: '42883', message: 'function public.save_client_financial_profile does not exist' },

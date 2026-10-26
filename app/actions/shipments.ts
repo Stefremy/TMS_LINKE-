@@ -378,7 +378,7 @@ export async function emitClientGuiaAction(data: {
     }
 
     reservation = await reserveWallet(supabase, ctx.tenant_id, matchedClient.id, shipmentId, computedSellPrice, trackingNumber)
-    shipmentData.billing_type = reservation.reserved ? 'pay_as_you_go' : 'conta_corrente'
+    shipmentData.billing_type = reservation.reserved && reservation.kind !== 'credit_limit' ? 'pay_as_you_go' : 'conta_corrente'
 
     // ─── STEP 1: Call carrier API — only write to DB if carrier accepts ──────────
     let realGuia = trackingNumber
@@ -619,7 +619,7 @@ export async function emitClientGuiaAction(data: {
     }
 
     // Wallet consumption is represented by the shipment and its reservation, never a second decrement.
-    if (reservation.reserved && (reservation.balanceBefore ?? 0) >= 15 && matchedClient.email) {
+    if (reservation.reserved && reservation.kind !== 'credit_limit' && (reservation.balanceBefore ?? 0) >= 15 && matchedClient.email) {
       try {
         const after = await walletSnapshot(supabase, ctx.tenant_id, matchedClient.id)
         if (after && after.balance < 15) {

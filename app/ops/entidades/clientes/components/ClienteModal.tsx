@@ -112,6 +112,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     payment_due_days: initialData?.payment_due_days ?? defaultPaymentDays,
     iban: initialData?.iban || "",
     credit_limit: initialData?.credit_limit ?? 5000,
+    credit_limit_enabled: initialData?.credit_limit_enabled ?? false,
     balance: initialData?.balance || "0,00€",
     assigned_seller: initialData?.assigned_seller || "Gestão Comercial",
     observations: initialData?.observations || "",
@@ -155,6 +156,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         payment_due_days: initialData.payment_due_days ?? defaultPaymentDays,
         iban: initialData.iban || "",
         credit_limit: initialData.credit_limit ?? 5000,
+        credit_limit_enabled: initialData.credit_limit_enabled ?? false,
         balance: initialData.balance || "0,00€",
         assigned_seller: initialData.assigned_seller || "Gestão Comercial",
         observations: initialData.observations || "",
@@ -937,7 +939,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Crédito (€)</label>
-                    {formData.billing_type !== "pay_as_you_go" && (
+                    {formData.billing_type !== "pay_as_you_go" && formData.credit_limit_enabled && (
                       <button 
                         type="button" 
                         onClick={() => setIsEditingCredit(!isEditingCredit)}
@@ -948,9 +950,11 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     )}
                   </div>
                   
-                  {isEditingCredit && formData.billing_type !== "pay_as_you_go" ? (
+                  {isEditingCredit && formData.billing_type !== "pay_as_you_go" && formData.credit_limit_enabled ? (
                     <input
                       type="number"
+                      min="0"
+                      step="0.01"
                       value={formData.credit_limit ?? 5000}
                       onChange={(e) => setFormData({ ...formData, credit_limit: Number(e.target.value) })}
                       className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs font-mono font-bold text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
@@ -958,10 +962,24 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     />
                   ) : (
                     <div className={`w-full border border-[var(--border-subtle)] rounded-md px-3 py-2 text-xs font-mono font-bold text-[var(--text-primary)] flex items-center justify-between ${formData.billing_type === "pay_as_you_go" ? "bg-slate-100 text-slate-500 opacity-80 cursor-not-allowed" : "bg-[var(--surface-muted)]"}`}>
-                      <span>{Number(formData.credit_limit || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</span>
+                      <span>{formData.billing_type !== "pay_as_you_go" && !formData.credit_limit_enabled ? "Sem limite" : `${Number(formData.credit_limit || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}</span>
                       <span className="text-[10px] text-[var(--text-tertiary)] font-normal font-sans">
-                        {formData.billing_type === "pay_as_you_go" ? "Carregamentos Acumulados (Bloqueado)" : "Limite Base"}
+                        {formData.billing_type === "pay_as_you_go" ? "Carregamentos Acumulados (Bloqueado)" : formData.credit_limit_enabled ? "Limite Base" : "Conta Corrente"}
                       </span>
+                    </div>
+                  )}
+                  {formData.billing_type !== "pay_as_you_go" && (
+                    <div className="mt-2">
+                      <button type="button" role="switch" aria-checked={formData.credit_limit_enabled === true}
+                        aria-label="Ativar limite de crédito"
+                        onClick={() => { setFormData(prev => ({ ...prev, credit_limit_enabled: !prev.credit_limit_enabled })); setIsEditingCredit(false) }}
+                        className="inline-flex items-center gap-2 text-[11px] font-semibold text-[var(--text-secondary)] cursor-pointer">
+                        <span aria-hidden="true" className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${formData.credit_limit_enabled ? "bg-[#246B45]" : "bg-slate-300"}`}>
+                          <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${formData.credit_limit_enabled ? "translate-x-4" : "translate-x-0"}`} />
+                        </span>
+                        {formData.credit_limit_enabled ? "Limite de crédito ativo" : "Ativar limite de crédito"}
+                      </button>
+                      <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">{formData.credit_limit_enabled ? "Novos envios não podem ultrapassar o crédito disponível." : "Sem limite de crédito. O valor definido fica guardado para reativar."} Alteração aplicada ao guardar.</p>
                     </div>
                   )}
                 </div>

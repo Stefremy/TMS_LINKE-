@@ -425,7 +425,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
 
                     {/* Crédito */}
                     <td className="py-3 px-3 text-right font-mono text-[11px] text-[var(--text-primary)]">
-                      {item.credit_limit ? (
+                      {item.billing_type !== 'pay_as_you_go' && !item.credit_limit_enabled ? <span className="text-[var(--text-secondary)] font-sans">Sem limite</span> : typeof item.credit_limit === 'number' ? (
                         item.billing_type === 'pay_as_you_go' ? (
                           <div className="flex flex-col items-end gap-0.5">
                             <span className="font-semibold">

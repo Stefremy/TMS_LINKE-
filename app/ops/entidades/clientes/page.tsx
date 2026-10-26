@@ -6,6 +6,7 @@ import { ClientesClient } from "./components/ClientesClient"
 import { createAdminClient } from "@/lib/supabase/server"
 import { defaultClientPaymentDays } from "@/lib/billing/payment-settings"
 import { requireEmployee } from "@/lib/auth/context"
+import { currentAccountOutstanding } from "@/lib/billing/client-balance"
 
 export const dynamic = "force-dynamic"
 
@@ -46,10 +47,11 @@ export default async function EntidadesClientesPage() {
       }
     })
 
-    const totalDebt = unbilledShipmentsTotal + unpaidStatementsTotal
+    const totalDebt = c.billing_type === 'pay_as_you_go' ? unbilledShipmentsTotal + unpaidStatementsTotal
+      : currentAccountOutstanding(shipments.filter(s => s.client_id === c.id), statements.filter((s: { client_id?: string }) => s.client_id === c.id))
     let available_credit = undefined
 
-    if (typeof c.credit_limit === 'number') {
+    if (typeof c.credit_limit === 'number' && (c.billing_type === 'pay_as_you_go' || c.credit_limit_enabled === true)) {
       available_credit = Math.max(0, c.credit_limit - totalDebt)
     }
 

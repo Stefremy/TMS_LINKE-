@@ -160,7 +160,7 @@ test('SW07: issuing a receipt for already prepaid shipments does not replenish w
 })
 
 function shipmentHarness() {
- const tables={shipments:[],audit_log:[],packages:[]},db=fakeSupabase(tables,undefined,{persistInserts:true})
+ const tables={shipments:[],audit_log:[{id:'wallet-profile',tenant_id:TENANT,action:'client_data',details:{id:A,billing_type:'pay_as_you_go',credit_limit:1}}],packages:[]},db=fakeSupabase(tables,undefined,{persistInserts:true})
  db.client.rpc=async(name,p)=>{
   const reservations=tables.wallet_reservations ||= []
   if(name==='reserve_shipment_wallet') {
