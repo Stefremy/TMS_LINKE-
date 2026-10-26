@@ -59,7 +59,7 @@ export function DashboardCalendarWidget({ initialDate }: { initialDate: string }
       title={`${day} de ${month}. ${status}${summary.event ? `. ${nextEvent}` : ''}`}
       aria-label={`Abrir calendário: ${day} de ${month}. ${status}${summary.event ? `. ${nextEvent}` : ''}`}>
       <span className={styles.dateBadge} aria-hidden="true">
-        <span className={styles.weekday}>{weekday.replace('.', '')}</span>
+        <span className={styles.weekday}>{weekday.replace('.', '').slice(0, 3)}</span>
         <span className={styles.day}>{day}</span>
       </span>
       <span className={styles.reading}>

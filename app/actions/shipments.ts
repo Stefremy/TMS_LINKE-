@@ -9,6 +9,7 @@ import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPrici
 import { getAuthContext, requireUser, requireEmployee, requireClientAccess, getTenantId } from "@/lib/auth/context"
 import { CTT_TRACKING_EVENTS, CTT_INCIDENT_CODES } from "@/lib/services/ctt/ctt-types"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
+import { validateCttExportDetails, type CttExportDetails } from "@/lib/services/ctt/export-details"
 import { CorreosShipmentService } from "@/lib/services/correos/correos-shipment.service"
 import { resolveCttCredentials, resolveCorreosCredentials } from "@/lib/services/carriers/credentials"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
@@ -244,6 +245,7 @@ export async function emitClientGuiaAction(data: {
   widthCm: number
   heightCm: number
   observations?: string
+  cttExportDetails?: CttExportDetails
 }) {
   let reservation: WalletReservation | undefined
   let submitted = false
@@ -287,6 +289,7 @@ export async function emitClientGuiaAction(data: {
     let weightPricingBasis: WeightPricingBasis
     let matchedClient: any = {}
     let carrierCode: "ctt" | "correos"
+    let cttExportDetails: CttExportDetails | undefined
     try {
       validateShipmentPricingInput(data)
       const pricing = await loadShipmentPricingContext(supabase, ctx, finalClientId, data)
@@ -296,8 +299,14 @@ export async function emitClientGuiaAction(data: {
       if (!chosenService.webservice_service_code?.trim()) {
         throw new ShipmentPricingError("Serviço sem configuração de transportadora. Contacte o suporte.")
       }
-      const recipientCountry = data.recipientCountry || "PT"
-      const recipientPostal = data.recipientPostal || ""
+      const recipientCountry = (data.recipientCountry || "PT").trim().toUpperCase()
+      const recipientPostal = (data.recipientPostal || "").trim()
+      if (recipientCountry === "ES" && !/^\d{5}$/.test(recipientPostal)) {
+        throw new ShipmentPricingError("O código postal de Espanha deve ter 5 dígitos, sem hífen (ex.: 28013).")
+      }
+      if (carrierCode === "ctt" && recipientCountry !== "PT") {
+        cttExportDetails = validateCttExportDetails(data.cttExportDetails)
+      }
       const priceResult = calculateShipmentPrice(
         data.weightKg,
         { ...matchedClient, default_linke_table_id: chosenService.id },
@@ -308,7 +317,7 @@ export async function emitClientGuiaAction(data: {
       )
 
       // Carrier routing and credentials come from the verified service, not the request.
-      data = { ...data, serviceName: chosenService.name, subProductId: chosenService.webservice_service_code,
+      data = { ...data, recipientCountry, recipientPostal, serviceName: chosenService.name, subProductId: chosenService.webservice_service_code,
         webserviceConnectionId: chosenService.webservice_connection_id }
 
       weightPricingBasis = captureWeightPricingBasis(matchedClient, chosenService, recipientCountry, recipientPostal)
@@ -342,6 +351,9 @@ export async function emitClientGuiaAction(data: {
       sender_zip3: senderZip3,
       sender_zip4: senderZip4,
       recipient_name: data.recipientName,
+      recipient_country: data.recipientCountry || "PT",
+      ctt_export_details: cttExportDetails,
+      recipient_city: data.recipientCity || "",
       recipient_address: `${data.recipientAddress}${data.recipientCity ? `, ${data.recipientCity}` : ""}`,
       recipient_zip3: recipientZip3,
       recipient_zip4: recipientZip4,
@@ -478,9 +490,9 @@ export async function emitClientGuiaAction(data: {
             address: data.recipientAddress,
             city: data.recipientCity || "Portugal",
             zip: data.recipientPostal || "1000-001",
-            phone: data.recipientPhone || "920000000",
+            phone: data.recipientPhone || "",
             email: data.recipientEmail,
-            country: "PT"
+            country: data.recipientCountry || "PT"
           },
           weightKg: data.weightKg || 1,
           volumes: data.volumesCount || 1,
@@ -488,7 +500,8 @@ export async function emitClientGuiaAction(data: {
           codValue: data.selectedSpecialServices?.includes("cod") ? data.codValue : 0,
           isReturn: data.isReturn,
           observations,
-          autoClose: false
+          autoClose: false,
+          cttExportDetails,
         })
 
         if (!cttResult.success) {
@@ -513,7 +526,7 @@ export async function emitClientGuiaAction(data: {
         const rawZpl = cttResult.labelBase64 || ""
         labelBase64 = rawZpl ? await convertZplToPdfBase64(rawZpl) : null
       } catch (e: any) {
-        if (e.message?.includes("rejeitaram") || e.message?.includes("inválido") || e.message?.includes("suportado")) {
+        if (confirmedRejection || e.message?.includes("rejeitaram") || e.message?.includes("inválido") || e.message?.includes("suportado")) {
           throw e
         }
         throw new Error("Erro de ligação aos CTT: " + (e?.message || "Tente novamente."))

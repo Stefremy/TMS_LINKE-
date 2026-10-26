@@ -13,6 +13,15 @@ import {
 const CTT_QA_SHIPMENT_ENDPOINT = "http://cttexpressows.qa.ctt.pt/CTTEWSPool/CTTShipmentProviderWS.svc"
 const CTT_PROD_SHIPMENT_ENDPOINT = "http://cttexpressows.ctt.pt/CTTEWSPool/CTTShipmentProviderWS.svc"
 
+// Used only to choose Phone/MobilePhone, never to restrict which country may
+// contact a recipient. Unknown international prefixes are preserved as Phone.
+const CONTACT_NUMBER_PLANS = [
+  { country: "PT", prefix: "351", mobile: /^9\d{8}$/ },
+  { country: "ES", prefix: "34", mobile: /^[67]\d{8}$/ },
+  { country: "FR", prefix: "33", mobile: /^(?:6\d|7[3-9])\d{7}$/ },
+  { country: "GB", prefix: "44", mobile: /^7[1-57-9]\d{8}$/ },
+]
+
 export class CTTShipmentService {
   private client: CTTSoapClient
 
@@ -35,10 +44,28 @@ export class CTTShipmentService {
         ? "Receiver" 
         : defaultType
 
-    const rawPhone = (addr.Phone || "").replace(/\s+/g, "").replace(/^(\+351|00351)/, "")
-    const rawMobile = (addr.MobilePhone || "").replace(/\s+/g, "").replace(/^(\+351|00351)/, "")
-    // Se rawMobile não foi passado mas rawPhone começa com 9 (9 dígitos), é telemóvel para a CTT
-    const isPhoneMobile = !rawMobile && rawPhone.length === 9 && /^[9]/.test(rawPhone)
+    const country = (addr.Country || "PT").trim().toUpperCase()
+    const normalizeContact = (value?: string) => {
+      const compact = (value || "").replace(/[\s().-]+/g, "").replace(/^00/, "+")
+      const international = compact.startsWith("+")
+      const plan = international
+        ? CONTACT_NUMBER_PLANS.find(p => compact.startsWith(`+${p.prefix}`))
+        : CONTACT_NUMBER_PLANS.find(p => p.country === country)
+      const national = international && plan ? compact.slice(plan.prefix.length + 1) : compact
+      // National FR/GB numbers include a trunk zero, which is irrelevant only
+      // for classification; preserve the user's actual number in the payload.
+      const mobileDigits = !international && (plan?.country === "FR" || plan?.country === "GB")
+        ? national.replace(/^0/, "") : national
+      return {
+        value: international && plan?.country === country && (country === "PT" || country === "ES") ? national : compact,
+        mobile: plan?.mobile.test(mobileDigits) ?? false,
+      }
+    }
+    const phone = normalizeContact(addr.Phone)
+    const rawPhone = phone.value
+    const rawMobile = normalizeContact(addr.MobilePhone).value
+    // An explicit international prefix takes precedence over the address country.
+    const isPhoneMobile = !rawMobile && phone.mobile
     const mobileValue = rawMobile || (isPhoneMobile ? rawPhone : "")
     const phoneValue = rawMobile ? rawPhone : (isPhoneMobile ? "" : rawPhone)
 
@@ -47,7 +74,7 @@ export class CTTShipmentService {
         <mod:Address>${esc(addr.Address)}</mod:Address>
         <mod:City>${esc(addr.City)}</mod:City>
         ${addr.ContactName ? `<mod:ContactName>${esc(addr.ContactName)}</mod:ContactName>` : ""}
-        <mod:Country>${esc(addr.Country || "PT")}</mod:Country>
+        <mod:Country>${esc(country)}</mod:Country>
         ${addr.Door ? `<mod:Door>${esc(addr.Door)}</mod:Door>` : ""}
         ${addr.Email ? `<mod:Email>${esc(addr.Email)}</mod:Email>` : ""}
         ${addr.Floor ? `<mod:Floor>${esc(addr.Floor)}</mod:Floor>` : ""}
@@ -72,11 +99,13 @@ export class CTTShipmentService {
       <mod:ShipmentData>
         ${shipment.ATCode ? `<mod:ATCode>${esc(shipment.ATCode)}</mod:ATCode>` : ""}
         <mod:ClientReference>${esc(shipment.ClientReference)}</mod:ClientReference>
-        ${shipment.DeclaredValue ? `<mod:DeclaredValue>${shipment.DeclaredValue}</mod:DeclaredValue>` : ""}
+        ${shipment.DeclaredValue !== undefined ? `<mod:DeclaredValue>${shipment.DeclaredValue}</mod:DeclaredValue>` : ""}
+        ${shipment.ExportType ? `<mod:ExportType>${esc(shipment.ExportType)}</mod:ExportType>` : ""}
         <mod:IsDevolution>${shipment.IsDevolution ? "true" : "false"}</mod:IsDevolution>
         ${shipment.Observations ? `<mod:Observations>${esc(shipment.Observations)}</mod:Observations>` : ""}
         ${shipment.OriginalObject ? `<mod:OriginalObject>${esc(shipment.OriginalObject)}</mod:OriginalObject>` : ""}
         <mod:Quantity>${shipment.Quantity || 1}</mod:Quantity>
+        ${shipment.UPUCode ? `<mod:UPUCode>${esc(shipment.UPUCode)}</mod:UPUCode>` : ""}
         ${shipment.ValidationDate ? `<mod:ValidationDate>${esc(shipment.ValidationDate)}</mod:ValidationDate>` : ""}
         <mod:Weight>${Math.round(shipment.Weight || 1)}</mod:Weight>
       </mod:ShipmentData>

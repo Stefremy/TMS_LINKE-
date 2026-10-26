@@ -1,5 +1,6 @@
-import { CarrierProvider, ShipmentInput, ShipmentResult, PickupInput, PickupResult, TrackingResult } from './types'
+import { CarrierProvider, ShipmentInput, ShipmentResult, PickupInput, PickupResult, TrackingResult, type Address } from './types'
 import { CTTShipmentService, CTTPickupService, CTTTrackingService, CTTConnectionCredentials, CTTAddressData, CTTShipmentData } from '../ctt'
+import { validateCttExportDetails } from '../ctt/export-details'
 
 export class CttProvider implements CarrierProvider {
   private creds!: CTTConnectionCredentials
@@ -25,38 +26,32 @@ export class CttProvider implements CarrierProvider {
     }
   }
 
+  private shipmentAddress(address: Address, type: 1 | 2): CTTAddressData {
+    const country = (address.country || "PT").trim().toUpperCase()
+    const zip = country === "PT" ? this.parseZip(address.zip) : null
+    return {
+      Type: type,
+      Name: address.name || (type === 1 ? "Remetente Desconhecido" : "Destinatário Desconhecido"),
+      Address: address.address || "",
+      ...(zip ? { PTZipCode4: zip.cp4, PTZipCode3: zip.cp3 } : {
+        NonPTZipCode: (address.zip || "").trim(),
+        NonPTZipCodeLocation: address.city || "",
+      }),
+      City: address.city || "",
+      Country: country,
+      ContactName: address.contact || address.name,
+      Phone: address.phone,
+      MobilePhone: address.mobilePhone,
+      Email: address.email,
+    }
+  }
+
   async createShipment(input: ShipmentInput): Promise<ShipmentResult> {
     try {
-      const senderZip = this.parseZip(input.sender.zip)
-      const recipientZip = this.parseZip(input.recipient.zip)
+      const senderData = this.shipmentAddress(input.sender, 1)
+      const recipientData = this.shipmentAddress(input.recipient, 2)
 
-      const senderData: CTTAddressData = {
-        Type: 1, // 1=Remetente
-        Name: input.sender.name || "Remetente Desconhecido",
-        Address: input.sender.address || "",
-        PTZipCode4: senderZip.cp4,
-        PTZipCode3: senderZip.cp3,
-        City: input.sender.city || "",
-        Country: input.sender.country || "PT",
-        ContactName: input.sender.name,
-        Phone: input.sender.phone,
-        Email: input.sender.email,
-      }
-
-      const recipientData: CTTAddressData = {
-        Type: 2, // 2=Destinatário
-        Name: input.recipient.name || "Destinatário Desconhecido",
-        Address: input.recipient.address || "",
-        PTZipCode4: recipientZip.cp4,
-        PTZipCode3: recipientZip.cp3,
-        City: input.recipient.city || "",
-        Country: input.recipient.country || "PT",
-        ContactName: input.recipient.name,
-        Phone: input.recipient.phone,
-        Email: input.recipient.email,
-      }
-
-      const shipmentData: any = {
+      const shipmentData: CTTShipmentData = {
         ClientReference: input.reference || "LNK_GEN",
         Weight: Math.round((input.weightKg || 1) * 1000), // CTT expects grams
         Quantity: input.volumes || 1,
@@ -64,7 +59,18 @@ export class CttProvider implements CarrierProvider {
         IsDevolution: input.isReturn
       }
 
-      if (input.codValue && input.codValue > 0) {
+      if (recipientData.Country !== "PT") {
+        try {
+          const details = validateCttExportDetails(input.cttExportDetails)
+          shipmentData.ExportType = details.exportType
+          shipmentData.UPUCode = details.contentType
+          shipmentData.DeclaredValue = details.declaredValue
+        } catch (error) {
+          // This is a local rejection before any carrier call, so a wallet
+          // reservation can be released without an ambiguous remote outcome.
+          return { success: false, confirmedRejection: true, error: error instanceof Error ? error.message : "Dados de exportação inválidos." }
+        }
+      } else if (input.codValue && input.codValue > 0) {
         shipmentData.DeclaredValue = input.codValue
       }
 

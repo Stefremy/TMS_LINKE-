@@ -156,6 +156,59 @@ function withDimensions(form) {
 }
 async function emit(h, extra) { return h.load('app/actions/shipments.ts').emitClientGuiaAction(shipmentInput(extra)) }
 
+test('CTT client and OPS emissions keep the selected Spanish destination through the provider and stored details', async () => {
+  for (const ctx of [clientContext, { ...clientContext, role: 'employee' }]) {
+    const h = shipmentHarness({ ctx, adjust: t => {
+      t.servicos_linke[0].allowed_zones = ['ES-PENIN']
+      t.servicos_linke[0].zones[0].zone_code = 'ES-PENIN'
+    } })
+    const result = await emit(h, { clientId: CLIENT, recipientCountry: 'ES', recipientPostal: '28013',
+      recipientCity: 'Madrid', recipientPhone: '+34 612 345 678',
+      cttExportDetails: { exportType: 'Permanent', contentType: 'Goods', declaredValue: 25.5 } })
+    assert.equal(result.success, true)
+    assert.equal(h.providerCalls[0].payload.recipient.country, 'ES')
+    assert.equal(h.providerCalls[0].payload.recipient.zip, '28013')
+    assert.equal(h.providerCalls[0].payload.recipient.phone, '+34 612 345 678')
+    const saved = h.db.writes.find(w => w.table === 'audit_log' && w.value.action === 'shipment_data').value.details
+    assert.equal(saved.recipient_country, 'ES')
+    assert.equal(saved.recipient_city, 'Madrid')
+    assert.deepEqual(saved.ctt_export_details, { exportType: 'Permanent', contentType: 'Goods', declaredValue: 25.5 })
+    assert.deepEqual(h.providerCalls[0].payload.cttExportDetails, saved.ctt_export_details)
+  }
+})
+
+test('Spanish postcodes with Portuguese masks are rejected before wallet reservation or carrier submission', async () => {
+  const h = shipmentHarness({ adjust: t => {
+    t.servicos_linke[0].allowed_zones = ['ES-PENIN']
+    t.servicos_linke[0].zones[0].zone_code = 'ES-PENIN'
+  } })
+  const result = await emit(h, { recipientCountry: 'ES', recipientPostal: '2801-003' })
+  assert.equal(result.success, false); assert.match(result.error, /5 dígitos/)
+  assert.equal(h.providerCalls.length, 0); assert.equal(h.db.writes.length, 0)
+})
+
+test('missing or invalid CTT international declarations stop before reserving money or requesting a label', async () => {
+  for (const details of [undefined, {}, { exportType: '1', contentType: 'Goods', declaredValue: 10 },
+    { exportType: 'Permanent', contentType: 'Goods', declaredValue: NaN },
+    { exportType: 'Permanent', contentType: 'Goods', declaredValue: -1 }]) {
+    const h = shipmentHarness({ adjust: t => {
+      t.servicos_linke[0].allowed_zones = ['ES-PENIN']; t.servicos_linke[0].zones[0].zone_code = 'ES-PENIN'
+      t.audit_log[0].details.billing_type = 'pay_as_you_go'
+    } })
+    const result = await emit(h, { recipientCountry: 'ES', recipientPostal: '28013', cttExportDetails: details })
+    assert.equal(result.success, false); assert.match(result.error, /exportação|conteúdo|declarado/)
+    assert.equal(h.providerCalls.length, 0); assert.equal(h.db.writes.length, 0)
+  }
+})
+
+test('a confirmed CTT validation rejection is reported as validation rather than a connection error', async () => {
+  const message = 'O tipo de exportação é obrigatório., O tipo de produto é obrigatório.'
+  const h = shipmentHarness({ carrierResult: { success: false, confirmedRejection: true, error: message } })
+  const result = await emit(h)
+  assert.equal(result.success, false); assert.equal(result.error, message)
+  assert.equal(h.providerCalls.length, 1); assert.equal(h.db.writes.length, 0)
+})
+
 for (const role of ['client', 'employee', 'admin']) {
   test(`${role}: missing or invalid C/L/A is rejected before reserving funds or contacting a carrier`, async () => {
     for (const field of ['lengthCm', 'widthCm', 'heightCm']) {
@@ -414,6 +467,44 @@ function fixtureQuote(h, input = {}) {
     data.weightKg, h.tables.audit_log[0].details, h.tables.servicos_linke[0],
     data.recipientCountry, data.recipientPostal, data.selectedSpecialServices, data.codValue)
 }
+
+for (const carrier of ['CTT', 'Correos']) {
+  test(`${carrier}: client estimates work with costs redacted and match authoritative totals`, () => {
+    const h = shipmentHarness({ carrier, adjust: t => setCustomPrices(t, [6]) })
+    const client = h.tables.audit_log[0].details
+    const original = h.tables.servicos_linke[0]
+    const publicService = { ...original, zones: original.zones.map(z => ({ ...z,
+      tiers: z.tiers.map(t => ({ ...t, cost_price: undefined, margin_pct: undefined })),
+    })) }
+    const codes = carrier === 'CTT' ? ['cod', 'fragil'] : ['correos_cod', 'correos_saturday']
+    const authoritative = fixtureQuote(h, { selectedSpecialServices: codes, codValue: 100 })
+    assert.throws(() => h.load('lib/pricing/calculate-shipment-quote.ts').calculateShipmentQuote(
+      1, client, publicService, 'PT', '4800-019', codes, 100), /Tarifa inválida/)
+    const before = JSON.stringify(publicService)
+    const preview = h.load('lib/pricing/calculate-client-shipment-preview.ts').calculateClientShipmentPreview(
+      1, client, publicService, 'PT', '4800-019', codes, 100)
+    for (const key of ['basePrice', 'fuelSurchargeAmount', 'specialFeesAmount', 'specialItems', 'totalPrice']) {
+      assert.deepEqual(preview[key], authoritative[key])
+    }
+    assert.ok(!('buyPrice' in preview))
+    assert.equal(JSON.stringify(publicService), before)
+  })
+}
+
+test('client estimates do not invent Spain tariffs from a Portuguese price zone', () => {
+  const h = shipmentHarness()
+  const service = { ...h.tables.servicos_linke[0], allowed_zones: ['ES-PENIN'] }
+  const preview = h.load('lib/pricing/calculate-client-shipment-preview.ts').calculateClientShipmentPreview
+  assert.throws(() => preview(1, {}, service, 'ES', '28013'), /Tarifa não configurada/)
+  const spanish = { ...service, zones: service.zones.map(z => ({ ...z, zone_code: 'ES-PENIN' })) }
+  assert.ok(preview(1, {}, spanish, 'ES', '28013').totalPrice > 0)
+  assert.throws(() => preview(1, {}, spanish, 'PT', '4800-019'), /Serviço indisponível/)
+  const highest = Math.max(...spanish.zones[0].tiers.map(t => t.weight_max))
+  assert.throws(() => preview(highest + 1, {}, spanish, 'ES', '28013'), /Tarifa não configurada/)
+  const invalid = { ...spanish, zones: spanish.zones.map(z => ({ ...z, tiers: z.tiers.map(t => ({ ...t, sell_price: 0 })) })) }
+  assert.throws(() => preview(1, {}, invalid, 'ES', '28013'), /Tarifa inválida/)
+})
+
 for (const carrier of ['CTT', 'Correos']) {
   test(`${carrier}: persisted custom prices match the preview, returned total and recorded breakdown without discount`, async () => {
     const h = shipmentHarness({ carrier, adjust: t => {
@@ -481,7 +572,8 @@ for (const carrier of ['CTT', 'Correos']) {
         srv.zones.push({ zone_code: zone, zone_name: zone, tiers: [{ ...srv.zones[0].tiers[0], sell_price: 20 }] })
         setCustomPrices(t, [6])
       } })
-      const input = { recipientCountry: country, recipientPostal: postal }
+      const input = { recipientCountry: country, recipientPostal: postal,
+        cttExportDetails: country === 'ES' ? { exportType: 'Permanent', contentType: 'Goods', declaredValue: 25.5 } : undefined }
       const preview = fixtureQuote(h, input)
       assert.equal(preview.basePrice, 20)
       assert.equal(preview.totalPrice, 22.5)
@@ -504,6 +596,13 @@ test('additional kilograms use the configured anchor, rounded increments and neg
     assert.equal(preview.basePrice, basePrice)
     assert.equal(preview.buyPrice, buyPrice)
     assert.equal(preview.totalPrice, totalPrice)
+    const publicService = { ...h.tables.servicos_linke[0], zones: h.tables.servicos_linke[0].zones.map(z => ({ ...z,
+      tiers: z.tiers.map(t => ({ ...t, cost_price: undefined, margin_pct: undefined })),
+    })) }
+    const publicPreview = h.load('lib/pricing/calculate-client-shipment-preview.ts').calculateClientShipmentPreview(
+      weight, h.tables.audit_log[0].details, publicService, 'PT', '4800-019')
+    assert.equal(publicPreview.basePrice, basePrice)
+    assert.equal(publicPreview.totalPrice, totalPrice)
     const result = await emit(h, { weightKg: weight })
     assert.equal(result.success, true)
     assert.equal(result.sellPrice, preview.totalPrice)

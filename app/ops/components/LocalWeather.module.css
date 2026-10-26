@@ -25,10 +25,10 @@
 .weatherButton {
   display: inline-flex;
   align-items: center;
-  min-width: 218px;
-  width: 218px;
-  height: 90px;
-  padding: 12px 32px 12px 100px;
+  min-width: var(--dashboard-widget-width, 218px);
+  width: var(--dashboard-widget-width, 218px);
+  height: var(--dashboard-widget-height, 90px);
+  padding: 10px 22px 10px var(--dashboard-weather-scene, 100px);
   border: 1px solid rgb(29 88 147 / 32%);
   border-radius: 15px;
   text-align: left;
@@ -60,6 +60,8 @@
 .temperature { display: block; font-size: 26px; font-weight: 600; letter-spacing: -1px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgb(11 42 77 / 25%); }
 .location { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; margin-top: 2px; }
 .condition { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: #f0f4f7; margin-top: 2px; }
+.weatherButton > .scene { width: var(--dashboard-weather-scene, 105px); }
+.weatherButton .temperature { font-size: var(--dashboard-widget-number, 26px); white-space: nowrap; }
 .chevron { position: absolute; right: 12px; top: 16px; width: 13px; height: 13px; color: #e5edf3; transition: transform 180ms ease; }
 .forecastHeader { display: flex; justify-content: space-between; align-items: flex-start; min-height: 94px; padding: 18px 14px; border: 1px solid rgb(255 255 255 / 16%); border-radius: 12px; }
 .forecastHeader > .scene { left: auto; right: 10px; top: 65%; width: 110px; opacity: .55; z-index: -1; }

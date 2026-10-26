@@ -28,7 +28,10 @@ import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { resolveZoneCode, isZoneAllowedByService } from "@/lib/pricing/calculate-shipment-price"
-import { calculateShipmentQuote, getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
+import { getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
+import { calculateClientShipmentPreview } from "@/lib/pricing/calculate-client-shipment-preview"
+import { readCttExportForm } from "@/lib/services/ctt/export-details"
+import { CttExportFields } from "@/components/shipments/CttExportFields"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { 
@@ -190,7 +193,7 @@ export function ClientCreateGuia() {
     const destinationZone = resolveZoneCode(recipientCountry, recipientPostal)
     try {
       if (!activeLinkeService) throw new Error("Selecione um serviço disponível.")
-      const quote = calculateShipmentQuote(Number(weight), currentClient, activeLinkeService,
+      const quote = calculateClientShipmentPreview(Number(weight), currentClient, activeLinkeService,
         recipientCountry, recipientPostal, activeSpecialServices, Number(codAmount))
       return {
         base: quote.basePrice.toFixed(2), fuel: quote.fuelSurchargeAmount.toFixed(2),
@@ -207,7 +210,7 @@ export function ClientCreateGuia() {
     }
   }, [currentClient, activeLinkeService, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount])
 
-  const handleCreateShipment = async (e: React.FormEvent) => {
+  const handleCreateShipment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (isSuspended) {
       setSubmitError("A sua conta encontra-se suspensa para a criação de novos envios. Contacte geral@linke.pt para reativar.")
@@ -262,6 +265,7 @@ export function ClientCreateGuia() {
         codValue: parseFloat(codAmount) || 0,
         selectedSpecialServices: activeSpecialServices,
         observations,
+        cttExportDetails: !isCorreosService && recipientCountry !== "PT" ? readCttExportForm(new FormData(e.currentTarget)) : undefined,
       })
 
       if (!res.success) throw new Error(res.error || "Não foi possível criar o envio.")
@@ -777,8 +781,9 @@ export function ClientCreateGuia() {
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-slate-700">Telefone do Destinatário</label>
               <input 
-                type="text" 
-                placeholder="Ex: 910000000" 
+                type="tel"
+                inputMode="tel"
+                placeholder={recipientCountry === "ES" ? "Ex: +34 612 345 678" : "Ex: +351 910 000 000"}
                 value={recipientPhone}
                 onChange={(e) => setRecipientPhone(e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
@@ -808,6 +813,8 @@ export function ClientCreateGuia() {
               />
             </div>
           </div>
+
+          {!isCorreosService && recipientCountry !== "PT" && <CttExportFields key={generatedGuia || "new"} />}
 
           {/* Checkbox para guardar destinatário na agenda */}
           <div className="flex items-center gap-2 pt-1 pb-2">
@@ -1016,13 +1023,16 @@ export function ClientCreateGuia() {
                 <div className="text-[11px] sm:text-xs text-slate-500 font-medium">Preço Total Estimado do Envio (sem IVA):</div>
                 <div className="flex flex-wrap items-baseline gap-2">
                   <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
-                    {calculatedPrice.total}€
+                    {calculatedPrice.isBlocked ? "Indisponível" : `${calculatedPrice.total}€`}
                   </span>
-                  <span className="text-[10px] sm:text-[11px] text-slate-500">
-                    (Base: <strong>{calculatedPrice.base}€</strong> + Comb. {calculatedPrice.fuelPct}%: <strong>{calculatedPrice.fuel}€</strong>
-                    {parseFloat(calculatedPrice.specialTotal) > 0 ? ` + Supl.: ${calculatedPrice.specialTotal}€` : ""}
-)
-                  </span>
+                  {calculatedPrice.isBlocked ? (
+                    <span role="status" className="text-xs text-amber-800">{calculatedPrice.blockedReason}</span>
+                  ) : (
+                    <span className="text-[10px] sm:text-[11px] text-slate-500">
+                      (Base: <strong>{calculatedPrice.base}€</strong> + Comb. {calculatedPrice.fuelPct}%: <strong>{calculatedPrice.fuel}€</strong>
+                      {parseFloat(calculatedPrice.specialTotal) > 0 ? ` + Supl.: ${calculatedPrice.specialTotal}€` : ""})
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

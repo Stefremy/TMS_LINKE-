@@ -96,6 +96,8 @@ export interface CTTShipmentData {
   Quantity: number // Nº de volumes
   ClientReference: string // Referência interna única (max 21 chars)
   DeclaredValue?: number
+  ExportType?: import("./export-details").CttExportType
+  UPUCode?: import("./export-details").CttContentType
 }
 
 export interface CTTDeliveryNote {

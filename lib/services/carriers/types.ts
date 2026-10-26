@@ -22,6 +22,7 @@ export interface ShipmentInput {
   specialServices?: string[]
   observations?: string
   autoClose?: boolean
+  cttExportDetails?: import("../ctt/export-details").CttExportDetails
 }
 
 export interface ShipmentResult {

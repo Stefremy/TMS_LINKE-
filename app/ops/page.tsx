@@ -34,6 +34,7 @@ import { HeaderClockDate } from "./components/HeaderClockDate"
 import { DashboardBillingPanel } from "./components/DashboardBillingPanel"
 import { DashboardCalendarWidget } from "./components/DashboardCalendarWidget"
 import { lisbonDate } from "@/lib/billing/recurring-periods"
+import headerStyles from "./components/DashboardHeader.module.css"
 
 function getMonthName(date: Date) {
   return date.toLocaleString('pt-PT', { month: 'long', year: 'numeric' })
@@ -288,24 +289,26 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
     <div className="max-w-[1600px] mx-auto flex flex-col gap-6">
       <OpsDashboardClientSync activeIds={activeIds} />
       
-      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-5 border-b border-[var(--border-subtle)]">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <div>
+      <header className={headerStyles.header}>
+        <div className={headerStyles.layout}>
+          <div className={headerStyles.intro}>
             <h1 className="text-2xl font-semibold text-[var(--text-primary)] tracking-tight">Visão geral</h1>
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
               {isCustomRange ? "Resumo do período selecionado" : `Resumo de ${getMonthName(targetDate)}`}
             </p>
           </div>
-          <LocalWeather />
-          <HeaderClockDate />
-          <FloatingCalculatorWidget placement="inline" />
-          <DashboardCalendarWidget initialDate={lisbonDate(now)} />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <DateRangePicker 
-            defaultFrom={isCustomRange ? searchParams.from! : currentMonthStart.toISOString().split('T')[0]} 
-            defaultTo={isCustomRange ? searchParams.to! : currentMonthEnd.toISOString().split('T')[0]} 
-          />
+          <div className={headerStyles.widgets}>
+            <LocalWeather />
+            <HeaderClockDate />
+            <FloatingCalculatorWidget placement="inline" />
+            <DashboardCalendarWidget initialDate={lisbonDate(now)} />
+          </div>
+          <div className={headerStyles.filters}>
+            <DateRangePicker
+              defaultFrom={isCustomRange ? searchParams.from! : currentMonthStart.toISOString().split('T')[0]}
+              defaultTo={isCustomRange ? searchParams.to! : currentMonthEnd.toISOString().split('T')[0]}
+            />
+          </div>
         </div>
       </header>
 

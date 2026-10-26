@@ -330,8 +330,8 @@ export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
 export async function emitCttShipmentAction(shipmentInput: {
   id?: string
   ref?: string
-  sender: { name: string; address: string; zip: string; city: string; phone: string; email?: string }
-  recipient: { name: string; address: string; zip: string; city: string; phone: string; email?: string }
+  sender: { name: string; address: string; zip: string; city: string; phone: string; email?: string; country?: string }
+  recipient: { name: string; address: string; zip: string; city: string; phone: string; email?: string; country?: string }
   weightKg?: number
   volumes?: number
   subProduct?: string
@@ -339,6 +339,7 @@ export async function emitCttShipmentAction(shipmentInput: {
   autoClose?: boolean
   isReturn?: boolean
   selectedSpecialServices?: string[]
+  cttExportDetails?: import("@/lib/services/ctt/export-details").CttExportDetails
 }) {
   await requireEmployee()
   const creds = await getCttCredentials()
@@ -361,8 +362,8 @@ export async function emitCttShipmentAction(shipmentInput: {
 
   const result = await provider.createShipment({
     reference: shipmentInput.ref || `TRK-${Date.now().toString().slice(-8)}`,
-    sender: { ...shipmentInput.sender, country: "PT" },
-    recipient: { ...shipmentInput.recipient, country: "PT" },
+    sender: { ...shipmentInput.sender, country: shipmentInput.sender.country || "PT" },
+    recipient: { ...shipmentInput.recipient, country: shipmentInput.recipient.country || "PT" },
     weightKg: shipmentInput.weightKg || 1,
     volumes: shipmentInput.volumes || 1,
     subProduct: shipmentInput.subProduct,
@@ -370,7 +371,8 @@ export async function emitCttShipmentAction(shipmentInput: {
     isReturn: shipmentInput.isReturn,
     specialServices: [], // CTT rejects SpecialServiceType for EMSF056.01, so we map them as observations
     observations: observationsString,
-    autoClose: shipmentInput.autoClose
+    autoClose: shipmentInput.autoClose,
+    cttExportDetails: shipmentInput.cttExportDetails,
   })
 
   if (result.success && result.trackingNumber) {

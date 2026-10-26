@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button"
 import { OFFICIAL_LINKE_ZONES } from "@/lib/services/geo/international-zones"
 import { resolveZoneCode } from "@/lib/pricing/calculate-shipment-price"
 import { calculateShipmentQuote, getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
+import { readCttExportForm } from "@/lib/services/ctt/export-details"
+import { CttExportFields } from "@/components/shipments/CttExportFields"
 import { getServiceDisplayLabel } from "@/lib/services/ctt/service-identity"
 import { downloadCttLabel, printCttLabel } from "@/lib/label-utils"
 
@@ -224,7 +226,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         webserviceConnectionId: activeLinkeService?.webservice_connection_id,
         calculatedPrice: estimatedTier.sell,
         selectedSpecialServices: activeSpecialServices,
-        codValue: activeSpecialServices.some(code => code === "cod" || code === "correos_cod") ? codValue : undefined
+        codValue: activeSpecialServices.some(code => code === "cod" || code === "correos_cod") ? codValue : undefined,
+        cttExportDetails: !isCorreos && recipientCountry !== "PT" ? readCttExportForm(formData) : undefined,
       })
       
       if (!res.success) {
@@ -960,7 +963,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                         <input 
                           type="tel" 
                           name="recipient_phone" 
-                          placeholder="910000000" 
+                          inputMode="tel"
+                          placeholder={recipientCountry === "ES" ? "+34 612 345 678" : "+351 910 000 000"}
                           value={recipientPhone}
                           onChange={(e) => setRecipientPhone(e.target.value)}
                           className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs" 
@@ -995,6 +999,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
               </div>
 
             </div>
+
+            {!isCorreos && recipientCountry !== "PT" && <div className="px-6 pb-6"><CttExportFields /></div>}
 
             {specialServicesAvailable.length > 0 && (
               <div className="px-6 pb-6 pt-2">
