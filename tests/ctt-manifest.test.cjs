@@ -112,8 +112,8 @@ test('duplicate carrier tracking codes cannot close an ambiguous batch', async (
   assert.equal(h.calls.length, 0)
 })
 
-test('EQ, DB and EE products use their own CTT product code, without a Para Amanhã default', async () => {
-  for (const [tracking, product] of [['EQ123456789PT', 'ENCF008.01'], ['DB123456789PT', 'EMSF057.01'], ['EE123456789PT', 'EMSF001.02']]) {
+test('EQ, DB, EE and CE products use their own CTT product code, without a Para Amanhã default', async () => {
+  for (const [tracking, product] of [['EQ123456789PT', 'ENCF008.01'], ['DB123456789PT', 'EMSF057.01'], ['EE123456789PT', 'EMSF001.02'], ['CE123456789PT', 'ENCF008.02']]) {
     const h = harness({ rows: [row(A, { carrier_tracking_number: tracking })] })
     assert.equal((await h.close(TENANT, [A])).success, true)
     assert.equal(h.calls[0].input.shipments[0].SubProductCode, product)

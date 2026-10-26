@@ -31,7 +31,7 @@ interface CloseMetadata extends CTTShipment2Close {
   connectionId?: string
 }
 
-const productByPrefix: Record<string, string> = { EQ: 'ENCF008.01', DD: 'EMSF056.01', DB: 'EMSF057.01', EE: 'EMSF001.02' }
+const productByPrefix: Record<string, string> = { EQ: 'ENCF008.01', DD: 'EMSF056.01', DB: 'EMSF057.01', EE: 'EMSF001.02', CE: 'ENCF008.02' }
 
 /** Closing the carrier's paperwork never confirms physical collection. */
 export async function closeCttManifest(tenantId: string, shipmentIds?: string[], clientId?: string): Promise<ManifestResult> {

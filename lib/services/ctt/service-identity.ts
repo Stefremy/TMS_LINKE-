@@ -3,7 +3,7 @@ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 type ServiceIdentityInput = Pick<Partial<ServicoLinke>, "name" | "preferred_carrier_name" | "webservice_service_code">
 
 interface CttServiceIdentity {
-  prefix: "EQ" | "DD" | "DB" | "EE"
+  prefix: "EQ" | "DD" | "DB" | "EE" | "CE"
   productName: string
   label: string
 }
@@ -13,6 +13,7 @@ const CTT_SERVICE_IDENTITIES: Record<string, CttServiceIdentity> = {
   "EMSF056.01": { prefix: "DD", productName: "Para Amanhã", label: "Guia DD · Para Amanhã" },
   "EMSF057.01": { prefix: "DB", productName: "Em 2 Dias", label: "Guia DB · Em 2 Dias" },
   "EMSF001.02": { prefix: "EE", productName: "EMS Internacional", label: "Guia EE · EMS Internacional" },
+  "ENCF008.02": { prefix: "CE", productName: "EMS Economy", label: "Guia CE · EMS Economy" },
 }
 
 /** Display identity follows the configured carrier product, never an editable table name. */

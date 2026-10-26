@@ -1141,6 +1141,25 @@ export function ServicoModal({
                             Europa e destinos mundiais aéreo
                           </p>
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, webservice_service_code: "ENCF008.02" })}
+                          className={`p-3 rounded-xl border text-left transition-all ${
+                            formData.webservice_service_code === "ENCF008.02"
+                              ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
+                              : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold text-xs">ENCF008.02</span>
+                            {formData.webservice_service_code === "ENCF008.02" && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                          </div>
+                          <p className="text-xs font-semibold mt-1">EMS Economy (Guia CE)</p>
+                          <p className={`text-[10px] ${formData.webservice_service_code === "ENCF008.02" ? "text-slate-300" : "text-slate-500"}`}>
+                            Europa rodoviário / internacional económico
+                          </p>
+                        </button>
                       </>
                     )}
                   </div>

@@ -245,11 +245,12 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   {
     id: "srv_linke_europa_air",
     code: "LK-EU-AIR",
-    name: "Linke International Express Exportação Aéreo",
-    description: "Tarifas oficiais de exportação aérea internacional em 8 zonas mundiais (Europa 1, 2 e 3, América do Norte, América do Sul, Oriente 1 e 2, África) via CTT EMS Internacional (Guia EE).",
+    name: "Linke EMS Internacional Aéreo (Guia EE)",
+    description: "Tarifas oficiais de exportação aérea internacional prioritária em 8 zonas mundiais (Europa 1, 2 e 3, América do Norte, América do Sul, Oriente 1 e 2, África) via CTT EMS Internacional (Guia EE · EMSF001.02).",
     category: "Internacional",
     color: "#7c3aed",
     is_active: true,
+    is_primordial: true,
     pricing_profile: "Standard / Geral",
     target_client_name: "Todos os Clientes",
     discount_vs_standard_pct: 0,
@@ -265,6 +266,36 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     allowed_zones: ["EU 1", "EU 2", "EU 3", "NA", "SA", "O1", "O2", "A", "EU-Z1", "EU-Z2", "EU-Z3", "INTL-AERO", "INTL"],
     created_at: "2026-09-01T10:40:00Z",
     zones: buildOfficialLinkeInternationalZones(22),
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 5b. EUROPA RODOVIÁRIO — EMS Economy — Guia CE — ENCF008.02
+  //    (código real validado contra a API CTT em produção)
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: "srv_linke_ce_std",
+    code: "LK-CE-STD",
+    name: "Linke Europa Terrestre Económico (Guia CE)",
+    description: "Tarifas oficiais de exportação rodoviária / económica para a Europa (Zonas EU 1, EU 2 e EU 3) via CTT EMS Economy (Guia CE · ENCF008.02).",
+    category: "Internacional",
+    color: "#2563eb",
+    is_active: true,
+    is_primordial: true,
+    pricing_profile: "Standard / Geral",
+    target_client_name: "Todos os Clientes",
+    discount_vs_standard_pct: 0,
+    preferred_carrier_id: "forn_2",
+    preferred_carrier_name: "CTT Expresso",
+    webservice_connection_id: "ctt_expresso",
+    webservice_service_code: "ENCF008.02",
+    transit_time_label: "3-5 dias úteis",
+    global_markup_pct: 22.0,
+    fuel_surcharge_pct: 8.5,
+    cod_fee_pct: 0,
+    cod_min_fee: 0,
+    allowed_zones: ["EU 1", "EU 2", "EU 3", "EU-Z1", "EU-Z2", "EU-Z3", "INTL"],
+    created_at: "2026-09-01T10:45:00Z",
+    zones: buildOfficialLinkeInternationalZones(22).filter(z => ["EU 1", "EU 2", "EU 3"].includes(z.zone_code)),
   },
 
   // ─────────────────────────────────────────────────────────────────────────
