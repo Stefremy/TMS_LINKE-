@@ -7,7 +7,7 @@ import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
 import { getTenantId, requireUser, requireEmployee } from "@/lib/auth/context"
-import { buildOfficialLinkeInternationalZones } from "@/lib/services/geo/international-zones"
+import { buildOfficialLinkeInternationalZones, buildOfficialCeTruckZones } from "@/lib/services/geo/international-zones"
 import { isTemporarilyWithdrawnService } from "@/lib/services/service-availability"
 
 const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
@@ -315,14 +315,14 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 5b. EUROPA RODOVIÁRIO — EMS Economy — Guia CE — ENCF008.02
-  //    (código real validado contra a API CTT em produção)
+  // 5b. EUROPA RODOVIÁRIO (CAMIÃO) — EMS Economy — Guia CE — ENCF008.02
+  //    Contrato CTT oficial (public/Capa.pdf): Exclusivamente Zona 2 e Zona 3
   // ─────────────────────────────────────────────────────────────────────────
   {
     id: "srv_linke_ce_std",
     code: "LK-CE-STD",
     name: "Linke Europa Terrestre Económico (Guia CE)",
-    description: "Tarifas oficiais de exportação rodoviária / económica para a Europa (Zonas EU 1, EU 2 e EU 3) via CTT EMS Economy (Guia CE · ENCF008.02).",
+    description: "Tarifas oficiais de exportação rodoviária / camião para a Europa (Zona 2 e Zona 3) via CTT EMS Economy (Guia CE · ENCF008.02).",
     category: "Internacional",
     color: "#2563eb",
     is_active: true,
@@ -335,13 +335,13 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     webservice_connection_id: "ctt_expresso",
     webservice_service_code: "ENCF008.02",
     transit_time_label: "3-5 dias úteis",
-    global_markup_pct: 22.0,
+    global_markup_pct: 15.0,
     fuel_surcharge_pct: 8.5,
     cod_fee_pct: 0,
     cod_min_fee: 0,
-    allowed_zones: ["EU 1", "EU 2", "EU 3", "EU-Z1", "EU-Z2", "EU-Z3", "INTL"],
+    allowed_zones: ["Zona 2", "Zona 3"],
     created_at: "2026-09-01T10:45:00Z",
-    zones: buildOfficialLinkeInternationalZones(22).filter(z => ["EU 1", "EU 2", "EU 3"].includes(z.zone_code)),
+    zones: buildOfficialCeTruckZones(),
   },
 
   // ─────────────────────────────────────────────────────────────────────────

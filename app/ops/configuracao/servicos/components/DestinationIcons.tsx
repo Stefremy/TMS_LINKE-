@@ -122,6 +122,8 @@ export function DestinationBadge({ code, showLabel = false }: { code: string; sh
     case "EU-1":
     case "EU-2":
     case "EU-3":
+    case "Zona 2":
+    case "Zona 3":
       return (
         <span className="inline-flex items-center gap-1 shrink-0 text-slate-700">
           <EuFlag className="w-3.5 h-2.5" />

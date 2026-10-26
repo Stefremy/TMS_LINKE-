@@ -14,7 +14,7 @@
 
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "@/app/ops/configuracao/servicos/types"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
-import { resolveInternationalZone } from "@/lib/services/geo/international-zones"
+import { resolveInternationalZone, resolveCeTruckZone } from "@/lib/services/geo/international-zones"
 import { ShipmentPricingError } from "./shipment-pricing-errors"
 
 export interface PriceResult {
@@ -96,10 +96,12 @@ export function isZoneAllowedByService(allowedZones: string[] | undefined, zoneC
   // Equivalences between official Linke codes and legacy codes:
   if (zoneCode === "EU 1" && (allowedZones.includes("EU-Z1") || allowedZones.includes("EU 1"))) return true
   if (zoneCode === "EU-Z1" && (allowedZones.includes("EU 1") || allowedZones.includes("EU-Z1"))) return true
-  if (zoneCode === "EU 2" && (allowedZones.includes("EU-Z2") || allowedZones.includes("EU 2"))) return true
-  if (zoneCode === "EU-Z2" && (allowedZones.includes("EU 2") || allowedZones.includes("EU-Z2"))) return true
-  if (zoneCode === "EU 3" && (allowedZones.includes("EU-Z3") || allowedZones.includes("EU 3"))) return true
-  if (zoneCode === "EU-Z3" && (allowedZones.includes("EU 3") || allowedZones.includes("EU-Z3"))) return true
+  if (zoneCode === "EU 2" && (allowedZones.includes("EU-Z2") || allowedZones.includes("EU 2") || allowedZones.includes("Zona 2"))) return true
+  if (zoneCode === "EU-Z2" && (allowedZones.includes("EU 2") || allowedZones.includes("EU-Z2") || allowedZones.includes("Zona 2"))) return true
+  if (zoneCode === "Zona 2" && (allowedZones.includes("Zona 2") || allowedZones.includes("EU 2") || allowedZones.includes("EU-Z2"))) return true
+  if (zoneCode === "EU 3" && (allowedZones.includes("EU-Z3") || allowedZones.includes("EU 3") || allowedZones.includes("Zona 3"))) return true
+  if (zoneCode === "EU-Z3" && (allowedZones.includes("EU 3") || allowedZones.includes("EU-Z3") || allowedZones.includes("Zona 3"))) return true
+  if (zoneCode === "Zona 3" && (allowedZones.includes("Zona 3") || allowedZones.includes("EU 3") || allowedZones.includes("EU-Z3"))) return true
 
   // Specific allowances:
   // INTL allowed by INTL-AERO or INTL-MAR or INTL or world zones
@@ -115,7 +117,7 @@ export function isZoneAllowedByService(allowedZones: string[] | undefined, zoneC
     return true
   }
   // EU zones allowed if INTL-AERO or INTL is enabled on table
-  if ((zoneCode.startsWith("EU") || ["EU 1", "EU 2", "EU 3"].includes(zoneCode)) && (allowedZones.includes("INTL-AERO") || allowedZones.includes("INTL"))) {
+  if ((zoneCode.startsWith("EU") || ["EU 1", "EU 2", "EU 3", "Zona 2", "Zona 3"].includes(zoneCode)) && (allowedZones.includes("INTL-AERO") || allowedZones.includes("INTL"))) {
     return true
   }
 
@@ -138,7 +140,20 @@ function findTier(tiers: PriceTierLinke[], weightKg: number): PriceTierLinke | n
  */
 function findExactZone(zones: ZonePriceMatrix[], zoneCode: string): ZonePriceMatrix | null {
   if (!zones || zones.length === 0) return null
-  return zones.find((z) => z.zone_code === zoneCode) || null
+  const exact = zones.find((z) => z.zone_code === zoneCode)
+  if (exact) return exact
+
+  // Map aliases for Zona 2 / Zona 3 / EU 2 / EU 3
+  if (zoneCode === "Zona 2" || zoneCode === "EU 2" || zoneCode === "EU-Z2") {
+    return zones.find((z) => z.zone_code === "Zona 2" || z.zone_code === "EU 2" || z.zone_code === "EU-Z2") || null
+  }
+  if (zoneCode === "Zona 3" || zoneCode === "EU 3" || zoneCode === "EU-Z3") {
+    return zones.find((z) => z.zone_code === "Zona 3" || z.zone_code === "EU 3" || z.zone_code === "EU-Z3") || null
+  }
+  if (zoneCode === "EU 1" || zoneCode === "EU-Z1") {
+    return zones.find((z) => z.zone_code === "EU 1" || z.zone_code === "EU-Z1") || null
+  }
+  return null
 }
 
 /**
@@ -203,8 +218,10 @@ export function calculateShipmentPrice(
   recipientPostal?: string,
   options: { requireConfiguredTariff?: boolean } = {}
 ): PriceResult {
-  const zoneCode = resolveZoneCode(recipientCountry, recipientPostal)
   const clientTable = resolveClientTable(client, allServicos)
+  const isCeTruck = clientTable?.webservice_service_code === "ENCF008.02" || clientTable?.code === "LK-CE-STD" || clientTable?.id === "srv_linke_ce_std"
+  const ceZone = isCeTruck ? resolveCeTruckZone(recipientCountry) : null
+  const zoneCode = ceZone || resolveZoneCode(recipientCountry, recipientPostal)
 
   if (options.requireConfiguredTariff) {
     if (!Number.isFinite(weightKg) || weightKg <= 0) throw new ShipmentPricingError("Peso inválido.")
@@ -249,15 +266,22 @@ export function calculateShipmentPrice(
   // 2. If client table doesn't cover this zone, search all active tables that allow this zone
   if ((!zone || !zone.tiers || zone.tiers.length === 0) && allServicos && allServicos.length > 0) {
     const alternativeTable = allServicos.find(
-      (s) =>
-        s.is_active !== false &&
-        isZoneAllowedByService(s.allowed_zones, zoneCode) &&
-        s.zones?.some((z) => (z.zone_code === zoneCode || (zoneCode.startsWith("EU-") && z.zone_code.startsWith("EU-"))) && z.tiers?.length > 0)
+      (s) => {
+        const isAltCeTruck = s.webservice_service_code === "ENCF008.02" || s.code === "LK-CE-STD" || s.id === "srv_linke_ce_std"
+        const targetZone = isAltCeTruck ? (resolveCeTruckZone(recipientCountry) || zoneCode) : zoneCode
+        return (
+          s.is_active !== false &&
+          isZoneAllowedByService(s.allowed_zones, targetZone) &&
+          s.zones?.some((z) => (z.zone_code === targetZone || (targetZone.startsWith("EU-") && z.zone_code.startsWith("EU-"))) && z.tiers?.length > 0)
+        )
+      }
     )
     if (alternativeTable) {
       effectiveTable = alternativeTable
-      zone = findExactZone(alternativeTable.zones, zoneCode) ||
-             (zoneCode.startsWith("EU-") ? alternativeTable.zones.find((z) => z.zone_code.startsWith("EU-")) : null) || null
+      const isAltCeTruck = alternativeTable.webservice_service_code === "ENCF008.02" || alternativeTable.code === "LK-CE-STD" || alternativeTable.id === "srv_linke_ce_std"
+      const targetZone = isAltCeTruck ? (resolveCeTruckZone(recipientCountry) || zoneCode) : zoneCode
+      zone = findExactZone(alternativeTable.zones, targetZone) ||
+             (targetZone.startsWith("EU-") ? alternativeTable.zones.find((z) => z.zone_code.startsWith("EU-")) : null) || null
       isDifferentTable = true
     }
   }

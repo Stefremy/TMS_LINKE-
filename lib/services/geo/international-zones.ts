@@ -471,3 +471,120 @@ export function buildOfficialLinkeInternationalZones(markupPct: number = 22): Zo
     }
   })
 }
+
+/**
+ * Zonas Oficiais do Contrato CTT Europa Rodoviário / Camião (Guia CE · ENCF008.02)
+ * Extraídas diretamente do contrato oficial em public/Capa.pdf
+ * O contrato contempla exclusivamente Zona 2 e Zona 3 para envio Europa Rodoviário (Camião).
+ */
+export interface CeTruckZoneDefinition {
+  code: string
+  name: string
+  description: string
+  transitTime: string
+  sampleCountries: string[]
+  countries: string[]
+}
+
+export const CTT_CE_TRUCK_ZONES: Record<string, CeTruckZoneDefinition> = {
+  "Zona 2": {
+    code: "Zona 2",
+    name: "Zona 2 — Europa Rodoviário (Camião)",
+    description: "Alemanha, Áustria, Bélgica, Eslováquia, Eslovénia, França, Grécia, Holanda, Hungria, Irlanda, Islândia, Itália, Lituânia, Luxemburgo, Reino Unido, República Checa, Suíça",
+    transitTime: "3-5 dias úteis",
+    sampleCountries: ["Alemanha", "França", "Holanda", "Bélgica", "Reino Unido", "Itália", "Áustria"],
+    countries: [
+      "DE", "AT", "BE", "SK", "SI", "FR", "GR", "NL", "HU", "IE", "IS", "IT", "LT", "LU", "GB", "UK", "CZ", "CH",
+      "ALEMANHA", "AUSTRIA", "BELGICA", "ESLOVAQUIA", "ESLOVENIA", "FRANCA", "GRECIA", "HOLANDA", "HUNGRIA", "IRLANDA", "ISLANDIA", "ITALIA", "LITUANIA", "LUXEMBURGO", "REINO UNIDO", "REPUBLICA CHECA", "SUICA",
+      "GERMANY", "FRANCE", "NETHERLANDS", "HUNGARY", "IRELAND", "ICELAND", "ITALY", "LITHUANIA", "LUXEMBOURG", "UNITED KINGDOM", "CZECH REPUBLIC", "SWITZERLAND", "SLOVAKIA", "SLOVENIA"
+    ]
+  },
+  "Zona 3": {
+    code: "Zona 3",
+    name: "Zona 3 — Europa Rodoviário (Camião)",
+    description: "Dinamarca, Estónia, Finlândia, Letónia, Malta, Noruega, Polónia, Suécia",
+    transitTime: "4-6 dias úteis",
+    sampleCountries: ["Polónia", "Suécia", "Dinamarca", "Finlândia", "Noruega"],
+    countries: [
+      "DK", "EE", "FI", "LV", "MT", "NO", "PL", "SE",
+      "DINAMARCA", "ESTONIA", "FINLANDIA", "LETONIA", "MALTA", "NORUEGA", "POLONIA", "SUECIA",
+      "DENMARK", "FINLAND", "LATVIA", "NORWAY", "POLAND", "SWEDEN", "MALTA", "ESTONIA"
+    ]
+  }
+}
+
+/**
+ * Resolve o país de destino para a Zona Rodoviária CTT CE (Zona 2 ou Zona 3)
+ */
+export function resolveCeTruckZone(rawCountry: string): "Zona 2" | "Zona 3" | null {
+  if (!rawCountry) return null
+  const clean = rawCountry
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/gi, "")
+
+  // 1. Exact match on country code or full normalized name
+  for (const [zoneKey, zoneDef] of Object.entries(CTT_CE_TRUCK_ZONES)) {
+    if (zoneDef.countries.includes(clean)) {
+      return zoneKey as "Zona 2" | "Zona 3"
+    }
+  }
+
+  // 2. Substring match only for longer names (>= 4 chars) to prevent 2-letter codes (like ES or PT) from matching words like ESLOVAQUIA
+  if (clean.length >= 4) {
+    for (const [zoneKey, zoneDef] of Object.entries(CTT_CE_TRUCK_ZONES)) {
+      for (const c of zoneDef.countries) {
+        if (c.length >= 4 && (clean.includes(c) || c.includes(clean))) {
+          return zoneKey as "Zona 2" | "Zona 3"
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Matriz de preços oficiais do contrato CTT Europa Rodoviário (Capa.pdf)
+ * Aplica margem contratual (15% até 5kg, 10% a partir de 10kg e quilos adicionais).
+ */
+export function buildOfficialCeTruckZones(): ZonePriceMatrix[] {
+  return [
+    {
+      zone_code: "Zona 2",
+      zone_name: "Zona 2 — Europa Rodoviário (Alemanha, França, Holanda, etc.)",
+      tiers: [
+        { id: "ce_z2_1",   label: "Até 1 Kg",            weight_max: 1,   cost_price: 13.00, margin_pct: 15, sell_price: 14.95, delivery_time: "3-5 dias úteis", enabled: true },
+        { id: "ce_z2_2",   label: "Até 2 Kg",            weight_max: 2,   cost_price: 13.95, margin_pct: 15, sell_price: 16.04, delivery_time: "3-5 dias úteis", enabled: true },
+        { id: "ce_z2_3",   label: "Até 3 Kg",            weight_max: 3,   cost_price: 15.85, margin_pct: 15, sell_price: 18.23, delivery_time: "3-5 dias úteis", enabled: true },
+        { id: "ce_z2_4",   label: "Até 4 Kg",            weight_max: 4,   cost_price: 17.74, margin_pct: 15, sell_price: 20.40, delivery_time: "3-5 dias úteis", enabled: true },
+        { id: "ce_z2_5",   label: "Até 5 Kg",            weight_max: 5,   cost_price: 19.64, margin_pct: 15, sell_price: 22.59, delivery_time: "3-5 dias úteis", enabled: true },
+        { id: "ce_z2_10",  label: "Até 10 Kg",           weight_max: 10,  cost_price: 25.32, margin_pct: 10, sell_price: 27.85, delivery_time: "3-5 dias úteis", enabled: true },
+        { id: "ce_z2_15",  label: "Até 15 Kg",           weight_max: 15,  cost_price: 34.80, margin_pct: 10, sell_price: 38.28, delivery_time: "3-5 dias úteis", enabled: true },
+        { id: "ce_z2_20",  label: "Até 20 Kg",           weight_max: 20,  cost_price: 44.28, margin_pct: 10, sell_price: 48.71, delivery_time: "3-5 dias úteis", enabled: true },
+        { id: "ce_z2_25",  label: "Até 25 Kg",           weight_max: 25,  cost_price: 53.76, margin_pct: 10, sell_price: 59.14, delivery_time: "3-5 dias úteis", enabled: true },
+        { id: "ce_z2_30",  label: "Até 30 Kg",           weight_max: 30,  cost_price: 63.23, margin_pct: 10, sell_price: 69.55, delivery_time: "3-5 dias úteis", enabled: true },
+        { id: "ce_z2_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 2.30,  margin_pct: 10, sell_price: 2.53,  delivery_time: "3-5 dias úteis", enabled: true },
+      ],
+    },
+    {
+      zone_code: "Zona 3",
+      zone_name: "Zona 3 — Europa Rodoviário (Polónia, Suécia, Dinamarca, etc.)",
+      tiers: [
+        { id: "ce_z3_1",   label: "Até 1 Kg",            weight_max: 1,   cost_price: 13.85, margin_pct: 15, sell_price: 15.93, delivery_time: "4-6 dias úteis", enabled: true },
+        { id: "ce_z3_2",   label: "Até 2 Kg",            weight_max: 2,   cost_price: 15.31, margin_pct: 15, sell_price: 17.61, delivery_time: "4-6 dias úteis", enabled: true },
+        { id: "ce_z3_3",   label: "Até 3 Kg",            weight_max: 3,   cost_price: 18.23, margin_pct: 15, sell_price: 20.96, delivery_time: "4-6 dias úteis", enabled: true },
+        { id: "ce_z3_4",   label: "Até 4 Kg",            weight_max: 4,   cost_price: 21.15, margin_pct: 15, sell_price: 24.32, delivery_time: "4-6 dias úteis", enabled: true },
+        { id: "ce_z3_5",   label: "Até 5 Kg",            weight_max: 5,   cost_price: 24.06, margin_pct: 15, sell_price: 27.67, delivery_time: "4-6 dias úteis", enabled: true },
+        { id: "ce_z3_10",  label: "Até 10 Kg",           weight_max: 10,  cost_price: 32.81, margin_pct: 10, sell_price: 36.09, delivery_time: "4-6 dias úteis", enabled: true },
+        { id: "ce_z3_15",  label: "Até 15 Kg",           weight_max: 15,  cost_price: 47.40, margin_pct: 10, sell_price: 52.14, delivery_time: "4-6 dias úteis", enabled: true },
+        { id: "ce_z3_20",  label: "Até 20 Kg",           weight_max: 20,  cost_price: 61.98, margin_pct: 10, sell_price: 68.18, delivery_time: "4-6 dias úteis", enabled: true },
+        { id: "ce_z3_25",  label: "Até 25 Kg",           weight_max: 25,  cost_price: 76.57, margin_pct: 10, sell_price: 84.23, delivery_time: "4-6 dias úteis", enabled: true },
+        { id: "ce_z3_30",  label: "Até 30 Kg",           weight_max: 30,  cost_price: 91.15, margin_pct: 10, sell_price: 100.27, delivery_time: "4-6 dias úteis", enabled: true },
+        { id: "ce_z3_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 3.31,  margin_pct: 10, sell_price: 3.64,  delivery_time: "4-6 dias úteis", enabled: true },
+      ],
+    },
+  ]
+}
