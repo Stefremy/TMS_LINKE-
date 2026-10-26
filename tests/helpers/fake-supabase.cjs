@@ -27,6 +27,7 @@ function fakeSupabase(tables, failure, options = {}) {
       lte(field, value) { state.filters.push({ field, value, kind: 'lte' }); return query },
       ilike(field, value) { state.filters.push({ field, value, kind: 'ilike' }); return query },
       in(field, value) { state.filters.push({ field, value, kind: 'in' }); return query },
+      is(field, value) { state.filters.push({ field, value, kind: 'is' }); return query },
       order(field, options) { (state.orders ||= []).push({ field, ...options }); return query },
       limit(value) { state.limit = value; return query },
       range(start, end) { state.range = [start, end]; return query },
@@ -46,7 +47,9 @@ function fakeSupabase(tables, failure, options = {}) {
             return filter.kind === 'ilike' ? matchesLike(value, filter.value)
               : filter.kind === 'gte' ? value >= filter.value
               : filter.kind === 'lte' ? value <= filter.value
-              : filter.kind === 'in' ? filter.value.includes(value) : value === filter.value
+              : filter.kind === 'in' ? filter.value.includes(value)
+              : filter.kind === 'is' ? (filter.value === null ? value == null : value === filter.value)
+              : value === filter.value
           }))
           if (state.write) {
             if (state.write.kind === 'insert' && options.persistInserts) {

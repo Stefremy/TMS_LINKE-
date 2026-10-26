@@ -239,14 +239,14 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 5. EUROPA — Avião / Economy — Zona 2 e Zona 3
-  //    Nota: código EMSF a confirmar com CTT (EMSF081.01 = Int'l Avião Express)
+  // 5. EUROPA & MUNDIAL — EMS Internacional — Guia EE — EMSF001.02
+  //    (código real validado contra a API CTT em produção)
   // ─────────────────────────────────────────────────────────────────────────
   {
     id: "srv_linke_europa_air",
     code: "LK-EU-AIR",
     name: "Linke International Express Exportação Aéreo",
-    description: "Tarifas oficiais de exportação aérea internacional em 8 zonas mundiais (Europa 1, 2 e 3, América do Norte, América do Sul, Oriente 1 e 2, África) válidas até 31/12/2025.",
+    description: "Tarifas oficiais de exportação aérea internacional em 8 zonas mundiais (Europa 1, 2 e 3, América do Norte, América do Sul, Oriente 1 e 2, África) via CTT EMS Internacional (Guia EE).",
     category: "Internacional",
     color: "#7c3aed",
     is_active: true,
@@ -256,7 +256,7 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     preferred_carrier_id: "forn_2",
     preferred_carrier_name: "CTT Expresso",
     webservice_connection_id: "ctt_expresso",
-    webservice_service_code: "EMSF081.01",
+    webservice_service_code: "EMSF001.02",
     transit_time_label: "3-7 dias úteis",
     global_markup_pct: 22.0,
     fuel_surcharge_pct: 8.5,

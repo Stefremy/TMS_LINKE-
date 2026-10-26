@@ -36,7 +36,12 @@ export class CTTShipmentService {
   /**
    * Serializa morada para XML de acordo com schema AddressData CTT (ordenação estrita WCF)
    */
-  private buildAddressXml(addr: CTTAddressData, tagName: string, defaultType: "Sender" | "Receiver"): string {
+  private buildAddressXml(
+    addr: CTTAddressData,
+    tagName: string,
+    defaultType: "Sender" | "Receiver",
+    isInternationalDestination: boolean = false
+  ): string {
     const esc = CTTSoapClient.escapeXml
     const typeEnum = addr.Type === "Sender" || addr.Type === 1 
       ? "Sender" 
@@ -56,8 +61,12 @@ export class CTTShipmentService {
       // for classification; preserve the user's actual number in the payload.
       const mobileDigits = !international && (plan?.country === "FR" || plan?.country === "GB")
         ? national.replace(/^0/, "") : national
+      let contactVal = international && plan?.country === country && (country === "PT" || country === "ES") ? national : compact
+      if (tagName === "SenderData" && isInternationalDestination && country === "PT" && contactVal) {
+        contactVal = contactVal.startsWith("+") ? contactVal : `+351${contactVal.replace(/^0+/, "")}`
+      }
       return {
-        value: international && plan?.country === country && (country === "PT" || country === "ES") ? national : compact,
+        value: contactVal,
         mobile: plan?.mobile.test(mobileDigits) ?? false,
       }
     }
@@ -162,6 +171,8 @@ export class CTTShipmentService {
     const distChannel = creds.distribution_channel || 99
     const requestId = crypto.randomUUID()
 
+    const isInternational = Boolean(input.receiver.Country && !["PT", "ES"].includes(input.receiver.Country.trim().toUpperCase()))
+
     const bodyXml = `
       <tem:CompleteShipment>
         <tem:Input>
@@ -174,7 +185,7 @@ export class CTTShipmentService {
               <mod:ShipmentCTT>
                 <mod:HasSenderInformation>true</mod:HasSenderInformation>
                 ${this.buildAddressXml(input.receiver, "ReceiverData", "Receiver")}
-                ${this.buildAddressXml(input.sender, "SenderData", "Sender")}
+                ${this.buildAddressXml(input.sender, "SenderData", "Sender", isInternational)}
                 ${this.buildShipmentDataXml(input.shipment)}
                 ${this.buildSpecialServicesXml(input.specialServices)}
               </mod:ShipmentCTT>
@@ -220,6 +231,8 @@ export class CTTShipmentService {
     const distChannel = creds.distribution_channel || 99
     const requestId = crypto.randomUUID()
 
+    const isInternational = Boolean(input.receiver.Country && !["PT", "ES"].includes(input.receiver.Country.trim().toUpperCase()))
+
     const bodyXml = `
       <tem:CreateShipment>
         <tem:Input>
@@ -232,7 +245,7 @@ export class CTTShipmentService {
               <mod:ShipmentCTT>
                 <mod:HasSenderInformation>true</mod:HasSenderInformation>
                 ${this.buildAddressXml(input.receiver, "ReceiverData", "Receiver")}
-                ${this.buildAddressXml(input.sender, "SenderData", "Sender")}
+                ${this.buildAddressXml(input.sender, "SenderData", "Sender", isInternational)}
                 ${this.buildShipmentDataXml(input.shipment)}
                 ${this.buildSpecialServicesXml(input.specialServices)}
               </mod:ShipmentCTT>
