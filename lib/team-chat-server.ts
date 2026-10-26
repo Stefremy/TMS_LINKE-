@@ -34,7 +34,7 @@ export async function listTeamChatChannels(tenantId: string): Promise<ChatChanne
   if (!error && Array.isArray(data)) {
     for (const row of data) {
       if (row.details && typeof row.details === "object") {
-        const d = row.details as any
+        const d = row.details as Partial<ChatChannel>
         if (d.slug && d.name) {
           customChannels.push({
             id: d.id || d.slug,
@@ -153,7 +153,7 @@ export async function readTeamChat(
   const { data, error } = await query.order("sequence", { ascending: !!after }).limit(CHAT_PAGE_SIZE + 1)
   databaseError(error)
 
-  const rows: ChatMessage[] = (data || []).slice(0, CHAT_PAGE_SIZE).map((row: any) => {
+  const rows: ChatMessage[] = (data || []).slice(0, CHAT_PAGE_SIZE).map((row: ChatMessage) => {
     const { cleanBody, channelSlug: foundChannel } = parseMessageBody(row.body)
     return {
       ...row,
