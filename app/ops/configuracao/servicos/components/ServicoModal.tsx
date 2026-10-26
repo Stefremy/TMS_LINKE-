@@ -1044,6 +1044,25 @@ export function ServicoModal({
                             Ilhas Baleares e Canárias Espanha
                           </p>
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, webservice_service_code: "90" })}
+                          className={`p-3 rounded-xl border text-left transition-all ${
+                            formData.webservice_service_code === "90"
+                              ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
+                              : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono font-bold text-xs">90</span>
+                            {formData.webservice_service_code === "90" && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                          </div>
+                          <p className="text-xs font-semibold mt-1">Internacional Express</p>
+                          <p className={`text-[10px] ${formData.webservice_service_code === "90" ? "text-slate-300" : "text-slate-500"}`}>
+                            Exportação aérea mundial (8 zonas oficiais)
+                          </p>
+                        </button>
                       </>
                     ) : (
                       <>

@@ -77,6 +77,7 @@ export const PRIMORDIAL_SERVICE_CODES = new Set([
   "LK-COR-ECOM",
   "LK-COR-ISLAS",
   "LK-COR-48",
+  "LK-COR-INTL",
 ])
 
 export const PRIMORDIAL_SERVICE_IDS = new Set([
@@ -91,6 +92,7 @@ export const PRIMORDIAL_SERVICE_IDS = new Set([
   "srv_linke_cor_48",
   "srv_linke_cor_ecom",
   "srv_linke_cor_islas",
+  "srv_linke_cor_intl",
   "b0123d61-f8ca-4238-bec5-0655cd18c102",
   "ff35f836-44fb-4041-a572-17ddea7fff75",
   "1c478f00-0c01-46ef-8865-e913652adc6b",

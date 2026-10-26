@@ -19,7 +19,7 @@ function harness({ service=fixture, auditOnly=false, failure, role='admin' }={})
     'next/cache':{revalidatePath(){}},'@/lib/supabase/server':{createAdminClient:()=>db.client},
     '@/lib/auth/context':{requireEmployee:employee,requireUser:async()=>ctx,getTenantId:async()=>T},
     '@/app/actions/fornecedores':{},'@/app/actions/ctt':{},
-    '@/lib/services/geo/international-zones':{buildOfficialLinkeInternationalZones:()=>[]},
+    '@/lib/services/geo/international-zones':{buildOfficialLinkeInternationalZones:()=>[],buildOfficialCeTruckZones:()=>[]},
   })
   return {actions:load('app/actions/servicos-linke.ts'),db,tables}
 }

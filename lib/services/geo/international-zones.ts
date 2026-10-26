@@ -109,7 +109,7 @@ export const COUNTRY_TO_ZONE_MAP: Record<string, string> = {
   "ANGOLA": "A", "AO": "A",
   "ANGUILLA": "SA", "AI": "SA",
   "ANTIGUA": "SA", "AG": "SA", "ANTIGUA E BARBUDA": "SA",
-  "ANTILHAS HOLANDESAS": "SA", "ANT. HOLANDESAS": "SA", "AN": "SA",
+  "ANTILHAS HOLANDESAS": "SA", "ANT. HOLANDESAS": "SA", "ANT HOLANDESAS": "SA", "AN": "SA",
   "ARABIA SAUDITA": "O2", "SA_ISO": "O2", "SAUDI ARABIA": "O2",
   "ARGELIA": "A", "DZ": "A", "ALGERIA": "A",
   "ARGENTINA": "SA", "AR": "SA",
@@ -165,7 +165,7 @@ export const COUNTRY_TO_ZONE_MAP: Record<string, string> = {
   "EQUADOR": "SA", "EC": "SA", "ECUADOR": "SA",
   "EGIPTO": "O1", "EG": "O1", "EGYPT": "O1",
   "EL SALVADOR": "SA", "SV": "SA",
-  "EMIRATOS ARABES U.": "O2", "EMIRADOS ARABES UNIDOS": "O2", "AE": "O2", "UAE": "O2",
+  "EMIRATOS ARABES U.": "O2", "EMIRATOS ARABES U": "O2", "EMIRADOS ARABES UNIDOS": "O2", "AE": "O2", "UAE": "O2",
   "ERITREIA": "A", "ER": "A",
   "ESLOVAQUIA": "EU 2", "SK": "EU 2", "SLOVAKIA": "EU 2",
   "ESLOVENIA": "EU 2", "SI": "EU 2", "SLOVENIA": "EU 2",
@@ -214,9 +214,9 @@ export const COUNTRY_TO_ZONE_MAP: Record<string, string> = {
   "ILHAS COOK": "A", "CK": "A",
   "ILHAS FAROE": "EU 2", "FO": "EU 2", "FAROE ISLANDS": "EU 2",
   "ILHAS MARSHALL": "A", "MH": "A",
-  "ILHAS ST. MARTIN": "SA", "MF": "SA",
+  "ILHAS ST. MARTIN": "SA", "ILHAS ST MARTIN": "SA", "SAINT MARTIN": "SA", "MF": "SA",
   "ILHAS TURCAS E CAICOS": "SA", "TC": "SA",
-  "ILHAS VIRGENS BRIT.": "SA", "VG": "SA",
+  "ILHAS VIRGENS BRIT.": "SA", "ILHAS VIRGENS BRIT": "SA", "ILHAS VIRGENS BRITANICAS": "SA", "VG": "SA",
   "ISRAEL": "O2", "IL": "O2",
   "ITALIA": "EU 1", "IT": "EU 1", "ITALY": "EU 1",
 
@@ -238,6 +238,7 @@ export const COUNTRY_TO_ZONE_MAP: Record<string, string> = {
   "LIBANO": "O2", "LB": "O2", "LEBANON": "O2",
   "LIBIA": "A", "LY": "A", "LIBYA": "A",
   "LIECHTENSTEIN": "EU 3", "LI": "EU 3",
+  "LETONIA": "EU 2", "LV": "EU 2", "LATVIA": "EU 2",
   "LITUANIA": "EU 2", "LT": "EU 2", "LITHUANIA": "EU 2",
   "LUXEMBURGO": "EU 1", "LU": "EU 1", "LUXEMBOURG": "EU 1",
 
@@ -293,18 +294,18 @@ export const COUNTRY_TO_ZONE_MAP: Record<string, string> = {
 
   // R
   "REINO UNIDO": "EU 1", "GB": "EU 1", "UK": "EU 1", "UNITED KINGDOM": "EU 1",
-  "REP. CENTRAL AFRICANA": "A", "CF": "A",
-  "REP. CHECA": "EU 2", "CZ": "EU 2", "CZECH REPUBLIC": "EU 2",
-  "REP. DEM. DO CONGO": "A", "CD": "A",
-  "REP. DOMINICANA": "SA", "DO": "SA", "DOMINICAN REPUBLIC": "SA",
+  "REP. CENTRAL AFRICANA": "A", "REP CENTRAL AFRICANA": "A", "REPUBLICA CENTRAL AFRICANA": "A", "CF": "A",
+  "REP. CHECA": "EU 2", "REP CHECA": "EU 2", "CZ": "EU 2", "CZECH REPUBLIC": "EU 2",
+  "REP. DEM. DO CONGO": "A", "REP DEM DO CONGO": "A", "REPUBLICA DEMOCRATICA DO CONGO": "A", "CD": "A",
+  "REP. DOMINICANA": "SA", "REP DOMINICANA": "SA", "REPUBLICA DOMINICANA": "SA", "DO": "SA", "DOMINICAN REPUBLIC": "SA",
   "RUANDA": "A", "RW": "A", "RWANDA": "A",
   "ROMENIA": "EU 2", "RO": "EU 2", "ROMANIA": "EU 2",
   "RUSSIA": "EU 2", "RU": "EU 2",
 
   // S
-  "SAIPAN, ILHAS MARIANAS": "A", "MP": "A",
+  "SAIPAN, ILHAS MARIANAS": "A", "SAIPAN ILHAS MARIANAS": "A", "SAIPAN": "A", "MP": "A",
   "SAMOA AMERICANA": "A", "AS": "A",
-  "S. VICENTE E GRANADINAS": "SA", "VC": "SA",
+  "S. VICENTE E GRANADINAS": "SA", "S VICENTE E GRANADINAS": "SA", "SAO VICENTE E GRANADINAS": "SA", "VC": "SA",
   "SANTA LUCIA": "SA", "LC": "SA",
   "SENEGAL": "A", "SN": "A",
   "SERVIA": "EU 2", "RS": "EU 2", "SERBIA": "EU 2",
@@ -315,7 +316,7 @@ export const COUNTRY_TO_ZONE_MAP: Record<string, string> = {
   "ST KITTS E NEVIS": "SA", "KN": "SA",
   "SUECIA": "EU 1", "SE": "EU 1", "SWEDEN": "EU 1",
   "SUICA": "EU 3", "CH": "EU 3", "SWITZERLAND": "EU 3",
-  "SURINAME": "SA", "SR": "SA",
+  "SURINAME": "SA", "SURIMANE": "SA", "SR": "SA",
   "SUAZILANDIA": "A", "SZ": "A", "ESWATINI": "A",
 
   // T

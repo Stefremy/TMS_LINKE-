@@ -584,6 +584,38 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
       },
     ],
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 11. CORREOS EXPRESS INTERNACIONAL — International Express Exportação — LK-COR-INTL
+  //    Contrato Oficial Correos Express Internacional:
+  //    - TABELA INTERNACIONAL (2).pdf (Tarifas Produtos Internacional Exportação - Aéreo)
+  //    - ZONAS INTERNACIONAIS.pdf (8 Zonas Internacionais, ~200 países)
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: "srv_linke_cor_intl",
+    code: "LK-COR-INTL",
+    name: "Linke Internacional Expresso (Correos Express)",
+    description: "Tarifas oficiais de exportação aérea internacional da Correos Express (International Express Exportação) em 8 zonas mundiais (Europa 1, 2 e 3, América do Norte, América do Sul, Oriente 1 e 2, África) conforme contrato oficial (TABELA INTERNACIONAL (2).pdf e ZONAS INTERNACIONAIS.pdf).",
+    category: "Internacional",
+    color: "#0284c7",
+    is_active: true,
+    is_primordial: true,
+    pricing_profile: "Standard / Geral",
+    target_client_name: "Todos os Clientes",
+    discount_vs_standard_pct: 0,
+    preferred_carrier_id: "forn_lk003",
+    preferred_carrier_name: "CORREOS.EXPRESS",
+    webservice_connection_id: "correos_express",
+    webservice_service_code: "90",
+    transit_time_label: "3-7 dias úteis",
+    global_markup_pct: 22.0,
+    fuel_surcharge_pct: 8.5,
+    cod_fee_pct: 0,
+    cod_min_fee: 0,
+    allowed_zones: ["EU 1", "EU 2", "EU 3", "NA", "SA", "O1", "O2", "A", "EU-Z1", "EU-Z2", "EU-Z3", "INTL-AERO", "INTL"],
+    created_at: "2026-09-01T11:40:00Z",
+    zones: buildOfficialLinkeInternationalZones(22),
+  },
 ]
 
 /** Read both storage paths before allowing an irreversible catalogue deletion or demotion. */
