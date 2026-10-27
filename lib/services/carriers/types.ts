@@ -16,6 +16,8 @@ export interface ShipmentInput {
   recipient: Address
   weightKg: number
   volumes: number
+  /** Declared parcel dimensions in centimetres, as entered by the sender. */
+  dimensionsCm?: { length: number; width: number; height: number }
   subProduct?: string
   codValue?: number
   isReturn?: boolean

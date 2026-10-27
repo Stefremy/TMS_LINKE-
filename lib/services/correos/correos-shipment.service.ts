@@ -1,5 +1,6 @@
 import { CorreosRestClient } from "./correos-rest-client"
 import { CorreosCredentials, CorreosShipmentInput, CorreosShipmentOutput } from "./types"
+import { validateParcelDimensions } from "../shipments/parcel-dimensions"
 
 const PROD_ENDPOINT = "https://www.cexpr.es/wspsc/apiRestGrabacionEnviok8s/json/grabacionEnvio"
 const TEST_ENDPOINT = "https://www.test.cexpr.es/wspsc/apiRestGrabacionEnviok8s/json/grabacionEnvio"
@@ -44,20 +45,29 @@ export class CorreosShipmentService {
     const formattedPobDest = input.destinatario.poblacion.slice(0, 40)
     const formattedPobRte = input.remitente.poblacion.slice(0, 40)
 
-    const numBultos = Number(input.bultos) || 1
-    const totalKilos = Number(input.kilos) || 1
-    const kilosPerBulto = (totalKilos / numBultos).toFixed(3)
+    const numBultos = Number(input.bultos)
+    const totalKilos = Number(input.kilos)
+    if (!Number.isSafeInteger(numBultos) || numBultos < 1 || !Number.isFinite(totalKilos) || totalKilos <= 0) {
+      throw new Error("Confirme o peso total e o número de volumes do envio Correos.")
+    }
+    const dimensions = input.dimensionsCm ? validateParcelDimensions(input.dimensionsCm) : undefined
+    const totalGrams = Math.round(totalKilos * 1000)
+    if (totalGrams < numBultos) throw new Error("O peso total deve permitir pelo menos 1 grama por volume.")
+    const gramsPerBulto = Math.floor(totalGrams / numBultos)
+    const remainder = totalGrams % numBultos
 
     // Correos Express requires at least one bulto in listaBultos to generate shipping labels!
     const listaBultos = input.listaBultos && input.listaBultos.length > 0
       ? input.listaBultos
       : Array.from({ length: numBultos }, (_, i) => ({
           orden: (i + 1).toString(),
-          kilos: kilosPerBulto,
-          volumen: "0",
-          alto: "0",
-          largo: "0",
-          ancho: "0"
+          // Preserve the total to the gram even when division is not exact.
+          kilos: ((gramsPerBulto + (i < remainder ? 1 : 0)) / 1000).toFixed(3),
+          ...(dimensions ? {
+            alto: String(dimensions.height),
+            largo: String(dimensions.length),
+            ancho: String(dimensions.width),
+          } : {}),
         }))
 
     // Construct the payload mapping to Correos Express spec

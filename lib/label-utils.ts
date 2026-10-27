@@ -73,8 +73,8 @@ export async function convertZplToPdfBase64(zpl: string): Promise<string> {
       return Buffer.from(arrayBuf).toString("base64")
     }
     console.warn("Labelary respondeu com erro:", res.status, res.statusText)
-  } catch (err: any) {
-    console.warn("Falha ao converter ZPL para PDF via Labelary:", err?.message)
+  } catch (err: unknown) {
+    console.warn("Falha ao converter ZPL para PDF via Labelary:", err instanceof Error ? err.message : String(err))
   }
   return trimmed
 }

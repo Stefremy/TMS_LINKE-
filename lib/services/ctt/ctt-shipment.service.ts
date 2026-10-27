@@ -1,4 +1,5 @@
 import { CTTSoapClient } from "./ctt-soap-client"
+import { normalizeCttContactPhone } from "./recipient-contact"
 import { 
   CTTConnectionCredentials, 
   CTTCompleteShipmentInput, 
@@ -12,15 +13,6 @@ import {
 
 const CTT_QA_SHIPMENT_ENDPOINT = "http://cttexpressows.qa.ctt.pt/CTTEWSPool/CTTShipmentProviderWS.svc"
 const CTT_PROD_SHIPMENT_ENDPOINT = "http://cttexpressows.ctt.pt/CTTEWSPool/CTTShipmentProviderWS.svc"
-
-// Used only to choose Phone/MobilePhone, never to restrict which country may
-// contact a recipient. Unknown international prefixes are preserved as Phone.
-const CONTACT_NUMBER_PLANS = [
-  { country: "PT", prefix: "351", mobile: /^9\d{8}$/ },
-  { country: "ES", prefix: "34", mobile: /^[67]\d{8}$/ },
-  { country: "FR", prefix: "33", mobile: /^(?:6\d|7[3-9])\d{7}$/ },
-  { country: "GB", prefix: "44", mobile: /^7[1-57-9]\d{8}$/ },
-]
 
 export class CTTShipmentService {
   private client: CTTSoapClient
@@ -51,23 +43,14 @@ export class CTTShipmentService {
 
     const country = (addr.Country || "PT").trim().toUpperCase()
     const normalizeContact = (value?: string) => {
-      const compact = (value || "").replace(/[\s().-]+/g, "").replace(/^00/, "+")
-      const international = compact.startsWith("+")
-      const plan = international
-        ? CONTACT_NUMBER_PLANS.find(p => compact.startsWith(`+${p.prefix}`))
-        : CONTACT_NUMBER_PLANS.find(p => p.country === country)
-      const national = international && plan ? compact.slice(plan.prefix.length + 1) : compact
-      // National FR/GB numbers include a trunk zero, which is irrelevant only
-      // for classification; preserve the user's actual number in the payload.
-      const mobileDigits = !international && (plan?.country === "FR" || plan?.country === "GB")
-        ? national.replace(/^0/, "") : national
-      let contactVal = international && plan?.country === country && (country === "PT" || country === "ES") ? national : compact
+      const contact = normalizeCttContactPhone(value, country)
+      let contactVal = contact.value
       if (tagName === "SenderData" && isInternationalDestination && country === "PT" && contactVal) {
         contactVal = contactVal.startsWith("+") ? contactVal : `+351${contactVal.replace(/^0+/, "")}`
       }
       return {
         value: contactVal,
-        mobile: plan?.mobile.test(mobileDigits) ?? false,
+        mobile: contact.mobile,
       }
     }
     const phone = normalizeContact(addr.Phone)

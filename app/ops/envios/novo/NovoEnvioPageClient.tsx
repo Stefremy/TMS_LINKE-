@@ -13,6 +13,7 @@ import { OFFICIAL_LINKE_ZONES } from "@/lib/services/geo/international-zones"
 import { getServiceDestinationCountries, getServiceDestinationZone } from "@/lib/services/service-destinations"
 import { calculateShipmentQuote, getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
+import { getCttRecipientContactError, hasCttRecipientMobilePhone } from "@/lib/services/ctt/recipient-contact"
 import { CttExportFields } from "@/components/shipments/CttExportFields"
 import { getServiceDisplayLabel } from "@/lib/services/ctt/service-identity"
 import { downloadCttLabel, printCttLabel } from "@/lib/label-utils"
@@ -210,6 +211,13 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
     try {
       const formData = new FormData(e.currentTarget)
+      if (!isCorreos && recipientCountry !== "PT") {
+        const contactError = getCttRecipientContactError({ country: recipientCountry,
+          phone: (formData.get("recipient_phone") as string) || recipientPhone,
+          email: (formData.get("recipient_email") as string) || recipientEmail,
+        })
+        if (contactError) throw new Error(contactError)
+      }
       const res = await emitClientGuiaAction({
         clientId: selectedClientId,
         clientName: isEditingSender ? senderName : (currentClient?.short_name || currentClient?.legal_name || "Operador"),
@@ -582,6 +590,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 </div>
               </div>
 
+              {isCorreos && <p className="text-xs text-[var(--text-secondary)]">As medidas indicadas aplicam-se a cada volume. Para volumes de tamanhos diferentes, crie envios separados.</p>}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Remetente */}
                 <div className="rounded-xl border border-[var(--border-subtle)] p-4 sm:p-5">
@@ -886,22 +896,27 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Telefone / Telemóvel</label>
+                        <label htmlFor="recipient-phone" className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Telefone / Telemóvel</label>
                         <input 
                           type="tel" 
+                          id="recipient-phone"
                           name="recipient_phone" 
+                          aria-describedby={!isCorreos && recipientCountry !== "PT" ? "recipient-contact-help" : undefined}
                           inputMode="tel"
-                          placeholder={recipientCountry === "ES" ? "+34 612 345 678" : "+351 910 000 000"}
+                          placeholder={recipientCountry === "BE" ? "+32 470 123 456" : recipientCountry === "ES" ? "+34 612 345 678" : "Telemóvel com indicativo do país"}
                           value={recipientPhone}
                           onChange={(e) => setRecipientPhone(e.target.value)}
                           className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs" 
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Email (Notificação)</label>
+                        <label htmlFor="recipient-email" className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">Email (Notificação){!isCorreos && recipientCountry !== "PT" && !hasCttRecipientMobilePhone(recipientPhone, recipientCountry) ? " *" : ""}</label>
                         <input 
                           type="email" 
+                          id="recipient-email"
                           name="recipient_email" 
+                          required={!isCorreos && recipientCountry !== "PT" && !hasCttRecipientMobilePhone(recipientPhone, recipientCountry)}
+                          aria-describedby={!isCorreos && recipientCountry !== "PT" ? "recipient-contact-help" : undefined}
                           placeholder="cliente@email.com" 
                           value={recipientEmail}
                           onChange={(e) => setRecipientEmail(e.target.value)}
@@ -909,6 +924,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                         />
                       </div>
                     </div>
+
+                    {!isCorreos && recipientCountry !== "PT" && <p id="recipient-contact-help" className="text-xs text-[var(--text-secondary)]">CTT internacional: indique um e-mail ou telemóvel do destinatário. Um telefone fixo sozinho não é suficiente.</p>}
 
                     <div className="pt-1">
                       <label className="flex items-center gap-2 text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer select-none">

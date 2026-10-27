@@ -2,6 +2,8 @@ import { CarrierProvider, ShipmentInput, ShipmentResult, PickupInput, PickupResu
 import { CTTShipmentService, CTTPickupService, CTTTrackingService, CTTConnectionCredentials, CTTAddressData, CTTShipmentData } from '../ctt'
 import { validateCttExportDetails } from '../ctt/export-details'
 import { getCttShipmentLabel } from '../ctt/shipment-label'
+import { getCttRecipientContactError } from '../ctt/recipient-contact'
+import { cttParcelObservations, validateParcelDimensions } from '../shipments/parcel-dimensions'
 
 export class CttProvider implements CarrierProvider {
   private creds!: CTTConnectionCredentials
@@ -43,7 +45,7 @@ export class CttProvider implements CarrierProvider {
       ContactName: address.contact || address.name,
       Phone: address.phone,
       MobilePhone: address.mobilePhone,
-      Email: address.email,
+      Email: address.email?.trim() || undefined,
     }
   }
 
@@ -51,6 +53,10 @@ export class CttProvider implements CarrierProvider {
     try {
       const senderData = this.shipmentAddress(input.sender, 1)
       const recipientData = this.shipmentAddress(input.recipient, 2)
+      if (input.dimensionsCm) {
+        try { validateParcelDimensions(input.dimensionsCm) }
+        catch (error) { return { success: false, confirmedRejection: true, error: error instanceof Error ? error.message : "Dimensões inválidas." } }
+      }
 
       const shipmentData: CTTShipmentData = {
         ClientReference: input.reference || "LNK_GEN",
@@ -66,6 +72,8 @@ export class CttProvider implements CarrierProvider {
           shipmentData.ExportType = details.exportType
           shipmentData.UPUCode = details.contentType
           shipmentData.DeclaredValue = details.declaredValue
+          const contactError = getCttRecipientContactError(input.recipient)
+          if (contactError) return { success: false, confirmedRejection: true, error: contactError }
         } catch (error) {
           // This is a local rejection before any carrier call, so a wallet
           // reservation can be released without an ambiguous remote outcome.
@@ -73,6 +81,13 @@ export class CttProvider implements CarrierProvider {
         }
       } else if (input.codValue && input.codValue > 0) {
         shipmentData.DeclaredValue = input.codValue
+      }
+
+      if (input.dimensionsCm) {
+        // CustomsData is a customs declaration, not a general measurement field.
+        // Some destinations (including BE) explicitly prohibit that block.
+        try { shipmentData.Observations = cttParcelObservations(input.dimensionsCm, input.observations) }
+        catch (error) { return { success: false, confirmedRejection: true, error: error instanceof Error ? error.message : "Dimensões inválidas." } }
       }
 
       const CTT_SPECIAL_SERVICES_MAP: Record<string, string> = {

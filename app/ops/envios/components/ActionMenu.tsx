@@ -127,8 +127,10 @@ export function ActionMenu({
     if (!effectiveId) return
     setIsEmitting(true)
     try {
-      await dispatchShipmentAction(effectiveId)
-      alert("Envio CTT emitido com sucesso!")
+      const result = await dispatchShipmentAction(effectiveId)
+      if (!result.success) throw new Error(result.error || "Os CTT não aceitaram o envio.")
+      onUpdateShipment?.({ ...shipment, status: "pendente", carrier_tracking_number: result.trackingNumber })
+      alert(result.dbWarning || "Envio CTT emitido com sucesso!")
     } catch (err: any) {
       alert("Erro ao emitir CTT: " + err.message)
     } finally {

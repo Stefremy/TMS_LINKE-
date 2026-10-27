@@ -5,6 +5,8 @@ const COLORS = {
   EQ: "bg-amber-50 text-amber-900 border-amber-300",
   DD: "bg-emerald-50 text-emerald-900 border-emerald-200",
   DB: "bg-blue-50 text-blue-900 border-blue-200",
+  EE: "bg-sky-50 text-sky-900 border-sky-200",
+  CE: "bg-violet-50 text-violet-900 border-violet-200",
 }
 
 export function CttServiceBadge({ service }: { service: Partial<ServicoLinke> }) {

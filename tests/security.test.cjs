@@ -148,7 +148,7 @@ function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = cl
 }
 function shipmentInput(extra = {}) {
   return { clientId: OTHER, serviceId: 'service-a', serviceName: 'forged service name',
-    recipientName: 'Fixture', recipientAddress: 'Fixture street', recipientCountry: 'PT', recipientPostal: '4000-001',
+    recipientName: 'Fixture', recipientAddress: 'Fixture street', recipientCountry: 'PT', recipientPostal: '4000-001', recipientPhone: '+351910000001',
     weightKg: 1, volumesCount: 1, lengthCm: 30.5, widthCm: 20, heightCm: 10, calculatedPrice: 0.01, subProductId: 'forged-code', webserviceConnectionId: 'forged-connection', ...extra }
 }
 test('requesting an existing CTT label never creates another carrier shipment or changes tracking',async()=>{
@@ -193,6 +193,7 @@ test('CTT client and OPS emissions keep the selected Spanish destination through
     assert.equal(h.providerCalls[0].payload.recipient.country, 'ES')
     assert.equal(h.providerCalls[0].payload.recipient.zip, '28013')
     assert.equal(h.providerCalls[0].payload.recipient.phone, '+34 612 345 678')
+    assert.deepEqual(h.providerCalls[0].payload.dimensionsCm,{length:30.5,width:20,height:10})
     const saved = h.db.writes.find(w => w.table === 'audit_log' && w.value.action === 'shipment_data').value.details
     assert.equal(saved.recipient_country, 'ES')
     assert.equal(saved.recipient_city, 'Madrid')
@@ -217,6 +218,7 @@ test('CE Finland shipments reach the carrier and preserve the validated road tar
       assert.equal(h.providerCalls.length,1)
       assert.equal(h.providerCalls[0].payload.recipient.country,'FI')
       assert.equal(h.providerCalls[0].payload.recipient.zip,'00100')
+      assert.deepEqual(h.providerCalls[0].payload.dimensionsCm,{length:30.5,width:20,height:10})
       const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
       assert.equal(saved.recipient_country,'FI')
       assert.equal(saved.weight_pricing_basis.service.zones[0].zone_code,'Zona 3')
@@ -270,6 +272,21 @@ test('missing or invalid CTT international declarations stop before reserving mo
   }
 })
 
+test('CTT Belgium contact validation precedes wallet reservation and carrier calls for client and OPS',async()=>{
+ const {buildOfficialCeTruckZones}=createLoader({})('lib/services/geo/international-zones.ts')
+ for(const role of ['client','employee']) for(const recipientPhone of ['', '+3222792211']){
+  const h=shipmentHarness({ctx:{...clientContext,role},adjust:t=>{
+   t.servicos_linke[0].webservice_service_code='ENCF008.02'
+   t.servicos_linke[0].allowed_zones=['Zona 2','Zona 3'];t.servicos_linke[0].zones=buildOfficialCeTruckZones()
+   t.audit_log[0].details.billing_type='pay_as_you_go'
+  }})
+  const result=await emit(h,{clientId:CLIENT,recipientCountry:'BE',recipientPostal:'1000',recipientPhone,recipientEmail:'  ',
+   cttExportDetails:{exportType:'Permanent',contentType:'Goods',declaredValue:25}})
+  assert.equal(result.success,false);assert.match(result.error,/e-mail ou telemóvel/)
+  assert.equal(h.providerCalls.length,0);assert.equal(h.credentials.length,0);assert.equal(h.db.writes.length,0)
+ }
+})
+
 test('a confirmed CTT validation rejection is reported as validation rather than a connection error', async () => {
   const message = 'O tipo de exportação é obrigatório., O tipo de produto é obrigatório.'
   const h = shipmentHarness({ carrierResult: { success: false, confirmedRejection: true, error: message } })
@@ -299,6 +316,7 @@ for (const carrier of ['CTT', 'Correos']) {
     const h = shipmentHarness({ carrier })
     const result = await emit(h)
     assert.equal(result.success, true)
+    if(carrier==='Correos')assert.deepEqual(h.providerCalls[0].payload.dimensionsCm,{length:30.5,width:20,height:10})
     const row = h.db.writes.find(w => w.table === 'packages').value
     assert.deepEqual(row.dimensions, { length_cm: 30.5, width_cm: 20, height_cm: 10, unit: 'cm' })
     assert.equal(row.weight_g, 1000)
@@ -321,11 +339,15 @@ test('draft FormData cannot omit any dimension and retains valid decimal dimensi
     assert.equal(h.db.writes.length, 0)
   }
   const h = shipmentHarness(), form = withDimensions(new FormData())
-  form.set('weight_kg', '2.5'); form.set('service_id', 'service-a')
+  form.set('weight_kg', '2.5'); form.set('service_id', 'service-a'); form.set('volumes','3')
+  form.set('recipient_phone','+351910000002')
   assert.equal((await h.load('lib/services/shipments/shipment-creator.ts').createShipment(form)).success, true)
   assert.deepEqual(h.db.writes.find(w => w.table === 'packages').value.dimensions,
     { length_cm: 30.5, width_cm: 20, height_cm: 10, unit: 'cm' })
   assert.equal(h.db.writes.find(w => w.table === 'packages').value.weight_g, 2500)
+  const draft=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+  assert.equal(draft.package_count,3);assert.equal(draft.webservice_service_code,'EMSF056.01')
+  assert.equal(draft.webservice_connection_id,'verified-connection');assert.equal(draft.recipient_phone,'+351910000002')
   const native = h.db.writes.find(w => w.table === 'shipments').value
   for (const unsupported of ['length_cm', 'width_cm', 'height_cm', 'weight_kg', 'base_price', 'tier_label']) {
     assert.equal(Object.hasOwn(native, unsupported), false)

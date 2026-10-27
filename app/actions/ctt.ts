@@ -334,6 +334,7 @@ export async function emitCttShipmentAction(shipmentInput: {
   recipient: { name: string; address: string; zip: string; city: string; phone: string; email?: string; country?: string }
   weightKg?: number
   volumes?: number
+  dimensionsCm?: { length: number; width: number; height: number }
   subProduct?: string
   codValue?: number
   autoClose?: boolean
@@ -366,6 +367,7 @@ export async function emitCttShipmentAction(shipmentInput: {
     recipient: { ...shipmentInput.recipient, country: shipmentInput.recipient.country || "PT" },
     weightKg: shipmentInput.weightKg || 1,
     volumes: shipmentInput.volumes || 1,
+    dimensionsCm: shipmentInput.dimensionsCm,
     subProduct: shipmentInput.subProduct,
     codValue: shipmentInput.codValue,
     isReturn: shipmentInput.isReturn,

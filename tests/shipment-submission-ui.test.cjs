@@ -85,7 +85,8 @@ function harness(t, portal, services = [service]) {
   global.document = { getElementById: () => ({ focus() {} }) }
   global.FormData = class {
     get(name) { return ({ recipient_name: 'Fixture recipient', recipient_address: 'Fixture street',
-      recipient_zip: '4000-001', recipient_city: 'Porto', weight_kg: '1', volumes: '1', length_cm: '30.5', width_cm: '20', height_cm: '10' })[name] || '' }
+      recipient_zip: '4000-001', recipient_city: 'Porto', weight_kg: '1', volumes: '1', length_cm: '30.5', width_cm: '20', height_cm: '10',
+      ctt_export_type:'Permanent',ctt_content_type:'Goods',ctt_declared_value:'25' })[name] || '' }
   }
   t.after(() => { h.dispose(); Object.assign(global, previous) })
   const jsx = (type, props) => ({ type, props: props || {} })
@@ -139,6 +140,30 @@ function harness(t, portal, services = [service]) {
 }
 for (const portal of [true, false]) {
   const name = portal ? 'client portal' : 'OPS'
+  for(const [phone,email,allowed] of [
+    ['32470123456','',true],['+32 470 123 456','',true],['+3222792211','recipient@example.invalid',true],
+    ['+3222792211','',false],['','',false],
+  ]) test(`${name}: Belgian CTT contacts ${phone || 'empty'}/${email ? 'email' : 'no email'} ${allowed ? 'can submit' : 'stop locally'}`,async t=>{
+    const {buildOfficialCeTruckZones}=createLoader({})('lib/services/geo/international-zones.ts')
+    const road={...service,name:'CTT Europa Terrestre',webservice_service_code:'ENCF008.02',allowed_zones:['Zona 2','Zona 3'],zones:buildOfficialCeTruckZones()}
+    const h=harness(t,portal,[road])
+    let nodes=await h.ready()
+    nodes.find(n=>n.type==='select'&&n.props.name==='recipient_country').props.onChange({target:{value:'BE'}})
+    nodes=h.render()
+    nodes.find(n=>n.props.name==='recipient_phone').props.onChange({target:{value:phone}})
+    nodes.find(n=>n.props.name==='recipient_email').props.onChange({target:{value:email}})
+    nodes=h.render()
+    assert.equal(nodes.find(n=>n.props.name==='recipient_email').props.required,!phone.includes('470'))
+    const submission=nodes.find(n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}})
+    assert.equal(h.calls.create,allowed?1:0)
+    if(allowed){
+      assert.equal(h.calls.inputs[0].recipientPhone,phone)
+      assert.equal(h.calls.inputs[0].recipientEmail,email || (portal?'':undefined))
+      h.result.resolve({success:false,error:'Fixture result; no real carrier call'})
+    }
+    await submission
+    if(!allowed)assert.match(h.render().map(textOf).join(' '),/indique um e-mail ou telemóvel/)
+  })
   test(name + ': service selection precedes the destination and switching services refreshes countries and clears incompatible postal data', async t => {
     const international={...service,id:'service-intl',name:'International',allowed_zones:['EU 1','NA'],
       zones:[{zone_code:'EU 1',tiers:[{weight_max:30,enabled:true}]},{zone_code:'NA',tiers:[{weight_max:30,enabled:true}]}]}

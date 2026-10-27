@@ -18,7 +18,7 @@ test('CE PDF documents are returned as the official label when LabelList is empt
  await provider.initialize({auth_id:'fixture',client_number:'fixture',contract_number:'fixture'})
  const result=await provider.createShipment({reference:'NO-REAL-SHIPMENT',subProduct:'ENCF008.02',autoClose:false,weightKg:1,volumes:1,
   sender:{name:'Fixture',address:'Fixture',city:'Porto',zip:'4000-001',country:'PT'},
-  recipient:{name:'Fixture',address:'Fixture',city:'Helsinki',zip:'00100',country:'FI'},
+  recipient:{name:'Fixture',address:'Fixture',city:'Helsinki',zip:'00100',country:'FI',email:'recipient@example.invalid'},
   cttExportDetails:{exportType:'Permanent',contentType:'Goods',declaredValue:10}})
  assert.equal(sent.length,1)
  assert.equal(result.success,true);assert.equal(result.trackingNumber,'CE000000001PT')

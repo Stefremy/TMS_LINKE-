@@ -10,6 +10,7 @@ import { getAuthContext, requireUser, requireEmployee, requireClientAccess, getT
 import { CTT_TRACKING_EVENTS, CTT_INCIDENT_CODES } from "@/lib/services/ctt/ctt-types"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { validateCttExportDetails, type CttExportDetails } from "@/lib/services/ctt/export-details"
+import { getCttRecipientContactError } from "@/lib/services/ctt/recipient-contact"
 import { CorreosShipmentService } from "@/lib/services/correos/correos-shipment.service"
 import { resolveCttCredentials, resolveCorreosCredentials } from "@/lib/services/carriers/credentials"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
@@ -307,6 +308,10 @@ export async function emitClientGuiaAction(data: {
       }
       if (carrierCode === "ctt" && recipientCountry !== "PT") {
         cttExportDetails = validateCttExportDetails(data.cttExportDetails)
+        const contactError = getCttRecipientContactError({
+          country: recipientCountry, phone: data.recipientPhone, email: data.recipientEmail,
+        })
+        if (contactError) throw new ShipmentPricingError(contactError)
       }
       const priceResult = calculateShipmentPrice(
         data.weightKg,
@@ -421,6 +426,7 @@ export async function emitClientGuiaAction(data: {
           },
           bultos: data.volumesCount || 1,
           kilos: data.weightKg || 1,
+          dimensionsCm: { length: data.lengthCm, width: data.widthCm, height: data.heightCm },
           producto: data.subProductId || "63",
           portes: "P",
           reembolso: data.selectedSpecialServices?.includes("correos_cod") && data.codValue ? data.codValue.toString() : "",
@@ -498,6 +504,7 @@ export async function emitClientGuiaAction(data: {
           },
           weightKg: data.weightKg || 1,
           volumes: data.volumesCount || 1,
+          dimensionsCm: { length: data.lengthCm, width: data.widthCm, height: data.heightCm },
           subProduct: data.subProductId || "EMSF056.01",
           codValue: data.selectedSpecialServices?.includes("cod") ? data.codValue : 0,
           isReturn: data.isReturn,

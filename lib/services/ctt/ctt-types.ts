@@ -92,7 +92,7 @@ export interface CTTShipmentData {
   ValidationDate?: string
   ATCode?: string // Código AT da Autoridade Tributária
   Observations?: string
-  Weight: number // Peso em gramas ou kg (conforme parametrização)
+  Weight: number // Peso total declarado em gramas
   Quantity: number // Nº de volumes
   ClientReference: string // Referência interna única (max 21 chars)
   DeclaredValue?: number

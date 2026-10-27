@@ -23,9 +23,24 @@ test('Correos exposes all eight international groups and resolves country/zone I
  assert.equal(all.length,new Set(all.map(c=>c.code)).size)
  assert.ok(all.every(c=>/^[A-Z]{2}$/.test(c.code)&&c.name))
 })
+test('CTT air follows Cana.pdf numbered zones rather than the Correos international mapping',()=>{
+ const air=groups.find(g=>g.id==='ctt_air')
+ assert.deepEqual(air.zones.map(z=>[z.code,z.countries.length]),[
+  ['Zona 2',12],['Zona 3',12],['Zona 4',2],['Zona 5',74],['Zona 6',105],['Zona 8',1],
+ ])
+ for(const [zone,countries] of [
+  ['Zona 2',['GR','GB']],['Zona 3',['FI','GG','JE','MT','SE']],['Zona 4',['CA','US']],
+  ['Zona 5',['AO','BA','IR','GW','XK','TJ','MX']],['Zona 6',['CN','QA','BQ','SH','SX','GF','NA']],['Zona 8',['BR']],
+ ]) for(const code of countries) assert.ok(air.zones.find(z=>z.code===zone).countries.some(c=>c.code===code),`${code} belongs to ${zone}`)
+ const all=air.zones.flatMap(z=>z.countries.map(c=>c.code))
+ assert.equal(all.length,new Set(all).size)
+ assert.equal(all.includes('ES'),false)
+ assert.deepEqual(air.zones.find(z=>z.code==='Zona 8').countries,[{code:'BR',name:'Brasil'}])
+ assert.notEqual(air.zones,groups.find(g=>g.id==='correos_international').zones)
+})
 test('country, ISO and zone searches are accent-insensitive and do not mutate the mappings',()=>{
  const before=JSON.stringify(groups)
- for(const [id,code] of [['ctt_road','Zona 3'],['correos_international','EU 3']]){
+ for(const [id,code] of [['ctt_road','Zona 3'],['ctt_air','Zona 3'],['correos_international','EU 3']]){
   const zones=groups.find(g=>g.id===id).zones
   for(const query of ['finlandia','Finlândia',' fi ']){
    const found=filterDistributionZones(zones,query)
@@ -35,7 +50,11 @@ test('country, ISO and zone searches are accent-insensitive and do not mutate th
   assert.deepEqual(filterDistributionZones(zones,'unknown-destination'),[])
   assert.equal(filterDistributionZones(zones,''),zones)
  }
- assert.deepEqual(filterDistributionZones(groups[1].zones,'A').map(z=>z.code),['A'])
+ assert.deepEqual(filterDistributionZones(groups.find(g=>g.id==='correos_international').zones,'A').map(z=>z.code),['A'])
+ const air=groups.find(g=>g.id==='ctt_air').zones
+ for(const [query,iso] of [['bonaire','BQ'],['ascensao','SH'],['sint maarten','SX']]){
+  assert.deepEqual(filterDistributionZones(air,query).flatMap(z=>z.countries.map(c=>c.code)),[iso])
+ }
  assert.equal(JSON.stringify(groups),before)
 })
 test('the page switches carriers and filters the country tables without showing development placeholders',()=>{
@@ -50,6 +69,14 @@ test('the page switches carriers and filters the country tables without showing 
  let nodes=render()
  assert.equal(nodes.filter(n=>n.type==='table').length,2)
  assert.doesNotMatch(nodes.map(text).join(' '),/Em Desenvolvimento|Em Breve/)
+ nodes.find(n=>n.type==='button'&&text(n).includes('Internacional Aéreo · Guia EE')).props.onClick()
+ nodes=render();assert.equal(nodes.filter(n=>n.type==='table').length,6)
+ nodes.find(n=>n.type==='input'&&n.props.id==='zone-country-search').props.onChange({target:{value:'Brasil'}})
+ nodes=render();assert.equal(nodes.filter(n=>n.type==='table').length,1)
+ assert.match(nodes.map(text).join(' '),/Zona 8/)
+ nodes.find(n=>n.type==='button'&&n.props['aria-label']==='Limpar pesquisa').props.onClick()
+ assert.equal(render().filter(n=>n.type==='table').length,6)
+ nodes=render()
  nodes.find(n=>n.type==='button'&&text(n).includes('Correos Express')).props.onClick()
  nodes=render();assert.equal(nodes.filter(n=>n.type==='table').length,8)
  nodes.find(n=>n.type==='input'&&n.props.id==='zone-country-search').props.onChange({target:{value:'finlandia'}})

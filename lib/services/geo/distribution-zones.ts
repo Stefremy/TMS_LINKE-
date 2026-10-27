@@ -1,9 +1,10 @@
 import { COUNTRY_TO_ZONE_MAP, CTT_CE_TRUCK_ZONES, OFFICIAL_LINKE_ZONES } from "./international-zones"
+import { CTT_AIR_COUNTRY_NAMES, CTT_AIR_ZONES } from "./ctt-air-zones"
 
 export interface DistributionCountry { code: string; name: string }
 export interface DistributionZone { code: string; name: string; countries: DistributionCountry[] }
 export interface DistributionZoneGroup {
-  id: "ctt_road" | "correos_international"
+  id: "ctt_road" | "ctt_air" | "correos_international"
   carrier: string
   service: string
   description: string
@@ -11,13 +12,13 @@ export interface DistributionZoneGroup {
 }
 
 const countryNames = new Intl.DisplayNames(["pt-PT"], { type: "region" })
-function countriesFromCodes(codes: string[]): DistributionCountry[] {
+function countriesFromCodes(codes: readonly string[], names: Readonly<Record<string, string>> = {}): DistributionCountry[] {
   return [...new Set(codes.filter(code => /^[A-Z]{2}$/.test(code)).map(code => code === "UK" ? "GB" : code))]
-    .map(code => ({ code, name: countryNames.of(code) || code }))
+    .map(code => ({ code, name: names[code] || countryNames.of(code) || code }))
     .sort((a, b) => a.name.localeCompare(b.name, "pt-PT"))
 }
 
-/** Display the same road and air country mappings used by shipment pricing. */
+/** Display each carrier's coverage using its own service's zone definitions. */
 export function getDistributionZoneGroups(): DistributionZoneGroup[] {
   const internationalCountries = Object.entries(COUNTRY_TO_ZONE_MAP)
     .map(([code, zone]) => ({ code: code.replace(/_ISO$/, ""), zone }))
@@ -27,6 +28,13 @@ export function getDistributionZoneGroups(): DistributionZoneGroup[] {
       description: "Duas zonas de distribuição para envios europeus por via terrestre.",
       zones: Object.values(CTT_CE_TRUCK_ZONES).map(zone => ({
         code: zone.code, name: "Europa Rodoviário", countries: countriesFromCodes(zone.countries),
+      })),
+    },
+    {
+      id: "ctt_air", carrier: "CTT Expresso", service: "Internacional Aéreo · Guia EE",
+      description: "Seis zonas da tabela contratual CTT Internacional (Outbound), com origem em Portugal Continental.",
+      zones: CTT_AIR_ZONES.map(zone => ({
+        code: zone.code, name: "Internacional Aéreo Expresso", countries: countriesFromCodes(zone.countries, CTT_AIR_COUNTRY_NAMES),
       })),
     },
     {

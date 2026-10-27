@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ArrowUpRight, Globe2, Map, Search, Truck, X } from "lucide-react"
+import { ArrowUpRight, Globe2, Map, Plane, Search, Truck, X } from "lucide-react"
 import { filterDistributionZones, type DistributionZoneGroup } from "@/lib/services/geo/distribution-zones"
 
 export function DistributionZonesClient({ groups }: { groups: DistributionZoneGroup[] }) {
@@ -29,10 +29,10 @@ export function DistributionZonesClient({ groups }: { groups: DistributionZoneGr
         </Link>
       </div>
 
-      <div role="group" aria-label="Transportadora e serviço" className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div role="group" aria-label="Transportadora e serviço" className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {groups.map(item => {
           const selected = item.id === group.id
-          const Icon = item.id === "ctt_road" ? Truck : Globe2
+          const Icon = item.id === "ctt_road" ? Truck : item.id === "ctt_air" ? Plane : Globe2
           return (
             <button key={item.id} type="button" aria-pressed={selected} onClick={() => setSelectedGroupId(item.id)}
               className={`flex items-center gap-3 rounded-xl border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${selected ? "border-[var(--accent)] bg-[var(--accent-soft)] ring-1 ring-[var(--accent)]" : "border-[var(--border-subtle)] bg-[var(--surface-bg)] hover:border-[var(--border-strong)]"}`}>
@@ -47,7 +47,7 @@ export function DistributionZonesClient({ groups }: { groups: DistributionZoneGr
         })}
       </div>
 
-      <section aria-label={`Zonas ${group.carrier}`} className="space-y-4">
+      <section aria-label={`Zonas ${group.carrier} — ${group.service}`} className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-[var(--text-primary)]">{group.service}</h2>
@@ -90,10 +90,10 @@ export function DistributionZonesClient({ groups }: { groups: DistributionZoneGr
         ) : (
           <div className="rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-bg)] px-5 py-10 text-center">
             <p className="text-sm font-medium text-[var(--text-primary)]">Nenhum destino encontrado</p>
-            <p className="mt-1 text-xs text-[var(--text-secondary)]">Pesquise outro país, código ISO ou zona, ou selecione a outra transportadora.</p>
+            <p className="mt-1 text-xs text-[var(--text-secondary)]">Pesquise outro país, código ISO ou zona, ou selecione outro serviço de transporte.</p>
           </div>
         )}
-        <p className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">A cobertura apresentada segue os mapeamentos das tabelas de transporte. Os serviços autorizados, os escalões de peso e os preços de cada cliente são definidos em Tabelas de preços e serviços.</p>
+        <p className="text-[11px] leading-relaxed text-[var(--text-tertiary)]">A cobertura apresentada segue as tabelas de transporte de cada serviço. Os serviços autorizados, os escalões de peso e os preços de cada cliente são definidos em Tabelas de preços e serviços.</p>
       </section>
     </div>
   )

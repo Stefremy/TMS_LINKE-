@@ -30,6 +30,9 @@ export interface CorreosShipmentInput {
   
   bultos: number
   kilos: number
+  /** Common declared dimensions of each parcel, in centimetres. For different
+   * parcel sizes, provide their actual dimensions in listaBultos instead. */
+  dimensionsCm?: import("../shipments/parcel-dimensions").ParcelDimensionsCm
   volumen?: string
   
   producto: string // e.g. "63"

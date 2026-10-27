@@ -31,6 +31,7 @@ import { getServiceDestinationCountries, getServiceDestinationZone } from "@/lib
 import { getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
 import { calculateClientShipmentPreview } from "@/lib/pricing/calculate-client-shipment-preview"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
+import { getCttRecipientContactError, hasCttRecipientMobilePhone } from "@/lib/services/ctt/recipient-contact"
 import { CttExportFields } from "@/components/shipments/CttExportFields"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
@@ -203,6 +204,8 @@ export function ClientCreateGuia() {
   }, [currentClient])
 
   const isCorreosService = (activeLinkeService?.preferred_carrier_name || activeLinkeService?.name || "").toLowerCase().includes("correos")
+  const requiresCttContact = !isCorreosService && recipientCountry !== "PT"
+  const requiresRecipientEmail = requiresCttContact && !hasCttRecipientMobilePhone(recipientPhone, recipientCountry)
   const activeSpecialServices = React.useMemo(() => selectedSpecialServices.filter(code =>
     specialFeesList.some(f => f.is_enabled && f.special_service_code === code &&
       code.startsWith("correos_") === isCorreosService)), [selectedSpecialServices, specialFeesList, isCorreosService])
@@ -259,6 +262,10 @@ export function ClientCreateGuia() {
     setFieldError(null)
 
     try {
+      if (requiresCttContact) {
+        const contactError = getCttRecipientContactError({ country: recipientCountry, phone: recipientPhone, email: recipientEmail })
+        if (contactError) throw new Error(contactError)
+      }
       const res = await emitClientGuiaAction({
         clientId: currentClient?.id,
         clientName: isEditingSender ? customSenderName : (currentClient?.short_name || currentClient?.legal_name),
@@ -856,11 +863,14 @@ export function ClientCreateGuia() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Telefone do Destinatário</label>
+              <label htmlFor="recipient-phone" className="block text-xs font-bold text-slate-700">Telefone / Telemóvel do Destinatário</label>
               <input 
                 type="tel"
+                id="recipient-phone"
+                name="recipient_phone"
+                aria-describedby={requiresCttContact ? "recipient-contact-help" : undefined}
                 inputMode="tel"
-                placeholder={recipientCountry === "ES" ? "Ex: +34 612 345 678" : "Ex: +351 910 000 000"}
+                placeholder={recipientCountry === "BE" ? "Ex: +32 470 123 456" : recipientCountry === "ES" ? "Ex: +34 612 345 678" : "Telemóvel com indicativo do país"}
                 value={recipientPhone}
                 onChange={(e) => setRecipientPhone(e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
@@ -868,14 +878,19 @@ export function ClientCreateGuia() {
             </div>
             
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Email do Destinatário</label>
+              <label htmlFor="recipient-email" className="block text-xs font-bold text-slate-700">Email do Destinatário{requiresRecipientEmail ? " *" : ""}</label>
               <input 
                 type="email" 
+                id="recipient-email"
+                name="recipient_email"
+                required={requiresRecipientEmail}
+                aria-describedby={requiresCttContact ? "recipient-contact-help" : undefined}
                 placeholder="email@exemplo.pt" 
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
               />
+              {requiresCttContact && <p id="recipient-contact-help" className="text-xs text-slate-600">CTT internacional: indique um e-mail ou telemóvel do destinatário. Um telefone fixo sozinho não é suficiente.</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -956,6 +971,8 @@ export function ClientCreateGuia() {
               />
             </div>
           </div>
+
+          {isCorreosService && <p className="text-xs text-slate-600">As medidas indicadas aplicam-se a cada volume. Para volumes de tamanhos diferentes, crie envios separados.</p>}
 
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-slate-700">Observações (opcional)</label>

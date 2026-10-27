@@ -120,6 +120,7 @@ export async function emitCorreosShipmentAction(shipmentInput: {
   recipient: { name: string; address: string; zip: string; city: string; phone: string; email?: string }
   weightKg?: number
   volumes?: number
+  dimensionsCm?: { length: number; width: number; height: number }
   subProduct?: string
   codValue?: number
   autoClose?: boolean
@@ -158,6 +159,7 @@ export async function emitCorreosShipmentAction(shipmentInput: {
       },
       bultos: shipmentInput.volumes || 1,
       kilos: shipmentInput.weightKg || 1,
+      dimensionsCm: shipmentInput.dimensionsCm,
       producto: shipmentInput.subProduct || "63",
       portes: "P",
       reembolso: shipmentInput.codValue ? shipmentInput.codValue.toString() : "",
