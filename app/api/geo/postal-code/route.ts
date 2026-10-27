@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { lookupPostalCode } from "@/lib/services/geo/postal-code.service"
+import { lookupInternationalPostalCode } from "@/lib/services/geo/international-postal-code"
 
 export const runtime = "nodejs"
 
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (!code) {
     return NextResponse.json({ found: false, error: "Código postal em falta" }, { status: 400 })
   }
-  const result = lookupPostalCode(code, country)
+  const result = lookupPostalCode(code, country) || await lookupInternationalPostalCode(code, country)
   if (!result) {
     return NextResponse.json({ found: false, error: "Código postal não encontrado" }, { status: 404 })
   }

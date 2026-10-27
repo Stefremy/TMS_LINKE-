@@ -11,6 +11,7 @@ import { CTT_TRACKING_EVENTS, CTT_INCIDENT_CODES } from "@/lib/services/ctt/ctt-
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { validateCttExportDetails, type CttExportDetails } from "@/lib/services/ctt/export-details"
 import { getCttRecipientContactError } from "@/lib/services/ctt/recipient-contact"
+import { assertShipmentDestinationAvailable } from "@/lib/services/shipment-destination-policy"
 import { CorreosShipmentService } from "@/lib/services/correos/correos-shipment.service"
 import { resolveCttCredentials, resolveCorreosCredentials } from "@/lib/services/carriers/credentials"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
@@ -303,11 +304,12 @@ export async function emitClientGuiaAction(data: {
       }
       const recipientCountry = (data.recipientCountry || "PT").trim().toUpperCase()
       const recipientPostal = (data.recipientPostal || "").trim()
+      assertShipmentDestinationAvailable(recipientCountry, recipientPostal)
       if (recipientCountry === "ES" && !/^\d{5}$/.test(recipientPostal)) {
         throw new ShipmentPricingError("O código postal de Espanha deve ter 5 dígitos, sem hífen (ex.: 28013).")
       }
       if (carrierCode === "ctt" && recipientCountry !== "PT") {
-        cttExportDetails = validateCttExportDetails(data.cttExportDetails)
+        cttExportDetails = validateCttExportDetails(data.cttExportDetails, { country: recipientCountry, postalCode: recipientPostal, weightKg: data.weightKg })
         const contactError = getCttRecipientContactError({
           country: recipientCountry, phone: data.recipientPhone, email: data.recipientEmail,
         })

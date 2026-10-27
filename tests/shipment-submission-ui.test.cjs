@@ -179,7 +179,7 @@ for (const portal of [true, false]) {
     assert.deepEqual(options(),['PT'])
     selectService(international.id);h.render();nodes=h.render()
     assert.equal(country().props.value,'')
-    assert.ok(options().includes('US'));assert.ok(options().includes('FR'))
+    assert.equal(options().includes('US'),false);assert.ok(options().includes('FR'))
     assert.equal(options().includes('PT'),false);assert.equal(options().includes('ES'),false)
     country().props.onChange({target:{value:'FR'}});nodes=h.render()
     const postal=nodes.find(n=>portal?n.props.id==='field-recipient-postal':n.props.name==='recipient_zip')
@@ -196,6 +196,16 @@ for (const portal of [true, false]) {
     await nodes.find(n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}})
     assert.equal(h.calls.create,0)
     assert.match(h.render().map(textOf).join(' '),/Sem destinos configurados|países de destino com tarifas/)
+  })
+  test(name + ': customs destinations are absent from both shipping selectors',async t=>{
+    const international={...service,name:'International air',webservice_service_code:'EMSF001.02',allowed_zones:['EU 2'],
+      zones:[{zone_code:'EU 2',tiers:[{weight_max:30,enabled:true}]}]}
+    const h=harness(t,portal,[international])
+    const nodes=await h.ready()
+    const selector=nodes.find(n=>n.type==='select'&&n.props.name==='recipient_country')
+    const countries=flatten(selector).filter(n=>n.type==='option').map(n=>n.props.value)
+    for(const country of ['IS','GB','NO','CH','US'])assert.equal(countries.includes(country),false,country)
+    assert.ok(countries.filter(Boolean).length > 0)
   })
   test(name + ': rapid double submit sends one request, shows loading, then scrolls to success and unlocks', async t => {
     const h = harness(t, portal), nodes = await h.ready()
@@ -282,13 +292,52 @@ test('changing service or country invalidates pending and in-flight postal looku
   const {usePostalCodeLookup}=load('lib/hooks/usePostalCodeLookup.ts')
   const render=country=>h.render(()=>usePostalCodeLookup({country,onFound:info=>found.push(info)}))
   let lookup=render('PT')
-  lookup.lookup('4000-001');lookup.reset();t.mock.timers.tick(150)
+  lookup.lookup('4000-001');lookup.reset();t.mock.timers.tick(350)
   assert.equal(requests,0)
-  lookup.lookup('4000-001');t.mock.timers.tick(150);assert.equal(requests,1)
+  lookup.lookup('4000-001');t.mock.timers.tick(350);assert.equal(requests,1)
   lookup=render('FR');lookup.reset()
   response.resolve({ok:true,json:async()=>({found:true,city:'Porto',country:'PT'})})
   await new Promise(resolve=>setImmediate(resolve))
   assert.deepEqual(found,[])
   lookup=render('FR');assert.equal(lookup.info,null);assert.equal(lookup.status,'idle');assert.equal(lookup.loading,false)
   h.dispose()
+})
+
+test('international postal assistance fills a city and clears stale suggestions when typing again', async t => {
+  const h = hooks(), found = [], requests = []
+  t.mock.timers.enable({apis:['setTimeout']})
+  const load = createLoader({react:h.react,fetch:async url => {
+    requests.push(url)
+    return {ok:true,json:async()=>({found:true,country:'BE',postalCode:'1000',city:'Bruxelles'})}
+  }})
+  const {usePostalCodeLookup} = load('lib/hooks/usePostalCodeLookup.ts')
+  const render = () => {const result=h.render(()=>usePostalCodeLookup({country:'BE',onFound:info=>found.push(info)}));h.commit();return result}
+  let lookup = render()
+  lookup.lookup('100');t.mock.timers.tick(350)
+  assert.equal(requests.length,0)
+  lookup.lookup('1000');t.mock.timers.tick(350)
+  await new Promise(resolve=>setImmediate(resolve))
+  lookup = render()
+  assert.equal(found[0].city,'Bruxelles')
+  assert.equal(lookup.status,'valid')
+  assert.match(requests[0],/country=BE/)
+  lookup.lookup('10')
+  lookup = render()
+  assert.equal(lookup.info,null)
+  assert.equal(lookup.status,'idle')
+  assert.equal(lookup.loading,false)
+  h.dispose()
+})
+
+test('postal assistance cancels requests on unmount and ignores late responses', async t => {
+  const h = hooks(), response = deferred(), found = []
+  t.mock.timers.enable({apis:['setTimeout']})
+  const {usePostalCodeLookup} = createLoader({react:h.react,fetch:()=>response.promise})('lib/hooks/usePostalCodeLookup.ts')
+  const lookup=h.render(()=>usePostalCodeLookup({country:'FR',onFound:info=>found.push(info)}))
+  h.commit()
+  lookup.lookup('75001');t.mock.timers.tick(350)
+  h.dispose()
+  response.resolve({ok:true,json:async()=>({found:true,country:'FR',city:'Paris'})})
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.deepEqual(found,[])
 })

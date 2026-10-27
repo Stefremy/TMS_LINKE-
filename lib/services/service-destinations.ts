@@ -1,6 +1,7 @@
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { findExactZone, isZoneAllowedByService, resolveServiceZoneCode } from "@/lib/pricing/calculate-shipment-price"
 import { COUNTRY_TO_ZONE_MAP, CTT_CE_TRUCK_ZONES } from "./geo/international-zones"
+import { isShipmentDestinationAvailable } from "./shipment-destination-policy"
 
 export { resolveServiceZoneCode as getServiceDestinationZone } from "@/lib/pricing/calculate-shipment-price"
 
@@ -19,6 +20,7 @@ export function getServiceDestinationCountries(service?: ServicoLinke): { code: 
     const postals = country === "PT" ? ["", "9000-001"]
       : country === "ES" ? ["", "07001", "35001", "38001", "51001", "52001"] : [""]
     return postals.some(postal => {
+      if (!isShipmentDestinationAvailable(country, postal)) return false
       const zoneCode = resolveServiceZoneCode(service, country, postal)
       if (!zoneCode || !isZoneAllowedByService(service.allowed_zones, zoneCode)) return false
       return findExactZone(service.zones, zoneCode)?.tiers?.some(tier =>

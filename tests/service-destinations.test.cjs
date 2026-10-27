@@ -24,7 +24,8 @@ test('island-only tariffs still expose their country and postal codes refine the
 test('international destinations include every mapped region, with Portuguese names and no duplicate aliases',()=>{
   const s={...service([]),zones:buildOfficialLinkeInternationalZones(20)}
   const before=JSON.stringify(s),countries=getServiceDestinationCountries(s),list=countries.map(c=>c.code)
-  for(const code of ['DE','FR','US','CA','BR','JP','SA','AU','AO','CV'])assert.ok(list.includes(code),code)
+  for(const code of ['DE','FR','BE','NL','SE','FI'])assert.ok(list.includes(code),code)
+  for(const code of ['NO','GB','UK','CH','IS','US','CA','BR','JP','SA','AU','AO','CV'])assert.equal(list.includes(code),false,code)
   assert.equal(list.includes('PT'),false);assert.equal(list.includes('ES'),false)
   assert.equal(list.length,new Set(list).size)
   assert.equal(countries.find(c=>c.code==='DE').name,'Alemanha')
@@ -33,8 +34,8 @@ test('international destinations include every mapped region, with Portuguese na
 test('CE road tariffs follow their contract countries rather than the air-zone country groups',()=>{
   const s={...service([]),webservice_service_code:'ENCF008.02',zones:buildOfficialCeTruckZones(),allowed_zones:['Zona 2','Zona 3']}
   const list=codes(s)
-  for(const code of ['DE','FR','GB','IS','CH','PL','SE','MT'])assert.ok(list.includes(code),code)
-  for(const code of ['PT','ES','US','RO','BG','UK'])assert.equal(list.includes(code),false,code)
+  for(const code of ['DE','FR','PL','SE','MT'])assert.ok(list.includes(code),code)
+  for(const code of ['PT','ES','US','RO','BG','UK','GB','NO','IS','CH'])assert.equal(list.includes(code),false,code)
   assert.equal(getServiceDestinationZone(s,'PL'),'Zona 3')
   assert.equal(getServiceDestinationZone(s,'AT'),'Zona 2')
   s.zones=s.zones.filter(z=>z.zone_code==='Zona 2')

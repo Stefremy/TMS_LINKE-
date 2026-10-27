@@ -30,6 +30,8 @@ import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { getServiceDestinationCountries, getServiceDestinationZone } from "@/lib/services/service-destinations"
 import { getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
 import { calculateClientShipmentPreview } from "@/lib/pricing/calculate-client-shipment-preview"
+import { assertShipmentDestinationAvailable } from "@/lib/services/shipment-destination-policy"
+import { focusCttCustomsFields } from "@/lib/ctt-customs-form"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
 import { getCttRecipientContactError, hasCttRecipientMobilePhone } from "@/lib/services/ctt/recipient-contact"
 import { CttExportFields } from "@/components/shipments/CttExportFields"
@@ -43,6 +45,7 @@ import { getClientServiceLabel, getClientServiceName } from "@/lib/services/clie
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { useClientScope } from "./ClientScope"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
+import { PostalAddressSuggestions } from "@/components/postal-address-suggestions"
 import { useRecipientAgenda } from "@/lib/hooks/useRecipientAgenda"
 import { ClientTopUpModal } from "./ClientTopUpModal"
 
@@ -217,6 +220,7 @@ export function ClientCreateGuia() {
       if (!activeLinkeService) throw new Error("Selecione um serviço disponível.")
       if (!destinationCountries.length) throw new Error("Este serviço não tem países de destino com tarifas configuradas.")
       if (!destinationCountries.some(country => country.code === recipientCountry)) throw new Error("Selecione um país disponível para este serviço.")
+      assertShipmentDestinationAvailable(recipientCountry, recipientPostal)
       const quote = calculateClientShipmentPreview(Number(weight), currentClient, activeLinkeService,
         recipientCountry, recipientPostal, activeSpecialServices, Number(codAmount))
       return {
@@ -236,6 +240,7 @@ export function ClientCreateGuia() {
 
   const handleCreateShipment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    const submittedForm = e.currentTarget
     if (isSuspended) {
       setSubmitError("A sua conta encontra-se suspensa para a criação de novos envios. Contacte geral@linke.pt para reativar.")
       return
@@ -293,7 +298,7 @@ export function ClientCreateGuia() {
         codValue: parseFloat(codAmount) || 0,
         selectedSpecialServices: activeSpecialServices,
         observations,
-        cttExportDetails: !isCorreosService && recipientCountry !== "PT" ? readCttExportForm(new FormData(e.currentTarget)) : undefined,
+        cttExportDetails: !isCorreosService && recipientCountry !== "PT" ? readCttExportForm(new FormData(e.currentTarget), { country: recipientCountry, postalCode: recipientPostal, weightKg: Number(weight) }) : undefined,
       })
 
       if (!res.success) throw new Error(res.error || "Não foi possível criar o envio.")
@@ -362,6 +367,7 @@ export function ClientCreateGuia() {
     } catch (err: any) {
       const msg: string = err?.message || "Erro desconhecido."
       setSubmitError(msg)
+      focusCttCustomsFields(submittedForm, msg)
       // Highlight the likely offending field
       if (msg.toLowerCase().includes("postal") || msg.toLowerCase().includes("código postal")) {
         setFieldError("postal")
@@ -773,12 +779,12 @@ export function ClientCreateGuia() {
                 )}
                 {postalLookup.status === "valid" && (
                   <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> {postalLookup.info?.city}
+                    <CheckCircle2 className="w-3 h-3" /> {postalLookup.info?.city || "Escolha a localidade"}
                   </span>
                 )}
                 {postalLookup.status === "invalid" && (
                   <span className="text-[10px] text-amber-600 font-medium">
-                    Código não registado
+                    Sem sugestão — preencha manualmente
                   </span>
                 )}
               </div>
@@ -830,22 +836,10 @@ export function ClientCreateGuia() {
               />
               <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             </div>
-            {postalLookup.info?.streets && postalLookup.info.streets.length > 1 && (
-              <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] text-slate-400 font-medium">Ruas:</span>
-                {postalLookup.info.streets.slice(0, 4).map((st) => (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => setRecipientAddress(`${st}, nº `)}
-                    className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
-                  >
-                    {st}
-                  </button>
-                ))}
-              </div>
-            )}
+            <PostalAddressSuggestions info={postalLookup.info} onCity={setRecipientCity} onStreet={street => setRecipientAddress(`${street}, nº `)} />
           </div>
+
+          {!isCorreosService && recipientCountry !== "PT" && <CttExportFields country={recipientCountry} postalCode={recipientPostal} key={`${recipientCountry}-${generatedGuia || "new"}`} />}
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-1.5">
@@ -906,7 +900,6 @@ export function ClientCreateGuia() {
             </div>
           </div>
 
-          {!isCorreosService && recipientCountry !== "PT" && <CttExportFields key={generatedGuia || "new"} />}
 
           {/* Checkbox para guardar destinatário na agenda */}
           <div className="flex items-center gap-2 pt-1 pb-2">

@@ -3,11 +3,12 @@ import fs from "node:fs"
 
 export interface PostalCodeLookupResult {
   found: boolean
-  country: "PT" | "ES"
+  country: string
   postalCode: string
   street?: string
   streets?: string[]
   city: string
+  cities?: string[]
   municipality?: string
   district?: string
 }
@@ -46,26 +47,30 @@ export function lookupPostalCode(
   if (!rawCode) return null
 
   const clean = rawCode.trim().replace(/\s+/g, "")
-  const isES = country.toUpperCase() === "ES" || (/^[0-9]{5}$/.test(clean) && !clean.includes("-"))
+  country = country.trim().toUpperCase()
+  if (country !== "PT" && country !== "ES") return null
+  const isES = country === "ES"
 
   const db = getDatabase()
   if (!db) return null
 
   if (isES) {
     // ── ESPANHA (5 dígitos) ──────────────────────────────────────────────
-    const fiveDigits = clean.replace(/[^0-9]/g, "").padStart(5, "0").substring(0, 5)
-    if (fiveDigits.length !== 5) return null
+    const fiveDigits = clean
+    if (!/^\d{5}$/.test(fiveDigits)) return null
 
     try {
-      const stmt = db.prepare("SELECT cp, municipio, provincia FROM es_postal_codes WHERE cp = ? LIMIT 1")
-      const row = stmt.get(fiveDigits) as { cp: string; municipio: string; provincia: string } | undefined
+      const stmt = db.prepare("SELECT cp, municipio, provincia FROM es_postal_codes WHERE cp = ?")
+      const rows = stmt.all(fiveDigits) as Array<{ cp: string; municipio: string; provincia: string }>
+      const row = rows[0]
 
       if (row) {
         return {
           found: true,
           country: "ES",
           postalCode: row.cp,
-          city: row.municipio,
+          city: new Set(rows.map(r => r.municipio)).size === 1 ? row.municipio : "",
+          cities: [...new Set(rows.map(r => r.municipio).filter(Boolean))],
           municipality: row.municipio,
           district: row.provincia,
         }
@@ -116,18 +121,21 @@ export function lookupPostalCode(
       if (rows && rows.length > 0) {
         const uniqueStreets = Array.from(new Set(rows.map(r => r.rua).filter(Boolean))) as string[]
         const primaryRow = rows[0]
+        const cities = [...new Set(rows.map(r => r.localidade || r.concelho).filter(Boolean))]
 
         return {
           found: true,
           country: "PT",
           postalCode: fullCp,
-          street: uniqueStreets.length > 0 ? uniqueStreets[0] : undefined,
+          street: uniqueStreets.length === 1 ? uniqueStreets[0] : undefined,
           streets: uniqueStreets.length > 1 ? uniqueStreets : undefined,
-          city: primaryRow.localidade || primaryRow.concelho || "",
+          city: cities.length === 1 ? cities[0] : "",
+          cities,
           municipality: primaryRow.concelho || "",
           district: primaryRow.distrito || "",
         }
       }
+      return null
     }
 
     // Se só tiver CP4 (ex: "4610") ou CP3 não existir exatamente: pesquisa por CP4

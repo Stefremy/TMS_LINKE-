@@ -231,7 +231,7 @@ test('CE Finland shipments reach the carrier and preserve the validated road tar
 
 test('Correos client and OPS emissions preserve the chosen country and postal code',async()=>{
   for(const role of ['client','employee']){
-    for(const [country,postal,zone] of [['ES','28013','ES-PENIN'],['FR','75001','EU 1'],['US','10001','NA']]){
+    for(const [country,postal,zone] of [['ES','28013','ES-PENIN'],['FR','75001','EU 1'],['DE','10115','EU 1']]){
       const h=shipmentHarness({carrier:'Correos',ctx:{...clientContext,role},adjust:t=>{
         t.servicos_linke[0].allowed_zones=[zone]
         t.servicos_linke[0].zones[0].zone_code=zone
@@ -256,6 +256,17 @@ test('Spanish postcodes with Portuguese masks are rejected before wallet reserva
   const result = await emit(h, { recipientCountry: 'ES', recipientPostal: '2801-003' })
   assert.equal(result.success, false); assert.match(result.error, /5 dígitos/)
   assert.equal(h.providerCalls.length, 0); assert.equal(h.db.writes.length, 0)
+})
+
+test('customs pause rejects stale forms for both carriers and roles before reserving money',async()=>{
+  for(const role of ['client','employee'])for(const carrier of ['CTT','Correos'])for(const [country,postal] of [['NO','0010'],['GB','SW1A 1AA'],['CH','8001'],['IS','101'],['ES','35001'],['FI','22100']]){
+    const h=shipmentHarness({carrier,ctx:{...clientContext,role}})
+    const result=await emit(h,{clientId:CLIENT,recipientCountry:country,recipientPostal:postal})
+    assert.equal(result.success,false,`${role}/${carrier}/${country}`)
+    assert.match(result.error,/aduaneiros.*temporariamente indisponíveis/)
+    assert.equal(h.providerCalls.length,0)
+    assert.equal((h.tables.wallet_reservations||[]).length,0)
+  }
 })
 
 test('missing or invalid CTT international declarations stop before reserving money or requesting a label', async () => {

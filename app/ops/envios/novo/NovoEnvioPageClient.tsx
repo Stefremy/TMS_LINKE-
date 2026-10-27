@@ -4,6 +4,7 @@ import * as React from "react"
 import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro, Download, FileText, ExternalLink, Check, Printer, BookmarkCheck } from "lucide-react"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
+import { PostalAddressSuggestions } from "@/components/postal-address-suggestions"
 import { useRecipientAgenda } from "@/lib/hooks/useRecipientAgenda"
 
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
@@ -12,6 +13,8 @@ import { Button } from "@/components/ui/button"
 import { OFFICIAL_LINKE_ZONES } from "@/lib/services/geo/international-zones"
 import { getServiceDestinationCountries, getServiceDestinationZone } from "@/lib/services/service-destinations"
 import { calculateShipmentQuote, getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
+import { assertShipmentDestinationAvailable } from "@/lib/services/shipment-destination-policy"
+import { focusCttCustomsFields } from "@/lib/ctt-customs-form"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
 import { getCttRecipientContactError, hasCttRecipientMobilePhone } from "@/lib/services/ctt/recipient-contact"
 import { CttExportFields } from "@/components/shipments/CttExportFields"
@@ -188,6 +191,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       if (!currentClient || !activeLinkeService) throw new Error("Selecione um cliente e um serviço disponível.")
       if (!destinationCountries.length) throw new Error("Este serviço não tem países de destino com tarifas configuradas.")
       if (!destinationCountries.some(country => country.code === recipientCountry)) throw new Error("Selecione um país disponível para este serviço.")
+      assertShipmentDestinationAvailable(recipientCountry, recipientZip)
       const quote = calculateShipmentQuote(weightKg, currentClient, activeLinkeService,
         recipientCountry, recipientZip, activeSpecialServices, codValue)
       return { label: quote.tierLabel, sell: quote.totalPrice, buy: quote.buyPrice, error: null }
@@ -199,6 +203,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    const submittedForm = e.currentTarget
     if (submissionRef.current) return
     if (estimatedTier.error) {
       setErrorMsg(estimatedTier.error)
@@ -243,7 +248,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         calculatedPrice: estimatedTier.sell,
         selectedSpecialServices: activeSpecialServices,
         codValue: activeSpecialServices.some(code => code === "cod" || code === "correos_cod") ? codValue : undefined,
-        cttExportDetails: !isCorreos && recipientCountry !== "PT" ? readCttExportForm(formData) : undefined,
+        cttExportDetails: !isCorreos && recipientCountry !== "PT" ? readCttExportForm(formData, { country: recipientCountry, postalCode: recipientZip, weightKg: Number(formData.get("weight_kg")) }) : undefined,
       })
       
       if (!res.success) {
@@ -318,6 +323,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       
     } catch (err: any) {
       setErrorMsg(err.message || "Erro ao criar envio.")
+      focusCttCustomsFields(submittedForm, err.message || "")
     } finally {
       submissionRef.current = false
       setLoading(false)
@@ -654,7 +660,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                             )}
                             {senderPostalLookup.status === "invalid" && (
                               <span className="text-[9px] text-[var(--status-warning)] font-medium">
-                                Não registado
+                                Sem sugestão
                               </span>
                             )}
                           </div>
@@ -829,13 +835,13 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                             </span>
                           )}
                           {recipientPostalLookup.status === "valid" && (
-                            <span className="text-[9px] text-[var(--accent)] font-semibold flex items-center gap-0.5 truncate max-w-[120px]" title={recipientPostalLookup.info?.city}>
-                              <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> {recipientPostalLookup.info?.city}
+                            <span className="text-[9px] text-[var(--accent)] font-semibold flex items-center gap-0.5 truncate max-w-[120px]" title={recipientPostalLookup.info?.city || "Escolha a localidade"}>
+                              <CheckCircle2 className="w-2.5 h-2.5 shrink-0" /> {recipientPostalLookup.info?.city || "Escolha a localidade"}
                             </span>
                           )}
                           {recipientPostalLookup.status === "invalid" && (
                             <span className="text-[9px] text-[var(--status-warning)] font-medium">
-                              Não registado
+                              Sem sugestão
                             </span>
                           )}
                         </div>
@@ -877,22 +883,10 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                         required 
                         className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] transition-colors shadow-2xs" 
                       />
-                      {recipientPostalLookup.info?.streets && recipientPostalLookup.info.streets.length > 1 && (
-                        <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                          <span className="text-[9px] text-[var(--text-tertiary)] font-medium">Ruas:</span>
-                          {recipientPostalLookup.info.streets.slice(0, 4).map((st) => (
-                            <button
-                              key={st}
-                              type="button"
-                              onClick={() => setRecipientAddress(`${st}, nº `)}
-                              className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--surface-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
-                            >
-                              {st}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                      <PostalAddressSuggestions info={recipientPostalLookup.info} onCity={setRecipientCity} onStreet={street => setRecipientAddress(`${street}, nº `)} />
                     </div>
+
+                    {!isCorreos && recipientCountry !== "PT" && <CttExportFields country={recipientCountry} postalCode={recipientZip} key={recipientCountry} />}
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
@@ -944,7 +938,6 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
 
             </div>
 
-            {!isCorreos && recipientCountry !== "PT" && <div className="px-6 pb-6"><CttExportFields /></div>}
 
             {specialServicesAvailable.length > 0 && (
               <div className="px-6 pb-6 pt-2">

@@ -85,12 +85,39 @@ export class CTTShipmentService {
   /**
    * Serializa dados do envio para XML de acordo com schema ShipmentData CTT (ordenação estrita WCF)
    */
+  private buildCustomsXml(data: NonNullable<CTTShipmentData["CustomsData"]>): string {
+    const esc = CTTSoapClient.escapeXml
+    const optional = (name: string, value?: string | number) => value !== undefined && value !== "" ? `<mod:${name}>${esc(String(value))}</mod:${name}>` : ""
+    return `<mod:CustomsData>
+      ${optional("ComercialInvoice", data.commercialInvoice)}
+      <mod:CustomsItemsData>${data.items.map((item, index) => `<mod:CustomsItemsData>
+        <mod:Currency>EUR</mod:Currency><mod:Detail>${esc(item.description)}</mod:Detail>
+        <mod:HarmonizedCode>${esc(item.harmonizedCode)}</mod:HarmonizedCode><mod:ItemNumber>${index + 1}</mod:ItemNumber>
+        <mod:OriginCountry>${esc(item.originCountry)}</mod:OriginCountry><mod:Quantity>${item.quantity}</mod:Quantity>
+        <mod:Value>${item.value.toFixed(2)}</mod:Value><mod:Weight>${Math.round(item.weightKg * 1000)}</mod:Weight>
+      </mod:CustomsItemsData>`).join("")}</mod:CustomsItemsData>
+      <mod:CustomsTotalItems>${data.items.reduce((sum, item) => sum + item.quantity, 0)}</mod:CustomsTotalItems>
+      <mod:CustomsTotalValue>${data.items.reduce((sum, item) => sum + Math.round(item.value * 100), 0) / 100}</mod:CustomsTotalValue>
+      <mod:CustomsTotalWeight>${data.items.reduce((sum, item) => sum + Math.round(item.weightKg * 1000), 0)}</mod:CustomsTotalWeight>
+      ${optional("Height", data.dimensionsCm?.height)}
+      <mod:InvoiceDate>${esc(data.invoiceDate)}T00:00:00</mod:InvoiceDate>
+      ${optional("Length", data.dimensionsCm?.length)}
+      <mod:NonDeliveryCase>${esc(data.nonDeliveryCase)}</mod:NonDeliveryCase>
+      ${optional("ReceiverTIN", data.receiverTIN)}
+      <mod:SachetDocumentation>${data.sachetDocumentation}</mod:SachetDocumentation>
+      ${optional("SenderEmail", data.senderEmail)}
+      <mod:VATExportDeclaration>${data.vatExportDeclaration}</mod:VATExportDeclaration><mod:VATRate>${data.vatRate}</mod:VATRate>
+      ${optional("Width", data.dimensionsCm?.width)}
+    </mod:CustomsData>`
+  }
+
   private buildShipmentDataXml(shipment: CTTShipmentData): string {
     const esc = CTTSoapClient.escapeXml
     return `
       <mod:ShipmentData>
         ${shipment.ATCode ? `<mod:ATCode>${esc(shipment.ATCode)}</mod:ATCode>` : ""}
         <mod:ClientReference>${esc(shipment.ClientReference)}</mod:ClientReference>
+        ${shipment.CustomsData ? this.buildCustomsXml(shipment.CustomsData) : ""}
         ${shipment.DeclaredValue !== undefined ? `<mod:DeclaredValue>${shipment.DeclaredValue}</mod:DeclaredValue>` : ""}
         ${shipment.ExportType ? `<mod:ExportType>${esc(shipment.ExportType)}</mod:ExportType>` : ""}
         <mod:IsDevolution>${shipment.IsDevolution ? "true" : "false"}</mod:IsDevolution>

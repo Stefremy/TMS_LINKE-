@@ -1,3 +1,4 @@
+import { assertShipmentDestinationAvailable } from "../shipment-destination-policy"
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
@@ -74,6 +75,7 @@ export async function createShipment(formData: FormData) {
   let reservation: WalletReservation | undefined
 
   try {
+    assertShipmentDestinationAvailable(recipientCountry, recipient_zip)
     validateShipmentPricingInput({ weightKg, volumesCount, lengthCm, widthCm, heightCm })
     const { client: matchedClient, service } = await loadShipmentPricingContext(supabase, ctx, client_id, {
       serviceId: (formData.get("service_id") as string) || undefined,
@@ -228,6 +230,7 @@ export async function dispatchShipment(shipmentId: string) {
     throw new Error("Confirme o serviço CTT associado ao rascunho antes de emitir.")
   }
   const recipientCountry = saved.recipient_country || saved.weight_pricing_basis?.country || 'PT'
+  assertShipmentDestinationAvailable(recipientCountry, saved.recipient_postal || saved.recipient_zip || `${saved.recipient_zip4 || ''}-${saved.recipient_zip3 || ''}`)
   const contactError = getCttRecipientContactError({country:recipientCountry,phone:saved.recipient_phone,email:saved.recipient_email})
   if (contactError) throw new Error(contactError)
   // Legacy draft addresses stored the explicit city after the final comma.

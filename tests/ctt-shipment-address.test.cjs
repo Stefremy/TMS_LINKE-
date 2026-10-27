@@ -2,6 +2,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { XMLParser } = require('fast-xml-parser')
 const { createLoader } = require('./helpers/load-typescript.cjs')
+const customsFixture = {items:[{description:'Cotton shirts',quantity:2,value:25.5,weightKg:0.5,harmonizedCode:'610910',originCountry:'PT'}],nonDeliveryCase:'GiveBack',sachetDocumentation:true,vatExportDeclaration:false,vatRate:false,commercialInvoice:'TEST/2026/123',invoiceDate:'2026-10-27'}
 
 function harness() {
   const calls = []
@@ -18,6 +19,9 @@ function harness() {
           return { Status: 'Error', ErrorsList: { ErrorData: { Code: 1,
             Message: 'CustomsItemsData of CustomsData index 0 : Customs Data must not be included for shipments to selected Receiver Country' } } }
         }
+        if (request?.ReceiverData.Country === 'IS' && !request.ShipmentData.CustomsData?.CustomsItemsData?.CustomsItemsData) {
+          return {Status:'Error',ErrorsList:{ErrorData:{Code:1,Message:'CustomsItemsData of CustomsData index 0 : Customs Data is required for shipments to selected Receiver Country'}}}
+        }
         return { Status: 'Success', ShipmentData: { ShipmentDataOutput: { FirstObject: 'MOCK-ONLY' } } }
       }
     } },
@@ -32,7 +36,7 @@ function harness() {
     await provider.initialize({ auth_id: 'fixture', client_number: 'fixture', contract_number: 'fixture' })
     const result = await provider.createShipment({
       reference: 'NO-REAL-SHIPMENT', weightKg: 1, volumes: 1, autoClose: false,
-      cttExportDetails: { exportType: 'Permanent', contentType: 'Goods', declaredValue: 25.5 },
+      cttExportDetails: { exportType: 'Permanent', contentType: 'Goods', declaredValue: 25.5, customs:customsFixture },
       sender: { name: 'Fixture PT', address: 'Rua de teste', zip: '4800-019', city: 'Guimarães', country: 'PT', phone: '+351 910 000 001' },
       recipient: { name: 'Fixture ES', address: 'Calle de prueba', zip: '28013', city: 'Madrid', country: 'ES', phone: '+34 612 345 678', email: 'recipient@example.invalid', ...recipient },
       ...extra,
@@ -44,6 +48,107 @@ function harness() {
     return { xml, receiver: body.ReceiverData, sender: body.SenderData, shipment: body.ShipmentData }
   } }
 }
+
+for (const country of ['IS','GB','US']) for (const autoClose of [false,true]) {
+  test(`${country}: ${autoClose?'CompleteShipment':'CreateShipment'} sends an explicit full declaration with real items`,async()=>{
+    const h=harness()
+    const {shipment}=await h.send({country,zip:country==='IS'?'101':country==='GB'?'SW1A 1AA':'10001'}, {
+      autoClose,weightKg:1.5,dimensionsCm:{length:13,width:11,height:7.5},
+      cttExportDetails:{exportType:'Permanent',contentType:'Goods',declaredValue:25.5,customs:{...customsFixture,items:[
+        {...customsFixture.items[0],description:'Shirts & <samples>',quantity:2,value:15,weightKg:0.4},
+        {...customsFixture.items[0],description:'Cotton hat',quantity:1,value:10.5,weightKg:0.3},
+      ]}},
+    })
+    const customs=shipment.CustomsData
+    assert.equal(customs.CustomsTotalItems,'3')
+    assert.equal(customs.CustomsTotalValue,'25.5')
+    assert.equal(customs.CustomsTotalWeight,'700')
+    assert.equal(customs.CustomsItemsData.CustomsItemsData[0].Detail,'Shirts & <samples>')
+    assert.equal(customs.CustomsItemsData.CustomsItemsData[0].Weight,'400')
+    assert.equal(customs.CustomsItemsData.CustomsItemsData[1].Value,'10.50')
+    assert.equal(customs.NonDeliveryCase,'GiveBack')
+    assert.equal(customs.SachetDocumentation,'true')
+    assert.equal(customs.VATExportDeclaration,'false')
+    assert.equal(customs.Height,'7.5')
+    assert.equal(customs.ComercialInvoice,'TEST/2026/123')
+    assert.equal(customs.InvoiceDate,'2026-10-27T00:00:00')
+    assert.ok(Object.keys(customs).indexOf('Height') < Object.keys(customs).indexOf('InvoiceDate'))
+    assert.ok(Object.keys(customs).indexOf('InvoiceDate') < Object.keys(customs).indexOf('Length'))
+    assert.equal(shipment.Weight,'1500')
+    assert.equal(h.calls.length,1)
+    assert.deepEqual(Object.keys(shipment).slice(0,4),['ClientReference','CustomsData','DeclaredValue','ExportType'])
+  })
+}
+
+test('Iceland without customs items is rejected locally before calling CTT',async()=>{
+  const h=harness()
+  await assert.rejects(()=>h.send({country:'IS',zip:'101'},{cttExportDetails:{exportType:'Permanent',contentType:'Goods',declaredValue:25.5}}),/declaração aduaneira/)
+  assert.equal(h.calls.length,0)
+})
+
+test('Belgium strips a leftover declaration from a previous destination',async()=>{
+  const {shipment}=await harness().send({country:'BE',zip:'1000'},{cttExportDetails:{exportType:'Permanent',contentType:'Goods',declaredValue:25.5,customs:{items:[]}}})
+  assert.equal(shipment.CustomsData,undefined)
+})
+
+test('customs validation catches missing choices, inconsistent totals and invalid items',()=>{
+  const {validateCttCustoms,requiresCttCustoms}=createLoader({})('lib/services/ctt/customs-declaration.ts')
+  assert.equal(requiresCttCustoms('IS','101'),true)
+  assert.equal(requiresCttCustoms('BE','1000'),false)
+  assert.equal(requiresCttCustoms('ES','35001'),true)
+  assert.equal(requiresCttCustoms('ES','28013'),false)
+  for(const customs of [
+    {...customsFixture,items:[]}, {...customsFixture,nonDeliveryCase:undefined},
+    {...customsFixture,sachetDocumentation:undefined},
+    {...customsFixture,items:[{...customsFixture.items[0],value:20}]},
+    {...customsFixture,items:[{...customsFixture.items[0],weightKg:2}]},
+    {...customsFixture,items:[{...customsFixture.items[0],harmonizedCode:'bad'}]},
+  ]) assert.throws(()=>validateCttCustoms(customs,25.5,1.5))
+})
+
+test('Iceland form shows required customs fields while Belgium omits the declaration',()=>{
+  const React=require('react'),{renderToStaticMarkup}=require('react-dom/server')
+  const Fields=createLoader({react:React,'react/jsx-runtime':require('react/jsx-runtime')})('components/shipments/CttExportFields.tsx').CttExportFields
+  const markup=renderToStaticMarkup(React.createElement(Fields,{country:'IS',postalCode:'101'}))
+  assert.match(markup, /Declaração aduaneira obrigatória — Islândia/)
+  assert.match(markup, /<textarea[^>]*name="ctt_customs_description"[^>]*rows="3"/)
+  assert.ok(markup.indexOf('name="ctt_customs_description"') < markup.indexOf('name="ctt_export_type"'))
+  for(const name of ['description','quantity','value','weight','hs','origin','non_delivery','sachet','vat_export','vat_rate','invoice','invoice_date']){
+    const field=markup.match(new RegExp(`<(?:input|select|textarea)\\b[^>]*name="ctt_customs_${name}"[^>]*>`))?.[0]
+    assert.ok(field,name);assert.match(field,/\brequired=""/)
+  }
+  assert.doesNotMatch(renderToStaticMarkup(React.createElement(Fields,{country:'BE',postalCode:'1000'})),/name="ctt_customs_present"/)
+})
+
+test('customs form reads real lines and explicit false choices without turning blank amounts into zero',()=>{
+  const {readCttExportForm}=createLoader({})('lib/services/ctt/export-details.ts')
+  const form=new FormData()
+  for(const [name,value] of Object.entries({ctt_export_type:'Permanent',ctt_content_type:'Goods',ctt_declared_value:'25.50',
+    ctt_customs_present:'1',ctt_customs_description:'Cotton shirts',ctt_customs_quantity:'2',ctt_customs_value:'25.50',
+    ctt_customs_weight:'0.5',ctt_customs_hs:'610910',ctt_customs_origin:'pt',ctt_customs_non_delivery:'GiveBack',
+    ctt_customs_sachet:'true',ctt_customs_vat_export:'false',ctt_customs_vat_rate:'false',ctt_customs_invoice:'TEST/2026/123',ctt_customs_invoice_date:'2026-10-27'}))form.set(name,value)
+  const result=readCttExportForm(form)
+  assert.equal(result.customs.items[0].originCountry,'PT')
+  assert.equal(result.customs.items[0].weightKg,0.5)
+  assert.equal(result.customs.vatExportDeclaration,false)
+  assert.equal(result.customs.commercialInvoice,'TEST/2026/123')
+  assert.equal(result.customs.invoiceDate,'2026-10-27')
+  form.set('ctt_declared_value','0');form.set('ctt_customs_value','')
+  assert.throws(()=>readCttExportForm(form),/valor do artigo/)
+})
+
+for(const [invoice,date] of [['','2026-10-27'],['   ','2026-10-27'],['TEST/1',''],['TEST/1','2026-02-29'],['TEST/1','2026-04-31'],['TEST/1','27/10/2026'],['TEST/1','0000-01-01']]){
+  test(`customs invoice ${JSON.stringify(invoice)}/${JSON.stringify(date)} is rejected before SOAP`,async()=>{
+    const h=harness()
+    await assert.rejects(()=>h.send({country:'IS',zip:'101'},{cttExportDetails:{exportType:'Permanent',contentType:'Goods',declaredValue:25.5,customs:{...customsFixture,commercialInvoice:invoice,invoiceDate:date}}}),/fatura/i)
+    assert.equal(h.calls.length,0)
+  })
+}
+
+test('a valid leap-day invoice is retained without timezone conversion',()=>{
+  const {validateCttCustoms}=createLoader({})('lib/services/ctt/customs-declaration.ts')
+  assert.equal(validateCttCustoms({...customsFixture,invoiceDate:'2024-02-29'},25.5,1).invoiceDate,'2024-02-29')
+})
 
 for (const autoClose of [false, true]) {
   test(`CTT ${autoClose ? 'CompleteShipment' : 'CreateShipment'} preserves Madrid's full foreign postcode and country`, async () => {
@@ -182,7 +287,7 @@ for(const autoClose of [false,true]) test(`Belgium CTT ${autoClose ? 'CompleteSh
  assert.doesNotMatch(xml,/<mod:CustomsData>|<mod:CustomsItemsData>|<mod:NonDeliveryCase>|<mod:HarmonizedCode>/)
 })
 
-for(const [country,zip] of [['BE','1000'],['FR','75001'],['DE','10115'],['NL','1012 AB'],['FI','00100'],['ES','28013'],['GB','SW1A 1AA'],['US','10001']]){
+for(const [country,zip] of [['BE','1000'],['FR','75001'],['DE','10115'],['NL','1012 AB'],['FI','00100'],['ES','28013']]){
  for(const subProduct of ['ENCF008.02','EMSF001.02']) for(const autoClose of [false,true]){
   test(`${country} ${subProduct} ${autoClose?'Complete':'Create'} never generates a customs declaration just to carry dimensions`,async()=>{
    const h=harness(),{shipment,xml}=await h.send({country,zip},{subProduct,autoClose,weightKg:1.5,volumes:2,
@@ -281,7 +386,7 @@ test('international form fields require an explicit selection and read the conte
   const React = require('react'), { renderToStaticMarkup } = require('react-dom/server')
   const load = createLoader({ react: React, 'react/jsx-runtime': require('react/jsx-runtime') })
   const Fields = load('components/shipments/CttExportFields.tsx').CttExportFields
-  const markup = renderToStaticMarkup(React.createElement(Fields))
+  const markup = renderToStaticMarkup(React.createElement(Fields,{country:"BE"}))
   for (const name of ['ctt_export_type', 'ctt_content_type', 'ctt_declared_value']) {
     const field = markup.match(new RegExp(`<(?:input|select)\\b[^>]*name="${name}"[^>]*>`))?.[0]
     assert.ok(field, `Missing field: ${name}`)

@@ -68,10 +68,11 @@ export class CttProvider implements CarrierProvider {
 
       if (recipientData.Country !== "PT") {
         try {
-          const details = validateCttExportDetails(input.cttExportDetails)
+          const details = validateCttExportDetails(input.cttExportDetails, { country: recipientData.Country!, postalCode: input.recipient.zip, weightKg: input.weightKg })
           shipmentData.ExportType = details.exportType
           shipmentData.UPUCode = details.contentType
           shipmentData.DeclaredValue = details.declaredValue
+          if (details.customs) shipmentData.CustomsData = { ...details.customs, dimensionsCm: input.dimensionsCm, senderEmail: input.sender.email }
           const contactError = getCttRecipientContactError(input.recipient)
           if (contactError) return { success: false, confirmedRejection: true, error: contactError }
         } catch (error) {

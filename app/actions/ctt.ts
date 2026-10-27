@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache"
 import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
 import { syncShipmentTracking } from "@/lib/services/tracking"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
+import { assertShipmentDestinationAvailable } from "@/lib/services/shipment-destination-policy"
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
 import { 
   CTTShipmentService, 
@@ -343,6 +344,7 @@ export async function emitCttShipmentAction(shipmentInput: {
   cttExportDetails?: import("@/lib/services/ctt/export-details").CttExportDetails
 }) {
   await requireEmployee()
+  assertShipmentDestinationAvailable(shipmentInput.recipient.country || "PT", shipmentInput.recipient.zip)
   const creds = await getCttCredentials()
   const provider = new CttProvider()
   await provider.initialize(creds)

@@ -98,6 +98,10 @@ export interface CTTShipmentData {
   DeclaredValue?: number
   ExportType?: import("./export-details").CttExportType
   UPUCode?: import("./export-details").CttContentType
+  CustomsData?: import("./customs-declaration").CttCustomsDeclaration & {
+    dimensionsCm?: import("../shipments/parcel-dimensions").ParcelDimensionsCm
+    senderEmail?: string
+  }
 }
 
 export interface CTTDeliveryNote {

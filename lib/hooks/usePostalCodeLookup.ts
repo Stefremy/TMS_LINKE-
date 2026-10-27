@@ -1,12 +1,14 @@
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
+import { internationalPostalQuery } from "@/lib/services/geo/international-postal-code"
 
 export interface PostalLookupInfo {
   found: boolean
-  country: "PT" | "ES"
+  country: string
   postalCode: string
   street?: string
   streets?: string[]
   city: string
+  cities?: string[]
   municipality?: string
   district?: string
 }
@@ -20,14 +22,17 @@ export function usePostalCodeLookup(options?: {
   const [info, setInfo] = useState<PostalLookupInfo | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const requestVersionRef = useRef(0)
-  const countryRef = useRef(options?.country || "PT")
-  countryRef.current = options?.country || "PT"
+  const country = (options?.country || "PT").toUpperCase()
+  const countryRef = useRef(country)
   const onFoundRef = useRef(options?.onFound)
-  onFoundRef.current = options?.onFound
+  useEffect(() => {
+    countryRef.current = country
+    onFoundRef.current = options?.onFound
+  }, [country, options?.onFound])
 
   const lookup = useCallback((raw: string, countryOverride?: string) => {
     const requestVersion = ++requestVersionRef.current
-    const currentCountry = (countryOverride || countryRef.current || "PT").toUpperCase()
+    const currentCountry = (countryOverride || country).toUpperCase()
     let val = raw.trim()
 
     if (currentCountry === "PT") {
@@ -45,12 +50,14 @@ export function usePostalCodeLookup(options?: {
     // Outros países: formato livre internacional (sem impor máscara portuguesa)
 
     if (timerRef.current) clearTimeout(timerRef.current)
+    setLoading(false)
+    setInfo(null)
+    setStatus("idle")
 
     const isPT = currentCountry === "PT"
-    const isES = currentCountry === "ES"
     const cleanDigits = val.replace(/[^0-9]/g, "")
 
-    const shouldQuery = (isPT && cleanDigits.length >= 4) || (isES && cleanDigits.length >= 4)
+    const shouldQuery = (isPT && cleanDigits.length === 7) || (!isPT && internationalPostalQuery(val, currentCountry) !== null)
 
     if (!shouldQuery) {
       setStatus("idle")
@@ -74,20 +81,16 @@ export function usePostalCodeLookup(options?: {
           }
         }
         if (requestVersion !== requestVersionRef.current || currentCountry !== countryRef.current) return
-        if ((isPT && cleanDigits.length >= 7) || (isES && cleanDigits.length >= 5)) {
-          setStatus("invalid")
-        } else {
-          setStatus("idle")
-        }
+        setStatus("invalid")
       } catch {
         if (requestVersion === requestVersionRef.current) setStatus("idle")
       } finally {
         if (requestVersion === requestVersionRef.current) setLoading(false)
       }
-    }, 150)
+    }, 350)
 
     return val
-  }, [])
+  }, [country])
 
   const reset = useCallback(() => {
     requestVersionRef.current++
@@ -96,6 +99,12 @@ export function usePostalCodeLookup(options?: {
     setStatus("idle")
     setInfo(null)
   }, [])
+
+  const cancelPending = useCallback(() => {
+    requestVersionRef.current++
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [])
+  useEffect(() => cancelPending, [country, cancelPending])
 
   return {
     lookup,

@@ -1,4 +1,5 @@
 import { ShipmentPricingError } from "@/lib/pricing/shipment-pricing-errors"
+import { requiresCttCustoms, validateCttCustoms, readCttCustomsForm, type CttCustomsDeclaration } from "./customs-declaration"
 
 // SGEE V1.8, pages 25, 39 and 44–45. WCF expects enum names, not numbers.
 export const CTT_EXPORT_TYPES = [
@@ -21,9 +22,10 @@ export type CttExportDetails = {
   exportType: CttExportType
   contentType: CttContentType
   declaredValue: number
+  customs?: CttCustomsDeclaration
 }
 
-export function validateCttExportDetails(input: unknown): CttExportDetails {
+export function validateCttExportDetails(input: unknown, destination?: { country: string; postalCode?: string; weightKg?: number }): CttExportDetails {
   const value = input && typeof input === "object" ? input as Partial<CttExportDetails> : {}
   const exportType = CTT_EXPORT_TYPES.find(option => option.value === value.exportType)
   if (!exportType) {
@@ -37,14 +39,18 @@ export function validateCttExportDetails(input: unknown): CttExportDetails {
       !Number.isSafeInteger(Math.round(value.declaredValue * 100))) {
     throw new ShipmentPricingError("Indique um valor declarado do conteúdo válido, em euros, igual ou superior a zero.")
   }
-  return { exportType: exportType.value, contentType: contentType.value, declaredValue: Number(value.declaredValue.toFixed(2)) }
+  const result: CttExportDetails = { exportType: exportType.value, contentType: contentType.value, declaredValue: Number(value.declaredValue.toFixed(2)) }
+  const needsCustoms = destination ? requiresCttCustoms(destination.country, destination.postalCode) : value.customs !== undefined
+  if (needsCustoms) result.customs = validateCttCustoms(value.customs, result.declaredValue, destination?.weightKg)
+  return result
 }
 
-export function readCttExportForm(form: FormData): CttExportDetails {
+export function readCttExportForm(form: FormData, destination?: { country: string; postalCode?: string; weightKg?: number }): CttExportDetails {
   const amount = form.get("ctt_declared_value")
   return validateCttExportDetails({
     exportType: form.get("ctt_export_type"),
     contentType: form.get("ctt_content_type"),
     declaredValue: typeof amount === "string" && amount.trim() !== "" ? Number(amount) : undefined,
-  })
+    customs: readCttCustomsForm(form),
+  }, destination)
 }

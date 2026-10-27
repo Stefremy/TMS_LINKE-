@@ -42,6 +42,14 @@ test('draft dispatch uses saved decimal weight, dimensions, volume count and act
  await assert.rejects(()=>h.dispatch(),/já foi emitido/)
  assert.equal(h.calls.length,1)
 })
+
+test('existing customs drafts stop before loading credentials, writing data or contacting CTT',async()=>{
+ for(const [country,postal] of [['IS','101'],['NO','0010'],['GB','SW1A 1AA'],['CH','8001'],['ES','35001']]){
+  const h=harness({snapshot:{recipient_country:country,recipient_postal:postal}})
+  await assert.rejects(()=>h.dispatch(),/aduaneiros.*temporariamente indisponíveis/)
+  assert.equal(h.calls.length,0);assert.equal(h.credentials.length,0);assert.equal(h.db.writes.length,0)
+ }
+})
 test('legacy frozen tariff identity remains usable without inventing a default service',async()=>{
  const h=harness({snapshot:{webservice_service_code:undefined,weight_pricing_basis:{service:{webservice_service_code:'EMSF057.01'}}}})
  await h.dispatch();assert.equal(h.calls[0].subProduct,'EMSF057.01')
