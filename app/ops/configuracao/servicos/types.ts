@@ -104,6 +104,19 @@ export const PRIMORDIAL_SERVICE_IDS = new Set([
   "srv_linke_1793009571268", // CTT Expresso Económico 48 (Guia EQ), promoted to core.
 ])
 
+export const PRIMORDIAL_SERVICE_MANAGER_EMAILS = new Set([
+  "stefano.remy@gmail.com",
+  "geral@linke.pt",
+])
+
+export function canManagePrimordialServices(
+  userOrEmail?: { email?: string | null } | string | null
+): boolean {
+  const rawEmail = typeof userOrEmail === "string" ? userOrEmail : userOrEmail?.email
+  if (!rawEmail) return false
+  return PRIMORDIAL_SERVICE_MANAGER_EMAILS.has(rawEmail.trim().toLowerCase())
+}
+
 export function isPrimordialServico(servico?: Partial<ServicoLinke> | null): boolean {
   if (!servico) return false
   // Core identities cannot be downgraded by an editable flag or a stale payload.

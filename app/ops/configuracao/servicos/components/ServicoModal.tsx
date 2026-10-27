@@ -90,7 +90,7 @@ function getCarrierZones(carrierName: string) {
 interface ServicoModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (servico: Partial<ServicoLinke>) => Promise<void>
+  onSave: (servico: Partial<ServicoLinke>) => Promise<boolean | void>
   initialData?: ServicoLinke | null
   fornecedores: Fornecedor[]
   webservices?: any[]
@@ -467,8 +467,10 @@ export function ServicoModal({
     e.preventDefault()
     setSaving(true)
     try {
-      await onSave(formData)
-      onClose()
+      const ok = await onSave(formData)
+      if (ok !== false) {
+        onClose()
+      }
     } finally {
       setSaving(false)
     }

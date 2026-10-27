@@ -54,6 +54,11 @@ test('stored carrier PDFs can be retrieved from the audit documents with the sam
  assert.equal(h.db.writes.length,0)
  assert.ok(h.db.queries.every(q=>q.filters.some(f=>f.field==='tenant_id'&&f.value===tenant)))
 })
+test('stored carrier PDFs can be retrieved from rawResponse.ShipmentData[0].DocumentsList',async()=>{
+ const h=retrieval({snapshot:{rawResponse:{ShipmentData:[{FirstObject:'CE000000001PT',LabelList:[],DocumentsList:[{FileName:'CE000000001PT.pdf',File:pdf}]}]}}})
+ assert.equal(await h.api.fetchShipmentLabel(id),pdf)
+ assert.equal(h.db.writes.length,0)
+})
 test('missing official labels return unavailable and never generate substitute carrier labels',async()=>{
  const h=retrieval()
  assert.equal(await h.api.fetchShipmentLabel(id),null);assert.equal(h.db.writes.length,0)

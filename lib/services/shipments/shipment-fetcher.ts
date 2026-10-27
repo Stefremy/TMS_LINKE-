@@ -107,8 +107,13 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
     if (!saved) return null
     let label = saved.ctt_label_base64 || saved.carrier_label_base64 || saved.labelBase64 ||
       shipment?.ctt_label_base64 || shipment?.carrier_label_base64 || null
-    if (!label && saved.ctt_documents) {
-      label = getCttShipmentLabel({ FirstObject: saved.carrier_tracking_number, DocumentsList: saved.ctt_documents })?.data || null
+    if (!label && (saved.ctt_documents || saved.rawResponse?.ShipmentData?.[0])) {
+      const rawShipment = saved.rawResponse?.ShipmentData?.[0]
+      label = getCttShipmentLabel({
+        FirstObject: saved.carrier_tracking_number || rawShipment?.FirstObject,
+        LabelList: rawShipment?.LabelList,
+        DocumentsList: saved.ctt_documents || rawShipment?.DocumentsList,
+      })?.data || null
     }
     if (!label) return null
     if (label.trimStart().startsWith("^XA")) label = await convertZplToPdfBase64(label)

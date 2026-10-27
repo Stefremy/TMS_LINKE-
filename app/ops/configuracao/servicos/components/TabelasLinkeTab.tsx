@@ -22,6 +22,7 @@ import { isPrimordialServico } from "../types"
 interface TabelasLinkeTabProps {
   mode?: "base" | "custom" | "linke_services"
   servicos: ServicoLinke[]
+  canManageBaseTables?: boolean
   onEditServico: (servico: ServicoLinke) => void
   onDuplicateServico: (servico: ServicoLinke) => void
   onDeleteServico: (id: string) => void
@@ -32,6 +33,7 @@ interface TabelasLinkeTabProps {
 export function TabelasLinkeTab({
   mode = "base",
   servicos,
+  canManageBaseTables = false,
   onEditServico,
   onDuplicateServico,
   onDeleteServico,
@@ -87,6 +89,8 @@ export function TabelasLinkeTab({
     .filter(s => sectionFilter === "all" || (sectionFilter === "og" ? isPrimordialServico(s) : !isPrimordialServico(s)))
     .sort((a, b) => getCarrierRank(a) - getCarrierRank(b))
   const currentServico = visibleServicos.find((s) => s.id === activeServicoId) || visibleServicos[0]
+  const isCurrentBase = currentServico ? isPrimordialServico(currentServico) : false
+  const isCurrentLocked = isCurrentBase && !canManageBaseTables
   const [quickMarkupInput, setQuickMarkupInput] = React.useState<number>(currentServico?.global_markup_pct ?? 22)
 
   React.useEffect(() => {
@@ -288,34 +292,59 @@ export function TabelasLinkeTab({
                       Criar variante
                     </button>
 
-                    <button
-                      onClick={() => onEditServico(currentServico)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition-colors shadow-2xs"
-                    >
-                      <Edit3 className="w-3.5 h-3.5 text-slate-400" />
-                      Editar tabela
-                    </button>
+                    {isCurrentLocked ? (
+                      <span
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium rounded-lg"
+                        title="Apenas stefano.remy e geral@linke podem editar tabelas base contratadas"
+                      >
+                        <Lock className="w-3.5 h-3.5 text-amber-600" />
+                        Protegida · Bloqueada
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => onEditServico(currentServico)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition-colors shadow-2xs"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-slate-400" />
+                          Editar tabela
+                        </button>
 
-                    <button
-                      onClick={() => onToggleStatus(currentServico.id, !currentServico.is_active)}
-                      className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition-colors shadow-2xs"
-                    >
-                      {currentServico.is_active ? "Desativar" : "Ativar"}
-                    </button>
+                        <button
+                          onClick={() => onToggleStatus(currentServico.id, !currentServico.is_active)}
+                          className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition-colors shadow-2xs"
+                        >
+                          {currentServico.is_active ? "Desativar" : "Ativar"}
+                        </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm(`Eliminar a tabela '${currentServico.name}'?`)) {
-                          onDeleteServico(currentServico.id)
-                        }
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                      title="Eliminar Tabela"
-                      aria-label={`Eliminar tabela ${currentServico.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                        {isCurrentBase ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="p-1.5 text-slate-300 bg-slate-50 border border-slate-200/80 rounded-lg cursor-not-allowed opacity-60 inline-flex items-center gap-1"
+                            title="Tabelas base contratadas estão bloqueadas e não podem ser eliminadas"
+                            aria-label={`Eliminação bloqueada para tabela base ${currentServico.name}`}
+                          >
+                            <Lock className="w-3.5 h-3.5 text-slate-400" />
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Eliminar a tabela '${currentServico.name}'?`)) {
+                                onDeleteServico(currentServico.id)
+                              }
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Eliminar Tabela"
+                            aria-label={`Eliminar tabela ${currentServico.name}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -405,65 +434,67 @@ export function TabelasLinkeTab({
                 </div>
               </div>
 
-              <details key={`markup-${currentServico.id}`} className="group border-b border-slate-200/80">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50/60 px-5 py-3 text-xs font-semibold text-slate-700 [&::-webkit-details-marker]:hidden">
-                  <span className="flex items-center gap-2"><Percent className="h-3.5 w-3.5" />Ajustar margem e recalcular preços</span>
-                  <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-                </summary>
-                {/* Quick Margin & Markup Adjustment Bar */}
-                <div className="bg-slate-50/70 border-b border-slate-200/80 px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200 shrink-0">
-                      <Percent className="w-3.5 h-3.5" />
+              {!isCurrentLocked && (
+                <details key={`markup-${currentServico.id}`} className="group border-b border-slate-200/80">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-slate-50/60 px-5 py-3 text-xs font-semibold text-slate-700 [&::-webkit-details-marker]:hidden">
+                    <span className="flex items-center gap-2"><Percent className="h-3.5 w-3.5" />Ajustar margem e recalcular preços</span>
+                    <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                  </summary>
+                  {/* Quick Margin & Markup Adjustment Bar */}
+                  <div className="bg-slate-50/70 border-b border-slate-200/80 px-5 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200 shrink-0">
+                        <Percent className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-800">
+                          Acréscimo sobre o custo: +{currentServico.global_markup_pct ?? 20}%
+                        </span>
+                        <p className="text-[11px] text-slate-500">
+                          Ao aplicar, os preços de venda desta tabela serão recalculados a partir dos custos.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="font-semibold text-slate-800">
-                        Acréscimo sobre o custo: +{currentServico.global_markup_pct ?? 20}%
-                      </span>
-                      <p className="text-[11px] text-slate-500">
-                        Ao aplicar, os preços de venda desta tabela serão recalculados a partir dos custos.
-                      </p>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] text-slate-500 font-medium">Atalhos:</span>
+                      {[18, 20, 22, 25, 28, 30].map((pct) => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => {
+                            setQuickMarkupInput(pct)
+                          }}
+                          className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
+                            quickMarkupInput === pct
+                              ? "bg-slate-900 text-white shadow-2xs"
+                              : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+                          }`}
+                        >
+                          +{pct}%
+                        </button>
+                      ))}
+
+                      <div className="inline-flex items-center gap-1 ml-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
+                        <input
+                          type="number"
+                          value={quickMarkupInput}
+                          onChange={(e) => setQuickMarkupInput(parseFloat(e.target.value) || 0)}
+                          className="w-12 px-1.5 py-0.5 text-xs font-mono font-bold text-center text-slate-800 focus:outline-none"
+                        />
+                        <span className="text-xs text-slate-400 font-bold pr-1">%</span>
+                        <button
+                          type="button"
+                          onClick={() => onQuickMarkupChange(currentServico.id, quickMarkupInput)}
+                          className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-medium rounded-md transition-colors"
+                        >
+                          Aplicar margem
+                        </button>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] text-slate-500 font-medium">Atalhos:</span>
-                    {[18, 20, 22, 25, 28, 30].map((pct) => (
-                      <button
-                        key={pct}
-                        type="button"
-                        onClick={() => {
-                          setQuickMarkupInput(pct)
-                        }}
-                        className={`px-2 py-1 rounded text-xs font-semibold transition-all ${
-                          quickMarkupInput === pct
-                            ? "bg-slate-900 text-white shadow-2xs"
-                            : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-                        }`}
-                      >
-                        +{pct}%
-                      </button>
-                    ))}
-
-                    <div className="inline-flex items-center gap-1 ml-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
-                      <input
-                        type="number"
-                        value={quickMarkupInput}
-                        onChange={(e) => setQuickMarkupInput(parseFloat(e.target.value) || 0)}
-                        className="w-12 px-1.5 py-0.5 text-xs font-mono font-bold text-center text-slate-800 focus:outline-none"
-                      />
-                      <span className="text-xs text-slate-400 font-bold pr-1">%</span>
-                      <button
-                        type="button"
-                        onClick={() => onQuickMarkupChange(currentServico.id, quickMarkupInput)}
-                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-medium rounded-md transition-colors"
-                      >
-                        Aplicar margem
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </details>
+                </details>
+              )}
 
               {/* Price Tables per Zone */}
               <div className="p-5 space-y-6">

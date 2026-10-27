@@ -98,7 +98,11 @@ function harness({ ctx = ctxA, fallback = false, eventsOnA = false, failure } = 
     '@/lib/services/ctt': {},
     '@/lib/config/ctt-pickup-requester': {},
     '@/lib/services/ctt/close-manifest': {},
-    '@/app/ops/configuracao/servicos/types': { isPrimordialServico: () => false },
+    '@/app/ops/configuracao/servicos/types': {
+      PRIMORDIAL_SERVICE_CODES: new Set(),
+      canManagePrimordialServices: () => false,
+      isPrimordialServico: () => false,
+    },
     '@/lib/services/geo/international-zones': { buildOfficialLinkeInternationalZones: () => [], buildOfficialCeTruckZones: () => [] },
     '@/lib/services/service-availability': { isTemporarilyWithdrawnService: () => false },
     stripe: class { checkout = { sessions: { create: async () => { calls.stripe++; return { id: 'fictional-checkout', url: 'https://fixture.invalid/checkout' } } } } },

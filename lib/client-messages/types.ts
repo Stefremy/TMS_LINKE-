@@ -21,5 +21,10 @@ export function messageLink(base: string, section: MessageSection) {
 }
 export function canSendClientMessages(ctx: { role: string | null; permissions: string[] } | null) {
   return !!ctx && (ctx.role === 'admin' || ctx.role === 'employee' &&
-    ctx.permissions.some(p => ['Gestão de Clientes & Contratos', 'Acesso Total (Super-Admin)'].includes(p)))
+    ctx.permissions.some(p => [
+      'Gestão de Clientes & Contratos',
+      'Pedidos de Recolha & Distribuição',
+      'Emissão e Controlo de Guias CTT',
+      'Acesso Total (Super-Admin)',
+    ].includes(p)))
 }

@@ -30,6 +30,7 @@ interface ServicosLinkeClientProps {
   initialServicos: ServicoLinke[]
   initialFornecedores: Fornecedor[]
   initialWebservices?: any[]
+  canManageBaseTables?: boolean
 }
 
 type TabType = "servicos_linke" | "matriz_margens" | "simulador"
@@ -38,6 +39,7 @@ export function ServicosLinkeClient({
   initialServicos,
   initialFornecedores,
   initialWebservices = [],
+  canManageBaseTables = false,
 }: ServicosLinkeClientProps) {
   const [servicos, setServicos] = React.useState<ServicoLinke[]>(initialServicos)
   const [fornecedores] = React.useState<Fornecedor[]>(initialFornecedores)
@@ -59,20 +61,24 @@ export function ServicosLinkeClient({
   }
 
   // Save Service handler
-  const handleSaveServico = async (servicoData: Partial<ServicoLinke>) => {
+  const handleSaveServico = async (servicoData: Partial<ServicoLinke>): Promise<boolean> => {
     const res = await saveServicoLinkeAction(servicoData)
     if (res.success && res.data) {
+      const savedData = res.data
       setServicos((prev) => {
-        const index = prev.findIndex((s) => s.id === res.data.id)
+        const index = prev.findIndex((s) => s.id === savedData.id)
         if (index >= 0) {
           const next = [...prev]
-          next[index] = res.data
+          next[index] = savedData
           return next
         }
-        return [res.data, ...prev]
+        return [savedData, ...prev]
       })
-      showNotification(`Serviço / Tabela '${res.data.name}' gravado com sucesso!`)
+      showNotification(`Serviço / Tabela '${savedData.name}' gravado com sucesso!`)
+      return true
     }
+    showNotification(res.error || "Não foi possível gravar esta tabela. Tente novamente.")
+    return false
   }
 
   // Duplicate / Clone Service for VIP/Volume Client
@@ -86,11 +92,17 @@ export function ServicosLinkeClient({
     if (res.success && res.data) {
       setServicos((prev) => [res.data!, ...prev])
       showNotification(`Tabela personalizada com -${discountPct}% criada para '${targetClientName}'!`)
+      return
     }
+    showNotification(res.error || "Não foi possível duplicar esta tabela. Tente novamente.")
   }
 
   const handleToggleStatus = async (id: string, active: boolean) => {
-    await toggleServicoLinkeStatusAction(id, active)
+    const res = await toggleServicoLinkeStatusAction(id, active)
+    if (!res.success) {
+      showNotification(res.error || "Não foi possível alterar o estado desta tabela.")
+      return
+    }
     setServicos((prev) =>
       prev.map((s) => (s.id === id ? { ...s, is_active: active } : s))
     )
@@ -98,6 +110,11 @@ export function ServicosLinkeClient({
   }
 
   const handleDeleteServico = async (id: string) => {
+    const target = servicos.find((s) => s.id === id)
+    if (target && isPrimordialServico(target)) {
+      showNotification("Esta tabela base contratada está bloqueada e não pode ser eliminada.")
+      return
+    }
     try {
       const res = await deleteServicoLinkeAction(id)
       if (!res.success) {
@@ -112,7 +129,11 @@ export function ServicosLinkeClient({
   }
 
   const handleQuickMarkupChange = async (servicoId: string, markup: number) => {
-    await updateServicoMarkupAction(servicoId, markup)
+    const res = await updateServicoMarkupAction(servicoId, markup)
+    if (!res.success) {
+      showNotification(res.error || "Não foi possível atualizar a margem desta tabela.")
+      return
+    }
     setServicos((prev) =>
       prev.map((s) => {
         if (s.id === servicoId) {
@@ -238,7 +259,12 @@ export function ServicosLinkeClient({
           <TabelasLinkeTab
             mode="linke_services"
             servicos={servicos}
+            canManageBaseTables={canManageBaseTables}
             onEditServico={(servico) => {
+              if (isPrimordialServico(servico) && !canManageBaseTables) {
+                showNotification("Esta tabela base contratada está bloqueada. Apenas stefano.remy e geral@linke podem editar tabelas base.")
+                return
+              }
               setSelectedServicoForEdit(servico)
               setIsModalOpen(true)
             }}

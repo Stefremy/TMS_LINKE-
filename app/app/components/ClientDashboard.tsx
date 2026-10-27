@@ -44,11 +44,16 @@ import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CreditCard } from "lucide-react"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 import { useClientScope } from "./ClientScope"
+import { useClientMessageCounter } from "./ClientMessages"
 import { ManifestDocuments } from "@/components/manifest-documents"
 import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
+import type { ClientMessage, MessagePage } from "@/lib/client-messages/types"
 
 export function ClientDashboard() {
   const { client: currentClient, basePath } = useClientScope()
+  const messageCounter = useClientMessageCounter()
+  const [unreadNotices, setUnreadNotices] = React.useState<ClientMessage[]>([])
+  const [unreadNoticesTotal, setUnreadNoticesTotal] = React.useState(0)
   const [loadingStats, setLoadingStats] = React.useState(true)
   const [statsError, setStatsError] = React.useState(false)
   const [stats, setStats] = React.useState<{
@@ -153,6 +158,40 @@ export function ClientDashboard() {
     })
     return () => { active = false }
   }, [currentClient.id, currentClient.short_name])
+
+  // Load unread operational notices sent from /ops/mensagens so they appear right on the Client Dashboard
+  React.useEffect(() => {
+    const controller = new AbortController()
+    fetch(`/api/client-messages?clientId=${encodeURIComponent(currentClient.id)}&unread=1`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) return
+        const data: MessagePage = await res.json()
+        if (!controller.signal.aborted) {
+          setUnreadNotices(data.messages || [])
+          setUnreadNoticesTotal(typeof data.unreadCount === 'number' ? data.unreadCount : (data.messages?.length || 0))
+        }
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [currentClient.id])
+
+  const handleDismissNotice = async (noticeId: string) => {
+    setUnreadNotices((prev) => prev.filter((m) => m.id !== noticeId))
+    setUnreadNoticesTotal((prev) => Math.max(0, prev - 1))
+    try {
+      const res = await fetch('/api/client-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'read', clientId: currentClient.id, ids: [noticeId] }),
+      })
+      if (res.ok) {
+        void messageCounter?.refresh()
+      }
+    } catch {}
+  }
 
   // Handle click outside dropdown
   React.useEffect(() => {
@@ -381,6 +420,53 @@ export function ClientDashboard() {
         onClose={() => setIsTopUpOpen(false)} 
         clientId={currentClient?.id || ""} 
       />
+
+      {/* Avisos / Mensagens enviadas pela Equipa Linke */}
+      {unreadNotices.length > 0 && (
+        <div className="bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-white border border-emerald-200 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-lg bg-[#008A4B] text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+              <Bell className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded">
+                  Mensagem da Linke
+                </span>
+                {unreadNoticesTotal > 1 && (
+                  <span className="text-[10px] font-bold text-slate-700 bg-white border border-emerald-200 px-1.5 py-0.5 rounded">
+                    +{unreadNoticesTotal - 1} por ler
+                  </span>
+                )}
+              </div>
+              <p className="text-xs sm:text-sm text-slate-900 font-semibold mt-1">
+                {unreadNotices[0].title}
+              </p>
+              <p className="text-xs text-slate-700 mt-0.5 whitespace-pre-line break-words line-clamp-3">
+                {unreadNotices[0].body}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <Link
+              href={`${basePath}/mensagens`}
+              className="px-3.5 py-2 bg-[#008A4B] hover:bg-[#00703C] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Ver Mensagens</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+            <button
+              type="button"
+              onClick={() => void handleDismissNotice(unreadNotices[0].id)}
+              className="text-slate-400 hover:text-slate-600 p-1.5 rounded-md hover:bg-white/60 transition-colors cursor-pointer"
+              title="Marcar como lida"
+              aria-label="Marcar mensagem como lida"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Notificação de Nova Fatura Emitida */}
       {stats.latestInvoice && dismissedInvoiceId !== stats.latestInvoice.id && (

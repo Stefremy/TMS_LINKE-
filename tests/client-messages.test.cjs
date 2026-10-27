@@ -67,3 +67,52 @@ test('inbox read failures keep the unread state; confirmed writes update it and 
   render();assert.equal(state[1],success?0:1);assert.equal(Boolean(state[0][0].read_at),success);assert.equal(refreshes,success?1:0)
  }
 })
+test('audit_log fallback delivers messages end-to-end when client_messages RPCs are missing (PGRST202)',async()=>{
+ const tables={clients:[{id:A,tenant_id:T},{id:B,tenant_id:T}],audit_log:[]}
+ const db=fakeSupabase(tables,null,{persistInserts:true})
+ db.client.rpc=async()=>({data:null,error:{code:'PGRST202',message:'Could not find function in schema cache'}})
+ let activeCtx={...staff,user:{id:U},permissions:['Pedidos de Recolha & Distribuição']}
+ const load=createLoader({'@/lib/auth/context':{getAuthContext:async()=>activeCtx},'@/lib/supabase/server':{createAdminClient:()=>db.client}})
+ const route=load('app/api/client-messages/route.ts')
+ const post=(body)=>route.POST(new Request('https://toke.pt/api/client-messages',{method:'POST',headers:{origin:'https://toke.pt'},body:JSON.stringify(body)}))
+ const get=(query)=>route.GET(new Request('https://toke.pt/api/client-messages?'+query))
+
+ // 1. Staff sends notice to store A; idempotent retry returns same ID; mismatched payload with same requestId fails
+ const sendRes=await post({action:'send',clientId:A,requestId:M,title:' Horário Recolhas ',body:' Amanhã às 16h30 '})
+ assert.equal(sendRes.status,200)
+ const sent=await sendRes.json()
+ assert.match(sent.id,/^[a-f\d-]{36}$/i)
+ const retrySame=await post({action:'send',clientId:A,requestId:M,title:'Horário Recolhas',body:'Amanhã às 16h30'})
+ assert.equal(retrySame.status,200)
+ assert.equal((await retrySame.json()).id,sent.id)
+ const retryMismatch=await post({action:'send',clientId:A,requestId:M,title:'Outro título',body:'Amanhã às 16h30'})
+ assert.equal(retryMismatch.status,503)
+
+ // 2. Store B sees 0 messages; Store A client sees 1 unread message in summary, unread filter, and inbox
+ activeCtx={...client,client_id:B}
+ const pageB=await (await get('clientId='+B)).json()
+ assert.equal(pageB.unreadCount,0);assert.equal(pageB.messages.length,0)
+
+ activeCtx=client
+ const summaryA=await (await get('clientId='+A+'&summary=1')).json()
+ assert.equal(summaryA.unreadCount,1);assert.equal(summaryA.messages.length,0)
+ const inboxA=await (await get('clientId='+A+'&unread=1')).json()
+ assert.equal(inboxA.unreadCount,1);assert.equal(inboxA.messages.length,1)
+ assert.equal(inboxA.messages[0].title,'Horário Recolhas')
+ assert.equal(inboxA.messages[0].body,'Amanhã às 16h30')
+ assert.equal(inboxA.messages[0].read_at,null)
+
+ // 3. Staff marking read only marks for staff user, NOT for client user
+ activeCtx={...staff,user:{id:'99999999-9999-4999-8999-999999999999'}}
+ assert.equal((await post({action:'read',clientId:A,ids:[sent.id]})).status,200)
+ activeCtx=client
+ assert.equal((await (await get('clientId='+A+'&summary=1')).json()).unreadCount,1)
+
+ // 4. Client marking read updates unreadCount to 0 and populates read_at
+ assert.equal((await post({action:'read',clientId:A,ids:[sent.id]})).status,200)
+ const afterRead=await (await get('clientId='+A)).json()
+ assert.equal(afterRead.unreadCount,0)
+ assert.equal(afterRead.messages.length,1)
+ assert.ok(afterRead.messages[0].read_at)
+ assert.equal((await (await get('clientId='+A+'&unread=1')).json()).messages.length,0)
+})

@@ -8,5 +8,15 @@ export default async function ClientMessagesOpsPage() {
   const ctx = await requireEmployee()
   if (!canSendClientMessages(ctx)) notFound()
   const clients = await getClientesAction()
-  return <MessagesComposer clients={clients.map(client => ({ id: client.id, name: client.short_name || client.legal_name || 'Cliente' })).sort((a, b) => a.name.localeCompare(b.name, 'pt'))} />
+  return (
+    <MessagesComposer
+      clients={clients
+        .map(client => ({
+          id: client.id,
+          name: client.short_name || client.legal_name || 'Cliente',
+          portalSlug: client.portal_slug || null,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt'))}
+    />
+  )
 }

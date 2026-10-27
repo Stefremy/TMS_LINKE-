@@ -102,6 +102,7 @@ async function main() {
   const args = process.argv.slice(2)
   const isDryRun = args.includes('--dry-run')
   const isPilot = args.includes('--pilot')
+  const isFresh = args.includes('--fresh') || args.includes('--force')
   const recipientEmailArg = args.find(a => a.startsWith('--email='))?.split('=')[1] || 'geral@linke.pt'
 
   console.log('====================================================')
@@ -145,7 +146,7 @@ async function main() {
 
   const planFile = path.resolve(root, 'docs/EU_REAL_SHIPMENT_PLAN_2026-10-27.md')
   const existingCreated = new Map()
-  if (fs.existsSync(planFile)) {
+  if (fs.existsSync(planFile) && !isFresh) {
     const content = fs.readFileSync(planFile, 'utf8')
     for (const line of content.split('\n')) {
       const parts = line.split('|').map(s => s.trim())
@@ -290,8 +291,10 @@ async function main() {
         created_at: now,
         details: {
           id: shipmentId,
+          client_id: testClient.id,
           tracking_number: ref,
           carrier_tracking_number: trackingNumber,
+          ctt_object_id: trackingNumber,
           carrier_code: 'ctt',
           status: 'pendente',
           subProduct: SERVICE_CODE,
@@ -299,6 +302,8 @@ async function main() {
           sender: SENDER,
           weight_kg: 0.5,
           dimensions: PARCEL_PROFILE.dimensionsCm,
+          ctt_label_base64: result.labelBase64 || null,
+          ctt_documents: result.rawResponse?.ShipmentData?.[0]?.DocumentsList || null,
           rawResponse: result.rawResponse,
         },
       })

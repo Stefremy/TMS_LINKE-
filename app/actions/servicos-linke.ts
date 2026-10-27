@@ -5,7 +5,11 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { getFornecedoresAction, saveFornecedorAction } from "@/app/actions/fornecedores"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
-import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
+import {
+  PRIMORDIAL_SERVICE_CODES,
+  canManagePrimordialServices,
+  isPrimordialServico,
+} from "@/app/ops/configuracao/servicos/types"
 import { getTenantId, requireUser, requireEmployee } from "@/lib/auth/context"
 import { buildOfficialLinkeInternationalZones, buildOfficialCeTruckZones } from "@/lib/services/geo/international-zones"
 import { isTemporarilyWithdrawnService } from "@/lib/services/service-availability"
@@ -776,13 +780,27 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
  */
 export async function saveServicoLinkeAction(
   servico: Partial<ServicoLinke>
-): Promise<{ success: boolean; data: ServicoLinke }> {
+): Promise<{ success: boolean; data?: ServicoLinke; error?: string }> {
   const ctx = await requireEmployee()
   const supabase = createAdminClient()
 
   const id = servico.id || `srv_linke_${Date.now()}`
-  const isProtected = isPrimordialServico(servico) ||
-    (await readStoredServiceProtection(supabase, id, ctx.tenant_id)).isProtected
+  let storedProtected = false
+  try {
+    storedProtected = (await readStoredServiceProtection(supabase, id, ctx.tenant_id)).isProtected
+  } catch {
+    return {
+      success: false,
+      error: "Não foi possível verificar a proteção da tabela. Tente novamente.",
+    }
+  }
+  const isProtected = isPrimordialServico(servico) || storedProtected
+  if (isProtected && !canManagePrimordialServices(ctx.user?.email)) {
+    return {
+      success: false,
+      error: "Esta tabela base contratada está bloqueada. Apenas stefano.remy e geral@linke podem editar tabelas base.",
+    }
+  }
   
   // Processamento de zonas e escalões
   const processedZones = (servico.zones || []).map((zone) => ({
@@ -857,7 +875,7 @@ export async function saveServicoLinkeAction(
 
     if (delLogs) {
       for (const d of delLogs) {
-        if (d.details?.id === id) {
+        if (d.id && d.details?.id === id) {
           await supabase.from("audit_log").delete().eq("id", d.id)
         }
       }
@@ -884,7 +902,7 @@ export async function saveServicoLinkeAction(
 
     if (existing) {
       for (const item of existing) {
-        if (item.details?.id === id) {
+        if (item.id && item.details?.id === id) {
           await supabase.from("audit_log").delete().eq("id", item.id)
         }
       }
@@ -911,14 +929,17 @@ export async function duplicateServicoForClientAction(
   targetProfile: "VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente",
   targetClientName: string,
   discountPct: number
-): Promise<{ success: boolean; data?: ServicoLinke }> {
+): Promise<{ success: boolean; data?: ServicoLinke; error?: string }> {
   await requireEmployee()
   const servicos = await getServicosLinkeAction()
   const source = servicos.find((s) => s.id === sourceServicoId)
   if (!source) return { success: false }
 
   const newId = `srv_linke_${Date.now()}`
-  const newCode = `${source.code.replace(/-VIP|-STD|-PRO/, "")}-${targetProfile === "VIP / Alto Volume" ? "VIP" : targetProfile === "E-Commerce PME" ? "ECOM" : "CUST"}`
+  const rawNewCode = `${source.code.replace(/-VIP|-STD|-PRO/, "")}-${targetProfile === "VIP / Alto Volume" ? "VIP" : targetProfile === "E-Commerce PME" ? "ECOM" : "CUST"}`
+  const newCode = PRIMORDIAL_SERVICE_CODES.has(rawNewCode.trim().toUpperCase())
+    ? `${rawNewCode}-CUSTOM`
+    : rawNewCode
 
   // Aplicar desconto sobre o PVP base ou ajustar markup
   const clonedZones = source.zones.map((zone) => ({
@@ -962,7 +983,7 @@ export async function duplicateServicoForClientAction(
 export async function updateServicoMarkupAction(
   servicoId: string,
   newMarkupPct: number
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; error?: string }> {
   await requireEmployee()
   const servicos = await getServicosLinkeAction()
   const target = servicos.find((s) => s.id === servicoId)
@@ -977,11 +998,12 @@ export async function updateServicoMarkupAction(
     })),
   }))
 
-  await saveServicoLinkeAction({
+  const res = await saveServicoLinkeAction({
     ...target,
     global_markup_pct: newMarkupPct,
     zones: updatedZones,
   })
+  if (!res.success) return { success: false, error: res.error }
 
   return { success: true }
 }
@@ -989,22 +1011,26 @@ export async function updateServicoMarkupAction(
 /**
  * Altera status ativo/inativo de um Serviço Linke
  */
-export async function toggleServicoLinkeStatusAction(id: string, is_active: boolean) {
+export async function toggleServicoLinkeStatusAction(
+  id: string,
+  is_active: boolean
+): Promise<{ success: boolean; error?: string }> {
   await requireEmployee()
   const servicos = await getServicosLinkeAction()
   const target = servicos.find((s) => s.id === id)
   if (!target) return { success: false }
 
-  await saveServicoLinkeAction({
+  const res = await saveServicoLinkeAction({
     ...target,
     is_active,
   })
+  if (!res.success) return { success: false, error: res.error }
 
   return { success: true }
 }
 
 /**
- * Elimina um Serviço Linke, incluindo tabelas base, para colaboradores autorizados.
+ * Elimina um Serviço Linke personalizado. Tabelas base contratadas (primordiais) estão bloqueadas contra eliminação.
  */
 export async function deleteServicoLinkeAction(id: string): Promise<{ success: boolean; error?: string }> {
   const ctx = await requireEmployee()
@@ -1016,6 +1042,12 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
     return { success: false, error: "Não foi possível verificar a tabela. Tente novamente." }
   }
   if (!protection.found) return { success: false, error: "Tabela não encontrada. A eliminação foi recusada." }
+  if (protection.isProtected) {
+    return {
+      success: false,
+      error: "Esta tabela base contratada está bloqueada e não pode ser eliminada.",
+    }
+  }
 
   // Persist the tombstone first so default/fallback tables cannot reappear after a refresh.
   try {
@@ -1043,7 +1075,7 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
 
     if (logs) {
       for (const item of logs) {
-        if (item.details?.id === id) {
+        if (item.id && item.details?.id === id) {
           await supabase.from("audit_log").delete().eq("tenant_id", ctx.tenant_id).eq("id", item.id)
         }
       }
@@ -1058,7 +1090,7 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
  * Obtém os dados consolidados de Fornecedores, Serviços Linke e Webservices para o Módulo
  */
 export async function getServicosDashboardDataAction() {
-  await requireEmployee()
+  const ctx = await requireEmployee()
   const [servicos, fornecedores, webservices] = await Promise.all([
     getServicosLinkeAction(),
     getFornecedoresAction(),
@@ -1069,5 +1101,6 @@ export async function getServicosDashboardDataAction() {
     servicos,
     fornecedores,
     webservices: webservices || [],
+    canManageBaseTables: canManagePrimordialServices(ctx.user?.email),
   }
 }

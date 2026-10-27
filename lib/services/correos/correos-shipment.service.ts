@@ -87,7 +87,7 @@ export class CorreosShipmentService {
       paisISORte: input.remitente.paisISO,
       codPosIntRte: cpRtePT,
       contacRte: input.remitente.contacto || input.remitente.nombre || "",
-      telefRte: input.remitente.telefono || "",
+      telefRte: (input.remitente.telefono || "").replace(/\D/g, ""),
       emailRte: input.remitente.email || "",
       
       nomDest: input.destinatario.nombre,
@@ -98,7 +98,7 @@ export class CorreosShipmentService {
       paisISODest: input.destinatario.paisISO,
       codPosIntDest: cpDestPT,
       contacDest: input.destinatario.contacto || input.destinatario.nombre || "",
-      telefDest: input.destinatario.telefono || "",
+      telefDest: (input.destinatario.telefono || "").replace(/\D/g, ""),
       emailDest: input.destinatario.email || "",
       
       observac: input.observaciones || "",
