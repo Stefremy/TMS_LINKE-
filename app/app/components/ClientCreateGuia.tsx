@@ -2,18 +2,18 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { 
-  Building2, 
-  MapPin, 
-  Truck, 
-  Euro, 
-  Zap, 
-  Printer, 
-  Check, 
-  FileText, 
-  ChevronDown, 
-  Plus, 
-  ArrowLeft, 
+import {
+  Building2,
+  MapPin,
+  Truck,
+  Euro,
+  Zap,
+  Printer,
+  Check,
+  FileText,
+  ChevronDown,
+  Plus,
+  ArrowLeft,
   AlertCircle,
   Clock,
   Sparkles,
@@ -37,8 +37,8 @@ import { getCttRecipientContactError, hasCttRecipientMobilePhone } from "@/lib/s
 import { CttExportFields } from "@/components/shipments/CttExportFields"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
-import { 
-  SYSTEM_AVAILABLE_WEBSERVICES, 
+import {
+  SYSTEM_AVAILABLE_WEBSERVICES,
   ClientSpecialServiceFee
 } from "@/app/ops/entidades/clientes/types"
 import { getClientServiceLabel, getClientServiceName } from "@/lib/services/client-service-label"
@@ -158,13 +158,13 @@ export function ClientCreateGuia() {
         (!Array.isArray(currentClient.assigned_linke_service_ids) || currentClient.assigned_linke_service_ids.includes(s.id)))
       const selected = services.find(s => s.id === currentClient.default_linke_table_id) || services[0]
       if (selected) setSelectedServiceId(selected.id)
-      
+
       // Initialize custom sender with client data
       setCustomSenderName(currentClient.legal_name || currentClient.short_name || "")
       setCustomSenderAddress(currentClient.address || "")
       setCustomSenderCity(currentClient.city || "")
       setCustomSenderPostal(currentClient.postal_code || "")
-      
+
       setLoadingClient(false)
     }).catch(() => { if (active) setLoadingClient(false) })
     return () => { active = false }
@@ -391,31 +391,31 @@ export function ClientCreateGuia() {
 
 
   const defaultSenderName = currentClient?.legal_name || currentClient?.short_name || "Empresa Cliente"
-  const defaultSenderAddressStr = currentClient?.address 
+  const defaultSenderAddressStr = currentClient?.address
     ? `${currentClient.address}, ${currentClient.postal_code || ""} ${currentClient.city || ""}`.trim()
     : "Sede Comercial da Empresa"
 
   return (
     <div ref={pageTopRef} className="flex flex-col gap-6 max-w-6xl mx-auto scroll-mt-20">
-      
+
       {/* Navigation Breadcrumb & Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <Link href={basePath} className="hover:text-emerald-700">Painel Principal</Link>
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500 mb-1">
+            <Link href={basePath} className="hover:text-[#2d533d]">Painel Principal</Link>
             <span>&gt;</span>
-            <span className="text-emerald-600 font-bold">Novo Envio</span>
+            <span className="text-[#38664b] font-bold">Novo Envio</span>
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Criar Novo Envio</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-2xl font-black text-zinc-900 tracking-tight">Criar Novo Envio</h1>
+          <p className="text-xs text-zinc-500 mt-0.5">
             Emissão direta com transportadoras parceiras, serviços suplementares e preçário personalizado da sua conta.
           </p>
         </div>
 
         {currentClient && (
-          <div className="flex items-center gap-2.5 bg-white border border-slate-200 px-4 py-2 rounded-2xl shadow-2xs text-xs">
-            <div 
-              className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white shadow-2xs shrink-0 overflow-hidden border border-slate-200"
+          <div className="flex items-center gap-2.5 bg-white border border-zinc-200 px-4 py-2 rounded-2xl shadow-2xs text-xs">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white shadow-2xs shrink-0 overflow-hidden border border-zinc-200"
               style={{ backgroundColor: currentClient.color || "#10b981" }}
             >
               {currentClient.logo_url ? (
@@ -426,8 +426,8 @@ export function ClientCreateGuia() {
               )}
             </div>
             <div>
-              <div className="font-bold text-slate-900">{currentClient.short_name}</div>
-              <div className="text-[10px] text-slate-400 font-mono">Conta: {currentClient.code}</div>
+              <div className="font-bold text-zinc-900">{currentClient.short_name}</div>
+              <div className="text-[10px] text-zinc-400 font-mono">Conta: {currentClient.code}</div>
             </div>
           </div>
         )}
@@ -438,7 +438,7 @@ export function ClientCreateGuia() {
         <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] border-l-4 border-l-emerald-600 rounded-lg p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3.5">
-              <div className="w-9 h-9 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-md bg-[#2f6b4a] text-white flex items-center justify-center shrink-0">
                 <Check className="w-5 h-5" />
               </div>
               <div>
@@ -469,7 +469,7 @@ export function ClientCreateGuia() {
             </Link>
             <Link
               href={`${basePath}/envios`}
-              className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-md text-xs font-semibold transition-colors"
+              className="bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-3.5 py-2 rounded-md text-xs font-semibold transition-colors"
             >
               <span>Ver no Histórico</span>
             </Link>
@@ -490,7 +490,7 @@ export function ClientCreateGuia() {
                     }
                     printCttLabel(label)
                   }}
-                  className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-2 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 px-3.5 py-2 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Imprimir Etiqueta</span>
@@ -530,7 +530,7 @@ export function ClientCreateGuia() {
                 setGeneratedGuia(null)
                 setGeneratedLabelBase64(null)
               }}
-              className="text-emerald-700 hover:text-emerald-950 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
+              className="text-[#2d533d] hover:text-emerald-950 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
             >
               Fechar
             </button>
@@ -539,7 +539,7 @@ export function ClientCreateGuia() {
       )}
 
       {/* Main Creation Card Form */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 p-4 sm:p-6 md:p-8">
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-zinc-200 p-4 sm:p-6 md:p-8">
         <form onSubmit={handleCreateShipment} aria-busy={isSubmitting} className="space-y-6">
           {isSuspended && (
             <div role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-2xs">
@@ -552,12 +552,12 @@ export function ClientCreateGuia() {
               </p>
             </div>
           )}
-          
+
           {/* SELEÇÃO DO SERVIÇO LINKE */}
-          <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200 space-y-3">
+          <div className="bg-zinc-50 p-5 rounded-2xl border border-zinc-200 space-y-3">
             <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-900 flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+              <label className="block text-xs font-bold text-zinc-900 flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-white border border-zinc-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={getCarrierLogo(activeLinkeService?.preferred_carrier_name || "ctt") || ""}
@@ -580,28 +580,24 @@ export function ClientCreateGuia() {
                 value={activeLinkeService?.id || ""}
                 onChange={(e) => setSelectedServiceId(e.target.value)}
                 disabled={!availableServicos.length}
-                className={`w-full pl-3.5 pr-8 py-3 bg-white border rounded-xl text-xs font-bold focus:outline-none focus:ring-2 cursor-pointer shadow-2xs ${
-                  calculatedPrice.isBlocked
-                    ? "border-amber-400 text-amber-900 focus:ring-amber-500 bg-amber-50/30"
-                    : "border-slate-300 text-slate-900 focus:ring-emerald-500"
-                }`}
+                className="w-full pl-3.5 pr-8 py-3 bg-white border border-zinc-300 rounded-xl text-xs font-semibold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774] cursor-pointer shadow-2xs"
               >
                 {!availableServicos.length && <option value="">Sem serviços autorizados</option>}
                 {availableServicos.map(service => (
                   <option key={service.id} value={service.id}>{getClientServiceLabel(service)}</option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
             </div>
 
-            <p className="text-[11px] text-slate-500">Escolha o serviço primeiro. Os países de destino são apresentados conforme a cobertura e as tarifas desta tabela.</p>
+            <p className="text-[11px] text-zinc-500">Escolha o serviço primeiro. Os países de destino são apresentados conforme a cobertura e as tarifas desta tabela.</p>
 
             {calculatedPrice.isBlocked && (
-              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs">
-                <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-[#faf6ec] border border-[#ded0af] text-[#725a35] text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#9a7d48] mt-0.5" />
                 <div className="flex-1">
                   <div className="font-bold">Preço indisponível para este envio</div>
-                  <div className="text-[11px] text-amber-800 mt-0.5">{calculatedPrice.blockedReason}</div>
+                  <div className="text-[11px] text-[#806b49] mt-0.5">{calculatedPrice.blockedReason}</div>
                 </div>
               </div>
             )}
@@ -609,28 +605,28 @@ export function ClientCreateGuia() {
 
           {/* Remetente e Destinatário */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            
+
             {/* Remetente Card */}
-            <div className="space-y-3 bg-slate-50/80 p-4 rounded-2xl border border-slate-200">
+            <div className="space-y-3 bg-zinc-50 p-4 rounded-2xl border border-zinc-200">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-700">Remetente (A sua Empresa)</label>
+                <label className="block text-xs font-bold text-zinc-700">Remetente (A sua Empresa)</label>
                 <div className="flex items-center gap-2">
-                  <button 
-                    type="button" 
-                    onClick={() => setIsEditingSender(!isEditingSender)} 
-                    className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-md transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingSender(!isEditingSender)}
+                    className="text-[10px] font-bold text-[#38664b] hover:text-[#2d533d] bg-stone-50 hover:bg-stone-100 px-2.5 py-1 rounded-md transition-colors"
                   >
                     {isEditingSender ? "Cancelar" : "Editar"}
                   </button>
                   <span className="text-[10px] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">Conta Ativa</span>
                 </div>
               </div>
-              
+
               {!isEditingSender ? (
                 <div>
-                  <div className="text-xs text-slate-900 font-bold">{customSenderName || defaultSenderName}</div>
-                  <div className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
-                    {customSenderAddress || currentClient?.address 
+                  <div className="text-xs text-zinc-900 font-bold">{customSenderName || defaultSenderName}</div>
+                  <div className="text-[11px] text-zinc-500 leading-relaxed mt-0.5">
+                    {customSenderAddress || currentClient?.address
                       ? `${customSenderAddress || currentClient?.address}, ${customSenderPostal || currentClient?.postal_code || ""} ${customSenderCity || currentClient?.city || ""}`.trim()
                       : defaultSenderAddressStr}
                   </div>
@@ -638,40 +634,40 @@ export function ClientCreateGuia() {
               ) : (
                 <div className="space-y-3 pt-1">
                   <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold uppercase text-slate-500">Nome</label>
-                    <input 
-                      type="text" 
-                      value={customSenderName} 
-                      onChange={e => setCustomSenderName(e.target.value)} 
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500">Nome</label>
+                    <input
+                      type="text"
+                      value={customSenderName}
+                      onChange={e => setCustomSenderName(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold uppercase text-slate-500">Morada</label>
-                    <input 
-                      type="text" 
-                      value={customSenderAddress} 
-                      onChange={e => setCustomSenderAddress(e.target.value)} 
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                    <label className="block text-[10px] font-bold uppercase text-zinc-500">Morada</label>
+                    <input
+                      type="text"
+                      value={customSenderAddress}
+                      onChange={e => setCustomSenderAddress(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold uppercase text-slate-500">C. Postal</label>
-                      <input 
-                        type="text" 
-                        value={customSenderPostal} 
-                        onChange={e => setCustomSenderPostal(e.target.value)} 
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                      <label className="block text-[10px] font-bold uppercase text-zinc-500">C. Postal</label>
+                      <input
+                        type="text"
+                        value={customSenderPostal}
+                        onChange={e => setCustomSenderPostal(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="block text-[10px] font-bold uppercase text-slate-500">Localidade</label>
-                      <input 
-                        type="text" 
-                        value={customSenderCity} 
-                        onChange={e => setCustomSenderCity(e.target.value)} 
-                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                      <label className="block text-[10px] font-bold uppercase text-zinc-500">Localidade</label>
+                      <input
+                        type="text"
+                        value={customSenderCity}
+                        onChange={e => setCustomSenderCity(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
                       />
                     </div>
                   </div>
@@ -683,12 +679,12 @@ export function ClientCreateGuia() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="md:col-span-2 space-y-1.5 relative">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-700">Nome do Destinatário *</label>
+                  <label className="block text-xs font-bold text-zinc-700">Nome do Destinatário *</label>
                   {currentClient.id && (
                     <button
                       type="button"
                       onClick={() => setShowAgendaDropdown(!showAgendaDropdown)}
-                      className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] font-semibold text-[#38664b] hover:text-[#2d533d] hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <BookmarkCheck className="w-3.5 h-3.5" />
                       Agenda{savedRecipients.length > 0 ? ` (${savedRecipients.length})` : ""}
@@ -697,30 +693,30 @@ export function ClientCreateGuia() {
                 </div>
 
                 {showAgendaDropdown && (
-                  <div className="absolute z-30 left-0 top-16 w-full max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl p-1 text-xs">
-                    <div className="p-2 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                  <div className="absolute z-30 left-0 top-16 w-full max-h-56 overflow-y-auto bg-white border border-zinc-200 rounded-xl shadow-xl p-1 text-xs">
+                    <div className="p-2 border-b border-zinc-100 text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex justify-between items-center">
                       <span>Contactos da Agenda</span>
                       <button
                         type="button"
                         onClick={() => setShowAgendaDropdown(false)}
-                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                        className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
                       >
                         ✕
                       </button>
                     </div>
-                    {loadingAgenda && <p role="status" className="p-3 text-slate-500">A carregar agenda…</p>}
+                    {loadingAgenda && <p role="status" className="p-3 text-zinc-500">A carregar agenda…</p>}
                     {agendaError && <p role="alert" className="p-3 text-red-700">{agendaError}</p>}
                     {!loadingAgenda && !agendaError && savedRecipients.length === 0 && (
-                      <p className="p-3 text-slate-500">Ainda não existem destinatários nesta agenda.</p>
+                      <p className="p-3 text-zinc-500">Ainda não existem destinatários nesta agenda.</p>
                     )}
                     {savedRecipients.map((r) => (
                       <div
                         key={r.id}
                         onClick={() => handleSelectRecipient(r)}
-                        className="p-2 hover:bg-emerald-50/60 rounded-lg cursor-pointer transition-colors border-b border-slate-50 last:border-0"
+                        className="p-2 hover:bg-stone-50/60 rounded-lg cursor-pointer transition-colors border-b border-zinc-50 last:border-0"
                       >
-                        <div className="font-semibold text-slate-800">{r.name}</div>
-                        <div className="text-[10px] text-slate-500 font-mono truncate">
+                        <div className="font-semibold text-zinc-800">{r.name}</div>
+                        <div className="text-[10px] text-zinc-500 font-mono truncate">
                           {r.address}, {r.postal_code} {r.city}
                         </div>
                       </div>
@@ -728,22 +724,22 @@ export function ClientCreateGuia() {
                   </div>
                 )}
 
-                <input 
+                <input
                   id="field-recipient-name"
-                  type="text" 
+                  type="text"
                   required
-                  placeholder="Ex: Comercial Lisboa Lda ou Maria Fernandes" 
+                  placeholder="Ex: Comercial Lisboa Lda ou Maria Fernandes"
                   value={recipientName}
                   onChange={(e) => { setRecipientName(e.target.value); if (fieldError === "name") setFieldError(null) }}
-                  className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 font-medium ${
-                    fieldError === "name" 
-                      ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400" 
-                      : "border-slate-300 focus:ring-emerald-500"
-                  }`} 
+                  className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 font-medium ${
+                    fieldError === "name"
+                      ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
+                      : "border-zinc-300 focus:ring-[#718774]/25 focus:border-[#718774]"
+                  }`}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-700">País de Destino *</label>
+                <label className="block text-xs font-bold text-zinc-700">País de Destino *</label>
                 <select
                   name="recipient_country"
                   value={recipientCountry}
@@ -756,7 +752,7 @@ export function ClientCreateGuia() {
                     setRecipientCity("")
                     postalLookup.reset()
                   }}
-                  className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                  className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774] cursor-pointer shadow-2xs"
                 >
                   <option value="">{destinationCountries.length ? "Selecione o país" : "Sem destinos configurados"}</option>
                   {destinationCountries.map(country => (
@@ -771,14 +767,14 @@ export function ClientCreateGuia() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-700">Código Postal *</label>
+                <label className="block text-xs font-bold text-zinc-700">Código Postal *</label>
                 {postalLookup.loading && (
-                  <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
+                  <span className="text-[10px] text-zinc-400 flex items-center gap-1 font-mono">
                     <Loader2 className="w-2.5 h-2.5 animate-spin" /> A validar...
                   </span>
                 )}
                 {postalLookup.status === "valid" && (
-                  <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                  <span className="text-[10px] text-[#38664b] font-bold flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3" /> {postalLookup.info?.city || "Escolha a localidade"}
                   </span>
                 )}
@@ -788,53 +784,53 @@ export function ClientCreateGuia() {
                   </span>
                 )}
               </div>
-              <input 
+              <input
                 id="field-recipient-postal"
-                type="text" 
-                placeholder={recipientCountry === "ES" ? "28001" : recipientCountry === "PT" ? "4000-001" : "Código postal"} 
+                type="text"
+                placeholder={recipientCountry === "ES" ? "28001" : recipientCountry === "PT" ? "4000-001" : "Código postal"}
                 value={recipientPostal}
                 onChange={(e) => {
                   const formatted = postalLookup.lookup(e.target.value, recipientCountry)
                   setRecipientPostal(formatted)
                   if (fieldError === "postal") setFieldError(null)
                 }}
-                className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 ${
+                className={`w-full px-3.5 py-2.5 bg-white border rounded-xl text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:ring-2 ${
                   fieldError === "postal"
                     ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
-                    : "border-slate-300 focus:ring-emerald-500"
-                }`} 
+                    : "border-zinc-300 focus:ring-[#718774]/25 focus:border-[#718774]"
+                }`}
               />
             </div>
-            
+
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Localidade / Cidade *</label>
-              <input 
-                type="text" 
-                placeholder="Ex: Porto" 
+              <label className="block text-xs font-bold text-zinc-700">Localidade / Cidade *</label>
+              <input
+                type="text"
+                placeholder="Ex: Porto"
                 value={recipientCity}
                 onChange={(e) => setRecipientCity(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                className="w-full px-3.5 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-700">Morada de Entrega *</label>
+            <label className="block text-xs font-bold text-zinc-700">Morada de Entrega *</label>
             <div className="relative">
-              <input 
+              <input
                 id="field-recipient-address"
-                type="text" 
+                type="text"
                 required
-                placeholder="Rua, avenida, número, andar, porta..." 
+                placeholder="Rua, avenida, número, andar, porta..."
                 value={recipientAddress}
                 onChange={(e) => { setRecipientAddress(e.target.value); if (fieldError === "address") setFieldError(null) }}
-                className={`w-full pl-3.5 pr-8 py-2.5 bg-white border rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
+                className={`w-full pl-3.5 pr-8 py-2.5 bg-white border rounded-xl text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 ${
                   fieldError === "address"
                     ? "border-red-400 ring-1 ring-red-400 bg-red-50 focus:ring-red-400"
-                    : "border-slate-300 focus:ring-emerald-500"
-                }`} 
+                    : "border-zinc-300 focus:ring-[#718774]/25 focus:border-[#718774]"
+                }`}
               />
-              <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             </div>
             <PostalAddressSuggestions info={postalLookup.info} onCity={setRecipientCity} onStreet={street => setRecipientAddress(`${street}, nº `)} />
           </div>
@@ -843,22 +839,22 @@ export function ClientCreateGuia() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Peso Total (kg) *</label>
-              <input 
-                type="number" 
+              <label className="block text-xs font-bold text-zinc-700">Peso Total (kg) *</label>
+              <input
+                type="number"
                 step="0.1"
                 min="0.1"
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <label htmlFor="recipient-phone" className="block text-xs font-bold text-slate-700">Telefone / Telemóvel do Destinatário</label>
-              <input 
+              <label htmlFor="recipient-phone" className="block text-xs font-bold text-zinc-700">Telefone / Telemóvel do Destinatário</label>
+              <input
                 type="tel"
                 id="recipient-phone"
                 name="recipient_phone"
@@ -867,35 +863,35 @@ export function ClientCreateGuia() {
                 placeholder={recipientCountry === "BE" ? "Ex: +32 470 123 456" : recipientCountry === "ES" ? "Ex: +34 612 345 678" : "Telemóvel com indicativo do país"}
                 value={recipientPhone}
                 onChange={(e) => setRecipientPhone(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
               />
             </div>
-            
+
             <div className="space-y-1.5">
-              <label htmlFor="recipient-email" className="block text-xs font-bold text-slate-700">Email do Destinatário{requiresRecipientEmail ? " *" : ""}</label>
-              <input 
-                type="email" 
+              <label htmlFor="recipient-email" className="block text-xs font-bold text-zinc-700">Email do Destinatário{requiresRecipientEmail ? " *" : ""}</label>
+              <input
+                type="email"
                 id="recipient-email"
                 name="recipient_email"
                 required={requiresRecipientEmail}
                 aria-describedby={requiresCttContact ? "recipient-contact-help" : undefined}
-                placeholder="email@exemplo.pt" 
+                placeholder="email@exemplo.pt"
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
               />
-              {requiresCttContact && <p id="recipient-contact-help" className="text-xs text-slate-600">CTT internacional: indique um e-mail ou telemóvel do destinatário. Um telefone fixo sozinho não é suficiente.</p>}
+              {requiresCttContact && <p id="recipient-contact-help" className="text-xs text-zinc-600">CTT internacional: indique um e-mail ou telemóvel do destinatário. Um telefone fixo sozinho não é suficiente.</p>}
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Nº de Volumes *</label>
-              <input 
-                type="number" 
+              <label className="block text-xs font-bold text-zinc-700">Nº de Volumes *</label>
+              <input
+                type="number"
                 min="1"
                 step="1"
                 value={volumesCount}
                 onChange={(e) => setVolumesCount(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
               />
             </div>
           </div>
@@ -908,88 +904,88 @@ export function ClientCreateGuia() {
               id="save_to_agenda"
               checked={saveToAgenda}
               onChange={(e) => setSaveToAgenda(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              className="w-4 h-4 rounded border-zinc-300 text-[#38664b] focus:ring-[#718774]/25 focus:border-[#718774] cursor-pointer"
             />
-            <label htmlFor="save_to_agenda" className="text-xs text-slate-600 cursor-pointer select-none">
+            <label htmlFor="save_to_agenda" className="text-xs text-zinc-600 cursor-pointer select-none">
               Guardar este destinatário na lista de contactos da empresa para envios futuros
             </label>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <label htmlFor="field-length-cm" className="block text-xs font-bold text-slate-700">Comp. (cm) *</label>
-              <input 
+              <label htmlFor="field-length-cm" className="block text-xs font-bold text-zinc-700">Comp. (cm) *</label>
+              <input
                 id="field-length-cm"
                 name="length_cm"
                 required
-                type="number" 
+                type="number"
                 min="0.1"
                 step="any"
                 placeholder="Ex: 10"
                 value={lengthCm}
                 onChange={(e) => setLengthCm(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs font-mono text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
               />
             </div>
-            
+
             <div className="space-y-1.5">
-              <label htmlFor="field-width-cm" className="block text-xs font-bold text-slate-700">Largura (cm) *</label>
-              <input 
+              <label htmlFor="field-width-cm" className="block text-xs font-bold text-zinc-700">Largura (cm) *</label>
+              <input
                 id="field-width-cm"
                 name="width_cm"
                 required
-                type="number" 
+                type="number"
                 min="0.1"
                 step="any"
                 placeholder="Ex: 10"
                 value={widthCm}
                 onChange={(e) => setWidthCm(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs font-mono text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="field-height-cm" className="block text-xs font-bold text-slate-700">Altura (cm) *</label>
-              <input 
+              <label htmlFor="field-height-cm" className="block text-xs font-bold text-zinc-700">Altura (cm) *</label>
+              <input
                 id="field-height-cm"
                 name="height_cm"
                 required
-                type="number" 
+                type="number"
                 min="0.1"
                 step="any"
                 placeholder="Ex: 10"
                 value={heightCm}
                 onChange={(e) => setHeightCm(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs font-mono text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
               />
             </div>
           </div>
 
-          {isCorreosService && <p className="text-xs text-slate-600">As medidas indicadas aplicam-se a cada volume. Para volumes de tamanhos diferentes, crie envios separados.</p>}
+          {isCorreosService && <p className="text-xs text-zinc-600">As medidas indicadas aplicam-se a cada volume. Para volumes de tamanhos diferentes, crie envios separados.</p>}
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-700">Observações (opcional)</label>
-            <input 
-              type="text" 
-              placeholder="Ex: Entregar até às 18h..." 
+            <label className="block text-xs font-bold text-zinc-700">Observações (opcional)</label>
+            <input
+              type="text"
+              placeholder="Ex: Entregar até às 18h..."
               value={observations}
               onChange={(e) => setObservations(e.target.value)}
               maxLength={40}
-              className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+              className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
             />
-            <p className="text-[10px] text-slate-400">
+            <p className="text-[10px] text-zinc-400">
               Máximo de 40 caracteres suportados pela transportadora.
             </p>
           </div>
 
           {/* SERVIÇOS ESPECIAIS E SUPLEMENTARES */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-              <label className="block text-xs font-bold text-slate-900 flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-500" />
+          <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
+              <label className="block text-xs font-bold text-zinc-900 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-zinc-500" />
                 <span>Serviços Especiais & Suplementares {isCorreosService ? "Correos Express" : "CTT"} (SpecialServices)</span>
               </label>
-              <span className="text-[11px] text-slate-400">Opcionais por envio</span>
+              <span className="text-[11px] text-zinc-400">Opcionais por envio</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
@@ -999,12 +995,12 @@ export function ClientCreateGuia() {
                 .map(fee => {
                 const isSelected = selectedSpecialServices.includes(fee.special_service_code)
                 return (
-                  <div key={fee.special_service_code} className={`p-3 rounded-xl border transition-colors ${isSelected ? "bg-emerald-50/50 border-emerald-300" : "bg-slate-50 border-slate-200"}`}>
+                  <div key={fee.special_service_code} className={`p-3 rounded-xl border transition-colors ${isSelected ? "bg-stone-50/50 border-[#a4b0a5]" : "bg-zinc-50 border-zinc-200"}`}>
                     <div className="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         id={`opt_${fee.special_service_code}`}
-                        checked={isSelected} 
+                        checked={isSelected}
                         onChange={(e) => {
                           if (e.target.checked) {
                             setSelectedSpecialServices(prev => [...prev, fee.special_service_code])
@@ -1012,26 +1008,26 @@ export function ClientCreateGuia() {
                             setSelectedSpecialServices(prev => prev.filter(c => c !== fee.special_service_code))
                           }
                         }}
-                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer" 
+                        className="w-4 h-4 rounded text-[#38664b] focus:ring-[#718774]/25 focus:border-[#718774] cursor-pointer"
                       />
-                      <label htmlFor={`opt_${fee.special_service_code}`} className="font-bold text-slate-800 cursor-pointer text-xs">
+                      <label htmlFor={`opt_${fee.special_service_code}`} className="font-bold text-zinc-800 cursor-pointer text-xs">
                         {fee.special_service_name}
                       </label>
                     </div>
                     {(fee.special_service_code === "cod" || fee.special_service_code === "correos_cod") && isSelected && (
                       <div className="mt-2 pl-6 flex items-center gap-1.5">
-                        <span className="text-[11px] text-slate-500">Valor (€):</span>
+                        <span className="text-[11px] text-zinc-500">Valor (€):</span>
                         <input
                           type="number"
                           step="0.01"
                           value={codAmount}
                           onChange={(e) => setCodAmount(e.target.value)}
-                          className="w-24 border border-slate-300 rounded-lg px-2 py-0.5 text-xs font-mono font-bold bg-white"
+                          className="w-24 border border-zinc-300 rounded-lg px-2 py-0.5 text-xs font-mono font-bold bg-white"
                         />
                       </div>
                     )}
                     {fee.special_service_code !== "cod" && (
-                      <p className="text-[10px] text-slate-400 pl-6 mt-1 line-clamp-2" title={fee.description}>
+                      <p className="text-[10px] text-zinc-400 pl-6 mt-1 line-clamp-2" title={fee.description}>
                         {fee.fee_type === "fixed" ? `+${fee.fixed_value?.toFixed(2)}€` : `+${fee.percentage_value}% (mín. ${fee.min_value?.toFixed(2)}€)`} {fee.description ? `- ${fee.description}` : ""}
                       </p>
                     )}
@@ -1042,21 +1038,21 @@ export function ClientCreateGuia() {
           </div>
 
           {/* SIMULAÇÃO DE PREÇO & BOTÃO DE EMISSÃO */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-4 border-t border-slate-200 bg-slate-50/80 p-4 sm:p-5 rounded-2xl">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-4 border-t border-zinc-200 bg-zinc-50/80 p-4 sm:p-5 rounded-2xl">
             <div className="flex items-center gap-3.5 sm:gap-4">
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#2f6b4a] text-white flex items-center justify-center font-bold shadow-xs shrink-0">
                 <Euro className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div className="min-w-0">
-                <div className="text-[11px] sm:text-xs text-slate-500 font-medium">Preço Total Estimado do Envio (sem IVA):</div>
+                <div className="text-[11px] sm:text-xs text-zinc-500 font-medium">Preço Total Estimado do Envio (sem IVA):</div>
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
+                  <span className="text-2xl sm:text-3xl font-black text-zinc-900 font-mono">
                     {calculatedPrice.isBlocked ? "Indisponível" : `${calculatedPrice.total}€`}
                   </span>
                   {calculatedPrice.isBlocked ? (
                     <span role="status" className="text-xs text-amber-800">{calculatedPrice.blockedReason}</span>
                   ) : (
-                    <span className="text-[10px] sm:text-[11px] text-slate-500">
+                    <span className="text-[10px] sm:text-[11px] text-zinc-500">
                       (Base: <strong>{calculatedPrice.base}€</strong> + Comb. {calculatedPrice.fuelPct}%: <strong>{calculatedPrice.fuel}€</strong>
                       {parseFloat(calculatedPrice.specialTotal) > 0 ? ` + Supl.: ${calculatedPrice.specialTotal}€` : ""})
                     </span>
@@ -1065,13 +1061,13 @@ export function ClientCreateGuia() {
               </div>
             </div>
 
-            <button 
+            <button
               type="submit"
               disabled={isSubmitting || isSuspended}
               aria-busy={isSubmitting}
               className={`w-full sm:w-auto justify-center px-7 py-3.5 rounded-2xl text-xs sm:text-sm font-bold shadow-sm transition-all flex items-center gap-2 ${
                 isSuspended
-                  ? "bg-amber-700 text-white cursor-not-allowed opacity-80"
+                  ? "bg-zinc-200 text-zinc-600 cursor-not-allowed"
                   : "bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white cursor-pointer disabled:cursor-wait disabled:opacity-75 disabled:active:scale-100"
               }`}
             >
@@ -1105,9 +1101,9 @@ export function ClientCreateGuia() {
                   </div>
                 )}
               </div>
-              <button 
-                type="button" 
-                onClick={() => { setSubmitError(null); setFieldError(null) }} 
+              <button
+                type="button"
+                onClick={() => { setSubmitError(null); setFieldError(null) }}
                 className="text-red-400 hover:text-red-700 text-lg leading-none font-bold ml-auto"
               >×</button>
             </div>
@@ -1118,32 +1114,32 @@ export function ClientCreateGuia() {
 
       {/* Tabela de Envios Criados na Sessão */}
       {sessionShipments.length > 0 && (
-        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 p-4 sm:p-6">
+        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-zinc-200 p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm sm:text-base font-bold text-slate-900">Envios Criados Nesta Sessão</h3>
+            <h3 className="text-sm sm:text-base font-bold text-zinc-900">Envios Criados Nesta Sessão</h3>
             <span className="text-xs font-semibold text-[var(--text-primary)] bg-[var(--surface-muted)] border border-[var(--border-subtle)] px-2.5 py-0.5 rounded-md">
               {sessionShipments.length} envios
             </span>
           </div>
 
           {/* Mobile cards view */}
-          <div className="md:hidden divide-y divide-slate-100">
+          <div className="md:hidden divide-y divide-zinc-100">
             {sessionShipments.map((item, idx) => (
               <div key={idx} className="py-3 space-y-1.5 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-emerald-700">{item.guia}</span>
-                  <span className="font-mono font-bold text-slate-900">{item.valor}</span>
+                  <span className="font-mono font-bold text-[#2d533d]">{item.guia}</span>
+                  <span className="font-mono font-bold text-zinc-900">{item.valor}</span>
                 </div>
-                <div className="text-slate-800 font-semibold">{item.destinatario}</div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                <div className="text-zinc-800 font-semibold">{item.destinatario}</div>
+                <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-0.5">
                   <div className="flex items-center gap-1.5">
                     {getCarrierLogo(item.servico || item.transportadora || "ctt") ? (
-                      <div className="w-4 h-4 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                      <div className="w-4 h-4 rounded bg-white border border-zinc-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img 
-                          src={getCarrierLogo(item.servico || item.transportadora || "ctt")!} 
-                          alt="Logo" 
-                          className="max-w-full max-h-full object-contain" 
+                        <img
+                          src={getCarrierLogo(item.servico || item.transportadora || "ctt")!}
+                          alt="Logo"
+                          className="max-w-full max-h-full object-contain"
                         />
                       </div>
                     ) : null}
@@ -1159,7 +1155,7 @@ export function ClientCreateGuia() {
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-600 font-bold">
+                <tr className="border-b border-zinc-200 text-zinc-600 font-bold">
                   <th className="pb-3">Guia</th>
                   <th className="pb-3">Destinatário</th>
                   <th className="pb-3">Serviço</th>
@@ -1167,28 +1163,28 @@ export function ClientCreateGuia() {
                   <th className="pb-3 text-right">Valor</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-zinc-100">
                 {sessionShipments.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50">
-                    <td className="py-3 font-mono font-bold text-slate-900">{item.guia}</td>
-                    <td className="py-3 text-slate-700">{item.destinatario}</td>
+                  <tr key={idx} className="hover:bg-zinc-50">
+                    <td className="py-3 font-mono font-bold text-zinc-900">{item.guia}</td>
+                    <td className="py-3 text-zinc-700">{item.destinatario}</td>
                     <td className="py-3">
                       <div className="flex items-center gap-1.5">
                         {getCarrierLogo(item.servico || item.transportadora || "ctt") ? (
-                          <div className="w-4 h-4 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                          <div className="w-4 h-4 rounded bg-white border border-zinc-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img 
-                              src={getCarrierLogo(item.servico || item.transportadora || "ctt")!} 
-                              alt="Logo" 
-                              className="max-w-full max-h-full object-contain" 
+                            <img
+                              src={getCarrierLogo(item.servico || item.transportadora || "ctt")!}
+                              alt="Logo"
+                              className="max-w-full max-h-full object-contain"
                             />
                           </div>
                         ) : null}
-                        <span className="text-slate-700 font-medium">{getClientServiceName(item.servico)}</span>
+                        <span className="text-zinc-700 font-medium">{getClientServiceName(item.servico)}</span>
                       </div>
                     </td>
-                    <td className="py-3 text-slate-500">{item.data}</td>
-                    <td className="py-3 text-right font-mono font-bold text-slate-900">{item.valor}</td>
+                    <td className="py-3 text-zinc-500">{item.data}</td>
+                    <td className="py-3 text-right font-mono font-bold text-zinc-900">{item.valor}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1198,10 +1194,10 @@ export function ClientCreateGuia() {
       )}
 
       {/* Modal de Carregamento de Saldo Stripe */}
-      <ClientTopUpModal 
-        isOpen={isTopUpOpen} 
-        onClose={() => setIsTopUpOpen(false)} 
-        clientId={currentClient?.id || ""} 
+      <ClientTopUpModal
+        isOpen={isTopUpOpen}
+        onClose={() => setIsTopUpOpen(false)}
+        clientId={currentClient?.id || ""}
       />
 
     </div>
