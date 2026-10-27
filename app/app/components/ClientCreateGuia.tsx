@@ -554,7 +554,7 @@ export function ClientCreateGuia() {
           )}
 
           {/* SELEÇÃO DO SERVIÇO LINKE */}
-          <div className="bg-zinc-50 p-5 rounded-2xl border border-zinc-200 space-y-3">
+          <div className="bg-[#f3f8f4] p-5 rounded-2xl border border-[#d8e6db] space-y-3">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-bold text-zinc-900 flex items-center gap-2">
                 <div className="w-5 h-5 rounded bg-white border border-zinc-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
@@ -607,7 +607,7 @@ export function ClientCreateGuia() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
             {/* Remetente Card */}
-            <div className="space-y-3 bg-zinc-50 p-4 rounded-2xl border border-zinc-200">
+            <div className="space-y-3 bg-[#f3f8f4] p-4 rounded-2xl border border-[#d8e6db]">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-zinc-700">Remetente (A sua Empresa)</label>
                 <div className="flex items-center gap-2">
