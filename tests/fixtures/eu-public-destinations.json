@@ -1,0 +1,23 @@
+[
+  {"country":"DE","label":"Alemanha","city":"Berlin","address":"Am Lustgarten","postal":"10178","place":"Altes Museum","source":"https://www.smb.museum/en/museums-institutions/altes-museum/plan-your-visit/"},
+  {"country":"AT","label":"Áustria","city":"Wien","address":"Friedrich-Schmidt-Platz 1","postal":"1010","place":"Wiener Rathaus","source":"https://www.wien.info/de/rathaus-stadtinformation-124820"},
+  {"country":"BE","label":"Bélgica","city":"Bruxelles","address":"Grand-Place","postal":"1000","place":"Brussels City Museum","source":"https://www.brusselscitymuseum.brussels/en/your-visit/pratical-details"},
+  {"country":"CZ","label":"Chéquia","city":"Praha","address":"Václavské náměstí 1700/68","postal":"110 00","place":"Národní muzeum","source":"https://www.nm.cz/o-nas/kontakt"},
+  {"country":"DK","label":"Dinamarca","city":"København K","address":"Ny Vestergade 10","postal":"1471","place":"National Museum of Denmark","source":"https://en.natmus.dk/shortcuts/contact-information/"},
+  {"country":"SK","label":"Eslováquia","city":"Bratislava","address":"Vajanského nábrežie 2","postal":"810 06","place":"Slovak National Museum","source":"https://www.snm.sk/navsteva-snm/kontakt"},
+  {"country":"SI","label":"Eslovénia","city":"Ljubljana","address":"Prešernova cesta 20","postal":"1000","place":"National Museum of Slovenia","source":"https://www.nms.si/en/plan-your-visit/locations/muzejska"},
+  {"country":"EE","label":"Estónia","city":"Tallinn","address":"Raekoja plats 1","postal":"10146","place":"Tallinn Town Hall","source":"https://www.tourism.tallinn.ee/static/files/081/conference_2009.pdf"},
+  {"country":"FI","label":"Finlândia","city":"Helsinki","address":"Kaivokatu 2","postal":"00100","place":"Ateneum","source":"https://ateneum.fi/en/arrival-and-accessibility/"},
+  {"country":"FR","label":"França","city":"Paris","address":"99 rue de Rivoli","postal":"75001","place":"Louvre, Carrousel entrance","source":"https://www.louvre.fr/visiter/plan-acces-transports"},
+  {"country":"GR","label":"Grécia","city":"Athens","address":"Dionysiou Areopagitou 15","postal":"11742","place":"Acropolis Museum","source":"https://www.theacropolismuseum.gr/sites/default/files/2024-11/%CE%91cropolis%20Museum_EN_Map%20Leaflet_40x32_RTP_241111.pdf"},
+  {"country":"HU","label":"Hungria","city":"Budapest","address":"Múzeum krt. 14–16","postal":"1088","place":"Hungarian National Museum","source":"https://mnm.hu/elerhetoseg"},
+  {"country":"IE","label":"Irlanda","city":"Dublin","address":"7 Merrion Square North","postal":"D02 XN22","place":"National Gallery of Ireland","source":"https://www.nationalgallery.ie/what-we-do/our-organisation/contact-us"},
+  {"country":"IT","label":"Itália","city":"Roma","address":"Piazza del Colosseo","postal":"00184","place":"Colosseum","source":"https://colosseo.it/sito/wp-content/uploads/2020/07/Carta-della-qualita-dei-servizi-Colosseo.pdf"},
+  {"country":"LV","label":"Letónia","city":"Rīga","address":"Jaņa Rozentāla laukums 1","postal":"LV-1010","place":"Latvian National Museum of Art","source":"https://lnmm.gov.lv/upload/media/vcfs-nolikums-26-06-2025-2.pdf"},
+  {"country":"LT","label":"Lituânia","city":"Vilnius","address":"Katedros a. 4","postal":"01143","place":"Palace of the Grand Dukes of Lithuania","source":"https://www.valdovurumai.lt/en/contact/"},
+  {"country":"LU","label":"Luxemburgo","city":"Luxembourg","address":"14 rue du Saint-Esprit","postal":"L-1475","place":"Lëtzebuerg City Museum","source":"https://citymuseum.lu/le-musee/informations-generales/"},
+  {"country":"MT","label":"Malta","city":"Valletta","address":"Auberge de Provence, Republic Street","postal":"VLT 1112","place":"National Museum of Archaeology","source":"https://heritagemalta.mt/app/uploads/2024/03/NMA-Access-Statement-2024_compressed.pdf"},
+  {"country":"NL","label":"Países Baixos","city":"Amsterdam","address":"Museumstraat 1","postal":"1071 XX","place":"Rijksmuseum","source":"https://www.rijksmuseum.nl/en/visit/practical-info/address-and-directions"},
+  {"country":"PL","label":"Polónia","city":"Warszawa","address":"Al. Jerozolimskie 3","postal":"00-495","place":"National Museum in Warsaw","source":"https://bip.mnw.art.pl/"},
+  {"country":"SE","label":"Suécia","city":"Stockholm","address":"Kungliga Slottet","postal":"107 70","place":"Royal Palace","source":"https://www.royalpalaces.se/english/royal-palaces-and-sites/the-royal-palace/visit-us/contact.html"}
+]
