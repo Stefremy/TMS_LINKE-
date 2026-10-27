@@ -46,7 +46,8 @@ import { saveClienteAction } from "@/app/actions/clientes"
 import { inviteClientAccessAction } from "@/app/actions/client-invitations"
 import { paymentDueDays } from "@/lib/billing/payment-terms"
 import { normalizeStoreSlug } from "@/lib/client-portal/paths"
-import type { ServicoLinke, PriceTierLinke } from "@/app/ops/configuracao/servicos/types"
+import { getServiceZoneOverrideKey, resolveZoneTierOverrides } from "@/lib/pricing/calculate-shipment-price"
+import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "@/app/ops/configuracao/servicos/types"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { 
@@ -125,6 +126,8 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   })
 
   const [expandedPriceServico, setExpandedPriceServico] = React.useState<string | null>(null)
+  const [activeZoneByServico, setActiveZoneByServico] = React.useState<Record<string, number>>({})
+  const [quickDiscountPct, setQuickDiscountPct] = React.useState<number>(10)
   const [isEditingCredit, setIsEditingCredit] = React.useState(false)
 
   React.useEffect(() => {
@@ -221,15 +224,15 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   }
 
   const handleTierPriceChange = (
-    servicoId: string,
+    servico: ServicoLinke,
+    zoneCode: string,
     tierIndex: number,
     newSellPrice: number,
     baseTiers: PriceTierLinke[]
   ) => {
     setFormData((prev) => {
-      const currentOverrides = prev.custom_tier_overrides?.[servicoId]
-        ? [...prev.custom_tier_overrides[servicoId]]
-        : baseTiers.map((t) => t.sell_price)
+      const existing = resolveZoneTierOverrides(prev.custom_tier_overrides, servico, zoneCode)
+      const currentOverrides = existing ? [...existing] : baseTiers.map((t) => t.sell_price)
 
       while (currentOverrides.length < baseTiers.length) {
         currentOverrides.push(baseTiers[currentOverrides.length].sell_price)
@@ -237,20 +240,68 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
 
       currentOverrides[tierIndex] = newSellPrice
 
+      const nextOverrides = { ...(prev.custom_tier_overrides || {}) }
+      nextOverrides[getServiceZoneOverrideKey(servico.id, zoneCode)] = currentOverrides
+      if (servico.zones?.[0]?.zone_code === zoneCode && servico.id in nextOverrides) {
+        delete nextOverrides[servico.id]
+      }
+
       return {
         ...prev,
-        custom_tier_overrides: {
-          ...(prev.custom_tier_overrides || {}),
-          [servicoId]: currentOverrides,
-        },
+        custom_tier_overrides: nextOverrides,
       }
     })
   }
 
-  const handleResetServiceTiers = (servicoId: string) => {
+  const handleApplyZoneDiscount = (
+    servico: ServicoLinke,
+    targetZones: ZonePriceMatrix[],
+    discountPct: number
+  ) => {
+    const pct = Number.isFinite(discountPct) ? Math.max(-100, Math.min(80, discountPct)) : 0
     setFormData((prev) => {
       const nextOverrides = { ...(prev.custom_tier_overrides || {}) }
-      delete nextOverrides[servicoId]
+      for (const z of targetZones) {
+        const discounted = (z.tiers || []).map((t) => {
+          const factor = 1 - pct / 100
+          const minSafe = Number((t.cost_price * 1.02).toFixed(2))
+          const candidate = Number((t.sell_price * factor).toFixed(2))
+          return Math.max(0.01, pct > 0 ? Math.max(minSafe, candidate) : candidate)
+        })
+        nextOverrides[getServiceZoneOverrideKey(servico.id, z.zone_code)] = discounted
+        if (servico.zones?.[0]?.zone_code === z.zone_code && servico.id in nextOverrides) {
+          delete nextOverrides[servico.id]
+        }
+      }
+      return {
+        ...prev,
+        custom_tier_overrides: nextOverrides,
+      }
+    })
+  }
+
+  const handleResetZoneTiers = (servico: ServicoLinke, zoneCode: string) => {
+    setFormData((prev) => {
+      const nextOverrides = { ...(prev.custom_tier_overrides || {}) }
+      delete nextOverrides[getServiceZoneOverrideKey(servico.id, zoneCode)]
+      if (servico.zones?.[0]?.zone_code === zoneCode) {
+        delete nextOverrides[servico.id]
+      }
+      return {
+        ...prev,
+        custom_tier_overrides: nextOverrides,
+      }
+    })
+  }
+
+  const handleResetServiceTiers = (servico: ServicoLinke) => {
+    setFormData((prev) => {
+      const nextOverrides = { ...(prev.custom_tier_overrides || {}) }
+      delete nextOverrides[servico.id]
+      const prefix = `${servico.id}::`
+      for (const key of Object.keys(nextOverrides)) {
+        if (key.startsWith(prefix)) delete nextOverrides[key]
+      }
       return {
         ...prev,
         custom_tier_overrides: nextOverrides,
@@ -348,13 +399,27 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   const renderServiceAuthorization = (servico: ServicoLinke) => {
     const isAssigned = (formData.assigned_linke_service_ids || []).includes(servico.id)
     const carrierLogo = getCarrierLogo(servico.preferred_carrier_name)
-    const firstZone = servico.zones?.[0]
-    const tiers: PriceTierLinke[] = firstZone?.tiers || []
-    const tier1 = tiers[0]
-    const tier5 = tiers.find((t) => t.weight_max === 5) || tiers[1]
+    const zonesList: ZonePriceMatrix[] = servico.zones || []
+    const selectedZoneIdx = Math.min(activeZoneByServico[servico.id] || 0, Math.max(0, zonesList.length - 1))
+    const activeZone = zonesList[selectedZoneIdx] || zonesList[0]
+    const tiers: PriceTierLinke[] = activeZone?.tiers || []
+    const firstZone = zonesList[0]
+    const firstZoneTiers: PriceTierLinke[] = firstZone?.tiers || []
+    const tier1 = firstZoneTiers[0]
+    const tier5 = firstZoneTiers.find((t) => t.weight_max === 5) || firstZoneTiers[1]
     const isExpanded = expandedPriceServico === servico.id
-    const overrides = formData.custom_tier_overrides?.[servico.id]
-    const hasCustomPrices = !!(overrides && overrides.some((val, idx) => val !== undefined && tiers[idx] && Math.abs(val - tiers[idx].sell_price) > 0.001))
+    const activeZoneOverrides = activeZone
+      ? resolveZoneTierOverrides(formData.custom_tier_overrides, servico, activeZone.zone_code)
+      : undefined
+    const zoneHasCustomPrices = (zone: ZonePriceMatrix) => {
+      const zOverrides = resolveZoneTierOverrides(formData.custom_tier_overrides, servico, zone.zone_code)
+      return !!(
+        zOverrides &&
+        zOverrides.some((val, idx) => val !== undefined && zone.tiers?.[idx] && Math.abs(val - zone.tiers[idx].sell_price) > 0.001)
+      )
+    }
+    const activeZoneIsCustom = activeZone ? zoneHasCustomPrices(activeZone) : false
+    const hasCustomPrices = zonesList.some((z) => zoneHasCustomPrices(z))
 
     return (
       <div
@@ -401,6 +466,11 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                 <span className="font-bold text-xs text-[var(--text-primary)]">{servico.name}</span>
                 <CttServiceBadge service={servico} />
                 {servico.is_active === false && <span className="text-[10px] font-medium text-[var(--text-secondary)]">Inativo no catálogo</span>}
+                {zonesList.length > 1 && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
+                    {zonesList.length} Zonas
+                  </span>
+                )}
                 {hasCustomPrices && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                     <Edit3 className="w-2.5 h-2.5" />
@@ -419,10 +489,35 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
 
               {tier1 && !isExpanded && (
                 <div className="mt-2 text-[11px] text-[var(--text-secondary)] flex items-center gap-2 font-mono flex-wrap">
-                  {(() => {
-                     const price1 = overrides?.[0] ?? tier1.sell_price
-                     const is1Custom = overrides?.[0] !== undefined && Math.abs(overrides[0] - tier1.sell_price) > 0.001
-                     const price5 = tier5 ? (overrides?.[tiers.indexOf(tier5)] ?? tier5.sell_price) : null
+                  {zonesList.length > 1 ? (
+                    <>
+                      {zonesList.slice(0, 3).map((z, zIdx) => {
+                        const zTier1 = z.tiers?.[0]
+                        if (!zTier1) return null
+                        const zOvr = resolveZoneTierOverrides(formData.custom_tier_overrides, servico, z.zone_code)
+                        const zPrice1 = zOvr?.[0] ?? zTier1.sell_price
+                        const zCustom = zOvr?.[0] !== undefined && Math.abs(zOvr[0] - zTier1.sell_price) > 0.001
+                        return (
+                          <span key={z.zone_code}>
+                            {zIdx > 0 ? "• " : ""}
+                            {z.zone_code} ({zTier1.label}):{" "}
+                            <strong className={zCustom ? "text-amber-800 font-bold" : "text-[var(--accent)] font-bold"}>
+                              {zPrice1.toFixed(2)}€
+                            </strong>
+                          </span>
+                        )
+                      })}
+                      {zonesList.length > 3 && (
+                        <span className="text-[10px] text-[var(--text-tertiary)]">
+                          +{zonesList.length - 3} zonas
+                        </span>
+                      )}
+                    </>
+                  ) : (() => {
+                     const firstOverrides = firstZone ? resolveZoneTierOverrides(formData.custom_tier_overrides, servico, firstZone.zone_code) : undefined
+                     const price1 = firstOverrides?.[0] ?? tier1.sell_price
+                     const is1Custom = firstOverrides?.[0] !== undefined && Math.abs(firstOverrides[0] - tier1.sell_price) > 0.001
+                     const price5 = tier5 ? (firstOverrides?.[firstZoneTiers.indexOf(tier5)] ?? tier5.sell_price) : null
                      return (
                        <>
                          <span>
@@ -453,7 +548,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
           </div>
 
           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            {isAssigned && tiers.length > 0 && (
+            {isAssigned && zonesList.some((z) => (z.tiers?.length || 0) > 0) && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -467,7 +562,6 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     ? "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200"
                     : "bg-[var(--surface-bg)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
                 }`}
-                title="Editar ou personalizar preços dos escalões deste serviço para este cliente"
               >
                 <Edit3 className="w-3 h-3" />
                 <span>{isExpanded ? "Fechar Tabela" : hasCustomPrices ? "Ajustar Preços ✎" : "Ajustar Preços"}</span>
@@ -484,7 +578,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         </div>
 
         {/* Expanded Price Override Table */}
-        {isExpanded && isAssigned && (
+        {isExpanded && isAssigned && activeZone && (
           <div
             className="p-4 bg-[var(--surface-bg)] border-t border-[var(--border-subtle)] rounded-b-xl space-y-3"
             onClick={(e) => e.stopPropagation()}
@@ -496,29 +590,126 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                 </div>
                 <div>
                   <span className="text-xs font-bold text-[var(--text-primary)]">
-                    Personalização dos Escalões de Peso: {servico.name}
+                    Personalização por Zona & Escalão: {servico.name}
                   </span>
                   <p className="text-[11px] text-[var(--text-secondary)]">
-                    Preços para {firstZone?.zone_name || firstZone?.zone_code}, antes de combustível e extras. As outras zonas usam a tabela Linke.
+                    Zona ativa: <strong>{activeZone.zone_name || activeZone.zone_code}</strong> (antes de combustível e extras). Na Área do Cliente a zona é aplicada automaticamente pelo país de destino.
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {activeZoneIsCustom && zonesList.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleResetZoneTiers(servico, activeZone.zone_code)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Repor {activeZone.zone_code}
+                  </button>
+                )}
                 {hasCustomPrices && (
                   <button
                     type="button"
-                    onClick={() => handleResetServiceTiers(servico.id)}
+                    onClick={() => handleResetServiceTiers(servico)}
                     className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
                   >
                     <RotateCcw className="w-3 h-3" />
-                    Repor Padrão Linke
+                    {zonesList.length > 1 ? "Repor Todas as Zonas" : "Repor Padrão Linke"}
                   </button>
                 )}
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]">
+            {/* Multi-Zone Selector Tabs (e.g. Zona 2 | Zona 3 on Guia CE) */}
+            {zonesList.length > 1 && (
+              <div
+                role="tablist"
+                aria-label={`Zonas tarifárias de ${servico.name}`}
+                className="flex flex-wrap items-center gap-1.5 p-1.5 rounded-lg bg-[var(--surface-muted)] border border-[var(--border-subtle)]"
+              >
+                {zonesList.map((zone, zIdx) => {
+                  const isCurrentZone = zIdx === selectedZoneIdx
+                  const isZoneCustomized = zoneHasCustomPrices(zone)
+                  return (
+                    <button
+                      key={zone.zone_code}
+                      type="button"
+                      role="tab"
+                      aria-selected={isCurrentZone}
+                      onClick={() => setActiveZoneByServico((prev) => ({ ...prev, [servico.id]: zIdx }))}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        isCurrentZone
+                          ? "bg-[var(--text-primary)] text-white shadow-2xs"
+                          : "bg-[var(--surface-bg)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]"
+                      }`}
+                    >
+                      <span>{zone.zone_code}</span>
+                      {zone.zone_name && zone.zone_name !== zone.zone_code && (
+                        <span className={`text-[10px] font-normal hidden sm:inline truncate max-w-[180px] ${isCurrentZone ? "text-white/75" : "text-[var(--text-tertiary)]"}`}>
+                          — {zone.zone_name.replace(new RegExp(`^${zone.zone_code}\\s*[—-]\\s*`), "")}
+                        </span>
+                      )}
+                      {isZoneCustomized && (
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${isCurrentZone ? "bg-amber-400 text-amber-950" : "bg-amber-100 text-amber-900"}`}>
+                          Custom
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Quick Discount / Batch Adjustment Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-[var(--surface-muted)]/60 border border-[var(--border-subtle)] text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-semibold text-[var(--text-secondary)] flex items-center gap-1">
+                  <Percent className="w-3 h-3 text-[var(--accent)]" />
+                  Desconto rápido sobre PVP Linke:
+                </span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="1"
+                    min="-50"
+                    max="60"
+                    aria-label={`Percentagem de desconto rápido para ${servico.name}`}
+                    value={quickDiscountPct}
+                    onChange={(e) => setQuickDiscountPct(parseFloat(e.target.value) || 0)}
+                    className="w-16 px-2 py-1 text-center font-mono font-bold text-xs rounded border border-[var(--border-subtle)] bg-[var(--surface-bg)] text-[var(--text-primary)]"
+                  />
+                  <span className="text-[11px] font-bold text-[var(--text-secondary)]">%</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleApplyZoneDiscount(servico, [activeZone], quickDiscountPct)}
+                  className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[var(--surface-bg)] hover:bg-[var(--accent-soft)] text-[var(--text-primary)] border border-[var(--border-subtle)] transition-colors cursor-pointer"
+                >
+                  Aplicar em {activeZone.zone_code}
+                </button>
+                {zonesList.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleApplyZoneDiscount(servico, zonesList, quickDiscountPct)}
+                    className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition-colors cursor-pointer"
+                  >
+                    Aplicar nas {zonesList.length} Zonas
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div
+              tabIndex={0}
+              role="region"
+              aria-label={`Escalões de peso ${servico.name} — ${activeZone.zone_code}`}
+              className="overflow-x-auto rounded-lg border border-[var(--border-subtle)]"
+            >
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] text-[var(--text-secondary)] font-semibold text-[11px]">
@@ -535,8 +726,8 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
                   {tiers.map((tier, tIdx) => {
-                    const currentVal = overrides?.[tIdx] !== undefined ? overrides[tIdx] : tier.sell_price
-                    const isOverridden = overrides?.[tIdx] !== undefined && Math.abs(overrides[tIdx] - tier.sell_price) > 0.001
+                    const currentVal = activeZoneOverrides?.[tIdx] !== undefined ? activeZoneOverrides[tIdx] : tier.sell_price
+                    const isOverridden = activeZoneOverrides?.[tIdx] !== undefined && Math.abs(activeZoneOverrides[tIdx] - tier.sell_price) > 0.001
                     const marginEur = currentVal - tier.cost_price
                     const marginPct = currentVal > 0 ? (marginEur / currentVal) * 100 : 0
 
@@ -560,10 +751,11 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                               type="number"
                               step="0.01"
                               min="0"
+                              aria-label={`PVP Cliente ${tier.label || `Escalão ${tIdx + 1}`} (${activeZone.zone_code})`}
                               value={currentVal}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value) || 0
-                                handleTierPriceChange(servico.id, tIdx, val, tiers)
+                                handleTierPriceChange(servico, activeZone.zone_code, tIdx, val, tiers)
                               }}
                               className={`w-24 text-right font-mono font-bold text-xs px-2 py-1 rounded-md border shadow-2xs focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-all ${
                                 isOverridden

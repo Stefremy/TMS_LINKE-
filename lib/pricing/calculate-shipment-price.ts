@@ -112,8 +112,14 @@ export function isZoneAllowedByService(allowedZones: string[] | undefined, zoneC
   if (zoneCode === "ES-ILHAS" && (allowedZones.includes("ES-ILHAS") || allowedZones.includes("INTL-MAR"))) {
     return true
   }
-  // PT-ILHAS (Açores / Madeira) allowed by INTL-MAR if maritime table
-  if (zoneCode === "PT-ILHAS" && (allowedZones.includes("PT-ILHAS") || allowedZones.includes("INTL-MAR"))) {
+  // PT-ILHAS (Açores / Madeira) allowed by PT-ILHAS, legacy PT-ACORES/PT-MADEIRA, or INTL-MAR
+  if (
+    zoneCode === "PT-ILHAS" &&
+    (allowedZones.includes("PT-ILHAS") ||
+      allowedZones.includes("PT-ACORES") ||
+      allowedZones.includes("PT-MADEIRA") ||
+      allowedZones.includes("INTL-MAR"))
+  ) {
     return true
   }
   // EU zones allowed if INTL-AERO or INTL is enabled on table
@@ -124,11 +130,65 @@ export function isZoneAllowedByService(allowedZones: string[] | undefined, zoneC
   return false
 }
 
+/** Composite key for per-zone client tier price overrides inside `custom_tier_overrides`. */
+export function getServiceZoneOverrideKey(serviceId: string, zoneCode: string): string {
+  return `${serviceId}::${zoneCode}`
+}
+
+/**
+ * Resolves custom tier overrides for a specific `(service, zoneCode)` pair.
+ * Supports explicit per-zone keys (`${serviceId}::${zoneCode}`) while preserving
+ * backwards compatibility with legacy `{ [serviceId]: number[] }` entries on `zones[0]`.
+ */
+export function resolveZoneTierOverrides(
+  overridesMap: Record<string, number[]> | undefined,
+  service: Pick<Partial<ServicoLinke>, "id" | "zones">,
+  zoneCode: string
+): number[] | undefined {
+  if (!overridesMap || !service.id || !zoneCode) return undefined
+  const zoneKey = getServiceZoneOverrideKey(service.id, zoneCode)
+  if (Object.prototype.hasOwnProperty.call(overridesMap, zoneKey)) {
+    return overridesMap[zoneKey]
+  }
+  if (zoneCode === "PT-ILHAS") {
+    for (const legacyCode of ["PT-ACORES", "PT-MADEIRA"]) {
+      const legacyKey = getServiceZoneOverrideKey(service.id, legacyCode)
+      if (Object.prototype.hasOwnProperty.call(overridesMap, legacyKey)) {
+        return overridesMap[legacyKey]
+      }
+    }
+  }
+  const firstZoneCode = service.zones?.[0]?.zone_code
+  const matchesFirstZone =
+    firstZoneCode === zoneCode ||
+    (!firstZoneCode && service.zones?.length === 1 && zoneCode === "PT-CONT") ||
+    (zoneCode === "PT-ILHAS" && (firstZoneCode === "PT-ACORES" || firstZoneCode === "PT-MADEIRA"))
+  if (matchesFirstZone && Object.prototype.hasOwnProperty.call(overridesMap, service.id)) {
+    return overridesMap[service.id]
+  }
+  return undefined
+}
+
+/** Detects CTT Europa Terrestre / Rodoviário (Guia CE · ENCF008.02), even when `webservice_service_code` is redacted for clients. */
+export function isCeTruckService(service: Partial<ServicoLinke> | null | undefined): boolean {
+  if (!service) return false
+  if (service.webservice_service_code) {
+    return service.webservice_service_code === "ENCF008.02"
+  }
+  if (service.id === "srv_linke_ce_std") return true
+  const upperCode = service.code?.trim().toUpperCase() || ""
+  if (upperCode === "LK-CE-STD" || upperCode.startsWith("LK-CE-")) return true
+  return Boolean(
+    service.zones &&
+    service.zones.length > 0 &&
+    service.zones.every((z) => z.zone_code === "Zona 2" || z.zone_code === "Zona 3")
+  )
+}
+
 /** Resolve the tariff zone using the selected carrier product, including CE road zones. */
 export function resolveServiceZoneCode(service: Partial<ServicoLinke> | null | undefined, country: string, postal?: string): string {
   if (!country) return ""
-  const isCeTruck = service?.webservice_service_code === "ENCF008.02" || service?.code === "LK-CE-STD" || service?.id === "srv_linke_ce_std"
-  return isCeTruck ? resolveCeTruckZone(country) || "" : resolveZoneCode(country, postal)
+  return isCeTruckService(service) ? resolveCeTruckZone(country) || "" : resolveZoneCode(country, postal)
 }
 
 /**
@@ -149,6 +209,20 @@ export function findExactZone(zones: ZonePriceMatrix[], zoneCode: string): ZoneP
   if (!zones || zones.length === 0) return null
   const exact = zones.find((z) => z.zone_code === zoneCode)
   if (exact) return exact
+
+  // Legacy Portuguese islands zone codes ("PT-ACORES" / "PT-MADEIRA") map to "PT-ILHAS"
+  if (zoneCode === "PT-ILHAS" || zoneCode === "PT-ACORES" || zoneCode === "PT-MADEIRA") {
+    return (
+      zones.find(
+        (z) => z.zone_code === "PT-ILHAS" || z.zone_code === "PT-ACORES" || z.zone_code === "PT-MADEIRA"
+      ) || null
+    )
+  }
+
+  // Legacy single-zone domestic snapshots saved without `zone_code` cover PT-CONT only
+  if (zoneCode === "PT-CONT" && zones.length === 1 && !zones[0].zone_code) {
+    return zones[0]
+  }
 
   // Map aliases for Zona 2 / Zona 3 / EU 2 / EU 3
   if (zoneCode === "Zona 2" || zoneCode === "EU 2" || zoneCode === "EU-Z2") {
@@ -374,9 +448,9 @@ function calculateFromZone(
     }
   }
 
-  // The existing customer editor only customizes table.zones[0]. Applying its
-  // positional array to another zone would overwrite unrelated destination prices.
-  const customPrices = table.zones?.[0]?.zone_code === zone.zone_code ? client.custom_tier_overrides?.[table.id] : undefined
+  // Resolve per-zone client overrides (`${table.id}::${zone.zone_code}`), falling back
+  // to legacy `{ [table.id]: number[] }` only when `zone` is `table.zones[0]`.
+  const customPrices = resolveZoneTierOverrides(client.custom_tier_overrides, table, zone.zone_code)
   if (customPrices !== undefined && !Array.isArray(customPrices)) throw new ShipmentPricingError("Preços personalizados inválidos. Reveja a tabela do cliente.")
   const amounts = (matched: PriceTierLinke) => {
     const custom = customPrices?.[zone.tiers.indexOf(matched)]

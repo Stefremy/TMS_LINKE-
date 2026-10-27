@@ -116,8 +116,8 @@ export interface Cliente {
   pricing?: ClientPricingConfig
   allowed_webservices?: ClientAllowedWebservice[]
 
-  // Preços customizados por serviço Linke (por cliente)
-  // Chave: ServicoLinke.id, Valor: array de sell_price por tier index
+  // Preços customizados por serviço e zona Linke (por cliente)
+  // Chave: `${ServicoLinke.id}::${zone_code}` (ou `ServicoLinke.id` legacy para zones[0]), Valor: array de sell_price por tier index
   custom_tier_overrides?: Record<string, number[]>
 }
 

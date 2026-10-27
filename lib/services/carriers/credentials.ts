@@ -79,7 +79,8 @@ let correosCredentialsCache: CorreosCredentials | null = null
 let correosCredentialsCacheTime = 0
 
 export async function resolveCorreosCredentials(connectionId?: string): Promise<CorreosCredentials> {
-  if (!connectionId && correosCredentialsCache && Date.now() - correosCredentialsCacheTime < 60000) {
+  const isDefaultCorreosId = !connectionId || connectionId === "correos_express"
+  if (isDefaultCorreosId && correosCredentialsCache && Date.now() - correosCredentialsCacheTime < 60000) {
     return correosCredentialsCache
   }
 
@@ -87,12 +88,13 @@ export async function resolveCorreosCredentials(connectionId?: string): Promise<
   let result: CorreosCredentials | null = null
 
   try {
+    const tenantId = await getTenantId()
     let query = supabase
       .from("carrier_connections")
       .select("*")
-      .eq("tenant_id", (await getTenantId()))
-      
-    if (connectionId) {
+      .eq("tenant_id", tenantId)
+
+    if (!isDefaultCorreosId && connectionId) {
       query = query.eq("id", connectionId)
     } else {
       query = query.eq("carrier_code", "correos_express")
@@ -106,7 +108,7 @@ export async function resolveCorreosCredentials(connectionId?: string): Promise<
         codRte: conn.contract_number,
         user: conn.auth_id,
         pass: conn.user_id || "",
-        environment: (conn.environment === "qa" ? "test" : conn.environment as "test" | "production") || "production",
+        environment: (conn.environment === "qa" ? "test" : (conn.environment as "test" | "production")) || "production",
       }
     }
   } catch {}
@@ -117,10 +119,10 @@ export async function resolveCorreosCredentials(connectionId?: string): Promise<
         .from("audit_log")
         .select("*")
         .eq("action", "carrier_connection_config")
+        .eq("details->>carrier_code", "correos_express")
         .order("created_at", { ascending: false })
-        .limit(10)
+        .limit(5)
 
-      // CRITICAL: filter by carrier_code to avoid picking up CTT/other configs
       const connLog = logs?.find((l: any) => l.details?.carrier_code === "correos_express")
       if (connLog?.details) {
         const d = connLog.details
@@ -129,26 +131,25 @@ export async function resolveCorreosCredentials(connectionId?: string): Promise<
           codRte: d.contract_number,
           user: d.auth_id,
           pass: d.user_id || "",
-          environment: (d.environment === "qa" ? "test" : d.environment as "test" | "production") || "production",
+          environment: (d.environment === "qa" ? "test" : (d.environment as "test" | "production")) || "production",
         }
       }
     } catch {}
   }
 
-  if (!result) {
-    result = {
-      solicitante: process.env.CORREOS_SOLICITANTE || "",
-      codRte: process.env.CORREOS_COD_RTE || "",
-      user: process.env.CORREOS_USER || "",
-      pass: process.env.CORREOS_PASSWORD || "",
-      environment: (process.env.CORREOS_ENVIRONMENT as "test" | "production") || "test",
-    }
+  const finalResult: CorreosCredentials = result || {
+    solicitante: process.env.CORREOS_SOLICITANTE || "",
+    codRte: process.env.CORREOS_COD_RTE || "",
+    user: process.env.CORREOS_USER || "",
+    pass: process.env.CORREOS_PASSWORD || "",
+    environment: (process.env.CORREOS_ENVIRONMENT as "test" | "production") || "test",
   }
 
-  if (!connectionId) {
-    correosCredentialsCache = result
+  if (isDefaultCorreosId) {
+    correosCredentialsCache = finalResult
     correosCredentialsCacheTime = Date.now()
   }
 
-  return result
+  return finalResult
 }
+

@@ -33,6 +33,7 @@ export interface ServicoLinke {
   // Parceiro transportador associado (informativo)
   preferred_carrier_id: string
   preferred_carrier_name: string
+  carrier_group?: "ctt" | "correos"
   
   // Conexão Webservice para Emissão Automática de Guias / API
   webservice_connection_id?: string // ID da conexão de Webservice

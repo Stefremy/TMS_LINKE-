@@ -1,6 +1,6 @@
 import type { Cliente } from '@/app/ops/entidades/clientes/types'
 import type { ServicoLinke } from '@/app/ops/configuracao/servicos/types'
-import { calculateShipmentPrice, findExactZone, resolveServiceZoneCode } from '@/lib/pricing/calculate-shipment-price'
+import { calculateShipmentPrice, findExactZone, resolveServiceZoneCode, resolveZoneTierOverrides } from '@/lib/pricing/calculate-shipment-price'
 import type { CarrierReading } from '@/lib/services/tracking/carrier-measurements'
 
 export type WeightPricingBasis = {
@@ -15,7 +15,7 @@ export type WeightAdjustmentResult = {
 export function captureWeightPricingBasis(client: Partial<Cliente>, service: ServicoLinke, country: string, postal: string): WeightPricingBasis {
   const zone = findExactZone(service.zones, resolveServiceZoneCode(service, country, postal))
   if (!zone) throw new Error('Zona tarifária não encontrada.')
-  const overrides = service.zones[0]?.zone_code === zone.zone_code ? client.custom_tier_overrides?.[service.id] : undefined
+  const overrides = resolveZoneTierOverrides(client.custom_tier_overrides, service, zone.zone_code)
   return structuredClone({ version: 1, country, postal,
     service: { id: service.id, name: service.name, code: service.code, webservice_service_code: service.webservice_service_code,
       is_active: true, zones: [zone], allowed_zones: [zone.zone_code],

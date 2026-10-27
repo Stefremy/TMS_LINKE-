@@ -13,6 +13,13 @@ import {
 import { getTenantId, requireUser, requireEmployee } from "@/lib/auth/context"
 import { buildOfficialLinkeInternationalZones, buildOfficialCeTruckZones } from "@/lib/services/geo/international-zones"
 import { isTemporarilyWithdrawnService } from "@/lib/services/service-availability"
+import {
+  ZONE_DISPLAY_NAMES,
+  buildDefaultCustomServiceCode,
+  buildSubproductContractZones,
+  detectCarrierGroup,
+  normalizeServiceZoneCode,
+} from "@/lib/pricing/carrier-zone-templates"
 
 const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   // ─────────────────────────────────────────────────────────────────────────
@@ -23,10 +30,11 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     id: "srv_linke_dd_std",
     code: "LK-DD-STD",
     name: "Linke Para Amanhã 24H (Guia DD)",
-    description: "Entrega no dia útil seguinte em Portugal Continental. Emissão de Guia DD via CTT Expresso.",
+    description: "Entrega no dia útil seguinte em Portugal Continental, Ilhas (Açores e Madeira) e Espanha Peninsular. Emissão de Guia DD via CTT Expresso.",
     category: "Nacional",
     color: "#059669",
     is_active: true,
+    is_primordial: true,
     pricing_profile: "Standard / Geral",
     target_client_name: "Clientes Gerais",
     discount_vs_standard_pct: 0,
@@ -57,26 +65,26 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
         ],
       },
       {
-        zone_code: "PT-ACORES",
-        zone_name: "PT — Ilhas Açores",
+        zone_code: "PT-ILHAS",
+        zone_name: "PT — Ilhas Açores & Madeira",
         tiers: [
-          { id: "dd_acr_1",   label: "Até 1 Kg",            weight_max: 1,   cost_price: 10.33, margin_pct: 20, sell_price: 12.40, delivery_time: "48-72h", enabled: true },
-          { id: "dd_acr_5",   label: "Até 5 Kg",            weight_max: 5,   cost_price: 16.78, margin_pct: 20, sell_price: 20.14, delivery_time: "48-72h", enabled: true },
-          { id: "dd_acr_add", label: "Kg Adicional (+5kg)",  weight_max: 999, cost_price: 2.51,  margin_pct: 20, sell_price: 3.01,  delivery_time: "48-72h", enabled: true },
+          { id: "dd_acr_1",   label: "Até 1 Kg",            weight_max: 1,   cost_price: 10.33, margin_pct: 25, sell_price: 12.91, delivery_time: "48-72h", enabled: true },
+          { id: "dd_acr_5",   label: "Até 5 Kg",            weight_max: 5,   cost_price: 16.78, margin_pct: 25, sell_price: 20.98, delivery_time: "48-72h", enabled: true },
+          { id: "dd_acr_add", label: "Kg Adicional (+5kg)",  weight_max: 999, cost_price: 2.51,  margin_pct: 25, sell_price: 3.14,  delivery_time: "48-72h", enabled: true },
         ],
       },
       {
         zone_code: "ES-PENIN",
         zone_name: "Espanha Peninsular",
         tiers: [
-          { id: "dd_es_1",   label: "Até 1 Kg",             weight_max: 1,   cost_price: 3.26, margin_pct: 28, sell_price: 4.17, delivery_time: "24-48h", enabled: true },
-          { id: "dd_es_5",   label: "Até 5 Kg",             weight_max: 5,   cost_price: 4.05, margin_pct: 28, sell_price: 5.18, delivery_time: "24-48h", enabled: true },
-          { id: "dd_es_10",  label: "Até 10 Kg",            weight_max: 10,  cost_price: 5.14, margin_pct: 28, sell_price: 6.58, delivery_time: "24-48h", enabled: true },
-          { id: "dd_es_15",  label: "Até 15 Kg",            weight_max: 15,  cost_price: 6.12, margin_pct: 28, sell_price: 7.83, delivery_time: "24-48h", enabled: true },
-          { id: "dd_es_20",  label: "Até 20 Kg",            weight_max: 20,  cost_price: 7.80, margin_pct: 28, sell_price: 9.98, delivery_time: "24-48h", enabled: true },
-          { id: "dd_es_25",  label: "Até 25 Kg",            weight_max: 25,  cost_price: 8.50, margin_pct: 28, sell_price: 10.88, delivery_time: "24-48h", enabled: true },
-          { id: "dd_es_30",  label: "Até 30 Kg",            weight_max: 30,  cost_price: 9.82, margin_pct: 28, sell_price: 12.57, delivery_time: "24-48h", enabled: true },
-          { id: "dd_es_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.34, margin_pct: 28, sell_price: 0.44,  delivery_time: "24-48h", enabled: true },
+          { id: "dd_es_1",   label: "Até 1 Kg",             weight_max: 1,   cost_price: 3.26, margin_pct: 25, sell_price: 4.07,  delivery_time: "24-48h", enabled: true },
+          { id: "dd_es_5",   label: "Até 5 Kg",             weight_max: 5,   cost_price: 4.05, margin_pct: 25, sell_price: 5.06,  delivery_time: "24-48h", enabled: true },
+          { id: "dd_es_10",  label: "Até 10 Kg",            weight_max: 10,  cost_price: 5.14, margin_pct: 25, sell_price: 6.42,  delivery_time: "24-48h", enabled: true },
+          { id: "dd_es_15",  label: "Até 15 Kg",            weight_max: 15,  cost_price: 6.12, margin_pct: 25, sell_price: 7.65,  delivery_time: "24-48h", enabled: true },
+          { id: "dd_es_20",  label: "Até 20 Kg",            weight_max: 20,  cost_price: 7.80, margin_pct: 25, sell_price: 9.75,  delivery_time: "24-48h", enabled: true },
+          { id: "dd_es_25",  label: "Até 25 Kg",            weight_max: 25,  cost_price: 8.50, margin_pct: 25, sell_price: 10.63, delivery_time: "24-48h", enabled: true },
+          { id: "dd_es_30",  label: "Até 30 Kg",            weight_max: 30,  cost_price: 9.82, margin_pct: 25, sell_price: 12.28, delivery_time: "24-48h", enabled: true },
+          { id: "dd_es_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.34, margin_pct: 25, sell_price: 0.43,  delivery_time: "24-48h", enabled: true },
         ],
       },
     ],
@@ -89,10 +97,11 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     id: "srv_linke_db_std",
     code: "LK-DB-STD",
     name: "Linke Em 2 Dias 48H (Guia DB)",
-    description: "Entrega em 2 dias úteis. Emissão de Guia DB via CTT Expresso.",
+    description: "Entrega em 2 dias úteis em Portugal Continental, Ilhas (Açores e Madeira) e Espanha Peninsular. Emissão de Guia DB via CTT Expresso.",
     category: "Nacional",
     color: "#0891b2",
     is_active: true,
+    is_primordial: true,
     pricing_profile: "Standard / Geral",
     target_client_name: "Todos os Clientes",
     discount_vs_standard_pct: 0,
@@ -165,6 +174,7 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     category: "Nacional",
     color: "#6366f1",
     is_active: true,
+    is_primordial: true,
     pricing_profile: "Standard / Geral",
     target_client_name: "Todos os Clientes",
     discount_vs_standard_pct: 0,
@@ -177,7 +187,7 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     fuel_surcharge_pct: 12.5,
     cod_fee_pct: 2.5,
     cod_min_fee: 2.50,
-    allowed_zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN"],
+    allowed_zones: ["PT-CONT"],
     created_at: "2026-09-01T10:20:00Z",
     zones: [
       {
@@ -252,10 +262,11 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     id: "srv_linke_multiplo_std",
     code: "LK-MULT-STD",
     name: "Linke 19 Múltiplo (10+ volumes)",
-    description: "Tarifa múltiplo para remessas de 10 ou mais volumes com o mesmo produto, data, origem e destino. Preço mais baixo por volume.",
+    description: "Tarifa múltiplo para remessas de 10 ou mais volumes com o mesmo produto, data, origem e destino em Portugal Continental. Preço mais baixo por volume.",
     category: "Nacional",
     color: "#0d9488",
     is_active: true,
+    is_primordial: true,
     pricing_profile: "Standard / Geral",
     target_client_name: "Clientes com Grande Volume (10+ volumes/remessa)",
     discount_vs_standard_pct: 0,
@@ -268,7 +279,7 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     fuel_surcharge_pct: 12.5,
     cod_fee_pct: 2.5,
     cod_min_fee: 2.50,
-    allowed_zones: ["PT-CONT", "ES-PENIN"],
+    allowed_zones: ["PT-CONT"],
     created_at: "2026-09-01T10:30:00Z",
     zones: [
       {
@@ -649,6 +660,51 @@ function getCarrierRank(s: Partial<ServicoLinke>): number {
 }
 
 /**
+ * Normalizes legacy zone codes (`PT-ACORES` -> `PT-ILHAS`, missing single-zone domestic `zone_code` -> `PT-CONT`)
+ * and attaches `is_primordial` + safe `carrier_group` before client cost redaction.
+ */
+function normalizeLoadedServico(s: any): any {
+  const rawZones = Array.isArray(s.zones) ? s.zones : []
+  const normalizedZones = rawZones.map((z: any) => {
+    const rawCode = typeof z?.zone_code === "string" ? z.zone_code.trim() : ""
+    const canonicalCode = rawCode
+      ? normalizeServiceZoneCode(rawCode)
+      : rawZones.length === 1
+      ? "PT-CONT"
+      : ""
+    const nextZone: any = {
+      ...z,
+      ...(canonicalCode ? { zone_code: canonicalCode } : {}),
+    }
+    if (!z?.zone_name && ((z as any)?.name || !rawCode)) {
+      nextZone.zone_name = (z as any)?.name || ZONE_DISPLAY_NAMES[canonicalCode] || canonicalCode
+    } else if (
+      (rawCode.toUpperCase() === "PT-ACORES" || rawCode.toUpperCase() === "PT-MADEIRA") &&
+      canonicalCode === "PT-ILHAS"
+    ) {
+      nextZone.zone_name = "PT — Ilhas Açores & Madeira"
+    }
+    return nextZone
+  })
+
+  const normalizedAllowed = Array.isArray(s.allowed_zones)
+    ? Array.from(new Set(s.allowed_zones.map((c: string) => normalizeServiceZoneCode(c) || c)))
+    : !s.allowed_zones && rawZones.length === 1 && !rawZones[0]?.zone_code
+    ? ["PT-CONT"]
+    : s.allowed_zones
+
+  const carrierGroup = detectCarrierGroup(s)
+
+  return {
+    ...s,
+    is_primordial: isPrimordialServico(s),
+    ...(carrierGroup ? { carrier_group: carrierGroup } : {}),
+    ...(normalizedAllowed !== undefined ? { allowed_zones: normalizedAllowed } : {}),
+    ...(Array.isArray(s.zones) ? { zones: normalizedZones } : {}),
+  }
+}
+
+/**
  * Obtém todos os Serviços Linke configurados
  */
 export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
@@ -685,10 +741,7 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
       return data
         .filter((s: any) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
         .sort((a: any, b: any) => getCarrierRank(a) - getCarrierRank(b))
-        .map((s: any) => ({
-          ...s,
-          is_primordial: isPrimordialServico(s),
-        }))
+        .map((s: any) => normalizeLoadedServico(s))
         .filter((s: any) => {
           if (isClient && s.client_id && s.client_id !== ctx.client_id) return false;
           return true;
@@ -744,10 +797,7 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
   return merged
     .filter((s) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
     .sort((a, b) => getCarrierRank(a) - getCarrierRank(b))
-    .map((s) => ({
-      ...s,
-      is_primordial: isPrimordialServico(s),
-    }))
+    .map((s) => normalizeLoadedServico(s))
     .filter((s: any) => {
       if (isClient && s.client_id && s.client_id !== ctx.client_id) return false;
       return true;
@@ -802,29 +852,57 @@ export async function saveServicoLinkeAction(
     }
   }
   
-  // Processamento de zonas e escalões
-  const processedZones = (servico.zones || []).map((zone) => ({
-    ...zone,
-    tiers: (zone.tiers || []).map((t, idx) => {
-      const margin = t.margin_pct ?? servico.global_markup_pct ?? 20
-      const cost = Number(t.cost_price || 0)
-      const sell = t.sell_price > 0 ? Number(t.sell_price) : Number((cost * (1 + margin / 100)).toFixed(2))
-      return {
-        ...t,
-        id: t.id || `tier_${Date.now()}_${idx}`,
-        margin_pct: margin,
-        cost_price: cost,
-        sell_price: sell,
-        delivery_time: t.delivery_time || servico.transit_time_label || "24h",
-        enabled: t.enabled ?? true,
-      }
-    })
-  }))
+  const carrier = detectCarrierGroup(servico) || "ctt"
+
+  // Processamento e normalização de zonas e escalões
+  const rawZones = servico.zones || []
+  const processedZones = rawZones.map((zone) => {
+    const rawCode = (zone.zone_code || "").trim()
+    const canonicalCode = rawCode
+      ? normalizeServiceZoneCode(rawCode)
+      : rawZones.length === 1
+      ? "PT-CONT"
+      : ""
+    const canonicalName =
+      (rawCode.toUpperCase() === "PT-ACORES" || rawCode.toUpperCase() === "PT-MADEIRA") && canonicalCode === "PT-ILHAS"
+        ? "PT — Ilhas Açores & Madeira"
+        : zone.zone_name || (zone as any).name || ZONE_DISPLAY_NAMES[canonicalCode] || canonicalCode
+
+    return {
+      ...zone,
+      zone_code: canonicalCode,
+      zone_name: canonicalName,
+      tiers: (zone.tiers || []).map((t, idx) => {
+        const margin = t.margin_pct ?? servico.global_markup_pct ?? 20
+        const cost = Number(t.cost_price || 0)
+        const sell = t.sell_price > 0 ? Number(t.sell_price) : Number((cost * (1 + margin / 100)).toFixed(2))
+        return {
+          ...t,
+          id: t.id || `tier_${Date.now()}_${idx}`,
+          margin_pct: margin,
+          cost_price: cost,
+          sell_price: sell,
+          delivery_time: t.delivery_time || servico.transit_time_label || "24h",
+          enabled: t.enabled ?? true,
+        }
+      }),
+    }
+  })
+
+  const fallbackContract =
+    processedZones.length === 0
+      ? buildSubproductContractZones(carrier, servico.webservice_service_code, servico.global_markup_pct)
+      : null
+  const finalZones = processedZones.length > 0 ? processedZones : fallbackContract!.zones
+  const finalAllowedZones =
+    servico.allowed_zones !== undefined
+      ? Array.from(new Set(servico.allowed_zones.map((c) => normalizeServiceZoneCode(c) || c)))
+      : finalZones.map((z) => z.zone_code).filter(Boolean)
 
   const fullRecord: ServicoLinke = {
     id,
     is_primordial: isProtected,
-    code: servico.code || `LK-${Math.floor(100 + Math.random() * 900)}`,
+    code: servico.code || buildDefaultCustomServiceCode(carrier, servico.webservice_service_code),
     name: servico.name || "Novo Serviço Linke",
     description: servico.description || "",
     category: servico.category || "Nacional",
@@ -844,24 +922,8 @@ export async function saveServicoLinkeAction(
     cod_min_fee: servico.cod_min_fee ?? 2.50,
     saturday_fee: servico.saturday_fee ?? 15.0,
     return_guide_fee: servico.return_guide_fee ?? 3.5,
-    allowed_zones: servico.allowed_zones !== undefined
-      ? servico.allowed_zones
-      : (processedZones.length > 0 ? processedZones.map(z => z.zone_code) : ["PT-CONT"]),
-    zones: processedZones.length > 0 ? processedZones : [
-      {
-        zone_code: "PT-CONT",
-        zone_name: "Portugal Continental",
-        tiers: [
-          { id: `t_${Date.now()}_1`, label: "Até 1 Kg", weight_max: 1, cost_price: 2.85, margin_pct: 20, sell_price: 3.42, delivery_time: "24h", enabled: true },
-          { id: `t_${Date.now()}_2`, label: "Até 2 Kg", weight_max: 2, cost_price: 3.15, margin_pct: 20, sell_price: 3.78, delivery_time: "24h", enabled: true },
-          { id: `t_${Date.now()}_5`, label: "Até 5 Kg", weight_max: 5, cost_price: 3.75, margin_pct: 20, sell_price: 4.50, delivery_time: "24h", enabled: true },
-          { id: `t_${Date.now()}_10`, label: "Até 10 Kg", weight_max: 10, cost_price: 4.60, margin_pct: 20, sell_price: 5.52, delivery_time: "24h", enabled: true },
-          { id: `t_${Date.now()}_20`, label: "Até 20 Kg", weight_max: 20, cost_price: 6.20, margin_pct: 20, sell_price: 7.44, delivery_time: "24h", enabled: true },
-          { id: `t_${Date.now()}_30`, label: "Até 30 Kg", weight_max: 30, cost_price: 7.90, margin_pct: 20, sell_price: 9.48, delivery_time: "24h", enabled: true },
-          { id: `t_${Date.now()}_add`, label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.28, margin_pct: 20, sell_price: 0.34, delivery_time: "24h", enabled: true },
-        ]
-      }
-    ],
+    allowed_zones: finalAllowedZones.length > 0 ? finalAllowedZones : ["PT-CONT"],
+    zones: finalZones,
     created_at: servico.created_at || new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }

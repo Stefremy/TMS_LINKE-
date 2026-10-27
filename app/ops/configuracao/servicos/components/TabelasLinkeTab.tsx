@@ -406,12 +406,23 @@ export function TabelasLinkeTab({
                       currentServico.allowed_zones.map((code) => {
                         const labels: Record<string, string> = {
                           "PT-CONT": "Portugal Continental",
-                          "PT-ILHAS": "Ilhas PT",
+                          "PT-ILHAS": "Ilhas PT (Açores & Madeira)",
+                          "PT-ACORES": "Ilhas PT (Açores & Madeira)",
                           "ES-PENIN": "Espanha Peninsular",
-                          "ES-ILHAS": "Ilhas ES",
+                          "ES-ILHAS": "Ilhas ES (Baleares & Canárias)",
+                          "Zona 2": "Zona 2 (Europa Rodoviário)",
+                          "Zona 3": "Zona 3 (Europa Rodoviário)",
+                          "EU 1": "Europa 1",
+                          "EU 2": "Europa 2",
+                          "EU 3": "Europa 3",
                           "EU-Z1": "Europa Z1",
                           "EU-Z2": "Europa Z2",
                           "EU-Z3": "Europa Z3",
+                          "NA": "América do Norte",
+                          "SA": "América do Sul",
+                          "O1": "Oriente 1",
+                          "O2": "Oriente 2",
+                          "A": "África",
                           "INTL-AERO": "Aéreo",
                           "INTL-MAR": "Marítimo",
                           "INTL": "Internacional",
@@ -544,22 +555,27 @@ export function TabelasLinkeTab({
                         </div>
                       </div>
 
-                      <div className="overflow-x-auto rounded-lg border border-slate-200 shadow-2xs">
+                      <div
+                        tabIndex={0}
+                        role="region"
+                        aria-label={`Tabela de preços ${zone.zone_name || (zone as any).name || zone.zone_code || ""}`}
+                        className="overflow-x-auto rounded-lg border border-slate-200 shadow-2xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#128A47]"
+                      >
                         <table className="w-full text-left text-xs">
                           <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
                             <tr>
-                              <th className="py-2.5 px-3 font-medium">Escalão / Peso</th>
-                              <th className="py-2.5 px-3 text-right font-medium text-slate-700" title={`Preço base cobrado por ${currentServico.preferred_carrier_name}`}>
+                              <th scope="col" className="py-2.5 px-3 font-medium">Escalão / Peso</th>
+                              <th scope="col" className="py-2.5 px-3 text-right font-medium text-slate-700" title={`Preço base cobrado por ${currentServico.preferred_carrier_name}`}>
                                 Custo Fornecedor (€)
                               </th>
-                              <th className="py-2.5 px-3 text-center font-medium">Margem (%)</th>
-                              <th className="py-2.5 px-3 text-right font-semibold text-slate-900">
+                              <th scope="col" className="py-2.5 px-3 text-center font-medium">Margem (%)</th>
+                              <th scope="col" className="py-2.5 px-3 text-right font-semibold text-slate-900">
                                 Preço Venda Cliente (€)
                               </th>
-                              <th className="py-2.5 px-3 text-right font-semibold text-emerald-700">
+                              <th scope="col" className="py-2.5 px-3 text-right font-semibold text-emerald-700">
                                 Lucro Bruto (€)
                               </th>
-                              <th className="py-2.5 px-3 text-center font-medium">Prazo</th>
+                              <th scope="col" className="py-2.5 px-3 text-center font-medium">Prazo</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">

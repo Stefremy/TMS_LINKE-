@@ -38,6 +38,10 @@ test('CE road tariffs follow their contract countries rather than the air-zone c
   for(const code of ['PT','ES','US','RO','BG','UK','GB','NO','IS','CH'])assert.equal(list.includes(code),false,code)
   assert.equal(getServiceDestinationZone(s,'PL'),'Zona 3')
   assert.equal(getServiceDestinationZone(s,'AT'),'Zona 2')
+  const redactedCustomCe={id:'srv_linke_custom_ce',code:'LK-901',is_active:true,zones:buildOfficialCeTruckZones(),allowed_zones:['Zona 2','Zona 3']}
+  assert.deepEqual(codes(redactedCustomCe),list)
+  assert.equal(getServiceDestinationZone(redactedCustomCe,'DE'),'Zona 2')
+  assert.equal(getServiceDestinationZone(redactedCustomCe,'PL'),'Zona 3')
   s.zones=s.zones.filter(z=>z.zone_code==='Zona 2')
   assert.equal(codes(s).includes('PL'),false)
 })

@@ -125,6 +125,21 @@ export class CorreosShipmentService {
       ]
     }
 
-    return this.client.request<CorreosShipmentOutput>(endpoint, creds, payload)
+    let result = await this.client.request<CorreosShipmentOutput>(endpoint, creds, payload)
+    if (
+      result &&
+      result.codigoRetorno !== 0 &&
+      !result.datosResultado &&
+      payload.producto !== "63" &&
+      (result.codigoRetorno === 500 ||
+        result.codigoRetorno === 999 ||
+        String(result.mensajeRetorno || "").includes("TASAR"))
+    ) {
+      result = await this.client.request<CorreosShipmentOutput>(endpoint, creds, {
+        ...payload,
+        producto: "63",
+      })
+    }
+    return result
   }
 }

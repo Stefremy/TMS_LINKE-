@@ -28,7 +28,7 @@ import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
 import { getServiceDestinationCountries, getServiceDestinationZone } from "@/lib/services/service-destinations"
-import { getClientSpecialFees } from "@/lib/pricing/calculate-shipment-quote"
+import { getClientSpecialFees, isCorreosLinkeService } from "@/lib/pricing/calculate-shipment-quote"
 import { calculateClientShipmentPreview } from "@/lib/pricing/calculate-client-shipment-preview"
 import { assertShipmentDestinationAvailable } from "@/lib/services/shipment-destination-policy"
 import { focusCttCustomsFields } from "@/lib/ctt-customs-form"
@@ -206,7 +206,7 @@ export function ClientCreateGuia() {
     return getClientSpecialFees(currentClient)
   }, [currentClient])
 
-  const isCorreosService = (activeLinkeService?.preferred_carrier_name || activeLinkeService?.name || "").toLowerCase().includes("correos")
+  const isCorreosService = isCorreosLinkeService(activeLinkeService)
   const requiresCttContact = !isCorreosService && recipientCountry !== "PT"
   const requiresRecipientEmail = requiresCttContact && !hasCttRecipientMobilePhone(recipientPhone, recipientCountry)
   const activeSpecialServices = React.useMemo(() => selectedSpecialServices.filter(code =>
@@ -1044,7 +1044,14 @@ export function ClientCreateGuia() {
                 <Euro className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div className="min-w-0">
-                <div className="text-[11px] sm:text-xs text-zinc-500 font-medium">Preço Total Estimado do Envio (sem IVA):</div>
+                <div className="text-[11px] sm:text-xs text-zinc-500 font-medium flex items-center gap-2 flex-wrap">
+                  <span>Preço Total Estimado do Envio (sem IVA):</span>
+                  {(activeLinkeService?.zones?.length || 0) > 1 && calculatedPrice.destinationZone && !calculatedPrice.isBlocked && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-200/80 text-zinc-800 border border-zinc-300/80">
+                      Tarifa {calculatedPrice.destinationZone}
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-wrap items-baseline gap-2">
                   <span className="text-2xl sm:text-3xl font-black text-zinc-900 font-mono">
                     {calculatedPrice.isBlocked ? "Indisponível" : `${calculatedPrice.total}€`}

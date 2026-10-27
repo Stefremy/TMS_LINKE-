@@ -1,6 +1,6 @@
 import type { Cliente, ClientSpecialServiceFee } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
-import { calculateShipmentPrice } from "./calculate-shipment-price"
+import { calculateShipmentPrice, isCeTruckService } from "./calculate-shipment-price"
 import { ShipmentPricingError } from "./shipment-pricing-errors"
 
 // Preserve the server's existing charges for profiles without configured extras.
@@ -21,10 +21,44 @@ export function getClientSpecialFees(client: Partial<Cliente>): ClientSpecialSer
 }
 
 export function resolveServiceCarrier(service: ServicoLinke): "ctt" | "correos" {
-  const name = (service.preferred_carrier_name || service.name).toLowerCase()
-  if (name.includes("correos")) return "correos"
-  if (name.includes("ctt") || /ers|d\+/.test(name)) return "ctt"
+  if (service.preferred_carrier_name) {
+    const carrier = service.preferred_carrier_name.toLowerCase()
+    if (carrier.includes("correos")) return "correos"
+    if (carrier.includes("ctt") || /ers|d\+/.test(carrier)) return "ctt"
+    throw new ShipmentPricingError("Transportadora não suportada para este serviço.")
+  }
+  if (service.carrier_group === "correos" || service.carrier_group === "ctt") {
+    return service.carrier_group
+  }
+  const code = (service.code || "").trim().toUpperCase()
+  const name = (service.name || "").toLowerCase()
+  if (code.startsWith("LK-COR") || code.startsWith("COR-") || name.includes("correos") || /paq\s?(24|48)|e-?paq/.test(name)) {
+    return "correos"
+  }
+  if (
+    isCeTruckService(service) ||
+    /^LK-(CTT|DD|DB|EQ|MULT|EU|CE)/.test(code) ||
+    name.includes("ctt") ||
+    /ers|d\+|guia\s+(dd|db|eq|ce|ee)|ems|para amanh|em 2 dias|m[úu]ltiplo|europa terrestre/.test(name)
+  ) {
+    return "ctt"
+  }
   throw new ShipmentPricingError("Transportadora não suportada para este serviço.")
+}
+
+/** Safe helper for client UI to distinguish Correos vs CTT tables even after redaction. */
+export function isCorreosLinkeService(service?: Partial<ServicoLinke> | null): boolean {
+  if (!service) return false
+  if (service.carrier_group === "correos") return true
+  if (service.carrier_group === "ctt") return false
+  const carrier = (service.preferred_carrier_name || "").toLowerCase()
+  if (carrier.includes("correos")) return true
+  if (carrier.includes("ctt") || /ers|d\+/.test(carrier)) return false
+  const code = (service.code || "").trim().toUpperCase()
+  if (code.startsWith("LK-COR") || code.startsWith("COR-")) return true
+  if (/^LK-(CTT|DD|DB|EQ|MULT|EU|CE)/.test(code)) return false
+  const name = (service.name || "").toLowerCase()
+  return name.includes("correos") || /paq\s?(24|48)|e-?paq/.test(name)
 }
 
 export function calculateShipmentSpecialFees(
@@ -88,3 +122,4 @@ export function calculateShipmentQuote(
   const specials = calculateShipmentSpecialFees(transport.sellPrice, client, resolveServiceCarrier(service), specialCodes, codValue)
   return { ...transport, specialFeesAmount: specials.amount, specialItems: specials.items, totalPrice: specials.totalPrice }
 }
+

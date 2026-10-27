@@ -86,6 +86,8 @@ export function DestinationBadge({ code, showLabel = false }: { code: string; sh
       )
 
     case "PT-ILHAS":
+    case "PT-ACORES":
+    case "PT-MADEIRA":
       return (
         <span className="inline-flex items-center gap-1 shrink-0 text-slate-700">
           <PortugalFlag className="w-3.5 h-2.5" />

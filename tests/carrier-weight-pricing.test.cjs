@@ -98,3 +98,30 @@ test('missing migration or a stale invoice claim preserves the price and reports
  const h=worker({error:'function missing'});assert.equal((await h.run()).status,'unavailable');assert.equal(h.db.writes.length,0)
  const locked=worker({rpcResult:{status:'locked'}});assert.equal((await locked.run()).status,'locked')
 })
+test('per-zone client overrides price Zona 2 and Zona 3 independently and survive weight adjustments',()=>{
+ const {getServiceZoneOverrideKey}=loadPure('lib/pricing/calculate-shipment-price.ts')
+ const {calculateClientShipmentPreview}=loadPure('lib/pricing/calculate-client-shipment-preview.ts')
+ const ce={id:'srv_linke_ce_std',name:'Linke Europa Terrestre Económico (Guia CE)',code:'LK-CE-STD',webservice_service_code:'ENCF008.02',
+  is_active:true,zones:buildOfficialCeTruckZones(),allowed_zones:['Zona 2','Zona 3'],fuel_surcharge_pct:10}
+ const z2Overrides=ce.zones[0].tiers.map((t,i)=>i===0?14.00:i===5?25.00:t.sell_price)
+ const z3Overrides=ce.zones[1].tiers.map((t,i)=>i===0?15.00:i===5?32.00:t.sell_price)
+ const client={default_linke_table_id:ce.id,custom_tier_overrides:{
+  [getServiceZoneOverrideKey(ce.id,'Zona 2')]:z2Overrides,
+  [getServiceZoneOverrideKey(ce.id,'Zona 3')]:z3Overrides,
+ }}
+ const qFr=calculateShipmentPrice(1,client,[ce],'FR','75001',{requireConfiguredTariff:true})
+ const qPl=calculateShipmentPrice(1,client,[ce],'PL','00-001',{requireConfiguredTariff:true})
+ assert.equal(qFr.basePrice,14.00);assert.equal(qPl.basePrice,15.00)
+ const redactedCe={...ce,webservice_service_code:undefined,code:'LK-901',zones:ce.zones.map(z=>({...z,tiers:z.tiers.map(t=>({...t,cost_price:undefined,margin_pct:undefined}))}))}
+ const redactedClient={...client,default_linke_table_id:redactedCe.id,custom_tier_overrides:{
+  [getServiceZoneOverrideKey(redactedCe.id,'Zona 2')]:z2Overrides,
+  [getServiceZoneOverrideKey(redactedCe.id,'Zona 3')]:z3Overrides,
+ }}
+ assert.equal(calculateClientShipmentPreview(1,redactedClient,redactedCe,'FR','75001').basePrice,14.00)
+ assert.equal(calculateClientShipmentPreview(1,redactedClient,redactedCe,'PL','00-001').basePrice,15.00)
+ const basisPl=pure.captureWeightPricingBasis(client,ce,'PL','00-001')
+ assert.equal(basisPl.service.zones.length,1);assert.equal(basisPl.service.zones[0].zone_code,'Zona 3')
+ const adjPl=pure.planWeightAdjustment({basis:basisPl,previousWeightKg:1,weightKg:8,
+  sellPrice:qPl.sellPrice,buyPrice:qPl.buyPrice,basePrice:qPl.basePrice,fuelAmount:qPl.fuelSurchargeAmount,specialAmount:0})
+ assert.equal(adjPl.basePrice,32.00)
+})
