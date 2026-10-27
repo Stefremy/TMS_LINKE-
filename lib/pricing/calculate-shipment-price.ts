@@ -158,6 +158,28 @@ export function resolveZoneTierOverrides(
       }
     }
   }
+  if (zoneCode === "PT-ACORES" || zoneCode === "PT-MADEIRA") {
+    const ilhasKey = getServiceZoneOverrideKey(service.id, "PT-ILHAS")
+    if (Object.prototype.hasOwnProperty.call(overridesMap, ilhasKey)) {
+      return overridesMap[ilhasKey]
+    }
+  }
+  if (zoneCode === "Zona 2" || zoneCode === "EU 2" || zoneCode === "EU-Z2") {
+    for (const alias of ["Zona 2", "EU 2", "EU-Z2"]) {
+      const aliasKey = getServiceZoneOverrideKey(service.id, alias)
+      if (Object.prototype.hasOwnProperty.call(overridesMap, aliasKey)) {
+        return overridesMap[aliasKey]
+      }
+    }
+  }
+  if (zoneCode === "Zona 3" || zoneCode === "EU 3" || zoneCode === "EU-Z3") {
+    for (const alias of ["Zona 3", "EU 3", "EU-Z3"]) {
+      const aliasKey = getServiceZoneOverrideKey(service.id, alias)
+      if (Object.prototype.hasOwnProperty.call(overridesMap, aliasKey)) {
+        return overridesMap[aliasKey]
+      }
+    }
+  }
   const firstZoneCode = service.zones?.[0]?.zone_code
   const matchesFirstZone =
     firstZoneCode === zoneCode ||

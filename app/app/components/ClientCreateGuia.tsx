@@ -206,7 +206,13 @@ export function ClientCreateGuia() {
     return getClientSpecialFees(currentClient)
   }, [currentClient])
 
-  const isCorreosService = isCorreosLinkeService(activeLinkeService)
+  const isCorreosService = Boolean(
+    activeLinkeService?.carrier_group === "correos" ||
+    activeLinkeService?.preferred_carrier_name?.toLowerCase().includes("correos") ||
+    activeLinkeService?.code?.startsWith("LK-COR") ||
+    activeLinkeService?.webservice_connection_id === "correos_express" ||
+    (typeof isCorreosLinkeService === "function" && isCorreosLinkeService(activeLinkeService))
+  )
   const requiresCttContact = !isCorreosService && recipientCountry !== "PT"
   const requiresRecipientEmail = requiresCttContact && !hasCttRecipientMobilePhone(recipientPhone, recipientCountry)
   const activeSpecialServices = React.useMemo(() => selectedSpecialServices.filter(code =>

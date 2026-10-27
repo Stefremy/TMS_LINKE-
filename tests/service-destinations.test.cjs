@@ -57,3 +57,73 @@ test('zone aliases, broad coverage and published tables without internal costs r
   assert.equal(resolveInternationalZone('SA'),'O2')
   assert.equal(resolveInternationalZone('BA'),'SA')
 })
+
+test('multi-country primordial contracted services expose and map PT, ES and islands accurately',()=>{
+  const {buildContractZoneMatrix,buildSubproductContractZones,detectCarrierGroup,normalizeServiceZoneCode}=load('lib/pricing/carrier-zone-templates.ts')
+  const {resolveZoneTierOverrides,getServiceZoneOverrideKey,calculateShipmentPrice}=load('lib/pricing/calculate-shipment-price.ts')
+
+  // CTT Guia DD & DB (PT-CONT + PT-ILHAS + ES-PENIN)
+  const ddContract = buildSubproductContractZones('ctt', 'EMSF056.01')
+  assert.deepEqual(ddContract.allowedZones, ['PT-CONT', 'PT-ILHAS', 'ES-PENIN'])
+  assert.deepEqual(codes({ ...service([]), zones: ddContract.zones, allowed_zones: ddContract.allowedZones }), ['PT', 'ES'])
+
+  const dbContract = buildSubproductContractZones('ctt', 'EMSF057.01')
+  assert.deepEqual(dbContract.allowedZones, ['PT-CONT', 'PT-ILHAS', 'ES-PENIN'])
+  assert.deepEqual(codes({ ...service([]), zones: dbContract.zones, allowed_zones: dbContract.allowedZones }), ['PT', 'ES'])
+
+  // Correos Paq 24 & Paq 48 (PT-CONT + ES-PENIN)
+  const cor24 = buildSubproductContractZones('correos', '61')
+  assert.deepEqual(cor24.allowedZones, ['PT-CONT', 'ES-PENIN'])
+  assert.deepEqual(codes({ ...service([]), zones: cor24.zones, allowed_zones: cor24.allowedZones }), ['PT', 'ES'])
+
+  const cor48 = buildSubproductContractZones('correos', '62')
+  assert.deepEqual(cor48.allowedZones, ['PT-CONT', 'ES-PENIN'])
+  assert.deepEqual(codes({ ...service([]), zones: cor48.zones, allowed_zones: cor48.allowedZones }), ['PT', 'ES'])
+
+  // Correos Islas (ES-ILHAS)
+  const corIslas = buildSubproductContractZones('correos', '66')
+  assert.deepEqual(corIslas.allowedZones, ['ES-ILHAS'])
+  assert.deepEqual(codes({ ...service([]), zones: corIslas.zones, allowed_zones: corIslas.allowedZones }), ['ES'])
+
+  // Legacy PT-ACORES normalization
+  const legacyDd = {
+    id: 'srv_linke_dd_std',
+    is_active: true,
+    allowed_zones: ['PT-CONT', 'PT-ILHAS', 'ES-PENIN'],
+    zones: [
+      { zone_code: 'PT-CONT', tiers: [{ weight_max: 5, sell_price: 3.70, cost_price: 2.96, enabled: true }] },
+      { zone_code: 'PT-ACORES', tiers: [{ weight_max: 5, sell_price: 12.91, cost_price: 10.33, enabled: true }] },
+      { zone_code: 'ES-PENIN', tiers: [{ weight_max: 5, sell_price: 4.07, cost_price: 3.26, enabled: true }] },
+    ],
+  }
+  assert.equal(getServiceDestinationZone(legacyDd, 'PT', '9500-001'), 'PT-ILHAS')
+  assert.equal(getServiceDestinationZone(legacyDd, 'ES', '28013'), 'ES-PENIN')
+  assert.equal(getServiceDestinationZone(legacyDd, 'PT', '1000-001'), 'PT-CONT')
+
+  // Per-zone client overrides (${serviceId}::${zoneCode})
+  const clientOverrides = {
+    [getServiceZoneOverrideKey('srv_linke_dd_std', 'PT-CONT')]: [3.50],
+    [getServiceZoneOverrideKey('srv_linke_dd_std', 'PT-ILHAS')]: [11.00],
+    [getServiceZoneOverrideKey('srv_linke_dd_std', 'ES-PENIN')]: [3.90],
+  }
+  assert.deepEqual(resolveZoneTierOverrides(clientOverrides, legacyDd, 'PT-CONT'), [3.50])
+  assert.deepEqual(resolveZoneTierOverrides(clientOverrides, legacyDd, 'PT-ILHAS'), [11.00])
+  assert.deepEqual(resolveZoneTierOverrides(clientOverrides, legacyDd, 'ES-PENIN'), [3.90])
+
+  // Pricing calculations per zone
+  const client = { default_linke_table_id: legacyDd.id, custom_tier_overrides: clientOverrides }
+  const ptQuote = calculateShipmentPrice(1, client, [legacyDd], 'PT', '1000-001', { requireConfiguredTariff: true })
+  const ilhasQuote = calculateShipmentPrice(1, client, [legacyDd], 'PT', '9500-001', { requireConfiguredTariff: true })
+  const esQuote = calculateShipmentPrice(1, client, [legacyDd], 'ES', '28013', { requireConfiguredTariff: true })
+
+  assert.equal(ptQuote.basePrice, 3.50)
+  assert.equal(ilhasQuote.basePrice, 11.00)
+  assert.equal(esQuote.basePrice, 3.90)
+
+  // Future custom tables detection when carrier fields are redacted
+  const customCtt = { id: 'srv_cust_1', code: 'LK-CTT-899', is_active: true, zones: ddContract.zones, carrier_group: 'ctt' }
+  const customCor = { id: 'srv_cust_2', code: 'LK-COR-512', is_active: true, zones: cor24.zones, carrier_group: 'correos' }
+  assert.equal(detectCarrierGroup(customCtt), 'ctt')
+  assert.equal(detectCarrierGroup(customCor), 'correos')
+})
+

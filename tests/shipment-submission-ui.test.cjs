@@ -101,7 +101,7 @@ function harness(t, portal, services = [service]) {
     '@/app/actions/ctt': {}, '@/lib/label-utils': {},
     '@/lib/pricing/calculate-shipment-price': { resolveZoneCode: () => 'PT-CONT', isZoneAllowedByService: () => true },
     '@/lib/services/service-destinations': destinations,
-    '@/lib/pricing/calculate-shipment-quote': { getClientSpecialFees: () => [], calculateShipmentQuote: () => ({
+    '@/lib/pricing/calculate-shipment-quote': { isCorreosLinkeService: () => false, getClientSpecialFees: () => [], calculateShipmentQuote: () => ({
       basePrice: 8, buyPrice: 3, fuelSurchargeAmount: 1, specialFeesAmount: 0, specialItems: [], totalPrice: 9, tierLabel: 'Fixture',
     }) },
     '@/lib/pricing/calculate-client-shipment-preview': { calculateClientShipmentPreview: () => ({
