@@ -47,6 +47,7 @@ import { inviteClientAccessAction } from "@/app/actions/client-invitations"
 import { paymentDueDays } from "@/lib/billing/payment-terms"
 import { normalizeStoreSlug } from "@/lib/client-portal/paths"
 import { getServiceZoneOverrideKey, resolveZoneTierOverrides } from "@/lib/pricing/calculate-shipment-price"
+import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "@/app/ops/configuracao/servicos/types"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
 import { getCarrierLogo } from "@/lib/carrier-logos"
@@ -79,6 +80,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
+  const [serviceTableFilter, setServiceTableFilter] = React.useState<"all" | "base" | "custom">("all")
   const [specialProviderTab, setSpecialProviderTab] = React.useState<"ctt" | "correos">("ctt")
   const [saveSuccessMsg, setSaveSuccessMsg] = React.useState(false)
   const [draftId] = React.useState(() => initialData?.id || crypto.randomUUID())
@@ -394,6 +396,24 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     (formData.assigned_linke_service_ids || []).includes(service.id))
   const unassignedServices = servicosLinke.filter(service =>
     !(formData.assigned_linke_service_ids || []).includes(service.id))
+  const matchesTableFilter = (service: ServicoLinke) => serviceTableFilter === "all" ||
+    (serviceTableFilter === "base" ? isPrimordialServico(service) : !isPrimordialServico(service))
+  const filteredAssignedServices = assignedServices.filter(matchesTableFilter)
+  const unassignedServiceGroups = [
+    { id: "base", label: "Adicionar serviços · Tabelas primordiais", services: unassignedServices.filter(isPrimordialServico) },
+    { id: "custom", label: "Adicionar serviços · Tabelas personalizadas", services: unassignedServices.filter(service => !isPrimordialServico(service)) },
+  ]
+  const updateServiceAuthorization = (service: ServicoLinke, authorize: boolean) => {
+    if (!authorize && !confirm(`Remover a autorização de «${service.name}» para este cliente? O cliente deixará de poder criar envios com este serviço após gravar. A tabela e os preços personalizados serão mantidos.`)) return
+    setFormData(prev => ({
+      ...prev,
+      assigned_linke_service_ids: authorize
+        ? [...new Set([...(prev.assigned_linke_service_ids || []), service.id])]
+        : (prev.assigned_linke_service_ids || []).filter(id => id !== service.id),
+      default_linke_table_id: !authorize && prev.default_linke_table_id === service.id ? "" : prev.default_linke_table_id,
+    }))
+    if (!authorize && expandedPriceServico === service.id) setExpandedPriceServico(null)
+  }
   const visibleAssignedTablesCount = assignedServices.length
   const activeSpecialFeesCount = specialFeesList.filter((fee) => fee.is_enabled).length
 
@@ -435,37 +455,23 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
             : "bg-[var(--surface-bg)] border-[var(--border-subtle)] opacity-60 hover:opacity-100"
         }`}
       >
-        <div
-          onClick={() => {
-            const current = formData.assigned_linke_service_ids || []
-            const next = isAssigned
-              ? current.filter((id) => id !== servico.id)
-              : [...current, servico.id]
-            setFormData({ ...formData, assigned_linke_service_ids: next,
-              default_linke_table_id: isAssigned && formData.default_linke_table_id === servico.id
-                ? "" : formData.default_linke_table_id })
-          }}
-          className="p-3.5 flex items-start justify-between gap-3 cursor-pointer select-none"
-        >
-          <div className="flex items-start gap-3">
-            <input
-              type="checkbox"
-              checked={isAssigned}
-              aria-label={`Autorizar ${servico.name}`}
-              onChange={() => {}} // Handled by div onClick
-              className="mt-1 w-4 h-4 rounded border-[var(--border-strong)] accent-[var(--accent)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
-            />
+        <div className="p-3 flex flex-col gap-2">
+          <div className="flex w-full min-w-0 items-start gap-2">
+            {isAssigned && <CheckCircle2 aria-label="Serviço autorizado" className="mt-1 h-4 w-4 shrink-0 text-[var(--accent)]" />}
 
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
                 {carrierLogo ? (
                   <div className="w-6 h-6 rounded bg-[var(--surface-bg)] border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={carrierLogo} alt={servico.preferred_carrier_name} className="max-w-full max-h-full object-contain" />
                   </div>
                 ) : null}
-                <span className="font-bold text-xs text-[var(--text-primary)]">{servico.name}</span>
+                <span className="font-bold text-xs leading-snug text-[var(--text-primary)]">{servico.name}</span>
                 <CttServiceBadge service={servico} />
+                <span className="rounded border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-secondary)]">
+                  {isPrimordialServico(servico) ? "Tabela mãe · Primordial" : "Tabela personalizada"}
+                </span>
                 {servico.is_active === false && <span className="text-[10px] font-medium text-[var(--text-secondary)]">Inativo no catálogo</span>}
                 {zonesList.length > 1 && (
                   <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)]">
@@ -475,13 +481,13 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                 {hasCustomPrices && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                     <Edit3 className="w-2.5 h-2.5" />
-                    Preços Custom
+                    Preços ajustados neste cliente
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[10px] font-mono text-[var(--text-tertiary)]">{servico.code}</span>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                <span className="whitespace-nowrap text-[10px] font-mono text-[var(--text-tertiary)]">{servico.code}</span>
                 <span className="text-[10px] font-semibold text-[var(--accent)] bg-[var(--accent-soft)] px-1.5 py-0.2 rounded border border-[var(--accent)]/20">
                   {servico.pricing_profile}
                 </span>
@@ -489,7 +495,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
               </div>
 
               {tier1 && !isExpanded && (
-                <div className="mt-2 text-[11px] text-[var(--text-secondary)] flex items-center gap-2 font-mono flex-wrap">
+                <div className="mt-1.5 text-[11px] text-[var(--text-secondary)] flex items-center gap-2 font-mono flex-wrap">
                   {zonesList.length > 1 ? (
                     <>
                       {zonesList.slice(0, 3).map((z, zIdx) => {
@@ -548,7 +554,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
             </div>
           </div>
 
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <div className="flex w-full flex-wrap items-center gap-2 border-t border-[var(--border-subtle)] pt-2" onClick={(e) => e.stopPropagation()}>
             {isAssigned && zonesList.some((z) => (z.tiers?.length || 0) > 0) && (
               <button
                 type="button"
@@ -570,6 +576,13 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
               </button>
             )}
 
+            <button type="button" onClick={() => updateServiceAuthorization(servico, !isAssigned)}
+              aria-label={`${isAssigned ? "Remover autorização de" : "Autorizar"} ${servico.name}`}
+              className={`rounded-md border px-2.5 py-1.5 text-[11px] font-semibold ${isAssigned
+                ? "border-[var(--border-subtle)] text-[var(--text-secondary)] hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+                : "border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[var(--accent-soft)]/70"}`}>
+              {isAssigned ? "Remover autorização" : "Autorizar"}
+            </button>
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
               isAssigned ? "bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/30" : "bg-[var(--surface-muted)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]"
             }`}>
@@ -1600,16 +1613,34 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                         )}
                         <button
                           type="button"
-                          onClick={() => setFormData({ ...formData, assigned_linke_service_ids: [], default_linke_table_id: "" })}
+                          disabled={assignedServices.length === 0}
+                          onClick={() => {
+                            if (!confirm(`Remover a autorização de TODOS os ${assignedServices.length} serviços deste cliente, incluindo os ocultos pelo filtro? Após gravar, o cliente não poderá criar envios até voltar a autorizar um serviço. As tabelas e os preços serão mantidos.`)) return
+                            setFormData(prev => ({ ...prev, assigned_linke_service_ids: [], default_linke_table_id: "" }))
+                            setExpandedPriceServico(null)
+                          }}
                           className="px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded-md transition-colors cursor-pointer"
                         >
-                          Desmarcar Todos
+                          Remover todas as autorizações
                         </button>
                       </div>
                     </div>
 
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {assignedServices.map(renderServiceAuthorization)}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-3">
+                      <label className="flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
+                        Tipo de tabela
+                        <select value={serviceTableFilter} onChange={e => setServiceTableFilter(e.target.value as "all" | "base" | "custom")}
+                          className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs text-[var(--text-primary)]">
+                          <option value="all">Todas as tabelas</option>
+                          <option value="base">Tabelas mãe (primordiais)</option>
+                          <option value="custom">Tabelas personalizadas</option>
+                        </select>
+                      </label>
+                      <span className="text-[11px] text-[var(--text-secondary)]">{filteredAssignedServices.length} de {assignedServices.length} autorizadas</span>
+                    </div>
+                    <div className="p-3 grid grid-cols-1 md:grid-cols-2 items-start gap-3">
+                      {filteredAssignedServices.map(renderServiceAuthorization)}
+                      {assignedServices.length > 0 && filteredAssignedServices.length === 0 && <p className="col-span-full p-4 text-center text-xs text-[var(--text-secondary)]">Não há serviços autorizados deste tipo. Escolha outro filtro.</p>}
                       {assignedServices.length === 0 && servicosLinke.length > 0 && (
                         <p className="col-span-full rounded-lg border border-dashed border-[var(--border-subtle)] p-5 text-center text-xs text-[var(--text-secondary)]">
                           Este cliente ainda não tem serviços autorizados. Abra «Adicionar serviços» para escolher.
@@ -1622,24 +1653,27 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                         </div>
                       )}
                     </div>
-                    {unassignedServices.length > 0 && (
-                      <details className="group border-t border-[var(--border-subtle)]">
+                    {unassignedServiceGroups.map(group => (
+                      <details key={group.id} className="group border-t border-[var(--border-subtle)]">
                         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] [&::-webkit-details-marker]:hidden">
-                          <span className="flex items-center gap-2"><Plus className="h-3.5 w-3.5" />Adicionar serviços <span className="font-normal text-[var(--text-tertiary)]">({unassignedServices.length} não autorizados)</span></span>
+                          <span className="flex flex-wrap items-center gap-2"><Plus className="h-3.5 w-3.5" />{group.label} <span className="font-normal text-[var(--text-tertiary)]">({group.services.length} não autorizados)</span></span>
                           <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
                         </summary>
                         <div className="px-4 pb-4">
                           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)]">
                             <p>Selecione um serviço para o autorizar. As alterações são aplicadas ao guardar a ficha.</p>
-                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, assigned_linke_service_ids: servicosLinke.map(s => s.id) }))}
+                            {group.services.length > 0 && <button type="button"
+                              aria-label={group.id === "base" ? "Autorizar todas as tabelas primordiais apresentadas" : "Autorizar todas as tabelas personalizadas apresentadas"}
+                              onClick={() => setFormData(prev => ({ ...prev, assigned_linke_service_ids: [...new Set([...(prev.assigned_linke_service_ids || []), ...group.services.map(s => s.id)])] }))}
                               className="rounded-md border border-[var(--border-subtle)] px-2.5 py-1.5 font-semibold text-[var(--accent)] hover:bg-[var(--surface-muted)]">
-                              Autorizar todos
-                            </button>
+                              Autorizar apresentados
+                            </button>}
                           </div>
-                          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{unassignedServices.map(renderServiceAuthorization)}</div>
+                          {group.services.length === 0 && <p className="py-3 text-xs text-[var(--text-secondary)]">Não há serviços deste tipo por autorizar.</p>}
+                          <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">{group.services.map(renderServiceAuthorization)}</div>
                         </div>
                       </details>
-                    )}
+                    ))}
                   </div>
                 </div>
               )}

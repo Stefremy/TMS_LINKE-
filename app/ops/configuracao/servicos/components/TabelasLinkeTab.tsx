@@ -89,6 +89,8 @@ export function TabelasLinkeTab({
     .filter(s => sectionFilter === "all" || (sectionFilter === "og" ? isPrimordialServico(s) : !isPrimordialServico(s)))
     .sort((a, b) => getCarrierRank(a) - getCarrierRank(b))
   const currentServico = visibleServicos.find((s) => s.id === activeServicoId) || visibleServicos[0]
+  const servicePrefix = currentServico ? getCttServiceIdentity(currentServico)?.prefix : undefined
+  const islandTransportLabel = servicePrefix === "DD" ? "Via aérea" : servicePrefix === "DB" ? "Via marítima (barco)" : null
   const isCurrentBase = currentServico ? isPrimordialServico(currentServico) : false
   const isCurrentLocked = isCurrentBase && !canManageBaseTables
   const [quickMarkupInput, setQuickMarkupInput] = React.useState<number>(currentServico?.global_markup_pct ?? 22)
@@ -277,6 +279,8 @@ export function TabelasLinkeTab({
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {currentServico.description || "Tabela de preços de expedição."}
+                        {servicePrefix === "DD" && !/notifica[çc][õo]es de acompanhamento CTT/i.test(currentServico.description || "") && " Inclui notificações de acompanhamento CTT por SMS (para telemóveis portugueses) ou e-mail, para destinos Portugal e Espanha. Preencha o telemóvel ou e-mail do destinatário."}
+                        {servicePrefix === "DB" && !/via mar[ií]tima/i.test(currentServico.description || "") && " Transporte para as ilhas por via marítima (barco)."}
                       </p>
                     </div>
                   </div>
@@ -528,7 +532,7 @@ export function TabelasLinkeTab({
                   return (
                     <div key={zone.zone_code || (zone as any).id || idx} className="space-y-2.5">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                           <h3 className="font-semibold text-xs text-slate-800">
                             {zone.zone_name || (zone as any).name}
@@ -536,6 +540,11 @@ export function TabelasLinkeTab({
                           <span className="text-[11px] font-mono text-slate-400">
                             ({zone.zone_code || "N/A"})
                           </span>
+                          {islandTransportLabel && ["PT-ILHAS", "PT-ACORES", "PT-MADEIRA"].includes(zone.zone_code) && (
+                            <span className="rounded border border-[#d8e6db] bg-[#f3f8f4] px-2 py-0.5 text-[11px] font-medium text-[#3e5845]">
+                              {islandTransportLabel}
+                            </span>
+                          )}
                         </div>
                         
                         <div className="flex items-center gap-2 text-[11px] text-slate-500 flex-wrap">

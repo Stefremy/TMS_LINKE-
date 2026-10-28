@@ -90,6 +90,7 @@ export default function ContasCorrenteClient({
   const [emailRecipient, setEmailRecipient] = React.useState<string>("")
   const [emailIncludeMoloni, setEmailIncludeMoloni] = React.useState<boolean>(true)
   const [emailIncludeStatement, setEmailIncludeStatement] = React.useState<boolean>(true)
+  const invoiceEmailInFlight = React.useRef(false)
   const [isSendingEmail, setIsSendingEmail] = React.useState<boolean>(false)
   const [emailFeedback, setEmailFeedback] = React.useState<{ type: "success" | "error"; message: string } | null>(null)
 
@@ -103,13 +104,26 @@ export default function ContasCorrenteClient({
     setEmailFeedback(null)
   }
 
+  const renderResendInvoiceButton = (stmt: (typeof statements)[number]) => !stmt.is_pro_forma &&
+    (stmt.moloni_document_pdf || stmt.moloni_document_id) ? (
+      <button type="button"
+        aria-label={`Reenviar fatura ${stmt.moloni_document_number || stmt.statement_number || stmt.id} por e-mail`}
+        title="Reenviar fatura por e-mail"
+        onClick={event => { event.stopPropagation(); handleOpenEmailModal(stmt) }}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]">
+        <Mail aria-hidden="true" strokeWidth={1.75} className="h-4 w-4" />
+        Reenviar e-mail
+      </button>
+    ) : null
+
   const handleSendInvoiceEmail = async () => {
-    if (!emailModalStmt) return
+    if (!emailModalStmt || invoiceEmailInFlight.current) return
     if (!emailRecipient || !emailRecipient.includes("@")) {
       setEmailFeedback({ type: "error", message: "Por favor introduza um endereço de email válido." })
       return
     }
 
+    invoiceEmailInFlight.current = true
     setIsSendingEmail(true)
     setEmailFeedback(null)
 
@@ -134,6 +148,7 @@ export default function ContasCorrenteClient({
     } catch (err: any) {
       setEmailFeedback({ type: "error", message: err.message || "Erro inesperado ao enviar email." })
     } finally {
+      invoiceEmailInFlight.current = false
       setIsSendingEmail(false)
     }
   }
@@ -683,6 +698,7 @@ export default function ContasCorrenteClient({
                                 <span className="text-xs font-black text-[var(--text-primary)] font-mono">
                                   {Number(stmt.outstanding_value ?? stmt.total_value ?? 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                                 </span>
+                                {renderResendInvoiceButton(stmt)}
                                 {stmt.moloni_document_id && !stmt.is_pro_forma && !stmt.moloni_receipt_pdf && !stmt.moloni_receipt_id && stmt.status !== 'paid' && (
                                   <CreditNoteButton
                                     source={{id: stmt.audit_id || stmt.id, kind: 'billing_statement'}}
@@ -870,6 +886,7 @@ export default function ContasCorrenteClient({
                                 {Number(stmt.total_value || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
                               </span>
 
+                              {renderResendInvoiceButton(stmt)}
                               {/* Actions Dropdown */}
                               <div className="relative">
                                 <button
