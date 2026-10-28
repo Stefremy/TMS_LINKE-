@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { getFornecedoresAction, saveFornecedorAction } from "@/app/actions/fornecedores"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
+import { getServiceVolumetricRule } from "@/lib/pricing/chargeable-weight"
 import {
   PRIMORDIAL_SERVICE_CODES,
   canManagePrimordialServices,
@@ -698,6 +699,7 @@ function normalizeLoadedServico(s: any): any {
   return {
     ...s,
     is_primordial: isPrimordialServico(s),
+    volumetric_rule: getServiceVolumetricRule(s),
     ...(carrierGroup ? { carrier_group: carrierGroup } : {}),
     ...(normalizedAllowed !== undefined ? { allowed_zones: normalizedAllowed } : {}),
     ...(Array.isArray(s.zones) ? { zones: normalizedZones } : {}),

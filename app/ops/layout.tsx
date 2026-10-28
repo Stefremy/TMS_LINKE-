@@ -41,7 +41,7 @@ export default async function OpsLayout({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar / Header (Desktop only - Mobile has dedicated topbar in OpsSidebar) */}
-        <header className="tms-desktop-only h-[56px] items-center justify-between px-6 shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+        <header className="tms-ops-topbar tms-desktop-only h-[56px] items-center justify-between px-6 shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)]">
           <div className="flex items-center gap-3">
             <TrackingQuickBar />
           </div>

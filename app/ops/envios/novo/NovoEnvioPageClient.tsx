@@ -17,6 +17,7 @@ import { assertShipmentDestinationAvailable } from "@/lib/services/shipment-dest
 import { focusCttCustomsFields } from "@/lib/ctt-customs-form"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
 import { getCttRecipientContactError, hasCttRecipientMobilePhone } from "@/lib/services/ctt/recipient-contact"
+import { ShipmentVolumetricSummary } from "@/components/shipments/ShipmentVolumetricSummary"
 import { CttExportFields } from "@/components/shipments/CttExportFields"
 import { getServiceDisplayLabel } from "@/lib/services/ctt/service-identity"
 import { downloadCttLabel, printCttLabel } from "@/lib/label-utils"
@@ -62,6 +63,10 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   const [selectedClientId, setSelectedClientId] = React.useState(displayClients[0]?.id || "")
   const [selectedServiceId, setSelectedServiceId] = React.useState("")
   const [weightKg, setWeightKg] = React.useState<number>(1)
+  const [parcelLengthCm, setParcelLengthCm] = React.useState("")
+  const [parcelWidthCm, setParcelWidthCm] = React.useState("")
+  const [parcelHeightCm, setParcelHeightCm] = React.useState("")
+  const [parcelVolumes, setParcelVolumes] = React.useState("1")
   const [recipientCountry, setRecipientCountry] = React.useState("PT")
   const [selectedSpecialServices, setSelectedSpecialServices] = React.useState<string[]>([])
   const [codValue, setCodValue] = React.useState<number>(0)
@@ -193,13 +198,14 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       if (!destinationCountries.some(country => country.code === recipientCountry)) throw new Error("Selecione um país disponível para este serviço.")
       assertShipmentDestinationAvailable(recipientCountry, recipientZip)
       const quote = calculateShipmentQuote(weightKg, currentClient, activeLinkeService,
-        recipientCountry, recipientZip, activeSpecialServices, codValue)
-      return { label: quote.tierLabel, sell: quote.totalPrice, buy: quote.buyPrice, error: null }
+        recipientCountry, recipientZip, activeSpecialServices, codValue,
+        [parcelLengthCm, parcelWidthCm, parcelHeightCm].every(value => Number(value) >= 0.1) ? { lengthCm: Number(parcelLengthCm), widthCm: Number(parcelWidthCm), heightCm: Number(parcelHeightCm), volumesCount: Number(parcelVolumes) } : undefined)
+      return { label: quote.tierLabel, sell: quote.totalPrice, buy: quote.buyPrice, billableWeightKg: quote.billableWeightKg, volumetricWeightKg: quote.volumetricWeightKg, volumetricDivisor: quote.volumetricDivisor, error: null }
     } catch (error) {
-      return { label: "Preço indisponível", sell: 0, buy: 0,
+      return { label: "Preço indisponível", sell: 0, buy: 0, billableWeightKg: null, volumetricWeightKg: null, volumetricDivisor: null,
         error: error instanceof Error ? error.message : "Não foi possível calcular a tarifa." }
     }
-  }, [weightKg, currentClient, activeLinkeService, destinationCountries, recipientCountry, recipientZip, activeSpecialServices, codValue])
+  }, [weightKg, currentClient, activeLinkeService, destinationCountries, recipientCountry, recipientZip, activeSpecialServices, codValue, parcelLengthCm, parcelWidthCm, parcelHeightCm, parcelVolumes])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -320,6 +326,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       // Reset the form so they can type a new shipment immediately
       formRef.current?.reset()
       setWeightKg(1)
+      setParcelLengthCm(""); setParcelWidthCm(""); setParcelHeightCm(""); setParcelVolumes("1")
       
     } catch (err: any) {
       setErrorMsg(err.message || "Erro ao criar envio.")
@@ -550,7 +557,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       type="number"
                       name="volumes"
                       min="1"
-                      defaultValue={1}
+                      value={parcelVolumes}
+                      onChange={event => setParcelVolumes(event.target.value)}
                       className="w-full px-3 py-2 border border-[var(--border-strong)] rounded-md text-[11px] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)] font-mono transition-colors shadow-2xs"
                     />
                   </div>
@@ -561,6 +569,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       required
                       type="number"
                       name="length_cm"
+                      value={parcelLengthCm}
+                      onChange={event => setParcelLengthCm(event.target.value)}
                       min="0.1"
                       step="any"
                       placeholder="Ex.: 30"
@@ -574,6 +584,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       required
                       type="number"
                       name="width_cm"
+                      value={parcelWidthCm}
+                      onChange={event => setParcelWidthCm(event.target.value)}
                       min="0.1"
                       step="any"
                       placeholder="Ex.: 20"
@@ -587,6 +599,8 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                       required
                       type="number"
                       name="height_cm"
+                      value={parcelHeightCm}
+                      onChange={event => setParcelHeightCm(event.target.value)}
                       min="0.1"
                       step="any"
                       placeholder="Ex.: 10"
@@ -596,7 +610,9 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 </div>
               </div>
 
-              {isCorreos && <p className="text-xs text-[var(--text-secondary)]">As medidas indicadas aplicam-se a cada volume. Para volumes de tamanhos diferentes, crie envios separados.</p>}
+              <ShipmentVolumetricSummary service={activeLinkeService} country={recipientCountry} postal={recipientZip}
+                weightKg={weightKg} lengthCm={Number(parcelLengthCm)} widthCm={Number(parcelWidthCm)} heightCm={Number(parcelHeightCm)} volumesCount={Number(parcelVolumes)} />
+              {(isCorreos || Number(parcelVolumes) > 1) && <p className="text-xs text-[var(--text-secondary)]">As medidas indicadas aplicam-se a cada volume. Para volumes de tamanhos diferentes, crie envios separados.</p>}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Remetente */}

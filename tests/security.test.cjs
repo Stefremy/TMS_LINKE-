@@ -224,9 +224,39 @@ test('CE Finland shipments reach the carrier and preserve the validated road tar
       assert.equal(saved.weight_pricing_basis.service.zones[0].zone_code,'Zona 3')
       assert.equal(saved.weight_pricing_basis.service.webservice_service_code,'ENCF008.02')
       assert.equal(saved.weight_pricing_basis.service.webservice_connection_id,undefined)
-      assert.equal(result.sellPrice,17.92)
+      assert.equal(result.sellPrice,19.81)
+      assert.equal(saved.weight_kg,1)
+      assert.equal(saved.billing_weight_kg,1.22)
+      assert.equal(saved.volumetric_divisor,5000)
+      assert.equal(h.providerCalls[0].payload.weightKg,1)
     }
   }
+})
+
+test('volumetric tariffs are calculated server-side while the carrier receives the actual weight',async()=>{
+ for(const [product,country,postal,zone,divisor,expectedTier] of [
+  ['EMSF056.01','PT','9000-001','PT-ILHAS',6000,15],
+  ['EMSF057.01','PT','9500-001','PT-ILHAS',3000,30],
+  ['EMSF001.02','FR','75001','EU 1',5000,20],
+  ['ENCF008.02','FR','75001','Zona 2',5000,20],
+ ]){
+  const h=shipmentHarness({adjust:t=>{
+   const s=t.servicos_linke[0];s.webservice_service_code=product;s.allowed_zones=[zone];s.fuel_surcharge_pct=10
+   s.zones=[{zone_code:zone,zone_name:zone,tiers:[10,15,20,30].map(kg=>({id:String(kg),label:`Até ${kg} kg`,weight_max:kg,sell_price:kg,cost_price:kg/2,enabled:true}))}]
+  }})
+  const result=await emit(h,{clientId:CLIENT,recipientCountry:country,recipientPostal:postal,recipientEmail:'recipient@example.invalid',weightKg:10,lengthCm:50,widthCm:40,heightCm:40,
+   cttExportDetails:{exportType:'Permanent',contentType:'Goods',declaredValue:25},billing_weight_kg:0.01,volumetric_divisor:999999})
+  assert.equal(result.success,true,result.error)
+  assert.equal(result.sellPrice,expectedTier*1.1)
+  const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+  assert.equal(saved.weight_kg,10)
+  assert.equal(saved.billing_weight_kg,80000/divisor)
+  assert.equal(saved.volumetric_divisor,divisor)
+  assert.equal(saved.weight_pricing_basis.volumetricDivisor,divisor)
+  assert.equal(saved.base_price,expectedTier)
+  assert.equal(h.providerCalls[0].payload.weightKg,10)
+  assert.deepEqual(h.providerCalls[0].payload.dimensionsCm,{length:50,width:40,height:40})
+ }
 })
 
 test('Correos client and OPS emissions preserve the chosen country and postal code',async()=>{
@@ -661,7 +691,7 @@ for (const carrier of ['CTT', 'Correos']) {
     const preview = fixtureQuote(h)
     assert.equal(preview.basePrice, 3)
     assert.equal(preview.buyPrice, 1)
-    const result = await emit(h)
+    const result = await emit(h, { lengthCm: 10, widthCm: 10, heightCm: 10 })
     assert.equal(result.success, true)
     assert.equal(result.sellPrice, 3.38)
     assert.equal(h.db.writes.find(w => w.table === 'shipments').value.sell_price, preview.totalPrice)

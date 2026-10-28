@@ -19,7 +19,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Trash2,
-  Lock
+  Lock,
+  Maximize2,
+  Minimize2
 } from "lucide-react"
 import { RefreshIcon } from "@/components/ui/refresh-icon"
 
@@ -73,6 +75,15 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
   const [searchQuery, setSearchQuery] = React.useState(initialSearch || "")
   const [statusFilter, setStatusFilter] = React.useState(initialStatus || "Todos")
   const [showFilters, setShowFilters] = React.useState(false)
+  const [isExpanded, setIsExpanded] = React.useState(false)
+  React.useEffect(() => {
+    if (!isExpanded) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsExpanded(false)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [isExpanded])
   const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
   const [showRecolhaModal, setShowRecolhaModal] = React.useState(false)
   const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
@@ -203,7 +214,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
   })
 
   return (
-    <div className="tms-shipment-workspace mx-auto flex w-full max-w-[1600px] flex-col gap-4 bg-transparent [--accent:#526B57] [--accent-hover:#435A48] [--accent-active:#3A4F3F] [--accent-soft:#E9EEE8] [--status-success:#526B57] [--status-success-soft:#E9EEE8] [--status-warning:#846C43] [--status-warning-soft:#F2EEE5] [--status-critical:#9A625D] [--status-critical-soft:#F2E8E6] [--status-info:#596F7C] [--status-info-soft:#EBF0F2]">
+    <div data-expanded={isExpanded} className="tms-shipment-workspace mx-auto flex w-full min-w-0 flex-col gap-3 bg-transparent [--accent:#526B57] [--accent-hover:#435A48] [--accent-active:#3A4F3F] [--accent-soft:#E9EEE8] [--status-success:#526B57] [--status-success-soft:#E9EEE8] [--status-warning:#846C43] [--status-warning-soft:#F2EEE5] [--status-critical:#9A625D] [--status-critical-soft:#F2E8E6] [--status-info:#596F7C] [--status-info-soft:#EBF0F2]">
       
       {/* Header Area */}
       <div className="flex flex-wrap items-end justify-between gap-3 shrink-0">
@@ -215,6 +226,16 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             {viewMode === "envios" ? `${pagination?.total ?? envios.length} envios registados` : `${recolhas.length} pedidos de recolha`}
           </p>
         </div>
+        <button
+          type="button"
+          aria-pressed={isExpanded}
+          onClick={() => setIsExpanded(expanded => !expanded)}
+          title={isExpanded ? "Restaurar vista (Esc)" : "Expandir lista de envios"}
+          className="tms-desktop-only items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-muted)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+        >
+          {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          {isExpanded ? "Restaurar vista" : "Expandir vista"}
+        </button>
       </div>
 
       {/* Toolbar Area */}
@@ -782,7 +803,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
       </div>
       
       {pagination && viewMode === "envios" && (
-        <div className="rounded-xl border border-[var(--border-subtle)] px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 bg-[var(--surface-bg)]">
+        <div className="rounded-xl border border-[var(--border-subtle)] px-4 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 bg-[var(--surface-bg)]">
           <span className="text-[11px] text-[var(--text-secondary)] font-medium">
             A mostrar {envios.length} de {pagination.total} envios (Página {pagination.page} de {pagination.totalPages})
           </span>

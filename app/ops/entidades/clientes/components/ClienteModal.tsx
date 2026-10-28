@@ -65,6 +65,7 @@ interface ClienteModalProps {
   initialData?: Cliente | null
   servicosLinke?: ServicoLinke[]
   canManageAccess?: boolean
+  canSendAccessEmail?: boolean
   defaultPaymentDays?: number
   onManageAccess?: () => void
   onClose: () => void
@@ -74,7 +75,7 @@ interface ClienteModalProps {
 type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario" | "acesso"
 type PrecarioSubTab = "servicos_linke" | "suplementares" | "geral"
 
-export function ClienteModal({ initialData, servicosLinke = [], canManageAccess = false, defaultPaymentDays = 30, onManageAccess, onClose, onSaved }: ClienteModalProps) {
+export function ClienteModal({ initialData, servicosLinke = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, onManageAccess, onClose, onSaved }: ClienteModalProps) {
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
@@ -877,7 +878,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
             { id: "contactos", label: "Contactos", icon: Phone },
             { id: "comercial", label: "Condições & Crédito", icon: Euro },
             { id: "precario", label: "Preços & Serviços", icon: Percent, badge: `${visibleAssignedTablesCount} serviços` },
-            ...(canManageAccess ? [{ id: "acesso", label: "Acesso à Área do Cliente", icon: ShieldCheck }] : []),
+            ...((canManageAccess || canSendAccessEmail) ? [{ id: "acesso", label: "Acesso à Área do Cliente", icon: ShieldCheck }] : []),
           ].map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -914,7 +915,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
           {/* TAB 1: IDENTIDADE & GERAL */}
           {activeTab === "geral" && (
             <div className="space-y-5 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
-              {!initialData && canManageAccess && <div className="rounded-lg border border-[#C9D7CD] bg-[#F4F7F4] p-4">
+              {!initialData && canSendAccessEmail && <div className="rounded-lg border border-[#C9D7CD] bg-[#F4F7F4] p-4">
                 <label className="flex items-center gap-2 text-sm font-semibold text-[#244C35]">
                   <input type="checkbox" checked={sendInvitation} disabled={isSaving} onChange={e => {
                     setSendInvitation(e.target.checked)
@@ -1822,12 +1823,12 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
           )}
 
           {/* TAB 6: ACESSO À ÁREA DO CLIENTE */}
-          {activeTab === "acesso" && canManageAccess && (
+          {activeTab === "acesso" && (canManageAccess || canSendAccessEmail) && (
             <div className="space-y-6 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
               <div>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">Acesso à Área do Cliente</h3>
                 <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                  Faça a gestão das credenciais de acesso, suspensão de novos envios e bloqueio total ao portal do cliente sem alterar os dados comerciais.
+                  {canManageAccess ? "Faça a gestão das credenciais de acesso, suspensão de novos envios e bloqueio total ao portal do cliente sem alterar os dados comerciais." : "Envie um link para o email registado na ficha do cliente definir a própria palavra-passe."}
                 </p>
               </div>
 
@@ -1855,7 +1856,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                   )}
 
                   {/* Controlos de Bloqueio e Suspensão */}
-                  <ClientPortalAccessControl key={initialData.id} clientId={initialData.id} disabled={isSaving} />
+                  {canManageAccess && <ClientPortalAccessControl key={initialData.id} clientId={initialData.id} disabled={isSaving} />}
                 </div>
               ) : (
                 <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)]/50 p-5 space-y-4">

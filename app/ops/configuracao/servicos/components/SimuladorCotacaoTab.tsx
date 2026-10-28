@@ -4,6 +4,8 @@ import * as React from "react"
 import { Calculator, Package, ShieldCheck } from "lucide-react"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { findSimulationZone, getSimulationZoneName } from "@/lib/pricing/simulation-zone"
+import { calculateChargeableWeightForZone } from "@/lib/pricing/chargeable-weight"
+import { calculateConfiguredZonePrice } from "@/lib/pricing/calculate-shipment-price"
 import type { ServicoLinke, CotacaoSimulacaoResult } from "../types"
 
 interface SimuladorCotacaoTabProps {
@@ -20,16 +22,15 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
   const [isCod, setIsCod] = React.useState<boolean>(false)
   const [codValue, setCodValue] = React.useState<number>(50.00)
 
-  // Volumetric weight (standard 167 coefficient: L*W*H / 6000 or m3 * 167)
   const volumeM3 = (lengthCm * widthCm * heightCm) / 1000000
-  const volumetricWeightKg = Number((volumeM3 * 167).toFixed(2))
-  const chargeableWeight = Math.max(weightKg, volumetricWeightKg)
 
   // Zones available (inclui as 8 zonas oficiais do contrato Linke)
   const availableZones = [
     { code: "PT-CONT", name: "Portugal Continental" },
     { code: "ES-PENIN", name: "Espanha Peninsular" },
     { code: "PT-ILHAS", name: "Açores & Madeira (Ilhas)" },
+    { code: "Zona 2", name: "CE — Zona 2" },
+    { code: "Zona 3", name: "CE — Zona 3" },
     { code: "EU 1", name: "Europa 1 (DE, FR, GB, IT, ES, NL...)" },
     { code: "EU 2", name: "Europa 2 (PL, CZ, RO, HU, BG...)" },
     { code: "EU 3", name: "Europa 3 (CH, NO, FI, GR, AD...)" },
@@ -55,30 +56,14 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
 
         if (!zone || !Array.isArray(zone.tiers)) return
 
-        // Sort tiers by weight_max ascending
-        const sortedTiers = [...zone.tiers].sort((a, b) => a.weight_max - b.weight_max)
-        
-        let matchedTier = sortedTiers.find((t) => t.weight_max >= chargeableWeight)
-        let costPrice = 0
-        let sellPrice = 0
+        try {
+          const weight = calculateChargeableWeightForZone(weightKg, servico, selectedDestinationZone, { lengthCm, widthCm, heightCm })
+          const price = calculateConfiguredZonePrice(weight.billableWeightKg, servico, zone)
+          const costPrice = price.buyPrice
+          const sellPrice = price.basePrice
+          const fuelAmount = price.fuelSurchargeAmount
+          const matchedTier = zone.tiers.find(tier => tier.label === price.tierLabel)
 
-        if (matchedTier) {
-          costPrice = matchedTier.cost_price
-          sellPrice = matchedTier.sell_price
-        } else if (sortedTiers.length > 0) {
-          const maxBaseTier = sortedTiers[sortedTiers.length - 2] || sortedTiers[sortedTiers.length - 1]
-          const addTier = sortedTiers[sortedTiers.length - 1]
-          const extraKgs = Math.ceil(chargeableWeight - maxBaseTier.weight_max)
-          
-          costPrice = maxBaseTier.cost_price + (extraKgs * addTier.cost_price)
-          sellPrice = maxBaseTier.sell_price + (extraKgs * addTier.sell_price)
-          matchedTier = maxBaseTier
-        }
-
-        if (matchedTier) {
-          const fuelPct = servico.fuel_surcharge_pct || 0
-          const fuelAmount = Number((sellPrice * (fuelPct / 100)).toFixed(2))
-          
           let codAmount = 0
           if (isCod) {
             const codPctFee = (codValue * (servico.cod_fee_pct || 2.5)) / 100
@@ -97,8 +82,10 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
             carrierName: servico.preferred_carrier_name,
             carrierColor: servico.color || "#059669",
             zoneName: getSimulationZoneName(zone) || selectedDestinationZone,
-            weight: chargeableWeight,
-            transitTime: matchedTier.delivery_time || servico.transit_time_label,
+            weight: weight.billableWeightKg,
+            volumetricWeightKg: weight.volumetricWeightKg,
+            volumetricDivisor: weight.volumetricDivisor,
+            transitTime: matchedTier?.delivery_time || servico.transit_time_label,
             costPrice,
             sellPrice,
             marginAmount,
@@ -106,11 +93,14 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
             fuelAmount,
             finalSellPrice,
           })
+        } catch {
+          // Invalid/missing tiers or parcel data must never produce a fallback quote.
+          return
         }
       })
 
     return results.sort((a, b) => a.finalSellPrice - b.finalSellPrice)
-  }, [servicos, selectedDestinationZone, selectedClientProfile, chargeableWeight, isCod, codValue])
+  }, [servicos, selectedDestinationZone, selectedClientProfile, weightKg, lengthCm, widthCm, heightCm, isCod, codValue])
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -214,14 +204,7 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
               <span>Volume m³:</span>
               <span className="font-mono font-semibold">{volumeM3.toFixed(4)} m³</span>
             </div>
-            <div className="flex justify-between">
-              <span>Peso Volumétrico (1:167):</span>
-              <span className="font-mono font-semibold">{volumetricWeightKg} Kg</span>
-            </div>
-            <div className="flex justify-between font-bold text-slate-900 pt-1 border-t border-slate-200">
-              <span>Peso Taxável:</span>
-              <span className="font-mono text-emerald-800">{chargeableWeight} Kg</span>
-            </div>
+            <p>O divisor e o peso taxável são calculados por serviço e apresentados em cada cotação.</p>
           </div>
 
           {/* COD (Cobrança) */}
@@ -317,6 +300,11 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
                       </span>
                     </div>
                   </div>
+
+                  <p className="text-xs text-slate-600">
+                    Peso taxável: <strong>{q.weight.toLocaleString("pt-PT", { maximumFractionDigits: 3 })} kg</strong>
+                    {q.volumetricWeightKg != null && <> · Volumétrico: {q.volumetricWeightKg.toLocaleString("pt-PT", { maximumFractionDigits: 3 })} kg (divisor {q.volumetricDivisor})</>}
+                  </p>
 
                   {/* Pricing Comparison Columns */}
                   <div className="flex items-center gap-5 self-end sm:self-center">

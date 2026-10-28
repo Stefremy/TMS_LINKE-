@@ -9,10 +9,11 @@ interface ClientAuthModalProps {
   clientId: string
   clientName: string
   clientEmail?: string
+  allowManualPassword?: boolean
   onClose: () => void
 }
 
-export function ClientAuthModal({ clientId, clientName, clientEmail, onClose }: ClientAuthModalProps) {
+export function ClientAuthModal({ clientId, clientName, clientEmail, allowManualPassword = false, onClose }: ClientAuthModalProps) {
   const [email, setEmail] = React.useState(clientEmail || "")
   const [password, setPassword] = React.useState("")
   const [manualPassword, setManualPassword] = React.useState(false)
@@ -27,7 +28,7 @@ export function ClientAuthModal({ clientId, clientName, clientEmail, onClose }: 
     setSuccess("")
 
     try {
-      const res = manualPassword
+      const res = allowManualPassword && manualPassword
         ? await setClientPasswordAction(clientId, email, password)
         : await inviteClientAccessAction(clientId, email)
       setSuccess(res.message)
@@ -91,6 +92,7 @@ export function ClientAuthModal({ clientId, clientName, clientEmail, onClose }: 
                 maxLength={254}
                 disabled={isLoading || !!success}
                 required
+                readOnly={!allowManualPassword}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
@@ -99,12 +101,12 @@ export function ClientAuthModal({ clientId, clientName, clientEmail, onClose }: 
               <p className="text-[11px] text-slate-500 mt-1">Para alterar a palavra-passe, indique o mesmo email que o cliente usa para entrar na loja.</p>
             </div>
 
-            <label className="flex items-center gap-2 text-xs text-slate-500">
+            {allowManualPassword && <label className="flex items-center gap-2 text-xs text-slate-500">
               <input type="checkbox" checked={manualPassword} disabled={isLoading || !!success} onChange={e => setManualPassword(e.target.checked)} />
               Definir palavra-passe manualmente
-            </label>
+            </label>}
 
-            {manualPassword && <div>
+            {allowManualPassword && manualPassword && <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">
                 Password
               </label>

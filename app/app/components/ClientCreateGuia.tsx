@@ -34,6 +34,7 @@ import { assertShipmentDestinationAvailable } from "@/lib/services/shipment-dest
 import { focusCttCustomsFields } from "@/lib/ctt-customs-form"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
 import { getCttRecipientContactError, hasCttRecipientMobilePhone } from "@/lib/services/ctt/recipient-contact"
+import { ShipmentVolumetricSummary } from "@/components/shipments/ShipmentVolumetricSummary"
 import { CttExportFields } from "@/components/shipments/CttExportFields"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
@@ -228,21 +229,22 @@ export function ClientCreateGuia() {
       if (!destinationCountries.some(country => country.code === recipientCountry)) throw new Error("Selecione um país disponível para este serviço.")
       assertShipmentDestinationAvailable(recipientCountry, recipientPostal)
       const quote = calculateClientShipmentPreview(Number(weight), currentClient, activeLinkeService,
-        recipientCountry, recipientPostal, activeSpecialServices, Number(codAmount))
+        recipientCountry, recipientPostal, activeSpecialServices, Number(codAmount),
+        [lengthCm, widthCm, heightCm].every(value => Number(value) >= 0.1) ? { lengthCm: Number(lengthCm), widthCm: Number(widthCm), heightCm: Number(heightCm), volumesCount: Number(volumesCount) } : undefined)
       return {
         base: quote.basePrice.toFixed(2), fuel: quote.fuelSurchargeAmount.toFixed(2),
         fuelPct: activeLinkeService.fuel_surcharge_pct ?? currentClient.pricing?.fuel_surcharge_pct ?? 12.5,
         specialTotal: quote.specialFeesAmount.toFixed(2), specialItems: quote.specialItems,
-        total: quote.totalPrice.toFixed(2), destinationZone, isBlocked: false, blockedReason: null,
+        total: quote.totalPrice.toFixed(2), billableWeightKg: quote.billableWeightKg, volumetricWeightKg: quote.volumetricWeightKg, volumetricDivisor: quote.volumetricDivisor, destinationZone, isBlocked: false, blockedReason: null,
       }
     } catch (error) {
       return {
         base: "0.00", fuel: "0.00", fuelPct: 0, specialTotal: "0.00", specialItems: [], total: "0.00",
-        destinationZone, isBlocked: true,
+        destinationZone, billableWeightKg: null, volumetricWeightKg: null, volumetricDivisor: null, isBlocked: true,
         blockedReason: error instanceof Error ? error.message : "Não foi possível calcular a tarifa.",
       }
     }
-  }, [currentClient, activeLinkeService, destinationCountries, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount])
+  }, [currentClient, activeLinkeService, destinationCountries, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount, lengthCm, widthCm, heightCm, volumesCount])
 
   const handleCreateShipment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -847,6 +849,7 @@ export function ClientCreateGuia() {
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-zinc-700">Peso Total (kg) *</label>
               <input
+                name="weight_kg"
                 type="number"
                 step="0.1"
                 min="0.1"
@@ -967,7 +970,10 @@ export function ClientCreateGuia() {
             </div>
           </div>
 
-          {isCorreosService && <p className="text-xs text-zinc-600">As medidas indicadas aplicam-se a cada volume. Para volumes de tamanhos diferentes, crie envios separados.</p>}
+          <ShipmentVolumetricSummary service={activeLinkeService} country={recipientCountry} postal={recipientPostal}
+            weightKg={Number(weight)} lengthCm={Number(lengthCm)} widthCm={Number(widthCm)} heightCm={Number(heightCm)} volumesCount={Number(volumesCount)} />
+
+          {(isCorreosService || Number(volumesCount) > 1) && <p className="text-xs text-zinc-600">As medidas indicadas aplicam-se a cada volume. Para volumes de tamanhos diferentes, crie envios separados.</p>}
 
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-zinc-700">Observações (opcional)</label>

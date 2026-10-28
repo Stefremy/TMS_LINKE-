@@ -7,7 +7,7 @@ const client = { id: 'store-a', short_name: 'Fixture A', legal_name: 'Fixture A'
 const service = { id: 'service-a', name: 'CTT Fixture', allowed_zones: ['PT-CONT'], is_active: true,
   zones: [{zone_code:'PT-CONT',tiers:[{weight_max:30,sell_price:8,cost_price:3,enabled:true}]}] }
 const destinations = createLoader({})('lib/services/service-destinations.ts')
-const flatten = node => Array.isArray(node) ? node.flatMap(flatten) :
+const flatten = node => node?.type?.name === 'ShipmentVolumetricSummary' ? flatten(node.type(node.props)) : Array.isArray(node) ? node.flatMap(flatten) :
   node && typeof node === 'object' ? [node, ...flatten(node.props?.children)] : []
 const textOf = node => Array.isArray(node) ? node.map(textOf).join('') :
   node && typeof node === 'object' ? textOf(node.props?.children) : String(node ?? '')
@@ -77,7 +77,7 @@ function hooks() {
     commit() { const current = [...effects.values()]; effects.clear(); current.forEach(callback => callback()) },
     dispose() { cleanup.forEach(callback => callback?.()) } }
 }
-function harness(t, portal, services = [service]) {
+function harness(t, portal, services = [service], realQuotes = false) {
   const h = hooks(), result = deferred(), calls = { create: 0, agenda: [], scroll: [], inputs: [], postalResets: 0 }
   const scopedClient = { ...client, assigned_linke_service_ids: services.map(s => s.id) }
   const previous = { window: global.window, document: global.document, FormData: global.FormData }
@@ -100,11 +100,12 @@ function harness(t, portal, services = [service]) {
     '@/app/actions/destinatarios': { getDestinatariosAction: async id => { calls.agenda.push(id); return [] } },
     '@/app/actions/ctt': {}, '@/lib/label-utils': {},
     '@/lib/pricing/calculate-shipment-price': { resolveZoneCode: () => 'PT-CONT', isZoneAllowedByService: () => true },
+    '@/lib/pricing/chargeable-weight': createLoader({})('lib/pricing/chargeable-weight.ts'),
     '@/lib/services/service-destinations': destinations,
-    '@/lib/pricing/calculate-shipment-quote': { isCorreosLinkeService: () => false, getClientSpecialFees: () => [], calculateShipmentQuote: () => ({
+    '@/lib/pricing/calculate-shipment-quote': realQuotes ? createLoader({})('lib/pricing/calculate-shipment-quote.ts') : { isCorreosLinkeService: () => false, getClientSpecialFees: () => [], calculateShipmentQuote: () => ({
       basePrice: 8, buyPrice: 3, fuelSurchargeAmount: 1, specialFeesAmount: 0, specialItems: [], totalPrice: 9, tierLabel: 'Fixture',
     }) },
-    '@/lib/pricing/calculate-client-shipment-preview': { calculateClientShipmentPreview: () => ({
+    '@/lib/pricing/calculate-client-shipment-preview': realQuotes ? createLoader({})('lib/pricing/calculate-client-shipment-preview.ts') : { calculateClientShipmentPreview: () => ({
       basePrice: 8, fuelSurchargeAmount: 1, specialFeesAmount: 0, specialItems: [], totalPrice: 9,
     }) },
     '@/app/ops/entidades/clientes/types': { SYSTEM_AVAILABLE_WEBSERVICES: [] },
@@ -140,6 +141,26 @@ function harness(t, portal, services = [service]) {
 }
 for (const portal of [true, false]) {
   const name = portal ? 'client portal' : 'OPS'
+  test(`${name}: changing island dimensions immediately moves to the maritime weight tier`,async t=>{
+    const maritime={...service,webservice_service_code:'EMSF057.01',preferred_carrier_name:'CTT Expresso',fuel_surcharge_pct:0,allowed_zones:['PT-ILHAS'],
+      zones:[{zone_code:'PT-ILHAS',zone_name:'Ilhas',tiers:[10,15,30,40].map(kg=>({id:String(kg),label:`Até ${kg} kg`,weight_max:kg,sell_price:kg,cost_price:kg/2,enabled:true}))}]}
+    const h=harness(t,portal,[maritime],true)
+    let nodes=await h.ready()
+    const change=(predicate,value)=>{nodes.find(predicate).props.onChange({target:{value}});nodes=h.render()}
+    change(n=>portal?n.props.id==='field-recipient-postal':n.props.name==='recipient_zip','9000-001')
+    change(n=>n.props.name==='weight_kg','10')
+    for(const [field,value] of [['length','50'],['width','40'],['height','40']]){
+      change(n=>n.props.id===(portal?`field-${field}-cm`:`ops-${field}-cm`),value)
+    }
+    assert.match(nodes.map(textOf).join(' '),/Peso usado na tarifa: 26,667 kg/)
+    assert.match(nodes.map(textOf).join(' '),/Divisor do serviço: 3000/)
+    const summary=nodes.findIndex(n=>n.props.role==='status'&&n.props.className?.includes('d8e6db'))
+    assert.ok(summary>nodes.findIndex(n=>n.props.id===(portal?'field-height-cm':'ops-height-cm')))
+    if(portal)assert.ok(summary<nodes.findIndex(n=>n.type==='label'&&textOf(n).includes('Observações')))
+    assert.equal(h.calls.create,0)
+    change(n=>n.props.id===(portal?'field-height-cm':'ops-height-cm'),'10')
+    assert.match(nodes.map(textOf).join(' '),/Peso usado na tarifa: 10 kg/)
+  })
   for(const [phone,email,allowed] of [
     ['32470123456','',true],['+32 470 123 456','',true],['+3222792211','recipient@example.invalid',true],
     ['+3222792211','',false],['','',false],

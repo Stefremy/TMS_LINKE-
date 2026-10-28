@@ -5,6 +5,8 @@ import type { CarrierReading } from '@/lib/services/tracking/carrier-measurement
 
 export type WeightPricingBasis = {
   version: 1; country: string; postal: string; service: ServicoLinke; client: Partial<Cliente>
+  volumetricWeightKg?: number
+  volumetricDivisor?: number
 }
 export type WeightAdjustmentResult = {
   status: 'disabled' | 'review_required' | 'unchanged' | 'adjusted' | 'locked' | 'unavailable'
@@ -12,11 +14,13 @@ export type WeightAdjustmentResult = {
 }
 
 /** Freeze only the selected tariff zone, overrides and fuel rate, never credentials or personal data. */
-export function captureWeightPricingBasis(client: Partial<Cliente>, service: ServicoLinke, country: string, postal: string): WeightPricingBasis {
+export function captureWeightPricingBasis(client: Partial<Cliente>, service: ServicoLinke, country: string, postal: string,
+  weight?: { volumetricWeightKg: number | null; volumetricDivisor: number | null }): WeightPricingBasis {
   const zone = findExactZone(service.zones, resolveServiceZoneCode(service, country, postal))
   if (!zone) throw new Error('Zona tarifária não encontrada.')
   const overrides = resolveZoneTierOverrides(client.custom_tier_overrides, service, zone.zone_code)
   return structuredClone({ version: 1, country, postal,
+    ...(weight?.volumetricWeightKg != null ? { volumetricWeightKg: weight.volumetricWeightKg, volumetricDivisor: weight.volumetricDivisor } : {}),
     service: { id: service.id, name: service.name, code: service.code, webservice_service_code: service.webservice_service_code,
       is_active: true, zones: [zone], allowed_zones: [zone.zone_code],
       fuel_surcharge_pct: service.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5 },
@@ -42,7 +46,12 @@ export function planWeightAdjustment(input: {
   basis: WeightPricingBasis; previousWeightKg: number; weightKg: number; sellPrice: unknown; buyPrice: unknown;
   basePrice: unknown; fuelAmount: unknown; specialAmount: unknown
 }) {
-  const { basis, previousWeightKg, weightKg } = input
+  const { basis } = input
+  if (!Number.isFinite(input.previousWeightKg) || input.previousWeightKg <= 0 || !Number.isFinite(input.weightKg) || input.weightKg <= 0) throw new Error('Peso anterior ou comunicado inválido.')
+  const floor = basis?.volumetricWeightKg ?? 0
+  if (!Number.isFinite(floor) || floor < 0) throw new Error('Peso volumétrico original inválido.')
+  const previousWeightKg = Math.max(input.previousWeightKg, floor)
+  const weightKg = Math.max(input.weightKg, floor)
   if (!basis || basis.version !== 1 || !basis.country || !basis.service || !Number.isFinite(previousWeightKg) || previousWeightKg <= 0 || !Number.isFinite(weightKg) || weightKg <= 0) throw new Error('Falta a base tarifária original para ajustar o envio.')
   const options = { requireConfiguredTariff: true }
   const before = calculateShipmentPrice(previousWeightKg, basis.client, [basis.service], basis.country, basis.postal, options)

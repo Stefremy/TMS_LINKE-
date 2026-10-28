@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { captureWeightPricingBasis, type WeightPricingBasis } from "@/lib/billing/carrier-weight-pricing"
 import { calculateShipmentPrice } from "@/lib/pricing/calculate-shipment-price"
+import { calculateChargeableWeight } from "@/lib/pricing/chargeable-weight"
 import { calculateShipmentSpecialFees, resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
 import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
 import { getAuthContext, requireUser, requireEmployee, requireClientAccess, getTenantId } from "@/lib/auth/context"
@@ -293,6 +294,7 @@ export async function emitClientGuiaAction(data: {
     let matchedClient: any = {}
     let carrierCode: "ctt" | "correos"
     let cttExportDetails: CttExportDetails | undefined
+    let pricingWeight: ReturnType<typeof calculateChargeableWeight>
     try {
       validateShipmentPricingInput(data)
       const pricing = await loadShipmentPricingContext(supabase, ctx, finalClientId, data)
@@ -315,8 +317,9 @@ export async function emitClientGuiaAction(data: {
         })
         if (contactError) throw new ShipmentPricingError(contactError)
       }
+      pricingWeight = calculateChargeableWeight(data.weightKg, chosenService, recipientCountry, recipientPostal, data)
       const priceResult = calculateShipmentPrice(
-        data.weightKg,
+        pricingWeight.billableWeightKg,
         { ...matchedClient, default_linke_table_id: chosenService.id },
         [chosenService],
         recipientCountry,
@@ -328,7 +331,7 @@ export async function emitClientGuiaAction(data: {
       data = { ...data, recipientCountry, recipientPostal, serviceName: chosenService.name, subProductId: chosenService.webservice_service_code,
         webserviceConnectionId: chosenService.webservice_connection_id }
 
-      weightPricingBasis = captureWeightPricingBasis(matchedClient, chosenService, recipientCountry, recipientPostal)
+      weightPricingBasis = captureWeightPricingBasis(matchedClient, chosenService, recipientCountry, recipientPostal, pricingWeight)
       computedSellPrice = priceResult.sellPrice
       computedBuyPrice = priceResult.buyPrice
       computedFuelAmount = priceResult.fuelSurchargeAmount
@@ -378,6 +381,9 @@ export async function emitClientGuiaAction(data: {
       cod_value: data.codValue || 0,
       length_cm: data.lengthCm,
       weight_kg: data.weightKg,
+      billing_weight_kg: pricingWeight.billableWeightKg,
+      volumetric_weight_kg: pricingWeight.volumetricWeightKg,
+      volumetric_divisor: pricingWeight.volumetricDivisor,
       package_count: data.volumesCount || 1,
       width_cm: data.widthCm,
       height_cm: data.heightCm,

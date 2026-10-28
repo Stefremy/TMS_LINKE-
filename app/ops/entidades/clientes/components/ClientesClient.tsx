@@ -34,10 +34,11 @@ interface ClientesClientProps {
   initialClientes: Cliente[]
   initialServicosLinke?: ServicoLinke[]
   canManageAccess?: boolean
+  canSendAccessEmail?: boolean
   defaultPaymentDays?: number
 }
 
-export function ClientesClient({ initialClientes, initialServicosLinke = [], canManageAccess = false, defaultPaymentDays = 30 }: ClientesClientProps) {
+export function ClientesClient({ initialClientes, initialServicosLinke = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30 }: ClientesClientProps) {
   const [clientes, setClientes] = React.useState<Cliente[]>(initialClientes || [])
   const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>(initialServicosLinke || [])
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -484,7 +485,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
 
                             <div className="my-1 border-t border-[var(--border-subtle)]" />
 
-                            {canManageAccess && <button
+                            {(canManageAccess || canSendAccessEmail) && <button
                               type="button"
                               onClick={() => {
                                 setOpenActionId(null)
@@ -568,6 +569,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
           initialData={editingCliente}
           servicosLinke={servicosLinke}
           canManageAccess={canManageAccess}
+          canSendAccessEmail={canSendAccessEmail}
           defaultPaymentDays={defaultPaymentDays}
           onManageAccess={() => { if (editingCliente) setAuthModalCliente(editingCliente) }}
           onClose={() => setIsModalOpen(false)}
@@ -576,11 +578,12 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
       )}
 
       {/* Auth Modal */}
-      {canManageAccess && authModalCliente && (
+      {(canManageAccess || canSendAccessEmail) && authModalCliente && (
         <ClientAuthModal
           clientId={authModalCliente.id}
           clientName={authModalCliente.short_name}
           clientEmail={authModalCliente.email}
+          allowManualPassword={canManageAccess}
           onClose={() => setAuthModalCliente(null)}
         />
       )}

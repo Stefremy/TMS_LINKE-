@@ -1,17 +1,24 @@
 "use server"
 
 import { Resend } from "resend"
-import { requireAdmin } from "@/lib/auth/context"
+import { requireUser, type AuthContext } from "@/lib/auth/context"
+import { canSendClientAccessEmail } from "@/lib/auth/client-access-email"
 import { createAdminClient } from "@/lib/supabase/server"
 import { assertBoundClient, assertClientEmail, findClientUser, invitationConfig, invitationEmail, loadInvitationStore, normalizeInvitationEmail } from "@/lib/client-portal/invitations"
 
-/** Explicit administrator action. Never called merely by opening a client record. */
+/** Explicit staff action. Never called merely by opening a client record. */
 export async function inviteClientAccessAction(clientId: string, requestedEmail: string) {
-  const ctx = await requireAdmin()
+  const ctx = await requireUser()
+  if (!canSendClientAccessEmail(ctx)) throw new Error("Acesso restrito. Não tem permissão para enviar emails de acesso ao cliente.")
+  return sendClientAccessEmail(ctx, clientId, requestedEmail)
+}
+
+async function sendClientAccessEmail(ctx: AuthContext, clientId: string, requestedEmail: string) {
   const config = invitationConfig() // Fail before provisioning if delivery cannot be configured.
   const email = normalizeInvitationEmail(requestedEmail)
   const db = createAdminClient()
   const store = await loadInvitationStore(db, clientId, ctx.tenant_id)
+  if (ctx.role === "employee" && email !== store.email) throw new Error("O email de acesso deve corresponder ao email registado na ficha do cliente.")
   await assertClientEmail(db, email)
   const existing = await findClientUser(db, email, clientId, ctx.tenant_id)
   // Recovery also lets an already invited client receive a fresh link without changing stores.

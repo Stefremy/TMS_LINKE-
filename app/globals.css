@@ -687,8 +687,12 @@ body {
 /* One natural page scroll for shipment cards; a contained table on desktop. */
 .tms-shipment-workspace > .overflow-auto { overflow: visible; }
 @media (min-width: 1024px) and (min-height: 500px) {
-  .tms-shipment-workspace { height: calc(100dvh - 8rem); }
-  .tms-shipment-workspace > .overflow-auto { overflow: auto; }
+  .tms-main--shipments { padding: 0.375rem; }
+  .tms-main--shipments .tms-shipment-workspace { height: calc(100dvh - 4.25rem); }
+  .tms-shipment-workspace > .overflow-auto { min-height: 0; overflow: auto; }
+  .tms-workspace:has(.tms-shipment-workspace[data-expanded="true"]) .tms-sidebar,
+  .tms-workspace:has(.tms-shipment-workspace[data-expanded="true"]) .tms-ops-topbar { display: none; }
+  .tms-main--shipments .tms-shipment-workspace[data-expanded="true"] { height: calc(100dvh - 0.75rem); }
 }
 
 .tms-impersonation-banner {

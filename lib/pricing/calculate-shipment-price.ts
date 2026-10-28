@@ -448,6 +448,19 @@ export function calculateShipmentPrice(
   }
 }
 
+/** Simulator entry point for a deliberately selected configured zone. */
+export function calculateConfiguredZonePrice(weightKg: number, table: ServicoLinke, zone: ZonePriceMatrix): PriceResult {
+  if (!Number.isFinite(weightKg) || weightKg <= 0 || !isZoneAllowedByService(table.allowed_zones, zone.zone_code)) {
+    throw new ShipmentPricingError("Serviço indisponível para este destino e peso.")
+  }
+  if (!zone.tiers.some(tier => tier.enabled !== false && Number.isFinite(tier.weight_max) && weightKg <= tier.weight_max)) {
+    throw new ShipmentPricingError("Tarifa não configurada para este destino e peso.")
+  }
+  const result = calculateFromZone(zone, weightKg, table, {}, false)
+  if (result.isFallback || result.isBlocked) throw new ShipmentPricingError("Tarifa não configurada para este destino e peso.")
+  return result
+}
+
 function calculateFromZone(
   zone: ZonePriceMatrix,
   weightKg: number,

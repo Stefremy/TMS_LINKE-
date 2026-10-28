@@ -15,10 +15,12 @@ const decoratedPages = new Set([
 
 export function OpsPageSurface({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const decorated = decoratedPages.has(pathname.replace(/\/$/, ""))
+  const normalizedPath = pathname.replace(/\/$/, "")
+  const decorated = decoratedPages.has(normalizedPath)
+  const shipmentsPage = normalizedPath === "/ops/envios"
 
   return (
-    <main className={`tms-main flex-1 bg-[var(--canvas-bg)] ${decorated ? styles.dashboard : ""}`}>
+    <main className={`tms-main flex-1 bg-[var(--canvas-bg)] ${shipmentsPage ? "tms-main--shipments" : ""} ${decorated ? styles.dashboard : ""}`}>
       {decorated && <DashboardBackdrop />}
       {children}
     </main>

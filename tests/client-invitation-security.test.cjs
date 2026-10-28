@@ -17,7 +17,7 @@ function harness(options = {}) {
   process.env.STORE_FROM_EMAIL = 'Linke <portal@example.invalid>'
   const tables = {
     clients: [{ id: STORE, tenant_id: TENANT, name: 'Store A' }, { id: OTHER, tenant_id: OTHER, name: 'Private foreign store' }],
-    audit_log: [{ id: 'profile', tenant_id: TENANT, action: 'client_data', created_at: '2026-10-14', details: { id: STORE, short_name: 'Store A', is_active: true } }],
+    audit_log: [{ id: 'profile', tenant_id: TENANT, action: 'client_data', created_at: '2026-10-14', details: { id: STORE, short_name: 'Store A', email: EMAIL, is_active: true } }],
     colaboradores: [],
   }
   options.adjust?.(tables)
@@ -54,6 +54,10 @@ function harness(options = {}) {
     'server-only': {},
     '@/lib/auth/context': {
       LINKE_TENANT_ID: TENANT,
+      requireUser: async () => {
+        if(options.role==='anonymous')throw Error('ACCESS_DENIED')
+        return {user:{id:options.actorId||'operator-user',email:options.actorEmail||'operator@example.invalid'},role:options.role||'admin',tenant_id:TENANT,client_id:options.role==='client'?STORE:null,permissions:options.permissions||[]}
+      },
       requireAdmin: async () => {
         if (options.role && options.role !== 'admin') throw new Error('ADMIN_REQUIRED')
         return { user: { id: 'operator-user' }, role: 'admin', tenant_id: TENANT }
@@ -84,15 +88,38 @@ function request(overrides = {}, headers = {}) {
   })
 }
 
-test('only administrators can invite clients or configure manual access, before any provider or database access', async () => {
+test('unprivileged roles cannot invite clients and only admins can configure passwords manually', async () => {
   for (const role of ['client', 'employee', 'anonymous']) {
     const h = harness({ role })
-    await assert.rejects(h.invite(STORE, EMAIL), /ADMIN_REQUIRED/)
+    await assert.rejects(h.invite(STORE, EMAIL), /Acesso restrito|ACCESS_DENIED/)
     await assert.rejects(h.load('app/actions/auth.ts').setClientPasswordAction(STORE, EMAIL, 'a-fixture-password'), /ADMIN_REQUIRED/)
     assert.equal(h.db.adminClients, 0)
     assert.equal(h.calls.auth.length, 0)
     assert.equal(h.calls.mail.length, 0)
   }
+})
+
+test('Aldara and explicitly permitted staff can send a password email to the registered client address',async()=>{
+  for(const actor of [{actorEmail:'aldara.linke@gmail.com'},{actorEmail:'clientes@linke.pt'},{permissions:['Enviar email de acesso ao cliente']}]){
+    const h=harness({role:'employee',...actor})
+    assert.equal((await h.invite(STORE,EMAIL)).success,true)
+    assert.equal(h.calls.mail.length,1)
+    assert.deepEqual(h.calls.mail[0].to,[EMAIL])
+    await assert.rejects(h.load('app/actions/auth.ts').setClientPasswordAction(STORE,EMAIL,'a-fixture-password'),/ADMIN_REQUIRED/)
+  }
+})
+
+test('delegated email permission cannot select another address, another tenant or a deleted client',async()=>{
+  const options={role:'employee',actorEmail:'aldara.linke@gmail.com'}
+  const changed=harness(options)
+  await assert.rejects(changed.invite(STORE,'other@example.invalid'),/email registado/)
+  assert.equal(changed.calls.auth.length,0);assert.equal(changed.calls.mail.length,0)
+  const foreign=harness(options)
+  await assert.rejects(foreign.invite(OTHER,EMAIL),/loja/)
+  assert.equal(foreign.calls.auth.length,0)
+  const deleted=harness({...options,adjust:t=>t.audit_log.push({tenant_id:TENANT,action:'deleted_client',details:{id:STORE}})})
+  await assert.rejects(deleted.invite(STORE,EMAIL),/gravada e ativa/)
+  assert.equal(deleted.calls.mail.length,0)
 })
 
 test('missing email configuration stops invitation provisioning and delivery', async () => {

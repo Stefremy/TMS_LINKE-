@@ -38,6 +38,7 @@ export interface ServicoLinke {
   // Conexão Webservice para Emissão Automática de Guias / API
   webservice_connection_id?: string // ID da conexão de Webservice
   webservice_service_code?: string // Código de subproduto na API (ex: EMSF056.01, 19, 48, etc.)
+  volumetric_rule?: import("@/lib/pricing/chargeable-weight").VolumetricRule
   
   // Tempos de trânsito médios
   transit_time_label: string
@@ -143,6 +144,8 @@ export interface CotacaoSimulacaoResult {
   carrierColor: string
   zoneName: string
   weight: number
+  volumetricWeightKg?: number | null
+  volumetricDivisor?: number | null
   transitTime: string
   costPrice: number
   sellPrice: number

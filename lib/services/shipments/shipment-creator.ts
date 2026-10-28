@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
 import { captureWeightPricingBasis, type WeightPricingBasis } from "@/lib/billing/carrier-weight-pricing"
 import { calculateShipmentPrice } from "@/lib/pricing/calculate-shipment-price"
+import { calculateChargeableWeight } from "@/lib/pricing/chargeable-weight"
 import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
@@ -61,6 +62,7 @@ export async function createShipment(formData: FormData) {
   let computedFuelAmount = 0
   let computedBasePrice: number
   let computedTierLabel = "Standard"
+  let pricingWeight: ReturnType<typeof calculateChargeableWeight>
   let weightPricingBasis: WeightPricingBasis
   const weightKg = Number(formData.get("weight_kg"))
   const lengthCm = Number(formData.get('length_cm'))
@@ -85,9 +87,10 @@ export async function createShipment(formData: FormData) {
     carrierCode = resolveServiceCarrier(service)
     serviceCode = service.webservice_service_code
     connectionId = service.webservice_connection_id
-    const priceResult = calculateShipmentPrice(weightKg, { ...matchedClient, default_linke_table_id: service.id },
+    pricingWeight = calculateChargeableWeight(weightKg, service, recipientCountry, recipient_zip, { lengthCm, widthCm, heightCm, volumesCount })
+    const priceResult = calculateShipmentPrice(pricingWeight.billableWeightKg, { ...matchedClient, default_linke_table_id: service.id },
       [service], recipientCountry, recipient_zip, { requireConfiguredTariff: true })
-    weightPricingBasis = captureWeightPricingBasis(matchedClient, service, recipientCountry, recipient_zip)
+    weightPricingBasis = captureWeightPricingBasis(matchedClient, service, recipientCountry, recipient_zip, pricingWeight)
     computedSellPrice = priceResult.sellPrice
     computedBuyPrice = priceResult.buyPrice
     computedFuelAmount = priceResult.fuelSurchargeAmount || 0
@@ -134,6 +137,9 @@ export async function createShipment(formData: FormData) {
     buy_price: computedBuyPrice,
     sell_price: computedSellPrice,
     weight_pricing_basis: weightPricingBasis,
+    billing_weight_kg: pricingWeight.billableWeightKg,
+    volumetric_weight_kg: pricingWeight.volumetricWeightKg,
+    volumetric_divisor: pricingWeight.volumetricDivisor,
     weight_kg: weightKg,
     package_count: volumesCount,
     length_cm: lengthCm,

@@ -6,6 +6,7 @@ import { ClientesClient } from "./components/ClientesClient"
 import { createAdminClient } from "@/lib/supabase/server"
 import { defaultClientPaymentDays } from "@/lib/billing/payment-settings"
 import { requireEmployee } from "@/lib/auth/context"
+import { canSendClientAccessEmail } from "@/lib/auth/client-access-email"
 import { currentAccountOutstanding } from "@/lib/billing/client-balance"
 
 export const dynamic = "force-dynamic"
@@ -66,6 +67,7 @@ export default async function EntidadesClientesPage() {
       initialClientes={clientesComCredito} 
       initialServicosLinke={servicosLinke} 
       canManageAccess={ctx.role === "admin"}
+      canSendAccessEmail={canSendClientAccessEmail(ctx)}
       defaultPaymentDays={defaultPaymentDays}
     />
   )

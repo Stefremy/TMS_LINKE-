@@ -2,6 +2,7 @@ import type { Cliente, ClientSpecialServiceFee } from "@/app/ops/entidades/clien
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { calculateShipmentPrice, isCeTruckService } from "./calculate-shipment-price"
 import { ShipmentPricingError } from "./shipment-pricing-errors"
+import { calculateChargeableWeight, type ParcelPricingDimensions } from "./chargeable-weight"
 
 // Preserve the server's existing charges for profiles without configured extras.
 const DEFAULT_SPECIAL_FEES: ClientSpecialServiceFee[] = [
@@ -116,10 +117,12 @@ export function calculateShipmentQuote(
   postal: string,
   specialCodes: string[] = [],
   codValue: number = 0,
+  parcel?: ParcelPricingDimensions,
 ) {
-  const transport = calculateShipmentPrice(weightKg, { ...client, default_linke_table_id: service.id },
+  const weight = calculateChargeableWeight(weightKg, service, country, postal, parcel)
+  const transport = calculateShipmentPrice(weight.billableWeightKg, { ...client, default_linke_table_id: service.id },
     [service], country, postal, { requireConfiguredTariff: true })
   const specials = calculateShipmentSpecialFees(transport.sellPrice, client, resolveServiceCarrier(service), specialCodes, codValue)
-  return { ...transport, specialFeesAmount: specials.amount, specialItems: specials.items, totalPrice: specials.totalPrice }
+  return { ...transport, ...weight, specialFeesAmount: specials.amount, specialItems: specials.items, totalPrice: specials.totalPrice }
 }
 

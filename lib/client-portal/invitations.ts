@@ -25,7 +25,8 @@ export async function loadInvitationStore(db: SupabaseClient, clientId: string, 
   if (deletedError || profileError || deleted || !profile?.details || profile.details.is_active === false) {
     throw new Error("A loja precisa de estar gravada e ativa para configurar o acesso.")
   }
-  return { id: store.id as string, name: String(profile?.details?.short_name || store.name || "Loja") }
+  return { id: store.id as string, name: String(profile?.details?.short_name || store.name || "Loja"),
+    email: typeof profile.details.email === "string" ? profile.details.email.trim().toLowerCase() : "" }
 }
 
 export async function assertClientEmail(db: SupabaseClient, email: string) {
