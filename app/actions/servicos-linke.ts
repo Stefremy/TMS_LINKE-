@@ -1,5 +1,7 @@
 "use server"
 
+import { getServiceParcelLimitProduct } from "@/lib/pricing/oversize-surcharge"
+
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getFornecedoresAction, saveFornecedorAction } from "@/app/actions/fornecedores"
@@ -700,6 +702,7 @@ function normalizeLoadedServico(s: any): any {
     ...s,
     is_primordial: isPrimordialServico(s),
     volumetric_rule: getServiceVolumetricRule(s),
+    parcel_limit_product: getServiceParcelLimitProduct(s),
     ...(carrierGroup ? { carrier_group: carrierGroup } : {}),
     ...(normalizedAllowed !== undefined ? { allowed_zones: normalizedAllowed } : {}),
     ...(Array.isArray(s.zones) ? { zones: normalizedZones } : {}),

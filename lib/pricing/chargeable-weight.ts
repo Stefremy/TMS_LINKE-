@@ -3,7 +3,7 @@ import { resolveServiceZoneCode } from "./calculate-shipment-price"
 import { ShipmentPricingError } from "./shipment-pricing-errors"
 
 export type VolumetricRule = { divisor: number; zoneDivisors?: Record<string, number> }
-export type ParcelPricingDimensions = { lengthCm: number; widthCm: number; heightCm: number; volumesCount?: number }
+export type ParcelPricingDimensions = { lengthCm: number; widthCm: number; heightCm: number; volumesCount?: number; parcelWeightsKg?: number[] }
 
 /** Contract rules are keyed by API product, never by editable marketing names. */
 export function getServiceVolumetricRule(service: Partial<ServicoLinke>): VolumetricRule | undefined {

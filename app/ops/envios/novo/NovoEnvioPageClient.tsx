@@ -1,5 +1,7 @@
 "use client"
 
+import { ShipmentOversizeSummary } from "@/components/shipments/ShipmentOversizeSummary"
+import { getParcelLimits } from "@/lib/pricing/oversize-surcharge"
 import * as React from "react"
 import { X, Package, User, MapPin, Loader2, CheckCircle2, Weight, Euro, Download, FileText, ExternalLink, Check, Printer, BookmarkCheck } from "lucide-react"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
@@ -66,6 +68,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   const [parcelLengthCm, setParcelLengthCm] = React.useState("")
   const [parcelWidthCm, setParcelWidthCm] = React.useState("")
   const [parcelHeightCm, setParcelHeightCm] = React.useState("")
+  const [parcelWeights, setParcelWeights] = React.useState<string[]>([])
   const [parcelVolumes, setParcelVolumes] = React.useState("1")
   const [recipientCountry, setRecipientCountry] = React.useState("PT")
   const [selectedSpecialServices, setSelectedSpecialServices] = React.useState<string[]>([])
@@ -166,6 +169,12 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   }, [servicosLinke, currentClient])
 
   const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
+  const parcelWeightsKg = React.useMemo(() => {
+    const count = Number(parcelVolumes)
+    const limit = getParcelLimits(activeLinkeService ?? {}, recipientCountry)?.maxWeightKg ?? Infinity
+    if (!Number.isSafeInteger(count) || count <= 1 || count > 1000 || weightKg <= limit || !parcelWeights.some(Boolean)) return undefined
+    return Array.from({ length: count }, (_, i) => Number(parcelWeights[i] ?? ""))
+  }, [activeLinkeService, recipientCountry, weightKg, parcelVolumes, parcelWeights])
   const destinationCountries = React.useMemo(() => getServiceDestinationCountries(activeLinkeService), [activeLinkeService])
   const resolvedDestinationZone = activeLinkeService ? getServiceDestinationZone(activeLinkeService, recipientCountry, recipientZip) : ""
   const resetRecipientPostal = recipientPostalLookup.reset
@@ -199,13 +208,13 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       assertShipmentDestinationAvailable(recipientCountry, recipientZip)
       const quote = calculateShipmentQuote(weightKg, currentClient, activeLinkeService,
         recipientCountry, recipientZip, activeSpecialServices, codValue,
-        [parcelLengthCm, parcelWidthCm, parcelHeightCm].every(value => Number(value) >= 0.1) ? { lengthCm: Number(parcelLengthCm), widthCm: Number(parcelWidthCm), heightCm: Number(parcelHeightCm), volumesCount: Number(parcelVolumes) } : undefined)
+        [parcelLengthCm, parcelWidthCm, parcelHeightCm].every(value => Number(value) >= 0.1) ? { lengthCm: Number(parcelLengthCm), widthCm: Number(parcelWidthCm), heightCm: Number(parcelHeightCm), volumesCount: Number(parcelVolumes), parcelWeightsKg } : undefined)
       return { label: quote.tierLabel, sell: quote.totalPrice, buy: quote.buyPrice, billableWeightKg: quote.billableWeightKg, volumetricWeightKg: quote.volumetricWeightKg, volumetricDivisor: quote.volumetricDivisor, error: null }
     } catch (error) {
       return { label: "Preço indisponível", sell: 0, buy: 0, billableWeightKg: null, volumetricWeightKg: null, volumetricDivisor: null,
         error: error instanceof Error ? error.message : "Não foi possível calcular a tarifa." }
     }
-  }, [weightKg, currentClient, activeLinkeService, destinationCountries, recipientCountry, recipientZip, activeSpecialServices, codValue, parcelLengthCm, parcelWidthCm, parcelHeightCm, parcelVolumes])
+  }, [weightKg, currentClient, activeLinkeService, destinationCountries, recipientCountry, recipientZip, activeSpecialServices, codValue, parcelLengthCm, parcelWidthCm, parcelHeightCm, parcelVolumes, parcelWeightsKg])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -247,6 +256,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
         lengthCm: Number(formData.get("length_cm")),
         widthCm: Number(formData.get("width_cm")),
         heightCm: Number(formData.get("height_cm")),
+        parcelWeightsKg,
         serviceId: activeLinkeService?.id,
         serviceName: activeLinkeService?.name || "Linke Expresso 24H",
         subProductId: activeLinkeService?.webservice_service_code,
@@ -326,7 +336,7 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
       // Reset the form so they can type a new shipment immediately
       formRef.current?.reset()
       setWeightKg(1)
-      setParcelLengthCm(""); setParcelWidthCm(""); setParcelHeightCm(""); setParcelVolumes("1")
+      setParcelLengthCm(""); setParcelWidthCm(""); setParcelHeightCm(""); setParcelVolumes("1"); setParcelWeights([])
       
     } catch (err: any) {
       setErrorMsg(err.message || "Erro ao criar envio.")
@@ -610,6 +620,9 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
                 </div>
               </div>
 
+              <ShipmentOversizeSummary service={activeLinkeService} country={recipientCountry} weightKg={weightKg}
+                lengthCm={Number(parcelLengthCm)} widthCm={Number(parcelWidthCm)} heightCm={Number(parcelHeightCm)} volumesCount={Number(parcelVolumes)}
+                parcelWeightsKg={parcelWeightsKg} weights={parcelWeights} onWeightsChange={setParcelWeights} />
               <ShipmentVolumetricSummary service={activeLinkeService} country={recipientCountry} postal={recipientZip}
                 weightKg={weightKg} lengthCm={Number(parcelLengthCm)} widthCm={Number(parcelWidthCm)} heightCm={Number(parcelHeightCm)} volumesCount={Number(parcelVolumes)} />
               {(isCorreos || Number(parcelVolumes) > 1) && <p className="text-xs text-[var(--text-secondary)]">As medidas indicadas aplicam-se a cada volume. Para volumes de tamanhos diferentes, crie envios separados.</p>}

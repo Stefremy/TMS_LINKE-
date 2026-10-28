@@ -1,3 +1,4 @@
+import { calculateOversizeSurcharge } from "@/lib/pricing/oversize-surcharge"
 import { assertShipmentDestinationAvailable } from "../shipment-destination-policy"
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -61,6 +62,7 @@ export async function createShipment(formData: FormData) {
   let computedBuyPrice: number
   let computedFuelAmount = 0
   let computedBasePrice: number
+  let oversize: ReturnType<typeof calculateOversizeSurcharge>
   let computedTierLabel = "Standard"
   let pricingWeight: ReturnType<typeof calculateChargeableWeight>
   let weightPricingBasis: WeightPricingBasis
@@ -69,6 +71,7 @@ export async function createShipment(formData: FormData) {
   const widthCm = Number(formData.get('width_cm'))
   const heightCm = Number(formData.get('height_cm'))
   const volumesCount = Number(formData.get('volumes') || formData.get('package_count') || 1)
+  const parcelWeightsKg = formData.getAll('parcel_weight_kg').length ? formData.getAll('parcel_weight_kg').map(Number) : undefined
   const recipientCountry = String(formData.get('recipient_country') || 'PT').trim().toUpperCase()
   let carrierCode: 'ctt' | 'correos'
   let serviceCode: string | undefined
@@ -91,7 +94,8 @@ export async function createShipment(formData: FormData) {
     const priceResult = calculateShipmentPrice(pricingWeight.billableWeightKg, { ...matchedClient, default_linke_table_id: service.id },
       [service], recipientCountry, recipient_zip, { requireConfiguredTariff: true })
     weightPricingBasis = captureWeightPricingBasis(matchedClient, service, recipientCountry, recipient_zip, pricingWeight)
-    computedSellPrice = priceResult.sellPrice
+    oversize = calculateOversizeSurcharge(service, recipientCountry, weightKg, { lengthCm, widthCm, heightCm, volumesCount, parcelWeightsKg })
+    computedSellPrice = Number((priceResult.sellPrice + oversize.amount).toFixed(2))
     computedBuyPrice = priceResult.buyPrice
     computedFuelAmount = priceResult.fuelSurchargeAmount || 0
     computedBasePrice = priceResult.basePrice
@@ -136,6 +140,9 @@ export async function createShipment(formData: FormData) {
     recipient_zip4,
     buy_price: computedBuyPrice,
     sell_price: computedSellPrice,
+    special_fees_amount: oversize.amount,
+    special_fees_description: oversize.items.length ? JSON.stringify(oversize.items) : null,
+    parcel_weights_kg: parcelWeightsKg,
     weight_pricing_basis: weightPricingBasis,
     billing_weight_kg: pricingWeight.billableWeightKg,
     volumetric_weight_kg: pricingWeight.volumetricWeightKg,

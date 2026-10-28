@@ -715,7 +715,7 @@ for (const carrier of ['CTT', 'Correos']) {
 }
 
 test('additional kilograms use the configured anchor, rounded increments and negotiated per-kg price', async () => {
-  for (const [weight, basePrice, buyPrice, totalPrice] of [[30, 9, 8, 10.13], [30.01, 9.4, 8.2, 10.58], [31.2, 9.8, 8.4, 11.03]]) {
+  for (const [weight, basePrice, buyPrice, totalPrice] of [[30, 9, 8, 10.13], [30.01, 9.4, 8.2, 80.48], [31.2, 9.8, 8.4, 80.93]]) {
     const h = shipmentHarness({ adjust: t => {
       const tier = t.servicos_linke[0].zones[0].tiers[0]
       t.servicos_linke[0].zones[0].tiers = [
@@ -724,7 +724,8 @@ test('additional kilograms use the configured anchor, rounded increments and neg
       ]
       setCustomPrices(t, [9, 0.4])
     } })
-    const preview = fixtureQuote(h, { weightKg: weight })
+    const parcel = { lengthCm:30.5,widthCm:20,heightCm:10,volumesCount:1 }
+    const preview = h.load('lib/pricing/calculate-shipment-quote.ts').calculateShipmentQuote(weight,h.tables.audit_log[0].details,h.tables.servicos_linke[0],'PT','4800-019',[],0,parcel)
     assert.equal(preview.basePrice, basePrice)
     assert.equal(preview.buyPrice, buyPrice)
     assert.equal(preview.totalPrice, totalPrice)
@@ -732,7 +733,7 @@ test('additional kilograms use the configured anchor, rounded increments and neg
       tiers: z.tiers.map(t => ({ ...t, cost_price: undefined, margin_pct: undefined })),
     })) }
     const publicPreview = h.load('lib/pricing/calculate-client-shipment-preview.ts').calculateClientShipmentPreview(
-      weight, h.tables.audit_log[0].details, publicService, 'PT', '4800-019')
+      weight, h.tables.audit_log[0].details, publicService, 'PT', '4800-019', [], 0, parcel)
     assert.equal(publicPreview.basePrice, basePrice)
     assert.equal(publicPreview.totalPrice, totalPrice)
     const result = await emit(h, { weightKg: weight })
@@ -852,3 +853,40 @@ for (const carrier of ['CTT','Correos']) {
   assert.equal(h.providerCalls.length,0)
  })
 }
+
+test('automatic per-parcel surcharge is authoritative and included once in saved extras', async () => {
+  const h = shipmentHarness({adjust:t=>{
+    t.servicos_linke[0].zones[0].tiers[0].weight_max=100
+  }})
+  const result=await emit(h,{weightKg:50,volumesCount:2,lengthCm:10,widthCm:10,heightCm:10,parcelWeightsKg:[31,19],calculatedPrice:0.01})
+  assert.equal(result.success,true,result.error)
+  assert.equal(result.sellPrice,78.9)
+  const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+  assert.equal(saved.special_fees_amount,69.9)
+  assert.equal(JSON.parse(saved.special_fees_description).length,1)
+  assert.deepEqual(saved.parcel_weights_kg,[31,19])
+  assert.equal(h.providerCalls[0].payload.weightKg,50)
+})
+test('ambiguous or inconsistent individual weights stop before money reservation and carrier calls', async () => {
+  for(const parcelWeightsKg of [undefined,[20,20],[50]]) {
+    const h=shipmentHarness({adjust:t=>{t.servicos_linke[0].zones[0].tiers[0].weight_max=100}})
+    const result=await emit(h,{weightKg:50,volumesCount:2,lengthCm:10,widthCm:10,heightCm:10,parcelWeightsKg})
+    assert.equal(result.success,false)
+    assert.match(result.error,/peso real de cada|pesos individuais/)
+    assert.equal(h.db.writes.length,0)
+    assert.equal(h.providerCalls.length,0)
+    assert.equal(h.credentials.length,0)
+  }
+})
+
+test('legacy draft creation includes the same automatic surcharge in its reservation price and audit extras',async()=>{
+ const h=shipmentHarness()
+ const form=withDimensions(new FormData())
+ form.set('weight_kg','1');form.set('service_id','service-a');form.set('length_cm','151');form.set('width_cm','1');form.set('height_cm','1')
+ const result=await h.load('lib/services/shipments/shipment-creator.ts').createShipment(form)
+ assert.equal(result.success,true,result.error)
+ assert.equal(h.db.writes.find(w=>w.table==='shipments').value.sell_price,78.9)
+ const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+ assert.equal(saved.special_fees_amount,69.9)
+ assert.equal(h.providerCalls.length,0)
+})

@@ -1,5 +1,7 @@
 "use client"
 
+import { ShipmentOversizeSummary } from "@/components/shipments/ShipmentOversizeSummary"
+import { getParcelLimits } from "@/lib/pricing/oversize-surcharge"
 import * as React from "react"
 import Link from "next/link"
 import {
@@ -88,6 +90,7 @@ export function ClientCreateGuia() {
   }
   const [selectedCarrierCode, setSelectedCarrierCode] = React.useState<string>("ctt_expresso")
   const [selectedServiceId, setSelectedServiceId] = React.useState<string>("")
+  const [parcelWeights, setParcelWeights] = React.useState<string[]>([])
   const [volumesCount, setVolumesCount] = React.useState("1")
   const [lengthCm, setLengthCm] = React.useState("")
   const [widthCm, setWidthCm] = React.useState("")
@@ -189,6 +192,12 @@ export function ClientCreateGuia() {
 
   // Active chosen Linke service
   const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
+  const parcelWeightsKg = React.useMemo(() => {
+    const count = Number(volumesCount)
+    const limit = getParcelLimits(activeLinkeService ?? {}, recipientCountry)?.maxWeightKg ?? Infinity
+    if (!Number.isSafeInteger(count) || count <= 1 || count > 1000 || Number(weight) <= limit || !parcelWeights.some(Boolean)) return undefined
+    return Array.from({ length: count }, (_, i) => Number(parcelWeights[i] ?? ""))
+  }, [activeLinkeService, recipientCountry, weight, volumesCount, parcelWeights])
   const destinationCountries = React.useMemo(() => getServiceDestinationCountries(activeLinkeService), [activeLinkeService])
   const resetRecipientPostal = postalLookup.reset
 
@@ -230,7 +239,7 @@ export function ClientCreateGuia() {
       assertShipmentDestinationAvailable(recipientCountry, recipientPostal)
       const quote = calculateClientShipmentPreview(Number(weight), currentClient, activeLinkeService,
         recipientCountry, recipientPostal, activeSpecialServices, Number(codAmount),
-        [lengthCm, widthCm, heightCm].every(value => Number(value) >= 0.1) ? { lengthCm: Number(lengthCm), widthCm: Number(widthCm), heightCm: Number(heightCm), volumesCount: Number(volumesCount) } : undefined)
+        [lengthCm, widthCm, heightCm].every(value => Number(value) >= 0.1) ? { lengthCm: Number(lengthCm), widthCm: Number(widthCm), heightCm: Number(heightCm), volumesCount: Number(volumesCount), parcelWeightsKg } : undefined)
       return {
         base: quote.basePrice.toFixed(2), fuel: quote.fuelSurchargeAmount.toFixed(2),
         fuelPct: activeLinkeService.fuel_surcharge_pct ?? currentClient.pricing?.fuel_surcharge_pct ?? 12.5,
@@ -244,7 +253,7 @@ export function ClientCreateGuia() {
         blockedReason: error instanceof Error ? error.message : "Não foi possível calcular a tarifa.",
       }
     }
-  }, [currentClient, activeLinkeService, destinationCountries, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount, lengthCm, widthCm, heightCm, volumesCount])
+  }, [currentClient, activeLinkeService, destinationCountries, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount, lengthCm, widthCm, heightCm, volumesCount, parcelWeightsKg])
 
   const handleCreateShipment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -298,6 +307,7 @@ export function ClientCreateGuia() {
         lengthCm: Number(lengthCm),
         widthCm: Number(widthCm),
         heightCm: Number(heightCm),
+        parcelWeightsKg,
         serviceId: activeLinkeService?.id,
         serviceName: chosenService,
         subProductId: activeLinkeService?.webservice_service_code,
@@ -372,6 +382,7 @@ export function ClientCreateGuia() {
       setRecipientPhone("")
       setRecipientEmail("")
       setVolumesCount("1")
+      setParcelWeights([])
     } catch (err: any) {
       const msg: string = err?.message || "Erro desconhecido."
       setSubmitError(msg)
@@ -970,6 +981,9 @@ export function ClientCreateGuia() {
             </div>
           </div>
 
+          <ShipmentOversizeSummary service={activeLinkeService} country={recipientCountry} weightKg={Number(weight)}
+            lengthCm={Number(lengthCm)} widthCm={Number(widthCm)} heightCm={Number(heightCm)} volumesCount={Number(volumesCount)}
+            parcelWeightsKg={parcelWeightsKg} weights={parcelWeights} onWeightsChange={setParcelWeights} />
           <ShipmentVolumetricSummary service={activeLinkeService} country={recipientCountry} postal={recipientPostal}
             weightKg={Number(weight)} lengthCm={Number(lengthCm)} widthCm={Number(widthCm)} heightCm={Number(heightCm)} volumesCount={Number(volumesCount)} />
 

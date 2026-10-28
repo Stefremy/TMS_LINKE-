@@ -1,5 +1,6 @@
 "use client"
 
+import { calculateOversizeSurcharge } from "@/lib/pricing/oversize-surcharge"
 import * as React from "react"
 import { Calculator, Package, ShieldCheck } from "lucide-react"
 import { getCarrierLogo } from "@/lib/carrier-logos"
@@ -19,6 +20,7 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
   const [heightCm, setHeightCm] = React.useState<number>(10)
   const [selectedDestinationZone, setSelectedDestinationZone] = React.useState<string>("PT-CONT")
   const [selectedClientProfile, setSelectedClientProfile] = React.useState<string>("Todos")
+  const [limitCountry, setLimitCountry] = React.useState("FR")
   const [isCod, setIsCod] = React.useState<boolean>(false)
   const [codValue, setCodValue] = React.useState<number>(50.00)
 
@@ -70,7 +72,9 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
             codAmount = Math.max(codPctFee, servico.cod_min_fee || 2.50)
           }
 
-          const finalSellPrice = Number((sellPrice + fuelAmount + codAmount).toFixed(2))
+          const country = selectedDestinationZone.startsWith("PT-") ? "PT" : selectedDestinationZone === "ES-PENIN" ? "ES" : limitCountry
+          const oversize = calculateOversizeSurcharge(servico, country, weightKg, { lengthCm, widthCm, heightCm })
+          const finalSellPrice = Number((sellPrice + fuelAmount + codAmount + oversize.amount).toFixed(2))
           const marginAmount = Number((sellPrice - costPrice).toFixed(2))
           const marginPct = costPrice > 0 ? Number(((marginAmount / costPrice) * 100).toFixed(0)) : 0
 
@@ -92,6 +96,7 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
             marginPct,
             fuelAmount,
             finalSellPrice,
+            oversizeAmount: oversize.amount,
           })
         } catch {
           // Invalid/missing tiers or parcel data must never produce a fallback quote.
@@ -100,7 +105,7 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
       })
 
     return results.sort((a, b) => a.finalSellPrice - b.finalSellPrice)
-  }, [servicos, selectedDestinationZone, selectedClientProfile, weightKg, lengthCm, widthCm, heightCm, isCod, codValue])
+  }, [servicos, selectedDestinationZone, selectedClientProfile, weightKg, lengthCm, widthCm, heightCm, isCod, codValue, limitCountry])
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -150,6 +155,14 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
               ))}
             </select>
           </div>
+
+          {!selectedDestinationZone.startsWith("PT-") && selectedDestinationZone !== "ES-PENIN" && <label className="block space-y-1 text-xs text-slate-600">
+            <span>País para os limites por volume</span>
+            <select value={limitCountry} onChange={e => setLimitCountry(e.target.value)} className="w-full rounded-lg border border-slate-200 p-2">
+              {"AT BE BG CY CZ DE DK EE FI FR GR HR HU IE IT LT LU LV MT NL PL RO SE SI SK".split(" ").map(iso => <option key={iso} value={iso}>{new Intl.DisplayNames(["pt"], { type: "region" }).of(iso)}</option>)}
+            </select>
+            <span>A zona acima continua a definir a tarifa de transporte.</span>
+          </label>}
 
           {/* Weight */}
           <div className="space-y-1.5">
@@ -339,12 +352,13 @@ export function SimuladorCotacaoTab({ servicos }: SimuladorCotacaoTabProps) {
                 </div>
 
                 {/* Breakdown details */}
-                {(q.fuelAmount > 0 || isCod) && (
+                {(q.fuelAmount > 0 || isCod || (q.oversizeAmount ?? 0) > 0) && (
                   <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4 text-[11px] text-slate-500">
                     <span className="font-semibold text-slate-700">Detalhamento:</span>
                     <span>Base PVP: {q.sellPrice.toFixed(2)}€</span>
                     {q.fuelAmount > 0 && <span>+ Combustível: {q.fuelAmount.toFixed(2)}€</span>}
                     {isCod && <span>+ Taxa Cobrança: Incluída</span>}
+                    {(q.oversizeAmount ?? 0) > 0 && <span>+ Fora de medida/peso: {q.oversizeAmount?.toFixed(2)}€</span>}
                   </div>
                 )}
               </div>

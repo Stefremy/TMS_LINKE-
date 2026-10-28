@@ -1,5 +1,6 @@
 "use server"
 
+import { calculateOversizeSurcharge } from "@/lib/pricing/oversize-surcharge"
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { captureWeightPricingBasis, type WeightPricingBasis } from "@/lib/billing/carrier-weight-pricing"
@@ -236,6 +237,7 @@ export async function emitClientGuiaAction(data: {
   recipientPhone?: string
   recipientEmail?: string
   weightKg: number
+  parcelWeightsKg?: number[]
   volumesCount?: number
   serviceId?: string
   serviceName: string
@@ -338,9 +340,11 @@ export async function emitClientGuiaAction(data: {
       computedBasePrice = priceResult.basePrice
       const specials = calculateShipmentSpecialFees(computedSellPrice, matchedClient, carrierCode,
         data.selectedSpecialServices, data.codValue)
-      computedSellPrice = specials.totalPrice
-      computedSpecialAmount = specials.amount
-      computedSpecialDesc = specials.items.length > 0 ? JSON.stringify(specials.items) : null
+      const oversize = calculateOversizeSurcharge(chosenService, recipientCountry, data.weightKg, data)
+      computedSellPrice = Number((specials.totalPrice + oversize.amount).toFixed(2))
+      computedSpecialAmount = Number((specials.amount + oversize.amount).toFixed(2))
+      const specialItems = [...specials.items, ...oversize.items]
+      computedSpecialDesc = specialItems.length > 0 ? JSON.stringify(specialItems) : null
 
 
     } catch (pricingErr) {
@@ -384,6 +388,7 @@ export async function emitClientGuiaAction(data: {
       billing_weight_kg: pricingWeight.billableWeightKg,
       volumetric_weight_kg: pricingWeight.volumetricWeightKg,
       volumetric_divisor: pricingWeight.volumetricDivisor,
+      parcel_weights_kg: data.parcelWeightsKg,
       package_count: data.volumesCount || 1,
       width_cm: data.widthCm,
       height_cm: data.heightCm,

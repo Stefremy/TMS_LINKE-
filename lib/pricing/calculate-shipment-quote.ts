@@ -1,3 +1,4 @@
+import { calculateOversizeSurcharge } from "./oversize-surcharge"
 import type { Cliente, ClientSpecialServiceFee } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { calculateShipmentPrice, isCeTruckService } from "./calculate-shipment-price"
@@ -122,7 +123,8 @@ export function calculateShipmentQuote(
   const weight = calculateChargeableWeight(weightKg, service, country, postal, parcel)
   const transport = calculateShipmentPrice(weight.billableWeightKg, { ...client, default_linke_table_id: service.id },
     [service], country, postal, { requireConfiguredTariff: true })
+  const oversize = calculateOversizeSurcharge(service, country, weightKg, parcel)
   const specials = calculateShipmentSpecialFees(transport.sellPrice, client, resolveServiceCarrier(service), specialCodes, codValue)
-  return { ...transport, ...weight, specialFeesAmount: specials.amount, specialItems: specials.items, totalPrice: specials.totalPrice }
+  return { ...transport, ...weight, oversizeSurcharge: oversize, specialFeesAmount: Number((specials.amount + oversize.amount).toFixed(2)), specialItems: [...specials.items, ...oversize.items], totalPrice: Number((specials.totalPrice + oversize.amount).toFixed(2)) }
 }
 
