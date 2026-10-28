@@ -890,3 +890,23 @@ test('legacy draft creation includes the same automatic surcharge in its reserva
  assert.equal(saved.special_fees_amount,69.9)
  assert.equal(h.providerCalls.length,0)
 })
+
+test('island modality is validated against the persisted API product before any money or carrier action',async()=>{
+ for(const [product,mode,success] of [['EMSF056.01','air',true],['EMSF057.01','sea',true],['EMSF056.01','sea',false],['EMSF057.01','air',false],['EMSF057.01','forged',false]]){
+  const h=shipmentHarness({adjust:t=>{const s=t.servicos_linke[0];s.webservice_service_code=product;s.allowed_zones=['PT-ILHAS'];s.zones[0].zone_code='PT-ILHAS'}})
+  const result=await emit(h,{recipientPostal:'9000-001',islandTransportMode:mode})
+  assert.equal(result.success,success,result.error)
+  if(success){assert.equal(h.providerCalls[0].payload.subProduct,product)}
+  else{assert.equal(h.providerCalls.length,0);assert.equal(h.db.writes.length,0);assert.match(result.error,/modalidade/)}
+ }
+})
+test('service DTO retains safe island modality after redacting internal product and credentials',async()=>{
+ for(const [product,expected] of [['EMSF056.01','air'],['EMSF057.01','sea']]){
+  const h=shipmentHarness({adjust:t=>{t.servicos_linke[0].webservice_service_code=product}})
+  const list=await h.load('app/actions/servicos-linke.ts').getServicosLinkeAction()
+  const service=list.find(s=>s.id==='service-a')
+  assert.equal(service.island_transport_mode,expected)
+  assert.equal(service.webservice_service_code,undefined)
+  assert.equal(service.webservice_connection_id,undefined)
+ }
+})

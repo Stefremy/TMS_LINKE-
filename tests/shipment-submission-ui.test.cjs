@@ -102,6 +102,7 @@ function harness(t, portal, services = [service], realQuotes = false) {
     '@/lib/pricing/calculate-shipment-price': { resolveZoneCode: () => 'PT-CONT', isZoneAllowedByService: () => true },
     '@/lib/pricing/chargeable-weight': createLoader({})('lib/pricing/chargeable-weight.ts'),
     '@/lib/services/service-destinations': destinations,
+    '@/lib/services/shipment-service-options': createLoader({})('lib/services/shipment-service-options.ts'),
     '@/lib/pricing/calculate-shipment-quote': realQuotes ? createLoader({})('lib/pricing/calculate-shipment-quote.ts') : { isCorreosLinkeService: () => false, getClientSpecialFees: () => [], calculateShipmentQuote: () => ({
       basePrice: 8, buyPrice: 3, fuelSurchargeAmount: 1, specialFeesAmount: 0, specialItems: [], totalPrice: 9, tierLabel: 'Fixture',
     }) },
@@ -136,6 +137,22 @@ function harness(t, portal, services = [service], realQuotes = false) {
         nodes.find(node => node.props.id === id).props.onChange({ target: { value } })
       }
     }
+    nodes=render()
+    if(portal){
+      const country=nodes.find(n=>n.type==='select'&&n.props.name==='recipient_country')
+      const codes=flatten(country).filter(n=>n.type==='option'&&n.props.value).map(n=>n.props.value)
+      if(codes.length){
+        const iso=codes.includes('PT')?'PT':codes.includes('BE')?'BE':codes[0]
+        country.props.onChange({target:{value:iso}});nodes=render()
+        const postal=iso==='PT'?(services.some(s=>s.zones.some(z=>z.zone_code==='PT-CONT'))?'4000-001':'9000-001'):iso==='BE'?'1000':'75001'
+        nodes.find(n=>n.props.id==='field-recipient-postal').props.onChange({target:{value:postal}})
+        nodes=render();nodes=render()
+        const selector=nodes.find(n=>n.type==='select'&&n.props['aria-label']==='Serviço de Transporte Linke')
+        const first=flatten(selector).find(n=>n.type==='option'&&n.props.value)
+        if(first&&!selector.props.value)selector.props.onChange({target:{value:first.props.value}})
+      }
+    }
+    render()
     return render()
   } }
 }
@@ -171,6 +188,7 @@ for (const portal of [true, false]) {
     let nodes=await h.ready()
     nodes.find(n=>n.type==='select'&&n.props.name==='recipient_country').props.onChange({target:{value:'BE'}})
     nodes=h.render()
+    if(portal){nodes.find(n=>n.props.id==='field-recipient-postal').props.onChange({target:{value:'1000'}});nodes=h.render()}
     nodes.find(n=>n.props.name==='recipient_phone').props.onChange({target:{value:phone}})
     nodes.find(n=>n.props.name==='recipient_email').props.onChange({target:{value:email}})
     nodes=h.render()
@@ -185,7 +203,7 @@ for (const portal of [true, false]) {
     await submission
     if(!allowed)assert.match(h.render().map(textOf).join(' '),/indique um e-mail ou telemóvel/)
   })
-  test(name + ': service selection precedes the destination and switching services refreshes countries and clears incompatible postal data', async t => {
+  test(name + ': destination and service selection follow the intended portal or OPS flow', async t => {
     const international={...service,id:'service-intl',name:'International',allowed_zones:['EU 1','NA'],
       zones:[{zone_code:'EU 1',tiers:[{weight_max:30,enabled:true}]},{zone_code:'NA',tiers:[{weight_max:30,enabled:true}]}]}
     const h=harness(t,portal,[service,international])
@@ -196,6 +214,21 @@ for (const portal of [true, false]) {
       ? nodes.find(n=>n.type==='select'&&n.props['aria-label']==='Serviço de Transporte Linke').props.onChange({target:{value:id}})
       : nodes.find(n=>n.type==='input'&&n.props.name==='service_type'&&n.props.value===id).props.onChange()
     const serviceIndex=nodes.findIndex(n=>portal?n.props['aria-label']==='Serviço de Transporte Linke':n.props.name==='service_type')
+    if(portal){
+      assert.ok(serviceIndex>nodes.indexOf(country()))
+      assert.ok(options().includes('PT'));assert.ok(options().includes('FR'))
+      country().props.onChange({target:{value:'FR'}});nodes=h.render()
+      assert.equal(nodes.find(n=>n.props.id==='field-recipient-postal').props.value,'')
+      assert.equal(nodes.find(n=>n.props['aria-label']==='Serviço de Transporte Linke').props.disabled,true)
+      nodes.find(n=>n.props.id==='field-recipient-postal').props.onChange({target:{value:'75001'}})
+      h.render();nodes=h.render()
+      assert.equal(nodes.find(n=>n.props['aria-label']==='Serviço de Transporte Linke').props.value,international.id)
+      assert.equal(nodes.find(n=>n.props.id==='field-recipient-name').props.value,'Fixture recipient')
+      selectService(international.id);nodes=h.render()
+      assert.equal(country().props.value,'FR')
+      assert.equal(nodes.find(n=>n.props.id==='field-recipient-postal').props.value,'75001')
+      return
+    }
     assert.ok(serviceIndex<nodes.indexOf(country()))
     assert.deepEqual(options(),['PT'])
     selectService(international.id);h.render();nodes=h.render()
@@ -361,4 +394,44 @@ test('postal assistance cancels requests on unmount and ignores late responses',
   response.resolve({ok:true,json:async()=>({found:true,country:'FR',city:'Paris'})})
   await new Promise(resolve=>setImmediate(resolve))
   assert.deepEqual(found,[])
+})
+
+test('client portal: island mode follows redacted product metadata, filters variants and preserves recipient data',async t=>{
+ const make=(id,zone,island_transport_mode)=>({...service,id,name:id,carrier_group:'ctt',island_transport_mode,allowed_zones:[zone],zones:[{zone_code:zone,tiers:[{weight_max:30,sell_price:8,cost_price:3,enabled:true}]}]})
+ const h=harness(t,true,[make('Continente','PT-CONT','other'),make('Ilhas Avião','PT-ILHAS','air'),make('Ilhas Barco','PT-ILHAS','sea')])
+ let nodes=await h.ready()
+ const change=(find,value)=>{nodes.find(find).props.onChange({target:{value}});nodes=h.render();nodes=h.render()}
+ const selector=()=>nodes.find(n=>n.props['aria-label']==='Serviço de Transporte Linke')
+ const offered=()=>flatten(selector()).filter(n=>n.type==='option'&&n.props.value).map(n=>n.props.value)
+ assert.deepEqual(offered(),['Continente'])
+ change(n=>n.props.id==='field-recipient-address','Rua de teste 12')
+ change(n=>n.props.id==='field-recipient-postal','9000-001')
+ assert.equal(selector().props.value,'')
+ assert.equal(selector().props.disabled,true)
+ const radios=nodes.filter(n=>n.type==='input'&&n.props.name==='island_transport_mode')
+ assert.deepEqual(radios.map(n=>n.props.value),['air','sea'])
+ change(n=>n.props.name==='island_transport_mode'&&n.props.value==='air','air')
+ assert.deepEqual(offered(),['Ilhas Avião'])
+ assert.equal(selector().props.value,'Ilhas Avião')
+ change(n=>n.props.name==='island_transport_mode'&&n.props.value==='sea','sea')
+ assert.deepEqual(offered(),['Ilhas Barco'])
+ assert.equal(nodes.find(n=>n.props.id==='field-recipient-address').props.value,'Rua de teste 12')
+ assert.equal(nodes.find(n=>n.props.id==='field-recipient-postal').props.value,'9000-001')
+ change(n=>n.props.id==='field-recipient-postal','4000-001')
+ assert.deepEqual(offered(),['Continente'])
+ assert.equal(nodes.some(n=>n.props.name==='island_transport_mode'),false)
+ assert.equal(nodes.find(n=>n.props.id==='field-recipient-name').props.value,'Fixture recipient')
+ assert.equal(h.calls.create,0)
+})
+
+test('client portal: incomplete postal codes never offer a mainland tariff and single island mode is automatic',async t=>{
+ const s={...service,id:'Ilhas',name:'Ilhas',island_transport_mode:'sea',allowed_zones:['PT-ILHAS'],zones:[{zone_code:'PT-ILHAS',tiers:[{weight_max:30,enabled:true}]}]}
+ const h=harness(t,true,[s]);let nodes=await h.ready()
+ assert.equal(nodes.find(n=>n.props.name==='island_transport_mode').props.checked,true)
+ assert.equal(nodes.find(n=>n.props['aria-label']==='Serviço de Transporte Linke').props.value,'Ilhas')
+ nodes.find(n=>n.props.id==='field-recipient-postal').props.onChange({target:{value:'9000'}});nodes=h.render()
+ assert.equal(nodes.find(n=>n.props['aria-label']==='Serviço de Transporte Linke').props.disabled,true)
+ assert.equal(nodes.find(n=>n.props['aria-label']==='Serviço de Transporte Linke').props.value,'')
+ await nodes.find(n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}})
+ assert.equal(h.calls.create,0)
 })

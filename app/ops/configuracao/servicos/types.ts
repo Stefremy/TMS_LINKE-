@@ -38,6 +38,7 @@ export interface ServicoLinke {
   // Conexão Webservice para Emissão Automática de Guias / API
   webservice_connection_id?: string // ID da conexão de Webservice
   webservice_service_code?: string // Código de subproduto na API (ex: EMSF056.01, 19, 48, etc.)
+  island_transport_mode?: import("@/lib/services/shipment-service-options").IslandTransportMode
   parcel_limit_product?: import("@/lib/pricing/oversize-surcharge").ParcelLimitProduct
   volumetric_rule?: import("@/lib/pricing/chargeable-weight").VolumetricRule
   

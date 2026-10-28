@@ -1,5 +1,6 @@
 "use server"
 
+import { getServiceIslandTransportMode } from "@/lib/services/shipment-service-options"
 import { getServiceParcelLimitProduct } from "@/lib/pricing/oversize-surcharge"
 
 import { revalidatePath } from "next/cache"
@@ -703,6 +704,7 @@ function normalizeLoadedServico(s: any): any {
     is_primordial: isPrimordialServico(s),
     volumetric_rule: getServiceVolumetricRule(s),
     parcel_limit_product: getServiceParcelLimitProduct(s),
+    island_transport_mode: getServiceIslandTransportMode(s),
     ...(carrierGroup ? { carrier_group: carrierGroup } : {}),
     ...(normalizedAllowed !== undefined ? { allowed_zones: normalizedAllowed } : {}),
     ...(Array.isArray(s.zones) ? { zones: normalizedZones } : {}),

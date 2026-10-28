@@ -29,7 +29,8 @@ import { Badge } from "@/components/ui/badge"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { emitClientGuiaAction } from "@/app/actions/shipments"
-import { getServiceDestinationCountries, getServiceDestinationZone } from "@/lib/services/service-destinations"
+import { getServiceDestinationZone } from "@/lib/services/service-destinations"
+import { getAuthorizedDestinationCountries, getDestinationServiceOptions, getServiceIslandTransportMode, isDestinationPostalReady, isPortugueseIslandDestination, type IslandTransportMode } from "@/lib/services/shipment-service-options"
 import { getClientSpecialFees, isCorreosLinkeService } from "@/lib/pricing/calculate-shipment-quote"
 import { calculateClientShipmentPreview } from "@/lib/pricing/calculate-client-shipment-preview"
 import { assertShipmentDestinationAvailable } from "@/lib/services/shipment-destination-policy"
@@ -75,7 +76,7 @@ export function ClientCreateGuia() {
   const handleSelectRecipient = (r: any) => {
     const country = (r.country || "PT").trim().toUpperCase()
     if (!destinationCountries.some(option => option.code === country)) {
-      setSubmitError("O país deste destinatário não está disponível no serviço selecionado. Escolha outro serviço antes de carregar o destinatário.")
+      setSubmitError("O país deste destinatário não tem serviços autorizados disponíveis para este cliente.")
       setShowAgendaDropdown(false)
       return
     }
@@ -90,6 +91,7 @@ export function ClientCreateGuia() {
   }
   const [selectedCarrierCode, setSelectedCarrierCode] = React.useState<string>("ctt_expresso")
   const [selectedServiceId, setSelectedServiceId] = React.useState<string>("")
+  const [islandTransportChoice, setIslandTransportChoice] = React.useState<IslandTransportMode | "">("")
   const [parcelWeights, setParcelWeights] = React.useState<string[]>([])
   const [volumesCount, setVolumesCount] = React.useState("1")
   const [lengthCm, setLengthCm] = React.useState("")
@@ -158,10 +160,7 @@ export function ClientCreateGuia() {
       const allowed = (currentClient.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter(w => w.is_enabled)
       const defWs = allowed.find(w => w.is_default) || allowed[0]
       if (defWs) setSelectedCarrierCode(defWs.code)
-      const services = (servicos || []).filter(s => s.is_active !== false &&
-        (!Array.isArray(currentClient.assigned_linke_service_ids) || currentClient.assigned_linke_service_ids.includes(s.id)))
-      const selected = services.find(s => s.id === currentClient.default_linke_table_id) || services[0]
-      if (selected) setSelectedServiceId(selected.id)
+      // Destination coverage determines the selection after country/postal entry.
 
       // Initialize custom sender with client data
       setCustomSenderName(currentClient.legal_name || currentClient.short_name || "")
@@ -190,27 +189,43 @@ export function ClientCreateGuia() {
     return active
   }, [servicosLinke, currentClient])
 
-  // Active chosen Linke service
-  const activeLinkeService = availableServicos.find((s) => s.id === selectedServiceId) || availableServicos[0]
+  const destinationCountries = React.useMemo(() => getAuthorizedDestinationCountries(availableServicos), [availableServicos])
+  React.useEffect(() => {
+    if (loadingClient || !recipientCountry || destinationCountries.some(country => country.code === recipientCountry)) return
+    setRecipientCountry("")
+    setRecipientPostal("")
+    setRecipientCity("")
+    postalLookup.reset()
+  }, [loadingClient, recipientCountry, destinationCountries, postalLookup.reset])
+  const destinationReady = isDestinationPostalReady(recipientCountry, recipientPostal)
+  const isIslandDestination = isPortugueseIslandDestination(recipientCountry, recipientPostal)
+  const destinationServices = React.useMemo(() => getDestinationServiceOptions(availableServicos, recipientCountry, recipientPostal), [availableServicos, recipientCountry, recipientPostal])
+  const islandModes = React.useMemo(() => isIslandDestination
+    ? [...new Set(destinationServices.map(getServiceIslandTransportMode))] : [], [destinationServices, isIslandDestination])
+  const selectedIslandMode = isIslandDestination
+    ? islandModes.includes(islandTransportChoice as IslandTransportMode) ? islandTransportChoice as IslandTransportMode
+      : islandModes.length === 1 ? islandModes[0] : undefined
+    : undefined
+  const compatibleServices = React.useMemo(() => isIslandDestination && !selectedIslandMode ? []
+    : getDestinationServiceOptions(availableServicos, recipientCountry, recipientPostal, selectedIslandMode),
+    [availableServicos, recipientCountry, recipientPostal, isIslandDestination, selectedIslandMode])
+  const activeLinkeService = compatibleServices.find(service => service.id === selectedServiceId)
+    || (compatibleServices.length === 1 ? compatibleServices[0] : undefined)
+
+  React.useEffect(() => {
+    if (!isIslandDestination) setIslandTransportChoice("")
+    else if (islandTransportChoice && !islandModes.includes(islandTransportChoice)) setIslandTransportChoice("")
+  }, [isIslandDestination, islandTransportChoice, islandModes])
+  React.useEffect(() => {
+    if (compatibleServices.some(service => service.id === selectedServiceId)) return
+    setSelectedServiceId(compatibleServices.length === 1 ? compatibleServices[0].id : "")
+  }, [compatibleServices, selectedServiceId])
   const parcelWeightsKg = React.useMemo(() => {
     const count = Number(volumesCount)
     const limit = getParcelLimits(activeLinkeService ?? {}, recipientCountry)?.maxWeightKg ?? Infinity
     if (!Number.isSafeInteger(count) || count <= 1 || count > 1000 || Number(weight) <= limit || !parcelWeights.some(Boolean)) return undefined
     return Array.from({ length: count }, (_, i) => Number(parcelWeights[i] ?? ""))
   }, [activeLinkeService, recipientCountry, weight, volumesCount, parcelWeights])
-  const destinationCountries = React.useMemo(() => getServiceDestinationCountries(activeLinkeService), [activeLinkeService])
-  const resetRecipientPostal = postalLookup.reset
-
-  React.useEffect(() => {
-    if (!activeLinkeService || destinationCountries.some(country => country.code === recipientCountry)) return
-    const nextCountry = destinationCountries.length === 1 ? destinationCountries[0].code : ""
-    if (recipientCountry === nextCountry) return
-    setRecipientCountry(nextCountry)
-    setRecipientPostal("")
-    setRecipientCity("")
-    resetRecipientPostal()
-  }, [activeLinkeService, destinationCountries, recipientCountry, resetRecipientPostal])
-
   // Available special services fees
   const specialFeesList: ClientSpecialServiceFee[] = React.useMemo(() => {
     return getClientSpecialFees(currentClient)
@@ -233,7 +248,12 @@ export function ClientCreateGuia() {
   const calculatedPrice = React.useMemo(() => {
     const destinationZone = activeLinkeService ? getServiceDestinationZone(activeLinkeService, recipientCountry, recipientPostal) : ""
     try {
-      if (!activeLinkeService) throw new Error("Selecione um serviço disponível.")
+      if (!destinationCountries.length) throw new Error("Este cliente não tem países de destino com tarifas configuradas.")
+      if (!destinationReady) throw new Error("Preencha o país e um código postal completo para ver as opções de envio.")
+      assertShipmentDestinationAvailable(recipientCountry, recipientPostal)
+      if (isIslandDestination && islandModes.length > 1 && !selectedIslandMode) throw new Error("Escolha como pretende enviar para as ilhas: aéreo, marítimo ou outra opção disponível.")
+      if (!destinationServices.length) throw new Error("Não existem serviços autorizados com cobertura e tarifas para este destino. Contacte o apoio Linke.")
+      if (!activeLinkeService) throw new Error("Selecione uma das opções de envio disponíveis.")
       if (!destinationCountries.length) throw new Error("Este serviço não tem países de destino com tarifas configuradas.")
       if (!destinationCountries.some(country => country.code === recipientCountry)) throw new Error("Selecione um país disponível para este serviço.")
       assertShipmentDestinationAvailable(recipientCountry, recipientPostal)
@@ -253,7 +273,7 @@ export function ClientCreateGuia() {
         blockedReason: error instanceof Error ? error.message : "Não foi possível calcular a tarifa.",
       }
     }
-  }, [currentClient, activeLinkeService, destinationCountries, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount, lengthCm, widthCm, heightCm, volumesCount, parcelWeightsKg])
+  }, [currentClient, activeLinkeService, destinationCountries, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount, lengthCm, widthCm, heightCm, volumesCount, parcelWeightsKg, destinationReady, isIslandDestination, islandModes, selectedIslandMode, destinationServices])
 
   const handleCreateShipment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -304,6 +324,7 @@ export function ClientCreateGuia() {
         recipientEmail,
         weightKg: parseFloat(weight) || 1.0,
         volumesCount: parseInt(volumesCount) || 1,
+        islandTransportMode: selectedIslandMode,
         lengthCm: Number(lengthCm),
         widthCm: Number(widthCm),
         heightCm: Number(heightCm),
@@ -572,59 +593,6 @@ export function ClientCreateGuia() {
             </div>
           )}
 
-          {/* SELEÇÃO DO SERVIÇO LINKE */}
-          <div className="bg-[#f3f8f4] p-5 rounded-2xl border border-[#d8e6db] space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-zinc-900 flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-white border border-zinc-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={getCarrierLogo(activeLinkeService?.preferred_carrier_name || "ctt") || ""}
-                    alt="Transportadora"
-                    className="max-w-full max-h-full object-contain"
-                  />
-                </div>
-                <span>Serviço de Transporte Linke</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">
-                  {activeLinkeService?.category || "Nacional"}
-                </span>
-              </div>
-            </div>
-
-            <div className="relative">
-              <select
-                aria-label="Serviço de Transporte Linke"
-                value={activeLinkeService?.id || ""}
-                onChange={(e) => setSelectedServiceId(e.target.value)}
-                disabled={!availableServicos.length}
-                className="w-full pl-3.5 pr-8 py-3 bg-white border border-zinc-300 rounded-xl text-xs font-semibold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774] cursor-pointer shadow-2xs"
-              >
-                {!availableServicos.length && <option value="">Sem serviços autorizados</option>}
-                {availableServicos.map(service => (
-                  <option key={service.id} value={service.id}>{getClientServiceLabel(service)}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
-            </div>
-
-            <p className="text-[11px] text-zinc-500">Escolha o serviço primeiro. Os países de destino são apresentados conforme a cobertura e as tarifas desta tabela.</p>
-
-            {calculatedPrice.isBlocked && (
-              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-[#faf6ec] border border-[#ded0af] text-[#725a35] text-xs">
-                <AlertCircle className="w-4 h-4 shrink-0 text-[#9a7d48] mt-0.5" />
-                <div className="flex-1">
-                  <div className="font-bold">Preço indisponível para este envio</div>
-                  <div className="text-[11px] text-[#806b49] mt-0.5">{calculatedPrice.blockedReason}</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Remetente e Destinatário */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
             {/* Remetente Card */}
             <div className="space-y-3 bg-[#f3f8f4] p-4 rounded-2xl border border-[#d8e6db]">
               <div className="flex items-center justify-between">
@@ -694,9 +662,11 @@ export function ClientCreateGuia() {
               )}
             </div>
 
-            {/* Destinatário Name & Country */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="md:col-span-2 space-y-1.5 relative">
+          <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-4" aria-label="Destino do envio">
+            <h2 className="text-xs font-bold text-zinc-900">1. Para onde vai o envio?</h2>
+            {/* Destinatário */}
+            <div className="min-w-0">
+              <div className="space-y-1.5 relative">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-zinc-700">Nome do Destinatário *</label>
                   {currentClient.id && (
@@ -757,6 +727,10 @@ export function ClientCreateGuia() {
                   }`}
                 />
               </div>
+
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-zinc-700">País de Destino *</label>
                 <select
@@ -779,11 +753,6 @@ export function ClientCreateGuia() {
                   ))}
                 </select>
               </div>
-            </div>
-          </div>
-
-          {/* Código Postal & Cidade, Morada de Entrega */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-bold text-zinc-700">Código Postal *</label>
@@ -820,6 +789,13 @@ export function ClientCreateGuia() {
                 }`}
               />
             </div>
+            </div>
+            {destinationReady && <p role="status" className="text-xs text-zinc-600">{recipientCountry === "PT" ? isIslandDestination ? "Destino: Açores ou Madeira" : "Destino: Portugal Continental" : recipientCountry === "ES" ? recipientPostal.startsWith("07") ? "Destino: Baleares" : "Destino: Espanha" : "Destino internacional"}</p>}
+          </section>
+
+          {/* Cidade e morada de entrega */}
+          <div className="grid grid-cols-1 gap-4">
+
 
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-zinc-700">Localidade / Cidade *</label>
@@ -855,21 +831,6 @@ export function ClientCreateGuia() {
           </div>
 
           {!isCorreosService && recipientCountry !== "PT" && <CttExportFields country={recipientCountry} postalCode={recipientPostal} key={`${recipientCountry}-${generatedGuia || "new"}`} />}
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-zinc-700">Peso Total (kg) *</label>
-              <input
-                name="weight_kg"
-                type="number"
-                step="0.1"
-                min="0.1"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
-              />
-            </div>
-          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1.5">
@@ -981,6 +942,21 @@ export function ClientCreateGuia() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-zinc-700">Peso Total (kg) *</label>
+              <input
+                name="weight_kg"
+                type="number"
+                step="0.1"
+                min="0.1"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-zinc-300 rounded-xl text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774]"
+              />
+            </div>
+          </div>
+
           <ShipmentOversizeSummary service={activeLinkeService} country={recipientCountry} weightKg={Number(weight)}
             lengthCm={Number(lengthCm)} widthCm={Number(widthCm)} heightCm={Number(heightCm)} volumesCount={Number(volumesCount)}
             parcelWeightsKg={parcelWeightsKg} weights={parcelWeights} onWeightsChange={setParcelWeights} />
@@ -1061,6 +1037,68 @@ export function ClientCreateGuia() {
                 )
               })}
             </div>
+          </div>
+
+          {/* SELEÇÃO DO SERVIÇO LINKE */}
+          <div className="bg-[#f3f8f4] p-5 rounded-2xl border border-[#d8e6db] space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-zinc-900 flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-white border border-zinc-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={getCarrierLogo(activeLinkeService?.preferred_carrier_name || "ctt") || ""}
+                    alt="Transportadora"
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+                <span>2. Serviço de Transporte Linke</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)] px-2 py-0.5 rounded-md">
+                  {activeLinkeService?.category || "Opções de envio"}
+                </span>
+              </div>
+            </div>
+
+            {isIslandDestination && islandModes.length > 0 && <fieldset className="rounded-xl border border-[#d8e6db] bg-white p-3">
+              <legend className="px-1 text-xs font-semibold text-zinc-800">Como pretende enviar para as ilhas?</legend>
+              <div className="flex flex-wrap gap-3">{islandModes.map(mode => <label key={mode}
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs ${selectedIslandMode === mode ? "border-[#718774] bg-[#f3f8f4] text-[#3e5845]" : "border-zinc-200 text-zinc-700"}`}>
+                <input type="radio" name="island_transport_mode" value={mode} checked={selectedIslandMode === mode}
+                  onChange={() => setIslandTransportChoice(mode)} className="accent-[#38664b]" />
+                {mode === "air" ? "Aéreo (avião)" : mode === "sea" ? "Marítimo (barco)" : "Outros serviços"}
+              </label>)}</div>
+              {islandModes.length === 1 && <p className="mt-2 text-[11px] text-zinc-500">Esta é a modalidade disponível para o seu destino e conta.</p>}
+              <p className="mt-2 text-[11px] text-zinc-500">O prazo para as ilhas depende do percurso. Confirme o prazo da opção escolhida.</p>
+            </fieldset>}
+
+            <div className="relative">
+              <select
+                aria-label="Serviço de Transporte Linke"
+                value={activeLinkeService?.id || ""}
+                onChange={(e) => setSelectedServiceId(e.target.value)}
+                disabled={!compatibleServices.length}
+                className="w-full pl-3.5 pr-8 py-3 bg-white border border-zinc-300 rounded-xl text-xs font-semibold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-[#718774]/25 focus:border-[#718774] cursor-pointer shadow-2xs"
+              >
+                <option value="">{!destinationReady ? "Preencha o destino primeiro" : isIslandDestination && !selectedIslandMode && islandModes.length > 1 ? "Escolha aéreo ou marítimo" : compatibleServices.length ? "Selecione o serviço" : "Sem serviços para este destino"}</option>
+                {compatibleServices.map(service => (
+                  <option key={service.id} value={service.id}>{getClientServiceLabel(service)}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+            </div>
+
+            <p className="text-[11px] text-zinc-500">As opções apresentadas respeitam o destino e os serviços autorizados na sua conta.</p>
+
+            {destinationReady && calculatedPrice.isBlocked && (
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-[#faf6ec] border border-[#ded0af] text-[#725a35] text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#9a7d48] mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-bold">Preço indisponível para este envio</div>
+                  <div className="text-[11px] text-[#806b49] mt-0.5">{calculatedPrice.blockedReason}</div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* SIMULAÇÃO DE PREÇO & BOTÃO DE EMISSÃO */}

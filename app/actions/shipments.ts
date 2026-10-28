@@ -1,5 +1,6 @@
 "use server"
 
+import { getServiceIslandTransportMode, isPortugueseIslandDestination, type IslandTransportMode } from "@/lib/services/shipment-service-options"
 import { calculateOversizeSurcharge } from "@/lib/pricing/oversize-surcharge"
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -237,6 +238,7 @@ export async function emitClientGuiaAction(data: {
   recipientPhone?: string
   recipientEmail?: string
   weightKg: number
+  islandTransportMode?: IslandTransportMode
   parcelWeightsKg?: number[]
   volumesCount?: number
   serviceId?: string
@@ -309,6 +311,11 @@ export async function emitClientGuiaAction(data: {
       const recipientCountry = (data.recipientCountry || "PT").trim().toUpperCase()
       const recipientPostal = (data.recipientPostal || "").trim()
       assertShipmentDestinationAvailable(recipientCountry, recipientPostal)
+      if (data.islandTransportMode !== undefined && (
+        !["air", "sea", "other"].includes(data.islandTransportMode) ||
+        !isPortugueseIslandDestination(recipientCountry, recipientPostal) ||
+        getServiceIslandTransportMode(chosenService) !== data.islandTransportMode
+      )) throw new ShipmentPricingError("O serviço selecionado não corresponde à modalidade de transporte para as ilhas. Volte a selecionar o serviço.")
       if (recipientCountry === "ES" && !/^\d{5}$/.test(recipientPostal)) {
         throw new ShipmentPricingError("O código postal de Espanha deve ter 5 dígitos, sem hífen (ex.: 28013).")
       }
@@ -389,6 +396,7 @@ export async function emitClientGuiaAction(data: {
       volumetric_weight_kg: pricingWeight.volumetricWeightKg,
       volumetric_divisor: pricingWeight.volumetricDivisor,
       parcel_weights_kg: data.parcelWeightsKg,
+      island_transport_mode: data.islandTransportMode,
       package_count: data.volumesCount || 1,
       width_cm: data.widthCm,
       height_cm: data.heightCm,
