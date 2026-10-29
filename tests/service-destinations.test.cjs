@@ -127,3 +127,18 @@ test('multi-country primordial contracted services expose and map PT, ES and isl
   assert.equal(detectCarrierGroup(customCor), 'correos')
 })
 
+
+test('client price overrides are isolated per table: a variant and its original never share adjusted prices', () => {
+  const {resolveZoneTierOverrides,getServiceZoneOverrideKey}=load('lib/pricing/calculate-shipment-price.ts')
+  const zones = [{ zone_code: 'PT-CONT', tiers: [{ weight_max: 5, sell_price: 4, cost_price: 3, enabled: true }] }]
+  const original = { id: 'srv_orig', zones }
+  const variant = { id: 'srv_variant', zones: JSON.parse(JSON.stringify(zones)) }
+  const overrides = {
+    [getServiceZoneOverrideKey('srv_variant', 'PT-CONT')]: [2.5],
+    [getServiceZoneOverrideKey('srv_orig', 'PT-ILHAS')]: [9],
+  }
+  assert.deepEqual(resolveZoneTierOverrides(overrides, variant, 'PT-CONT'), [2.5])
+  assert.equal(resolveZoneTierOverrides(overrides, original, 'PT-CONT'), undefined)
+  assert.equal(resolveZoneTierOverrides(overrides, variant, 'PT-ILHAS'), undefined)
+  assert.equal(original.zones[0].tiers[0].sell_price, 4)
+})

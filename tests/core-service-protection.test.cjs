@@ -354,6 +354,12 @@ test('non-manager staff can still create custom variants from base tables and ma
   const sourcePrices = fixture.zones.map(z => z.tiers.map(t => [t.cost_price, t.sell_price, t.margin_pct]))
   const variantPrices = variant.data.zones.map(z => z.tiers.map(t => [t.cost_price, t.sell_price, t.margin_pct]))
   assert.deepEqual(variantPrices, sourcePrices)
+  // Isolation: the variant shares no objects or tier ids with its source table
+  assert.notEqual(variant.data.zones, fixture.zones)
+  assert.notEqual(variant.data.zones[0].tiers[0], fixture.zones[0].tiers[0])
+  assert.notEqual(variant.data.zones[0].tiers[0].id, fixture.zones[0].tiers[0].id)
+  variant.data.zones[0].tiers[0].sell_price = 999
+  assert.notEqual(fixture.zones[0].tiers[0].sell_price, 999)
 
   const hCustom = harness({ email: 'aldara.linke@gmail.com', role: 'employee' })
   assert.equal((await hCustom.actions.saveServicoLinkeAction({ ...fixture, name: 'Updated Custom' })).success, true)

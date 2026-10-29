@@ -657,6 +657,19 @@ export function ServicoModal({
     })
   }
 
+  /** Immutable tier edit: never mutates objects shared with the catalogue list or other tables. */
+  const updateTierField = (zoneIdx: number, tierIdx: number, patch: Partial<PriceTierLinke>) => {
+    setFormData((prev) => {
+      const zones = [...(prev.zones || [])]
+      const zone = zones[zoneIdx]
+      if (!zone?.tiers?.[tierIdx]) return prev
+      const tiers = [...zone.tiers]
+      tiers[tierIdx] = { ...tiers[tierIdx], ...patch }
+      zones[zoneIdx] = { ...zone, tiers }
+      return { ...prev, zones }
+    })
+  }
+
   const handleTierCostChange = (zoneIdx: number, tierIdx: number, cost: number) => {
     setFormData((prev) => {
       const zones = [...(prev.zones || [])]
@@ -2014,9 +2027,7 @@ export function ServicoModal({
                                   type="text"
                                   value={tier.label}
                                   onChange={(e) => {
-                                    const zones = [...(formData.zones || [])]
-                                    zones[activeZoneIndex].tiers[tierIdx].label = e.target.value
-                                    setFormData({ ...formData, zones })
+                                    updateTierField(activeZoneIndex, tierIdx, { label: e.target.value })
                                   }}
                                   className="w-32 px-2 py-1 bg-white border border-slate-200 rounded-md text-xs text-slate-900 font-medium focus:ring-1 focus:ring-slate-900"
                                 />
@@ -2028,9 +2039,7 @@ export function ServicoModal({
                                   step="0.5"
                                   value={tier.weight_max}
                                   onChange={(e) => {
-                                    const zones = [...(formData.zones || [])]
-                                    zones[activeZoneIndex].tiers[tierIdx].weight_max = parseFloat(e.target.value) || 0
-                                    setFormData({ ...formData, zones })
+                                    updateTierField(activeZoneIndex, tierIdx, { weight_max: parseFloat(e.target.value) || 0 })
                                   }}
                                   className="w-16 px-1.5 py-1 bg-white border border-slate-200 rounded-md text-xs font-mono font-medium text-center focus:ring-1 focus:ring-slate-900"
                                 />
@@ -2077,9 +2086,7 @@ export function ServicoModal({
                                   type="text"
                                   value={tier.delivery_time}
                                   onChange={(e) => {
-                                    const zones = [...(formData.zones || [])]
-                                    zones[activeZoneIndex].tiers[tierIdx].delivery_time = e.target.value
-                                    setFormData({ ...formData, zones })
+                                    updateTierField(activeZoneIndex, tierIdx, { delivery_time: e.target.value })
                                   }}
                                   className="w-16 px-1.5 py-1 text-center bg-white border border-slate-200 rounded-md text-xs font-medium text-slate-700 focus:ring-1 focus:ring-slate-900"
                                 />

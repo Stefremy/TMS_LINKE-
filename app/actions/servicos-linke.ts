@@ -1039,16 +1039,16 @@ export async function duplicateServicoForClientAction(
 
   // A variante copia exatamente os preços de custo/venda da tabela de origem (todas as zonas).
   // Ajustes comerciais por cliente fazem-se depois em "Ajustar Preços" (overrides por zona).
-  const clonedZones = source.zones.map((zone) => ({
+  const clonedZones = JSON.parse(JSON.stringify(source.zones)).map((zone: ServicoLinke["zones"][number], zIdx: number) => ({
     ...zone,
-    tiers: zone.tiers.map((t, idx) => ({
+    tiers: zone.tiers.map((t: ServicoLinke["zones"][number]["tiers"][number], idx: number) => ({
       ...t,
-      id: `t_clone_${Date.now()}_${idx}`,
+      id: `t_clone_${newId}_${zIdx}_${idx}`,
     })),
   }))
 
   const clonedRecord: ServicoLinke = {
-    ...source,
+    ...JSON.parse(JSON.stringify(source)),
     id: newId,
     code: newCode,
     name: `${source.name.replace(/\(.*?\)/g, "").trim()} (${targetProfile})`,
