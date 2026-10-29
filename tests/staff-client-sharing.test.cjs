@@ -206,3 +206,12 @@ test('invalid payment deadlines are rejected by the server without saving the cl
   assert.equal(h.db.writes.length,0)
  }
 })
+
+test('separate billing fields persist and older partial client forms cannot erase them',async()=>{
+ const h=harness()
+ const saved=await h.actions.saveClienteAction({id:A,short_name:'Store A',address:'Pickup',billing_same_as_pickup:false,billing_address:'  Fiscal  ',billing_postal_code:'4000-001',billing_city:'Porto',billing_country_code:'pt'})
+ assert.equal(saved.data.address,'Pickup');assert.equal(saved.data.billing_address,'Fiscal');assert.equal(saved.data.billing_country_code,'PT')
+ h.tables.audit_log.push({id:'fiscal-saved',tenant_id:TENANT,action:'client_data',created_at:'2099-01-01T00:00:00Z',details:saved.data})
+ const next=await h.actions.saveClienteAction({id:A,short_name:'Edited'})
+ assert.equal(next.data.billing_address,'Fiscal');assert.equal(next.data.billing_same_as_pickup,false)
+})

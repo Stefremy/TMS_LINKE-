@@ -91,6 +91,11 @@ export interface Cliente {
   address: string
   postal_code: string
   country_code: string
+  billing_same_as_pickup?: boolean
+  billing_address?: string
+  billing_postal_code?: string
+  billing_city?: string
+  billing_country_code?: string
   email: string
   billing_email?: string
   phone: string

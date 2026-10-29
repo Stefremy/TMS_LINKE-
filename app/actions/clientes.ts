@@ -1,5 +1,7 @@
 "use server"
 
+import { normalizeClientBillingFields } from "@/lib/client-addresses"
+
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase/server"
@@ -321,6 +323,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     country_code: cliente.country_code || "PT",
     email: cliente.email?.trim() || "",
     billing_email: cliente.billing_email?.trim() || "",
+    ...normalizeClientBillingFields({ ...previous?.details, ...cliente }),
     phone: cliente.phone?.trim() || "",
     mobile_phone: cliente.mobile_phone?.trim() || "",
     manager_name: cliente.manager_name?.trim() || "",

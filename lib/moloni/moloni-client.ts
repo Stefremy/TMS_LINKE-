@@ -358,6 +358,18 @@ export class MoloniClient {
     }
   }
 
+  /** Country IDs come from Moloni's own country catalogue; never guess a foreign ID. */
+  async getCountryId(countryCode = "PT"): Promise<number> {
+    const iso = countryCode.trim().toUpperCase() === "UK" ? "GB" : countryCode.trim().toUpperCase()
+    if (iso === "PT") return 1 // Existing Portuguese integration ID.
+    if (!/^[A-Z]{2}$/.test(iso)) throw new Error("País de faturação inválido.")
+    const countries = await this.request("countries/getAll", {})
+    const matched = Array.isArray(countries) ? countries.find((item: { iso_3166_1?: string }) => item.iso_3166_1?.toUpperCase() === iso) : undefined
+    const id = Number(matched?.country_id)
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("País de faturação não encontrado no Moloni.")
+    return id
+  }
+
   /**
    * Cria um cliente no Moloni
    */
@@ -369,6 +381,7 @@ export class MoloniClient {
     zipCode: string;
     city: string;
     country_id?: number;
+    countryCode?: string;
     email?: string;
     phone?: string;
   }) {
@@ -383,7 +396,7 @@ export class MoloniClient {
       address: customerData.address || "Desconhecida",
       zip_code: customerData.zipCode || "1000-001",
       city: customerData.city || "Desconhecida",
-      country_id: customerData.country_id || 1, // 1 is PT
+      country_id: customerData.country_id || await this.getCountryId(customerData.countryCode || "PT"),
       email: customerData.email || "",
       phone: customerData.phone || "",
       maturity_date_id: maturityDateId,
@@ -410,6 +423,7 @@ export class MoloniClient {
     zipCode: string;
     city: string;
     country_id?: number;
+    countryCode?: string;
     email?: string;
     phone?: string;
   }) {
@@ -425,7 +439,7 @@ export class MoloniClient {
       address: customerData.address || "Desconhecida",
       zip_code: customerData.zipCode || "1000-001",
       city: customerData.city || "Desconhecida",
-      country_id: customerData.country_id || 1, // 1 is PT
+      country_id: customerData.country_id || await this.getCountryId(customerData.countryCode || "PT"),
       email: customerData.email || "",
       phone: customerData.phone || "",
       maturity_date_id: maturityDateId,

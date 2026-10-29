@@ -1,5 +1,8 @@
 "use client"
 
+import { CountrySelect } from "@/components/country-select"
+import { getClientBillingAddress } from "@/lib/client-addresses"
+
 import * as React from "react"
 import {CreditNoteButton} from "../notas-credito/components/CreditNoteButton"
 import Link from "next/link"
@@ -29,6 +32,13 @@ interface Client {
   nif?: string
   address?: string
   postal_code?: string
+  country_code?: string
+  billing_same_as_pickup?: boolean
+  billing_address?: string
+  billing_postal_code?: string
+  billing_city?: string
+  billing_country_code?: string
+  billing_email?: string
   city?: string
   email?: string
   phone?: string
@@ -78,6 +88,7 @@ export default function FaturaPersonalizadaClient({
   const [clientAddress, setClientAddress] = React.useState<string>("")
   const [clientZip, setClientZip] = React.useState<string>("")
   const [clientCity, setClientCity] = React.useState<string>("")
+  const [clientCountryCode, setClientCountryCode] = React.useState<string>("PT")
   const [clientEmail, setClientEmail] = React.useState<string>("")
   const [clientPhone, setClientPhone] = React.useState<string>("")
 
@@ -125,10 +136,12 @@ export default function FaturaPersonalizadaClient({
     if (found) {
       setClientName(found.legal_name || found.short_name || "")
       setClientVat(found.nif || "")
-      setClientAddress(found.address || "")
-      setClientZip(found.postal_code || "")
-      setClientCity(found.city || "Portugal")
-      setClientEmail(found.email || "")
+      const billing = getClientBillingAddress(found)
+      setClientAddress(billing.address)
+      setClientZip(billing.postal_code)
+      setClientCity(billing.city)
+      setClientCountryCode(billing.country_code)
+      setClientEmail(found.billing_email || found.email || "")
       setClientPhone(found.phone || "")
     }
   }
@@ -245,6 +258,7 @@ export default function FaturaPersonalizadaClient({
         clientAddress,
         clientZip,
         clientCity,
+        clientCountryCode,
         clientEmail,
         clientPhone,
         invoiceDate,
@@ -541,6 +555,11 @@ export default function FaturaPersonalizadaClient({
                 />
               </div>
 
+              <div>
+                <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">País de faturação</label>
+                <CountrySelect value={clientCountryCode} onValueChange={setClientCountryCode}
+                  className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2 text-xs" />
+              </div>
               <div>
                 <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">
                   Email de Faturação

@@ -1,5 +1,7 @@
 "use server"
 
+import { invoiceBillingAddress, getClientBillingAddress, usesPrincipalBillingAddress } from "@/lib/client-addresses"
+
 import {loadInvoiceCredits, invoiceCreditSummary} from "@/lib/billing/credit-notes/balances"
 import { createAdminClient } from "@/lib/supabase/server"
 import { MoloniClient } from "@/lib/moloni/moloni-client"
@@ -39,6 +41,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
   const persistedClient = (await getClientesAction(client.id)).find((c: any) => c.id === client.id)
   if (!persistedClient) throw new Error("Cliente não encontrado nesta empresa.")
   client = { ...persistedClient, tenant_id: ctx.tenant_id }
+  const billingAddress = invoiceBillingAddress(client)
   const selectedIds = [...new Set(shipments.map((s: any) => s.id))]
   const { data: authoritativeShipments, error: shipmentError } = await supabase.from('shipments').select(SHIPMENT_LIST_COLUMNS)
     .eq('tenant_id', ctx.tenant_id).eq('client_id', client.id).in('id', selectedIds)
@@ -104,12 +107,13 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
               vat: client.nif || "999999990",
               number: moloniCust.number,
               name: client.legal_name || client.short_name || "Cliente Desconhecido",
-              address: client.address || "Desconhecida",
-              zipCode: client.postal_code || "0000-000",
-              city: client.city || "Desconhecida",
+              address: billingAddress.address || "Desconhecida",
+              zipCode: billingAddress.postal_code || "0000-000",
+              city: billingAddress.city || "Desconhecida",
+              countryCode: billingAddress.country_code,
               email: client.email,
               phone: client.phone
-            }).catch(e => console.warn("Erro ao atualizar cliente Moloni:", e))
+            })
           }
         }
         
@@ -118,9 +122,10 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
             vat: client.nif || "999999990",
             number: `C${Date.now()}`,
             name: client.legal_name || client.short_name || "Cliente Desconhecido",
-            address: client.address || "Desconhecida",
-            zipCode: client.postal_code || "0000-000",
-            city: client.city || "Desconhecida",
+            address: billingAddress.address || "Desconhecida",
+            zipCode: billingAddress.postal_code || "0000-000",
+            city: billingAddress.city || "Desconhecida",
+            countryCode: billingAddress.country_code,
             email: client.email,
             phone: client.phone
           })
@@ -541,6 +546,8 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       phone: ""
     }
 
+    const billingAddress = invoiceBillingAddress(client)
+
     // 4. Verificar ou Criar cliente no Moloni
     let moloniCustomerId = null
     if (client.nif && client.nif !== "999999990") {
@@ -553,12 +560,13 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
           vat: client.nif,
           number: moloniCust.number,
           name: client.legal_name || client.short_name || stmt.client_name || "Cliente TMS",
-          address: (client as any).address || "Desconhecida",
-          zipCode: (client as any).postal_code || "0000-000",
-          city: (client as any).city || "Desconhecida",
+          address: billingAddress.address || "Desconhecida",
+          zipCode: billingAddress.postal_code || "0000-000",
+          city: billingAddress.city || "Desconhecida",
+          countryCode: billingAddress.country_code,
           email: client.email || (client as any).billing_email || "",
           phone: client.phone || ""
-        }).catch(e => console.warn("Erro ao atualizar cliente Moloni:", e))
+        })
       }
     }
 
@@ -567,9 +575,10 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
         vat: client.nif || "999999990",
         number: `C${Date.now()}`,
         name: client.legal_name || client.short_name || stmt.client_name || "Cliente TMS",
-        address: (client as any).address || "Desconhecida",
-        zipCode: (client as any).postal_code || "0000-000",
-        city: (client as any).city || "Desconhecida",
+        address: billingAddress.address || "Desconhecida",
+        zipCode: billingAddress.postal_code || "0000-000",
+        city: billingAddress.city || "Desconhecida",
+        countryCode: billingAddress.country_code,
         email: client.email || (client as any).billing_email || "",
         phone: client.phone || ""
       })
@@ -729,6 +738,7 @@ export interface CustomInvoicePayload {
   clientAddress?: string
   clientZip?: string
   clientCity?: string
+  clientCountryCode?: string
   clientEmail?: string
   clientPhone?: string
   invoiceDate: string
@@ -747,6 +757,18 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
   await requireEmployee()
   try {
     const supabase = createAdminClient()
+
+    if (payload.clientId) {
+      const persisted = (await getClientesAction(payload.clientId)).find(client => client.id === payload.clientId)
+      if (!persisted) throw new Error("Cliente não encontrado nesta empresa.")
+      const fiscal = getClientBillingAddress(persisted)
+      payload = { ...payload, clientAddress: payload.clientAddress ?? fiscal.address,
+        clientZip: payload.clientZip ?? fiscal.postal_code, clientCity: payload.clientCity ?? fiscal.city,
+        clientCountryCode: payload.clientCountryCode ?? fiscal.country_code }
+      if (!usesPrincipalBillingAddress(persisted)) invoiceBillingAddress({ billing_same_as_pickup: false,
+        billing_address: payload.clientAddress, billing_postal_code: payload.clientZip,
+        billing_city: payload.clientCity, billing_country_code: payload.clientCountryCode })
+    }
 
     if (!payload.clientName || payload.clientName.trim().length === 0) {
       throw new Error("O nome do cliente é obrigatório.")
@@ -849,6 +871,12 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
           const existingCust = await moloni.getCustomerByVat(vatToSearch)
           if (existingCust?.customer_id) {
             moloniCustomerId = existingCust.customer_id
+            await moloni.updateCustomer(existingCust.customer_id, {
+              vat: vatToSearch, number: existingCust.number, name: payload.clientName,
+              address: payload.clientAddress || "Desconhecida", zipCode: payload.clientZip || "1000-001",
+              city: payload.clientCity || "Portugal", countryCode: payload.clientCountryCode || "PT",
+              email: payload.clientEmail, phone: payload.clientPhone,
+            })
           }
         }
 
@@ -860,6 +888,7 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
             address: payload.clientAddress || "Desconhecida",
             zipCode: payload.clientZip || "1000-001",
             city: payload.clientCity || "Portugal",
+            countryCode: payload.clientCountryCode || "PT",
             email: payload.clientEmail,
             phone: payload.clientPhone
           })
@@ -924,6 +953,7 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
       client_address: payload.clientAddress || "",
       client_zip: payload.clientZip || "",
       client_city: payload.clientCity || "Portugal",
+      client_country_code: payload.clientCountryCode || "PT",
       client_email: payload.clientEmail || "",
       client_phone: payload.clientPhone || "",
       invoice_date: payload.invoiceDate,
@@ -1436,8 +1466,8 @@ export async function sendStatementInvoiceEmailAction(params: {
           statementNumber: stmt.statement_number,
           clientName: clientName,
           clientNif: client?.nif || "",
-          clientAddress: client?.address || "",
-          clientCity: client?.city || "",
+          clientAddress: client ? getClientBillingAddress(client).address : "",
+          clientCity: client ? getClientBillingAddress(client).city : "",
           clientEmail: targetEmail,
           dateStr: new Date(stmt.created_at || Date.now()).toLocaleDateString("pt-PT"),
           totalValue: Number(stmt.total_value || 0),

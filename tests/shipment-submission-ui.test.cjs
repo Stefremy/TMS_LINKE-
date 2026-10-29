@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const { createLoader } = require('./helpers/load-typescript.cjs')
 
 const client = { id: 'store-a', short_name: 'Fixture A', legal_name: 'Fixture A',
-  allowed_webservices: [], assigned_linke_service_ids: ['service-a'], pricing: {} }
+  allowed_webservices: [], assigned_linke_service_ids: ['service-a'], pricing: {}, address:'Armazém de recolha',postal_code:'4800-019',city:'Guimarães',country_code:'PT',billing_same_as_pickup:false,billing_address:'Sede fiscal',billing_postal_code:'4000-001',billing_city:'Porto',billing_country_code:'PT' }
 const service = { id: 'service-a', name: 'CTT Fixture', allowed_zones: ['PT-CONT'], is_active: true,
   zones: [{zone_code:'PT-CONT',tiers:[{weight_max:30,sell_price:8,cost_price:3,enabled:true}]}] }
 const destinations = createLoader({})('lib/services/service-destinations.ts')
@@ -453,4 +453,11 @@ for(const portal of [true,false])test(`${portal?'client portal':'OPS'}: return a
  assert.deepEqual(h.calls.inputs[0].selectedSpecialServices,[])
  h.result.resolve({success:false,error:'Test: no real provider call'})
  await submission
+})
+
+for(const portal of [true,false])test(`${portal?'client portal':'OPS'}: sender defaults use the pickup address even with a separate fiscal address`,async t=>{
+ const h=harness(t,portal),nodes=await h.ready()
+ const submission=nodes.find(n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}})
+ assert.equal(h.calls.inputs[0].senderAddress,'Armazém de recolha')
+ h.result.resolve({success:true,id:'fixture',guia:'MOCK',sellPrice:9});await submission
 })

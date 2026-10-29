@@ -1,3 +1,4 @@
+import { getClientBillingAddress } from "@/lib/client-addresses"
 import { NextRequest } from "next/server"
 import { loadFinancialDocument, financialPdfResponse } from "@/lib/services/billing/document-access"
 import { getClientesAction } from "@/app/actions/clientes"
@@ -67,8 +68,8 @@ export async function GET(
       statementNumber: details.statement_number || "EXT-0000/00-0000",
       clientName: client?.legal_name || client?.short_name || details.client_name || "Cliente TMS",
       clientNif: client?.nif || "",
-      clientAddress: client?.address || "",
-      clientCity: client?.city || "",
+      clientAddress: client ? getClientBillingAddress(client).address : "",
+      clientCity: client ? getClientBillingAddress(client).city : "",
       clientEmail: client?.billing_email || client?.email || "",
       dateStr: details.created_at ? new Date(details.created_at).toLocaleDateString("pt-PT") : new Date().toLocaleDateString("pt-PT"),
       totalValue: Number(details.total_value || 0),

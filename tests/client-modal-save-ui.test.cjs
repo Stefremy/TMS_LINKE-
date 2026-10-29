@@ -90,3 +90,22 @@ test('custom commercial names distinguish services when associating tables to a 
  nodes.find(n=>n.type==='button'&&text(n).includes('Preços & Serviços')).props.onClick();nodes=h.render()
  assert.ok(nodes.some(n=>text(n)==='Aldara Ilhas Aéreo'))
 })
+
+test('the client modal saves a separate invoice address and the same-address switch follows pickup edits without destroying fiscal data',async()=>{
+ const initial={id:'client-a',short_name:'Loja A',address:'Armazém',postal_code:'4800-019',city:'Guimarães',country_code:'PT',billing_same_as_pickup:false,billing_address:'Fiscal',billing_postal_code:'4000-001',billing_city:'Porto',billing_country_code:'PT'}
+ const h=harness(initial);let nodes=h.render()
+ nodes.find(n=>n.type==='button'&&text(n).includes('Moradas & Faturação')).props.onClick();nodes=h.render()
+ assert.equal(nodes.find(n=>n.props.id==='billing_address').props.value,'Fiscal')
+ nodes.find(n=>n.props.id==='billing_address').props.onChange({target:{value:'Nova fiscal'}})
+ await h.button('Gravar Cliente').props.onClick()
+ assert.equal(h.calls.inputs[0].address,'Armazém');assert.equal(h.calls.inputs[0].billing_address,'Nova fiscal')
+ nodes=h.render()
+ const toggle=nodes.find(n=>n.type==='label'&&text(n).includes('Usar a morada principal para faturação')).props.children[0]
+ toggle.props.onChange({target:{checked:true}});nodes=h.render()
+ assert.ok(!nodes.some(n=>n.props.id==='billing_address'))
+ const primary=nodes.find(n=>n.type==='input'&&n.props.value==='Armazém')
+ primary.props.onChange({target:{value:'Novo armazém'}})
+ await h.button('Gravar Cliente').props.onClick()
+ assert.equal(h.calls.inputs[1].billing_same_as_pickup,true);assert.equal(h.calls.inputs[1].address,'Novo armazém')
+ assert.equal(h.calls.inputs[1].billing_address,'Nova fiscal')
+})

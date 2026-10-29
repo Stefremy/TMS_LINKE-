@@ -6,7 +6,7 @@ const TENANT = '11111111-1111-1111-1111-111111111111'
 const CLIENT = '22222222-2222-2222-2222-222222222222'
 const SHIPMENT = '44444444-4444-4444-4444-444444444444'
 const connection = (details = {}) => ({tenant_id: TENANT, action: 'moloni_connection_config', created_at:'2026-10-15', details:{company_id:'42',refresh_token:'saved-refresh',...details}})
-function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false, clientDueDays=undefined, shipmentRows, fiscalDocument, failPriceClaim=false}={}) {
+function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false, clientDueDays=undefined, shipmentRows, fiscalDocument, failPriceClaim=false,clientDetails={},failAddressSync=false}={}) {
   const db = fakeSupabase({clients:[{id:CLIENT,tenant_id:TENANT}],audit_log: [...(connected ? [connection()] : []), ...existing], shipments:shipmentRows || [
     {id:SHIPMENT,client_id:CLIENT,tenant_id:TENANT,sell_price:3.91,service_type:'Nacional'}
   ]}, q=>failArchive&&q.write?.kind==='insert'&&q.write.value.action==='billing_statement'?{message:'unavailable'}:null,{persistInserts:Boolean(fiscalDocument||existing.some(r=>r.action==='credit_note'))})
@@ -17,13 +17,13 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
     if (name === 'claim_weight_safe_billing_shipments') assert.deepEqual(args.p_expected, [{ id: SHIPMENT, price: 3.91 }])
     return { data: null, error: failPriceClaim ? { message: 'Shipment prices changed' } : null }
   }
-  let issued = 0, lastInvoicePayload, lastReceiptPayload
+  let issued = 0, lastInvoicePayload, lastReceiptPayload, lastCustomerPayload
   const load = createLoader({
     'node:crypto':require('node:crypto'),
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
     '@/lib/auth/context':{getTenantId:async()=>TENANT,requireEmployee:async()=>({tenant_id:TENANT,user:{id:'finance'},role:'employee',permissions:['Faturação & Contas Correntes']}),requireUser:async()=>({tenant_id:TENANT})},
     '@/lib/config/public-origins':{moloniRedirectUri:()=> 'https://fixture.invalid/callback'},
-    '@/app/actions/clientes':{getClientesAction:async()=>[{id:CLIENT,tenant_id:TENANT,nif:'999999990',payment_due_days:clientDueDays}]},
+    '@/app/actions/clientes':{getClientesAction:async()=>[{id:CLIENT,tenant_id:TENANT,nif:'999999990',payment_due_days:clientDueDays,...clientDetails}]},
     '@/app/actions/shipments':{},
     '@/lib/services/shipments/shipment-fetcher':{SHIPMENT_LIST_COLUMNS:'*'},
     '@/app/actions/billing-config':{getBillingConfigAction:async()=>({defaultVatRate:23})},
@@ -38,7 +38,7 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
       }
       async createReceipt(payload){lastReceiptPayload=payload;return {document_id:321}}
       async getCustomerByVat(){return {customer_id:1}}
-      async updateCustomer(){}
+      async updateCustomer(id,payload){lastCustomerPayload=payload;if(failAddressSync)throw Error("Fiscal address sync failed")}
       async getTaxId(){return 1}
       async getDocumentSet(){return 1}
       async getGenericProductId(){return 1}
@@ -47,7 +47,7 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
       async getDocumentNumber(){return 'FT 2026/123'}
     }},
   })
-  return {db,load, get lastReceiptPayload(){return lastReceiptPayload}, get claims(){return claims}, get lastInvoicePayload(){return lastInvoicePayload}, get issued(){return issued}, emit:status=>load('app/actions/moloni.ts').internalEmitInvoice(
+  return {db,load, get lastCustomerPayload(){return lastCustomerPayload}, get lastReceiptPayload(){return lastReceiptPayload}, get claims(){return claims}, get lastInvoicePayload(){return lastInvoicePayload}, get issued(){return issued}, emit:status=>load('app/actions/moloni.ts').internalEmitInvoice(
     {id:CLIENT,tenant_id:TENANT,nif:'999999990'},[{id:SHIPMENT,status,sell_price:3.91,service_type:'Nacional'}])}
 }
 
@@ -329,4 +329,38 @@ test('weight repricing: manual invoices validate the price inside the claim befo
     assert.equal(changed.claims,1);assert.equal(changed.issued,0)
     const fresh=invoiceHarness();await fresh.emit('pendente');assert.equal(fresh.claims,1);assert.equal(fresh.issued,1)
   } finally { if(enabled===undefined)delete process.env.CARRIER_WEIGHT_REPRICING_ENABLED;else process.env.CARRIER_WEIGHT_REPRICING_ENABLED=enabled }
+})
+
+test('manual invoices use the persisted billing address instead of the pickup address',async()=>{
+ const h=invoiceHarness({clientDetails:{address:'Armazém Guimarães',postal_code:'4800-019',city:'Guimarães',billing_same_as_pickup:false,billing_address:'Sede Madrid',billing_postal_code:'28001',billing_city:'Madrid',billing_country_code:'ES'}})
+ const result=await h.emit('pending');assert.equal(result.success,true)
+ assert.equal(h.lastCustomerPayload.address,'Sede Madrid');assert.equal(h.lastCustomerPayload.zipCode,'28001');assert.equal(h.lastCustomerPayload.countryCode,'ES')
+})
+test('a missing separate billing address or failed fiscal synchronization cannot silently invoice the pickup address',async()=>{
+ const incomplete=invoiceHarness({clientDetails:{address:'Armazém',billing_same_as_pickup:false,billing_address:'Fiscal'}})
+ await assert.rejects(incomplete.emit('pending'),/morada de faturação/)
+ assert.equal(incomplete.issued,0);assert.equal(incomplete.claims,0)
+ const failed=invoiceHarness({failAddressSync:true,clientDetails:{billing_same_as_pickup:false,billing_address:'Fiscal',billing_postal_code:'4000-001',billing_city:'Porto',billing_country_code:'PT'}})
+ assert.equal((await failed.emit('pending')).success,false);assert.equal(failed.issued,0)
+})
+test('Moloni customer creation and update resolve the fiscal country from its ISO catalogue',async()=>{
+ const {MoloniClient}=tokenHarness([],()=>{throw Error('No network in this test')})
+ const moloni=new MoloniClient({companyId:'42',refreshToken:'fixture'}),calls=[]
+ moloni.getMaturityDateId=async()=>1;moloni.getPaymentMethodId=async()=>1
+ moloni.request=async(endpoint,payload)=>{calls.push({endpoint,payload});if(endpoint==='countries/getAll')return[{country_id:77,iso_3166_1:'ES'}];return{customer_id:9}}
+ const data={vat:'fixture',name:'Fixture',address:'Fiscal',zipCode:'28001',city:'Madrid',countryCode:'ES'}
+ await moloni.createCustomer(data);await moloni.updateCustomer(9,data)
+ assert.equal(calls.find(c=>c.endpoint==='customers/insert').payload.country_id,77)
+ assert.equal(calls.find(c=>c.endpoint==='customers/update').payload.country_id,77)
+ await assert.rejects(moloni.createCustomer({...data,countryCode:'ZZ'}),/País de faturação/)
+ assert.equal(calls.filter(c=>c.endpoint==='customers/insert').length,1)
+})
+
+test('custom invoice selection defaults to the persisted fiscal address and synchronizes existing Moloni customers',async()=>{
+ const h=invoiceHarness({clientDetails:{nif:'518600300',address:'Pickup',billing_same_as_pickup:false,billing_address:'Fiscal Madrid',billing_postal_code:'28001',billing_city:'Madrid',billing_country_code:'ES'}})
+ const result=await h.load('app/actions/moloni.ts').emitCustomInvoiceAction({clientId:CLIENT,clientName:'Fixture',clientVat:'518600300',invoiceDate:'2026-10-29',dueDate:'2026-10-29',items:[{title:'Fixture',qty:1,unitPrice:10,taxRate:23}]})
+ assert.equal(result.success,true,result.error)
+ assert.equal(h.lastCustomerPayload.address,'Fiscal Madrid');assert.equal(h.lastCustomerPayload.countryCode,'ES')
+ const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='custom_invoice').value.details
+ assert.equal(saved.client_address,'Fiscal Madrid');assert.equal(saved.client_country_code,'ES')
 })

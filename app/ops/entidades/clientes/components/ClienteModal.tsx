@@ -1,5 +1,8 @@
 "use client"
 
+import { CountrySelect } from "@/components/country-select"
+import { normalizeClientBillingFields, usesPrincipalBillingAddress, getClientBillingAddress } from "@/lib/client-addresses"
+
 import * as React from "react"
 import { ClientPortalAccessControl } from './ClientPortalAccessControl'
 import { 
@@ -104,6 +107,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     address: initialData?.address || "",
     postal_code: initialData?.postal_code || "",
     country_code: initialData?.country_code || "PT",
+    ...normalizeClientBillingFields(initialData || {}),
     email: initialData?.email || "",
     billing_email: initialData?.billing_email || "",
     phone: initialData?.phone || "",
@@ -155,6 +159,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         address: initialData.address || "",
         postal_code: initialData.postal_code || "",
         country_code: initialData.country_code || "PT",
+        ...normalizeClientBillingFields(initialData),
         email: initialData.email || "",
         billing_email: initialData.billing_email || "",
         phone: initialData.phone || "",
@@ -1140,9 +1145,13 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
             <div className="space-y-5 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)]">
               <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 border-b border-[var(--border-subtle)] pb-2.5">
                 <MapPin className="w-4 h-4 text-[var(--accent)]" />
-                Morada Principal e Agência de Faturação
+                Moradas de Recolha e Faturação
               </h2>
 
+              <div>
+                <h3 className="text-xs font-bold text-[var(--text-primary)]">Morada principal de recolha</h3>
+                <p className="mt-1 text-[11px] text-[var(--text-secondary)]">Usada como remetente nos envios e como local predefinido das recolhas.</p>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
                   <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Morada / Rua</label>
@@ -1194,6 +1203,45 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                   </select>
                 </div>
               </div>
+
+              <section className="space-y-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)]/40 p-4">
+                <div>
+                  <h3 className="text-xs font-bold text-[var(--text-primary)]">Morada de faturação</h3>
+                  <p className="mt-1 text-[11px] text-[var(--text-secondary)]">Usada nos dados fiscais e na emissão de faturas. Não altera a morada de recolha.</p>
+                </div>
+                <label className="flex items-center gap-2 text-xs font-medium text-[var(--text-primary)]">
+                  <input type="checkbox" checked={usesPrincipalBillingAddress(formData)}
+                    onChange={e => { const same = e.target.checked; setFormData(prev => ({ ...prev, billing_same_as_pickup: same,
+                      ...(!same ? { billing_address: prev.billing_address || prev.address || "", billing_postal_code: prev.billing_postal_code || prev.postal_code || "", billing_city: prev.billing_city || prev.city || "", billing_country_code: prev.billing_country_code || prev.country_code || "PT" } : {}),
+                    })) }} className="h-4 w-4 accent-[var(--accent)]" />
+                  Usar a morada principal para faturação
+                </label>
+                {usesPrincipalBillingAddress(formData) ? (
+                  <p className="text-xs text-[var(--text-secondary)]">{formData.address ? Object.values(getClientBillingAddress(formData)).filter(Boolean).join(", ") : "Preencha a morada principal acima."}</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {([
+                      ["billing_address", "Morada / Rua de faturação", "Rua e número"],
+                      ["billing_postal_code", "Código postal de faturação", "4000-001"],
+                      ["billing_city", "Localidade de faturação", "Porto"],
+                    ] as const).map(([field, label, placeholder]) => (
+                      <div key={field} className={field === "billing_address" ? "md:col-span-2" : ""}>
+                        <label htmlFor={field} className="mb-1 block text-[11px] font-bold text-[var(--text-secondary)]">{label}</label>
+                        <input id={field} type="text" value={formData[field] || ""} placeholder={placeholder}
+                          onChange={e => setFormData(prev => ({ ...prev, [field]: e.target.value }))}
+                          className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs text-[var(--text-primary)]" />
+                      </div>
+                    ))}
+                    <div>
+                      <label htmlFor="billing_country_code" className="mb-1 block text-[11px] font-bold text-[var(--text-secondary)]">País de faturação</label>
+                      <CountrySelect id="billing_country_code" value={formData.billing_country_code || ""}
+                        onValueChange={value => setFormData(prev => ({ ...prev, billing_country_code: value }))}
+                        className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs text-[var(--text-primary)]" />
+                      <p className="mt-1 text-[10px] text-[var(--text-secondary)]">Complete a morada de faturação antes de emitir faturas.</p>
+                    </div>
+                  </div>
+                )}
+              </section>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                 <div>

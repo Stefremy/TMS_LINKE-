@@ -1,3 +1,4 @@
+import { invoiceBillingAddress } from "@/lib/client-addresses"
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { MoloniClient } from '@/lib/moloni/moloni-client'
 import { DEFAULT_BILLING_CONFIG, type BillingConfig } from '@/app/actions/billing-config-types'
@@ -17,15 +18,19 @@ async function moloniForTenant(db: SupabaseClient, tenantId: string) {
 }
 
 export async function buildRecurringInvoice(moloni: MoloniClient, client: RecurringClient, statement: PeriodStatement, config: BillingConfig) {
-  if (!client.nif || !/^\d{9}$/.test(client.nif) || !client.address || !client.city || !client.postal_code) {
+  const billing = invoiceBillingAddress(client)
+  if (!client.nif || !/^\d{9}$/.test(client.nif) || !billing.address || !billing.city || !billing.postal_code) {
     throw new Error('Complete NIF, morada, localidade e código postal na ficha do cliente.')
   }
   if (!(shipmentTotal(statement.shipments) > 0)) throw new Error('O período não tem um valor positivo para faturar.')
   statement.shipments.forEach(shipmentChargeBreakdown)
   const existing = await moloni.getCustomerByVat(client.nif)
-  const customer = existing?.customer_id || await moloni.createCustomer({ vat: client.nif,
-    number: `TMS-${client.id}`, name: client.legal_name || client.short_name || statement.client_name,
-    address: client.address, zipCode: client.postal_code, city: client.city, email: client.billing_email || client.email })
+  const customerData = { vat: client.nif,
+    number: existing?.number || `TMS-${client.id}`, name: client.legal_name || client.short_name || statement.client_name,
+    address: billing.address, zipCode: billing.postal_code, city: billing.city,
+    countryCode: billing.country_code, email: client.billing_email || client.email }
+  const customer = existing?.customer_id || await moloni.createCustomer(customerData)
+  if (existing?.customer_id) await moloni.updateCustomer(existing.customer_id, customerData)
   const rate = Number(config.defaultVatRate)
   if (!Number.isFinite(rate) || rate <= 0) throw new Error('Configure uma taxa de IVA positiva para a faturação automática.')
   const tax = await moloni.getTaxId(rate)
