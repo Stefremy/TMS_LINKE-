@@ -392,8 +392,11 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   const specialFeesList = formData.pricing?.special_services_fees || DEFAULT_CLIENT_PRICING.special_services_fees
   const assignedServices = servicosLinke.filter(service =>
     (formData.assigned_linke_service_ids || []).includes(service.id))
+  // Inactive catalogue tables cannot be newly assigned; already-assigned ones stay visible so they can be removed.
   const unassignedServices = servicosLinke.filter(service =>
-    !(formData.assigned_linke_service_ids || []).includes(service.id))
+    service.is_active !== false && !(formData.assigned_linke_service_ids || []).includes(service.id))
+  const selectableServicesCount = servicosLinke.filter(service =>
+    service.is_active !== false || (formData.assigned_linke_service_ids || []).includes(service.id)).length
   const matchesTableFilter = (service: ServicoLinke) => serviceTableFilter === "all" ||
     (serviceTableFilter === "base" ? isPrimordialServico(service) : !isPrimordialServico(service))
   const filteredAssignedServices = assignedServices.filter(matchesTableFilter)
@@ -1507,7 +1510,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
               <div className="grid grid-cols-2 xl:grid-cols-3 gap-2.5">
                 <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3.5 py-3">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Serviços autorizados</p>
-                  <p className="mt-1 text-xs font-semibold text-[var(--text-primary)]">{visibleAssignedTablesCount} de {servicosLinke.length}</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--text-primary)]">{visibleAssignedTablesCount} de {selectableServicesCount}</p>
                 </div>
                 <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3.5 py-3">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Taxas adicionais</p>
@@ -1532,7 +1535,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     }`}
                   >
                     <Package className="w-3.5 h-3.5" />
-                    <span>Serviços autorizados ({visibleAssignedTablesCount}/{servicosLinke.length})</span>
+                    <span>Serviços autorizados ({visibleAssignedTablesCount}/{selectableServicesCount})</span>
                   </button>
 
                   <button
@@ -1639,13 +1642,13 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                     <div className="p-3 grid grid-cols-1 md:grid-cols-2 items-start gap-3">
                       {filteredAssignedServices.map(renderServiceAuthorization)}
                       {assignedServices.length > 0 && filteredAssignedServices.length === 0 && <p className="col-span-full p-4 text-center text-xs text-[var(--text-secondary)]">Não há serviços autorizados deste tipo. Escolha outro filtro.</p>}
-                      {assignedServices.length === 0 && servicosLinke.length > 0 && (
+                      {assignedServices.length === 0 && selectableServicesCount > 0 && (
                         <p className="col-span-full rounded-lg border border-dashed border-[var(--border-subtle)] p-5 text-center text-xs text-[var(--text-secondary)]">
                           Este cliente ainda não tem serviços autorizados. Abra «Adicionar serviços» para escolher.
                         </p>
                       )}
 
-                      {servicosLinke.length === 0 && (
+                      {selectableServicesCount === 0 && (
                         <div className="col-span-2 p-8 text-center text-[var(--text-tertiary)] text-xs">
                           Nenhum serviço Linke configurado. Configure serviços em Configuração &gt; Serviços Linke.
                         </div>
