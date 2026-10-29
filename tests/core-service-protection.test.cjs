@@ -344,13 +344,16 @@ test('non-manager staff can still create custom variants from base tables and ma
   const variant = await hVariant.actions.duplicateServicoForClientAction(
     'srv_linke_dd_std',
     'Tabela Negociada Cliente',
-    'Fixture Client',
-    5
+    'Fixture Client'
   )
   assert.equal(variant.success, true)
   assert.equal(variant.data.is_primordial, false)
   assert.notEqual(variant.data.id, 'srv_linke_dd_std')
   assert.equal(types.isPrimordialServico(variant.data), false)
+  // Variants copy the source sell/cost prices exactly (no automatic volume discount)
+  const sourcePrices = fixture.zones.map(z => z.tiers.map(t => [t.cost_price, t.sell_price, t.margin_pct]))
+  const variantPrices = variant.data.zones.map(z => z.tiers.map(t => [t.cost_price, t.sell_price, t.margin_pct]))
+  assert.deepEqual(variantPrices, sourcePrices)
 
   const hCustom = harness({ email: 'aldara.linke@gmail.com', role: 'employee' })
   assert.equal((await hCustom.actions.saveServicoLinkeAction({ ...fixture, name: 'Updated Custom' })).success, true)

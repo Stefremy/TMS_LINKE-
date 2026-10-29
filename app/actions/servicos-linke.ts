@@ -1024,8 +1024,7 @@ export async function saveServicoLinkeAction(
 export async function duplicateServicoForClientAction(
   sourceServicoId: string,
   targetProfile: "VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente",
-  targetClientName: string,
-  discountPct: number
+  targetClientName: string
 ): Promise<{ success: boolean; data?: ServicoLinke; error?: string }> {
   await requireEmployee()
   const servicos = await getServicosLinkeAction()
@@ -1038,21 +1037,14 @@ export async function duplicateServicoForClientAction(
     ? `${rawNewCode}-CUSTOM`
     : rawNewCode
 
-  // Aplicar desconto sobre o PVP base ou ajustar markup
+  // A variante copia exatamente os preços de custo/venda da tabela de origem (todas as zonas).
+  // Ajustes comerciais por cliente fazem-se depois em "Ajustar Preços" (overrides por zona).
   const clonedZones = source.zones.map((zone) => ({
     ...zone,
-    tiers: zone.tiers.map((t, idx) => {
-      const discountFactor = 1 - discountPct / 100
-      const newSellPrice = Number(Math.max(t.cost_price * 1.05, t.sell_price * discountFactor).toFixed(2))
-      const newMargin = Number((((newSellPrice - t.cost_price) / t.cost_price) * 100).toFixed(0))
-
-      return {
-        ...t,
-        id: `t_clone_${Date.now()}_${idx}`,
-        sell_price: newSellPrice,
-        margin_pct: newMargin,
-      }
-    }),
+    tiers: zone.tiers.map((t, idx) => ({
+      ...t,
+      id: `t_clone_${Date.now()}_${idx}`,
+    })),
   }))
 
   const clonedRecord: ServicoLinke = {
@@ -1060,10 +1052,10 @@ export async function duplicateServicoForClientAction(
     id: newId,
     code: newCode,
     name: `${source.name.replace(/\(.*?\)/g, "").trim()} (${targetProfile})`,
-    description: `Tabela de preços personalizada com desconto de ${discountPct}% para: ${targetClientName}`,
+    description: `Tabela de preços personalizada para: ${targetClientName}`,
     pricing_profile: targetProfile,
     target_client_name: targetClientName,
-    discount_vs_standard_pct: discountPct,
+    discount_vs_standard_pct: 0,
     is_primordial: false,
     zones: clonedZones,
     created_at: new Date().toISOString(),

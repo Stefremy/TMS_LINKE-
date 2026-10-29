@@ -21,8 +21,7 @@ interface DuplicateServicoModalProps {
   onConfirmDuplicate: (
     sourceId: string,
     targetProfile: "VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente",
-    targetClientName: string,
-    discountPct: number
+    targetClientName: string
   ) => Promise<boolean | void>
 }
 
@@ -34,7 +33,6 @@ export function DuplicateServicoModal({
 }: DuplicateServicoModalProps) {
   const [targetProfile, setTargetProfile] = React.useState<"VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente">("VIP / Alto Volume")
   const [targetClientName, setTargetClientName] = React.useState<string>("Grandes Contas (>300 envios/mês)")
-  const [discountPct, setDiscountPct] = React.useState<number>(12)
   const [loading, setLoading] = React.useState(false)
   const [created, setCreated] = React.useState(false)
   const [saveError, setSaveError] = React.useState("")
@@ -46,7 +44,6 @@ export function DuplicateServicoModal({
       setSaveError("")
       setTargetProfile("VIP / Alto Volume")
       setTargetClientName("Grandes Contas (>300 envios/mês)")
-      setDiscountPct(12)
     }
   }, [isOpen, servico])
 
@@ -56,13 +53,10 @@ export function DuplicateServicoModal({
     setTargetProfile(prof)
     if (prof === "VIP / Alto Volume") {
       setTargetClientName("Grandes Contas (>300 envios/mês)")
-      setDiscountPct(12)
     } else if (prof === "E-Commerce PME") {
       setTargetClientName("Lojas Online & E-commerce")
-      setDiscountPct(8)
     } else {
       setTargetClientName("Cliente Específico (ex: Nome da Empresa)")
-      setDiscountPct(15)
     }
   }
 
@@ -73,7 +67,7 @@ export function DuplicateServicoModal({
     setLoading(true)
     setSaveError("")
     try {
-      const saved = await onConfirmDuplicate(servico.id, targetProfile, targetClientName, discountPct)
+      const saved = await onConfirmDuplicate(servico.id, targetProfile, targetClientName)
       if (saved === false) setSaveError("Não foi possível criar a tabela. Tente novamente.")
       else setCreated(true)
     } catch (error) {
@@ -99,7 +93,7 @@ export function DuplicateServicoModal({
                 Duplicar Tabela para Cliente
               </h2>
               <p className="text-xs text-slate-500">
-                Criar variante de tarifário com desconto de volume ou cliente específico.
+                Criar variante de tarifário para um segmento ou cliente específico.
               </p>
             </div>
           </div>
@@ -157,25 +151,9 @@ export function DuplicateServicoModal({
             />
           </div>
 
-          {/* Discount Percentage */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-700 flex justify-between">
-              <span>Desconto de Volume sobre o PVP Base</span>
-              <span className="font-mono font-medium text-emerald-700">-{discountPct}%</span>
-            </label>
-            <input
-              disabled={loading || created}
-              type="number"
-              min="1"
-              max="50"
-              value={discountPct}
-              onChange={(e) => setDiscountPct(parseFloat(e.target.value) || 0)}
-              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
-            />
-            <span className="text-[11px] text-slate-400 block">
-              Os preços de venda dos escalões serão reduzidos em {discountPct}%, preservando margem positiva.
-            </span>
-          </div>
+          <p className="text-[11px] text-slate-500">
+            A variante copia exatamente os preços de venda da tabela de origem, em todas as zonas. Os ajustes por cliente fazem-se depois em &quot;Ajustar Preços&quot;.
+          </p>
 
           {saveError && <p role="alert" className="text-xs text-rose-700">{saveError}</p>}
           {created && <p role="status" className="text-xs text-emerald-700">Tabela criada com sucesso. Pode fechar esta janela.</p>}

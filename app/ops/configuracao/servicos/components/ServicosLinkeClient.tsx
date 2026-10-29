@@ -85,13 +85,12 @@ export function ServicosLinkeClient({
   const handleConfirmDuplicate = async (
     sourceId: string,
     targetProfile: "VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente",
-    targetClientName: string,
-    discountPct: number
+    targetClientName: string
   ) => {
-    const res = await duplicateServicoForClientAction(sourceId, targetProfile, targetClientName, discountPct)
+    const res = await duplicateServicoForClientAction(sourceId, targetProfile, targetClientName)
     if (res.success && res.data) {
       setServicos((prev) => [res.data!, ...prev])
-      showNotification(`Tabela personalizada com -${discountPct}% criada para '${targetClientName}'!`)
+      showNotification(`Tabela personalizada criada para '${targetClientName}' com os preços da tabela de origem!`)
       return true
     }
     showNotification(res.error || "Não foi possível duplicar esta tabela. Tente novamente.")
