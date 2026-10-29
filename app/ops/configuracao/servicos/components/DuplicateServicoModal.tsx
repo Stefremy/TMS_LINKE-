@@ -5,12 +5,6 @@ import {
   X, 
   Copy,
   Check,
-  Percent, 
-  UserCheck, 
-  TrendingDown, 
-  ShieldCheck, 
-  Sparkles,
-  ArrowRight
 } from "lucide-react"
 import type { ServicoLinke } from "../types"
 
@@ -20,7 +14,7 @@ interface DuplicateServicoModalProps {
   servico: ServicoLinke | null
   onConfirmDuplicate: (
     sourceId: string,
-    targetProfile: "VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente",
+    targetProfile: string,
     targetClientName: string
   ) => Promise<boolean | void>
 }
@@ -31,7 +25,7 @@ export function DuplicateServicoModal({
   servico,
   onConfirmDuplicate,
 }: DuplicateServicoModalProps) {
-  const [targetProfile, setTargetProfile] = React.useState<"VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente">("VIP / Alto Volume")
+  const [targetProfile, setTargetProfile] = React.useState<string>("VIP / Alto Volume")
   const [targetClientName, setTargetClientName] = React.useState<string>("Grandes Contas (>300 envios/mês)")
   const [loading, setLoading] = React.useState(false)
   const [created, setCreated] = React.useState(false)
@@ -40,6 +34,8 @@ export function DuplicateServicoModal({
 
   React.useEffect(() => {
     if (isOpen && servico) {
+      // Reset the dialog when a different source table is opened.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCreated(false)
       setSaveError("")
       setTargetProfile("VIP / Alto Volume")
@@ -49,7 +45,7 @@ export function DuplicateServicoModal({
 
   if (!isOpen || !servico) return null
 
-  const handleProfileChange = (prof: "VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente") => {
+  const handleProfileChange = (prof: string) => {
     setTargetProfile(prof)
     if (prof === "VIP / Alto Volume") {
       setTargetClientName("Grandes Contas (>300 envios/mês)")
@@ -126,14 +122,25 @@ export function DuplicateServicoModal({
             <select
               disabled={loading || created}
               value={targetProfile}
-              onChange={(e) => handleProfileChange(e.target.value as any)}
+              onChange={(e) => handleProfileChange(e.target.value)}
               className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
             >
               <option value="VIP / Alto Volume">VIP / Alto Volume (&gt;300 envios/mês)</option>
               <option value="E-Commerce PME">E-Commerce PME (Lojas Online)</option>
               <option value="Tabela Negociada Cliente">Tabela Negociada (Cliente Específico)</option>
+              <option value={["VIP / Alto Volume", "E-Commerce PME", "Tabela Negociada Cliente"].includes(targetProfile) ? "" : targetProfile}>Outros</option>
             </select>
           </div>
+
+          {!["VIP / Alto Volume", "E-Commerce PME", "Tabela Negociada Cliente"].includes(targetProfile) && (
+            <div className="space-y-1.5">
+              <label htmlFor="duplicate-custom-profile" className="block text-xs font-medium text-slate-700">Nome do perfil comercial</label>
+              <input id="duplicate-custom-profile" type="text" required maxLength={100} disabled={loading || created}
+                value={targetProfile} onChange={e => setTargetProfile(e.target.value)}
+                placeholder="Ex: Ilhas aéreo · Loja Aldara"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800" />
+            </div>
+          )}
 
           {/* Target Client Name */}
           <div className="space-y-1.5">

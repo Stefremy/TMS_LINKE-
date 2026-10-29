@@ -29,7 +29,7 @@ export interface ServicoLinke {
   is_active: boolean
   
   // Perfil Tarifário & Segmentação de Cliente
-  pricing_profile: "Standard / Geral" | "VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente"
+  pricing_profile: string // Standard profile or a free-text commercial label.
   target_client_name?: string // Ex: "Cliente Geral", "Grandes Contas (>500 envios/mês)", ou nome de cliente específico
   discount_vs_standard_pct?: number // Desconto concedido por volume vs tabela padrão (%)
   
@@ -161,4 +161,12 @@ export interface CotacaoSimulacaoResult {
   fuelAmount: number
   oversizeAmount?: number
   finalSellPrice: number
+}
+
+export const STANDARD_COMMERCIAL_PROFILES = [
+  "Standard / Geral", "VIP / Alto Volume", "E-Commerce PME", "Tabela Negociada Cliente",
+]
+
+export function isCustomCommercialProfile(profile?: string): boolean {
+  return !STANDARD_COMMERCIAL_PROFILES.includes(profile ?? "Standard / Geral")
 }

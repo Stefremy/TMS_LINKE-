@@ -3,7 +3,7 @@ const assert=require('node:assert/strict')
 const {createLoader}=require('./helpers/load-typescript.cjs')
 const flat=n=>Array.isArray(n)?n.flatMap(flat):n&&typeof n==='object'?[n,...flat(n.props?.children)]:[]
 const text=n=>Array.isArray(n)?n.map(text).join(''):n&&typeof n==='object'?text(n.props?.children):String(n??'')
-function harness(initialData={id:'client-a',short_name:'Loja A',payment_due_days:30}){
+function harness(initialData={id:'client-a',short_name:'Loja A',payment_due_days:30},servicosLinke=[]){
  const slots=[];let cursor=0,response={success:true,data:{...initialData,id:initialData?.id||'created-id',short_name:'Loja A'}}
  const calls={saved:[],close:0,inputs:[]}
  const React={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useEffect(){}}
@@ -12,7 +12,7 @@ function harness(initialData={id:'client-a',short_name:'Loja A',payment_due_days
   '@/app/actions/clientes':{saveClienteAction:async data=>{calls.inputs.push(data);return typeof response==='function'?response(data):response}},
   '@/app/actions/client-invitations':{},'./ClientPortalAccessControl':{ClientPortalAccessControl:()=>null}})
  const Modal=load('app/ops/entidades/clientes/components/ClienteModal.tsx').ClienteModal
- const props={initialData,servicosLinke:[],onClose(){calls.close++},onSaved(data){calls.saved.push(data)}}
+ const props={initialData,servicosLinke,onClose(){calls.close++},onSaved(data){calls.saved.push(data)}}
  const render=()=>{cursor=0;return flat(Modal(props))}
  const button=label=>render().find(n=>n.type==='button'&&text(n)===label)
  const edit=value=>render().find(n=>n.type==='input'&&n.props.placeholder==='Ex: CACTO ou DETAILER').props.onChange({target:{value}})
@@ -82,4 +82,11 @@ test('client modal separates CTT and Correos fees, shows included services and s
  assert.equal(saved.find(f=>f.special_service_code==='correos_delivery_window').fixed_value,.55)
  assert.equal(saved.find(f=>f.special_service_code==='correos_delivery_window').is_enabled,false)
  assert.equal(saved.find(f=>f.special_service_code==='correos_saturday').fixed_value,12)
+})
+
+test('custom commercial names distinguish services when associating tables to a client',()=>{
+ const table={id:'islas-a',name:'Ilhas',code:'LK-ISLAS-A',pricing_profile:'Aldara Ilhas Aéreo',is_active:true,zones:[{zone_code:'PT-ILHAS',tiers:[{weight_max:1,sell_price:10,enabled:true}]}]}
+ const h=harness({id:'client-a',short_name:'Loja A',assigned_linke_service_ids:[table.id]},[table]);let nodes=h.render()
+ nodes.find(n=>n.type==='button'&&text(n).includes('Preços & Serviços')).props.onClick();nodes=h.render()
+ assert.ok(nodes.some(n=>text(n)==='Aldara Ilhas Aéreo'))
 })

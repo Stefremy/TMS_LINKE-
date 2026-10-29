@@ -437,3 +437,21 @@ test('saving a visual tier order preserves storage indexes and round-trips the o
  const loaded=await h.actions.getServicosLinkeAction()
  assert.deepEqual(loaded.find(s=>s.id===original.id).zones[0].tiers.map(t=>[t.id,t.display_order]),[['a',1],['b',0]])
 })
+
+test('custom commercial profiles persist trimmed in both save and duplication without changing sell prices',async()=>{
+ const h=harness()
+ const saved=await h.actions.saveServicoLinkeAction({...fixture,pricing_profile:'  Aldara Ilhas Aéreo  '})
+ assert.equal(saved.success,true)
+ assert.equal(saved.data.pricing_profile,'Aldara Ilhas Aéreo')
+ const dup=await harness().actions.duplicateServicoForClientAction(fixture.id,'  Ilhas Marítimo Aldara  ','Aldara')
+ assert.equal(dup.success,true)
+ assert.equal(dup.data.pricing_profile,'Ilhas Marítimo Aldara')
+ assert.deepEqual(dup.data.zones.map(z=>z.tiers.map(t=>t.sell_price)),fixture.zones.map(z=>z.tiers.map(t=>t.sell_price)))
+ assert.equal((await harness().actions.duplicateServicoForClientAction(fixture.id,'   ','Aldara')).success,false)
+})
+test('duplicating a table also preserves explicit zero sell prices without recalculating from margins',async()=>{
+ const source={...fixture,zones:fixture.zones.map(z=>({...z,tiers:z.tiers.map(t=>({...t,sell_price:0}))}))}
+ const result=await harness({service:source}).actions.duplicateServicoForClientAction(source.id,'Tabela Negociada Cliente','Fixture')
+ assert.equal(result.success,true)
+ assert.equal(result.data.zones[0].tiers[0].sell_price,0)
+})

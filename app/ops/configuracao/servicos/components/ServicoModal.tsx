@@ -1,5 +1,7 @@
 "use client"
 
+import { isCustomCommercialProfile } from "../types"
+
 import * as React from "react"
 import { getTierDisplayEntries, moveTierDisplayOrder } from "@/lib/pricing/tier-display-order"
 import { 
@@ -1169,7 +1171,7 @@ export function ServicoModal({
                               key={profile.value}
                               type="button"
                               aria-pressed={formData.pricing_profile === profile.value}
-                              onClick={() => setFormData({ ...formData, pricing_profile: profile.value as any })}
+                              onClick={() => setFormData({ ...formData, pricing_profile: profile.value })}
                               className={`p-2 rounded-lg border text-left transition-all ${
                                 formData.pricing_profile === profile.value
                                   ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
@@ -1182,7 +1184,24 @@ export function ServicoModal({
                               </p>
                             </button>
                           ))}
+                          <button type="button" aria-pressed={isCustomCommercialProfile(formData.pricing_profile)}
+                            onClick={() => setFormData({ ...formData, pricing_profile: isCustomCommercialProfile(formData.pricing_profile) ? formData.pricing_profile : "" })}
+                            className={`p-2 rounded-lg border text-left transition-all ${isCustomCommercialProfile(formData.pricing_profile) ? "bg-slate-900 text-white border-slate-900" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"}`}>
+                            <p className="text-xs font-semibold">Outros</p>
+                            <p className="text-[10px] opacity-70">Nome personalizado</p>
+                          </button>
                         </div>
+                        {isCustomCommercialProfile(formData.pricing_profile) && (
+                          <div className="pt-2">
+                            <label htmlFor="custom-commercial-profile" className="text-xs font-medium text-slate-700">Nome do perfil comercial</label>
+                            <input id="custom-commercial-profile" type="text" required maxLength={100}
+                              value={formData.pricing_profile || ""}
+                              onChange={e => setFormData({ ...formData, pricing_profile: e.target.value })}
+                              placeholder="Ex: Ilhas aéreo · Loja Aldara"
+                              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800" />
+                            <p className="mt-1 text-[10px] text-slate-500">Este nome aparece nas tabelas e ao associar serviços ao cliente.</p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-1">

@@ -84,7 +84,7 @@ export function ServicosLinkeClient({
   // Duplicate / Clone Service for VIP/Volume Client
   const handleConfirmDuplicate = async (
     sourceId: string,
-    targetProfile: "VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente",
+    targetProfile: string,
     targetClientName: string
   ) => {
     const res = await duplicateServicoForClientAction(sourceId, targetProfile, targetClientName)

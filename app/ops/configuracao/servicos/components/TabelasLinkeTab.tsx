@@ -52,7 +52,7 @@ export function TabelasLinkeTab({
   )
 
   const categories = ["Todas", ...new Set(servicos.map(s => s.category))]
-  const profiles = ["Todos os Perfis", "Standard / Geral", "VIP / Alto Volume", "E-Commerce PME", "Tabela Negociada Cliente"]
+  const profiles = ["Todos os Perfis", ...new Set(["Standard / Geral", "VIP / Alto Volume", "E-Commerce PME", "Tabela Negociada Cliente", ...servicos.map(service => service.pricing_profile).filter(Boolean)])]
 
   const filteredServicos = servicos.filter((s) => {
     if (!isLinkeServicesMode && s.pricing_profile === "Tabela Negociada Cliente") {
@@ -62,7 +62,7 @@ export function TabelasLinkeTab({
     const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
     const identity = getCttServiceIdentity(s)
     const query = normalizeSearch(searchTerm)
-    const matchesSearch = [s.name, s.code, s.preferred_carrier_name, s.target_client_name,
+    const matchesSearch = [s.name, s.code, s.pricing_profile, s.preferred_carrier_name, s.target_client_name,
       s.webservice_service_code, identity?.label].some(value => value && normalizeSearch(value).includes(query))
 
     const matchesCategory = selectedCategory === "Todas" || s.category === selectedCategory

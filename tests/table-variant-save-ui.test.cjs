@@ -3,14 +3,14 @@ const {createLoader}=require('./helpers/load-typescript.cjs')
 const flat=n=>Array.isArray(n)?n.flatMap(flat):n&&typeof n==='object'?[n,...flat(n.props?.children)]:[]
 const text=n=>Array.isArray(n)?n.map(text).join(''):n&&typeof n==='object'?text(n.props?.children):String(n??'')
 function harness(result=true){
- const slots=[];let cursor=0,closed=0,calls=0
+ const slots=[],inputs=[];let cursor=0,closed=0,calls=0
  const react={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=initial;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useRef(initial){const i=cursor++;return slots[i]??={current:initial}},useEffect(){}}
  const jsx=(type,props)=>({type,props:props||{}})
  const load=createLoader({react,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,p)=>p})})
  const {DuplicateServicoModal}=load('app/ops/configuracao/servicos/components/DuplicateServicoModal.tsx')
- const props={isOpen:true,servico:{id:'fixture',name:'Tabela de teste',zones:[]},onClose(){closed++},onConfirmDuplicate:async()=>{calls++;return result}}
+ const props={isOpen:true,servico:{id:'fixture',name:'Tabela de teste',zones:[]},onClose(){closed++},onConfirmDuplicate:async(...args)=>{inputs.push(args);calls++;return result}}
  const render=()=>{cursor=0;return flat(DuplicateServicoModal(props))}
- return{render,closed:()=>closed,calls:()=>calls}
+ return{render,inputs,closed:()=>closed,calls:()=>calls}
 }
 test('creating a variant stays open with Gravado and explicit Fechar, preventing accidental duplicate creation',async()=>{
  const h=harness();let nodes=h.render()
@@ -31,4 +31,14 @@ test('failed variant creation remains editable and cannot be presented as saved'
  assert.equal(nodes.some(n=>n.type==='button'&&text(n)==='Gravado'),false)
  assert.ok(nodes.some(n=>n.props.role==='alert'))
  assert.ok(nodes.filter(n=>['input','select'].includes(n.type)).every(n=>!n.props.disabled))
+})
+
+test('duplication has no volume discount control and accepts Outros as a free commercial profile',async()=>{
+ const h=harness();let nodes=h.render()
+ assert.equal(nodes.some(n=>n.type==='input'&&n.props.type==='number'),false)
+ assert.ok(!nodes.some(n=>text(n).includes('Desconto de Volume')))
+ nodes.find(n=>n.type==='select').props.onChange({target:{value:''}});nodes=h.render()
+ nodes.find(n=>n.props.id==='duplicate-custom-profile').props.onChange({target:{value:'Aldara Ilhas'}});nodes=h.render()
+ await nodes.find(n=>n.type==='form').props.onSubmit({preventDefault(){}})
+ assert.deepEqual(h.inputs[0],['fixture','Aldara Ilhas','Cliente Específico (ex: Nome da Empresa)'])
 })

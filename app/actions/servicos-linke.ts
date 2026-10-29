@@ -869,6 +869,9 @@ export async function saveServicoLinkeAction(
   const ctx = await requireEmployee()
   const supabase = createAdminClient()
 
+  const profile = typeof servico.pricing_profile === "string" ? servico.pricing_profile.trim() : "Standard / Geral"
+  if (!profile || profile.length > 100) return { success: false, error: "Indique um perfil comercial com 1 a 100 caracteres." }
+
   const id = servico.id || `srv_linke_${Date.now()}`
   let storedProtected = false
   try {
@@ -910,7 +913,8 @@ export async function saveServicoLinkeAction(
       tiers: (zone.tiers || []).map((t, idx) => {
         const margin = t.margin_pct ?? servico.global_markup_pct ?? 20
         const cost = Number(t.cost_price || 0)
-        const sell = t.sell_price > 0 ? Number(t.sell_price) : Number((cost * (1 + margin / 100)).toFixed(2))
+        const sell = typeof t.sell_price === "number" && Number.isFinite(t.sell_price) && t.sell_price >= 0
+          ? t.sell_price : Number((cost * (1 + margin / 100)).toFixed(2))
         return {
           ...t,
           id: t.id || `tier_${Date.now()}_${idx}`,
@@ -943,7 +947,7 @@ export async function saveServicoLinkeAction(
     category: servico.category || "Nacional",
     color: servico.color || "#059669",
     is_active: servico.is_active ?? true,
-    pricing_profile: servico.pricing_profile || "Standard / Geral",
+    pricing_profile: profile,
     target_client_name: servico.target_client_name || "Clientes Gerais",
     discount_vs_standard_pct: servico.discount_vs_standard_pct ?? 0,
     preferred_carrier_id: servico.preferred_carrier_id || "forn_2",
@@ -1023,10 +1027,12 @@ export async function saveServicoLinkeAction(
  */
 export async function duplicateServicoForClientAction(
   sourceServicoId: string,
-  targetProfile: "VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente",
+  targetProfile: string,
   targetClientName: string
 ): Promise<{ success: boolean; data?: ServicoLinke; error?: string }> {
   await requireEmployee()
+  targetProfile = typeof targetProfile === "string" ? targetProfile.trim() : ""
+  if (!targetProfile || targetProfile.length > 100) return { success: false, error: "Indique um perfil comercial com 1 a 100 caracteres." }
   const servicos = await getServicosLinkeAction()
   const source = servicos.find((s) => s.id === sourceServicoId)
   if (!source) return { success: false }
