@@ -1,5 +1,8 @@
 "use server"
 
+import { applyPaq24Tariffs } from "@/lib/services/correos/paq24-tariffs"
+import correosProducts from "@/lib/services/correos/product-catalog.json"
+
 import { getServiceIslandTransportMode } from "@/lib/services/shipment-service-options"
 import { getServiceParcelLimitProduct } from "@/lib/pricing/oversize-surcharge"
 
@@ -408,17 +411,17 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 7. CORREOS EXPRESS PAQ 24 — LK-COR-24
-  //    Contrato Correos Express Portugal (CEP II) - Ibérico 24H
+  // 7. CORREOS EXPRESS PAQ 10 — legacy table ID retained
+  //    Available in configuration, disabled for operational use.
   // ─────────────────────────────────────────────────────────────────────────
   {
     id: "srv_linke_cor_24",
     code: "LK-COR-24",
-    name: "Linke Ibérico 24H (Correos Paq 24)",
-    description: "Serviço expresso porta-a-porta Portugal Continental e Espanha Peninsular com entrega em 24h via Correos Express.",
+    name: "Linke PAQ10 (Correos Express)",
+    description: "Entrega antes das 10h do dia útil seguinte nas localidades abrangidas em Espanha e nos principais distritos de Portugal. Confirmar cobertura por código postal.",
     category: "Ibérico",
     color: "#00a3e0",
-    is_active: true,
+    is_active: false,
     is_primordial: true,
     pricing_profile: "Standard / Geral",
     target_client_name: "Clientes Gerais",
@@ -427,7 +430,7 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     preferred_carrier_name: "CORREOS.EXPRESS",
     webservice_connection_id: "correos_express",
     webservice_service_code: "61",
-    transit_time_label: "24h",
+    transit_time_label: "Antes das 10h",
     global_markup_pct: 22.0,
     fuel_surcharge_pct: 11.5,
     cod_fee_pct: 2.5,
@@ -467,16 +470,16 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 8. CORREOS EXPRESS PAQ 48 — LK-COR-48
+  // 8. CORREOS EXPRESS PAQ 14 — legacy table ID retained
   // ─────────────────────────────────────────────────────────────────────────
   {
     id: "srv_linke_cor_48",
     code: "LK-COR-48",
-    name: "Linke Ibérico 48H (Correos Paq 48)",
-    description: "Serviço económico ibérico para encomendas com prazo de entrega de 48h via Correos Express.",
+    name: "Linke PAQ14 (Correos Express)",
+    description: "Entrega antes das 14h do dia útil seguinte no território peninsular espanhol e nos distritos abrangidos de Portugal.",
     category: "Ibérico",
     color: "#0284c7",
-    is_active: true,
+    is_active: false,
     is_primordial: true,
     pricing_profile: "Standard / Geral",
     target_client_name: "Todos os Clientes",
@@ -485,7 +488,7 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     preferred_carrier_name: "CORREOS.EXPRESS",
     webservice_connection_id: "correos_express",
     webservice_service_code: "62",
-    transit_time_label: "48h",
+    transit_time_label: "Antes das 14h",
     global_markup_pct: 22.0,
     fuel_surcharge_pct: 11.5,
     cod_fee_pct: 2.5,
@@ -526,8 +529,8 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   {
     id: "srv_linke_cor_ecom",
     code: "LK-COR-ECOM",
-    name: "Linke e-Paq 24 B2C (Correos Express)",
-    description: "Solução especializada para lojas de comércio eletrónico B2C com alertas SMS e previsão de entrega.",
+    name: "Linke ePAQ24 B2C (Correos Express)",
+    description: "Entrega a particulares em Portugal Continental e Espanha Peninsular, com previsão de entrega gratuita. Telemóvel do destinatário obrigatório. Apenas destinos com tarifa configurada ficam disponíveis.",
     category: "Nacional",
     color: "#0369a1",
     is_active: true,
@@ -564,16 +567,16 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 10. CORREOS EXPRESS ILHAS BALEARES & CANÁRIAS — LK-COR-ISLAS
+  // 10. CORREOS EXPRESS BALEARES (66) — legacy table, disabled
   // ─────────────────────────────────────────────────────────────────────────
   {
     id: "srv_linke_cor_islas",
     code: "LK-COR-ISLAS",
-    name: "Linke Ilhas Espanholas (Correos Express)",
-    description: "Serviço expresso para as ilhas espanholas (Baleares e Canárias) com gestão aduaneira e tracking integrado.",
+    name: "Linke Baleares (legado) (Correos Express)",
+    description: "Produto específico Baleares, código 66. Tabela anterior conservada para consulta; não corresponde ao Ilhas Express 26.",
     category: "Ilhas",
     color: "#0ea5e9",
-    is_active: true,
+    is_active: false,
     is_primordial: true,
     pricing_profile: "Standard / Geral",
     target_client_name: "Clientes Gerais",
@@ -582,7 +585,7 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     preferred_carrier_name: "CORREOS.EXPRESS",
     webservice_connection_id: "correos_express",
     webservice_service_code: "66",
-    transit_time_label: "48-72h",
+    transit_time_label: "48–72h",
     global_markup_pct: 25.0,
     fuel_surcharge_pct: 12.0,
     cod_fee_pct: 2.5,
@@ -605,7 +608,7 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 11. CORREOS EXPRESS INTERNACIONAL — International Express Exportação — LK-COR-INTL
+  // 11. CORREOS EXPRESS INTERNACIONAL STANDARD (90) — disabled pending tariff review
   //    Contrato Oficial Correos Express Internacional:
   //    - TABELA INTERNACIONAL (2).pdf (Tarifas Produtos Internacional Exportação - Aéreo)
   //    - ZONAS INTERNACIONAIS.pdf (8 Zonas Internacionais, ~200 países)
@@ -613,11 +616,11 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
   {
     id: "srv_linke_cor_intl",
     code: "LK-COR-INTL",
-    name: "Linke Internacional Expresso (Correos Express)",
-    description: "Tarifas oficiais de exportação aérea internacional da Correos Express (International Express Exportação) em 8 zonas mundiais (Europa 1, 2 e 3, América do Norte, América do Sul, Oriente 1 e 2, África) conforme contrato oficial (TABELA INTERNACIONAL (2).pdf e ZONAS INTERNACIONAIS.pdf).",
+    name: "Linke Internacional Standard (Correos Express)",
+    description: "Serviço internacional económico porta a porta. Código 90 (monovolume). Mantido desativado; validar tarifas e cobertura do produto antes de ativar.",
     category: "Internacional",
     color: "#0284c7",
-    is_active: true,
+    is_active: false,
     is_primordial: true,
     pricing_profile: "Standard / Geral",
     target_client_name: "Todos os Clientes",
@@ -626,7 +629,7 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     preferred_carrier_name: "CORREOS.EXPRESS",
     webservice_connection_id: "correos_express",
     webservice_service_code: "90",
-    transit_time_label: "3-7 dias úteis",
+    transit_time_label: "Consultar destino",
     global_markup_pct: 22.0,
     fuel_surcharge_pct: 8.5,
     cod_fee_pct: 0,
@@ -636,6 +639,31 @@ const DEFAULT_SERVICOS_LINKE: ServicoLinke[] = [
     zones: buildOfficialLinkeInternationalZones(22),
   },
 ]
+
+for (const product of correosProducts) {
+  if (DEFAULT_SERVICOS_LINKE.some((service) => service.id === product.id)) continue
+  DEFAULT_SERVICOS_LINKE.push({
+    id: product.id, code: product.code,
+    name: `Linke ${product.title} (Correos Express)`, description: product.description,
+    category: product.category as ServicoLinke["category"], color: "#526653",
+    is_active: product.active, is_primordial: true,
+    pricing_profile: "Standard / Geral", target_client_name: "Clientes Gerais",
+    preferred_carrier_id: "forn_lk003", preferred_carrier_name: "CORREOS.EXPRESS",
+    webservice_connection_id: "correos_express", webservice_service_code: product.api,
+    transit_time_label: product.transit, global_markup_pct: 25,
+    allowed_zones: product.coverage,
+    zones: product.api === "26" ? buildSubproductContractZones("correos", "26", 25).zones
+      : product.coverage.map((code) => ({ zone_code: code, zone_name: ZONE_DISPLAY_NAMES[code] || code, tiers: [] })),
+    created_at: "2026-10-29T00:00:00Z",
+  })
+}
+
+// Canonical defaults use the same supplied tariffs as persisted PAQ24/ePAQ24 tables.
+for (let i = 0; i < DEFAULT_SERVICOS_LINKE.length; i++) {
+  if (["63", "93"].includes(DEFAULT_SERVICOS_LINKE[i].webservice_service_code || "")) {
+    DEFAULT_SERVICOS_LINKE[i] = applyPaq24Tariffs(DEFAULT_SERVICOS_LINKE[i])
+  }
+}
 
 /** Resolve the stored base-table marker and whether a catalogue entry exists. */
 async function readStoredServiceProtection(supabase: ReturnType<typeof createAdminClient>, id: string, tenantId: string) {

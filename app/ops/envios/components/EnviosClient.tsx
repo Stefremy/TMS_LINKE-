@@ -2,6 +2,7 @@
 import { ShipmentParcelWeight } from '@/components/shipments/ShipmentParcelWeight'
 
 import * as React from "react"
+import { EMPTY_SHIPMENT_FILTERS, buildShipmentFilterFacets, matchesShipmentListFilters, shipmentFiltersError, shipmentListQuery, type ShipmentListFilters, type ShipmentFilterFacets } from "@/lib/services/shipments/shipment-list-filters"
 import { useRouter } from "next/navigation"
 import { useTrackingPolling } from "@/lib/hooks/useTrackingPolling"
 import { 
@@ -47,6 +48,9 @@ interface EnviosClientProps {
     totalPages: number
     total: number
   }
+  initialFilters?: ShipmentListFilters
+  filterFacets?: ShipmentFilterFacets
+  filterError?: string | null
   initialSearch?: string
   initialStatus?: string
 }
@@ -70,10 +74,13 @@ function getMutedShipmentBadgeClass(variant: string) {
   }
 }
 
-export function EnviosClient({ envios, recolhas, clients, pagination, initialSearch, initialStatus }: EnviosClientProps) {
+export function EnviosClient({ envios, recolhas, clients, pagination, initialSearch, initialStatus, initialFilters = EMPTY_SHIPMENT_FILTERS, filterFacets, filterError }: EnviosClientProps) {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = React.useState(initialSearch || "")
+  const [requestedSearch, setRequestedSearch] = React.useState(initialSearch || "")
+  const [searchAutoEnabled, setSearchAutoEnabled] = React.useState(true)
   const [statusFilter, setStatusFilter] = React.useState(initialStatus || "Todos")
+  const [filters, setFilters] = React.useState<ShipmentListFilters>(initialFilters)
   const [showFilters, setShowFilters] = React.useState(false)
   const [isExpanded, setIsExpanded] = React.useState(false)
   React.useEffect(() => {
@@ -93,6 +100,33 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
   const [isClosingManifest, setIsClosingManifest] = React.useState(false)
   const [isSyncingSelected, setIsSyncingSelected] = React.useState(false)
   const [isDeletingSelected, setIsDeletingSelected] = React.useState(false)
+  const appliedFilterSignature = JSON.stringify(initialFilters)
+  React.useEffect(() => {
+    setFilters(initialFilters)
+    setSearchQuery(current => current !== requestedSearch ? current : initialSearch || "")
+    setRequestedSearch(initialSearch || "")
+    setStatusFilter(initialStatus || "Todos")
+    setSearchAutoEnabled(true)
+    setSelectedIds([])
+  // Compare serialized query values, not the object recreated on each refresh.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedFilterSignature, initialSearch, initialStatus, pagination?.page])
+  const navigateFilters = (nextFilters = filters, search = searchQuery, status = statusFilter) => {
+    if (shipmentFiltersError(nextFilters)) return
+    setSelectedIds([])
+    setSearchAutoEnabled(false)
+    setRequestedSearch(search)
+    router.push(`/ops/envios?${shipmentListQuery(nextFilters, search, status)}`, { scroll: false })
+  }
+  React.useEffect(() => {
+    if (!searchAutoEnabled || viewMode !== "envios" || searchQuery === (initialSearch || "")) return
+    const timer = setTimeout(() => {
+      setRequestedSearch(searchQuery)
+      router.push(`/ops/envios?${shipmentListQuery(initialFilters, searchQuery, statusFilter)}`, { scroll: false })
+    }, 400)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, initialSearch, viewMode, appliedFilterSignature, statusFilter, searchAutoEnabled])
   const statusTabs = ["Todos", "Pendente", "Em Trânsito", "Em Distribuição", "Entregue", "Entregue (PUDO)", "Incidência", "Devolvido", "Cancelado"]
 
   const activeIds = React.useMemo(() => envios
@@ -174,58 +208,18 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
 
   const dataSource = viewMode === "envios" ? envios : recolhas
 
-  const filteredEnvios = dataSource.filter((item) => {
-    // 1. Status Filter
-    const rawStatus = item.status?.label || item.rawShipment?.ctt_estado || "Pendente"
-    const statusCfg = getShipmentStatusConfig(rawStatus)
-    
-    if (statusFilter !== "Todos") {
-      const targetLabel = statusFilter === "Pendente"
-        ? "Aguarda Entrada"
-        : statusFilter === "Incidências" || statusFilter === "Incidência"
-        ? "Incidência"
-        : statusFilter
-      if (statusCfg.label !== targetLabel) return false
-    }
-
-    if (!searchQuery) return true
-    const q = searchQuery.toLowerCase()
-    
-    // Add safety checks in case properties are missing
-    const trkId = item.trk?.id || ""
-    const trkRef = item.trk?.ref || ""
-    const carrierRef = item.trk?.carrierRef || item.rawShipment?.ctt_object_id || ""
-    const senderName = item.sender?.name || ""
-    const recipientName = item.recipient?.name || ""
-    const serviceName = item.service?.name || ""
-    const statusLabel = item.status?.label || ""
-    const valueAmount = item.value?.amount || ""
-
-    return (
-      trkId.toLowerCase().includes(q) ||
-      trkRef.toLowerCase().includes(q) ||
-      carrierRef.toLowerCase().includes(q) ||
-      senderName.toLowerCase().includes(q) ||
-      recipientName.toLowerCase().includes(q) ||
-      serviceName.toLowerCase().includes(q) ||
-      statusLabel.toLowerCase().includes(q) ||
-      valueAmount.toLowerCase().includes(q)
-    )
-  })
+  const facets = viewMode === "envios" ? filterFacets || buildShipmentFilterFacets(envios.map(item => item.rawShipment || {}))
+    : buildShipmentFilterFacets(recolhas.map(item => item.rawShipment || {}))
+  const filteredEnvios = viewMode === "envios" ? envios : dataSource.filter(item =>
+    matchesShipmentListFilters(item.rawShipment || {}, filters, searchQuery, "Todos"))
+  const dateError = shipmentFiltersError(filters)
 
   return (
     <div data-expanded={isExpanded} className="tms-shipment-workspace mx-auto flex w-full min-w-0 flex-col gap-3 bg-transparent [--accent:#526B57] [--accent-hover:#435A48] [--accent-active:#3A4F3F] [--accent-soft:#E9EEE8] [--status-success:#526B57] [--status-success-soft:#E9EEE8] [--status-warning:#846C43] [--status-warning-soft:#F2EEE5] [--status-critical:#9A625D] [--status-critical-soft:#F2E8E6] [--status-info:#596F7C] [--status-info-soft:#EBF0F2]">
       
-      {/* Header Area */}
-      <div className="flex flex-wrap items-end justify-between gap-3 shrink-0">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-            {viewMode === "envios" ? "Envios" : "Recolhas"}
-          </h1>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            {viewMode === "envios" ? `${pagination?.total ?? envios.length} envios registados` : `${recolhas.length} pedidos de recolha`}
-          </p>
-        </div>
+      {/* View controls */}
+      <div className="flex justify-end shrink-0">
+        <h1 className="sr-only">{viewMode === "envios" ? "Envios" : "Recolhas"}</h1>
         <button
           type="button"
           aria-pressed={isExpanded}
@@ -303,7 +297,8 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
               type="text" 
               placeholder="Pesquisar guia, cliente ou destino"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setSearchAutoEnabled(true) }}
+              onKeyDown={event => { if (event.key === "Enter" && viewMode === "envios") navigateFilters() }}
               aria-label="Pesquisar envios"
               className="h-10 w-full pl-9 pr-3 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-colors"
             />
@@ -317,7 +312,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                 key={status}
                 type="button"
                 aria-pressed={statusFilter === status}
-                onClick={() => setStatusFilter(status)}
+                onClick={() => { setStatusFilter(status); navigateFilters(initialFilters, searchQuery, status) }}
                 className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${statusFilter === status ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"}`}
               >
                 {status === "Incidência" ? "Incidências" : status === "Todos" ? "Todos os envios" : status}
@@ -330,56 +325,66 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
       {/* Expanded Filters Area */}
       {showFilters && (
         <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 shrink-0 flex flex-col gap-3 text-xs">
-          {/* Row 1 */}
-          <div className="flex items-end gap-3 flex-wrap">
-            <div className="flex flex-col gap-1 w-32">
-              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Filtrar Data</label>
-              <select className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
-                <option>Data Recolha</option>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex w-40 flex-col gap-1 font-semibold text-[var(--text-secondary)]">
+              Filtrar Data
+              <select aria-label="Filtrar Data" value={filters.dateField} onChange={e => setFilters(prev => ({ ...prev, dateField: e.target.value as ShipmentListFilters["dateField"] }))} className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
+                <option value="pickup">{viewMode === "recolhas" ? "Data agendada" : "Data Recolha"}</option>
+                <option value="created">Data de criação</option><option value="updated">Última atualização</option>
               </select>
-            </div>
-            <div className="flex flex-col gap-1 w-56">
-              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Data</label>
+            </label>
+            <div className="flex flex-col gap-1">
+              <span className="font-semibold text-[var(--text-secondary)]">Data</span>
               <div className="flex items-center gap-1">
-                <input type="text" placeholder="Início" className="w-full border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]" />
-                <span className="text-[var(--text-tertiary)] px-1">até</span>
-                <input type="text" placeholder="Fim" className="w-full border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]" />
+                <input aria-label="Data inicial" type="date" value={filters.dateFrom} onChange={e => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))} className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]" />
+                <span className="text-[var(--text-tertiary)]">até</span>
+                <input aria-label="Data final" type="date" value={filters.dateTo} onChange={e => setFilters(prev => ({ ...prev, dateTo: e.target.value }))} className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]" />
               </div>
             </div>
-            <div className="flex flex-col gap-1 w-32">
-              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Serviço</label>
-              <select className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
-                <option>Todos</option>
+            <label className="flex w-48 flex-col gap-1 font-semibold text-[var(--text-secondary)]">
+              Serviço
+              <select aria-label="Serviço" value={filters.service} onChange={e => setFilters(prev => ({ ...prev, service: e.target.value }))} className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
+                <option value="">Todos</option>{facets.services.map(value => <option key={value} value={value}>{value}</option>)}
               </select>
-            </div>
-            <div className="flex flex-col gap-1 w-40">
-              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Fornecedor</label>
-              <div className="flex">
-                <span className="bg-[var(--surface-dim)] border border-[var(--border-strong)] border-r-0 rounded-l-md px-2 py-1.5 text-[var(--text-secondary)] font-bold">=</span>
-                <select className="w-full border border-[var(--border-strong)] rounded-r-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
-                  <option>Todos</option>
+            </label>
+            <div className="flex flex-col gap-1">
+              <span className="font-semibold text-[var(--text-secondary)]">Fornecedor</span>
+              <div className="flex gap-1">
+                <select aria-label="Condição do fornecedor" value={filters.carrierOp} onChange={e => setFilters(prev => ({ ...prev, carrierOp: e.target.value === "neq" ? "neq" : "eq" }))} className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
+                  <option value="eq">=</option><option value="neq">≠</option>
+                </select>
+                <select aria-label="Fornecedor" value={filters.carrier} onChange={e => setFilters(prev => ({ ...prev, carrier: e.target.value }))} className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
+                  <option value="">Todos</option>{facets.carriers.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
             </div>
-            <div className="flex flex-col gap-1 w-28">
-              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Contexto</label>
-              <select className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
-                <option>Todos</option>
+            <label className="flex w-40 flex-col gap-1 font-semibold text-[var(--text-secondary)]">
+              Contexto
+              <select aria-label="Contexto" value={filters.context} onChange={e => setFilters(prev => ({ ...prev, context: e.target.value }))} className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
+                <option value="">Todos</option><option value="mainland">Continente</option><option value="islands">Ilhas</option><option value="spain">Espanha</option><option value="international">Internacional</option><option value="unknown">Não identificado</option>
               </select>
-            </div>
-            <div className="flex flex-col gap-1 w-28">
-              <label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Tipo</label>
-              <select className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
-                <option>Todos</option>
+            </label>
+            <label className="flex w-32 flex-col gap-1 font-semibold text-[var(--text-secondary)]">
+              Tipo
+              <select aria-label="Tipo" value={filters.type} onChange={e => setFilters(prev => ({ ...prev, type: e.target.value }))} className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
+                <option value="">Todos</option><option value="shipment">Envio</option><option value="return">Devolução</option>
               </select>
-            </div>
-            <div className="flex flex-col gap-1 w-32">
-              <div className="flex justify-between items-center"><label className="font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Motorista</label><span className="text-[9px] text-[var(--status-info)] cursor-pointer hover:underline">Todos</span></div>
-              <select className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
-                <option>Todos</option>
+            </label>
+            <label className="flex w-44 flex-col gap-1 font-semibold text-[var(--text-secondary)]">
+              Motorista
+              <select aria-label="Motorista" value={filters.driver} onChange={e => setFilters(prev => ({ ...prev, driver: e.target.value }))} className="border border-[var(--border-strong)] rounded-md px-2 py-1.5 focus:outline-none focus:border-[var(--accent)] bg-[var(--surface-bg)] text-[var(--text-primary)]">
+                <option value="">Todos</option><option value="__none__">Sem motorista atribuído</option>{facets.drivers.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-subtle)] pt-3">
+            <p className="text-[11px] text-[var(--text-secondary)]">{viewMode === "envios" ? "Os filtros abrangem todos os envios, antes da paginação. Data de recolha usa a primeira recolha confirmada." : "Data agendada usa a data prevista do pedido de recolha."}</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setFilters(EMPTY_SHIPMENT_FILTERS); setSearchQuery(""); setStatusFilter("Todos"); if (viewMode === "envios") navigateFilters(EMPTY_SHIPMENT_FILTERS, "", "Todos") }} className="rounded-md border border-[var(--border-strong)] px-3 py-2 font-semibold">Limpar filtros</button>
+              <button type="button" disabled={!!dateError} onClick={() => { if (viewMode === "envios") navigateFilters() }} className="rounded-md bg-[var(--accent)] px-3 py-2 font-semibold text-white disabled:opacity-50">Aplicar filtros</button>
             </div>
           </div>
+          {(dateError || filterError) && <p role="alert" className="text-xs text-[var(--status-critical)]">{dateError || filterError}</p>}
         </div>
       )}
 
@@ -572,7 +577,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                   <th className="px-4 py-2.5 w-10">
                     <input 
                       type="checkbox" 
-                      checked={filteredEnvios.length > 0 && selectedIds.length === filteredEnvios.length}
+                      checked={filteredEnvios.length > 0 && filteredEnvios.every(e => selectedIds.includes(e.rawId || e.rawShipment?.id || e.trk?.id))}
                       onChange={handleSelectAll}
                       className="rounded border-[var(--border-strong)] text-[var(--accent)] focus:ring-[var(--accent-active)] cursor-pointer" 
                       title="Selecionar Todos"
@@ -805,7 +810,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
       {pagination && viewMode === "envios" && (
         <div className="rounded-xl border border-[var(--border-subtle)] px-4 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 bg-[var(--surface-bg)]">
           <span className="text-[11px] text-[var(--text-secondary)] font-medium">
-            A mostrar {envios.length} de {pagination.total} envios (Página {pagination.page} de {pagination.totalPages})
+            A mostrar {filteredEnvios.length} de {pagination.total} envios (Página {pagination.page} de {Math.max(1, pagination.totalPages)})
           </span>
           <div className="flex items-center gap-2">
             <Button

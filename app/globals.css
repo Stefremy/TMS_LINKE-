@@ -700,3 +700,22 @@ body {
   padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
   padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
 }
+
+/* Client notices: continuous ticker, readable when paused or motion is reduced. */
+@keyframes client-announcement-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.client-announcement-track { display: flex; width: max-content; animation: client-announcement-scroll 40s linear infinite; }
+.client-announcement-copy { flex: none; padding-right: 4rem; white-space: nowrap; }
+.client-announcement:hover .client-announcement-track,
+.client-announcement:focus-within .client-announcement-track { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .client-announcement-track { animation: none; width: auto; }
+  .client-announcement-copy { white-space: normal; overflow-wrap: anywhere; padding-right: 0; }
+  .client-announcement-copy + .client-announcement-copy { display: none; }
+}
+.client-announcement[data-paused="true"] .client-announcement-track { animation: none; width: auto; }
+.client-announcement[data-paused="true"] .client-announcement-copy { white-space: normal; overflow-wrap: anywhere; padding-right: 0; }
+.client-announcement[data-paused="true"] .client-announcement-copy + .client-announcement-copy { display: none; }
+@media (prefers-reduced-motion: reduce) { .client-announcement > button { display: none; } }

@@ -1,3 +1,6 @@
+import { DEFAULT_CORREOS_SPECIAL_SERVICES_FEES } from "@/lib/services/correos/complementary-services"
+export { DEFAULT_CORREOS_SPECIAL_SERVICES_FEES } from "@/lib/services/correos/complementary-services"
+
 export interface ClientPricingRate {
   zone_code: string
   zone_name: string
@@ -201,47 +204,6 @@ export const DEFAULT_CTT_SERVICES_PRICING: ClientServicePrice[] = [
 /**
  * 2. SERVIÇOS ESPECIAIS E SUPLEMENTARES (SpecialServices)
  */
-export const DEFAULT_CORREOS_SPECIAL_SERVICES_FEES: ClientSpecialServiceFee[] = [
-  {
-    special_service_code: "correos_cod",
-    special_service_name: "AgainstReimbursement (Cobrança / Reembolso - COD)",
-    api_type_code: 2,
-    fee_type: "percentage",
-    percentage_value: 2.0,
-    min_value: 1.80,
-    description: "Recebimento do valor da mercadoria ou frete no ato de entrega.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "correos_saturday",
-    special_service_name: "Saturday (Entrega ao Sábado 10h-14h)",
-    api_type_code: 4,
-    fee_type: "fixed",
-    fixed_value: 8.50,
-    description: "Distribuição prioritária ao sábado de manhã.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "correos_insurance",
-    special_service_name: "SpecialInsurance (Seguro Extra de Valor Declarado)",
-    api_type_code: 6,
-    fee_type: "percentage",
-    percentage_value: 1.0,
-    min_value: 3.50,
-    description: "Cobertura total até ao montante declarado da mercadoria.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "correos_fragil",
-    special_service_name: "Fragil (Tratamento Diferenciado Frágil)",
-    api_type_code: 7,
-    fee_type: "fixed",
-    fixed_value: 1.50,
-    description: "Acondicionamento e manuseamento prioritário contra quebras.",
-    is_enabled: true,
-  }
-]
-
 export const DEFAULT_CTT_SPECIAL_SERVICES_FEES: ClientSpecialServiceFee[] = [
   {
     special_service_code: "cod",
@@ -323,7 +285,7 @@ export const DEFAULT_CTT_SPECIAL_SERVICES_FEES: ClientSpecialServiceFee[] = [
     api_type_code: 20,
     fee_type: "fixed",
     fixed_value: 3.85,
-    description: "Emissão de guias de retorno autorizadas para trocas de e-commerce.",
+    description: "Emissão de guias de retorno autorizadas para trocas de e-commerce. Disponível apenas em Portugal Continental.",
     is_enabled: true,
   },
   {
@@ -423,7 +385,7 @@ export const DEFAULT_CLIENT_PRICING: ClientPricingConfig = {
   fuel_surcharge_pct: 12.5,
   discount_pct: 0,
   services_pricing: DEFAULT_CTT_SERVICES_PRICING,
-  special_services_fees: DEFAULT_CTT_SPECIAL_SERVICES_FEES,
+  special_services_fees: [...DEFAULT_CTT_SPECIAL_SERVICES_FEES, ...DEFAULT_CORREOS_SPECIAL_SERVICES_FEES],
   rates: [
     {
       zone_code: "PT_CONT",

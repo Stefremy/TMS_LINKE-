@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Send, CheckCircle2, Clock, ExternalLink, Inbox } from 'lucide-react'
+import { AnnouncementsComposer } from './AnnouncementsComposer'
 import { Button } from '@/components/ui/button'
 import type { ClientMessage, MessagePage } from '@/lib/client-messages/types'
 
@@ -114,6 +115,8 @@ export function MessagesComposer({
           Envie um aviso diretamente para o painel e caixa de mensagens da Área do Cliente.
         </p>
       </header>
+
+      <AnnouncementsComposer clients={clients} />
 
       <form
         onSubmit={send}

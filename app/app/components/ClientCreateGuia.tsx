@@ -1,5 +1,6 @@
 "use client"
 
+import { isCttSpecialServiceAvailable } from "@/lib/services/ctt/special-service-availability"
 import { ShipmentOversizeSummary } from "@/components/shipments/ShipmentOversizeSummary"
 import { getParcelLimits } from "@/lib/pricing/oversize-surcharge"
 import * as React from "react"
@@ -242,7 +243,7 @@ export function ClientCreateGuia() {
   const requiresRecipientEmail = requiresCttContact && !hasCttRecipientMobilePhone(recipientPhone, recipientCountry)
   const activeSpecialServices = React.useMemo(() => selectedSpecialServices.filter(code =>
     specialFeesList.some(f => f.is_enabled && f.special_service_code === code &&
-      code.startsWith("correos_") === isCorreosService)), [selectedSpecialServices, specialFeesList, isCorreosService])
+      code.startsWith("correos_") === isCorreosService && isCttSpecialServiceAvailable(code, recipientCountry, recipientPostal))), [selectedSpecialServices, specialFeesList, isCorreosService, recipientCountry, recipientPostal])
 
   // Compute live simulated price using exact Linke Table tiers & client special services
   const calculatedPrice = React.useMemo(() => {
@@ -992,7 +993,7 @@ export function ClientCreateGuia() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
               {specialFeesList
-                .filter(f => f.is_enabled)
+                .filter(f => f.is_enabled && isCttSpecialServiceAvailable(f.special_service_code, recipientCountry, recipientPostal))
                 .filter(f => (activeLinkeService?.preferred_carrier_name || activeLinkeService?.name || "").toLowerCase().includes("correos") ? f.special_service_code.startsWith("correos_") : !f.special_service_code.startsWith("correos_"))
                 .map(fee => {
                 const isSelected = selectedSpecialServices.includes(fee.special_service_code)

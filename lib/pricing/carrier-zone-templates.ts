@@ -1,3 +1,6 @@
+import { buildPaq24Zone, PAQ24_ZONES } from "@/lib/services/correos/paq24-tariffs"
+import { BALEARES_ZONE_NAMES, buildBalearesExpressZones } from "@/lib/services/correos/baleares-tariffs"
+import correosProducts from "@/lib/services/correos/product-catalog.json"
 import type { PriceTierLinke, ServicoLinke, ZonePriceMatrix } from "@/app/ops/configuracao/servicos/types"
 import { PRIMORDIAL_SERVICE_CODES } from "@/app/ops/configuracao/servicos/types"
 import {
@@ -29,6 +32,7 @@ export function normalizeServiceZoneCode(rawCode?: string | null): string {
 }
 
 export const ZONE_DISPLAY_NAMES: Record<string, string> = {
+  ...BALEARES_ZONE_NAMES,
   "PT-CONT": "Portugal Continental",
   "PT-ILHAS": "PT — Ilhas Açores & Madeira",
   "ES-PENIN": "Espanha Peninsular",
@@ -50,6 +54,7 @@ export const ZONE_DISPLAY_NAMES: Record<string, string> = {
 
 /** Concrete zone codes that require an explicit `ZonePriceMatrix` in `service.zones`. */
 export const CONCRETE_TARIFF_ZONE_CODES = new Set([
+  ...Object.keys(BALEARES_ZONE_NAMES),
   "PT-CONT",
   "PT-ILHAS",
   "ES-PENIN",
@@ -330,79 +335,19 @@ export const CARRIER_SUBPRODUCT_PRESETS: CarrierSubproductPreset[] = [
     defaultZones: ["Zona 2", "Zona 3"],
   },
 
-  // Correos Express
-  {
+  // Product identities from the carrier manual; operational availability is stored per table.
+  ...correosProducts.map((product): CarrierSubproductPreset => ({
     carrier: "correos",
-    wsCode: "61",
-    codePrefix: "LK-COR24",
-    shortTitle: "Paq 24 (Ibérico)",
-    subtitle: "PT Continental + Espanha Peninsular (24h)",
-    category: "Ibérico",
-    transitTimeLabel: "24h",
-    fuelSurchargePct: 11.5,
-    defaultMarkupPct: 22,
-    defaultZones: ["PT-CONT", "ES-PENIN"],
-  },
-  {
-    carrier: "correos",
-    wsCode: "62",
-    codePrefix: "LK-COR48",
-    shortTitle: "Paq 48 (Ibérico)",
-    subtitle: "PT Continental + Espanha Peninsular (48h)",
-    category: "Ibérico",
-    transitTimeLabel: "48h",
-    fuelSurchargePct: 11.5,
-    defaultMarkupPct: 22,
-    defaultZones: ["PT-CONT", "ES-PENIN"],
-  },
-  {
-    carrier: "correos",
-    wsCode: "93",
-    codePrefix: "LK-COR",
-    shortTitle: "e-Paq 24 B2C",
-    subtitle: "Portugal Continental B2C com SMS/Email",
-    category: "Nacional",
-    transitTimeLabel: "24h",
+    wsCode: product.api,
+    codePrefix: product.code,
+    shortTitle: product.title,
+    subtitle: product.description,
+    category: product.category as CarrierSubproductPreset["category"],
+    transitTimeLabel: product.transit,
     fuelSurchargePct: 11.5,
     defaultMarkupPct: 25,
-    defaultZones: ["PT-CONT"],
-  },
-  {
-    carrier: "correos",
-    wsCode: "63",
-    codePrefix: "LK-COR",
-    shortTitle: "E-Paq 24 (E-Commerce)",
-    subtitle: "Portugal Continental B2C / E-Commerce",
-    category: "Nacional",
-    transitTimeLabel: "24h",
-    fuelSurchargePct: 11.5,
-    defaultMarkupPct: 25,
-    defaultZones: ["PT-CONT"],
-  },
-  {
-    carrier: "correos",
-    wsCode: "66",
-    codePrefix: "LK-CORIS",
-    shortTitle: "Ilhas Espanholas (Baleares)",
-    subtitle: "Ilhas Baleares & Canárias (ES-ILHAS)",
-    category: "Ilhas",
-    transitTimeLabel: "48-72h",
-    fuelSurchargePct: 12.0,
-    defaultMarkupPct: 25,
-    defaultZones: ["ES-ILHAS"],
-  },
-  {
-    carrier: "correos",
-    wsCode: "90",
-    codePrefix: "LK-CORINT",
-    shortTitle: "Internacional Express",
-    subtitle: "Exportação aérea mundial (8 zonas oficiais)",
-    category: "Internacional",
-    transitTimeLabel: "3-7 dias úteis",
-    fuelSurchargePct: 8.5,
-    defaultMarkupPct: 22,
-    defaultZones: ["EU 1", "EU 2", "EU 3", "NA", "SA", "O1", "O2", "A"],
-  },
+    defaultZones: product.coverage,
+  })),
 ]
 
 export function getCarrierSubproductPreset(
@@ -431,6 +376,25 @@ export function buildContractZoneMatrix(options: {
   const canonicalCode = normalizeServiceZoneCode(options.zoneCode)
   const ws = (options.wsCode || "").trim()
   const zoneName = options.zoneNameOverride || ZONE_DISPLAY_NAMES[canonicalCode] || canonicalCode
+
+  if (options.carrier === "correos" && ["63", "93"].includes(ws) && PAQ24_ZONES.includes(canonicalCode)) {
+    return buildPaq24Zone(canonicalCode, options.markupPct)
+  }
+
+  if (options.carrier === "correos" && ws === "26") {
+    const tariff = buildBalearesExpressZones(options.markupPct).find(zone => zone.zone_code === canonicalCode)
+    return tariff || { zone_code: canonicalCode, zone_name: zoneName, tiers: [] }
+  }
+
+  // A product catalogue is not a tariff. Never borrow CTT or another Correos
+  // product's prices when configuring a newly registered contracted product.
+  if (options.carrier === "correos" &&
+      !["61", "62", "63", "66", "90", "93"].includes(ws)) {
+    return { zone_code: canonicalCode, zone_name: zoneName, tiers: [] }
+  }
+  if (options.carrier === "correos" && canonicalCode === "PT-ILHAS") {
+    return { zone_code: canonicalCode, zone_name: zoneName, tiers: [] }
+  }
 
   // 1. CTT Europa Terrestre (Guia CE · Zona 2 / Zona 3)
   if (canonicalCode === "Zona 2" || canonicalCode === "Zona 3") {
@@ -576,7 +540,7 @@ export function detectCarrierGroup(service?: Partial<ServicoLinke> | null): "ctt
   if (wsConn.includes("ctt")) return "ctt"
 
   const wsCode = (service.webservice_service_code || "").trim().toUpperCase()
-  if (["61", "62", "63", "66", "90", "93"].includes(wsCode)) return "correos"
+  if (correosProducts.some((product) => product.api === wsCode)) return "correos"
   if (wsCode.startsWith("EM") || wsCode.startsWith("EN")) return "ctt"
 
   const code = (service.code || "").trim().toUpperCase()

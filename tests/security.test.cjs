@@ -910,3 +910,40 @@ test('service DTO retains safe island modality after redacting internal product 
   assert.equal(service.webservice_connection_id,undefined)
  }
 })
+
+test('return authorization is accepted only in mainland Portugal and rejected before reservations/provider calls elsewhere',async()=>{
+ for(const [country,postal,zone,product,allowed] of [
+  ['PT','4000-001','PT-CONT','EMSF056.01',true],
+  ['PT','9000-001','PT-ILHAS','EMSF056.01',false],
+  ['PT','9500-001','PT-ILHAS','EMSF057.01',false],
+  ['ES','28001','ES-PENIN','EMSF056.01',false],
+  ['BE','1000','EU 1','EMSF001.02',false],
+ ]){
+  const h=shipmentHarness({adjust:t=>{const s=t.servicos_linke[0];s.webservice_service_code=product;s.allowed_zones=[zone];s.zones[0].zone_code=zone}})
+  const result=await emit(h,{recipientCountry:country,recipientPostal:postal,selectedSpecialServices:['auth_return'],recipientEmail:'recipient@example.invalid',cttExportDetails:{exportType:'Permanent',contentType:'Goods',declaredValue:25}})
+  assert.equal(result.success,allowed,result.error)
+  if(allowed)assert.equal(result.sellPrice,12.85)
+  else{assert.match(result.error,/apenas para Portugal Continental/);assert.equal(h.providerCalls.length,0);assert.equal(h.db.writes.length,0);assert.equal(h.credentials.length,0)}
+ }
+})
+
+test('shipment return type is persisted explicitly for list filtering without changing the carrier flag',async()=>{
+ for(const isReturn of [true,false]){
+  const h=shipmentHarness()
+  const result=await emit(h,{isReturn})
+  assert.equal(result.success,true,result.error)
+  const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+  assert.equal(saved.is_return,isReturn)
+  assert.equal(h.providerCalls[0].payload.isReturn,isReturn)
+ }
+})
+
+test('Correos product 93 is sent unchanged and recorded only in the supported audit snapshot',async()=>{
+ const h=shipmentHarness({carrier:'Correos',adjust:t=>{t.servicos_linke[0].webservice_service_code='93'}})
+ const result=await emit(h)
+ assert.equal(result.success,true,result.error)
+ assert.equal(h.providerCalls[0].payload.producto,'93')
+ const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+ assert.equal(saved.correos_product_code,'93')
+ assert.equal(Object.hasOwn(h.db.writes.find(w=>w.table==='shipments').value,'correos_product_code'),false)
+})

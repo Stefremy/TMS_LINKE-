@@ -125,21 +125,8 @@ export class CorreosShipmentService {
       ]
     }
 
-    let result = await this.client.request<CorreosShipmentOutput>(endpoint, creds, payload)
-    if (
-      result &&
-      result.codigoRetorno !== 0 &&
-      !result.datosResultado &&
-      payload.producto !== "63" &&
-      (result.codigoRetorno === 500 ||
-        result.codigoRetorno === 999 ||
-        String(result.mensajeRetorno || "").includes("TASAR"))
-    ) {
-      result = await this.client.request<CorreosShipmentOutput>(endpoint, creds, {
-        ...payload,
-        producto: "63",
-      })
-    }
-    return result
+    // Never substitute a different carrier product after a rejection. Prices,
+    // coverage and delivery commitments belong to the selected product.
+    return this.client.request<CorreosShipmentOutput>(endpoint, creds, payload)
   }
 }

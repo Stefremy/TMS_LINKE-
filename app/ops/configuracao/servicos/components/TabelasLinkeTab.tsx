@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { getTierDisplayEntries } from "@/lib/pricing/tier-display-order"
 import { 
   Package, 
   Search, 
@@ -518,7 +519,7 @@ export function TabelasLinkeTab({
                   <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">Combustível: {currentServico.fuel_surcharge_pct == null ? "Conforme cliente" : `${currentServico.fuel_surcharge_pct}%`}</span>
                 </div>
                 {currentServico.zones.map((zone, idx) => {
-                  const tiers = zone.tiers || []
+                  const tiers = getTierDisplayEntries(zone.tiers || []).map(entry => entry.tier)
                   const costs = tiers.map(t => Number(t.cost_price || 0))
                   const sells = tiers.map(t => Number(t.sell_price || 0))
                   const minCost = costs.length > 0 ? Math.min(...costs) : 0

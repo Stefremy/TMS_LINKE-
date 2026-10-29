@@ -1,3 +1,5 @@
+import { isCorreosConfigurationOnly } from "@/lib/services/correos/complementary-services"
+import { isCttSpecialServiceAvailable } from "@/lib/services/ctt/special-service-availability"
 import { calculateOversizeSurcharge } from "./oversize-surcharge"
 import type { Cliente, ClientSpecialServiceFee } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
@@ -5,12 +7,12 @@ import { calculateShipmentPrice, isCeTruckService } from "./calculate-shipment-p
 import { ShipmentPricingError } from "./shipment-pricing-errors"
 import { calculateChargeableWeight, type ParcelPricingDimensions } from "./chargeable-weight"
 
-// Preserve the server's existing charges for profiles without configured extras.
+// Preserve legacy charges until a client explicitly saves its fee configuration.
 const DEFAULT_SPECIAL_FEES: ClientSpecialServiceFee[] = [
   { special_service_code: "cod", special_service_name: "Cobrança (COD)", api_type_code: 1, fee_type: "percentage", percentage_value: 2, min_value: 1.8, description: "", is_enabled: true },
   { special_service_code: "fragil", special_service_name: "Tratamento Frágil", api_type_code: 2, fee_type: "fixed", fixed_value: 1.5, description: "", is_enabled: true },
   { special_service_code: "sms_tracking", special_service_name: "Alerta SMS & Tracking", api_type_code: 3, fee_type: "fixed", fixed_value: 0.15, description: "", is_enabled: true },
-  { special_service_code: "auth_return", special_service_name: "Logística Inversa (Retorno)", api_type_code: 4, fee_type: "fixed", fixed_value: 3.85, description: "", is_enabled: true },
+  { special_service_code: "auth_return", special_service_name: "Logística Inversa (Retorno)", api_type_code: 20, fee_type: "fixed", fixed_value: 3.85, description: "", is_enabled: true },
   { special_service_code: "correos_cod", special_service_name: "AgainstReimbursement (Cobrança)", api_type_code: 2, fee_type: "percentage", percentage_value: 2, min_value: 1.8, description: "", is_enabled: true },
   { special_service_code: "correos_saturday", special_service_name: "Saturday (Sábado)", api_type_code: 4, fee_type: "fixed", fixed_value: 8.5, description: "", is_enabled: true },
   { special_service_code: "correos_insurance", special_service_name: "SpecialInsurance (Seguro)", api_type_code: 6, fee_type: "percentage", percentage_value: 1, min_value: 3.5, description: "", is_enabled: true },
@@ -19,7 +21,7 @@ const DEFAULT_SPECIAL_FEES: ClientSpecialServiceFee[] = [
 
 export function getClientSpecialFees(client: Partial<Cliente>): ClientSpecialServiceFee[] {
   const configured = client.pricing?.special_services_fees
-  return configured?.length ? configured : DEFAULT_SPECIAL_FEES
+  return (configured?.length ? configured : DEFAULT_SPECIAL_FEES).filter(fee => !isCorreosConfigurationOnly(fee.special_service_code))
 }
 
 export function resolveServiceCarrier(service: ServicoLinke): "ctt" | "correos" {
@@ -69,6 +71,7 @@ export function calculateShipmentSpecialFees(
   carrier: "ctt" | "correos",
   codes: string[] = [],
   codValue: number = 0,
+  destination?: { country: string; postal: string },
 ) {
   if (!Array.isArray(codes) || codes.some(code => typeof code !== "string") ||
       new Set(codes).size !== codes.length || codes.length > 20) {
@@ -76,6 +79,9 @@ export function calculateShipmentSpecialFees(
   }
   const fees = getClientSpecialFees(client)
   const items = codes.map(code => {
+    if (!isCttSpecialServiceAvailable(code, destination?.country ?? "", destination?.postal ?? "")) {
+      throw new ShipmentPricingError("AuthorizeReturn / Back (Logística Inversa) está disponível apenas para Portugal Continental.")
+    }
     if (code.startsWith("correos_") !== (carrier === "correos")) {
       throw new ShipmentPricingError("Serviço especial não autorizado para esta transportadora.")
     }
@@ -124,7 +130,7 @@ export function calculateShipmentQuote(
   const transport = calculateShipmentPrice(weight.billableWeightKg, { ...client, default_linke_table_id: service.id },
     [service], country, postal, { requireConfiguredTariff: true })
   const oversize = calculateOversizeSurcharge(service, country, weightKg, parcel)
-  const specials = calculateShipmentSpecialFees(transport.sellPrice, client, resolveServiceCarrier(service), specialCodes, codValue)
+  const specials = calculateShipmentSpecialFees(transport.sellPrice, client, resolveServiceCarrier(service), specialCodes, codValue, { country, postal })
   return { ...transport, ...weight, oversizeSurcharge: oversize, specialFeesAmount: Number((specials.amount + oversize.amount).toFixed(2)), specialItems: [...specials.items, ...oversize.items], totalPrice: Number((specials.totalPrice + oversize.amount).toFixed(2)) }
 }
 

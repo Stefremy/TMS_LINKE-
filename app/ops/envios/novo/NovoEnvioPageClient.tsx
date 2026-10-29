@@ -1,5 +1,6 @@
 "use client"
 
+import { isCttSpecialServiceAvailable } from "@/lib/services/ctt/special-service-availability"
 import { ShipmentOversizeSummary } from "@/components/shipments/ShipmentOversizeSummary"
 import { getParcelLimits } from "@/lib/pricing/oversize-surcharge"
 import * as React from "react"
@@ -194,8 +195,9 @@ export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: 
   const specialServicesAvailable = React.useMemo(() => {
     if (!currentClient) return []
     return getClientSpecialFees(currentClient).filter(f => f.is_enabled &&
-      f.special_service_code.startsWith("correos_") === isCorreos)
-  }, [currentClient, isCorreos])
+      f.special_service_code.startsWith("correos_") === isCorreos &&
+      isCttSpecialServiceAvailable(f.special_service_code, recipientCountry, recipientZip))
+  }, [currentClient, isCorreos, recipientCountry, recipientZip])
 
   const activeSpecialServices = React.useMemo(() => selectedSpecialServices.filter(code =>
     specialServicesAvailable.some(f => f.special_service_code === code)), [selectedSpecialServices, specialServicesAvailable])

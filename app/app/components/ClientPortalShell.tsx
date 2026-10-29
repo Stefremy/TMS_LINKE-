@@ -13,6 +13,7 @@ import { ClientSidebarNav, ClientTopHeaderAction } from "./ClientSidebarNav"
 import { signout } from "@/app/login/actions"
 import type { requirePortalStore } from "@/lib/client-portal/access"
 import { ClientScopeProvider } from "./ClientScope"
+import { ClientAnnouncements } from "./ClientAnnouncements"
 import { ClientMessagesProvider } from "./ClientMessages"
 import { ClientMobileNav } from "./ClientMobileNav"
 import { DashboardBackdrop } from "@/app/ops/components/DashboardBackdrop"
@@ -108,6 +109,7 @@ export function ClientPortalShell({ children, store, isSuspended = false, access
             </Suspense>
           </header>
 
+          <ClientAnnouncements />
           {/* Page Content with Visão Geral Backdrop */}
           <main className={`tms-main flex-1 bg-[var(--canvas-bg)] ${backdropStyles.dashboard} relative isolate min-h-0`}>
             <DashboardBackdrop />

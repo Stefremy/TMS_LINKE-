@@ -8,6 +8,7 @@ export type ParcelPricingDimensions = { lengthCm: number; widthCm: number; heigh
 /** Contract rules are keyed by API product, never by editable marketing names. */
 export function getServiceVolumetricRule(service: Partial<ServicoLinke>): VolumetricRule | undefined {
   if (service.volumetric_rule) return service.volumetric_rule
+  if (service.webservice_service_code === "26") return { divisor: 1_000_000 / 167 }
   if (service.carrier_group === "correos" || service.preferred_carrier_name?.toLowerCase().includes("correos")) return undefined
   switch (service.webservice_service_code?.trim().toUpperCase()) {
     case "EMSF056.01": return { divisor: 6000 }

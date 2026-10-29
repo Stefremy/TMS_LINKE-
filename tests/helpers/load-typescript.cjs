@@ -10,6 +10,7 @@ function createLoader(mocks) {
   function load(filename) {
     const absolute = path.resolve(root, filename)
     if (cache.has(absolute)) return cache.get(absolute).exports
+    if (absolute.endsWith(".json")) return JSON.parse(fs.readFileSync(absolute, "utf8"))
     const loadedModule = { exports: {} }
     cache.set(absolute, loadedModule)
     const source = ts.transpileModule(fs.readFileSync(absolute, 'utf8'), {

@@ -77,7 +77,7 @@ function hooks() {
     commit() { const current = [...effects.values()]; effects.clear(); current.forEach(callback => callback()) },
     dispose() { cleanup.forEach(callback => callback?.()) } }
 }
-function harness(t, portal, services = [service], realQuotes = false) {
+function harness(t, portal, services = [service], realQuotes = false, configuredSpecialFees = []) {
   const h = hooks(), result = deferred(), calls = { create: 0, agenda: [], scroll: [], inputs: [], postalResets: 0 }
   const scopedClient = { ...client, assigned_linke_service_ids: services.map(s => s.id) }
   const previous = { window: global.window, document: global.document, FormData: global.FormData }
@@ -103,7 +103,7 @@ function harness(t, portal, services = [service], realQuotes = false) {
     '@/lib/pricing/chargeable-weight': createLoader({})('lib/pricing/chargeable-weight.ts'),
     '@/lib/services/service-destinations': destinations,
     '@/lib/services/shipment-service-options': createLoader({})('lib/services/shipment-service-options.ts'),
-    '@/lib/pricing/calculate-shipment-quote': realQuotes ? createLoader({})('lib/pricing/calculate-shipment-quote.ts') : { isCorreosLinkeService: () => false, getClientSpecialFees: () => [], calculateShipmentQuote: () => ({
+    '@/lib/pricing/calculate-shipment-quote': realQuotes ? createLoader({})('lib/pricing/calculate-shipment-quote.ts') : { isCorreosLinkeService: () => false, getClientSpecialFees: () => configuredSpecialFees, calculateShipmentQuote: () => ({
       basePrice: 8, buyPrice: 3, fuelSurchargeAmount: 1, specialFeesAmount: 0, specialItems: [], totalPrice: 9, tierLabel: 'Fixture',
     }) },
     '@/lib/pricing/calculate-client-shipment-preview': realQuotes ? createLoader({})('lib/pricing/calculate-client-shipment-preview.ts') : { calculateClientShipmentPreview: () => ({
@@ -434,4 +434,23 @@ test('client portal: incomplete postal codes never offer a mainland tariff and s
  assert.equal(nodes.find(n=>n.props['aria-label']==='Serviço de Transporte Linke').props.value,'')
  await nodes.find(n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}})
  assert.equal(h.calls.create,0)
+})
+
+for(const portal of [true,false])test(`${portal?'client portal':'OPS'}: return authorization disappears and is not submitted after changing mainland to islands`,async t=>{
+ const s={...service,webservice_service_code:'EMSF056.01',preferred_carrier_name:'CTT Expresso',allowed_zones:['PT-CONT','PT-ILHAS'],zones:['PT-CONT','PT-ILHAS'].map(zone_code=>({zone_code,tiers:[{weight_max:30,sell_price:8,enabled:true}]}))}
+ const fee={special_service_code:'auth_return',special_service_name:'AuthorizeReturn / Back',is_enabled:true,fee_type:'fixed',fixed_value:3.85,description:'Apenas continente'}
+ const h=harness(t,portal,[s],false,[fee]);let nodes=await h.ready()
+ if(!portal){nodes.find(n=>n.props.name==='recipient_zip').props.onChange({target:{value:'4000-001'}});nodes=h.render()}
+ const option=nodes.find(n=>portal?n.props.id==='opt_auth_return':n.type==='div'&&n.props.onClick&&n.props.className?.includes('cursor-pointer')&&textOf(n).includes('Apenas continente'))
+ assert.ok(option)
+ if(portal)option.props.onChange({target:{checked:true}});else option.props.onClick()
+ nodes=h.render()
+ nodes.find(n=>portal?n.props.id==='field-recipient-postal':n.props.name==='recipient_zip').props.onChange({target:{value:'9000-001'}})
+ nodes=h.render();nodes=h.render()
+ assert.equal(nodes.some(n=>portal?n.props.id==='opt_auth_return':n.type==='div'&&n.props.onClick&&textOf(n).includes('Apenas continente')),false)
+ const submission=nodes.find(n=>n.type==='form').props.onSubmit({preventDefault(){},currentTarget:{}})
+ assert.equal(h.calls.create,1)
+ assert.deepEqual(h.calls.inputs[0].selectedSpecialServices,[])
+ h.result.resolve({success:false,error:'Test: no real provider call'})
+ await submission
 })

@@ -3,7 +3,8 @@
 import * as React from "react"
 import { 
   X, 
-  Copy, 
+  Copy,
+  Check,
   Percent, 
   UserCheck, 
   TrendingDown, 
@@ -22,7 +23,7 @@ interface DuplicateServicoModalProps {
     targetProfile: "VIP / Alto Volume" | "E-Commerce PME" | "Tabela Negociada Cliente",
     targetClientName: string,
     discountPct: number
-  ) => Promise<void>
+  ) => Promise<boolean | void>
 }
 
 export function DuplicateServicoModal({
@@ -35,9 +36,14 @@ export function DuplicateServicoModal({
   const [targetClientName, setTargetClientName] = React.useState<string>("Grandes Contas (>300 envios/mês)")
   const [discountPct, setDiscountPct] = React.useState<number>(12)
   const [loading, setLoading] = React.useState(false)
+  const [created, setCreated] = React.useState(false)
+  const [saveError, setSaveError] = React.useState("")
+  const inFlight = React.useRef(false)
 
   React.useEffect(() => {
     if (isOpen && servico) {
+      setCreated(false)
+      setSaveError("")
       setTargetProfile("VIP / Alto Volume")
       setTargetClientName("Grandes Contas (>300 envios/mês)")
       setDiscountPct(12)
@@ -62,11 +68,18 @@ export function DuplicateServicoModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (inFlight.current || created) return
+    inFlight.current = true
     setLoading(true)
+    setSaveError("")
     try {
-      await onConfirmDuplicate(servico.id, targetProfile, targetClientName, discountPct)
-      onClose()
+      const saved = await onConfirmDuplicate(servico.id, targetProfile, targetClientName, discountPct)
+      if (saved === false) setSaveError("Não foi possível criar a tabela. Tente novamente.")
+      else setCreated(true)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Não foi possível criar a tabela.")
     } finally {
+      inFlight.current = false
       setLoading(false)
     }
   }
@@ -92,7 +105,7 @@ export function DuplicateServicoModal({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={onClose} disabled={loading}
             className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
           >
             <X className="w-4 h-4" />
@@ -117,6 +130,7 @@ export function DuplicateServicoModal({
               Perfil / Segmento
             </label>
             <select
+              disabled={loading || created}
               value={targetProfile}
               onChange={(e) => handleProfileChange(e.target.value as any)}
               className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
@@ -133,6 +147,7 @@ export function DuplicateServicoModal({
               Nome do Cliente ou Grupo Alvo
             </label>
             <input
+              disabled={loading || created}
               type="text"
               required
               value={targetClientName}
@@ -149,6 +164,7 @@ export function DuplicateServicoModal({
               <span className="font-mono font-medium text-emerald-700">-{discountPct}%</span>
             </label>
             <input
+              disabled={loading || created}
               type="number"
               min="1"
               max="50"
@@ -161,22 +177,24 @@ export function DuplicateServicoModal({
             </span>
           </div>
 
+          {saveError && <p role="alert" className="text-xs text-rose-700">{saveError}</p>}
+          {created && <p role="status" className="text-xs text-emerald-700">Tabela criada com sucesso. Pode fechar esta janela.</p>}
           {/* Footer Actions */}
           <div className="pt-4 border-t border-slate-200/80 flex items-center justify-end gap-2 text-xs">
             <button
               type="button"
-              onClick={onClose}
+              onClick={onClose} disabled={loading}
               className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg font-medium transition-colors"
             >
-              Cancelar
+              Fechar
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || created}
               className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-medium shadow-2xs transition-colors disabled:opacity-50"
             >
-              <Copy className="w-3.5 h-3.5" />
-              {loading ? "A Criar..." : "Criar Tabela"}
+              {created ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {loading ? "A Criar..." : created ? "Gravado" : "Criar Tabela"}
             </button>
           </div>
 

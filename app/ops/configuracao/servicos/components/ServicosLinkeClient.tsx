@@ -61,7 +61,7 @@ export function ServicosLinkeClient({
   }
 
   // Save Service handler
-  const handleSaveServico = async (servicoData: Partial<ServicoLinke>): Promise<boolean> => {
+  const handleSaveServico = async (servicoData: Partial<ServicoLinke>): Promise<ServicoLinke | false> => {
     const res = await saveServicoLinkeAction(servicoData)
     if (res.success && res.data) {
       const savedData = res.data
@@ -75,7 +75,7 @@ export function ServicosLinkeClient({
         return [savedData, ...prev]
       })
       showNotification(`Serviço / Tabela '${savedData.name}' gravado com sucesso!`)
-      return true
+      return savedData
     }
     showNotification(res.error || "Não foi possível gravar esta tabela. Tente novamente.")
     return false
@@ -92,9 +92,10 @@ export function ServicosLinkeClient({
     if (res.success && res.data) {
       setServicos((prev) => [res.data!, ...prev])
       showNotification(`Tabela personalizada com -${discountPct}% criada para '${targetClientName}'!`)
-      return
+      return true
     }
     showNotification(res.error || "Não foi possível duplicar esta tabela. Tente novamente.")
+    return false
   }
 
   const handleToggleStatus = async (id: string, active: boolean) => {

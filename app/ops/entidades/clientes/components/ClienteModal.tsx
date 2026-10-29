@@ -50,6 +50,7 @@ import { getServiceZoneOverrideKey, resolveZoneTierOverrides } from "@/lib/prici
 import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "@/app/ops/configuracao/servicos/types"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
+import { CORREOS_INCLUDED_SERVICES, isCorreosConfigurationOnly, mergeClientSpecialFees } from "@/lib/services/correos/complementary-services"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { 
   Cliente, 
@@ -57,7 +58,6 @@ import {
   CLIENT_COLOR_OPTIONS,
   DEFAULT_CLIENT_PRICING,
   DEFAULT_CTT_SPECIAL_SERVICES_FEES,
-  DEFAULT_CORREOS_SPECIAL_SERVICES_FEES,
   ClientPricingConfig,
   ClientSpecialServiceFee
 } from "../types"
@@ -82,7 +82,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
   const [serviceTableFilter, setServiceTableFilter] = React.useState<"all" | "base" | "custom">("all")
   const [specialProviderTab, setSpecialProviderTab] = React.useState<"ctt" | "correos">("ctt")
-  const [saveSuccessMsg, setSaveSuccessMsg] = React.useState(false)
+  const [savedFormSnapshot, setSavedFormSnapshot] = React.useState<string | null>(null)
   const [draftId] = React.useState(() => initialData?.id || crypto.randomUUID())
   const [sendInvitation, setSendInvitation] = React.useState(false)
   const [invitationEmail, setInvitationEmail] = React.useState("")
@@ -124,9 +124,14 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     assigned_linke_service_ids: initialData?.assigned_linke_service_ids ?? (initialData ? servicosLinke.map((s) => s.id) : []),
     assigned_linke_profile: initialData?.assigned_linke_profile || "Standard / Geral",
     volume_discount_pct: initialData?.volume_discount_pct ?? 0,
-    pricing: initialData?.pricing || DEFAULT_CLIENT_PRICING,
+    pricing: {
+      ...DEFAULT_CLIENT_PRICING, ...initialData?.pricing,
+      special_services_fees: mergeClientSpecialFees(initialData?.pricing?.special_services_fees, DEFAULT_CTT_SPECIAL_SERVICES_FEES),
+    },
     custom_tier_overrides: initialData?.custom_tier_overrides || {},
   })
+
+  const saveSuccessMsg = savedFormSnapshot === JSON.stringify(formData) && !sendInvitation
 
   const [expandedPriceServico, setExpandedPriceServico] = React.useState<string | null>(null)
   const [activeZoneByServico, setActiveZoneByServico] = React.useState<Record<string, number>>({})
@@ -174,14 +179,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         pricing: {
           ...DEFAULT_CLIENT_PRICING,
           ...initialData.pricing,
-          special_services_fees: [
-            ...(initialData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES),
-            ...DEFAULT_CORREOS_SPECIAL_SERVICES_FEES.filter(
-              (defFee) => !(initialData.pricing?.special_services_fees || []).some(
-                (existingFee) => existingFee.special_service_code === defFee.special_service_code
-              )
-            )
-          ],
+          special_services_fees: mergeClientSpecialFees(initialData.pricing?.special_services_fees, DEFAULT_CTT_SPECIAL_SERVICES_FEES),
         },
       })
     }
@@ -362,6 +360,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     setInvitationMessage("")
     setIsSaving(true)
     let persisted = false
+    const submittedSnapshot = JSON.stringify(formData)
     try {
       paymentDueDays(formData.payment_due_days, NaN)
       const res = await saveClienteAction({
@@ -371,17 +370,16 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
 
       if (res.success && res.data) {
         persisted = true
-        setSaveSuccessMsg(true)
+        setSavedFormSnapshot(submittedSnapshot)
         onSaved(res.data)
         if (sendInvitation) {
           const invitation = await inviteClientAccessAction(res.data.id, invitationEmail)
           setInvitationMessage(invitation.message)
           setSendInvitation(false)
-          return // Keep the delivery result visible; do not immediately close the dialog.
+          return // Keep the invitation delivery result visible.
         }
-        setTimeout(() => {
-          onClose()
-        }, 300)
+      } else {
+        setSaveError("error" in res && typeof res.error === "string" ? res.error : "Não foi possível gravar o cliente. Tente novamente.")
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Tente novamente."
@@ -391,7 +389,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     }
   }
 
-  const specialFeesList = formData.pricing?.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES
+  const specialFeesList = formData.pricing?.special_services_fees || DEFAULT_CLIENT_PRICING.special_services_fees
   const assignedServices = servicosLinke.filter(service =>
     (formData.assigned_linke_service_ids || []).includes(service.id))
   const unassignedServices = servicosLinke.filter(service =>
@@ -1700,17 +1698,26 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                       onClick={() => setSpecialProviderTab("ctt")}
                       className={`flex-1 py-3 text-xs font-bold transition-colors ${specialProviderTab === "ctt" ? "text-[var(--accent)] border-b-2 border-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"}`}
                     >
-                      CTT Expresso
+                      CTT Expresso · {specialFeesList.filter(fee => !fee.special_service_code.startsWith("correos_")).length} taxas
                     </button>
                     <button
                       type="button"
                       onClick={() => setSpecialProviderTab("correos")}
                       className={`flex-1 py-3 text-xs font-bold transition-colors ${specialProviderTab === "correos" ? "text-[var(--accent)] border-b-2 border-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"}`}
                     >
-                      Correos Express
+                      Correos Express · {specialFeesList.filter(fee => fee.special_service_code.startsWith("correos_")).length} taxas
                     </button>
                   </div>
 
+                  {specialProviderTab === "correos" && (
+                    <div className="border-b border-[var(--border-subtle)] bg-emerald-50/40 px-5 py-4">
+                      <p className="text-xs font-semibold text-[var(--text-primary)]">Correos Express · Incluído no frete</p>
+                      <ul className="mt-2 grid gap-1 text-[11px] text-[var(--text-secondary)] sm:grid-cols-2">
+                        {CORREOS_INCLUDED_SERVICES.map(item => <li key={item}>✓ {item}</li>)}
+                      </ul>
+                      <p className="mt-3 text-[11px] text-[var(--text-secondary)]">Valores de referência do contrato apresentado (tarifas de 2025). Os valores já negociados com este cliente são mantidos. Gravar altera apenas este cliente.</p>
+                    </div>
+                  )}
                   <div className="divide-y divide-[var(--border-subtle)]">
                     {specialFeesList
                       .map((fee, idx) => ({ fee, idx }))
@@ -1726,17 +1733,19 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                           <input
                             type="checkbox"
                             checked={fee.is_enabled}
+                            disabled={isCorreosConfigurationOnly(fee.special_service_code)}
                             onChange={(e) => handleSpecialFeeChange(idx, "is_enabled", e.target.checked)}
                             className="w-4 h-4 mt-1 rounded border-[var(--border-strong)] accent-[var(--accent)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
                           />
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-xs text-[var(--text-primary)]">{fee.special_service_name}</span>
-                              <span className="text-[10px] font-mono bg-[var(--surface-muted)] text-[var(--text-secondary)] px-1.5 py-0.2 rounded border border-[var(--border-subtle)]">
-                                Tipo {fee.api_type_code}
+                              <span className="text-[10px] font-semibold bg-[var(--surface-muted)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded border border-[var(--border-subtle)]">
+                                {fee.special_service_code.startsWith("correos_") ? "Correos Express" : `CTT · Tipo ${fee.api_type_code}`}
                               </span>
                             </div>
                             <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">{fee.description}</p>
+                            {isCorreosConfigurationOnly(fee.special_service_code) && <p className="mt-1 text-[11px] font-medium text-amber-800">Preço configurável · ativação na emissão pendente; não é cobrado nos envios.</p>}
                           </div>
                         </div>
 
@@ -1750,7 +1759,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                                   <input
                                     type="number"
                                     step="0.1"
-                                    disabled={!fee.is_enabled}
+                                    disabled={!fee.is_enabled && !isCorreosConfigurationOnly(fee.special_service_code)}
                                     value={fee.percentage_value ?? 2.0}
                                     onChange={(e) => handleSpecialFeeChange(idx, "percentage_value", e.target.value)}
                                     className="w-20 border border-[var(--border-subtle)] rounded px-2 py-1 text-xs font-mono font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
@@ -1765,7 +1774,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                                   <input
                                     type="number"
                                     step="0.1"
-                                    disabled={!fee.is_enabled}
+                                    disabled={!fee.is_enabled && !isCorreosConfigurationOnly(fee.special_service_code)}
                                     value={fee.min_value ?? 1.5}
                                     onChange={(e) => handleSpecialFeeChange(idx, "min_value", e.target.value)}
                                     className="w-20 border border-[var(--border-subtle)] rounded px-2 py-1 text-xs font-mono font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
@@ -1781,7 +1790,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                                 <input
                                   type="number"
                                   step="0.1"
-                                  disabled={!fee.is_enabled}
+                                  disabled={!fee.is_enabled && !isCorreosConfigurationOnly(fee.special_service_code)}
                                   value={fee.fixed_value ?? 0.0}
                                   onChange={(e) => handleSpecialFeeChange(idx, "fixed_value", e.target.value)}
                                   className="w-24 border border-[var(--border-subtle)] rounded px-2 py-1 text-xs font-mono font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
@@ -1956,14 +1965,14 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
               disabled={isSaving}
               className="px-4 py-2 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg transition-colors cursor-pointer"
             >
-              {saveSuccessMsg ? "Fechar" : "Cancelar"}
+              Fechar
             </button>
 
             <button
               type="button"
               onClick={() => handleSubmit()}
-              disabled={isSaving}
-              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold px-5 py-2 rounded-lg text-xs shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+              disabled={isSaving || saveSuccessMsg}
+              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold px-5 py-2 rounded-lg text-xs shadow-sm flex items-center gap-2 transition-all cursor-pointer disabled:cursor-default disabled:opacity-75"
             >
               {isSaving ? (
                 <>
@@ -1972,8 +1981,8 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4" />
-                  <span>{sendInvitation ? "Gravar e enviar convite" : "Gravar Cliente"}</span>
+                  {saveSuccessMsg ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                  <span>{saveSuccessMsg ? "Gravado" : sendInvitation ? "Gravar e enviar convite" : "Gravar Cliente"}</span>
                 </>
               )}
             </button>

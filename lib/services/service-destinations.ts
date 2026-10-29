@@ -18,7 +18,7 @@ export function getServiceDestinationCountries(service?: ServicoLinke): { code: 
   return countryCodes.filter(country => {
     // A country remains selectable for an islands-only service; postal validation refines coverage.
     const postals = country === "PT" ? ["", "9000-001"]
-      : country === "ES" ? ["", "07001", "35001", "38001", "51001", "52001"] : [""]
+      : country === "ES" ? ["", "07001", "07701", "07800", "35001", "38001", "51001", "52001"] : [""]
     return postals.some(postal => {
       if (!isShipmentDestinationAvailable(country, postal)) return false
       const zoneCode = resolveServiceZoneCode(service, country, postal)

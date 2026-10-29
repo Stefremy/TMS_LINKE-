@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server"
-import { fetchPaginatedShipments } from "@/lib/services/shipments/shipment-fetcher"
+import { loadFilteredShipmentPage } from "@/lib/services/shipments/filtered-shipment-list"
+import { readShipmentListFilters } from "@/lib/services/shipments/shipment-list-filters"
+import { requireEmployee } from "@/lib/auth/context"
 import { getClientesAction } from "@/app/actions/clientes"
 import { EnviosClient } from "./components/EnviosClient"
 
@@ -7,22 +9,31 @@ import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { pickupDateDisplay } from "@/lib/services/shipments/shipment-pickup-dates"
 import { formatDeclaredWeight } from '@/lib/services/shipments/parcel-summary'
 
-export default async function EnviosPage(props: { searchParams?: Promise<{ page?: string, search?: string, status?: string }> }) {
+export default async function EnviosPage(props: { searchParams?: Promise<Record<string, string | undefined>> }) {
   const searchParams = await props.searchParams || {}
+  const ctx = await requireEmployee()
   const supabase = createAdminClient()
+  const filters = readShipmentListFilters(searchParams)
   
   const page = parseInt(searchParams.page || "1", 10)
   const search = searchParams.search || ""
   const status = searchParams.status || undefined
 
+  const loadRecolhas = async () => {
+    const rows = []
+    for (let offset = 0; ; offset += 1000) {
+      const result = await supabase.from("recolhas").select("*").eq("tenant_id", ctx.tenant_id)
+        .order("created_at", { ascending: false }).order("id").range(offset, offset + 999)
+      if (result.error) return { data: [], error: result.error }
+      rows.push(...(result.data || []))
+      if (!result.data || result.data.length < 1000) return { data: rows, error: null }
+    }
+  }
+
   // Fetch real data from DB & persistent actions
   const [paginatedResult, recolhasResult, clients] = await Promise.all([
-    fetchPaginatedShipments({ page, search, status }),
-    supabase
-      .from("recolhas")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(200),
+    loadFilteredShipmentPage({ page, search, status, filters }),
+    loadRecolhas(),
     getClientesAction()
   ])
 
@@ -121,6 +132,8 @@ export default async function EnviosPage(props: { searchParams?: Promise<{ page?
 })
 
 const mappedRecolhas = recolhas.map((r: any) => ({
+  rawId: r.id,
+  rawShipment: { ...r, service_type: "Recolha", carrier_code: r.carrier_code || "ctt", picked_up_at: r.scheduled_date },
   trk: { 
     id: r.ctt_pickup_id || r.id.substring(0, 8).toUpperCase(), 
     date: new Date(r.created_at).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' }), 
@@ -178,6 +191,9 @@ const mappedRecolhas = recolhas.map((r: any) => ({
         totalPages: paginatedResult.totalPages,
         total: paginatedResult.total
       }}
+      filterFacets={paginatedResult.facets}
+      initialFilters={filters}
+      filterError={paginatedResult.filterError}
       initialSearch={search}
       initialStatus={status}
     />

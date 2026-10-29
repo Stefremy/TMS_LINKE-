@@ -1,0 +1,180 @@
+[
+  {
+    "api": "61",
+    "id": "srv_linke_cor_24",
+    "code": "LK-COR-24",
+    "title": "PAQ10",
+    "category": "Ibérico",
+    "active": false,
+    "coverage": [
+      "PT-CONT",
+      "ES-PENIN"
+    ],
+    "transit": "Antes das 10h",
+    "description": "Entrega antes das 10h do dia útil seguinte nas localidades abrangidas em Espanha e nos principais distritos de Portugal. Confirmar cobertura por código postal."
+  },
+  {
+    "api": "62",
+    "id": "srv_linke_cor_48",
+    "code": "LK-COR-48",
+    "title": "PAQ14",
+    "category": "Ibérico",
+    "active": false,
+    "coverage": [
+      "PT-CONT",
+      "ES-PENIN"
+    ],
+    "transit": "Antes das 14h",
+    "description": "Entrega antes das 14h do dia útil seguinte no território peninsular espanhol e nos distritos abrangidos de Portugal."
+  },
+  {
+    "api": "63",
+    "id": "26179d74-c276-4500-8df6-386f76c53503",
+    "code": "LK-COR-PAQ24",
+    "title": "PAQ24",
+    "category": "Ibérico",
+    "active": true,
+    "coverage": [
+      "PT-CONT",
+      "ES-PENIN"
+    ],
+    "transit": "24h",
+    "description": "Entrega estimada no dia útil seguinte em Portugal Continental e Espanha Peninsular. Serviço geral; não exige destinatário particular. Apenas destinos com tarifa configurada ficam disponíveis."
+  },
+  {
+    "api": "93",
+    "id": "srv_linke_cor_ecom",
+    "code": "LK-COR-EPAQ24",
+    "title": "ePAQ24 B2C",
+    "category": "Ibérico",
+    "active": true,
+    "coverage": [
+      "PT-CONT",
+      "ES-PENIN"
+    ],
+    "transit": "24h",
+    "description": "Entrega a particulares em Portugal Continental e Espanha Peninsular, com previsão de entrega gratuita. Telemóvel do destinatário obrigatório. Apenas destinos com tarifa configurada ficam disponíveis."
+  },
+  {
+    "api": "26",
+    "id": "srv_linke_cor_islas_express",
+    "code": "LK-COR-ISLAS-EXPRESS",
+    "title": "Ilhas Express",
+    "category": "Ilhas",
+    "active": true,
+    "coverage": [
+      "ES-BALEARES-MAIORCA",
+      "ES-BALEARES-MENORES"
+    ],
+    "transit": "2 dias úteis",
+    "description": "Ilhas Express aéreo para Baleares: Maiorca e ilhas menores (Menorca, Ibiza e Formentera), com tarifas distintas por código postal. Entrega estimada em 2 dias úteis. Custo calculado pelo maior entre peso real e volumétrico (167 kg/m³). Limites do contrato: 40 kg por volume; soma das dimensões até 240 cm e lado maior até 150 cm. Canárias, Açores e Madeira não estão ativados nesta tabela."
+  },
+  {
+    "api": "66",
+    "id": "srv_linke_cor_islas",
+    "code": "LK-COR-ISLAS",
+    "title": "Baleares (legado)",
+    "category": "Ilhas",
+    "active": false,
+    "coverage": [
+      "ES-ILHAS"
+    ],
+    "transit": "48–72h",
+    "description": "Produto específico Baleares, código 66. Tabela anterior conservada para consulta; não corresponde ao Ilhas Express 26."
+  },
+  {
+    "api": "79",
+    "id": "srv_linke_cor_islas_maritimo",
+    "code": "LK-COR-ISLAS-MAR",
+    "title": "Ilhas Marítimo",
+    "category": "Ilhas",
+    "active": false,
+    "coverage": [
+      "PT-ILHAS",
+      "ES-ILHAS"
+    ],
+    "transit": "4–10 dias úteis",
+    "description": "Transporte marítimo para Canárias, Açores e Madeira. Registado para consulta; tarifas pendentes e sem utilização por agora."
+  },
+  {
+    "api": "46",
+    "id": "srv_linke_cor_islas_docs",
+    "code": "LK-COR-ISLAS-DOCS",
+    "title": "Ilhas Docs",
+    "category": "Ilhas",
+    "active": false,
+    "coverage": [
+      "ES-ILHAS"
+    ],
+    "transit": "2–3 dias úteis",
+    "description": "Documentação para Canárias: 2 dias úteis para Gran Canária e Tenerife e 3 dias úteis para as restantes ilhas. Registado para consulta; tarifas pendentes."
+  },
+  {
+    "api": "90",
+    "id": "srv_linke_cor_intl",
+    "code": "LK-COR-INTL",
+    "title": "Internacional Standard",
+    "category": "Internacional",
+    "active": false,
+    "coverage": [
+      "EU 1",
+      "EU 2",
+      "EU 3",
+      "NA",
+      "SA",
+      "O1",
+      "O2",
+      "A"
+    ],
+    "transit": "Consultar destino",
+    "description": "Serviço internacional económico porta a porta. Código 90 (monovolume). Mantido desativado; validar tarifas e cobertura do produto antes de ativar."
+  },
+  {
+    "api": "91",
+    "id": "srv_linke_cor_intl_express",
+    "code": "LK-COR-INTL-EXPRESS",
+    "title": "Internacional Express",
+    "category": "Internacional",
+    "active": false,
+    "coverage": [
+      "EU 1",
+      "EU 2",
+      "EU 3",
+      "NA",
+      "SA",
+      "O1",
+      "O2",
+      "A"
+    ],
+    "transit": "Consultar destino",
+    "description": "Serviço aéreo urgente porta a porta com cobertura mundial, conforme contrato. Código 91. Registado para consulta; tarifas próprias pendentes."
+  },
+  {
+    "api": "92",
+    "id": "srv_linke_cor_empresa14",
+    "code": "LK-COR-EMPRESA14",
+    "title": "PAQ Empresa 14",
+    "category": "Ibérico",
+    "active": false,
+    "coverage": [
+      "PT-CONT",
+      "ES-PENIN"
+    ],
+    "transit": "Antes das 14h",
+    "description": "Entrega B2B antes das 14h do dia útil seguinte, para empresas com horário comercial publicado. Mesma tarifa PAQ24 segundo o contrato apresentado; sem utilização por agora."
+  },
+  {
+    "api": "54",
+    "id": "srv_linke_cor_entrega_plus",
+    "code": "LK-COR-ENTREGA-PLUS",
+    "title": "Entrega Plus",
+    "category": "Especial / Recolhas",
+    "active": false,
+    "coverage": [
+      "PT-CONT",
+      "ES-PENIN"
+    ],
+    "transit": "24h",
+    "description": "Serviço de entrega com recolha, com ou sem gestão adicional. Registado para consulta, desativado; operação e tarifas próprias pendentes."
+  }
+]

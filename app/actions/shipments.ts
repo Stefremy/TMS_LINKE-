@@ -346,7 +346,7 @@ export async function emitClientGuiaAction(data: {
       computedFuelAmount = priceResult.fuelSurchargeAmount
       computedBasePrice = priceResult.basePrice
       const specials = calculateShipmentSpecialFees(computedSellPrice, matchedClient, carrierCode,
-        data.selectedSpecialServices, data.codValue)
+        data.selectedSpecialServices, data.codValue, { country: recipientCountry, postal: recipientPostal })
       const oversize = calculateOversizeSurcharge(chosenService, recipientCountry, data.weightKg, data)
       computedSellPrice = Number((specials.totalPrice + oversize.amount).toFixed(2))
       computedSpecialAmount = Number((specials.amount + oversize.amount).toFixed(2))
@@ -367,6 +367,7 @@ export async function emitClientGuiaAction(data: {
       weight_pricing_basis: weightPricingBasis,
       tracking_number: trackingNumber,
       service_type: data.serviceName || "CTT Expresso 24H",
+      correos_product_code: carrierCode === "correos" ? data.subProductId : undefined,
       status: "pendente",
       sender_name: ctx.role === "client" ? matchedClient.short_name || "Empresa Cliente" : (data.clientName || "Empresa Cliente"),
       sender_address: `${data.senderAddress || "Sede Comercial"}${data.senderCity ? `, ${data.senderCity}` : ""}`,
@@ -374,6 +375,7 @@ export async function emitClientGuiaAction(data: {
       sender_zip4: senderZip4,
       recipient_name: data.recipientName,
       recipient_country: data.recipientCountry || "PT",
+      is_return: data.isReturn === true,
       ctt_export_details: cttExportDetails,
       recipient_city: data.recipientCity || "",
       recipient_address: `${data.recipientAddress}${data.recipientCity ? `, ${data.recipientCity}` : ""}`,

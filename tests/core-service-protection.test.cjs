@@ -418,3 +418,13 @@ test('catalogue UI locks base tables for non-authorized staff and keeps the dele
     assert.match(managerMarkup, /Ajustar margem e recalcular preços/)
   }
 })
+
+test('saving a visual tier order preserves storage indexes and round-trips the order metadata',async()=>{
+ const original={...fixture,zones:[{...fixture.zones[0],tiers:[{...fixture.zones[0].tiers[0],id:'a',display_order:1},{...fixture.zones[0].tiers[0],id:'b',weight_max:5,display_order:0}]}]}
+ const h=harness({service:original})
+ const result=await h.actions.saveServicoLinkeAction(original)
+ assert.equal(result.success,true,result.error)
+ assert.deepEqual(result.data.zones[0].tiers.map(t=>[t.id,t.display_order]),[['a',1],['b',0]])
+ const loaded=await h.actions.getServicosLinkeAction()
+ assert.deepEqual(loaded.find(s=>s.id===original.id).zones[0].tiers.map(t=>[t.id,t.display_order]),[['a',1],['b',0]])
+})

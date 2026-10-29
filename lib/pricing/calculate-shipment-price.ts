@@ -1,3 +1,4 @@
+import { BALEARES_ZONE_NAMES, resolveBalearesTariffZone } from "@/lib/services/correos/baleares-tariffs"
 /**
  * Shared shipment price calculator (server authority and form previews).
  *
@@ -210,6 +211,12 @@ export function isCeTruckService(service: Partial<ServicoLinke> | null | undefin
 /** Resolve the tariff zone using the selected carrier product, including CE road zones. */
 export function resolveServiceZoneCode(service: Partial<ServicoLinke> | null | undefined, country: string, postal?: string): string {
   if (!country) return ""
+  // Zone metadata survives client DTO redaction. Never collapse these prices into
+  // generic ES-ILHAS, which also includes Canárias and the African enclaves.
+  if (country.trim().toUpperCase() === "ES" && postal?.trim().startsWith("07") &&
+      service?.zones?.some(zone => Object.hasOwn(BALEARES_ZONE_NAMES, zone.zone_code))) {
+    return resolveBalearesTariffZone(country, postal)
+  }
   return isCeTruckService(service) ? resolveCeTruckZone(country) || "" : resolveZoneCode(country, postal)
 }
 

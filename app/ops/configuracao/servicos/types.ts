@@ -1,4 +1,7 @@
+import correosProducts from "@/lib/services/correos/product-catalog.json"
+
 export interface PriceTierLinke {
+  display_order?: number // Visual order only; keep storage indexes stable for negotiated prices.
   id: string
   label: string
   weight_max: number
@@ -70,6 +73,7 @@ export interface ServicoLinke {
 }
 
 export const PRIMORDIAL_SERVICE_CODES = new Set([
+  ...correosProducts.map((product) => product.code),
   "LK-DD-STD",
   "LK-DB-STD",
   "LK-EQ-STD",
@@ -85,6 +89,7 @@ export const PRIMORDIAL_SERVICE_CODES = new Set([
 ])
 
 export const PRIMORDIAL_SERVICE_IDS = new Set([
+  ...correosProducts.map((product) => product.id),
   "srv_linke_dd_std",
   "srv_linke_db_std",
   "srv_linke_eq_std",
