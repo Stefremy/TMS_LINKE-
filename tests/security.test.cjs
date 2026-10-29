@@ -947,3 +947,20 @@ test('Correos product 93 is sent unchanged and recorded only in the supported au
  assert.equal(saved.correos_product_code,'93')
  assert.equal(Object.hasOwn(h.db.writes.find(w=>w.table==='shipments').value,'correos_product_code'),false)
 })
+
+test('Correos 26 Baleares routes each island tariff and postcode through client/OPS emission without generic island fallback',async()=>{
+ const {buildBalearesExpressZones}=createLoader({})('lib/services/correos/baleares-tariffs.ts')
+ for(const role of ['client','employee'])for(const [postal,cost] of [['07001',9.98],['07701',10.51],['07860',10.51]]){
+  const h=shipmentHarness({carrier:'Correos',ctx:{...clientContext,role},adjust:t=>{
+   const s=t.servicos_linke[0];s.webservice_service_code='26';s.zones=buildBalearesExpressZones(25);s.allowed_zones=s.zones.map(z=>z.zone_code)
+  }})
+  const result=await emit(h,{clientId:CLIENT,recipientCountry:'ES',recipientPostal:postal,recipientCity:'Baleares',recipientPhone:'+34612345678',lengthCm:10,widthCm:10,heightCm:10})
+  assert.equal(result.success,true,result.error)
+  assert.equal(h.providerCalls.length,1)
+  assert.equal(h.providerCalls[0].payload.producto,'26')
+  assert.equal(h.providerCalls[0].payload.destinatario.paisISO,'ES')
+  assert.equal(h.providerCalls[0].payload.destinatario.cpNacional,postal)
+  const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+  assert.equal(saved.buy_price,cost)
+ }
+})

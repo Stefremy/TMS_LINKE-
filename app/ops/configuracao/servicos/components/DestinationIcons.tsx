@@ -105,6 +105,15 @@ export function DestinationBadge({ code, showLabel = false }: { code: string; sh
         </span>
       )
 
+    case "ES-BALEARES-MAIORCA":
+    case "ES-BALEARES-MENORES":
+      return (
+        <span className="inline-flex items-center gap-1 shrink-0 text-slate-700" title={code === "ES-BALEARES-MAIORCA" ? "Baleares — Maiorca" : "Baleares — Menorca, Ibiza e Formentera"}>
+          <SpainFlag className="w-3.5 h-2.5" />
+          <span className="text-[10px] font-medium text-slate-600">{code === "ES-BALEARES-MAIORCA" ? "Maiorca" : "Ilhas menores"}</span>
+        </span>
+      )
+
     case "ES-ILHAS":
       return (
         <span className="inline-flex items-center gap-1 shrink-0 text-slate-700">

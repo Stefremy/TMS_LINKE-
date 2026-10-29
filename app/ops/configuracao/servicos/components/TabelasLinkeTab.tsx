@@ -415,6 +415,8 @@ export function TabelasLinkeTab({
                           "PT-ACORES": "Ilhas PT (Açores & Madeira)",
                           "ES-PENIN": "Espanha Peninsular",
                           "ES-ILHAS": "Ilhas ES (Baleares & Canárias)",
+                          "ES-BALEARES-MAIORCA": "Baleares — Maiorca",
+                          "ES-BALEARES-MENORES": "Baleares — Ilhas menores",
                           "Zona 2": "Zona 2 (Europa Rodoviário)",
                           "Zona 3": "Zona 3 (Europa Rodoviário)",
                           "EU 1": "Europa 1",
