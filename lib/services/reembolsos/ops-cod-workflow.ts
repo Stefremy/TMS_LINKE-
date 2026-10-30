@@ -7,9 +7,9 @@ import { applyCodPayoutRecords, buildClientCodRows, clientCodReceivable, deliver
 import { parseCodPayoutBox, payoutBoxId } from './client-cod-payout'
 
 export interface OpsCodWorkflowRow extends ClientCodRow { clientId:string; clientName:string; clientCode:string; delivered:boolean; requested:boolean }
-export interface OpsCodWorkflowRequest { id:string; clientId:string; clientName:string; clientCode:string; createdAt:string; amountCents:number; tracking:string[]; state:'requested'|'paid'|'review'; paidAt?:string; paymentRef?:string }
+export interface OpsCodWorkflowRequest { id:string; clientId:string; clientName:string; clientCode:string; createdAt:string; amountCents:number; tracking:string[]; shipmentIds:string[]; state:'requested'|'paid'|'review'; paidAt?:string; paymentRef?:string }
 export interface OpsCodWorkflowClient extends OpsCodClient { availableCents:number; pendingCents:number; paidCents:number; availableIds:string[] }
-export interface OpsCodMissingGuide { tracking:string; amountCents:number; filename:string; lineNumber:number }
+export interface OpsCodMissingGuide { tracking:string; amountCents:number; filename:string; lineNumber:number; reason?:string; clientId?:string; shipmentId?:string }
 export interface OpsCodWorkflowData { rows:OpsCodWorkflowRow[]; clients:OpsCodWorkflowClient[]; requests:OpsCodWorkflowRequest[]; missing:OpsCodMissingGuide[] }
 const record=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{}
 
@@ -31,7 +31,6 @@ export async function loadOpsCodWorkflow(db:SupabaseClient,tenant:string):Promis
   const declarations=await loadCodDeclarations(db,tenant,shipments)
   for(const item of shipments) {
     const declaration=declarations.get(item.id)
-    if(declaration?.ownerConflict) throw new Error('Uma cobrança tem associação de cliente divergente. Reveja a ficha do envio.')
     item.cod_enabled=declaration?.enabled
     item.cod_value=declaration?.cents!==null&&declaration?.cents!==undefined?declaration.cents/100:null
   }
@@ -62,7 +61,13 @@ export async function loadOpsCodWorkflow(db:SupabaseClient,tenant:string):Promis
       if(Array.isArray(details.items)) for(const rawItem of details.items) {
         const item=record(rawItem)
         const tracking=typeof item.carrierTracking==='string'?item.carrierTracking.trim():''
-        if(!tracking||!knownTracking.has(tracking.toUpperCase())) missing.push({tracking:tracking||'Sem tracking',amountCents:typeof item.amount==='number'&&Number.isFinite(item.amount)?Math.round(item.amount*100):0,filename:typeof details.filename==='string'?details.filename:'Extrato',lineNumber:typeof item.lineNumber==='number'?item.lineNumber:0})
+        const notFound=!tracking||!knownTracking.has(tracking.toUpperCase())
+        if(notFound||item.reconcileStatus==='unmatched'||item.reconcileStatus==='value_mismatch') {
+          const shipment=typeof item.shipmentId==='string'?owned.get(item.shipmentId):undefined
+          missing.push({tracking:tracking||'Sem tracking',amountCents:typeof item.amount==='number'&&Number.isFinite(item.amount)?Math.round(item.amount*100):0,filename:typeof details.filename==='string'?details.filename:'Extrato',lineNumber:typeof item.lineNumber==='number'?item.lineNumber:0,
+            reason:typeof item.reconcileReason==='string'?item.reconcileReason:notFound?'Guia não encontrada no TMS.':'O tracking, o cliente, o valor ou as datas não coincidem com o envio.',
+            ...(shipment&&(!item.clientId||item.clientId===shipment.client_id)?{clientId:shipment.client_id,shipmentId:shipment.id}:{})})
+        }
       }
     }
     if(data.length<1000) break
@@ -77,6 +82,13 @@ export async function loadOpsCodWorkflow(db:SupabaseClient,tenant:string):Promis
     result.rows.push(...rows.map(r=>({...r,clientId:client.id,clientName:client.name,clientCode:client.code,delivered:delivered.has(r.id),requested:claimed.has(r.id)})))
     result.requests.push(...payout.history.map(r=>({...r,clientId:client.id,clientName:client.name,clientCode:client.code,tracking:r.shipmentIds.map(id=>rows.find(row=>row.id===id)?.tracking||id)})))
   }
+  // A mapped review is already shown as a shipment row; keep other import exceptions in the separate list.
+  const reviewed=new Map(result.rows.filter(row=>row.state==='review').map(row=>[row.id,row]))
+  result.missing=result.missing.filter(issue=>{
+    const row=issue.shipmentId?reviewed.get(issue.shipmentId):undefined
+    if(row&&row.clientId===issue.clientId){row.disputeReason=issue.reason;return false}
+    return true
+  })
   result.requests.sort((a,b)=>b.createdAt.localeCompare(a.createdAt))
   return result
 }

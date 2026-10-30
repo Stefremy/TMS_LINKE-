@@ -20,10 +20,10 @@ test('valid zero history is distinct from a missing or corrupt snapshot',()=>{
   assert.equal(helpers.readLegacyServiceHistory({count:0,source:'lojas_servicos.csv',imported_at:'2026-10-30T11:00:00Z'}).count,0)
   for(const details of [null,{count:-1},{count:'0'},{count:0,source:'a',imported_at:'bad'}])assert.equal(helpers.readLegacyServiceHistory(details),null)
 })
-function harness({tenant='tenant',logs=[],failure,authorized=true}={}){
- const db=fakeSupabase({clients:[{id:A,tenant_id:'tenant'},{id:B,tenant_id:'other'}],audit_log:logs},failure)
+function harness({tenant='tenant',logs=[],failure,authorized=true,shipments=[]}={}){
+ const db=fakeSupabase({clients:[{id:A,tenant_id:'tenant'},{id:B,tenant_id:'other'}],audit_log:logs,shipments},failure)
  const load=createLoader({'@/lib/auth/context':{requireEmployee:async()=>{if(!authorized)throw Error('Forbidden');return {tenant_id:tenant}}},'@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()}})
- return {read:load('app/actions/client-service-history.ts').getClientServiceHistoryAction,db}
+ return {read:load('app/actions/client-service-history.ts').getClientServiceHistoryAction,readTotal:load('app/actions/client-service-history.ts').getClientTotalServicesAction,db}
 }
 function row(id,count,date,tenant_id='tenant'){return {id:date,tenant_id,action:'client_legacy_service_count',created_at:date,details:{id,count,source:'lojas_servicos.csv',imported_at:date}}}
 test('staff read only the latest snapshot, including an updated zero, without adding repeated imports',async()=>{
@@ -42,16 +42,30 @@ test('read failures are exposed, never presented as zero services or absent hist
  await assert.rejects(harness({logs:[row(A,-1,'2026-10-30')]}).read(A),/incompleto/)
 })
 
-test('the modal counter shows a known zero separately from missing history',()=>{
+test('the modal shows only the total number, including zero, without legacy import descriptions',()=>{
  const jsx=(type,props)=>({type,props})
  const text=node=>Array.isArray(node)?node.map(text).join(''):node&&typeof node==='object'?text(node.props?.children):String(node??'')
- function render(history){let cursor=0;const values=[history,false,'',0]
-  const load=createLoader({react:{useState:()=>[values[cursor++],()=>{}],useEffect:()=>{}},'react/jsx-runtime':{jsx,jsxs:jsx},'@/app/actions/client-service-history':{getClientServiceHistoryAction:async()=>history}})
+ function render(total){let cursor=0;const values=[{total},false,'',0]
+  const load=createLoader({react:{useState:()=>[values[cursor++],()=>{}],useEffect:()=>{}},'react/jsx-runtime':{jsx,jsxs:jsx},'@/app/actions/client-service-history':{getClientTotalServicesAction:async()=>({total})}})
   return text(load('app/ops/entidades/clientes/components/ClientServiceHistory.tsx').ClientServiceHistory({clientId:A}))
  }
- const zero=render({count:0,source:'lojas_servicos.csv',imported_at:'2026-10-30T11:00:00Z'})
- assert.match(zero,/Serviços na plataforma anterior0/)
- assert.doesNotMatch(zero,/Sem dados importados/)
- assert.match(zero,/Período não indicado/)
- assert.match(render(null),/Sem dados importados/)
+ assert.match(render(0),/N.º de serviços totais0/)
+ assert.match(render(42),/N.º de serviços totais42/)
+ assert.doesNotMatch(render(0),/plataforma anterior|Sem dados importados|contagem associada|Período|separadamente/)
+})
+test('total services combine the latest historical snapshot and all native shipments of this client and tenant only',async()=>{
+ const shipments=[{id:'one',tenant_id:'tenant',client_id:A},{id:'two',tenant_id:'tenant',client_id:A},{id:'other-store',tenant_id:'tenant',client_id:B},{id:'other-company',tenant_id:'other',client_id:A}]
+ const h=harness({logs:[row(A,100,'2026-10-29'),row(A,30,'2026-10-30')],shipments})
+ assert.deepEqual(await h.readTotal(A),{total:32})
+ assert.deepEqual(await harness({shipments}).readTotal(A),{total:2})
+ assert.deepEqual(await harness().readTotal(A),{total:0})
+ assert.equal(h.db.writes.length,0)
+ const query=h.db.queries.find(q=>q.table==='shipments')
+ assert.ok(query.filters.some(f=>f.field==='client_id'&&f.value===A));assert.ok(query.filters.some(f=>f.field==='tenant_id'&&f.value==='tenant'))
+})
+test('total service failures never appear as zero, and the total remains staff-only and tenant-scoped',async()=>{
+ await assert.rejects(harness({authorized:false}).readTotal(A),/Forbidden/)
+ await assert.rejects(harness().readTotal(B),/não encontrado/)
+ await assert.rejects(harness({failure:q=>q.table==='shipments'?{message:'offline'}:null}).readTotal(A),/Não foi possível consultar/)
+ await assert.rejects(harness({logs:[row(A,-1,'2026-10-30')]}).readTotal(A),/incompleto/)
 })

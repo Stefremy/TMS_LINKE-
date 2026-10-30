@@ -1,0 +1,8 @@
+﻿Número de Linha;Objeto;Data Entrega;Data Processamento;Destinatário;Morada;Código Postal;Localidade;Valor;Pagamento;Referência;Informação;Notas
+1;ZZ830100001ZZ;30/10/2026;30/10/2026;Destinatário fictício 1;Rua de Teste 1;4800-019;Guimarães;50,00;D;TEST-COD-20261030-01;TESTE FICTÍCIO;Correspondência válida
+2;ZZ830100002ZZ;30/10/2026;30/10/2026;Destinatário fictício 2;Rua de Teste 1;4800-019;Guimarães;25,00;D;TEST-COD-20261030-02;TESTE FICTÍCIO;Correspondência válida
+3;ZZ830100003ZZ;30/10/2026;30/10/2026;Destinatário fictício 3;Rua de Teste 1;4800-019;Guimarães;18,50;D;TEST-COD-20261030-03;TESTE FICTÍCIO;Correspondência válida
+4;ZZ830100004ZZ;30/10/2026;30/10/2026;Destinatário fictício 4;Rua de Teste 1;4800-019;Guimarães;39,99;D;TEST-COD-20261030-04;TESTE FICTÍCIO;Valor divergente: TMS 40,00 / ficheiro 39,99
+5;ZZ830100005ZZ;30/10/2026;30/10/2026;Destinatário fictício 5;Rua de Teste 1;4800-019;Guimarães;12,00;D;TEST-COD-20261030-05;TESTE FICTÍCIO;Não tem cobrança no TMS
+6;ZZ830100007ZZ;30/10/2026;30/10/2026;Destinatário fictício 7;Rua de Teste 1;4800-019;Guimarães;15,00;D;TEST-COD-20261030-07;TESTE FICTÍCIO;Envio cancelado
+7;ZZ830100999ZZ;30/10/2026;30/10/2026;Destinatário fictício sem guia;Rua de Teste 1;4800-019;Guimarães;9,99;D;TEST-COD-INEXISTENTE;TESTE FICTÍCIO;Tracking inexistente no TMS

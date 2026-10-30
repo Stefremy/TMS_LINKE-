@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
+import { ReembolsoStatusBadge } from '@/components/reembolso-status-badge'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Banknote, RefreshCw } from 'lucide-react'
@@ -26,16 +27,27 @@ export function ClientReembolsos({ overview, error }: { overview: ClientCodPageD
   const [feedback,setFeedback] = useState('')
   const [requestError,setRequestError] = useState(false)
   const inFlight = useRef(false)
+  const [selection,setSelection] = useState<{clientId:string;ids:string[]}>({clientId:client.id,ids:[]})
+  const selectedIds=selection.clientId===client.id?selection.ids:[]
+  const selectedRows=(data?.payout.eligible||[]).filter(row=>selectedIds.includes(row.id))
+  const selectedCents=selectedRows.reduce((sum,row)=>sum+(row.statementCents||0),0)
+  function selectShipment(id:string,checked:boolean) {
+    setSelection(current=>{
+      const ids=current.clientId===client.id?current.ids:[]
+      return {clientId:client.id,ids:checked?[...new Set([...ids,id])]:ids.filter(value=>value!==id)}
+    })
+  }
   const filtered = useMemo(() => filterClientCodRows(deliveredClientCodRows(data?.rows || []),{state:'all',search,from:period.from,to:period.to}), [data,search,period])
   const summary = useMemo(() => summarizeClientCod(filtered),[filtered])
   const pages = Math.max(1,Math.ceil(filtered.length/20)), current = Math.min(page,pages)
   const visible = filtered.slice((current-1)*20,current*20)
   async function requestPayout() {
-    if(inFlight.current || !data || data.payout.pending || data.payout.availableCents<=0) return
+    if(inFlight.current || !data || !selectedRows.length) return
     inFlight.current=true;setRequesting(true);setFeedback('');setRequestError(false)
     try {
-      const result=await solicitarReembolsoAction(client.id)
-      setFeedback(result.alreadyRequested ? 'Já existe um pedido em acompanhamento pela Linke.' : 'Pedido enviado à Linke. Pode acompanhar o estado nesta secção.')
+      const result=await solicitarReembolsoAction(client.id,selectedRows.map(row=>row.id))
+      setFeedback(result.alreadyRequested ? 'Esta seleção já tem um pedido registado.' : 'Pedido enviado à Linke. Pode acompanhar o estado nesta secção.')
+      setSelection({clientId:client.id,ids:[]})
       router.refresh()
     } catch(reason) {setRequestError(true);setFeedback(reason instanceof Error ? reason.message : 'Não foi possível confirmar o pedido. Atualize antes de repetir.')}
     finally {inFlight.current=false;setRequesting(false)}
@@ -69,14 +81,16 @@ export function ClientReembolsos({ overview, error }: { overview: ClientCodPageD
         {summary.missingRequested>0&&<p className="text-[11px] text-[#936A32]">{summary.missingRequested} envio(s) sem valor solicitado registado.</p>}
       </section> : <section role="tabpanel" id="cod-receivable" aria-labelledby="cod-receivable-tab" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4">
-          <div><p className="text-xs text-[var(--text-secondary)]">Disponível para solicitar à Linke</p><p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--accent)]">{money(data.payout.availableCents)}</p><p className="mt-1 text-[11px] text-[var(--text-secondary)]">Saldo acumulado de todos os períodos · Apenas CTT conciliado, não pago e ainda não solicitado.</p></div>
-          <button type="button" onClick={requestPayout} disabled={requesting||data.payout.pending||data.payout.availableCents<=0} className="rounded-md bg-[var(--accent)] px-5 py-2 text-xs font-semibold text-white disabled:opacity-40">{requesting?'A solicitar…':data.payout.pending?'Pedido em acompanhamento':'Solicitar'}</button>
+          <div><p className="text-xs text-[var(--text-secondary)]">Disponível para solicitar à Linke</p><p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--accent)]">{money(data.payout.availableCents)}</p><p className="mt-1 text-[11px] text-[var(--text-secondary)]">Saldo acumulado de todos os períodos · Apenas guias confirmadas no cruzamento CTT, não pagas e ainda não solicitadas.</p></div>
+          <button type="button" onClick={requestPayout} disabled={requesting||!selectedRows.length} className="rounded-md bg-[var(--accent)] px-5 py-2 text-xs font-semibold text-white disabled:opacity-40">{requesting?'A solicitar…':'Solicitar'}</button>
         </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><p>Selecione as guias disponíveis que pretende incluir neste pedido.</p><strong className="tabular-nums">{selectedRows.length} guia(s) selecionada(s) · {money(selectedCents)}</strong></div>
+        <div className="max-h-96 overflow-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]"><table className="w-full text-left text-xs"><thead className="bg-[var(--surface-muted)] text-[var(--text-secondary)]"><tr><th className="p-3"><input type="checkbox" aria-label="Selecionar todas as guias disponíveis" disabled={requesting||!data.payout.eligible.length} checked={data.payout.eligible.length>0&&selectedRows.length===data.payout.eligible.length} onChange={e=>setSelection({clientId:client.id,ids:e.target.checked?data.payout.eligible.map(row=>row.id):[]})}/></th><th className="p-3">Guia disponível</th><th className="p-3">Data do envio</th><th className="p-3">Estado no TMS</th><th className="p-3 text-right">Reembolso</th></tr></thead><tbody className="divide-y divide-[var(--border-subtle)]">{data.payout.eligible.map(row=><tr key={row.id}><td className="p-3"><input type="checkbox" aria-label={`Selecionar guia ${row.tracking}`} disabled={requesting} checked={selectedIds.includes(row.id)} onChange={e=>selectShipment(row.id,e.target.checked)}/></td><td className="p-3 font-mono font-semibold">{row.tracking}</td><td className="p-3">{day(row.date)}</td><td className="p-3">{getShipmentStatusConfig(row.shipmentStatus).label}</td><td className="p-3 text-right tabular-nums">{money(row.statementCents)}</td></tr>)}{!data.payout.eligible.length&&<tr><td colSpan={5} className="p-6 text-center text-[var(--text-secondary)]">Sem guias disponíveis para solicitar.</td></tr>}</tbody></table></div>
         {data.rows.some(row=>row.state==='review')&&<div className="rounded-lg border border-[#d9c59f] bg-[#faf6ed] p-3 text-xs text-[#785a2d]"><p className="font-semibold">Cobranças em revisão — sem saldo disponível</p><ul className="mt-2 space-y-1">{data.rows.filter(row=>row.state==='review').map(row=><li key={row.id}><span className="font-mono">{row.tracking}</span> · {money(row.requestedCents)}{row.disputeReason?` · ${row.disputeReason}`:' · A Linke está a verificar o cruzamento.'}</li>)}</ul></div>}
-        {data.payout.pending&&<p className="text-xs text-[var(--text-secondary)]">{money(data.payout.pendingCents)} em pedidos por concluir. Aguarde a conclusão antes de fazer outro pedido.</p>}
+        {data.payout.pending&&<p className="text-xs text-[var(--text-secondary)]">{money(data.payout.pendingCents)} em pedidos por concluir. Essas guias já estão reservadas; pode solicitar outras guias disponíveis.</p>}
         {feedback&&<p role={requestError?'alert':'status'} className={`text-xs ${requestError?'text-[#936A32]':'text-[var(--accent)]'}`}>{feedback}</p>}
-        <p className="text-[11px] text-[var(--text-secondary)]">Os valores ficam disponíveis após a importação e conciliação do extrato CTT. «Solicitar» envia um pedido à Linke; não executa uma transferência bancária.</p>
-        <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]"><table className="w-full text-left text-xs"><thead className="bg-[var(--surface-muted)] text-[var(--text-secondary)]"><tr><th className="p-3">Pedido</th><th className="p-3">Data</th><th className="p-3 text-right">Valor</th><th className="p-3">Estado</th></tr></thead><tbody className="divide-y divide-[var(--border-subtle)]">{data.payout.history.map(request=><tr key={request.id}><td className="p-3 font-mono">{request.id.slice(0,8).toUpperCase()}</td><td className="p-3">{day(lisbonDate(request.createdAt))}</td><td className="p-3 text-right tabular-nums">{money(request.amountCents)}</td><td className="p-3">{request.state==='paid'?'Pago':request.state==='review'?'Em revisão pela Linke':'Solicitado à Linke'}</td></tr>)}{!data.payout.history.length&&<tr><td colSpan={4} className="p-6 text-center text-[var(--text-secondary)]">Ainda não tem pedidos de reembolso.</td></tr>}</tbody></table></div>
+        <p className="text-[11px] text-[var(--text-secondary)]">Os valores ficam disponíveis automaticamente após a correspondência válida no cruzamento do extrato CTT. «Solicitar» envia um pedido à Linke; não executa uma transferência bancária.</p>
+        <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]"><table className="w-full text-left text-xs"><thead className="bg-[var(--surface-muted)] text-[var(--text-secondary)]"><tr><th className="p-3">Pedido</th><th className="p-3">Data do pedido</th><th className="p-3">Guias</th><th className="p-3 text-right">Valor</th><th className="p-3">Data do pagamento</th><th className="p-3">Estado</th></tr></thead><tbody className="divide-y divide-[var(--border-subtle)]">{data.payout.history.map(request=><tr key={request.id}><td className="p-3 font-mono">{request.id.slice(0,8).toUpperCase()}</td><td className="p-3">{day(lisbonDate(request.createdAt))}</td><td className="p-3">{request.shipmentIds.length}</td><td className="p-3 text-right tabular-nums">{money(request.amountCents)}</td><td className="p-3">{day(request.paidAt?lisbonDate(request.paidAt):null)}</td><td className="p-3"><ReembolsoStatusBadge state={request.state==='paid'?'paid':request.state==='review'?'review':'pending'} /></td></tr>)}{!data.payout.history.length&&<tr><td colSpan={6} className="p-6 text-center text-[var(--text-secondary)]">Ainda não tem pedidos de reembolso.</td></tr>}</tbody></table></div>
       </section>}
     </>}
   </div>

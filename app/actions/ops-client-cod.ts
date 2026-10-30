@@ -5,7 +5,7 @@ import { loadOpsCodWorkflow } from '@/lib/services/reembolsos/ops-cod-workflow'
 import { requestClientCodPayout, recordCodRequestPayment, setCodDispute } from '@/lib/services/reembolsos/client-cod-payout'
 import { requirePermission } from '@/lib/auth/context'
 import { createAdminClient } from '@/lib/supabase/server'
-import { isDateKey } from '@/lib/billing/recurring-periods'
+import { isDateKey, lisbonDate } from '@/lib/billing/recurring-periods'
 import { loadOpsCodClients } from '@/lib/services/reembolsos/ops-cod-data'
 import { loadClientCodOverview } from '@/lib/services/reembolsos/client-cod-data'
 import { filterClientCodRows } from '@/lib/services/reembolsos/client-cod'
@@ -39,13 +39,31 @@ export async function prepareOpsCodPaymentAction(clientId:string) {
   const result=await requestClientCodPayout(createAdminClient(),ctx,clientId)
   refreshCodPages();return result
 }
-export async function recordOpsCodPaymentAction(clientId:string,requestId:string,paymentRef:string) {
+export async function recordOpsCodPaymentAction(clientId:string,requestId:string,paymentRef:string,paymentDate:string) {
   const ctx=await requirePermission('Faturação & Contas Correntes');validateClientId(clientId)
-  const result=await recordCodRequestPayment(createAdminClient(),ctx,clientId,requestId,paymentRef)
+  if(typeof paymentDate!=='string'||!isDateKey(paymentDate)||paymentDate>lisbonDate()) throw new Error('Escolha uma data de pagamento válida, até hoje.')
+  const result=await recordCodRequestPayment(createAdminClient(),ctx,clientId,requestId,paymentRef,paymentDate)
   refreshCodPages();return result
 }
 export async function setOpsCodDisputeAction(clientId:string,shipmentId:string,reason:string|null) {
   const ctx=await requirePermission('Faturação & Contas Correntes');validateClientId(clientId)
   const result=await setCodDispute(createAdminClient(),ctx,clientId,shipmentId,reason)
   refreshCodPages();return result
+}
+
+export async function getOpsCodReceiptAction(clientId:string,requestId:string,format:'pdf'|'xlsx'='pdf') {
+  const ctx=await requirePermission('Faturação & Contas Correntes')
+  validateClientId(clientId)
+  if(typeof requestId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) throw new Error('Pedido inválido.')
+  if(format!=='pdf'&&format!=='xlsx') throw new Error('Formato de documento inválido.')
+  const {loadCodReceiptData}=await import('@/lib/services/reembolsos/reembolso-receipt-data')
+  const data=await loadCodReceiptData(createAdminClient(),ctx.tenant_id,clientId,requestId)
+  if(format==='xlsx') {
+    const {generateCodReceiptExcel}=await import('@/lib/services/reembolsos/reembolso-receipt-excel')
+    const document=generateCodReceiptExcel(data)
+    return {filename:`Reembolso_${requestId}.xlsx`,base64:document.toString('base64')}
+  }
+  const {generateCodReceiptPdf}=await import('@/lib/services/reembolsos/reembolso-receipt-pdf')
+  const pdf=await generateCodReceiptPdf(data)
+  return {filename:`Reembolso_${requestId}.pdf`,base64:pdf.toString('base64')}
 }

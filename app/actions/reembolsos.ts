@@ -61,6 +61,7 @@ export async function processReembolsoUploadAction(
     }
 
     revalidatePath("/ops/tesouraria/reembolsos")
+    revalidatePath("/app/[storeSlug]/reembolsos", "page")
 
     return { success: true, batch }
   } catch (err: unknown) {

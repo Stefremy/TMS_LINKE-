@@ -1,3 +1,4 @@
+const {seedCodReleases}=require('./helpers/cod-releases.cjs')
 const test=require('node:test'),assert=require('node:assert/strict')
 const {createLoader}=require('./helpers/load-typescript.cjs'),{fakeSupabase}=require('./helpers/fake-supabase.cjs')
 const load=createLoader({'node:crypto':require('node:crypto')})
@@ -12,6 +13,7 @@ function fixture(){
   if(confirmed)tables.audit_log.push({id:`batch-${id}`,tenant_id:T,action:'reembolso_batch',created_at:'2026-10-30',details:{carrier:'ctt',filename:`${id}.xls`,items:[],clientSummaries:[{clientId:owner,isPaid:false,items:[{clientId:owner,shipmentId:id,carrierTracking:`TRACK-${id}`,processingDate:'30/10/2026',amount,reconcileStatus:'matched'}]}]}})
  }
  add('awaiting',A,'entregue',20,false);add('available',A,'entregue',10,true);add('new',A,'criado',5,false);add('other',B,'entregue',30,true)
+ seedCodReleases(tables,T,[{clientId:A,id:'available',tracking:'TRACK-available',cents:1000},{clientId:B,id:'other',tracking:'TRACK-other',cents:3000}])
  const db=fakeSupabase(tables,undefined,{persistInserts:true})
  return{tables,db}
 }
@@ -23,7 +25,7 @@ test('bulk management separates delivered collections, unconfirmed money and per
  assert.deepEqual(data.rows.filter(r=>r.delivered&&r.state==='unconfirmed').map(r=>r.id),['awaiting'])
  assert.equal(data.clients.find(c=>c.id===A).availableCents,1000)
  assert.equal(data.clients.find(c=>c.id===B).availableCents,3000)
- assert.deepEqual(data.missing,[{tracking:'OLD-GUIDE',amountCents:1234,filename:'legacy.xls',lineNumber:4}])
+ assert.deepEqual(data.missing,[{tracking:'OLD-GUIDE',amountCents:1234,filename:'legacy.xls',lineNumber:4,reason:'Guia não encontrada no TMS.'}])
  assert.doesNotMatch(JSON.stringify(data),/PRIVATE/)
  assert.equal(h.db.writes.length,0)
  for(const query of h.db.queries)assert.ok(query.filters.some(f=>f.field==='tenant_id'&&f.value===T))
@@ -41,7 +43,7 @@ test('recording precisely one requested payment updates the portal to paid, clea
  assert.equal(dashboard.clients.find(c=>c.id===A).paidCents,1000)
  assert.equal(dashboard.requests[0].state,'paid')
  assert.equal(h.tables.audit_log.find(r=>r.id==='batch-available').details.clientSummaries[0].isPaid,false)
- assert.equal(h.db.writes.filter(w=>w.kind==='update').length,1)
+ assert.equal(h.db.writes.filter(w=>w.kind==='update').length,2)
 })
 test('open disputes withhold funds, block payment of pending requests, and resolving never marks an unconfirmed guide paid',async()=>{
  const h=fixture(),request=await service.requestClientCodPayout(h.db.client,client,A)
@@ -94,15 +96,43 @@ test('workspace shows delivered collections, groups available money by shop, and
  const render=()=>{cursor=0;return view({data,error:'',batches:[],initialPeriod:{from:'2026-10-01',to:'2026-10-31'}})}
  const click=label=>flat(render()).find(n=>n.type==='button'&&text(n).startsWith(label)).props.onClick()
  assert.match(text(render()),/TRACK-awaiting/);assert.doesNotMatch(text(render()),/TRACK-new/)
- click('Disponível por loja')
- assert.match(text(render()),/Loja B/);assert.doesNotMatch(text(flat(render()).find(n=>n.type==='section')),/Loja A/)
+ click('Disponível para solicitar')
+ assert.match(text(render()),/TRACK-other/);assert.doesNotMatch(text(flat(render()).find(n=>n.type==='tbody')),/TRACK-available/)
  click('Solicitados');click('Registar pagamento')
  let dialog=flat(render()).find(n=>n.props.role==='dialog')
  assert.ok(dialog);assert.equal(calls.length,0)
  assert.equal(flat(dialog).find(n=>n.type==='button'&&text(n)==='Confirmar pagamento efetuado').props.disabled,true)
- flat(dialog).find(n=>n.type==='input').props.onChange({target:{value:'BANK-REFERENCE'}})
+ flat(dialog).find(n=>n.type==='input'&&n.props.maxLength===160).props.onChange({target:{value:'BANK-REFERENCE'}})
+ flat(dialog).find(n=>n.type==='input'&&n.props.type==='date').props.onChange({target:{value:''}})
+ assert.equal(flat(render()).find(n=>n.type==='button'&&text(n)==='Confirmar pagamento efetuado').props.disabled,true)
+ flat(render()).find(n=>n.type==='input'&&n.props.type==='date').props.onChange({target:{value:'2026-10-29'}})
  dialog=flat(render()).find(n=>n.props.role==='dialog')
  await flat(dialog).find(n=>n.type==='button'&&text(n)==='Confirmar pagamento efetuado').props.onClick()
- assert.deepEqual(calls,[[A,request.requestId,'BANK-REFERENCE']])
+ assert.deepEqual(calls,[[A,request.requestId,'BANK-REFERENCE','2026-10-29']])
  assert.equal(flat(render()).some(n=>n.props.role==='dialog'),false)
+})
+
+test('the selected payment day is preserved in the ledger, portal, OPS and receipt separately from the recording timestamp',async()=>{
+ const h=fixture(),request=await service.requestClientCodPayout(h.db.client,client,A,['available'])
+ await service.recordCodRequestPayment(h.db.client,staff,A,request.requestId,'TRANSFER-BACKDATED','2026-10-29')
+ const box=await service.readCodPayoutBox(h.db.client,T,A),saved=box.requests.find(r=>r.id===request.requestId)
+ assert.equal(saved.paidAt,'2026-10-29');assert.match(saved.paidRecordedAt,/^\d{4}-\d{2}-\d{2}T/);assert.equal(saved.paidBy,staff.user.id)
+ const portal=await service.loadClientCodPage(h.db.client,T,A)
+ assert.equal(portal.payout.history[0].paidAt,'2026-10-29');assert.equal(portal.rows.find(r=>r.id==='available').paidAt,'2026-10-29')
+ const dashboard=await workflow.loadOpsCodWorkflow(h.db.client,T)
+ assert.equal(dashboard.requests[0].paidAt,'2026-10-29')
+ const receipt=await load('lib/services/reembolsos/reembolso-receipt-data.ts').loadCodReceiptData(h.db.client,T,A,request.requestId)
+ assert.equal(receipt.paidAt,'2026-10-29')
+ const timestamp=saved.paidRecordedAt
+ await service.recordCodRequestPayment(h.db.client,staff,A,request.requestId,'RETRY','2026-10-28')
+ const repeated=(await service.readCodPayoutBox(h.db.client,T,A)).requests[0]
+ assert.equal(repeated.paidAt,'2026-10-29');assert.equal(repeated.paidRecordedAt,timestamp)
+})
+test('blank, impossible and future payment dates are rejected before database reads, including missing dates on the public action',async()=>{
+ const h=fixture()
+ for(const day of ['', '2026-02-30','30/10/2026','2999-01-01']) await assert.rejects(service.recordCodRequestPayment(h.db.client,staff,A,'unused','ref',day),/data de pagamento válida/)
+ assert.equal(h.db.queries.length,0)
+ const api=createLoader({'node:crypto':require('node:crypto'),'next/cache':{revalidatePath(){}},'@/lib/auth/context':{requirePermission:async()=>staff},'@/lib/supabase/server':{createAdminClient:()=>h.db.client}})('app/actions/ops-client-cod.ts')
+ await assert.rejects(api.recordOpsCodPaymentAction(A,'unused','ref'),/data de pagamento válida/)
+ assert.equal(h.db.queries.length,0);assert.equal(h.db.writes.length,0)
 })

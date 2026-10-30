@@ -33,10 +33,11 @@ import {
 
 interface ReembolsosClientProps {
   initialBatches: ReembolsoBatch[]
+  onViewDisputes?: ()=>void
   managePayments?: boolean
 }
 
-export default function ReembolsosClient({ initialBatches, managePayments = true }: ReembolsosClientProps) {
+export default function ReembolsosClient({ initialBatches, managePayments = true, onViewDisputes }: ReembolsosClientProps) {
   const [batches, setBatches] = React.useState<ReembolsoBatch[]>(initialBatches)
   const [selectedBatch, setSelectedBatch] = React.useState<ReembolsoBatch | null>(initialBatches[0] || null)
   const [activeTab, setActiveTab] = React.useState<"clientes" | "guias" | "historico">("clientes")
@@ -84,7 +85,7 @@ export default function ReembolsosClient({ initialBatches, managePayments = true
       if (res.success && res.batch) {
         setBatches(prev => [res.batch!, ...prev])
         setSelectedBatch(res.batch)
-        setActiveTab("clientes")
+        setActiveTab(res.batch.items.some(item=>item.reconcileStatus!=="matched")?"guias":"clientes")
         if (fileInputRef.current) fileInputRef.current.value = ""
       } else {
         setUploadError(res.error || "Erro ao processar ficheiro de extrato.")
@@ -356,7 +357,7 @@ export default function ReembolsosClient({ initialBatches, managePayments = true
             <button type="button" disabled={checking} onClick={async()=>{setChecking(true);setUploadError(null);try{setSelectedBatch(await previewReembolsoReconciliationAction(selectedBatch.id));setActiveTab('guias')}catch(reason){setUploadError(reason instanceof Error?reason.message:'Não foi possível verificar o lote.')}finally{setChecking(false)}}} className="shrink-0 rounded border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] disabled:opacity-40">{checking?'A verificar…':'Verificar com o TMS'}</button>
           </div>
 
-          <MissingTrackingWarning items={selectedBatch.items} carrier={selectedBatch.carrier} />
+          <MissingTrackingWarning items={selectedBatch.items} carrier={selectedBatch.carrier} onViewDisputes={onViewDisputes} />
 
           {/* 4. Sub-barra de Informação do Ficheiro */}
           <div className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-3.5 py-2 flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs text-[var(--text-secondary)]">

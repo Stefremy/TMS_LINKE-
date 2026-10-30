@@ -40,9 +40,9 @@ export async function loadClientCodOverview(db: SupabaseClient, tenantId: string
       for (const row of data) {
         if (typeof row.shipmentId !== 'string' || latest.has(row.shipmentId)) continue
         latest.add(row.shipmentId)
-        if (row.clientId && row.clientId !== clientId) throw new Error('Não foi possível confirmar a associação do envio a esta conta.')
         const shipment = part.find(s => s.id === row.shipmentId)
         if (!shipment) continue
+        if(row.clientId&&row.clientId!==clientId){shipment.cod_value=0;shipment.cod_enabled=false;continue}
         const value = row.codValue ?? row.codAmount
         shipment.cod_value = row.isCod === false ? 0 : typeof value === 'number' || typeof value === 'string' ? value : null
         shipment.cod_enabled = row.isCod === true

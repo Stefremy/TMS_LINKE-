@@ -78,10 +78,13 @@ export function summarizeClientCod(rows: ClientCodRow[]) {
 
 export interface CodPayoutRequest {
   id: string; createdAt: string; amountCents: number; shipmentIds: string[]; requestedBy: string
-  paidAt?: string; paymentRef?: string; paidBy?: string
+  paidAt?: string; paymentRef?: string; paidBy?: string; paidRecordedAt?: string
+  items?: { shipmentId: string; tracking: string; amountCents: number; date: string | null }[]
 }
 export interface CodDispute { shipmentId: string; reason: string; openedAt: string; openedBy: string; resolvedAt?: string }
-export interface CodPayoutBox { clientId: string; revision: string; requests: CodPayoutRequest[]; disputes?: CodDispute[] }
+/** Historical manual flags are retained for audit only and do not control availability. */
+export interface CodPayoutRelease { shipmentId:string; tracking:string; amountCents:number; releasedAt:string; releasedBy:string; revokedAt?:string }
+export interface CodPayoutBox { clientId: string; revision: string; requests: CodPayoutRequest[]; disputes?: CodDispute[]; releases?:CodPayoutRelease[] }
 /** A recorded payout stays paid; open disputes withhold funds without inventing a payment. */
 export function applyCodPayoutRecords(overview: ClientCodOverview, box: CodPayoutBox | null): ClientCodOverview {
   return {...overview,rows:overview.rows.map(row=>{

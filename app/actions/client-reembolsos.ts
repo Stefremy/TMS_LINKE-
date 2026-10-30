@@ -11,10 +11,11 @@ export async function getClientReembolsosAction(clientId: string) {
   return loadClientCodPage(createAdminClient(), ctx.tenant_id, clientId)
 }
 
-export async function solicitarReembolsoAction(clientId: string) {
+export async function solicitarReembolsoAction(clientId: string, shipmentIds: string[]) {
   const ctx = await requireClientAccess(clientId)
   if (!/^[0-9a-f-]{36}$/i.test(clientId)) throw new Error('Cliente inválido.')
-  const result = await requestClientCodPayout(createAdminClient(),ctx,clientId)
+  if(!Array.isArray(shipmentIds)||!shipmentIds.length) throw new Error('Selecione as guias que pretende solicitar.')
+  const result = await requestClientCodPayout(createAdminClient(),ctx,clientId,shipmentIds)
   revalidatePath('/ops/tesouraria/reembolsos')
   revalidatePath('/app/[storeSlug]/reembolsos','page')
   return result

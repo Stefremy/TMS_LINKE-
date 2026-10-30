@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AuthContext } from '@/lib/auth/context'
 import { applyCodPayoutRecords, clientCodReceivable, type ClientCodOverview, type CodPayoutBox } from './client-cod'
 import { loadClientCodOverview } from './client-cod-data'
+import { isDateKey, lisbonDate } from '@/lib/billing/recurring-periods'
 
 export const payoutBoxId = (tenant: string, client: string) => {
   const hash = createHash('sha256').update(`client-cod-payout:${tenant}:${client}`).digest('hex').slice(0,32)
@@ -13,6 +14,7 @@ export function parseCodPayoutBox(value: unknown, client: string): CodPayoutBox 
   const box = value as CodPayoutBox
   if(!box || box.clientId !== client || typeof box.revision !== 'string' || !Array.isArray(box.requests) || box.requests.some(r => !r.id || typeof r.createdAt !== 'string' || !Number.isFinite(Date.parse(r.createdAt)) || !Array.isArray(r.shipmentIds) || !r.shipmentIds.length || new Set(r.shipmentIds).size!==r.shipmentIds.length || !Number.isSafeInteger(r.amountCents) || r.amountCents <= 0 || (r.paidAt!==undefined && !Number.isFinite(Date.parse(r.paidAt))))) throw new Error('Pedido de reembolso inválido. Contacte a Linke.')
   if(box.disputes!==undefined && (!Array.isArray(box.disputes) || box.disputes.some(d=>!d.shipmentId||typeof d.reason!=='string'||!d.reason.trim()||!Number.isFinite(Date.parse(d.openedAt))||(d.resolvedAt!==undefined&&!Number.isFinite(Date.parse(d.resolvedAt)))))) throw new Error('Disputa de reembolso inválida.')
+  if(box.requests.some(r=>r.items!==undefined&&(!Array.isArray(r.items)||r.items.length!==r.shipmentIds.length||new Set(r.items.map(i=>i.shipmentId)).size!==r.items.length||r.items.some(i=>!r.shipmentIds.includes(i.shipmentId)||typeof i.tracking!=='string'||!Number.isSafeInteger(i.amountCents)||i.amountCents<=0)||r.items.reduce((sum,i)=>sum+i.amountCents,0)!==r.amountCents))) throw new Error('Detalhe do pedido de reembolso inválido.')
   return box
 }
 export async function readCodPayoutBox(db: SupabaseClient, tenant: string, client: string): Promise<CodPayoutBox | null> {
@@ -28,25 +30,42 @@ export async function loadClientCodPage(db: SupabaseClient, tenant: string, clie
   return { ...applyCodPayoutRecords(overview,box), payout: clientCodReceivable(overview,box) }
 }
 /** One compare-and-swap mailbox per company/client serializes requests; this never performs a bank transfer. */
-export async function requestClientCodPayout(db: SupabaseClient, ctx: AuthContext, client: string) {
+export async function requestClientCodPayout(db: SupabaseClient, ctx: AuthContext, client: string, shipmentIds?: string[]) {
   if (ctx.role === 'client' ? ctx.client_id !== client : ctx.role !== 'admin' && !(ctx.role === 'employee' && ctx.permissions.some(p => ['Faturação & Contas Correntes','Acesso Total (Super-Admin)'].includes(p)))) throw new Error('Acesso negado ao pedido desta conta.')
+  if(shipmentIds!==undefined && (!Array.isArray(shipmentIds)||!shipmentIds.length||shipmentIds.length>1000||shipmentIds.some(id=>typeof id!=='string'||!id.trim()||id.length>160)||new Set(shipmentIds).size!==shipmentIds.length)) throw new Error('Selecione as guias disponíveis que pretende solicitar (até 1000 por pedido).')
   const overview = await loadClientCodOverview(db,ctx.tenant_id,client)
   const old = await readCodPayoutBox(db,ctx.tenant_id,client)
   const current = clientCodReceivable(overview,old)
-  if(current.pending) return { success:true as const, alreadyRequested:true, requestId:current.history.find(r=>r.state!=='paid')!.id }
-  if(current.availableCents <= 0) throw new Error('Ainda não existem valores CTT conciliados disponíveis para solicitar.')
-  const request = { id:randomUUID(),createdAt:new Date().toISOString(),amountCents:current.availableCents,shipmentIds:current.eligible.map(row=>row.id).sort(),requestedBy:ctx.user.id }
+  const selectedIds=shipmentIds?[...shipmentIds].sort():undefined
+  const sameSelection=(ids:string[])=>Boolean(selectedIds&&ids.length===selectedIds.length&&[...ids].sort().every((id,index)=>id===selectedIds[index]))
+  const replay=old?.requests.find(request=>sameSelection(request.shipmentIds))
+  if(replay) return {success:true as const,alreadyRequested:true,requestId:replay.id}
+  // Older internal callers keep their all-balance behavior; the portal always supplies an explicit selection.
+  if(!selectedIds&&current.pending) return { success:true as const, alreadyRequested:true, requestId:current.history.find(r=>r.state!=='paid')!.id }
+  const eligible=new Map(current.eligible.map(row=>[row.id,row]))
+  if(selectedIds?.some(id=>!eligible.has(id))) throw new Error('Uma ou mais guias selecionadas já não estão disponíveis nesta conta. Atualize a lista antes de solicitar.')
+  const selected=selectedIds?selectedIds.map(id=>eligible.get(id)!):current.eligible
+  const amountCents=selected.reduce((sum,row)=>sum+row.statementCents!,0)
+  if(!selected.length||amountCents<=0||!Number.isSafeInteger(amountCents)) throw new Error('Ainda não existem valores CTT conciliados disponíveis para solicitar.')
+  const request = { id:randomUUID(),createdAt:new Date().toISOString(),amountCents,shipmentIds:selected.map(row=>row.id).sort(),requestedBy:ctx.user.id,
+    items:selected.map(row=>({shipmentId:row.id,tracking:row.tracking,amountCents:row.statementCents!,date:row.date})) }
   const next: CodPayoutBox = { ...old,clientId:client,revision:randomUUID(),requests:[...(old?.requests || []),request] }
   const id = payoutBoxId(ctx.tenant_id,client)
   if(old) {
     const {data,error} = await db.from('audit_log').update({details:next}).eq('tenant_id',ctx.tenant_id).eq('action','client_cod_payout_requests').eq('id',id).eq('details->>revision',old.revision).select('id').maybeSingle()
+    if(!error&&!data) {
+      const saved=await readCodPayoutBox(db,ctx.tenant_id,client)
+      const existing=saved?.requests.find(item=>item.shipmentIds.length===request.shipmentIds.length&&[...item.shipmentIds].sort().every((id,index)=>id===request.shipmentIds[index]))
+      if(existing) return {success:true as const,alreadyRequested:true,requestId:existing.id}
+    }
     if(error || !data) throw new Error('O pedido mudou durante a operação. Atualize os dados antes de tentar novamente.')
   } else {
     const {error} = await db.from('audit_log').insert({id,tenant_id:ctx.tenant_id,action:'client_cod_payout_requests',details:next})
     if(error) {
       if(error.code==='23505') {
         const saved = await readCodPayoutBox(db,ctx.tenant_id,client)
-        if(saved?.requests.length) return {success:true as const,alreadyRequested:true,requestId:saved.requests.at(-1)!.id}
+        const existing=selectedIds?saved?.requests.find(item=>sameSelection(item.shipmentIds)):saved?.requests.at(-1)
+        if(existing) return {success:true as const,alreadyRequested:true,requestId:existing.id}
       }
       throw new Error('Não foi possível confirmar o pedido. Atualize os dados antes de repetir.')
     }
@@ -92,9 +111,10 @@ async function savePayoutBox(db: SupabaseClient, ctx: AuthContext, client: strin
   }
 }
 /** Records an already executed bank payment for precisely the immutable guides in this request. */
-export async function recordCodRequestPayment(db: SupabaseClient, ctx: AuthContext, client: string, requestId: string, paymentRef: string) {
+export async function recordCodRequestPayment(db: SupabaseClient, ctx: AuthContext, client: string, requestId: string, paymentRef: string, paymentDate: string = lisbonDate()) {
   requireFinanceActor(ctx)
   if(typeof paymentRef!=='string'||!paymentRef.trim()||paymentRef.trim().length>160) throw new Error('Indique a referência do pagamento (até 160 caracteres).')
+  if(typeof paymentDate!=='string'||!isDateKey(paymentDate)||paymentDate>lisbonDate()) throw new Error('Escolha uma data de pagamento válida, até hoje.')
   const overview=await loadClientCodOverview(db,ctx.tenant_id,client)
   const old=await readCodPayoutBox(db,ctx.tenant_id,client)
   const request=old?.requests.find(item=>item.id===requestId)
@@ -103,7 +123,7 @@ export async function recordCodRequestPayment(db: SupabaseClient, ctx: AuthConte
   const rows=applyCodPayoutRecords(overview,old).rows
   const source=request.shipmentIds.map(id=>rows.find(row=>row.id===id))
   if(new Set(request.shipmentIds).size!==request.shipmentIds.length || source.some(row=>!row||row.state!=='statement'||!row.cttConfirmed||!row.statementCents) || source.reduce((sum,row)=>sum+(row?.statementCents||0),0)!==request.amountCents) throw new Error('O pedido tem divergências ou valores já pagos. Reveja o cruzamento antes de registar o pagamento.')
-  const next:CodPayoutBox={...old,revision:randomUUID(),requests:old.requests.map(item=>item.id===requestId?{...item,paidAt:new Date().toISOString(),paymentRef:paymentRef.trim(),paidBy:ctx.user.id}:item)}
+  const next:CodPayoutBox={...old,revision:randomUUID(),requests:old.requests.map(item=>item.id===requestId?{...item,paidAt:paymentDate,paidRecordedAt:new Date().toISOString(),paymentRef:paymentRef.trim(),paidBy:ctx.user.id}:item)}
   await savePayoutBox(db,ctx,client,old,next)
   return {success:true as const,alreadyPaid:false}
 }

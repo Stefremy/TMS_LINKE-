@@ -17,7 +17,7 @@ test('collections appear only after delivery, while receivable eligibility still
  const shipments=[shipment('new',10,'criado'),shipment('transit',10,'em_transito'),shipment('delivered'),shipment('pudo',10,'entregue_pudo'),shipment('pudo-alias',10,'entregue_em_pudo'),shipment('cancelled',10,'cancelado')]
  const rows=model.buildClientCodRows(shipments,[settlement('transit')])
  assert.deepEqual(model.deliveredClientCodRows(rows).map(r=>r.id),['delivered','pudo','pudo-alias'])
- const payout=model.clientCodReceivable({clientId:A,rows,updatedAt:'2026-10-30'},null)
+ const payout=model.clientCodReceivable({clientId:A,rows,updatedAt:'2026-10-30'},{clientId:A,revision:'release',requests:[],releases:[{shipmentId:'transit',tracking:'TRK-transit',amountCents:1000,releasedAt:'2026-10-30',releasedBy:'finance'}]})
  assert.equal(payout.availableCents,1000)
  assert.deepEqual(payout.eligible.map(r=>r.id),['transit'])
  assert.equal(rows.find(r=>r.id==='delivered').state,'unconfirmed')
