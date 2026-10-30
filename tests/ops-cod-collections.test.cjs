@@ -7,7 +7,7 @@ function fixture(){return{clients:[{id:A,tenant_id:T,name:'Native A'},{id:B,tena
 {id:'one-data',tenant_id:T,action:'shipment_data',created_at:'2026-10-01',details:{id:'one',client_id:A,cod_value:10}},
 {id:'two-data',tenant_id:T,action:'shipment_data',created_at:'2026-10-01',details:{id:'two',client_id:A,cod_value:20}},
 ]}}
-function harness(authorized=true){const tables=fixture(),db=fakeSupabase(tables);const api=createLoader({'@/lib/auth/context':{requirePermission:async name=>{assert.equal(name,'Faturação & Contas Correntes');if(!authorized)throw Error('Forbidden');return{tenant_id:T}}},'@/lib/supabase/server':{createAdminClient:()=>db.client}})('app/actions/ops-client-cod.ts');return{api,tables,db}}
+function harness(authorized=true){const tables=fixture(),db=fakeSupabase(tables);const api=createLoader({'node:crypto':require('node:crypto'),'next/cache':{revalidatePath(){}},'@/lib/auth/context':{requirePermission:async name=>{assert.equal(name,'Faturação & Contas Correntes');if(!authorized)throw Error('Forbidden');return{tenant_id:T}}},'@/lib/supabase/server':{createAdminClient:()=>db.client}})('app/actions/ops-client-cod.ts');return{api,tables,db}}
 test('the Ops customer selector contains only registered, undeleted customers of the current company and minimal identity fields',async()=>{
  const h=harness()
  assert.deepEqual(await h.api.getOpsCodClientsAction(),[{id:A,name:'Store A',code:'C001'}])

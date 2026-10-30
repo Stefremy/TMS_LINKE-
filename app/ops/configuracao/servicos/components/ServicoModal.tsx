@@ -4,24 +4,19 @@ import { isCustomCommercialProfile } from "../types"
 
 import * as React from "react"
 import { getTierDisplayEntries, moveTierDisplayOrder } from "@/lib/pricing/tier-display-order"
-import { 
+import {
   GripVertical,
-  X, 
-  Save, 
-  Plus, 
-  Trash2, 
-  Package, 
-  ShieldCheck,
+  X,
+  Save,
+  Plus,
+  Trash2,
+  Package,
   UserCheck,
-  TrendingDown,
   Globe,
   Cpu,
-  MapPin,
   Check,
   Lock,
   Percent,
-  Layers,
-  Settings2,
   Copy,
   CheckCheck,
   AlertCircle,
@@ -29,7 +24,6 @@ import {
   Calculator,
   Sliders,
   Zap,
-  ArrowRight,
   TrendingUp,
   Tag
 } from "lucide-react"
@@ -127,26 +121,117 @@ interface ServicoModalProps {
   onSave: (servico: Partial<ServicoLinke>) => Promise<ServicoLinke | boolean | void>
   initialData?: ServicoLinke | null
   fornecedores: Fornecedor[]
-  webservices?: any[]
+  webservices?: unknown[]
 }
 
-const DEFAULT_TIERS_TEMPLATE: PriceTierLinke[] = [
-  { id: "t1", label: "Até 1 Kg", weight_max: 1, cost_price: 2.85, margin_pct: 25, sell_price: 3.56, delivery_time: "24h", enabled: true },
-  { id: "t2", label: "Até 2 Kg", weight_max: 2, cost_price: 3.15, margin_pct: 25, sell_price: 3.94, delivery_time: "24h", enabled: true },
-  { id: "t5", label: "Até 5 Kg", weight_max: 5, cost_price: 3.75, margin_pct: 22, sell_price: 4.58, delivery_time: "24h", enabled: true },
-  { id: "t10", label: "Até 10 Kg", weight_max: 10, cost_price: 4.60, margin_pct: 22, sell_price: 5.61, delivery_time: "24h", enabled: true },
-  { id: "t20", label: "Até 20 Kg", weight_max: 20, cost_price: 6.20, margin_pct: 20, sell_price: 7.44, delivery_time: "24h", enabled: true },
-  { id: "t30", label: "Até 30 Kg", weight_max: 30, cost_price: 7.90, margin_pct: 20, sell_price: 9.48, delivery_time: "24h", enabled: true },
-  { id: "t_add", label: "Kg Adicional (+30kg)", weight_max: 999, cost_price: 0.28, margin_pct: 25, sell_price: 0.35, delivery_time: "24h", enabled: true },
-]
+function buildInitialServiceForm(initialData: ServicoLinke | null | undefined, fornecedores: Fornecedor[]): Partial<ServicoLinke> {
+  if (initialData) {
+    let carrierId = initialData.preferred_carrier_id
+    let carrierName = initialData.preferred_carrier_name
 
-export function ServicoModal({
-  isOpen,
+    const matchedCarrier = fornecedores.find((f) => f.id === carrierId)
+
+    const isActuallyCtt = (
+      (initialData.name && initialData.name.toLowerCase().includes("ctt")) ||
+      (initialData.preferred_carrier_name && initialData.preferred_carrier_name.toLowerCase().includes("ctt")) ||
+      (initialData.webservice_service_code && (initialData.webservice_service_code.startsWith("EM") || initialData.webservice_service_code.startsWith("EN")))
+    )
+    const isActuallyCorreos = (
+      (initialData.name && initialData.name.toLowerCase().includes("correos")) ||
+      (initialData.preferred_carrier_name && initialData.preferred_carrier_name.toLowerCase().includes("correos")) ||
+      (initialData.webservice_service_code && ["61", "62", "63", "66", "90", "93"].includes(initialData.webservice_service_code))
+    )
+
+    if (isActuallyCtt && matchedCarrier && matchedCarrier.short_name.toLowerCase().includes("correos")) {
+      const cttCarrier = fornecedores.find((f) => f.id === "forn_2" || f.short_name.toLowerCase().includes("ctt"))
+      if (cttCarrier) {
+        carrierId = cttCarrier.id
+        carrierName = cttCarrier.short_name
+      }
+    } else if (isActuallyCorreos && matchedCarrier && !matchedCarrier.short_name.toLowerCase().includes("correos")) {
+      const correosCarrier = fornecedores.find((f) => f.id === "forn_lk003" || f.short_name.toLowerCase().includes("correos"))
+      if (correosCarrier) {
+        carrierId = correosCarrier.id
+        carrierName = correosCarrier.short_name
+      }
+    } else if (matchedCarrier) {
+      carrierName = matchedCarrier.short_name
+    }
+
+    const isCorreosCarrier = carrierName?.toLowerCase().includes("correos")
+    const defaultWsConn = isCorreosCarrier ? "correos_express" : "ctt_expresso"
+    const rawZones = initialData.zones || []
+    const normalizedZones = rawZones.map((z) => {
+      const rawCode = (z.zone_code || "").trim()
+      const canonicalCode = rawCode
+        ? normalizeServiceZoneCode(rawCode)
+        : rawZones.length === 1
+        ? "PT-CONT"
+        : ""
+      return {
+        ...z,
+        zone_code: canonicalCode,
+        zone_name:
+          (rawCode.toUpperCase() === "PT-ACORES" || rawCode.toUpperCase() === "PT-MADEIRA") &&
+          canonicalCode === "PT-ILHAS"
+            ? "PT — Ilhas Açores & Madeira"
+            : z.zone_name || (z as ZonePriceMatrix & { name?: string }).name || ZONE_DISPLAY_NAMES[canonicalCode] || canonicalCode,
+      }
+    })
+
+    return {
+      ...initialData,
+      preferred_carrier_id: carrierId,
+      preferred_carrier_name: carrierName,
+      webservice_connection_id: initialData.webservice_connection_id || defaultWsConn,
+      allowed_zones: initialData.allowed_zones
+        ? Array.from(new Set(initialData.allowed_zones.map((c) => normalizeServiceZoneCode(c) || c)))
+        : normalizedZones.map((z) => z.zone_code).filter(Boolean),
+      zones: normalizedZones,
+    }
+  } else {
+    const defaultCtt = fornecedores.find(f => f.id === "forn_2" || f.short_name.toLowerCase().includes("ctt")) || fornecedores[0]
+    const isDefaultCorreos = defaultCtt?.short_name?.toLowerCase().includes("correos")
+    const carrierKey = isDefaultCorreos ? "correos" : "ctt"
+    const defaultWsCode = isDefaultCorreos ? "61" : "EMSF056.01"
+    const contract = buildSubproductContractZones(carrierKey, defaultWsCode)
+    return {
+      name: "",
+      code: buildDefaultCustomServiceCode(carrierKey, defaultWsCode),
+      category: contract.preset?.category || "Nacional",
+      description: "",
+      color: "#0f172a",
+      is_active: true,
+      pricing_profile: "Standard / Geral",
+      target_client_name: "Clientes Gerais",
+      discount_vs_standard_pct: 0,
+      preferred_carrier_id: defaultCtt?.id || "",
+      preferred_carrier_name: defaultCtt?.short_name || "CTT Expresso",
+      webservice_connection_id: isDefaultCorreos ? "correos_express" : "ctt_expresso",
+      webservice_service_code: defaultWsCode,
+      transit_time_label: contract.preset?.transitTimeLabel || "24h",
+      global_markup_pct: contract.preset?.defaultMarkupPct ?? 25.0,
+      fuel_surcharge_pct: contract.preset?.fuelSurchargePct ?? 12.5,
+      cod_fee_pct: 2.5,
+      cod_min_fee: 2.50,
+      allowed_zones: contract.allowedZones,
+      is_primordial: false,
+      zones: contract.zones,
+    }
+  }
+}
+
+export function ServicoModal(props: ServicoModalProps) {
+  if (!props.isOpen) return null
+
+  return <ServicoModalForm key={props.initialData?.id ?? "new"} {...props} />
+}
+
+function ServicoModalForm({
   onClose,
   onSave,
   initialData,
   fornecedores,
-  webservices = [],
 }: ServicoModalProps) {
   const [activeTab, setActiveTab] = React.useState<"geral" | "api" | "destinos" | "precos">("geral")
   const [activeZoneIndex, setActiveZoneIndex] = React.useState<number>(0)
@@ -158,146 +243,15 @@ export function ServicoModal({
   const [draggedTierIdx, setDraggedTierIdx] = React.useState<number | null>(null)
   const [tierOrderAnnouncement, setTierOrderAnnouncement] = React.useState("")
   const [copiedCode, setCopiedCode] = React.useState(false)
-  const [discountBatchPct, setDiscountBatchPct] = React.useState<number>(10)
   const [zoneMarkupPct, setZoneMarkupPct] = React.useState<number>(20)
   const [showZonePicker, setShowZonePicker] = React.useState(false)
   const [selectedZoneCode, setSelectedZoneCode] = React.useState<string>("")
 
-  const [formData, setFormData] = React.useState<Partial<ServicoLinke>>({
-    name: "",
-    code: "",
-    category: "Nacional",
-    description: "",
-    color: "#0f172a",
-    is_active: true,
-    pricing_profile: "Standard / Geral",
-    target_client_name: "Clientes Gerais",
-    discount_vs_standard_pct: 0,
-    preferred_carrier_id: fornecedores[0]?.id || "",
-    preferred_carrier_name: fornecedores[0]?.short_name || "CTT Expresso",
-    webservice_connection_id: "ctt_expresso",
-    webservice_service_code: "EMSF056.01",
-    transit_time_label: "24h",
-    global_markup_pct: 25.0,
-    fuel_surcharge_pct: 12.5,
-    cod_fee_pct: 2.5,
-    cod_min_fee: 2.50,
-    allowed_zones: ["PT-CONT"],
-    is_primordial: false,
-    zones: [
-      {
-        zone_code: "PT-CONT",
-        zone_name: "Portugal Continental",
-        tiers: DEFAULT_TIERS_TEMPLATE,
-      },
-    ],
-  })
+  const [formData, setFormData] = React.useState<Partial<ServicoLinke>>(() =>
+    buildInitialServiceForm(initialData, fornecedores)
+  )
 
   const isSaved = savedSnapshot === JSON.stringify(formData)
-
-  React.useEffect(() => {
-    setSavedSnapshot(null)
-    setSaveError("")
-    if (initialData) {
-      let carrierId = initialData.preferred_carrier_id
-      let carrierName = initialData.preferred_carrier_name
-
-      const matchedCarrier = fornecedores.find((f) => f.id === carrierId)
-      
-      const isActuallyCtt = (
-        (initialData.name && initialData.name.toLowerCase().includes("ctt")) ||
-        (initialData.preferred_carrier_name && initialData.preferred_carrier_name.toLowerCase().includes("ctt")) ||
-        (initialData.webservice_service_code && (initialData.webservice_service_code.startsWith("EM") || initialData.webservice_service_code.startsWith("EN")))
-      )
-      const isActuallyCorreos = (
-        (initialData.name && initialData.name.toLowerCase().includes("correos")) ||
-        (initialData.preferred_carrier_name && initialData.preferred_carrier_name.toLowerCase().includes("correos")) ||
-        (initialData.webservice_service_code && ["61", "62", "63", "66", "90", "93"].includes(initialData.webservice_service_code))
-      )
-
-      if (isActuallyCtt && matchedCarrier && matchedCarrier.short_name.toLowerCase().includes("correos")) {
-        const cttCarrier = fornecedores.find((f) => f.id === "forn_2" || f.short_name.toLowerCase().includes("ctt"))
-        if (cttCarrier) {
-          carrierId = cttCarrier.id
-          carrierName = cttCarrier.short_name
-        }
-      } else if (isActuallyCorreos && matchedCarrier && !matchedCarrier.short_name.toLowerCase().includes("correos")) {
-        const correosCarrier = fornecedores.find((f) => f.id === "forn_lk003" || f.short_name.toLowerCase().includes("correos"))
-        if (correosCarrier) {
-          carrierId = correosCarrier.id
-          carrierName = correosCarrier.short_name
-        }
-      } else if (matchedCarrier) {
-        carrierName = matchedCarrier.short_name
-      }
-
-      const isCorreosCarrier = carrierName?.toLowerCase().includes("correos")
-      const defaultWsConn = isCorreosCarrier ? "correos_express" : "ctt_expresso"
-      const rawZones = initialData.zones || []
-      const normalizedZones = rawZones.map((z) => {
-        const rawCode = (z.zone_code || "").trim()
-        const canonicalCode = rawCode
-          ? normalizeServiceZoneCode(rawCode)
-          : rawZones.length === 1
-          ? "PT-CONT"
-          : ""
-        return {
-          ...z,
-          zone_code: canonicalCode,
-          zone_name:
-            (rawCode.toUpperCase() === "PT-ACORES" || rawCode.toUpperCase() === "PT-MADEIRA") &&
-            canonicalCode === "PT-ILHAS"
-              ? "PT — Ilhas Açores & Madeira"
-              : z.zone_name || (z as any).name || ZONE_DISPLAY_NAMES[canonicalCode] || canonicalCode,
-        }
-      })
-
-      setFormData({
-        ...initialData,
-        preferred_carrier_id: carrierId,
-        preferred_carrier_name: carrierName,
-        webservice_connection_id: initialData.webservice_connection_id || defaultWsConn,
-        allowed_zones: initialData.allowed_zones
-          ? Array.from(new Set(initialData.allowed_zones.map((c) => normalizeServiceZoneCode(c) || c)))
-          : normalizedZones.map((z) => z.zone_code).filter(Boolean),
-        zones: normalizedZones,
-      })
-      setActiveZoneIndex(0)
-    } else {
-      const defaultCtt = fornecedores.find(f => f.id === "forn_2" || f.short_name.toLowerCase().includes("ctt")) || fornecedores[0]
-      const isDefaultCorreos = defaultCtt?.short_name?.toLowerCase().includes("correos")
-      const carrierKey = isDefaultCorreos ? "correos" : "ctt"
-      const defaultWsCode = isDefaultCorreos ? "61" : "EMSF056.01"
-      const contract = buildSubproductContractZones(carrierKey, defaultWsCode)
-      setFormData({
-        name: "",
-        code: buildDefaultCustomServiceCode(carrierKey, defaultWsCode),
-        category: contract.preset?.category || "Nacional",
-        description: "",
-        color: "#0f172a",
-        is_active: true,
-        pricing_profile: "Standard / Geral",
-        target_client_name: "Clientes Gerais",
-        discount_vs_standard_pct: 0,
-        preferred_carrier_id: defaultCtt?.id || "",
-        preferred_carrier_name: defaultCtt?.short_name || "CTT Expresso",
-        webservice_connection_id: isDefaultCorreos ? "correos_express" : "ctt_expresso",
-        webservice_service_code: defaultWsCode,
-        transit_time_label: contract.preset?.transitTimeLabel || "24h",
-        global_markup_pct: contract.preset?.defaultMarkupPct ?? 25.0,
-        fuel_surcharge_pct: contract.preset?.fuelSurchargePct ?? 12.5,
-        cod_fee_pct: 2.5,
-        cod_min_fee: 2.50,
-        allowed_zones: contract.allowedZones,
-        is_primordial: false,
-        zones: contract.zones,
-      })
-      setActiveZoneIndex(0)
-    }
-    setActiveTab("geral")
-  }, [initialData, fornecedores, isOpen])
-
-  if (!isOpen) return null
 
   const getActiveCarrierKey = (carrierName?: string, wsConnId?: string): "ctt" | "correos" => {
     if ((carrierName || "").toLowerCase().includes("correos") || wsConnId === "correos_express") {
@@ -620,7 +574,7 @@ export function ServicoModal({
       const targetZone = { ...zones[zoneIdx] }
       const lastTier = targetZone.tiers[targetZone.tiers.length - 1]
       const newWeight = lastTier ? (lastTier.weight_max === 999 ? 50 : lastTier.weight_max + 5) : 1
-      
+
       const newTier: PriceTierLinke = {
         id: `t_custom_${Date.now()}`,
         display_order: Math.max(-1, ...targetZone.tiers.map((tier, index) => Number.isFinite(tier.display_order) ? tier.display_order! : index)) + 1,
@@ -763,8 +717,6 @@ export function ServicoModal({
   }
 
   const currentCarrierLogo = getCarrierLogo(formData.preferred_carrier_name)
-  const isCttCarrier = formData.preferred_carrier_name?.toLowerCase().includes("ctt")
-  const isCorreosCarrier = formData.preferred_carrier_name?.toLowerCase().includes("correos")
   const activeCarrierKey = getActiveCarrierKey(formData.preferred_carrier_name, formData.webservice_connection_id)
   const availableSubproductPresets = CARRIER_SUBPRODUCT_PRESETS.filter((p) => p.carrier === activeCarrierKey)
   const configuredZoneCodes = new Set(
@@ -786,11 +738,11 @@ export function ServicoModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200/90 ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
-        
+
         {/* TOP BAR / HEADER */}
         <div className="px-6 pt-5 pb-3 border-b border-slate-200/80 bg-gradient-to-b from-slate-50/70 to-white">
           <div className="flex items-start justify-between gap-4">
-            
+
             {/* Left: Carrier Icon & Service Title */}
             <div className="flex items-center gap-3.5 min-w-0">
               <div className="relative group shrink-0">
@@ -882,7 +834,7 @@ export function ServicoModal({
           {/* COOL HUD BAR: LIVE SERVICE STATS / GLANCE */}
           <div className="mt-3.5 py-2 px-3 bg-slate-900 text-white rounded-xl shadow-xs flex items-center justify-between gap-3 text-xs overflow-x-auto">
             <div className="flex items-center gap-5 shrink-0">
-              
+
               {/* Base Price */}
               <div className="flex items-center gap-2">
                 <span className="text-slate-400 text-[11px] uppercase tracking-wider font-semibold">PVP Base</span>
@@ -1013,14 +965,14 @@ export function ServicoModal({
 
         {/* MODAL FORM BODY */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 flex flex-col justify-between">
-          
+
           {/* TAB 1: GERAL & PERFIL */}
           {activeTab === "geral" && (
             <div className="space-y-6 animate-in fade-in-50 duration-150">
-              
+
               {/* SECTION: IDENTIFICAÇÃO E OPERAÇÃO */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                
+
                 {/* Left Card: Core Service Info */}
                 <div className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/40 space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
@@ -1078,7 +1030,7 @@ export function ServicoModal({
                     <div className="space-y-1.5 pt-1">
                       <label className="text-xs font-medium text-slate-700">Categoria Logística</label>
                       <div className="flex flex-wrap gap-1.5">
-                        {[
+                        {([
                           "Nacional",
                           "Ibérico",
                           "Ilhas",
@@ -1086,12 +1038,12 @@ export function ServicoModal({
                           "Especial / Recolhas",
                           "Ponto / Locky",
                           "Paletes / Carga"
-                        ].map((cat) => (
+                        ] as const).map((cat) => (
                           <button
                             key={cat}
                             type="button"
                             aria-pressed={formData.category === cat}
-                            onClick={() => setFormData({ ...formData, category: cat as any })}
+                            onClick={() => setFormData({ ...formData, category: cat })}
                             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                               formData.category === cat
                                 ? "bg-slate-900 text-white shadow-2xs"
@@ -1118,7 +1070,7 @@ export function ServicoModal({
                   </div>
 
                   <div className="space-y-3">
-                    
+
                     {/* Carrier Selection Cards */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-slate-700">Transportador Parceiro</label>
@@ -1238,7 +1190,7 @@ export function ServicoModal({
           {/* TAB 2: WEBSERVICE & API (HIGH TECH OPS CONSOLE) */}
           {activeTab === "api" && (
             <div className="space-y-6 animate-in fade-in-50 duration-150">
-              
+
               {/* API Connection & Subproduct Card */}
               <div className="bg-slate-50/70 p-5 rounded-xl border border-slate-200/90 space-y-5">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-200/70">
@@ -1314,7 +1266,7 @@ export function ServicoModal({
                       </button>
                     )}
                   </div>
-                  
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                     {availableSubproductPresets.map((preset) => {
                       const isSelected = formData.webservice_service_code === preset.wsCode
@@ -1473,7 +1425,7 @@ export function ServicoModal({
           {/* TAB 3: DESTINOS AUTORIZADOS (REGIONAL LOGISTICS MATRIX) */}
           {activeTab === "destinos" && (
             <div className="space-y-5 animate-in fade-in-50 duration-150">
-              
+
               {/* Header & Quick Action Presets */}
               <div className="flex flex-wrap items-center justify-between gap-3 pb-1 border-b border-slate-200">
                 <div>
@@ -1495,7 +1447,7 @@ export function ServicoModal({
               {/* Fast Presets Filter Bar */}
               <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Atalhos Rápidos:</span>
-                
+
                 {[
                   { label: "Só Continental", zones: ["PT-CONT"] },
                   { label: "Portugal + Ilhas", zones: ["PT-CONT", "PT-ILHAS"] },
@@ -1552,7 +1504,7 @@ export function ServicoModal({
 
               {/* GROUPED DESTINATION CARDS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
+
                 {/* Group 1: Território Nacional */}
                 <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5">
                   <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 text-xs font-semibold text-slate-800">
@@ -1840,7 +1792,7 @@ export function ServicoModal({
                   </button>
                 </div>
               )}
-              
+
               {/* ZONE NAVIGATION BAR */}
               <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -2003,7 +1955,7 @@ export function ServicoModal({
                           const margin = Number(tier.margin_pct || 0)
 
                           // Margin health badge color
-                          const marginColor = margin >= 22 
+                          const marginColor = margin >= 22
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                             : margin >= 15
                             ? "bg-sky-50 text-sky-700 border-sky-200"
@@ -2060,7 +2012,7 @@ export function ServicoModal({
                                   className="w-32 px-2 py-1 bg-white border border-slate-200 rounded-md text-xs text-slate-900 font-medium focus:ring-1 focus:ring-slate-900"
                                 />
                               </td>
-                              
+
                               <td className="py-1.5 px-2 text-center">
                                 <input
                                   type="number"

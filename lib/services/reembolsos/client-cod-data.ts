@@ -5,6 +5,15 @@ import { buildClientCodRows, codCents, reembolsoDay, type CodShipment, type CodS
 
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 const text = (value: unknown) => typeof value === 'string' ? value.slice(0, 160) : null
+export function codSettlementFromItem(carrier: unknown, summary: Record<string, unknown>, item: Record<string, unknown>, shipment: CodShipment): CodSettlement {
+  const carrierTracking = typeof item.carrierTracking === 'string' ? item.carrierTracking.trim().toUpperCase() : ''
+  const carrierMatches = Boolean(carrierTracking && [shipment.carrier_tracking_number,shipment.tracking_number].some(value => value?.trim().toUpperCase() === carrierTracking))
+  const processed = reembolsoDay(item.processingDate), created = billingDay(shipment.created_at), delivered = reembolsoDay(item.deliveryDate)
+  const datesMatch = Boolean(created && processed && processed >= created && (!delivered || delivered >= created))
+  return { carrier: typeof carrier === 'string' ? carrier : undefined, shipmentId: shipment.id, amountCents: codCents(item.amount), matched: item.reconcileStatus === 'matched' && carrierMatches && datesMatch,
+    paid: summary.isPaid === true, paidAt: billingDay(summary.paidAt), processingDate: reembolsoDay(item.processingDate), paymentRef: text(summary.paymentRef) }
+}
+
 export async function loadClientCodOverview(db: SupabaseClient, tenantId: string, clientId: string): Promise<ClientCodOverview> {
   if (!tenantId || !clientId) throw new Error('Não foi possível verificar a conta.')
   const { data: owner, error: ownerError } = await db.from('clients').select('id').eq('tenant_id', tenantId).eq('id', clientId).maybeSingle()
@@ -57,12 +66,7 @@ export async function loadClientCodOverview(db: SupabaseClient, tenantId: string
           const item = record(value)
           if (typeof item.shipmentId !== 'string' || !owned.has(item.shipmentId) || (item.clientId && item.clientId !== clientId)) continue
           const shipment = owned.get(item.shipmentId)!
-          const carrierTracking = typeof item.carrierTracking === 'string' ? item.carrierTracking.trim().toUpperCase() : ''
-          const carrierMatches = Boolean(carrierTracking && [shipment.carrier_tracking_number,shipment.tracking_number].some(value => value?.trim().toUpperCase() === carrierTracking))
-          const processed = reembolsoDay(item.processingDate), created = billingDay(shipment.created_at), delivered = reembolsoDay(item.deliveryDate)
-          const datesMatch = Boolean(created && processed && processed >= created && (!delivered || delivered >= created))
-          settlements.push({ carrier: typeof row.carrier === 'string' ? row.carrier : undefined, shipmentId: item.shipmentId, amountCents: codCents(item.amount), matched: item.reconcileStatus === 'matched' && carrierMatches && datesMatch,
-            paid: summary.isPaid === true, paidAt: billingDay(summary.paidAt), processingDate: reembolsoDay(item.processingDate), paymentRef: text(summary.paymentRef) })
+          settlements.push(codSettlementFromItem(row.carrier,summary,item,shipment))
         }
       }
     }

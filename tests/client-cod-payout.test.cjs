@@ -7,7 +7,7 @@ const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbb
 const ctx={tenant_id:T,role:'client',user:{id:'actor'},client_id:A}
 function fixture(){return{clients:[{id:A,name:'Own Store',tenant_id:T}],shipments:[{id:'one',client_id:A,tenant_id:T,tracking_number:'OWN-ONE',status:'entregue',created_at:'2026-10-30'}],audit_log:[
  {id:'snapshot',tenant_id:T,action:'shipment_data',created_at:'2026-10-30',details:{id:'one',client_id:A,cod_value:10}},
- {id:'batch',tenant_id:T,action:'reembolso_batch',created_at:'2026-10-30',details:{carrier:'ctt',clientSummaries:[{clientId:A,isPaid:false,items:[{clientId:A,shipmentId:'one',carrierTracking:'OWN-ONE',amount:10,reconcileStatus:'matched'}]}]}}
+ {id:'batch',tenant_id:T,action:'reembolso_batch',created_at:'2026-10-30',details:{carrier:'ctt',clientSummaries:[{clientId:A,isPaid:false,items:[{clientId:A,shipmentId:'one',carrierTracking:'OWN-ONE',processingDate:'31/10/2026',amount:10,reconcileStatus:'matched'}]}]}}
 ]}}
 test('monthly defaults cover the full Lisbon calendar month, including leap years',()=>{
  assert.deepEqual(model.currentCodMonth('2026-10-30'),{from:'2026-10-01',to:'2026-10-31'})
@@ -49,7 +49,7 @@ test('an existing pending request is not duplicated; another request can be made
  assert.equal((await payout.loadClientCodPage(db.client,T,A)).payout.history[0].state,'paid')
  t.shipments.push({id:'two',client_id:A,tenant_id:T,tracking_number:'OWN-TWO',status:'entregue',created_at:'2026-10-31'})
  t.audit_log.push({id:'snapshot-two',tenant_id:T,action:'shipment_data',created_at:'2026-10-31',details:{id:'two',client_id:A,cod_value:20}},
- {id:'batch-two',tenant_id:T,action:'reembolso_batch',created_at:'2026-10-31',details:{carrier:'ctt',clientSummaries:[{clientId:A,isPaid:false,items:[{clientId:A,shipmentId:'two',carrierTracking:'OWN-TWO',amount:20,reconcileStatus:'matched'}]}]}})
+ {id:'batch-two',tenant_id:T,action:'reembolso_batch',created_at:'2026-10-31',details:{carrier:'ctt',clientSummaries:[{clientId:A,isPaid:false,items:[{clientId:A,shipmentId:'two',carrierTracking:'OWN-TWO',processingDate:'31/10/2026',amount:20,reconcileStatus:'matched'}]}]}})
  await payout.requestClientCodPayout(db.client,ctx,A)
  const current=await payout.loadClientCodPage(db.client,T,A)
  assert.equal(current.payout.history.length,2);assert.equal(current.payout.pendingCents,2000)

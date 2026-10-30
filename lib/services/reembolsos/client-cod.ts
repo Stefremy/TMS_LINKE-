@@ -12,6 +12,7 @@ export interface CodSettlement {
   paidAt: string | null; processingDate: string | null; paymentRef: string | null
 }
 export interface ClientCodRow {
+  disputeReason?: string
   cttConfirmed?: boolean
   id: string; tracking: string; carrier: string; shipmentStatus: string; date: string | null
   requestedCents: number | null; statementCents: number | null; state: ClientCodState
@@ -55,6 +56,10 @@ export function buildClientCodRows(shipments: CodShipment[], settlements: CodSet
   }
   return rows
 }
+/** Collection visibility is separate from the statement-based payout eligibility. */
+export function deliveredClientCodRows(rows: ClientCodRow[]): ClientCodRow[] {
+  return rows.filter(row => ['entregue', 'entregue_pudo', 'entregue_em_pudo', 'delivered'].includes(row.shipmentStatus.trim().toLowerCase()))
+}
 export function filterClientCodRows(rows: ClientCodRow[], options: { state: string; search: string; from: string; to: string }): ClientCodRow[] {
   const normalize = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   const q = normalize(options.search.trim())
@@ -73,19 +78,32 @@ export function summarizeClientCod(rows: ClientCodRow[]) {
 
 export interface CodPayoutRequest {
   id: string; createdAt: string; amountCents: number; shipmentIds: string[]; requestedBy: string
+  paidAt?: string; paymentRef?: string; paidBy?: string
 }
-export interface CodPayoutBox { clientId: string; revision: string; requests: CodPayoutRequest[] }
+export interface CodDispute { shipmentId: string; reason: string; openedAt: string; openedBy: string; resolvedAt?: string }
+export interface CodPayoutBox { clientId: string; revision: string; requests: CodPayoutRequest[]; disputes?: CodDispute[] }
+/** A recorded payout stays paid; open disputes withhold funds without inventing a payment. */
+export function applyCodPayoutRecords(overview: ClientCodOverview, box: CodPayoutBox | null): ClientCodOverview {
+  return {...overview,rows:overview.rows.map(row=>{
+    const payment=box?.requests.find(request=>request.paidAt && request.shipmentIds.includes(row.id))
+    if(payment) return {...row,state:'paid',paidAt:payment.paidAt!,paymentRef:payment.paymentRef || null} as ClientCodRow
+    const dispute=box?.disputes?.find(item=>item.shipmentId===row.id && !item.resolvedAt)
+    return dispute ? {...row,state:'review',cttConfirmed:false,statementCents:null,disputeReason:dispute.reason} : row
+  })}
+}
 export function payoutRequestState(request: CodPayoutRequest, rows: ClientCodRow[]): 'requested' | 'paid' | 'review' {
+  if(request.paidAt) return 'paid'
   const source = request.shipmentIds.map(id => rows.find(row => row.id === id))
   if (source.every(row => row?.state === 'paid' && row.cttConfirmed)) return 'paid'
   if (source.some(row => !row || !row.cttConfirmed || row.state === 'review' || row.state === 'excluded')) return 'review'
   return 'requested'
 }
 export function clientCodReceivable(overview: ClientCodOverview, box: CodPayoutBox | null) {
+  overview=applyCodPayoutRecords(overview,box)
   const requests = box?.requests || []
   const claimed = new Set(requests.flatMap(request => request.shipmentIds))
   const eligible = overview.rows.filter(row => row.state === 'statement' && row.cttConfirmed && row.statementCents !== null && row.statementCents > 0 && !claimed.has(row.id))
-  const history = requests.map(request => ({ id:request.id,createdAt:request.createdAt,amountCents:request.amountCents,shipmentIds:request.shipmentIds,state: payoutRequestState(request, overview.rows) }))
+  const history = requests.map(request => ({ id:request.id,createdAt:request.createdAt,amountCents:request.amountCents,shipmentIds:request.shipmentIds,paidAt:request.paidAt,paymentRef:request.paymentRef,state: payoutRequestState(request, overview.rows) }))
   const availableCents = eligible.reduce((sum,row) => sum + row.statementCents!, 0)
   if (!Number.isSafeInteger(availableCents)) throw new Error('Não foi possível validar o saldo disponível.')
   return { availableCents, eligible,

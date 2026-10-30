@@ -53,7 +53,7 @@ export async function reconcileReembolsoItems(rawItems:ReembolsoRawItem[],metada
       else {status='matched';reason='Guia, cliente, cobrança, valor e datas confirmados no TMS.'}
     }
     const assigned=Boolean(shipment&&client),clientId=assigned?shipment!.client_id!:undefined
-    const item:ReembolsoMatchedItem={...raw,reconcileStatus:status,reconcileReason:reason,shipmentId:assigned?shipment!.id:undefined,clientId,
+    const item:ReembolsoMatchedItem={...raw,trackingNotFound:!candidates?.size,reconcileStatus:status,reconcileReason:reason,shipmentId:assigned?shipment!.id:undefined,clientId,
       clientName:assigned?client!.short_name||client!.legal_name||client!.name||'Cliente':'Não associado ao TMS',clientIban:assigned?client!.iban||'Sem IBAN configurado':'',
       expectedCod:declared?.cents&&declared.cents>0?declared.cents/100:undefined,difference:amount!==null&&declared?.cents?((amount-declared.cents)/100):undefined}
     items.push(item)

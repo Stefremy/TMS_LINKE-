@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { MissingTrackingWarning } from "./MissingTrackingWarning"
 import { 
   Upload, 
   FileText, 
@@ -32,9 +33,10 @@ import {
 
 interface ReembolsosClientProps {
   initialBatches: ReembolsoBatch[]
+  managePayments?: boolean
 }
 
-export default function ReembolsosClient({ initialBatches }: ReembolsosClientProps) {
+export default function ReembolsosClient({ initialBatches, managePayments = true }: ReembolsosClientProps) {
   const [batches, setBatches] = React.useState<ReembolsoBatch[]>(initialBatches)
   const [selectedBatch, setSelectedBatch] = React.useState<ReembolsoBatch | null>(initialBatches[0] || null)
   const [activeTab, setActiveTab] = React.useState<"clientes" | "guias" | "historico">("clientes")
@@ -351,8 +353,10 @@ export default function ReembolsosClient({ initialBatches }: ReembolsosClientPro
 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-3">
             <p className="text-xs text-[var(--text-secondary)]">{selectedBatch.reconciliationPreview ? 'Pré-visualização com as guias atuais do TMS. Os pagamentos históricos não foram alterados. Reimporte o ficheiro para guardar este cruzamento.' : selectedBatch.reconciliationVersion===2 ? 'Só guias existentes no TMS, com cliente e valor de cobrança confirmados, ficam disponíveis.' : 'Importação anterior por verificar. As associações históricas não provam que as guias existem neste TMS.'}</p>
-            <button type="button" disabled={checking} onClick={async()=>{setChecking(true);setUploadError(null);try{setSelectedBatch(await previewReembolsoReconciliationAction(selectedBatch.id));setActiveTab('guias')}catch(reason){setUploadError(reason instanceof Error?reason.message:'Não foi possível verificar o lote.')}finally{setChecking(false)}} className="shrink-0 rounded border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] disabled:opacity-40">{checking?'A verificar…':'Verificar com o TMS'}</button>
+            <button type="button" disabled={checking} onClick={async()=>{setChecking(true);setUploadError(null);try{setSelectedBatch(await previewReembolsoReconciliationAction(selectedBatch.id));setActiveTab('guias')}catch(reason){setUploadError(reason instanceof Error?reason.message:'Não foi possível verificar o lote.')}finally{setChecking(false)}}} className="shrink-0 rounded border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] disabled:opacity-40">{checking?'A verificar…':'Verificar com o TMS'}</button>
           </div>
+
+          <MissingTrackingWarning items={selectedBatch.items} carrier={selectedBatch.carrier} />
 
           {/* 4. Sub-barra de Informação do Ficheiro */}
           <div className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-3.5 py-2 flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs text-[var(--text-secondary)]">
@@ -537,7 +541,8 @@ export default function ReembolsosClient({ initialBatches }: ReembolsosClientPro
                             <button
                               type="button"
                               onClick={() => handleTogglePaid(client.clientId, client.isPaid)}
-                              disabled={updatingClientId === client.clientId || selectedBatch.reconciliationPreview || (!client.isPaid && (client.totalAmount <= 0 || selectedBatch.reconciliationVersion !== 2))}
+                              disabled={!managePayments || updatingClientId === client.clientId || selectedBatch.reconciliationPreview || (!client.isPaid && (client.totalAmount <= 0 || selectedBatch.reconciliationVersion !== 2))}
+                              title={!managePayments ? "Registe a devolução no separador Solicitados; os pagamentos antigos deste lote são preservados." : undefined}
                               className={`px-2.5 py-1 rounded text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs ${
                                 client.isPaid
                                   ? "bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)] hover:bg-[var(--surface-muted)]"
@@ -552,7 +557,7 @@ export default function ReembolsosClient({ initialBatches }: ReembolsosClientPro
                               ) : (
                                 <>
                                   <Clock className="w-3 h-3 text-[var(--status-warning)]" />
-                                  <span>Marcar Pago</span>
+                                  <span>{managePayments ? 'Marcar Pago' : 'Gerir em Solicitados'}</span>
                                 </>
                               )}
                             </button>

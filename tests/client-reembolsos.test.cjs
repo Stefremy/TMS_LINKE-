@@ -13,6 +13,15 @@ test('delivery does not prove collection, and cancellation/drafts do not inflate
  assert.equal(rows[0].state,'unconfirmed')
  assert.deepEqual(model.summarizeClientCod(rows),{count:1,requestedCents:1000,statementCents:0,paidCents:0,missingRequested:0,unconfirmed:1,review:0})
 })
+test('collections appear only after delivery, while receivable eligibility still depends on carrier reconciliation',()=>{
+ const shipments=[shipment('new',10,'criado'),shipment('transit',10,'em_transito'),shipment('delivered'),shipment('pudo',10,'entregue_pudo'),shipment('pudo-alias',10,'entregue_em_pudo'),shipment('cancelled',10,'cancelado')]
+ const rows=model.buildClientCodRows(shipments,[settlement('transit')])
+ assert.deepEqual(model.deliveredClientCodRows(rows).map(r=>r.id),['delivered','pudo','pudo-alias'])
+ const payout=model.clientCodReceivable({clientId:A,rows,updatedAt:'2026-10-30'},null)
+ assert.equal(payout.availableCents,1000)
+ assert.deepEqual(payout.eligible.map(r=>r.id),['transit'])
+ assert.equal(rows.find(r=>r.id==='delivered').state,'unconfirmed')
+})
 test('carrier evidence and staff-recorded payout are separate; repeated batch imports do not multiply totals or undo a payout',()=>{
  const rows=model.buildClientCodRows([shipment('a'),shipment('b')],[settlement('a'),settlement('a',{paid:true,paidAt:'2026-10-30',paymentRef:'Transfer 1'}),settlement('a'),settlement('b')])
  assert.equal(rows[0].state,'paid');assert.equal(rows[0].paymentRef,'Transfer 1');assert.equal(rows[1].state,'statement')
@@ -20,11 +29,11 @@ test('carrier evidence and staff-recorded payout are separate; repeated batch im
  assert.equal(model.summarizeClientCod(rows).statementCents,2000)
 })
 test('conflicting or mismatched amounts are held for review; missing requested values remain distinct from zero',()=>{
- const rows=model.buildClientCodRows([shipment('conflict'),shipment('mismatch'),shipment('unknown',null)],[settlement('conflict'),settlement('conflict',{amountCents:1100}),settlement('mismatch',{amountCents:900}),settlement('unknown',{amountCents:2000,paid:true})])
+ const rows=model.buildClientCodRows([shipment('conflict'),shipment('mismatch'),{...shipment('unknown',null),cod_enabled:true}],[settlement('conflict'),settlement('conflict',{amountCents:1100}),settlement('mismatch',{amountCents:900}),settlement('unknown',{amountCents:2000,paid:true})])
  assert.equal(rows[0].state,'review');assert.equal(rows[1].state,'review');assert.equal(rows[2].requestedCents,null)
  assert.equal(model.summarizeClientCod(rows).missingRequested,1)
- assert.equal(model.summarizeClientCod(rows).paidCents,2000)
- assert.equal(model.summarizeClientCod(rows).statementCents,2000)
+ assert.equal(model.summarizeClientCod(rows).paidCents,0)
+ assert.equal(model.summarizeClientCod(rows).statementCents,0)
  const flagged=model.buildClientCodRows([{...shipment('flagged',0),cod_enabled:true}],[])
  assert.equal(flagged[0].requestedCents,null);assert.equal(flagged[0].state,'unconfirmed')
 })
@@ -38,10 +47,10 @@ function tables(){return {clients:[{id:A,tenant_id:TENANT},{id:B,tenant_id:OTHER
  {id:'snapshot',tenant_id:TENANT,action:'shipment_data',created_at:'2026-10-30',details:{id:'one',client_id:A,cod_value:10}},
  {id:'foreign',tenant_id:OTHER,action:'shipment_data',created_at:'2026-10-31',details:{id:'one',client_id:B,cod_value:999}},
  {id:'batch',tenant_id:TENANT,action:'reembolso_batch',created_at:'2026-10-30',details:{carrier:'ctt',clientSummaries:[
-  {clientId:A,isPaid:true,paidAt:'2026-10-30',paymentRef:'own-ref',items:[{shipmentId:'one',carrierTracking:'TRK-one',clientId:A,amount:10,reconcileStatus:'matched'},{shipmentId:'other',carrierTracking:'TRK-other',clientId:A,amount:999,reconcileStatus:'matched'}]},
-  {clientId:B,isPaid:true,clientIban:'PRIVATE-OTHER-IBAN',clientEmail:'other@private.invalid',items:[{shipmentId:'one',carrierTracking:'TRK-one',clientId:B,amount:500,reconcileStatus:'matched'}]},
+  {clientId:A,isPaid:true,paidAt:'2026-10-30',paymentRef:'own-ref',items:[{shipmentId:'one',carrierTracking:'TRK-one',processingDate:'31/10/2026',clientId:A,amount:10,reconcileStatus:'matched'},{shipmentId:'other',carrierTracking:'TRK-other',processingDate:'31/10/2026',clientId:A,amount:999,reconcileStatus:'matched'}]},
+  {clientId:B,isPaid:true,clientIban:'PRIVATE-OTHER-IBAN',clientEmail:'other@private.invalid',items:[{shipmentId:'one',carrierTracking:'TRK-one',processingDate:'31/10/2026',clientId:B,amount:500,reconcileStatus:'matched'}]},
  ]}},
- {id:'foreign-batch',tenant_id:OTHER,action:'reembolso_batch',created_at:'2026-10-31',details:{carrier:'ctt',clientSummaries:[{clientId:A,isPaid:true,items:[{shipmentId:'one',carrierTracking:'TRK-one',amount:900,reconcileStatus:'matched'}]}]}}
+ {id:'foreign-batch',tenant_id:OTHER,action:'reembolso_batch',created_at:'2026-10-31',details:{carrier:'ctt',clientSummaries:[{clientId:A,isPaid:true,items:[{shipmentId:'one',carrierTracking:'TRK-one',processingDate:'31/10/2026',amount:900,reconcileStatus:'matched'}]}]}}
 ]}}
 test('the portal reads only tenant/client shipments, joins the latest COD snapshot and never returns other clients or raw batches',async()=>{
  const db=fakeSupabase(tables())
@@ -95,7 +104,7 @@ test('the collections screen defaults to the current month, contains no recipien
  const jsx=(type,props)=>({type,props:props||{}})
  const flat=n=>Array.isArray(n)?n.flatMap(flat):n&&typeof n==='object'?[n,...flat(n.props.children)]:[]
  const text=n=>Array.isArray(n)?n.map(text).join(''):n&&typeof n==='object'?text(n.props.children):String(n??'')
- const overview={clientId:A,rows:model.buildClientCodRows([shipment('a'),shipment('b')],[settlement('a',{paid:true,paidAt:'2026-10-30'})]),updatedAt:'2026-10-30'}
+ const overview={clientId:A,rows:model.buildClientCodRows([shipment('a'),shipment('b'),shipment('pending-secret',10,'em_transito')],[settlement('a',{paid:true,paidAt:'2026-10-30'})]),updatedAt:'2026-10-30'}
  overview.payout=model.clientCodReceivable(overview,null)
  function harness(props){let cursor=0;const slots=[];const React={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useMemo:fn=>fn(),useRef:initial=>({current:initial})}
  const load=createLoader({react:React,'react/jsx-runtime':{jsx,jsxs:jsx},'next/navigation':{useRouter:()=>({refresh(){}})},'next/link':{default:'link'},'lucide-react':new Proxy({},{get:(_,p)=>p}),'./ClientScope':{useClientScope:()=>({basePath:'/app/own-store',client:{id:A}})},'@/app/actions/client-reembolsos':{},'@/lib/billing/recurring-periods':{lisbonDate:()=> '2026-10-30'}})
@@ -105,7 +114,8 @@ test('the collections screen defaults to the current month, contains no recipien
  const dates=flat(render()).filter(n=>n.type==='input'&&n.props.type==='date')
  assert.deepEqual(dates.map(n=>n.props.value),['2026-10-01','2026-10-31'])
  assert.match(text(render()),/TRK-a/);assert.match(text(render()),/Pagamentos à cobrança/)
- assert.doesNotMatch(text(render()),/Ágata|Destinatário/)
+ assert.doesNotMatch(text(render()),/Ágata|Destinatário|TRK-pending-secret/)
+ assert.equal(flat(render()).some(n=>n.type==='select'&&n.props['aria-label']==='Filtrar cobranças'),false)
  dates[1].props.onChange({target:{value:'2026-10-29'}})
  assert.doesNotMatch(text(flat(render()).find(n=>n.type==='tbody')),/TRK-a|TRK-b/)
  flat(render()).find(n=>n.type==='button'&&n.props['aria-controls']==='cod-receivable').props.onClick()

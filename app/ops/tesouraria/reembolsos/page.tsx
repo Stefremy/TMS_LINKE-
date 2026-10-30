@@ -1,11 +1,9 @@
-import { getOpsCodClientsAction } from "@/app/actions/ops-client-cod"
-import { OpsCodCollectionsPanel } from "./OpsCodCollectionsPanel"
+import { getOpsCodWorkflowAction } from "@/app/actions/ops-client-cod"
+import { ReembolsosWorkspace } from "./ReembolsosWorkspace"
 import { currentCodMonth } from "@/lib/services/reembolsos/client-cod"
 import { lisbonDate } from "@/lib/billing/recurring-periods"
-import { CodPayoutRequestsPanel } from "./CodPayoutRequestsPanel"
 import * as React from "react"
-import { getReembolsoBatchesAction, getCodPayoutInboxAction } from "@/app/actions/reembolsos"
-import ReembolsosClient from "./ReembolsosClient"
+import { getReembolsoBatchesAction } from "@/app/actions/reembolsos"
 import { requireEmployee } from "@/lib/auth/context"
 
 export const dynamic = "force-dynamic"
@@ -20,17 +18,10 @@ export default async function ReembolsosPage() {
       </div>
     )
   }
-  const [batches,clients,inbox] = await Promise.all([
+  const [batches,workflow] = await Promise.all([
     getReembolsoBatchesAction(),
-    getOpsCodClientsAction().then(data=>({data,error:''})).catch(()=>({data:[],error:'Não foi possível carregar os clientes para consulta.'})),
-    getCodPayoutInboxAction().then(data=>({data,error:''})).catch(()=>({data:null,error:'Não foi possível consultar os pedidos dos clientes.'})),
+    getOpsCodWorkflowAction().then(data=>({data,error:''})).catch(()=>({data:null,error:'Não foi possível carregar as cobranças e os pagamentos. Atualize antes de continuar.'})),
   ])
 
-  return (
-    <div className="space-y-6">
-      <OpsCodCollectionsPanel clients={clients.data} clientError={clients.error} initialPeriod={currentCodMonth(lisbonDate())} />
-      <CodPayoutRequestsPanel rows={inbox.data} error={inbox.error} />
-      <ReembolsosClient initialBatches={batches} />
-    </div>
-  )
+  return <ReembolsosWorkspace data={workflow.data} error={workflow.error} batches={batches} initialPeriod={currentCodMonth(lisbonDate())} />
 }

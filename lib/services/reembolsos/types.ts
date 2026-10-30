@@ -17,6 +17,7 @@ export interface ReembolsoRawItem {
 export type ReconcileStatus = "matched" | "value_mismatch" | "unmatched"
 
 export interface ReembolsoMatchedItem extends ReembolsoRawItem {
+  trackingNotFound?: boolean
   reconcileReason?: string
   reconcileStatus: ReconcileStatus
   shipmentId?: string
