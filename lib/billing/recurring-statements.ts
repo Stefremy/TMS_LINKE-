@@ -96,7 +96,7 @@ async function settingsFor(db: SupabaseClient, tenantId: string): Promise<Settin
   return data as Settings | null
 }
 
-export async function recurringPreview(tenantId: string, asOf = lisbonDate(), db = createAdminClient()): Promise<RecurringPreview> {
+export async function recurringPreview(tenantId: string, asOf = lisbonDate(), db = createAdminClient(), options: { forPlanning?: boolean } = {}): Promise<RecurringPreview> {
   const base: RecurringPreview = { ready: true, enabled: false, anchorDate: lisbonDate(), previewDate: asOf,
     cronConfigured: Boolean(process.env.CRON_SECRET), emailConfigured: Boolean(process.env.RESEND_API_KEY && process.env.STORE_FROM_EMAIL), clients: [] }
   try {
@@ -116,13 +116,24 @@ export async function recurringPreview(tenantId: string, asOf = lisbonDate(), db
     }
     base.clients = clients.map(client => {
       const lastEnd = cycles.filter(c => c.client_id === client.id).map(c => c.period_end).sort().at(-1)
-      const period = periodForClient(client, base.anchorDate, lastEnd)
+      let period = periodForClient(client, base.anchorDate, lastEnd)
       const row: RecurringPreview['clients'][number] = { id: client.id, name: client.short_name || client.legal_name || 'Cliente',
         terms: client.payment_terms || 'Não definida', recipient: billingRecipient(client), start: period?.start || null,
         end: period?.end || null, days: period?.days || null, due: Boolean(period && period.end <= asOf), shipmentCount: 0, total: 0 }
       if (!period) { row.error = 'Condição de pagamento não suportada.'; return row }
       try {
-        const selected = selectPeriodShipments(client.id, tenantId, period.start, period.end, shipments, invoiced)
+        let selected = selectPeriodShipments(client.id, tenantId, period.start, period.end, shipments, invoiced)
+        // Planning remains useful while automation is off: skip closed periods with no unbilled work.
+        // No cursor, invoice, or financial record is written by this projection.
+        if (options.forPlanning) {
+          while (period.end <= asOf && selected.length === 0) {
+            const next = periodForClient(client, base.anchorDate, period.end)
+            if (!next || next.end <= period.end) throw new Error('Não foi possível calcular o próximo período.')
+            period = next
+            selected = selectPeriodShipments(client.id, tenantId, period.start, period.end, shipments, invoiced)
+          }
+          row.start = period.start; row.end = period.end; row.days = period.days; row.due = period.end <= asOf
+        }
         row.shipmentCount = selected.length
         row.total = shipmentTotal(selected)
       } catch (error) { row.error = error instanceof Error ? error.message : 'Não foi possível validar os envios.' }
@@ -132,6 +143,11 @@ export async function recurringPreview(tenantId: string, asOf = lisbonDate(), db
   } catch (error) {
     return { ...base, ready: false, error: error instanceof Error ? error.message : 'Pré-visualização indisponível.' }
   }
+}
+
+/** Read-only closure projection, independent of whether invoice automation is enabled. */
+export async function recurringPlanningPreview(tenantId: string, asOf = lisbonDate(), db = createAdminClient()) {
+  return recurringPreview(tenantId, asOf, db, { forPlanning: true })
 }
 
 export async function loadPeriodStatements(tenantId: string, clientId?: string, db = createAdminClient()): Promise<PeriodStatement[]> {

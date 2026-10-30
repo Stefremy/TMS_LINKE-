@@ -66,6 +66,8 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
     let moloniDocumentId = null
     let moloniDocumentUrl = null
     let moloniDocumentNumber: string | null = null
+    let invoiceDate: string | null = null
+    let invoiceDueDate: string | null = null
     
     // Verificar credenciais Moloni (no ambiente ou em audit_log)
     let moloniConfig: any = null
@@ -157,6 +159,8 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
         const dateNow = lisbonDate()
         const paymentDays = paymentDueDays(client.payment_due_days, billingConfig.defaultPaymentDays === undefined ? 30 : billingConfig.defaultPaymentDays)
         const expirationDate = addCalendarDays(dateNow, paymentDays)
+        invoiceDate = dateNow
+        invoiceDueDate = expirationDate
 
         if (!isProForma) await claimManualInvoiceShipments(client.id, shipments.map((s: any) => s.id), shipments)
 
@@ -225,6 +229,8 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
         moloni_document_number: moloniDocumentNumber,
         moloni_document_pdf: moloniDocumentUrl,
         moloni_error: moloniEmissionError,
+        invoice_date: moloniDocumentId ? invoiceDate : undefined,
+        due_date: moloniDocumentId ? invoiceDueDate : undefined,
         is_pro_forma: isProForma,
         total_value: totalValue,
         shipments_count: shipments.length,
@@ -674,6 +680,8 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       moloni_receipt_pdf: isProForma ? stmt.moloni_receipt_pdf : moloniDocPdf, // If Fatura-Recibo, it is the receipt
       is_pro_forma: isProForma,
       moloni_proforma_pdf: stmt.is_pro_forma && !isProForma ? stmt.moloni_document_pdf : (isProForma ? moloniDocPdf : stmt.moloni_proforma_pdf),
+      invoice_date: dateNow,
+      due_date: expirationDate,
       moloni_invoiced_at: new Date().toISOString()
     }
 

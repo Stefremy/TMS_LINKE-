@@ -1,26 +1,33 @@
+import { loadBillingStatistics } from '@/lib/billing/statistics-data'
+import { BillingPlanningPanel } from './BillingPlanningPanel'
 import * as React from "react"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getBillingStatementsAction, getMoloniConfigAction } from "@/app/actions/moloni"
 import ContasCorrenteClient from "./ContasCorrenteClient"
 import { requirePermission } from '@/lib/auth/context'
-import { recurringPreview, loadPeriodStatements } from '@/lib/billing/recurring-statements'
-import { RecurringStatementsPanel } from './RecurringStatementsPanel'
+import { recurringPlanningPreview, loadPeriodStatements } from '@/lib/billing/recurring-statements'
+import { billingViewSelection } from '@/lib/billing/view-filters'
 import { canInvoiceShipment } from '@/lib/billing/shipment-eligibility'
 import { isPrepaidShipment } from '@/lib/billing/client-balance'
 
 export const dynamic = "force-dynamic"
 
-export default async function ContasCorrentePage() {
+export default async function ContasCorrentePage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> } = {}) {
   const ctx = await requirePermission('Faturação & Contas Correntes')
+  const selection = billingViewSelection(await searchParams || {})
   const [clients, shipments, statements, moloniConfig, recurring, periodStatements] = await Promise.all([
     getClientesAction(),
     getShipmentsAction({ includeLabels: false, createdAfter: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() }),
     getBillingStatementsAction(),
     getMoloniConfigAction(),
-    recurringPreview(ctx.tenant_id),
+    recurringPlanningPreview(ctx.tenant_id),
     loadPeriodStatements(ctx.tenant_id),
   ])
+
+  const planning = await loadBillingStatistics(clients)
+    .then(data => ({ data, error: undefined as string | undefined }))
+    .catch(() => ({ data: null, error: 'Não foi possível carregar os vencimentos das faturas. Tente atualizar os dados.' }))
 
   // Filtrar envios já faturados em faturas oficiais Moloni
   const invoicedShipmentIds = new Set<string>()
@@ -37,13 +44,15 @@ export default async function ContasCorrentePage() {
   
   return (
     <div className="space-y-6">
-      <ContasCorrenteClient 
+      <ContasCorrenteClient
+        key={`${selection.startDate}:${selection.endDate}:${selection.grouping}`}
+        initialSelection={selection}
         clients={clients} 
         shipments={pendingShipments} 
         statements={statements}
         moloniConfig={moloniConfig}
         periodStatements={periodStatements}
-        automationPanel={<RecurringStatementsPanel initialPreview={recurring} canManage={ctx.role === 'admin'} />}
+        planningPanel={<BillingPlanningPanel statistics={planning.data} statisticsError={planning.error} recurring={recurring} />}
       />
     </div>
   )

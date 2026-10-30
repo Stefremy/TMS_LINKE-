@@ -76,6 +76,9 @@ export interface Cliente {
   short_name: string
   legal_name: string
   color: string
+  color_mode?: "services" | "manual"
+  /** Read-only historical count used for the identifier color. */
+  legacy_service_count?: number
   logo_url?: string
   nif: string
   category: string
@@ -113,6 +116,7 @@ export interface Cliente {
   balance?: string
   assigned_seller?: string
   observations?: string
+  portal_access_status?: "active" | "suspended" | "blocked"
   is_active: boolean
   created_at: string
 

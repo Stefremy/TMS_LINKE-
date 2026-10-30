@@ -18,6 +18,14 @@ export function RecurringStatementsPanel({ initialPreview, canManage }: { initia
   const [busy, setBusy] = useState<string | null>(null)
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState(false)
+  const activationBlockedReason = !preview.ready
+    ? 'Não foi possível validar a configuração de faturação.'
+    : !preview.emailConfigured
+      ? 'Configure o serviço de email no servidor antes de ativar a faturação automática.'
+      : !preview.cronConfigured
+        ? 'Configure o agendamento automático no servidor (CRON_SECRET) antes de ativar.'
+        : ''
+
   async function perform(key: string, action: () => Promise<void>) {
     if (busy) return
     setBusy(key); setFeedback(''); setError(false)
@@ -30,12 +38,28 @@ export function RecurringStatementsPanel({ initialPreview, canManage }: { initia
       className="w-full flex items-center gap-3 p-4 text-left rounded-xl hover:bg-[var(--surface-muted)] transition-colors">
       <span className="p-2 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]"><CalendarClock aria-hidden="true" strokeWidth={1.75} className="w-5 h-5" /></span>
       <span className="flex-1 min-w-0"><span className="block text-sm font-bold text-[var(--text-primary)]">Faturação automática por período</span>
-        <span className="block text-xs text-[var(--text-secondary)] mt-0.5">Conta Corrente · {preview.enabled ? 'Ativos' : 'Por ativar'} · {preview.clients.length} clientes</span></span>
+        <span className="block text-xs text-[var(--text-secondary)] mt-0.5">Conta Corrente · {preview.enabled ? 'Ativada — emissão automática' : 'Desativada — emissão manual'} · {preview.clients.length} clientes</span></span>
       <ChevronDown aria-hidden="true" strokeWidth={1.75} className={`w-4 h-4 text-[var(--text-secondary)] transition-transform motion-reduce:transition-none ${open ? '' : '-rotate-90'}`} />
     </button>
     <AnimatedDisclosure open={open} id="recurring-statements-settings">
       <div className="border-t border-[var(--border-subtle)] p-4 sm:p-5 space-y-4">
-        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">No fecho de cada período, é emitida a fatura Moloni e enviada por email com o extrato detalhado. A fatura fica pendente de pagamento, com a opção Emitir Recibo. Os envios anteriores à ativação continuam na faturação manual.</p>
+        <p className="text-xs text-[var(--text-secondary)] leading-relaxed">No fecho de cada período, é emitida a fatura Moloni e enviada por email com o extrato detalhado. A fatura fica pendente de pagamento, com a opção Emitir Recibo. Quando desativada, a equipa emite as faturas manualmente. A desativação interrompe novas emissões e emails automáticos, mantendo as faturas já emitidas.</p>
+        {canManage && <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" aria-pressed={preview.enabled} title={!preview.enabled ? activationBlockedReason : undefined} disabled={!!busy || (!preview.enabled && Boolean(activationBlockedReason))}
+              onClick={() => perform('configure', async () => {
+                const result = await configureRecurringStatementsAction(!preview.enabled, preview.anchorDate)
+                if (!result.success) throw new Error(result.error)
+                setPreview(await previewRecurringStatementsAction(date))
+                setFeedback(preview.enabled ? 'Faturação automática desativada. A equipa pode emitir manualmente.' : 'Automação ativada. As primeiras faturas e extratos serão enviados após o fecho de cada período.')
+                router.refresh()
+              })} className="px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-xs font-bold disabled:opacity-50">
+              {busy === 'configure' ? 'A guardar...' : preview.enabled ? 'Desativar faturação automática' : 'Ativar faturação automática'}
+            </button>
+            <span className="text-[11px] text-[var(--text-secondary)]">Início dos ciclos: {preview.anchorDate.split('-').reverse().join('/')}</span>
+          </div>
+          {!preview.enabled && activationBlockedReason && <p role="status" className="text-xs text-[var(--status-warning)]">Ativação indisponível: {activationBlockedReason} A emissão manual continua disponível.</p>}
+        </div>}
         {!preview.ready && <p role="alert" className="text-sm text-[var(--status-warning)]">{preview.error}</p>}
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-xs font-semibold text-[var(--text-secondary)]">Simular fecho em
@@ -56,20 +80,6 @@ export function RecurringStatementsPanel({ initialPreview, canManage }: { initia
         </div>
         <p className="text-[11px] text-[var(--text-secondary)]">Verificação de hora a hora; envio entre as 09h e as 19h de Lisboa. Sem envios no período, não é enviado email. Os clientes Pay as You Go ficam excluídos.</p>
         {canManage && <div className="flex flex-col gap-4 pt-3 border-t border-[var(--border-subtle)]">
-          <div className="flex flex-wrap items-center gap-3">
-            <button type="button" disabled={!!busy || !preview.ready || (!preview.enabled && (!preview.emailConfigured || !preview.cronConfigured))}
-              onClick={() => perform('configure', async () => {
-                const result = await configureRecurringStatementsAction(!preview.enabled, preview.anchorDate)
-                if (!result.success) throw new Error(result.error)
-                setPreview(await previewRecurringStatementsAction(date))
-                setFeedback(preview.enabled ? 'Envios automáticos suspensos.' : 'Automação ativada. As primeiras faturas e extratos serão enviados após o fecho de cada período.')
-                router.refresh()
-              })} className="px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-xs font-bold disabled:opacity-50">
-              {busy === 'configure' ? 'A guardar...' : preview.enabled ? 'Suspender envios automáticos' : 'Ativar ciclos a partir de hoje'}
-            </button>
-            <span className="text-[11px] text-[var(--text-secondary)]">Início dos ciclos: {preview.anchorDate.split('-').reverse().join('/')}</span>
-          </div>
-          {(!preview.emailConfigured || !preview.cronConfigured) && <p className="text-xs text-[var(--status-warning)]">{!preview.emailConfigured ? 'Serviço de email por configurar. ' : ''}{!preview.cronConfigured ? 'Agendamento por configurar. ' : ''}</p>}
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-xs font-semibold text-[var(--text-secondary)]">Email para teste
               <input type="email" autoComplete="email" placeholder="O teu email" value={testEmail} onChange={e => setTestEmail(e.target.value)} className="block mt-1 w-full sm:w-72 px-3 py-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-primary)]" />

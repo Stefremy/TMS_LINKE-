@@ -1,5 +1,6 @@
 "use server"
 
+import { loadCodPayoutInbox } from "@/lib/services/reembolsos/client-cod-payout"
 import fs from "fs"
 import path from "path"
 import { revalidatePath } from "next/cache"
@@ -160,6 +161,14 @@ export async function markClientReembolsoPaidAction(
     if (!summary) {
       return { success: false, error: "Cliente não encontrado neste lote." }
     }
+    if (isPaid) {
+      const checked = await reconcileReembolsoItems(batch.items, {filename:batch.filename,carrier:batch.carrier},ctx.tenant_id)
+      const confirmed = checked.clientSummaries.find(c=>c.clientId===clientId)
+      const ids = (items: typeof summary.items) => items.filter(item=>item.reconcileStatus==='matched').map(item=>item.shipmentId).sort().join('|')
+      if (!confirmed || confirmed.totalAmount<=0 || Math.round(confirmed.totalAmount*100)!==Math.round(summary.totalAmount*100) || ids(confirmed.items)!==ids(summary.items)) {
+        return {success:false,error:'O lote não está confirmado com as guias e cobranças atuais do TMS. Reveja o cruzamento antes de marcar o pagamento.'}
+      }
+    }
     summary.isPaid = isPaid
     summary.paidAt = isPaid ? new Date().toISOString() : undefined
     summary.paymentRef = isPaid ? paymentRef || "Transferência Bancária" : undefined
@@ -204,4 +213,20 @@ export async function deleteReembolsoBatchAction(batchId: string): Promise<{ suc
   } catch {
     return { success: false, error: "Erro ao apagar lote." }
   }
+}
+
+export async function getCodPayoutInboxAction() {
+  const ctx = await requireReembolsoAccess()
+  return loadCodPayoutInbox(createAdminClient(),ctx.tenant_id)
+}
+
+/** Read-only: never rewrite historical payments while checking a legacy platform export. */
+export async function previewReembolsoReconciliationAction(batchId:string) {
+  const ctx=await requireReembolsoAccess()
+  const db=createAdminClient()
+  const {data,error}=await db.from('audit_log').select('details').eq('tenant_id',ctx.tenant_id).eq('action','reembolso_batch').eq('id',batchId).single()
+  if(error||!data?.details)throw new Error('Lote não encontrado nesta empresa.')
+  const batch=data.details as ReembolsoBatch
+  const preview=await reconcileReembolsoItems(batch.items,{filename:batch.filename,carrier:batch.carrier,carrierAccount:batch.carrierAccount,carrierContract:batch.carrierContract,destinationIban:batch.destinationIban},ctx.tenant_id)
+  return {...preview,id:batchId,created_at:batch.created_at,reconciliationPreview:true,legacyPaidGroups:batch.clientSummaries.filter(c=>c.isPaid).length}
 }

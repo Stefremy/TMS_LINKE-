@@ -23,7 +23,8 @@ import {
 } from "lucide-react"
 import type { ReembolsoBatch, ClientReembolsoSummary, ReembolsoMatchedItem } from "@/lib/services/reembolsos/types"
 import { 
-  processReembolsoUploadAction, 
+  processReembolsoUploadAction,
+  previewReembolsoReconciliationAction, 
   loadSampleCttFileAction, 
   markClientReembolsoPaidAction,
   deleteReembolsoBatchAction
@@ -39,6 +40,7 @@ export default function ReembolsosClient({ initialBatches }: ReembolsosClientPro
   const [activeTab, setActiveTab] = React.useState<"clientes" | "guias" | "historico">("clientes")
   
   // Upload state
+  const [checking,setChecking]=React.useState(false)
   const [isUploading, setIsUploading] = React.useState(false)
   const [uploadError, setUploadError] = React.useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -347,6 +349,11 @@ export default function ReembolsosClient({ initialBatches }: ReembolsosClientPro
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-3">
+            <p className="text-xs text-[var(--text-secondary)]">{selectedBatch.reconciliationPreview ? 'Pré-visualização com as guias atuais do TMS. Os pagamentos históricos não foram alterados. Reimporte o ficheiro para guardar este cruzamento.' : selectedBatch.reconciliationVersion===2 ? 'Só guias existentes no TMS, com cliente e valor de cobrança confirmados, ficam disponíveis.' : 'Importação anterior por verificar. As associações históricas não provam que as guias existem neste TMS.'}</p>
+            <button type="button" disabled={checking} onClick={async()=>{setChecking(true);setUploadError(null);try{setSelectedBatch(await previewReembolsoReconciliationAction(selectedBatch.id));setActiveTab('guias')}catch(reason){setUploadError(reason instanceof Error?reason.message:'Não foi possível verificar o lote.')}finally{setChecking(false)}} className="shrink-0 rounded border border-[var(--border-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] disabled:opacity-40">{checking?'A verificar…':'Verificar com o TMS'}</button>
+          </div>
+
           {/* 4. Sub-barra de Informação do Ficheiro */}
           <div className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg px-3.5 py-2 flex flex-col md:flex-row md:items-center justify-between gap-2 text-xs text-[var(--text-secondary)]">
             <div className="flex items-center gap-3 flex-wrap">
@@ -530,7 +537,7 @@ export default function ReembolsosClient({ initialBatches }: ReembolsosClientPro
                             <button
                               type="button"
                               onClick={() => handleTogglePaid(client.clientId, client.isPaid)}
-                              disabled={updatingClientId === client.clientId}
+                              disabled={updatingClientId === client.clientId || selectedBatch.reconciliationPreview || (!client.isPaid && (client.totalAmount <= 0 || selectedBatch.reconciliationVersion !== 2))}
                               className={`px-2.5 py-1 rounded text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs ${
                                 client.isPaid
                                   ? "bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)] hover:bg-[var(--surface-muted)]"
@@ -719,6 +726,7 @@ export default function ReembolsosClient({ initialBatches }: ReembolsosClientPro
                               Pendente TMS
                             </span>
                           )}
+                          {item.reconcileReason && <p className="mt-1 max-w-xs whitespace-normal text-[10px] text-[var(--text-secondary)]">{item.reconcileReason}</p>}
                         </td>
                         <td className="px-3.5 py-2 text-right font-mono font-bold text-[var(--text-primary)]">
                           {item.amount.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€

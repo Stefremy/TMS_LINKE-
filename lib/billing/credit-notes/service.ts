@@ -49,7 +49,7 @@ async function creditInvoiceDocument(db:SupabaseClient,tenantId:string,source:Cr
   if (positiveId(invoice.document_id)!==original.documentId || String(invoice.company_id)!==company || Number(invoice.status)!==1) throw new CreditNoteError('A fatura não está fechada nesta empresa Moloni.')
   const type=String(record(invoice.document_type).saft_code)
   if (type === 'FR') throw new CreditNoteError('Não é possível emitir nota de crédito sobre uma Fatura-Recibo.')
-  if (type === 'RC') throw new CreditNoteError('Não é possível emitir nota de crédito sobre um recibo.')
+  if (type === 'RC' || type === 'RE') throw new CreditNoteError('Não é possível emitir nota de crédito sobre um recibo.')
   if (!['FT','FS'].includes(type)) throw new CreditNoteError('Apenas faturas oficiais (FT) podem ser creditadas.')
   if (Number(invoice.exchange_currency_id || 0) || Number(invoice.financial_discount || 0) || Number(invoice.special_discount || 0) || Number(invoice.deduction_value || 0)) throw new CreditNoteError('Esta fatura tem moeda, retenções ou descontos globais que exigem tratamento no Moloni.')
   const gross=amount(invoice.net_value),tax=amount(invoice.taxes_value)

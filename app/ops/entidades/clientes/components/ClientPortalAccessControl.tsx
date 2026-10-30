@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { LockKeyhole, UnlockKeyhole, Loader2, PauseCircle, PlayCircle } from 'lucide-react'
 import {
   getClientPortalAccessAction,
@@ -117,6 +118,7 @@ export function ClientPortalAccessPanel({
 }
 
 export function ClientPortalAccessControl({ clientId, disabled = false }: { clientId: string; disabled?: boolean }) {
+  const router = useRouter()
   const [blocked, setBlocked] = useState<boolean | null>(null)
   const [suspended, setSuspended] = useState<boolean>(false)
   const [pending, setPending] = useState(false)
@@ -155,6 +157,7 @@ export function ClientPortalAccessControl({ clientId, disabled = false }: { clie
       setBlocked(result.blocked)
       if (result.blocked) setSuspended(false)
       setConfirmingBlock(false)
+      router.refresh()
     } catch {
       setError('Não foi possível alterar o acesso. Tente novamente.')
     } finally {
@@ -175,6 +178,7 @@ export function ClientPortalAccessControl({ clientId, disabled = false }: { clie
       const result = await setClientPortalSuspendedAction(clientId, !suspended)
       setSuspended(result.suspended)
       setConfirmingSuspend(false)
+      router.refresh()
     } catch {
       setError('Não foi possível alterar a suspensão. Tente novamente.')
     } finally {

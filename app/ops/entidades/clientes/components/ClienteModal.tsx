@@ -1,10 +1,12 @@
 "use client"
 
+import { CLIENT_ACTIVITY_COLORS, clientActivityColor } from "@/lib/clients/activity-color"
 import { CountrySelect } from "@/components/country-select"
 import { normalizeClientBillingFields, usesPrincipalBillingAddress, getClientBillingAddress } from "@/lib/client-addresses"
 
 import * as React from "react"
 import { ClientPortalAccessControl } from './ClientPortalAccessControl'
+import { ClientServiceHistory } from './ClientServiceHistory'
 import { 
   X, 
   Save, 
@@ -99,6 +101,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     portal_slug: initialData?.portal_slug || "",
     legal_name: initialData?.legal_name || "",
     color: initialData?.color || "#246B45",
+    color_mode: initialData?.color_mode,
     logo_url: initialData?.logo_url || "",
     nif: initialData?.nif || "",
     category: initialData?.category || "Cliente Conta Corrente",
@@ -151,6 +154,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         portal_slug: initialData.portal_slug || "",
         legal_name: initialData.legal_name || "",
         color: initialData.color || "#246B45",
+        color_mode: initialData.color_mode,
         logo_url: initialData.logo_url || "",
         nif: initialData.nif || "",
         category: initialData.category || "Cliente Conta Corrente",
@@ -934,6 +938,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
           {/* TAB 1: IDENTIDADE & GERAL */}
           {activeTab === "geral" && (
             <div className="space-y-5 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
+              {initialData?.id && <ClientServiceHistory key={initialData.id} clientId={initialData.id} />}
               {!initialData && canSendAccessEmail && <div className="rounded-lg border border-[#C9D7CD] bg-[#F4F7F4] p-4">
                 <label className="flex items-center gap-2 text-sm font-semibold text-[#244C35]">
                   <input type="checkbox" checked={sendInvitation} disabled={isSaving} onChange={e => {
@@ -1104,25 +1109,42 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
 
                 <div>
                   <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Cor Identificadora no TMS</label>
+                  {initialData?.legacy_service_count !== undefined && <div className="mb-2">
+                    <label className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+                      <input type="checkbox" checked={formData.color_mode === 'services'} onChange={e => setFormData({ ...formData,
+                        color_mode: e.target.checked ? 'services' : 'manual',
+                        color: e.target.checked ? clientActivityColor(initialData.legacy_service_count) : formData.color,
+                      })} />
+                      Cor automática por nº de serviços ({initialData.legacy_service_count.toLocaleString('pt-PT')})
+                    </label>
+                    <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">Histórico da plataforma anterior. Escolher outra cor passa para modo manual.</p>
+                  </div>}
+
                   <div className="flex items-center gap-2">
                     <input
                       type="color"
                       value={formData.color || "#246B45"}
-                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, color: e.target.value, color_mode: "manual" })}
                       className="w-9 h-9 p-0.5 rounded-md border border-[var(--border-subtle)] cursor-pointer bg-[var(--surface-muted)]"
                     />
                     <select
                       value={formData.color || "#246B45"}
-                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, color: e.target.value, color_mode: "manual" })}
                       className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
                     >
-                      {formData.color && !CLIENT_COLOR_OPTIONS.some(option => option.value.toLowerCase() === formData.color?.toLowerCase()) && (
+                      {formData.color && !CLIENT_COLOR_OPTIONS.some(option => option.value.toLowerCase() === formData.color?.toLowerCase()) && !CLIENT_ACTIVITY_COLORS.some(band => band.color.toLowerCase() === formData.color?.toLowerCase()) && (
                         <option value={formData.color}>Cor personalizada ({formData.color})</option>
                       )}
+                      {CLIENT_ACTIVITY_COLORS.map(band => <option key={band.color} value={band.color}>{band.name} · {band.label} serviços</option>)}
                       {CLIENT_COLOR_OPTIONS.map((c) => (
                         <option key={c.value} value={c.value}>{c.label} ({c.value})</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-[var(--text-secondary)]" aria-label="Escala de cores por serviços históricos">
+                    {CLIENT_ACTIVITY_COLORS.map(band => <span key={band.min} className="inline-flex items-center gap-1" title={band.name}>
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: band.color }} />{band.label}
+                    </span>)}
                   </div>
                 </div>
               </div>

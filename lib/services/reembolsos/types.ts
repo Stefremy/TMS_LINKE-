@@ -17,6 +17,7 @@ export interface ReembolsoRawItem {
 export type ReconcileStatus = "matched" | "value_mismatch" | "unmatched"
 
 export interface ReembolsoMatchedItem extends ReembolsoRawItem {
+  reconcileReason?: string
   reconcileStatus: ReconcileStatus
   shipmentId?: string
   clientId?: string
@@ -46,6 +47,10 @@ export interface ReembolsoBatch {
   carrierAccount?: string
   carrierContract?: string
   destinationIban?: string
+  reconciliationPreview?: boolean
+  legacyPaidGroups?: number
+  reconciliationVersion?: number
+  reviewCount?: number
   totalItems: number
   totalAmount: number
   matchedCount: number

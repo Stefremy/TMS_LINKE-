@@ -252,7 +252,7 @@ function receiptActionHarness(options={}) {
    assert.equal(endpoint,'documents/getOne')
    if(payload.document_id===123)return{document_id:123,company_id:42,customer_id:7,status:1,document_type:{saft_code:'FT'},taxes_value:2.3,net_value:12.3,reconciled_value:0,...options.invoiceDocument}
    const call=calls[payload.document_id-901]
-   return{document_id:payload.document_id,company_id:42,customer_id:7,status:1,document_type:{saft_code:'RC'},notes:call.notes,net_value:call.value,associated_documents:[{associated_id:123,value:call.value}],...options.receiptDocument}
+   return{document_id:payload.document_id,company_id:42,customer_id:7,status:1,document_type:{saft_code:'RE'},notes:call.notes,net_value:call.value,associated_documents:[{associated_id:123,value:call.value}],...options.receiptDocument}
   }
   async createReceipt(payload){calls.push(structuredClone(payload));if(options.lostResponse&&calls.length===1)throw Error('Fixture lost response');return{document_id:900+calls.length}}
   async getDocumentPDFLink(){if(options.pdfFailure)throw Error('PDF pending');return 'https://fixture.invalid/receipt.pdf'}
@@ -367,4 +367,23 @@ test('RECEIPT: a lost database preparation response keeps the invoice lock and r
  assert.ok(h.tables.audit_log.some(r=>r.action==='invoice_financial_lock'))
  assert.equal(h.tables.audit_log.find(r=>r.action==='receipt_operation').details.state,'prepared')
  assert.equal((await h.emit()).success,true);assert.equal(h.calls.length,1)
+})
+
+test('RECEIPT: real Moloni RE documents can recover an already-issued receipt without another insert',async()=>{
+ const h=receiptActionHarness({receiptDocument:{document_type:{document_type_id:2,saft_code:'RE'}},archiveFailure:true})
+ assert.equal((await h.emit()).success,false)
+ assert.equal(h.calls.length,1)
+ h.setArchiveFailure(false)
+ const recovered=await h.emit()
+ assert.equal(recovered.success,true,recovered.error)
+ assert.equal(h.calls.length,1)
+ assert.equal(h.tables.audit_log.find(r=>r.action==='billing_statement').details.status,'paid')
+})
+test('RECEIPT: legacy RC receipts remain recognizable without allowing invoices as receipt confirmations',async()=>{
+ const legacy=receiptActionHarness({receiptDocument:{document_type:{saft_code:'RC'}}})
+ assert.equal((await legacy.emit()).success,true)
+ const invoice=receiptActionHarness({receiptDocument:{document_type:{saft_code:'FT'}}})
+ assert.equal((await invoice.emit()).success,false)
+ assert.equal(invoice.calls.length,1)
+ assert.ok(invoice.tables.audit_log.some(r=>r.action==='invoice_financial_lock'))
 })

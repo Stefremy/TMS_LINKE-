@@ -46,15 +46,18 @@ export async function getPeriodShipmentsForBillingAction(id: string) {
 export async function configureRecurringStatementsAction(enabled: boolean, anchor: string) {
   const ctx = await requireAdmin()
   if (typeof enabled !== 'boolean' || !isDateKey(anchor)) return { success: false, error: 'Configuração inválida.' }
-  const preview = await recurringPreview(ctx.tenant_id)
-  if (!preview.ready) return { success: false, error: preview.error }
-  if (enabled && (!preview.emailConfigured || !preview.cronConfigured)) {
-    return { success: false, error: 'Configure o serviço de email e o segredo do agendamento antes de ativar.' }
+  if (enabled) {
+    const preview = await recurringPreview(ctx.tenant_id)
+    if (!preview.ready) return { success: false, error: preview.error }
+    if (!preview.emailConfigured || !preview.cronConfigured) {
+      return { success: false, error: 'Configure o serviço de email e o segredo do agendamento antes de ativar.' }
+    }
   }
   const db = createAdminClient()
   const { error } = await db.rpc('configure_recurring_statements', { p_tenant: ctx.tenant_id, p_enabled: enabled, p_anchor: anchor })
   if (error) return { success: false, error: 'Não foi possível guardar. A data inicial fica fixa após a primeira ativação.' }
   revalidatePath('/ops/faturacao/contas-corrente')
+  revalidatePath('/ops/configuracao/faturacao')
   return { success: true }
 }
 

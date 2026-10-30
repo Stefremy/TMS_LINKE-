@@ -37,7 +37,7 @@ function validateReceipt(op: ReceiptOperation, value: unknown) {
   const doc = record(value)
   const associated = Array.isArray(doc.associated_documents) ? doc.associated_documents.map(record) : []
   if (Number(doc.document_id) !== op.receipt_id || String(doc.company_id) !== op.company
-    || Number(doc.customer_id) !== op.customer || record(doc.document_type).saft_code !== 'RC'
+    || Number(doc.customer_id) !== op.customer || !['RE', 'RC'].includes(String(record(doc.document_type).saft_code))
     || Number(doc.status) !== 1 || !String(doc.notes || '').split('\n').includes(op.marker)
     || !Number.isFinite(Number(doc.net_value)) || Math.round(Number(doc.net_value) * 100) !== Math.round(op.amount * 100)
     || associated.length !== 1 || Number(associated[0].associated_id) !== op.invoice

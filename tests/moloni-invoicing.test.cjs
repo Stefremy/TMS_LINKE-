@@ -32,7 +32,7 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
       async request(endpoint,payload){
         assert.equal(endpoint,'documents/getOne')
         if(payload.document_id===321)return{document_id:321,company_id:42,status:1,customer_id:lastReceiptPayload.customerId,
-          document_type:{saft_code:'RC'},notes:lastReceiptPayload.notes,net_value:lastReceiptPayload.value,
+          document_type:{saft_code:'RE'},notes:lastReceiptPayload.notes,net_value:lastReceiptPayload.value,
           associated_documents:[{associated_id:123,value:lastReceiptPayload.value}]}
         return {document_type:{saft_code:'FT'},taxes_value:2.3,...fiscalDocument}
       }
@@ -70,11 +70,15 @@ test('manual billing page excludes cancelled test fixtures and drafts while keep
     '@/app/actions/clientes':{getClientesAction:async()=>[]},
     '@/app/actions/shipments':{getShipmentsAction:async()=>shipments},
     '@/app/actions/moloni':{getBillingStatementsAction:async()=>[],getMoloniConfigAction:async()=>({})},
-    '@/lib/billing/recurring-statements':{recurringPreview:async()=>[],loadPeriodStatements:async()=>[]},
+    '@/lib/billing/recurring-statements':{recurringPlanningPreview:async()=>[],loadPeriodStatements:async()=>[]},
     './ContasCorrenteClient':{default:()=>null},
     './RecurringStatementsPanel':{RecurringStatementsPanel:()=>null},
+    './BillingPlanningPanel':{BillingPlanningPanel:()=>null},
+    '@/lib/billing/statistics-data':{loadBillingStatistics:async()=>({invoices:[]})},
   })
-  const page=await load('app/ops/faturacao/contas-corrente/page.tsx').default()
+  const page=await load('app/ops/faturacao/contas-corrente/page.tsx').default({searchParams:Promise.resolve({from:'2026-10-01',to:'2026-10-30',grouping:'detailed'})})
+  assert.deepEqual(page.props.children.props.initialSelection,{startDate:'2026-10-01',endDate:'2026-10-30',grouping:'detailed'})
+  assert.equal(page.props.children.props.automationPanel,undefined)
   assert.deepEqual(page.props.children.props.shipments.map(s=>s.status),['pendente','entrada_rede','entregue'])
 })
 
@@ -114,7 +118,10 @@ test('Both pending and delivered shipments can be invoiced; the official documen
     const h=invoiceHarness();const result=await h.emit(status)
     assert.equal(result.success,true);assert.equal(result.moloniDocumentId,123)
     assert.match(result.moloniDocumentPdf,/moloni-pdf$/)
-    assert.equal(h.db.writes.find(w=>w.kind==='insert').value.details.moloni_document_id,123)
+    const saved=h.db.writes.find(w=>w.kind==='insert').value.details
+    assert.equal(saved.moloni_document_id,123)
+    assert.equal(saved.invoice_date,h.lastInvoicePayload.date)
+    assert.equal(saved.due_date,h.lastInvoicePayload.expirationDate)
   }
 })
 test('PDF failure after issuance preserves the real invoice ID and warns rather than offering reissuance',async()=>{

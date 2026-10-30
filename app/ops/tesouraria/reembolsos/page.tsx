@@ -1,5 +1,10 @@
+import { getOpsCodClientsAction } from "@/app/actions/ops-client-cod"
+import { OpsCodCollectionsPanel } from "./OpsCodCollectionsPanel"
+import { currentCodMonth } from "@/lib/services/reembolsos/client-cod"
+import { lisbonDate } from "@/lib/billing/recurring-periods"
+import { CodPayoutRequestsPanel } from "./CodPayoutRequestsPanel"
 import * as React from "react"
-import { getReembolsoBatchesAction } from "@/app/actions/reembolsos"
+import { getReembolsoBatchesAction, getCodPayoutInboxAction } from "@/app/actions/reembolsos"
 import ReembolsosClient from "./ReembolsosClient"
 import { requireEmployee } from "@/lib/auth/context"
 
@@ -15,10 +20,16 @@ export default async function ReembolsosPage() {
       </div>
     )
   }
-  const batches = await getReembolsoBatchesAction()
+  const [batches,clients,inbox] = await Promise.all([
+    getReembolsoBatchesAction(),
+    getOpsCodClientsAction().then(data=>({data,error:''})).catch(()=>({data:[],error:'Não foi possível carregar os clientes para consulta.'})),
+    getCodPayoutInboxAction().then(data=>({data,error:''})).catch(()=>({data:null,error:'Não foi possível consultar os pedidos dos clientes.'})),
+  ])
 
   return (
     <div className="space-y-6">
+      <OpsCodCollectionsPanel clients={clients.data} clientError={clients.error} initialPeriod={currentCodMonth(lisbonDate())} />
+      <CodPayoutRequestsPanel rows={inbox.data} error={inbox.error} />
       <ReembolsosClient initialBatches={batches} />
     </div>
   )

@@ -27,11 +27,12 @@ import { type BillingConfig } from "@/app/actions/billing-config-types"
 import { MoloniConnectModal } from "@/app/ops/faturacao/contas-corrente/MoloniConnectModal"
 
 interface BillingConfigClientProps {
+  automationSettings?: React.ReactNode
   initialConfig: BillingConfig
   moloniDetails?: any
 }
 
-export function BillingConfigClient({ initialConfig, moloniDetails }: BillingConfigClientProps) {
+export function BillingConfigClient({ initialConfig, moloniDetails, automationSettings }: BillingConfigClientProps) {
   const router = useRouter()
   const [config, setConfig] = React.useState<BillingConfig>(initialConfig)
   const [hasChanges, setHasChanges] = React.useState(false)
@@ -139,6 +140,8 @@ export function BillingConfigClient({ initialConfig, moloniDetails }: BillingCon
           <span className="text-slate-600 font-semibold">Faturação & Moloni</span>
         </div>
       </div>
+
+      {automationSettings && <div className="px-6 py-4 border-b border-slate-100">{automationSettings}</div>}
 
       {/* Toolbar / Action Bar */}
       <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/60 flex flex-wrap items-center justify-between gap-3 text-[13px]">

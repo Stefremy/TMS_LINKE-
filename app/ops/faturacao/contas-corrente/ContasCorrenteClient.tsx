@@ -4,13 +4,14 @@ import * as React from "react"
 import {CreditNoteButton} from "../notas-credito/components/CreditNoteButton"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Building, FolderOpen, FileText, ChevronDown, ChevronRight, Euro, Plug, ReceiptText, Loader2, AlertCircle, Filter, Download, Calendar, Package, CheckCircle2, X, Mail, Send } from "lucide-react"
+import { Building, FolderOpen, FileText, ChevronDown, ChevronRight, Euro, Plug, ReceiptText, Loader2, AlertCircle, Download, Calendar, Package, CheckCircle2, X, Mail, Send } from "lucide-react"
 import { groupInvoiceArchive, isInvoicePaid } from "@/lib/billing/invoice-archive"
 import { InvoiceIssueButton } from "./InvoiceIssueButton"
 import { AnimatedDisclosure } from "./AnimatedDisclosure"
 import { StoreAvatar } from "./StoreAvatar"
 import { PeriodStatementCard } from './PeriodStatementCard'
 import type { PeriodStatement } from '@/lib/billing/recurring-statements'
+import { billingViewFiltersUrl, type BillingViewSelection } from "@/lib/billing/view-filters"
 import { addCalendarDays } from '@/lib/billing/recurring-periods'
 import { MoloniConnectModal } from "./MoloniConnectModal"
 
@@ -19,14 +20,16 @@ export default function ContasCorrenteClient({
   shipments, 
   statements = [],
   periodStatements = [],
-  automationPanel,
+  initialSelection,
+  planningPanel,
   moloniConfig
 }: { 
   clients: any[]
   shipments: any[]
   statements?: any[]
   periodStatements?: PeriodStatement[]
-  automationPanel?: React.ReactNode
+  initialSelection?: BillingViewSelection
+  planningPanel?: React.ReactNode
   moloniConfig?: any
 }) {
   const router = useRouter()
@@ -59,8 +62,8 @@ export default function ContasCorrenteClient({
   } | null>(null)
   
   // Filtros
-  const [startDate, setStartDate] = React.useState<string>("")
-  const [endDate, setEndDate] = React.useState<string>("")
+  const [startDate, setStartDate] = React.useState<string>(initialSelection?.startDate || "")
+  const [endDate, setEndDate] = React.useState<string>(initialSelection?.endDate || "")
   const [periodClientFilter, setPeriodClientFilter] = React.useState<string | null>(null)
   const [periodShipments, setPeriodShipments] = React.useState<any[] | null>(null)
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
@@ -83,7 +86,7 @@ export default function ContasCorrenteClient({
   const [excludedShipmentIds, setExcludedShipmentIds] = React.useState<Set<string>>(new Set())
 
   // Modo de agrupamento da fatura Moloni (Agrupada por serviço e soma total vs Detalhada)
-  const [groupInvoicesByService, setGroupInvoicesByService] = React.useState<boolean>(true)
+  const groupInvoicesByService = initialSelection?.grouping !== "detailed"
 
   // Modal de envio de fatura por email
   const [emailModalStmt, setEmailModalStmt] = React.useState<any | null>(null)
@@ -358,7 +361,7 @@ export default function ContasCorrenteClient({
         </Link>
       </div>
 
-      {automationPanel}
+      {planningPanel}
 
       {/* Aviso de Moloni Desconectado */}
       {!moloniConfig?.isConnected && (
@@ -382,60 +385,11 @@ export default function ContasCorrenteClient({
         </div>
       )}
 
-      {/* Barra de Filtros e Modo de Faturação */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-bg)] p-3 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-            <Filter aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
-            <span className="text-[11px] font-bold uppercase tracking-wider">Filtros</span>
-          </div>
-          <div className="h-5 w-px bg-[var(--border-subtle)] mx-1" />
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-0.5">Data Inicial</span>
-              <input 
-                type="date" 
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="text-xs bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-colors"
-              />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider mb-0.5">Data Final</span>
-              <input 
-                type="date" 
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="text-xs bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none transition-colors"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Opção de Agrupamento por Serviço (Fatura Compacta) */}
-        {periodClientFilter && <button type="button" onClick={() => { setPeriodClientFilter(null); setPeriodShipments(null); setStartDate(''); setEndDate('') }} className="text-xs text-[var(--accent)] font-semibold">Limpar seleção do período</button>}
-        <div className="flex items-center gap-2 bg-[var(--surface-muted)] px-3 py-1.5 rounded-lg border border-[var(--border-subtle)]">
-          <label className="flex items-center gap-2.5 cursor-pointer select-none">
-            <input 
-              type="checkbox"
-              checked={groupInvoicesByService}
-              onChange={(e) => setGroupInvoicesByService(e.target.checked)}
-              className="w-4 h-4 rounded text-[var(--accent)] accent-[var(--accent)] cursor-pointer"
-            />
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
-                Agrupar por Serviço (Fatura Compacta)
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)]">
-                  {groupInvoicesByService ? "1 Página" : "Detalhada"}
-                </span>
-              </span>
-              <span className="text-[10px] text-[var(--text-tertiary)]">
-                {groupInvoicesByService 
-                  ? "Soma total dos envios com o mesmo serviço (evita faturas com dezenas de páginas)" 
-                  : "Lista 1 linha por cada envio individual"}
-              </span>
-            </div>
-          </label>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-[var(--text-secondary)]">
+        <span>Período dos envios: {startDate || endDate ? `${startDate ? startDate.split('-').reverse().join('/') : 'Início'} a ${endDate ? endDate.split('-').reverse().join('/') : 'hoje'}` : 'Sem filtro de datas'} · Fatura {groupInvoicesByService ? 'agrupada por serviço' : 'detalhada'}</span>
+        <div className="flex items-center gap-3">
+          {periodClientFilter && <button type="button" onClick={() => { setPeriodClientFilter(null); setPeriodShipments(null); setStartDate(''); setEndDate('') }} className="font-semibold text-[var(--accent)]">Limpar seleção do período</button>}
+          <Link href={billingViewFiltersUrl({ startDate, endDate, grouping: groupInvoicesByService ? 'grouped' : 'detailed' })} className="font-semibold text-[var(--accent)] hover:underline">Configurar filtros e faturação</Link>
         </div>
       </div>
 

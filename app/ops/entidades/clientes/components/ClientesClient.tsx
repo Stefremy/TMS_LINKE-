@@ -28,6 +28,8 @@ import { Cliente, DEFAULT_CLIENT_CATEGORIES } from "../types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { ClienteModal } from "./ClienteModal"
 import { ClientAuthModal } from "./ClientAuthModal"
+import { CLIENT_ACTIVITY_COLORS, matchesClientServiceCount, sortClientsByServiceCount } from "@/lib/clients/activity-color"
+import { clientListStatus, matchesClientStatus } from "@/lib/client-portal/list-status"
 import { Button } from "@/components/ui/button"
 
 interface ClientesClientProps {
@@ -44,6 +46,8 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
   const [searchQuery, setSearchQuery] = React.useState("")
   const [categoryFilter, setCategoryFilter] = React.useState("Todos")
   const [statusFilter, setStatusFilter] = React.useState("Todos")
+  const [serviceCountFilter, setServiceCountFilter] = React.useState("all")
+  const [sortOrder, setSortOrder] = React.useState("default")
   const [selectedIds, setSelectedIds] = React.useState<string[]>([])
   
   // Modal state
@@ -67,7 +71,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
 
   // Filtered clients
   const filtered = React.useMemo(() => {
-    return clientes.filter((item) => {
+    const matches = clientes.filter((item) => {
       const q = searchQuery.toLowerCase().trim()
       const matchesSearch = !q || (
         item.short_name?.toLowerCase().includes(q) ||
@@ -80,13 +84,12 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
       )
 
       const matchesCategory = categoryFilter === "Todos" || item.category === categoryFilter
-      const matchesStatus = statusFilter === "Todos" || 
-        (statusFilter === "Ativo" && item.is_active) || 
-        (statusFilter === "Inativo" && !item.is_active)
+      const matchesStatus = matchesClientStatus(item, statusFilter)
       
-      return matchesSearch && matchesCategory && matchesStatus
+      return matchesSearch && matchesCategory && matchesStatus && matchesClientServiceCount(item.legacy_service_count, serviceCountFilter)
     })
-  }, [clientes, searchQuery, categoryFilter, statusFilter])
+    return sortOrder === "default" ? matches : sortClientsByServiceCount(matches, sortOrder === "services_asc" ? "asc" : "desc")
+  }, [clientes, searchQuery, categoryFilter, statusFilter, serviceCountFilter, sortOrder])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
@@ -106,7 +109,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
     setClientes((prev) => {
       const exists = prev.some((c) => c.id === saved.id)
       if (exists) {
-        return prev.map((c) => (c.id === saved.id ? saved : c))
+        return prev.map((c) => (c.id === saved.id ? { ...saved, portal_access_status: c.portal_access_status, legacy_service_count: c.legacy_service_count } : c))
       }
       return [saved, ...prev]
     })
@@ -200,22 +203,31 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
             Novo
           </Button>
 
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setClientes(prev => [...prev].reverse())}
-            className="px-2.5 py-1.5 h-auto text-[11px] font-medium shadow-xs"
-          >
-            <ArrowUpDown className="w-3.5 h-3.5 mr-1.5 opacity-70" />
-            Ordenar
-          </Button>
+          <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 shadow-2xs">
+            <ArrowUpDown className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+            <select aria-label="Ordenar clientes" value={sortOrder} onChange={e => { setSortOrder(e.target.value); setCurrentPage(1) }}
+              className="text-[11px] font-medium text-[var(--text-primary)] bg-transparent focus:outline-none cursor-pointer">
+              <option value="default">Ordem habitual</option>
+              <option value="services_desc">Serviços: maior → menor</option>
+              <option value="services_asc">Serviços: menor → maior</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 shadow-2xs">
+            <select aria-label="Filtrar por serviços históricos" value={serviceCountFilter} onChange={e => { setServiceCountFilter(e.target.value); setCurrentPage(1) }}
+              className="text-[11px] font-medium text-[var(--text-primary)] bg-transparent focus:outline-none cursor-pointer">
+              <option value="all">Todos os serviços históricos</option>
+              <option value="known">Com histórico importado</option>
+              {CLIENT_ACTIVITY_COLORS.map(band => <option key={band.min} value={String(band.min)}>{band.label} serviços</option>)}
+              <option value="missing">Sem dados importados</option>
+            </select>
+          </div>
 
           {/* Filtro Categoria */}
           <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 shadow-2xs">
             <Filter className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1) }}
               className="text-[11px] font-medium text-[var(--text-primary)] bg-transparent focus:outline-none cursor-pointer"
             >
               <option value="Todos">Todas as Categorias</option>
@@ -229,12 +241,14 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
           <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 shadow-2xs">
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1) }}
               className="text-[11px] font-medium text-[var(--text-primary)] bg-transparent focus:outline-none cursor-pointer"
             >
               <option value="Todos">Todos os Estados</option>
               <option value="Ativo">Apenas Ativos</option>
-              <option value="Inativo">Apenas Inativos</option>
+              <option value="Inativo">Inativos / Suspensos / Bloqueados</option>
+              <option value="Suspenso">Apenas Suspensos</option>
+              <option value="Bloqueado">Apenas Bloqueados</option>
             </select>
           </div>
         </div>
@@ -295,6 +309,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
               <th className="py-2.5 px-3 min-w-[200px]">Contactos</th>
               <th className="py-2.5 px-3 min-w-[150px]">Localidade & Agência</th>
               <th className="py-2.5 px-3 min-w-[140px]">Categoria</th>
+              <th className="py-2.5 px-3 w-24 text-right" title="Contagem histórica da plataforma anterior">Serviços<br /><span className="font-normal normal-case">Histórico</span></th>
               <th className="py-2.5 px-3 w-24">Faturação / Prazo</th>
               <th className="py-2.5 px-3 w-24 text-right">Crédito</th>
               <th className="py-2.5 px-3 w-20 text-center">Estado</th>
@@ -304,7 +319,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
           <tbody className="divide-y divide-[var(--border-subtle)] text-[12px] bg-[var(--surface-bg)]">
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={11} className="py-12 text-center text-[var(--text-secondary)]">
+                <td colSpan={12} className="py-12 text-center text-[var(--text-secondary)]">
                   <Building2 className="w-8 h-8 text-[var(--text-tertiary)] mx-auto mb-2 opacity-50" />
                   <span className="font-semibold">Nenhum cliente encontrado</span>
                   <p className="text-[11px] text-[var(--text-tertiary)] mt-1">Tente ajustar a sua pesquisa ou adicione um novo cliente.</p>
@@ -418,6 +433,10 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
                       </span>
                     </td>
 
+                    <td className="py-3 px-3 text-right font-mono text-[11px] text-[var(--text-primary)]" title={item.legacy_service_count === undefined ? "Sem dados importados" : "Serviços na plataforma anterior"}>
+                      {item.legacy_service_count === undefined ? '—' : item.legacy_service_count.toLocaleString('pt-PT')}
+                    </td>
+
                     {/* Condições de Pagamento */}
                     <td className="py-3 px-3 text-[11px] text-[var(--text-secondary)] font-medium">
                       <span className="block">{item.billing_type === 'pay_as_you_go' ? 'Pré-pagamento' : item.payment_terms === 'Pronto Pagamento' ? 'Diária' : item.payment_terms}</span>
@@ -449,12 +468,12 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
                     {/* Estado */}
                     <td className="py-3 px-3 text-center">
                       <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                        item.is_active 
+                        clientListStatus(item) === "Ativo" 
                           ? "bg-[var(--status-success-soft)] text-[var(--status-success)] border border-[rgba(18,138,71,0.2)]" 
                           : "bg-[var(--surface-bg)] text-[var(--status-critical)] border border-[var(--status-critical-soft)] shadow-2xs"
                       }`}>
-                        <span className={`w-1 h-1 rounded-full ${item.is_active ? "bg-[var(--status-success)]" : "bg-[var(--status-critical)]"}`} />
-                        {item.is_active ? "Ativo" : "Inativo"}
+                        <span className={`w-1 h-1 rounded-full ${clientListStatus(item) === "Ativo" ? "bg-[var(--status-success)]" : "bg-[var(--status-critical)]"}`} />
+                        {clientListStatus(item)}
                       </span>
                     </td>
 

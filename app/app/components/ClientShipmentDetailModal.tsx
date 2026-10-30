@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { codCents } from "@/lib/services/reembolsos/client-cod"
 import { getClientServiceName } from "@/lib/services/client-service-label"
 import { 
   Building2, 
@@ -296,8 +297,9 @@ export function ClientShipmentDetailModal({
   const serviceType = currentShipment.service_type || "CTT Expresso 24H"
 
   // Special services status
-  const isCOD = Boolean(currentShipment.is_cod || currentShipment.cod_amount)
-  const codAmount = currentShipment.cod_amount ? `${Number(currentShipment.cod_amount).toFixed(2)}€` : "—"
+  const codAmountCents = codCents(currentShipment.cod_value ?? currentShipment.cod_amount)
+  const isCOD = Boolean(currentShipment.is_cod || (codAmountCents !== null && codAmountCents > 0))
+  const codAmount = codAmountCents !== null && codAmountCents > 0 ? (codAmountCents / 100).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) : "—"
   const isInsurance = Boolean(currentShipment.is_insurance || currentShipment.insured_value)
   const insuredValue = currentShipment.insured_value ? `${Number(currentShipment.insured_value).toFixed(2)}€` : "—"
   const isFragil = Boolean(currentShipment.is_fragil)

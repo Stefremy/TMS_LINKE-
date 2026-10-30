@@ -10,7 +10,7 @@ function harness(initialData={id:'client-a',short_name:'Loja A',payment_due_days
  const jsx=(type,props)=>({type,props:props||{}})
  const load=createLoader({react:React,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,p)=>p}),
   '@/app/actions/clientes':{saveClienteAction:async data=>{calls.inputs.push(data);return typeof response==='function'?response(data):response}},
-  '@/app/actions/client-invitations':{},'./ClientPortalAccessControl':{ClientPortalAccessControl:()=>null}})
+  '@/app/actions/client-invitations':{},'./ClientPortalAccessControl':{ClientPortalAccessControl:()=>null},'./ClientServiceHistory':{ClientServiceHistory:()=>null}})
  const Modal=load('app/ops/entidades/clientes/components/ClienteModal.tsx').ClienteModal
  const props={initialData,servicosLinke,onClose(){calls.close++},onSaved(data){calls.saved.push(data)}}
  const render=()=>{cursor=0;return flat(Modal(props))}
@@ -108,4 +108,15 @@ test('the client modal saves a separate invoice address and the same-address swi
  await h.button('Gravar Cliente').props.onClick()
  assert.equal(h.calls.inputs[1].billing_same_as_pickup,true);assert.equal(h.calls.inputs[1].address,'Novo armazém')
  assert.equal(h.calls.inputs[1].billing_address,'Nova fiscal')
+})
+
+test('the color control can switch from automatic activity colors to a saved manual choice',async()=>{
+ const h=harness({id:'client-a',short_name:'Loja A',legacy_service_count:7191,color:'#B45F40',color_mode:'services'})
+ const toggle=()=>h.render().find(n=>n.type==='input'&&n.props.type==='checkbox'&&n.props.checked===true)
+ assert.ok(toggle())
+ h.render().find(n=>n.type==='input'&&n.props.type==='color').props.onChange({target:{value:'#315D82'}})
+ assert.equal(h.render().find(n=>n.type==='input'&&n.props.type==='color').props.value,'#315D82')
+ await h.button('Gravar Cliente').props.onClick()
+ assert.equal(h.calls.inputs[0].color_mode,'manual')
+ assert.equal(h.calls.inputs[0].color,'#315D82')
 })

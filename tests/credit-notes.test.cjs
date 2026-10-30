@@ -127,8 +127,8 @@ test('foreign invoice references, wrong company, mismatched monetary values and 
  }
 })
 test('invoices with receipt already issued (receipt PDF, receipt ID, paid status, FR type or settled) refuse credit note issuance',async()=>{
- for(const kind of ['receipt_pdf','receipt_id','paid_status','fr_type','rc_type','settled']){
-  const h=harness(kind==='fr_type'?{invoice:{document_type:{saft_code:'FR'}}}:kind==='rc_type'?{invoice:{document_type:{saft_code:'RC'}}}:kind==='settled'?{invoice:{reconciled_value:12.3}}:{})
+ for(const kind of ['receipt_pdf','receipt_id','paid_status','fr_type','rc_type','re_type','settled']){
+  const h=harness(kind==='fr_type'?{invoice:{document_type:{saft_code:'FR'}}}:kind==='rc_type'?{invoice:{document_type:{saft_code:'RC'}}}:kind==='re_type'?{invoice:{document_type:{saft_code:'RE'}}}:kind==='settled'?{invoice:{reconciled_value:12.3}}:{})
   const row=h.tables.audit_log.find(r=>r.id===SOURCE)
   if(kind==='receipt_pdf')row.details.moloni_receipt_pdf='https://fixture.invalid/rc.pdf'
   if(kind==='receipt_id')row.details.moloni_receipt_id=999

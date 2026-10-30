@@ -215,3 +215,15 @@ test('separate billing fields persist and older partial client forms cannot eras
  const next=await h.actions.saveClienteAction({id:A,short_name:'Edited'})
  assert.equal(next.data.billing_address,'Fiscal');assert.equal(next.data.billing_same_as_pickup,false)
 })
+
+test('manual identifier color survives saving and reloading a high-volume customer', async () => {
+  const h = harness()
+  h.tables.audit_log.push({id:'history',tenant_id:TENANT,action:'client_legacy_service_count',created_at:'2026-10-30',
+    details:{id:A,count:7191,source:'lojas_servicos.csv',imported_at:'2026-10-30'}})
+  const saved = await h.actions.saveClienteAction({id:A,short_name:'Manual color',color:'#315D82',color_mode:'manual'})
+  assert.equal(saved.data.color_mode,'manual')
+  const customer = (await h.actions.getClientesAction()).find(c=>c.id===A)
+  assert.equal(customer.color,'#315D82')
+  assert.equal(customer.legacy_service_count,7191)
+  await assert.rejects(h.actions.saveClienteAction({id:A,color_mode:'invalid'}),/Modo de cor inválido/)
+})

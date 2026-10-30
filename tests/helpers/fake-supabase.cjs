@@ -3,6 +3,12 @@ function readField(row, field) {
   return key ? row[column]?.[key] : row[column]
 }
 
+function jsonContains(value, expected) {
+  if (Array.isArray(expected)) return Array.isArray(value) && expected.every(needle => value.some(item => jsonContains(item, needle)))
+  if (expected && typeof expected === 'object') return value && typeof value === 'object' && Object.keys(expected).every(key => jsonContains(value[key], expected[key]))
+  return value === expected
+}
+
 function matchesLike(value, pattern) {
   let source = ''
   const escape = c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -28,6 +34,7 @@ function fakeSupabase(tables, failure, options = {}) {
       ilike(field, value) { state.filters.push({ field, value, kind: 'ilike' }); return query },
       in(field, value) { state.filters.push({ field, value, kind: 'in' }); return query },
       is(field, value) { state.filters.push({ field, value, kind: 'is' }); return query },
+      contains(field, value) { state.filters.push({ field, value, kind: 'contains' }); return query },
       order(field, options) { (state.orders ||= []).push({ field, ...options }); return query },
       limit(value) { state.limit = value; return query },
       range(start, end) { state.range = [start, end]; return query },
@@ -44,7 +51,7 @@ function fakeSupabase(tables, failure, options = {}) {
           if (error) return { data: null, error }
           let rows = (tables[table] || []).filter(row => state.filters.every(filter => {
             const value = readField(row, filter.field)
-            return filter.kind === 'ilike' ? matchesLike(value, filter.value)
+            return filter.kind === 'contains' ? jsonContains(value, filter.value) : filter.kind === 'ilike' ? matchesLike(value, filter.value)
               : filter.kind === 'gte' ? value >= filter.value
               : filter.kind === 'lte' ? value <= filter.value
               : filter.kind === 'in' ? filter.value.includes(value)

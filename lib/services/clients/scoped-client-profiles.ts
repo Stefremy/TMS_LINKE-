@@ -34,7 +34,7 @@ export async function loadScopedClientProfiles(
     const seen = new Set<string>()
     for (const log of logs.data || []) {
       const d = log.details as ClientProfile | null
-      if (!d?.id || seen.has(d.id)) continue
+      if (!d?.id || seen.has(d.id) || !profiles.has(d.id)) continue
       profiles.set(d.id, {
         ...profiles.get(d.id), id: d.id, short_name: d.short_name,
         legal_name: d.legal_name, email: d.email, billing_email: d.billing_email, iban: d.iban,

@@ -80,11 +80,12 @@ test('failed persistence is reported instead of showing a successful block',asyn
 })
 
 test('the modal requires confirmation, disables the action while saving and then offers reactivation',async()=>{
-  const slots=[],effects=[],calls=[]
+  const slots=[],effects=[],calls=[],refreshes=[]
   let cursor=0,finish
   const jsx=(type,props)=>({type,props:props||{}})
   const load=createLoader({
     react:{useState(initial){const i=cursor++;if(!(i in slots))slots[i]=initial;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]},useEffect(fn){effects.push(fn)}},
+    'next/navigation':{useRouter:()=>({refresh:()=>refreshes.push(true)})},
     'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
     'lucide-react':new Proxy({},{get:(_,name)=>name}),
     '@/app/actions/client-portal-access':{
@@ -115,5 +116,6 @@ test('the modal requires confirmation, disables the action while saving and then
   assert.equal(button().props.disabled,false);assert.match(text(button()),/Reativar Cliente/)
   const restoring=button().props.onClick();finish({blocked:false});await restoring
   assert.deepEqual(calls.at(-1),{id:A,blocked:false})
+  assert.equal(refreshes.length,2)
   assert.match(text(button()),/Bloquear Cliente/)
 })

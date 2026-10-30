@@ -9,16 +9,19 @@ import { requireEmployee } from "@/lib/auth/context"
 import { canSendClientAccessEmail } from "@/lib/auth/client-access-email"
 import { currentAccountOutstanding } from "@/lib/billing/client-balance"
 
+import { readPortalAccessStatuses } from "@/lib/client-portal/suspension"
+
 export const dynamic = "force-dynamic"
 
 export default async function EntidadesClientesPage() {
   const ctx = await requireEmployee()
-  const [clientes, servicosLinke, shipments, statements, defaultPaymentDays] = await Promise.all([
+  const [clientes, servicosLinke, shipments, statements, defaultPaymentDays, accessStatuses] = await Promise.all([
     getClientesAction(),
     getServicosLinkeAction(),
     getShipmentsAction({ includeLabels: false }),
     getBillingStatementsAction(),
-    defaultClientPaymentDays(createAdminClient(), ctx.tenant_id)
+    defaultClientPaymentDays(createAdminClient(), ctx.tenant_id),
+    readPortalAccessStatuses(ctx.tenant_id)
   ])
 
   // Calcular o crédito disponível para cada cliente
@@ -58,7 +61,8 @@ export default async function EntidadesClientesPage() {
 
     return {
       ...c,
-      available_credit
+      available_credit,
+      portal_access_status: accessStatuses.get(c.id) ?? "active",
     }
   })
 

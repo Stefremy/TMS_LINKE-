@@ -67,18 +67,11 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
 
   let clientShipments = allShipments
 
-  if (effectiveClientId || clientName) {
-    const cNameLower = (clientName || "").toLowerCase().trim()
-    const cIdLower = (effectiveClientId || "").toLowerCase().trim()
-
-    clientShipments = allShipments.filter((s: any) => {
-      if (effectiveClientId && s.client_id === effectiveClientId) return true
-      if (cIdLower && s.client_id?.toLowerCase() === cIdLower) return true
-      if (cNameLower && s.sender_name?.toLowerCase().includes(cNameLower)) return true
-      return false
-    })
-
-    // Removed fallback that exposed all shipments when a client had none
+  if (effectiveClientId) {
+    // Client ownership is exact; a store name must never broaden another store's result.
+    clientShipments = allShipments.filter((s: { client_id?: string }) => s.client_id === effectiveClientId)
+  } else if (clientName) {
+    clientShipments = []
   }
 
   const client = profiles.find(profile => profile.id === effectiveClientId)

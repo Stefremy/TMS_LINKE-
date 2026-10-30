@@ -1,5 +1,8 @@
 "use server"
 
+import { applyClientActivityColor } from "@/lib/clients/activity-color"
+import { readLegacyServiceHistory } from "@/lib/clients/service-history"
+
 import { normalizeClientBillingFields } from "@/lib/client-addresses"
 
 import { revalidatePath } from "next/cache"
@@ -188,7 +191,7 @@ export async function getClientesAction(selectedClientId?: string): Promise<Clie
     const rows = []
     for (let offset = 0; ; offset += 1000) {
       let query = supabase.from("audit_log").select("id, action, details")
-        .eq("tenant_id", ctx.tenant_id).in("action", ["client_data", "deleted_client"])
+        .eq("tenant_id", ctx.tenant_id).in("action", ["client_data", "deleted_client", "client_legacy_service_count"])
         .order("created_at", { ascending: false }).order("id").range(offset, offset + 999)
       if (scopedId) query = query.eq("details->>id", scopedId)
       const { data, error } = await query
@@ -200,9 +203,13 @@ export async function getClientesAction(selectedClientId?: string): Promise<Clie
   const [dbClients, profiles] = await Promise.all([loadRegistry(), loadProfiles()])
   const auditClients: Record<string, Cliente> = {}
   const deletedIds = new Set<string>()
+  const serviceCounts = new Map<string, number | undefined>()
   for (const log of profiles) {
     if (!log.details?.id) continue
     if (log.action === "deleted_client") deletedIds.add(log.details.id)
+    else if (log.action === "client_legacy_service_count") {
+      if (!serviceCounts.has(log.details.id)) serviceCounts.set(log.details.id, readLegacyServiceHistory(log.details)?.count)
+    }
     else if (!auditClients[log.details.id]) auditClients[log.details.id] = log.details as Cliente
   }
 
@@ -256,7 +263,7 @@ export async function getClientesAction(selectedClientId?: string): Promise<Clie
     })
   })
 
-  let result = Array.from(clientMap.values()).sort((a, b) => {
+  let result = Array.from(clientMap.values()).map(c => applyClientActivityColor(c, serviceCounts.get(c.id))).sort((a, b) => {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
 
@@ -301,6 +308,9 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
   if (previousError) throw new Error("Não foi possível verificar o endereço atual da loja.")
   const slugName = cliente.portal_slug || previous?.details?.portal_slug || previous?.details?.short_name
     || previous?.details?.legal_name || cliente.short_name || cliente.legal_name || "loja"
+  if (cliente.color_mode !== undefined && cliente.color_mode !== 'services' && cliente.color_mode !== 'manual') {
+    throw new Error('Modo de cor inválido.')
+  }
   const fullRecord: Cliente = {
     id,
     portal_slug: normalizeStoreSlug(slugName),
@@ -308,6 +318,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     short_name: cliente.short_name?.trim() || cliente.legal_name?.trim() || "Novo Cliente",
     legal_name: cliente.legal_name?.trim() || cliente.short_name?.trim() || "Novo Cliente, Lda",
     color: cliente.color || "#10b981",
+    color_mode: cliente.color_mode ?? previous?.details?.color_mode,
     logo_url: cliente.logo_url || "",
     nif: cliente.nif?.trim() || "",
     category: cliente.category || "Cliente Conta Corrente",
