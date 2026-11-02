@@ -11,19 +11,19 @@ import {
   Menu,
   X,
   Plus,
-  MapPin,
   User,
   LogOut,
   LayoutDashboard,
   Package,
   CalendarCheck
 } from "lucide-react"
+import { canAccessOpsRoute, type PermissionContext } from "@/lib/auth/permissions"
 import { SidebarNav } from "./SidebarNav"
 import styles from "./SidebarPattern.module.css"
 import { APP_VERSION } from "@/lib/config/version"
 import { signout } from "@/app/login/actions"
 
-export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false }: { canAccessDocuments?: boolean; canSendMessages?: boolean }) {
+export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false, access }: { canAccessDocuments?: boolean; canSendMessages?: boolean; access?: PermissionContext }) {
   const [isCollapsed, setIsCollapsed] = React.useState(false)
   const [isMobileOpen, setIsMobileOpen] = React.useState(false)
   const pathname = usePathname()
@@ -96,13 +96,13 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
         </div>
 
         <div className="flex items-center gap-2">
-          <Link
+          {canAccessOpsRoute(access, "/ops/envios/novo") && (<Link
             href="/ops/envios/novo"
             className="tms-brand-cta min-h-11 flex items-center gap-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-xs active:scale-95 transition-all"
           >
             <Plus className="w-4 h-4" strokeWidth={1.75} />
             <span>Novo</span>
-          </Link>
+          </Link>)}
         </div>
       </div>
 
@@ -137,7 +137,7 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
           <div className={`tms-drawer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain ${styles.pattern} ${styles.mobilePattern}`}>
             {/* Scrollable Navigation */}
             <div className="py-2">
-              <SidebarNav collapsed={false} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} />
+              <SidebarNav collapsed={false} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} access={access} />
             </div>
 
             {/* Drawer Footer Actions */}
@@ -207,7 +207,7 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
         </div>
 
         {/* Navigation */}
-        <SidebarNav collapsed={isCollapsed} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} />
+        <SidebarNav collapsed={isCollapsed} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} access={access} />
 
         {/* Bottom Sidebar Action: Recolher painel */}
         <div className={`pb-4 pt-2 ${isCollapsed ? "px-2" : "px-4"}`}>
@@ -252,7 +252,7 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
           <span className="text-[11px] tracking-tight">Painel</span>
         </Link>
 
-        <Link
+        {canAccessOpsRoute(access, "/ops/envios") && (<Link
           href="/ops/envios"
           prefetch={false}
           aria-current={pathname.startsWith("/ops/envios") && pathname !== "/ops/envios/novo" ? "page" : undefined}
@@ -264,9 +264,9 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
         >
           <Package className={`w-5 h-5 mb-0.5 ${pathname.startsWith("/ops/envios") && pathname !== "/ops/envios/novo" ? "text-[var(--accent)] stroke-[2.5]" : ""}`} />
           <span className="text-[11px] tracking-tight">Envios</span>
-        </Link>
+        </Link>)}
 
-        <Link
+        {canAccessOpsRoute(access, "/ops/envios/novo") && (<Link
           href="/ops/envios/novo"
           prefetch={false}
           className="tms-nav-create flex flex-col items-center justify-center -mt-3 shrink-0"
@@ -275,9 +275,9 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
             <Plus className="w-6 h-6" strokeWidth={1.75} />
           </div>
           <span className="text-[9px] font-bold text-[var(--accent)] mt-0.5">Novo</span>
-        </Link>
+        </Link>)}
 
-        <Link
+        {canAccessOpsRoute(access, "/ops/envios/recolhas") && (<Link
           href="/ops/envios/recolhas"
           prefetch={false}
           aria-current={pathname.startsWith("/ops/envios/recolhas") ? "page" : undefined}
@@ -289,7 +289,7 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
         >
           <CalendarCheck className={`w-5 h-5 mb-0.5 ${pathname.startsWith("/ops/envios/recolhas") ? "text-[var(--accent)] stroke-[2.5]" : ""}`} />
           <span className="text-[11px] tracking-tight">Recolhas</span>
-        </Link>
+        </Link>)}
 
         <button
           type="button"

@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { notFound } from 'next/navigation'
 import { requireEmployee } from '@/lib/auth/context'
 import { getClientesAction } from '@/app/actions/clientes'
@@ -5,6 +6,8 @@ import { canSendClientMessages } from '@/lib/client-messages/types'
 import { MessagesComposer } from './MessagesComposer'
 export const metadata = { title: 'Mensagens aos clientes | Linke TMS' }
 export default async function ClientMessagesOpsPage() {
+  await requireOpsPageAccess("/ops/mensagens")
+
   const ctx = await requireEmployee()
   if (!canSendClientMessages(ctx)) notFound()
   const clients = await getClientesAction()

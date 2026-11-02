@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import * as React from "react"
 import Link from "next/link"
 import { Search, Plus, MoreVertical, Building2, UserCircle2 } from "lucide-react"
@@ -5,6 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { getClientes } from "@/app/actions/clientes"
 
 export default async function ClientesPage() {
+  await requireOpsPageAccess("/ops/clientes")
+
   const clientes = await getClientes()
 
   return (

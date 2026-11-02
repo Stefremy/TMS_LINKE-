@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { createAdminClient } from "@/lib/supabase/server"
 import { loadFilteredShipmentPage } from "@/lib/services/shipments/filtered-shipment-list"
 import { readShipmentListFilters } from "@/lib/services/shipments/shipment-list-filters"
@@ -10,6 +11,8 @@ import { pickupDateDisplay } from "@/lib/services/shipments/shipment-pickup-date
 import { formatDeclaredWeight } from '@/lib/services/shipments/parcel-summary'
 
 export default async function EnviosPage(props: { searchParams?: Promise<Record<string, string | undefined>> }) {
+  await requireOpsPageAccess("/ops/envios")
+
   const searchParams = await props.searchParams || {}
   const ctx = await requireEmployee()
   const supabase = createAdminClient()

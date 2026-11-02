@@ -60,6 +60,7 @@ function menuHarness(t, dashboard, label) {
   t.after(() => Object.assign(global, previous))
   const jsx = (type, props) => ({ type, props: props || {} })
   const load = createLoader({
+    fetch: async () => ({ ok: true, json: async () => ({ messages: [], unreadCount: 0 }) }),
     react, 'react/jsx-runtime': { jsx, jsxs: jsx },
     'lucide-react': new Proxy({}, { get: (_, name) => name }),
     'next/link': { __esModule: true, default: 'a' },
@@ -81,6 +82,7 @@ function menuHarness(t, dashboard, label) {
     '@/lib/carrier-logos': { getCarrierLogo: () => null },
     '@/lib/status-helpers': { getShipmentStatusConfig: () => ({ label: 'Pendente', badgeVariant: 'warning' }) },
     './ClientScope': { useClientScope: () => ({ client: { id: 'client-a', short_name: 'Fixture', pricing: {} }, basePath: '/app/fixture' }) },
+    './ClientMessages': { useClientMessageCounter: () => ({ unreadCount: 0, refresh: async () => {} }) },
     '@/components/manifest-documents': { ManifestDocuments: 'div' },
   })
   const Component = dashboard ? load('app/app/components/ClientDashboard.tsx').ClientDashboard :

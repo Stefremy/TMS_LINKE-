@@ -1,5 +1,9 @@
 "use client"
 
+import { SpecialFeesEditor } from "@/components/shipments/SpecialFeesEditor"
+import { DEFAULT_STANDARD_SPECIAL_FEES } from "@/lib/pricing/special-fee-catalogue"
+import { resolveClientSpecialFees } from "@/lib/pricing/special-fees"
+
 import { CLIENT_ACTIVITY_COLORS, clientActivityColor } from "@/lib/clients/activity-color"
 import { CountrySelect } from "@/components/country-select"
 import { normalizeClientBillingFields, usesPrincipalBillingAddress, getClientBillingAddress } from "@/lib/client-addresses"
@@ -55,14 +59,12 @@ import { getServiceZoneOverrideKey, resolveZoneTierOverrides } from "@/lib/prici
 import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "@/app/ops/configuracao/servicos/types"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
-import { CORREOS_INCLUDED_SERVICES, isCorreosConfigurationOnly, mergeClientSpecialFees } from "@/lib/services/correos/complementary-services"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { 
   Cliente, 
   DEFAULT_CLIENT_CATEGORIES, 
   CLIENT_COLOR_OPTIONS,
   DEFAULT_CLIENT_PRICING,
-  DEFAULT_CTT_SPECIAL_SERVICES_FEES,
   ClientPricingConfig,
   ClientSpecialServiceFee
 } from "../types"
@@ -72,6 +74,8 @@ interface ClienteModalProps {
   servicosLinke?: ServicoLinke[]
   canManageAccess?: boolean
   canSendAccessEmail?: boolean
+  standardSpecialFees?: ClientSpecialServiceFee[]
+  standardFuelSurchargePct?: number
   defaultPaymentDays?: number
   onManageAccess?: () => void
   onClose: () => void
@@ -81,12 +85,11 @@ interface ClienteModalProps {
 type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario" | "acesso"
 type PrecarioSubTab = "servicos_linke" | "suplementares" | "geral"
 
-export function ClienteModal({ initialData, servicosLinke = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, onManageAccess, onClose, onSaved }: ClienteModalProps) {
+export function ClienteModal({ initialData, servicosLinke = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, standardSpecialFees = DEFAULT_STANDARD_SPECIAL_FEES, standardFuelSurchargePct, onManageAccess, onClose, onSaved }: ClienteModalProps) {
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
   const [serviceTableFilter, setServiceTableFilter] = React.useState<"all" | "base" | "custom">("all")
-  const [specialProviderTab, setSpecialProviderTab] = React.useState<"ctt" | "correos">("ctt")
   const [savedFormSnapshot, setSavedFormSnapshot] = React.useState<string | null>(null)
   const [draftId] = React.useState(() => initialData?.id || crypto.randomUUID())
   const [sendInvitation, setSendInvitation] = React.useState(false)
@@ -133,7 +136,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
     volume_discount_pct: initialData?.volume_discount_pct ?? 0,
     pricing: {
       ...DEFAULT_CLIENT_PRICING, ...initialData?.pricing,
-      special_services_fees: mergeClientSpecialFees(initialData?.pricing?.special_services_fees, DEFAULT_CTT_SPECIAL_SERVICES_FEES),
+      special_services_fees: resolveClientSpecialFees(initialData?.pricing?.special_services_fees, standardSpecialFees),
     },
     custom_tier_overrides: initialData?.custom_tier_overrides || {},
   })
@@ -188,37 +191,17 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         pricing: {
           ...DEFAULT_CLIENT_PRICING,
           ...initialData.pricing,
-          special_services_fees: mergeClientSpecialFees(initialData.pricing?.special_services_fees, DEFAULT_CTT_SPECIAL_SERVICES_FEES),
+          special_services_fees: resolveClientSpecialFees(initialData.pricing?.special_services_fees, standardSpecialFees),
         },
       })
     }
-  }, [initialData, servicosLinke, defaultPaymentDays])
+  }, [initialData, servicosLinke, defaultPaymentDays, standardSpecialFees])
 
   React.useEffect(() => {
     if (formData.billing_type === "pay_as_you_go" && formData.payment_terms !== "Pronto Pagamento") {
       setFormData(prev => ({ ...prev, payment_terms: "Pronto Pagamento" }))
     }
   }, [formData.billing_type, formData.payment_terms])
-
-  // Handlers for Special Services Fees
-  const handleSpecialFeeChange = (index: number, field: keyof ClientSpecialServiceFee, value: any) => {
-    setFormData((prev) => {
-      const currentPricing = prev.pricing || DEFAULT_CLIENT_PRICING
-      const currentList = currentPricing.special_services_fees || DEFAULT_CTT_SPECIAL_SERVICES_FEES
-      const updated = [...currentList]
-      updated[index] = {
-        ...updated[index],
-        [field]: typeof value === "boolean" ? value : typeof value === "string" && !isNaN(Number(value)) ? parseFloat(value) : value,
-      }
-      return {
-        ...prev,
-        pricing: {
-          ...currentPricing,
-          special_services_fees: updated,
-        },
-      }
-    })
-  }
 
   const handlePricingConfigChange = (field: keyof ClientPricingConfig, value: any) => {
     setFormData((prev) => {
@@ -325,6 +308,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
         ...prev,
         pricing: {
           ...DEFAULT_CLIENT_PRICING,
+          special_services_fees: resolveClientSpecialFees(undefined, standardSpecialFees),
           services_pricing: prev.pricing?.services_pricing ?? DEFAULT_CLIENT_PRICING.services_pricing,
         },
         custom_tier_overrides: {},
@@ -1588,7 +1572,7 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                 </div>
                 <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3.5 py-3">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Combustível</p>
-                  <p className="mt-1 text-xs font-semibold text-[var(--text-primary)]">{formData.pricing?.fuel_surcharge_pct ?? DEFAULT_CLIENT_PRICING.fuel_surcharge_pct}%</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--text-primary)]">{standardFuelSurchargePct ?? formData.pricing?.fuel_surcharge_pct ?? DEFAULT_CLIENT_PRICING.fuel_surcharge_pct}%{standardFuelSurchargePct !== undefined ? " · Standard" : ""}</p>
                 </div>
               </div>
 
@@ -1751,131 +1735,14 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
 
               {/* SUBTAB 2: SERVIÇOS ESPECIAIS & SUPLEMENTARES (SpecialServices) */}
               {precarioSubTab === "suplementares" && (
-                <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)] overflow-hidden">
-                  <div className="px-5 py-3 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] flex items-center justify-between">
-                    <div>
-                      <h2 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-amber-500" />
-                        Tabela de Taxas Suplementares e Serviços Especiais
-                      </h2>
-                      <p className="text-[11px] text-[var(--text-secondary)]">
-                        Valores cobrados ao cliente quando adiciona opções especiais de entrega aos seus envios.
-                      </p>
-                    </div>
+                <div className="space-y-4">
+                  <div>
+                    <h2 className="text-sm font-bold">Tabela de Taxas Suplementares e Serviços Especiais</h2>
+                    <p className="mt-1 text-xs text-[var(--text-secondary)]">Valores cobrados ao cliente quando adiciona opções especiais de entrega aos seus envios. Alterar uma taxa cria um ajuste só para este cliente.</p>
+                    <a href="/ops/configuracao/taxas" target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-semibold text-[var(--accent)]">Consultar tabela standard →</a>
                   </div>
-
-                  {/* Tabs para as diferentes transportadoras */}
-                  <div className="flex border-b border-[var(--border-subtle)] bg-[var(--surface-bg)]">
-                    <button
-                      type="button"
-                      onClick={() => setSpecialProviderTab("ctt")}
-                      className={`flex-1 py-3 text-xs font-bold transition-colors ${specialProviderTab === "ctt" ? "text-[var(--accent)] border-b-2 border-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"}`}
-                    >
-                      CTT Expresso · {specialFeesList.filter(fee => !fee.special_service_code.startsWith("correos_")).length} taxas
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSpecialProviderTab("correos")}
-                      className={`flex-1 py-3 text-xs font-bold transition-colors ${specialProviderTab === "correos" ? "text-[var(--accent)] border-b-2 border-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]"}`}
-                    >
-                      Correos Express · {specialFeesList.filter(fee => fee.special_service_code.startsWith("correos_")).length} taxas
-                    </button>
-                  </div>
-
-                  {specialProviderTab === "correos" && (
-                    <div className="border-b border-[var(--border-subtle)] bg-emerald-50/40 px-5 py-4">
-                      <p className="text-xs font-semibold text-[var(--text-primary)]">Correos Express · Incluído no frete</p>
-                      <ul className="mt-2 grid gap-1 text-[11px] text-[var(--text-secondary)] sm:grid-cols-2">
-                        {CORREOS_INCLUDED_SERVICES.map(item => <li key={item}>✓ {item}</li>)}
-                      </ul>
-                      <p className="mt-3 text-[11px] text-[var(--text-secondary)]">Valores de referência do contrato apresentado (tarifas de 2025). Os valores já negociados com este cliente são mantidos. Gravar altera apenas este cliente.</p>
-                    </div>
-                  )}
-                  <div className="divide-y divide-[var(--border-subtle)]">
-                    {specialFeesList
-                      .map((fee, idx) => ({ fee, idx }))
-                      .filter(({ fee }) => specialProviderTab === "correos" ? fee.special_service_code.startsWith("correos_") : !fee.special_service_code.startsWith("correos_"))
-                      .map(({ fee, idx }) => (
-                      <div 
-                        key={fee.special_service_code}
-                        className={`p-4 flex flex-wrap items-center justify-between gap-4 transition-colors ${
-                          fee.is_enabled ? "hover:bg-[var(--surface-muted)]/60" : "bg-[var(--surface-muted)]/30 opacity-60"
-                        }`}
-                      >
-                        <div className="flex items-start gap-3 max-w-lg">
-                          <input
-                            type="checkbox"
-                            checked={fee.is_enabled}
-                            disabled={isCorreosConfigurationOnly(fee.special_service_code)}
-                            onChange={(e) => handleSpecialFeeChange(idx, "is_enabled", e.target.checked)}
-                            className="w-4 h-4 mt-1 rounded border-[var(--border-strong)] accent-[var(--accent)] text-[var(--accent)] focus:ring-[var(--accent)] cursor-pointer"
-                          />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-xs text-[var(--text-primary)]">{fee.special_service_name}</span>
-                              <span className="text-[10px] font-semibold bg-[var(--surface-muted)] text-[var(--text-secondary)] px-1.5 py-0.5 rounded border border-[var(--border-subtle)]">
-                                {fee.special_service_code.startsWith("correos_") ? "Correos Express" : `CTT · Tipo ${fee.api_type_code}`}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">{fee.description}</p>
-                            {isCorreosConfigurationOnly(fee.special_service_code) && <p className="mt-1 text-[11px] font-medium text-amber-800">Preço configurável · ativação na emissão pendente; não é cobrado nos envios.</p>}
-                          </div>
-                        </div>
-
-                        {/* Input controls based on fee type */}
-                        <div className="flex items-center gap-3">
-                          {fee.fee_type === "percentage" ? (
-                            <div className="flex items-center gap-2">
-                              <div>
-                                <label className="block text-[10px] font-bold text-[var(--text-secondary)]">Taxa (%)</label>
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    step="0.1"
-                                    disabled={!fee.is_enabled && !isCorreosConfigurationOnly(fee.special_service_code)}
-                                    value={fee.percentage_value ?? 2.0}
-                                    onChange={(e) => handleSpecialFeeChange(idx, "percentage_value", e.target.value)}
-                                    className="w-20 border border-[var(--border-subtle)] rounded px-2 py-1 text-xs font-mono font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
-                                  />
-                                  <span className="text-xs font-bold text-[var(--text-secondary)]">%</span>
-                                </div>
-                              </div>
-
-                              <div>
-                                <label className="block text-[10px] font-bold text-[var(--text-secondary)]">Mínimo (€)</label>
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    step="0.1"
-                                    disabled={!fee.is_enabled && !isCorreosConfigurationOnly(fee.special_service_code)}
-                                    value={fee.min_value ?? 1.5}
-                                    onChange={(e) => handleSpecialFeeChange(idx, "min_value", e.target.value)}
-                                    className="w-20 border border-[var(--border-subtle)] rounded px-2 py-1 text-xs font-mono font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
-                                  />
-                                  <span className="text-xs font-bold text-[var(--text-secondary)]">€</span>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              <label className="block text-[10px] font-bold text-[var(--text-secondary)]">Valor Fixo (€)</label>
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  disabled={!fee.is_enabled && !isCorreosConfigurationOnly(fee.special_service_code)}
-                                  value={fee.fixed_value ?? 0.0}
-                                  onChange={(e) => handleSpecialFeeChange(idx, "fixed_value", e.target.value)}
-                                  className="w-24 border border-[var(--border-subtle)] rounded px-2 py-1 text-xs font-mono font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] disabled:bg-[var(--surface-muted)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
-                                />
-                                <span className="text-xs font-bold text-[var(--text-secondary)]">€</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <SpecialFeesEditor mode="client" fees={specialFeesList} standards={standardSpecialFees}
+                    onChange={fees => setFormData(previous => ({ ...previous, pricing: { ...(previous.pricing || DEFAULT_CLIENT_PRICING), special_services_fees: fees } }))} />
                 </div>
               )}
 
@@ -1908,13 +1775,15 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                         <input
                           type="number"
                           step="0.1"
-                          value={formData.pricing?.fuel_surcharge_pct ?? 12.5}
+                          value={standardFuelSurchargePct ?? formData.pricing?.fuel_surcharge_pct ?? 12.5}
+                          readOnly={standardFuelSurchargePct !== undefined}
                           onChange={(e) => handlePricingConfigChange("fuel_surcharge_pct", parseFloat(e.target.value) || 0)}
                           className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs font-mono font-bold text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
                         />
                         <span className="text-xs font-bold text-[var(--text-secondary)]">%</span>
                       </div>
-                      <p className="text-[10px] text-[var(--text-tertiary)] mt-0.5">Calculada sobre o frete base de cada envio.</p>
+                      <p className="text-[10px] text-[var(--text-tertiary)] mt-0.5">{standardFuelSurchargePct !== undefined ? "Standard aplicado a todos os clientes." : "Calculada sobre o frete base de cada envio."}</p>
+                      <a href="/ops/configuracao/combustivel" target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] font-semibold text-[var(--accent)]">Configurar combustível standard →</a>
                     </div>
 
                     <div>

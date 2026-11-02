@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import React from "react"
 import { Metadata } from "next"
 import { DeliveryTrackingClient } from "./components/DeliveryTrackingClient"
@@ -6,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { resolveCoordinates } from "@/lib/services/geo/geocoder"
 import { TrackingShipment } from "./types"
 import { buildTrackingCheckpoints } from "./checkpoints"
+import { buildTrackingDistances } from "./distances"
 
 export const metadata: Metadata = {
   title: "Monitorização & Tracking por Pickagens | Linke TMS",
@@ -16,6 +18,8 @@ import Link from "next/link"
 export default async function OpsTrackingPage(props: {
   searchParams?: Promise<{ tab?: string; search?: string }>
 }) {
+  await requireOpsPageAccess("/ops/tracking")
+
   const supabase = createAdminClient()
   const resolvedSearchParams = await props.searchParams
   const tabParam = resolvedSearchParams?.tab || "active"
@@ -172,8 +176,7 @@ export default async function OpsTrackingPage(props: {
             clientName: s.sender_name || "Cliente Registado"
           },
           metrics: {
-            totalDistanceKm: 260,
-            remainingDistanceKm: Math.round(260 * (1 - progressPercent / 100)),
+            ...buildTrackingDistances(originCoord, destCoord, pickagens, ["entregue", "entregue_pudo"].includes(s.status)),
             remainingTimeStr: dynamicRemaining,
             lastPickagemLocation: pickagens.find(p => p.isCurrentPosition)?.locationName || originCoord.name,
             lastPickagemTime: pickagens.find(p => p.isCurrentPosition)?.formattedTime || "Agora",
@@ -211,9 +214,6 @@ export default async function OpsTrackingPage(props: {
           <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
             Tracking & Mapeamento por Pickagens
           </h1>
-          <p className="text-xs text-[var(--text-tertiary)]">
-            Ligação entre os locais identificados nas leituras da transportadora. O traçado não representa o percurso rodoviário exato.
-          </p>
         </div>
 
         <div className="flex items-center gap-4">

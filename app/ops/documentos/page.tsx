@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { notFound } from "next/navigation"
 import { getAuthContext, requireEmployee } from "@/lib/auth/context"
 import { canAccessStaffDocuments } from "@/lib/auth/staff-documents"
@@ -8,6 +9,8 @@ import { DocumentsClient } from "./DocumentsClient"
 export const metadata = { title: "Documentos Internos | Linke TMS" }
 
 export default async function DocumentsPage() {
+  await requireOpsPageAccess("/ops/documentos")
+
   await requireEmployee()
   const context = await getAuthContext()
   if (!canAccessStaffDocuments(context)) notFound()

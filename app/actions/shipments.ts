@@ -27,6 +27,7 @@ import { loadShipmentParcelSummaries } from '@/lib/services/shipments/shipment-p
 import { publicUrl } from "@/lib/config/public-origins"
 import type { CTTShipment2Close, CTTCompleteShipmentOutput, CTTDocumentData } from "@/lib/services/ctt/ctt-types"
 import { getCttShipmentLabel } from "@/lib/services/ctt/shipment-label"
+import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
 
 export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
   return fetchShipments(options)
@@ -252,7 +253,7 @@ export async function emitClientGuiaAction(data: {
   let submitted = false
   let confirmedRejection = false
   try {
-    const ctx = await requireUser()
+    const ctx = await requireUser("Emissão e Controlo de Guias CTT")
 
     const finalClientId = ctx.role === "client" ? ctx.client_id! : data.clientId
 
@@ -550,7 +551,7 @@ export async function emitClientGuiaAction(data: {
           }
         }
         const rawZpl = cttResult.labelBase64 || getCttShipmentLabel(emitted)?.data || ""
-        labelBase64 = rawZpl ? await convertZplToPdfBase64(rawZpl) : null
+        labelBase64 = rawZpl ? await applyLinkeLogoToCttLabel(await convertZplToPdfBase64(rawZpl), cttResult.trackingNumber) : null
       } catch (e: any) {
         if (confirmedRejection || e.message?.includes("rejeitaram") || e.message?.includes("inválido") || e.message?.includes("suportado")) {
           throw e
@@ -716,7 +717,7 @@ export async function emitClientGuiaAction(data: {
 
 /** Retrieve an existing official label without creating another carrier shipment. */
 export async function regenerateCttLabelAction(shipmentId: string) {
-  await requireEmployee()
+  await requireEmployee("Emissão e Controlo de Guias CTT")
   const labelBase64 = await fetchShipmentLabel(shipmentId)
   return {
     success: Boolean(labelBase64),
@@ -735,7 +736,7 @@ export async function updateShipmentStatusAction(
   location?: string
 ) {
   
-  await requireEmployee()
+  await requireEmployee("Emissão e Controlo de Guias CTT")
 
   const supabase = createAdminClient()
   const now = new Date().toISOString()
@@ -1086,7 +1087,7 @@ export async function getShipmentTrackingTimelineAction(shipmentId: string, trac
  * Sincroniza o tracking de um envio individual (Correos Express ou CTT Expresso)
  */
 export async function syncShipmentTrackingAction(trackingNumber: string, shipmentId?: string) {
-  const ctx = await requireUser()
+  const ctx = await requireUser(["Emissão e Controlo de Guias CTT","Atendimento & Suporte a Incidências"])
   const res = await syncShipmentTracking(
     { trackingNumber, shipmentId },
     {
@@ -1108,7 +1109,7 @@ export async function syncShipmentTrackingAction(trackingNumber: string, shipmen
  * Sincroniza todos os envios ativos em lote (Correos Express e CTT Expresso)
  */
 export async function syncAllActiveShipmentsTrackingAction() {
-  await requireEmployee()
+  await requireEmployee(["Emissão e Controlo de Guias CTT","Atendimento & Suporte a Incidências"])
 
   const supabase = createAdminClient()
   const { data: activeShipments } = await supabase
@@ -1137,7 +1138,7 @@ export async function syncAllActiveShipmentsTrackingAction() {
  * Sincroniza em segundo plano uma lista de envios visíveis ativos (sem bloquear a página)
  */
 export async function syncActiveShipmentsBatchAction(shipmentIds: string[]) {
-  const ctx = await requireUser()
+  const ctx = await requireUser(["Emissão e Controlo de Guias CTT","Atendimento & Suporte a Incidências"])
   const result = await syncAuthorizedShipmentBatch(ctx, shipmentIds)
   if (result.updatedCount > 0) {
     revalidatePath("/ops/envios")
@@ -1161,7 +1162,7 @@ export async function deleteShipmentAction(shipmentId: string) {
  */
 export async function createReturnShipmentAction(originalShipmentId: string, reason?: string) {
   
-  const ctx = await requireUser()
+  const ctx = await requireUser("Emissão e Controlo de Guias CTT")
 
   const supabase = createAdminClient()
   try {
@@ -1365,7 +1366,7 @@ export async function resolveShipmentIncidentAction(params: {
   newPhone?: string
   notes?: string
 }) {
-  await requireEmployee()
+  await requireEmployee(["Emissão e Controlo de Guias CTT","Atendimento & Suporte a Incidências"])
   const supabase = createAdminClient()
   const now = new Date().toISOString()
   const { shipmentId, actionType, scheduledDate, timeWindow, newAddress, newZipCode, newCity, newPhone, notes } = params

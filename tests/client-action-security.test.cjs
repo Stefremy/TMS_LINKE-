@@ -64,6 +64,7 @@ function harness(ctx = client, failure) {
     '@/lib/supabase/server': { createAdminClient: () => db.createAdminClient() },
     'next/cache': { revalidatePath: p => calls.revalidations.push(p) },
     '@/lib/services/geo/postal-code.service': { lookupPostalCode: () => null },
+    'node:crypto': require('node:crypto'),
     path,
     fs: { existsSync: () => { calls.filesystem++; return true }, readFileSync: () => { calls.filesystem++; return 'fixture' } },
     '@/lib/services/reembolsos/ctt-reembolso-parser': { parseCttReembolsoFile: () => {
@@ -156,6 +157,48 @@ test('recipient listing ignores a client-submitted store and excludes other comp
   assert.ok(result.every(r => r.client_id === A))
   assert.doesNotMatch(JSON.stringify(result), /Foreign private|recipient-b|recipient-global|Recipient B/)
   for (const q of h.db.queries) assert.ok(q.filters.some(f => f.field === 'tenant_id' && f.value === TENANT))
+})
+
+test('history recipient IDs distinguish shared name prefixes, postcodes and client accounts', async () => {
+  const h = harness(ops)
+  const shipment = (id, recipient_name, recipient_zip3, client_id = A) => ({
+    id, tenant_id: TENANT, client_id, recipient_name,
+    recipient_zip4: '4000', recipient_zip3, created_at: '2026-10-14',
+  })
+  h.tables.shipments = [
+    shipment('same-name-a', 'Destinatário final', '001'),
+    shipment('same-name-b', 'Destinatário final', '001', B),
+    shipment('other-postcode', 'Destinatário final', '002'),
+    shipment('other-name', 'Destinatário final diferente', '001'),
+    shipment('repeat', ' DESTINATÁRIO   FINAL ', '001'),
+  ]
+  const result = (await h.recipients.getDestinatariosAction()).filter(r => !r.is_saved)
+  assert.equal(result.length, 4)
+  assert.equal(new Set(result.map(r => r.id)).size, 4)
+  assert.ok(result.every(r => r.id.startsWith('dest_')))
+  const repeated = result.find(r => r.shipments_history.some(s => s.id === 'repeat'))
+  assert.equal(repeated.total_shipments, 2)
+  assert.deepEqual(new Set(repeated.shipments_history.map(s => s.id)), new Set(['same-name-a', 'repeat']))
+
+  h.tables.shipments.reverse()
+  const refreshed = (await h.recipients.getDestinatariosAction()).filter(r => !r.is_saved)
+  const idsByShipment = rows => Object.fromEntries(rows.flatMap(r => r.shipments_history.map(s => [s.id, r.id])))
+  assert.deepEqual(idsByShipment(refreshed), idsByShipment(result))
+})
+
+test('client recipient history IDs stay unique and match the same records in OPS', async () => {
+  const h = harness(client)
+  h.tables.shipments = ['001', '002'].map(zip => ({
+    id: `shipment-${zip}`, tenant_id: TENANT, client_id: A,
+    recipient_name: 'Destinatário final', recipient_zip4: '4000', recipient_zip3: zip, created_at: '2026-10-14',
+  }))
+  const result = (await h.recipients.getDestinatariosAction()).filter(r => !r.is_saved)
+  assert.equal(result.length, 2)
+  assert.equal(new Set(result.map(r => r.id)).size, 2)
+  const staff = harness(ops)
+  staff.tables.shipments = structuredClone(h.tables.shipments)
+  const staffIds = (await staff.recipients.getDestinatariosAction()).filter(r => !r.is_saved).map(r => r.id)
+  assert.deepEqual(result.map(r => r.id), staffIds)
 })
 
 test('client recipient updates reject forged foreign, shared, missing and wrong-action IDs without writes', async () => {

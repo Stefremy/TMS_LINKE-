@@ -3,8 +3,6 @@
 import * as React from "react"
 import {
   X,
-  Key,
-  Shield,
   Eye,
   EyeOff,
   Copy,
@@ -12,12 +10,11 @@ import {
   Loader2,
   CheckCircle2,
   Lock,
-  UserCheck
 } from "lucide-react"
 import { RefreshIcon } from "@/components/ui/refresh-icon"
-import { Colaborador, ACCESS_LEVELS, AVAILABLE_PERMISSIONS } from "../types"
+import { Colaborador } from "../types"
 import { setColaboradorCredentialsAction } from "@/app/actions/auth"
-import { saveColaboradorAction } from "@/app/actions/colaboradores"
+import { StaffPermissionEditor } from "./StaffPermissionEditor"
 
 interface ColaboradorAuthModalProps {
   isOpen: boolean
@@ -47,6 +44,7 @@ export function ColaboradorAuthModal({
   const [success, setSuccess] = React.useState("")
   const [copiedCredentials, setCopiedCredentials] = React.useState(false)
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Reset the editable form when the selected account changes. */
   React.useEffect(() => {
     setEmail(colaborador.email || "")
     setAccessLevel(colaborador.access_level || "Operacional")
@@ -55,25 +53,17 @@ export function ColaboradorAuthModal({
     setError("")
     setSuccess("")
   }, [colaborador, isOpen])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!isOpen) return null
 
   // Generate strong random password
   const handleGeneratePassword = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*"
-    let generated = ""
-    for (let i = 0; i < 12; i++) {
-      generated += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
+    const random = crypto.getRandomValues(new Uint8Array(16))
+    const generated = Array.from(random, value => chars[value % chars.length]).join("")
     setPassword(generated)
     setShowPassword(true)
-  }
-
-  // Toggle permission
-  const handleTogglePermission = (perm: string) => {
-    setSelectedPermissions((prev) =>
-      prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
-    )
   }
 
   // Copy credentials message
@@ -84,7 +74,7 @@ Email de Login: ${email}
 Password: ${password || "[A password atual do colaborador]"}
 Nível de Acesso: ${accessLevel}
 Permissões: ${selectedPermissions.join(", ")}
-Link de Acesso: http://localhost:3000/ops`
+Link de Acesso: ${window.location.origin}/ops`
 
     navigator.clipboard.writeText(text)
     setCopiedCredentials(true)
@@ -107,24 +97,14 @@ Link de Acesso: http://localhost:3000/ops`
         selectedPermissions
       )
 
-      // 2. Update employee profile
-      const saveRes = await saveColaboradorAction({
-        ...colaborador,
-        email: email.trim(),
-        access_level: accessLevel,
-        permissions: selectedPermissions,
-      })
-
-      if (saveRes.success && saveRes.colaborador && onUpdated) {
-        onUpdated(saveRes.colaborador)
-      }
+      if (authRes.colaborador && onUpdated) onUpdated(authRes.colaborador)
 
       setSuccess(authRes.message)
       setTimeout(() => {
         onClose()
       }, 1500)
-    } catch (err: any) {
-      setError(err?.message || "Ocorreu um erro ao atribuir credenciais.")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Ocorreu um erro ao atribuir credenciais.")
     } finally {
       setIsLoading(false)
     }
@@ -235,96 +215,8 @@ Link de Acesso: http://localhost:3000/ops`
             </div>
           </div>
 
-          {/* Nível de Acesso */}
-          <div>
-            <label className="block text-xs font-semibold text-[var(--text-primary)] mb-2">
-              Nível de Acesso (Perfil)
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {ACCESS_LEVELS.map((level) => {
-                const isSelected = accessLevel === level
-                return (
-                  <div
-                    key={level}
-                    onClick={() => setAccessLevel(level)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                      isSelected
-                        ? "bg-[var(--accent-soft)] border-[var(--accent)] ring-2 ring-[var(--accent)]/20"
-                        : "bg-[var(--surface-muted)] border-[var(--border-subtle)] hover:bg-[var(--surface-dim)]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={`text-xs font-bold ${isSelected ? "text-[var(--accent)]" : "text-[var(--text-primary)]"}`}>
-                        {level}
-                      </span>
-                      {isSelected && <Shield className="w-3.5 h-3.5 text-[var(--accent)]" />}
-                    </div>
-                    <p className="text-[11px] text-[var(--text-tertiary)] mt-1 leading-tight">
-                      {level === "Administrador"
-                        ? "Acesso total à gestão, clientes, finanças e configurações."
-                        : level === "Operacional"
-                        ? "Operações de transporte, guias CTT, recolhas e tracking."
-                        : "Gestão comercial, apoio a clientes e incidências."}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Permissões Granulares */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-xs font-semibold text-[var(--text-primary)]">
-                Módulos e Permissões Granulares
-              </label>
-              <span className="text-[10px] text-[var(--text-tertiary)]">
-                Selecione as permissões ativas
-              </span>
-            </div>
-            <div className="space-y-2 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl p-3">
-              {AVAILABLE_PERMISSIONS.map((perm) => {
-                const isChecked = selectedPermissions.includes(perm)
-                const isSalariosPerm = perm === "Gestão de Salários & Vencimentos"
-                const isSuperAdminPerm = perm === "Acesso Total (Super-Admin)"
-
-                return (
-                  <label
-                    key={perm}
-                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                      isChecked ? "bg-[var(--surface-bg)] shadow-2xs" : "hover:bg-[var(--surface-dim)]/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 text-xs text-[var(--text-primary)]">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => handleTogglePermission(perm)}
-                        className="w-4 h-4 rounded cursor-pointer accent-[var(--accent)]"
-                      />
-                      <span className={`text-xs ${isSuperAdminPerm ? "font-bold text-[var(--text-primary)]" : "font-medium"}`}>
-                        {perm}
-                      </span>
-                    </div>
-
-                    {isSalariosPerm && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--status-warning-soft)] text-[var(--status-warning)] border border-[rgba(217,119,6,0.2)]">
-                        <Lock className="w-2.5 h-2.5" />
-                        Área Restrita (/ops/tesouraria/salarios)
-                      </span>
-                    )}
-
-                    {isSuperAdminPerm && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)]">
-                        <Shield className="w-2.5 h-2.5" />
-                        Acesso Geral
-                      </span>
-                    )}
-                  </label>
-                )
-              })}
-            </div>
-          </div>
+          <StaffPermissionEditor level={accessLevel} permissions={selectedPermissions} email={email}
+            onChange={(level, permissions) => { setAccessLevel(level); setSelectedPermissions(permissions) }} />
 
           {/* Copiar Credenciais formatadas */}
           <div className="pt-2 flex items-center justify-between">

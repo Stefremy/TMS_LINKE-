@@ -42,7 +42,7 @@ export class CttProvider implements CarrierProvider {
       }),
       City: address.city || "",
       Country: country,
-      ContactName: address.contact || address.name,
+      ContactName: address.contact?.trim() || undefined,
       Phone: address.phone,
       MobilePhone: address.mobilePhone,
       Email: address.email?.trim() || undefined,

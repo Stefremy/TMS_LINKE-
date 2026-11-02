@@ -1,31 +1,36 @@
-import * as React from "react"
-import { Shield, Construction } from "lucide-react"
+import Link from "next/link"
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
+import { PERMISSION_GROUPS, PERMISSION_PRESETS } from "@/lib/auth/permissions"
 
-export default function PermissõesPage() {
+export default async function PermissoesPage() {
+  await requireOpsPageAccess("/ops/configuracao/permissoes")
   return (
-    <div className="p-6 flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
-      <div className="w-full max-w-lg bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] shadow-sm overflow-hidden">
-        <div className="px-6 py-5 bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] flex items-center gap-3">
-          <div className="w-8 h-8 rounded-md bg-[var(--accent-soft)] flex items-center justify-center text-[var(--accent)] border border-[rgba(18,138,71,0.1)]">
-            <Shield className="w-4 h-4" />
-          </div>
-          <div>
-            <h1 className="text-[14px] font-bold text-[var(--text-primary)] leading-tight">Permissões</h1>
-            <p className="text-[11px] font-medium text-[var(--text-secondary)] mt-0.5">Controlo de acessos por perfil e função</p>
-          </div>
-        </div>
-        <div className="p-8 flex flex-col items-center gap-4 text-center">
-          <div className="w-12 h-12 rounded-full bg-[var(--status-warning-soft)] border border-[rgba(217,119,6,0.2)] flex items-center justify-center text-[var(--status-warning)]">
-            <Construction className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-[14px] font-bold text-[var(--text-primary)]">Módulo em Desenvolvimento</p>
-            <p className="text-[12px] font-medium text-[var(--text-secondary)] mt-1">Este módulo estará disponível em breve.</p>
-          </div>
-          <span className="inline-block mt-1 px-3 py-1 bg-[var(--surface-muted)] border border-[var(--border-strong)] rounded text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider">
-            Em Breve
-          </span>
-        </div>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><h1 className="text-xl font-bold">Mapa de acessos</h1>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">O que cada permissão permite e sugestões para distribuir funções na equipa.</p></div>
+        <Link href="/ops/entidades/colaboradores" className="rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">Gerir colaboradores</Link>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {PERMISSION_PRESETS.map(preset => <div key={preset.id} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4">
+          <h2 className="text-sm font-bold">{preset.title}</h2><p className="mt-1 text-xs text-[var(--text-secondary)]">{preset.description}</p>
+          <p className="mt-3 text-xs">{preset.permissions.length} módulos · {preset.accessLevel}</p>
+        </div>)}
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+        <table className="w-full text-left text-xs">
+          <caption className="p-4 text-left text-sm font-bold">Módulos incluídos nas sugestões</caption>
+          <thead className="bg-[var(--surface-muted)]"><tr><th scope="col" className="p-3">Módulo e acesso</th>{PERMISSION_PRESETS.map(preset => <th key={preset.id} scope="col" className="p-3 text-center">{preset.title}</th>)}<th scope="col" className="p-3 text-center">Administrador</th></tr></thead>
+          <tbody>{PERMISSION_GROUPS.flatMap(group => group.items).map(item => <tr key={item.id} className="border-t border-[var(--border-subtle)]">
+            <th scope="row" className="max-w-md p-3 font-normal"><span className="block font-semibold">{item.title}</span><span className="mt-1 block leading-relaxed text-[var(--text-secondary)]">{item.description}</span></th>
+            {PERMISSION_PRESETS.map(preset => <td key={preset.id} className="p-3 text-center">{preset.permissions.includes(item.id) ? "Incluído" : "—"}</td>)}
+            <td className="p-3 text-center">Incluído</td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 text-sm"><h2 className="font-bold">Acesso comum à equipa</h2><p className="mt-2 text-[var(--text-secondary)]">Visão geral, perfil pessoal, calendário e chat estão disponíveis a todos os colaboradores ativos. O perfil Administrador gere também colaboradores, credenciais e configurações gerais.</p></div>
+        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 text-sm"><h2 className="font-bold">Sugestões de atribuição</h2><p className="mt-2 text-[var(--text-secondary)]">Comece pelo perfil da função e adicione apenas os módulos necessários. Mantenha salários, documentos e webservices separados da operação diária. Reveja os acessos sempre que a função mudar.</p></div>
       </div>
     </div>
   )

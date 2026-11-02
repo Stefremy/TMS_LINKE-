@@ -1,5 +1,6 @@
 import { CTTSoapClient } from "./ctt-soap-client"
 import { normalizeCttContactPhone } from "./recipient-contact"
+import { distinctContactName } from "../shipments/address-contact"
 import { 
   CTTConnectionCredentials, 
   CTTCompleteShipmentInput, 
@@ -42,6 +43,7 @@ export class CTTShipmentService {
         : defaultType
 
     const country = (addr.Country || "PT").trim().toUpperCase()
+    const contactName = distinctContactName(addr.Name, addr.ContactName)
     const normalizeContact = (value?: string) => {
       const contact = normalizeCttContactPhone(value, country)
       let contactVal = contact.value
@@ -65,7 +67,7 @@ export class CTTShipmentService {
       <mod:${tagName}>
         <mod:Address>${esc(addr.Address)}</mod:Address>
         <mod:City>${esc(addr.City)}</mod:City>
-        ${addr.ContactName ? `<mod:ContactName>${esc(addr.ContactName)}</mod:ContactName>` : ""}
+        ${contactName ? `<mod:ContactName>${esc(contactName)}</mod:ContactName>` : ""}
         <mod:Country>${esc(country)}</mod:Country>
         ${addr.Door ? `<mod:Door>${esc(addr.Door)}</mod:Door>` : ""}
         ${addr.Email ? `<mod:Email>${esc(addr.Email)}</mod:Email>` : ""}

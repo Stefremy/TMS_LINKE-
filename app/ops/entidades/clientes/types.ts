@@ -1,3 +1,5 @@
+import { DEFAULT_CTT_SPECIAL_SERVICES_FEES } from "@/lib/pricing/special-fee-catalogue"
+export { DEFAULT_CTT_SPECIAL_SERVICES_FEES } from "@/lib/pricing/special-fee-catalogue"
 import { DEFAULT_CORREOS_SPECIAL_SERVICES_FEES } from "@/lib/services/correos/complementary-services"
 export { DEFAULT_CORREOS_SPECIAL_SERVICES_FEES } from "@/lib/services/correos/complementary-services"
 
@@ -30,6 +32,8 @@ export interface ClientServicePrice {
 }
 
 export interface ClientSpecialServiceFee {
+  /** True: inherit the company standard; absent on older negotiated rates. */
+  use_standard?: boolean
   special_service_code: string
   special_service_name: string
   api_type_code: number
@@ -44,6 +48,8 @@ export interface ClientSpecialServiceFee {
 export interface ClientPricingConfig {
   table_name: string
   fuel_surcharge_pct: number
+  /** Effective tenant standard, supplied by the server on each read. */
+  standard_fuel_surcharge_pct?: number
   discount_pct?: number
   rates?: ClientPricingRate[]
   services_pricing: ClientServicePrice[]
@@ -213,188 +219,13 @@ export const DEFAULT_CTT_SERVICES_PRICING: ClientServicePrice[] = [
 /**
  * 2. SERVIÇOS ESPECIAIS E SUPLEMENTARES (SpecialServices)
  */
-export const DEFAULT_CTT_SPECIAL_SERVICES_FEES: ClientSpecialServiceFee[] = [
-  {
-    special_service_code: "cod",
-    special_service_name: "AgainstReimbursement (Cobrança / Reembolso - COD)",
-    api_type_code: 2,
-    fee_type: "percentage",
-    percentage_value: 2.0,
-    min_value: 1.80,
-    description: "Recebimento do valor da mercadoria ou frete no ato de entrega.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "saturday",
-    special_service_name: "Saturday (Entrega ao Sábado 10h-14h)",
-    api_type_code: 4,
-    fee_type: "fixed",
-    fixed_value: 8.50,
-    description: "Distribuição prioritária ao sábado de manhã.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "return_signed",
-    special_service_name: "ReturnDocumentSigned (Guia / Fatura Assinada e Carimbada)",
-    api_type_code: 5,
-    fee_type: "fixed",
-    fixed_value: 2.20,
-    description: "Devolução física ou digitalizada do comprovativo assinado pelo destinatário.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "insurance",
-    special_service_name: "SpecialInsurance (Seguro Extra de Valor Declarado)",
-    api_type_code: 6,
-    fee_type: "percentage",
-    percentage_value: 1.0,
-    min_value: 3.50,
-    description: "Cobertura total até ao montante declarado da mercadoria.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "fragil",
-    special_service_name: "Fragil (Tratamento Diferenciado Frágil)",
-    api_type_code: 7,
-    fee_type: "fixed",
-    fixed_value: 1.50,
-    description: "Acondicionamento e manuseamento prioritário contra quebras.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "delivery_point",
-    special_service_name: "DeliveryPoint (Ponto CTT / Cacifo 24H Lockers)",
-    api_type_code: 18,
-    fee_type: "fixed",
-    fixed_value: 0.0,
-    description: "Entrega direta em cacifo eletrónico ou posto parceiro da rede CTT.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "time_window",
-    special_service_name: "TimeWindow (Janela Horária Agendada de 2h/3h)",
-    api_type_code: 22,
-    fee_type: "fixed",
-    fixed_value: 3.50,
-    description: "Agendamento da entrega numa faixa horária definida pelo destinatário.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "sms_tracking",
-    special_service_name: "SMS / LiveTracking (Alerta SMS e Seguimento em Tempo Real)",
-    api_type_code: 14,
-    fee_type: "fixed",
-    fixed_value: 0.15,
-    description: "Envio de SMS com janela estimada e link de tracking no mapa ao destinatário.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "auth_return",
-    special_service_name: "AuthorizeReturn / Back (Logística Inversa de Devoluções)",
-    api_type_code: 20,
-    fee_type: "fixed",
-    fixed_value: 3.85,
-    description: "Emissão de guias de retorno autorizadas para trocas de e-commerce. Disponível apenas em Portugal Continental.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "second_delivery",
-    special_service_name: "SecondScheduledDelivery (2ª Tentativa Agendada)",
-    api_type_code: 12,
-    fee_type: "fixed",
-    fixed_value: 2.50,
-    description: "Re-agendamento de segunda passagem após ausência.",
-    is_enabled: true,
-  },
-  {
-    special_service_code: "postal_object",
-    special_service_name: "PostalObject (Objeto Postal Normal)",
-    api_type_code: 1,
-    fee_type: "fixed",
-    fixed_value: 0.0,
-    description: "Tratamento normal de objeto postal.",
-    is_enabled: false,
-  },
-  {
-    special_service_code: "nominative_check",
-    special_service_name: "NominativeCheck (Cheque Nominativo)",
-    api_type_code: 3,
-    fee_type: "fixed",
-    fixed_value: 1.0,
-    description: "Exigência de cheque nominativo para cobrança.",
-    is_enabled: false,
-  },
-  {
-    special_service_code: "back",
-    special_service_name: "Back (Devolução ao Remetente)",
-    api_type_code: 9,
-    fee_type: "fixed",
-    fixed_value: 0.0,
-    description: "Instrução de devolução imediata em caso de não entrega.",
-    is_enabled: false,
-  },
-  {
-    special_service_code: "multiple_home_delivery",
-    special_service_name: "MultipleHomeDelivery (Múltiplas Tentativas Domicílio)",
-    api_type_code: 21,
-    fee_type: "fixed",
-    fixed_value: 1.5,
-    description: "Tentativas adicionais de entrega ao domicílio.",
-    is_enabled: false,
-  },
-  {
-    special_service_code: "certain_day",
-    special_service_name: "CertainDay (Entrega em Dia Certo)",
-    api_type_code: 23,
-    fee_type: "fixed",
-    fixed_value: 4.5,
-    description: "Agendamento da entrega para um dia específico exato.",
-    is_enabled: false,
-  },
-  {
-    special_service_code: "phone_contact",
-    special_service_name: "PhoneContact (Contacto Telefónico Prévio)",
-    api_type_code: 24,
-    fee_type: "fixed",
-    fixed_value: 0.5,
-    description: "Obrigação do estafeta ligar antes da entrega.",
-    is_enabled: false,
-  },
-  {
-    special_service_code: "live_tracking",
-    special_service_name: "LiveTracking (Tracking GPS em Tempo Real)",
-    api_type_code: 37,
-    fee_type: "fixed",
-    fixed_value: 0.2,
-    description: "Partilha da localização GPS do estafeta no dia da entrega.",
-    is_enabled: false,
-  },
-  {
-    special_service_code: "contacto_agendamento",
-    special_service_name: "ContactoAgendamento (Contacto para Agendar)",
-    api_type_code: 38,
-    fee_type: "fixed",
-    fixed_value: 1.2,
-    description: "Contacto telefónico prévio para combinar dia e hora.",
-    is_enabled: false,
-  },
-  {
-    special_service_code: "delivery_aggregation",
-    special_service_name: "DeliveryAggregation (Agregação de Entregas)",
-    api_type_code: 39,
-    fee_type: "fixed",
-    fixed_value: 0.0,
-    description: "Agrupar múltiplas guias numa só entrega ao mesmo destinatário.",
-    is_enabled: false,
-  }
-]
 
 export const DEFAULT_CLIENT_PRICING: ClientPricingConfig = {
   table_name: "Tabela Base CTT & Transportes 2026",
   fuel_surcharge_pct: 12.5,
   discount_pct: 0,
   services_pricing: DEFAULT_CTT_SERVICES_PRICING,
-  special_services_fees: [...DEFAULT_CTT_SPECIAL_SERVICES_FEES, ...DEFAULT_CORREOS_SPECIAL_SERVICES_FEES],
+  special_services_fees: [...DEFAULT_CTT_SPECIAL_SERVICES_FEES, ...DEFAULT_CORREOS_SPECIAL_SERVICES_FEES].map(fee => ({ ...fee, use_standard: true })),
   rates: [
     {
       zone_code: "PT_CONT",

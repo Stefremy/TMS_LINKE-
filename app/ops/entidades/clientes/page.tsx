@@ -1,3 +1,5 @@
+import { getStandardSpecialFeesAction } from "@/app/actions/special-fees"
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { getShipmentsAction } from "@/app/actions/shipments"
@@ -14,14 +16,17 @@ import { readPortalAccessStatuses } from "@/lib/client-portal/suspension"
 export const dynamic = "force-dynamic"
 
 export default async function EntidadesClientesPage() {
+  await requireOpsPageAccess("/ops/entidades/clientes")
+
   const ctx = await requireEmployee()
-  const [clientes, servicosLinke, shipments, statements, defaultPaymentDays, accessStatuses] = await Promise.all([
+  const [clientes, servicosLinke, shipments, statements, defaultPaymentDays, accessStatuses, standardFees] = await Promise.all([
     getClientesAction(),
     getServicosLinkeAction(),
     getShipmentsAction({ includeLabels: false }),
     getBillingStatementsAction(),
     defaultClientPaymentDays(createAdminClient(), ctx.tenant_id),
-    readPortalAccessStatuses(ctx.tenant_id)
+    readPortalAccessStatuses(ctx.tenant_id),
+    getStandardSpecialFeesAction()
   ])
 
   // Calcular o crédito disponível para cada cliente
@@ -73,6 +78,8 @@ export default async function EntidadesClientesPage() {
       canManageAccess={ctx.role === "admin"}
       canSendAccessEmail={canSendClientAccessEmail(ctx)}
       defaultPaymentDays={defaultPaymentDays}
+      standardSpecialFees={standardFees.fees}
+      standardFuelSurchargePct={standardFees.fuelSurchargePct}
     />
   )
 }

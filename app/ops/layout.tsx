@@ -7,6 +7,7 @@ import { NotificationBell } from "./components/NotificationBell"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
 import { OpsPageSurface } from "./components/OpsPageSurface"
 import { signout } from "@/app/login/actions"
+import { canAccessOpsRoute } from "@/lib/auth/permissions"
 import { requireEmployee } from "@/lib/auth/context"
 import { canSendClientMessages } from "@/lib/client-messages/types"
 import { canAccessStaffDocuments } from "@/lib/auth/staff-documents"
@@ -26,6 +27,7 @@ export default async function OpsLayout({
   children: React.ReactNode
 }) {
   const authContext = await requireEmployee()
+  const access = { role: authContext.role, permissions: authContext.permissions, user: { email: authContext.user?.email } }
   const user = authContext.user
   
   // Try to get name from metadata, fallback to email prefix, fallback to "Operador"
@@ -36,21 +38,21 @@ export default async function OpsLayout({
   return (
     <div className="tms-shell tms-workspace bg-[var(--canvas-bg)] flex flex-col text-[var(--text-primary)]">
       {/* Interactive Collapsible Sidebar */}
-      <OpsSidebar canAccessDocuments={canAccessStaffDocuments(authContext)} canSendMessages={canSendClientMessages(authContext)} />
+      <OpsSidebar canAccessDocuments={canAccessStaffDocuments(authContext)} canSendMessages={canSendClientMessages(authContext)} access={access} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar / Header (Desktop only - Mobile has dedicated topbar in OpsSidebar) */}
         <header className="tms-ops-topbar tms-desktop-only h-[56px] items-center justify-between px-6 shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)]">
           <div className="flex items-center gap-3">
-            <TrackingQuickBar />
+            {canAccessOpsRoute(access, "/ops/tracking") && <TrackingQuickBar />}
           </div>
           
           <div className="flex items-center gap-5">
-            <Link href="/ops/envios/novo" className="tms-brand-cta flex items-center gap-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-md text-[12px] font-bold transition-colors shadow-xs">
+            {canAccessOpsRoute(access, "/ops/envios/novo") && (<Link href="/ops/envios/novo" className="tms-brand-cta flex items-center gap-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3 py-1.5 rounded-md text-[12px] font-bold transition-colors shadow-xs">
               <Plus className="w-4 h-4" strokeWidth={1.75} />
               Novo Envio
-            </Link>
+            </Link>)}
             
             <div className="flex items-center gap-4 border-r border-[var(--border-subtle)] pr-5">
               <Link href="/ops/chat" aria-label="Chat da equipa" title="Chat da equipa" className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"><MessageSquare className="w-5 h-5" /></Link>

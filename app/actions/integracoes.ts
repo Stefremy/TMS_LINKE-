@@ -26,7 +26,7 @@ export interface IntegrationConfig {
  * Obtém todas as integrações configuradas com resiliência a esquemas e fallbacks seguros
  */
 export async function getIntegrations(): Promise<IntegrationConfig[]> {
-  await requireEmployee()
+  await requireEmployee("Configurações de Webservices & Integrações")
   const supabase = createAdminClient()
   const tenantId = await getTenantId()
   const integrationsMap = new Map<string, IntegrationConfig>()
@@ -166,7 +166,7 @@ export async function saveIntegrationAction(payload: {
   default_subproduct?: string
   is_active?: boolean
 }) {
-  await requireEmployee()
+  await requireEmployee("Configurações de Webservices & Integrações")
   const supabase = createAdminClient()
   const tenantId = await getTenantId()
   const now = new Date().toISOString()

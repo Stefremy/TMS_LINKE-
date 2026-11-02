@@ -350,7 +350,7 @@ export function calculateShipmentPrice(
       .sort((a, b) => a.weight_max - b.weight_max)
       .find(t => Number.isFinite(t.weight_max) && weightKg <= t.weight_max)
     if (!configuredZone || !tier) throw new ShipmentPricingError("Tarifa não configurada para este destino e peso.")
-    const fuelPercentage = Number(clientTable.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5)
+    const fuelPercentage = Number(client.pricing?.standard_fuel_surcharge_pct ?? clientTable.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5)
     if (!Number.isFinite(Number(tier.cost_price)) || Number(tier.cost_price) < 0 ||
         !Number.isFinite(Number(tier.sell_price)) || Number(tier.sell_price) < 0 ||
         !Number.isFinite(Number(tier.margin_pct ?? 20)) ||
@@ -529,7 +529,7 @@ function calculateFromZone(
     baseSell = Number((base.sell + extraKg * baseSell).toFixed(2))
     buyPrice = Number((base.buy + extraKg * buyPrice).toFixed(2))
   }
-  const fuelPct = (table.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5) / 100
+  const fuelPct = (client.pricing?.standard_fuel_surcharge_pct ?? table.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5) / 100
   const fuelAmount = Number((baseSell * fuelPct).toFixed(2))
   const finalSell = Number((baseSell + fuelAmount).toFixed(2))
 

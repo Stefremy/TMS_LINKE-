@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import * as React from "react"
 import Link from "next/link"
 import { 
@@ -40,6 +41,8 @@ function getMonthName(date: Date) {
 }
 
 export default async function OpsDashboardPage(props: { searchParams?: Promise<{ month?: string, year?: string, from?: string, to?: string }> }) {
+  await requireOpsPageAccess("/ops")
+
   const searchParams = await props.searchParams || {}
   const supabase = createAdminClient()
 

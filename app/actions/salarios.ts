@@ -17,7 +17,6 @@ let memorySalarios: SalarioRecord[] = [...DEFAULT_SALARIOS]
 export async function requireSalariosAccess() {
   const ctx = await requireEmployee()
   const isSuperAdmin = Boolean(
-    ctx.user?.email?.toLowerCase().includes("stefano") ||
     ctx.role === "admin" ||
     ctx.permissions?.includes("Acesso Total (Super-Admin)")
   )

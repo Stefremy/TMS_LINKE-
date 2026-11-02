@@ -1,9 +1,12 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import * as React from "react"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { NovoEnvioPageClient } from "./NovoEnvioPageClient"
 
 export default async function NovoPage() {
+  await requireOpsPageAccess("/ops/envios/novo")
+
   const [clients, servicosLinke] = await Promise.all([
     getClientesAction(),
     getServicosLinkeAction(),

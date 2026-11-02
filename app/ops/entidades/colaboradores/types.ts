@@ -1,3 +1,5 @@
+import { AVAILABLE_STAFF_PERMISSIONS } from "@/lib/auth/permissions"
+
 export interface Colaborador {
   id: string
   code: string
@@ -36,16 +38,7 @@ export const ACCESS_LEVELS = [
   "Comercial / Suporte",
 ] as const
 
-export const AVAILABLE_PERMISSIONS = [
-  "Acesso Total (Super-Admin)",
-  "Gestão de Salários & Vencimentos",
-  "Gestão de Clientes & Contratos",
-  "Emissão e Controlo de Guias CTT",
-  "Pedidos de Recolha & Distribuição",
-  "Faturação & Contas Correntes",
-  "Gestão de Transportadoras & Frotas",
-  "Configurações de Webservices & Integrações",
-] as const
+export const AVAILABLE_PERMISSIONS = AVAILABLE_STAFF_PERMISSIONS
 
 export const DEFAULT_COLABORADORES: Colaborador[] = [
   {

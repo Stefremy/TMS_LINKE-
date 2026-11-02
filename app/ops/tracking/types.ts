@@ -73,8 +73,8 @@ export interface TrackingShipment {
     clientName: string
   }
   metrics: {
-    totalDistanceKm: number
-    remainingDistanceKm: number
+    totalDistanceKm: number | null
+    remainingDistanceKm: number | null
     remainingTimeStr: string
     lastPickagemLocation: string
     lastPickagemTime: string

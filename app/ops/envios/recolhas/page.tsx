@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { searchPickupsAction } from "@/app/actions/pickups"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
@@ -5,6 +6,8 @@ import { RecolhasClient } from "./RecolhasClient"
 import { getCttPickupRequester } from "@/lib/config/ctt-pickup-requester"
 
 export default async function RecolhasPage() {
+  await requireOpsPageAccess("/ops/envios/recolhas")
+
   const [recolhasResult, clients, carrierConnections] = await Promise.all([
     searchPickupsAction(),
     getClientesAction(),

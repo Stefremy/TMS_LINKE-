@@ -1,8 +1,11 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { getMyProfile } from "@/lib/auth/profile"
 import { PerfilClient } from "./PerfilClientView"
 export default async function PerfilPage() {
+  await requireOpsPageAccess("/ops/perfil")
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

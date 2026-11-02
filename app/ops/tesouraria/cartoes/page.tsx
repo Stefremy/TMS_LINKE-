@@ -1,6 +1,9 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import * as React from "react"
 
-export default function CartoesPage() {
+export default async function CartoesPage() {
+  await requireOpsPageAccess("/ops/tesouraria/cartoes")
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 h-[calc(100vh-8rem)]">
       <h1 className="text-2xl font-bold text-slate-800 mb-2">Cartoes</h1>

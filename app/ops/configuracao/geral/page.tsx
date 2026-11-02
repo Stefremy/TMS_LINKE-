@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import Link from "next/link"
 import {
   ArrowRight,
@@ -38,7 +39,9 @@ const inDevelopment = [
   { title: "Estados de envio", description: "Estados e etapas do ciclo de vida.", icon: GitBranch },
 ]
 
-export default function ConfiguraçõesGeraisPage() {
+export default async function ConfiguraçõesGeraisPage() {
+  await requireOpsPageAccess("/ops/configuracao/geral")
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 pb-10 sm:p-6">
       <header>

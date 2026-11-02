@@ -33,13 +33,11 @@ import { deleteColaboradorAction, toggleColaboradorStatusAction, getColaboradore
 interface ColaboradoresClientProps {
   initialColaboradores: Colaborador[]
   isSuperAdmin?: boolean
-  isStefano?: boolean
 }
 
 export function ColaboradoresClient({
   initialColaboradores,
-  isSuperAdmin = true,
-  isStefano = false,
+  isSuperAdmin = false,
 }: ColaboradoresClientProps) {
   const [colaboradores, setColaboradores] = React.useState<Colaborador[]>(initialColaboradores || [])
   const [isRefreshing, setIsRefreshing] = React.useState(false)
@@ -572,7 +570,7 @@ export function ColaboradoresClient({
                 </button>
 
                 <div className="flex items-center gap-1.5">
-                  {isStefano && (
+                  {isSuperAdmin && (
                     <button
                       onClick={(e) => handleOpenAuth(col, e)}
                       className="p-1.5 text-[#376C8A] hover:text-[#376C8A] hover:bg-[#EDF1F3] rounded-lg transition-colors"
@@ -689,7 +687,7 @@ export function ColaboradoresClient({
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
-                        {isStefano && (
+                        {isSuperAdmin && (
                           <button
                             onClick={(e) => handleOpenAuth(col, e)}
                             className="p-1.5 text-[#376C8A] hover:text-[#376C8A] hover:bg-[#EDF1F3] rounded-lg transition-colors"
@@ -742,7 +740,7 @@ export function ColaboradoresClient({
         onClose={() => setIsDetailsModalOpen(false)}
         colaborador={selectedColaborador}
         onEdit={isSuperAdmin ? (col) => handleOpenEdit(col) : undefined}
-        onManageAuth={isStefano ? (col) => handleOpenAuth(col) : undefined}
+        onManageAuth={isSuperAdmin ? (col) => handleOpenAuth(col) : undefined}
       />
 
       {authColaborador && (

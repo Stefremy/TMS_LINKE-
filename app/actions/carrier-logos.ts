@@ -43,7 +43,7 @@ export async function getCarrierLogosSettingsAction(): Promise<CarrierLogosSetti
  * Guarda as configurações de logótipos das transportadoras
  */
 export async function saveCarrierLogosSettingsAction(settings: CarrierLogosSettings): Promise<{ success: boolean; error?: string }> {
-  await requireEmployee()
+  await requireEmployee("Gestão de Transportadoras & Frotas")
   const supabase = createAdminClient()
   const tenantId = await getTenantId()
 
@@ -70,7 +70,7 @@ export async function saveCarrierLogosSettingsAction(settings: CarrierLogosSetti
  * Faz upload de um novo logótipo e guarda em /public/logo_transportadoras/
  */
 export async function uploadCarrierLogoAction(formData: FormData): Promise<{ success: boolean; url?: string; error?: string }> {
-  await requireEmployee()
+  await requireEmployee("Gestão de Transportadoras & Frotas")
 
   try {
     const file = formData.get("file") as File | null

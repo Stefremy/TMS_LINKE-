@@ -1,6 +1,9 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import * as React from "react"
 
-export default function AjudasCustoPage() {
+export default async function AjudasCustoPage() {
+  await requireOpsPageAccess("/ops/tesouraria/ajudas-custo")
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 h-[calc(100vh-8rem)]">
       <h1 className="text-2xl font-bold text-slate-800 mb-2">Ajudas Custo</h1>

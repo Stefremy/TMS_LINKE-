@@ -10,6 +10,7 @@ import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPrici
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
+import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
 import { positiveMeasurement } from "../tracking/carrier-measurements"
 import { resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
 import { readCttExportForm, type CttExportDetails } from "../ctt/export-details"
@@ -18,7 +19,7 @@ import { reserveWallet, transitionWallet, type WalletReservation } from "@/lib/b
 
 export async function createShipment(formData: FormData) {
   
-  const ctx = await requireUser()
+  const ctx = await requireUser("Emissão e Controlo de Guias CTT")
 
   const supabase = createAdminClient()
   
@@ -202,7 +203,7 @@ export async function createShipment(formData: FormData) {
 }
 
 export async function dispatchShipment(shipmentId: string) {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee("Emissão e Controlo de Guias CTT")
   if (!ctx.tenant_id) throw new Error("Conta sem empresa associada.")
   const supabase = createAdminClient()
   const { data: shipment, error } = await supabase
@@ -279,7 +280,7 @@ export async function dispatchShipment(shipmentId: string) {
     cttExportDetails: saved.ctt_export_details,
     observations: saved.observations,
   })
-  const labelBase64 = cttResult.labelBase64 ? await convertZplToPdfBase64(cttResult.labelBase64) : undefined
+  const labelBase64 = cttResult.labelBase64 ? await applyLinkeLogoToCttLabel(await convertZplToPdfBase64(cttResult.labelBase64), cttResult.trackingNumber) : undefined
   let dbWarning: string | undefined
   if (cttResult.success) {
     const now = new Date().toISOString()

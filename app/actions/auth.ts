@@ -1,6 +1,8 @@
 "use server"
 
 import { createAdminClient } from "@/lib/supabase/server"
+import { listStaffAuthUsers, OWNER_EMAIL, staffEmail } from "@/lib/auth/staff-directory"
+import { validateStaffAccess } from "@/lib/auth/permissions"
 import { requireAdmin } from "@/lib/auth/context"
 import { assertClientEmail, findClientUser, loadInvitationStore, normalizeInvitationEmail } from "@/lib/client-portal/invitations"
 
@@ -66,111 +68,35 @@ export async function setColaboradorCredentialsAction(
   permissions: string[] = []
 ) {
   const ctx = await requireAdmin()
-  if (!ctx.user?.email?.toLowerCase().includes("stefano.remy")) {
-    throw new Error("Acesso restrito. Apenas stefano.remy tem permissões para alterar credenciais de login.")
-  }
+  email = staffEmail(email)
+  const effectivePermissions = validateStaffAccess(accessLevel, permissions)
+  if (!email.includes("@")) throw new Error("O email de login é obrigatório.")
+  if (password && (password.trim().length < 12 || password.trim().length > 128)) throw new Error("A palavra-passe deve ter entre 12 e 128 caracteres.")
+  const { getColaboradoresAction, saveColaboradorAction } = await import("./colaboradores")
+  const profile = (await getColaboradoresAction()).find(c => c.id === colaboradorId)
+  if (!profile) throw new Error("Colaborador não disponível nesta empresa.")
+  if (profile.email === OWNER_EMAIL && staffEmail(ctx.user?.email) !== OWNER_EMAIL) throw new Error("As credenciais da conta principal só podem ser alteradas pelo seu titular.")
+  if (profile.email === OWNER_EMAIL && (email !== OWNER_EMAIL || accessLevel !== "Administrador")) throw new Error("O acesso da conta principal não pode ser removido.")
+  if ((profile.id === ctx.colaborador_id || profile.email === staffEmail(ctx.user?.email)) && accessLevel !== "Administrador") throw new Error("Não pode remover o seu próprio acesso de administrador.")
   const supabaseAdmin = createAdminClient()
-
-  if (!email || !email.trim()) {
-    throw new Error("O email de login é obrigatório.")
+  const users = await listStaffAuthUsers(supabaseAdmin)
+  const existingUser = users.find(u => u.app_metadata?.colaborador_id === colaboradorId || staffEmail(u.email) === profile.email)
+  if (users.some(u => staffEmail(u.email) === email && u.id !== existingUser?.id)) throw new Error("Este email já está associado a outra conta.")
+  if (existingUser && (existingUser.app_metadata?.role === "client" || existingUser.app_metadata?.tenant_id && existingUser.app_metadata.tenant_id !== ctx.tenant_id)) throw new Error("Esta conta não pertence aos colaboradores desta empresa.")
+  const app_metadata = {
+    ...existingUser?.app_metadata, tenant_id: ctx.tenant_id, role: accessLevel === "Administrador" ? "admin" : "employee",
+    colaborador_id: colaboradorId, access_level: accessLevel, permissions: effectivePermissions, staff_status: profile.status,
   }
-
-  // 1. Verificar se utilizador existe no Supabase Auth
-  const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers()
-
-  if (usersError) {
-    throw new Error("Erro ao aceder à gestão de autenticação: " + usersError.message)
-  }
-
-  const existingUser = usersData.users.find((u: any) => u.email?.toLowerCase() === email.toLowerCase().trim())
-
   if (existingUser) {
-    const isSuperAdmin = email.toLowerCase().trim() === "stefano.remy@gmail.com"
-    const assignedRole = isSuperAdmin || accessLevel === "Administrador" ? "admin" : "employee"
-    const effectiveAccessLevel = isSuperAdmin ? "Administrador" : accessLevel
-    const effectivePermissions = isSuperAdmin
-      ? ["Acesso Total (Super-Admin)"]
-      : permissions
-
-    const updateData: any = {
-      app_metadata: {
-        ...existingUser.app_metadata,
-        role: assignedRole,
-        colaborador_id: colaboradorId,
-        access_level: effectiveAccessLevel,
-        permissions: effectivePermissions,
-      },
-      user_metadata: {
-        ...existingUser.user_metadata,
-        role: assignedRole,
-        colaborador_id: colaboradorId,
-        access_level: effectiveAccessLevel,
-        permissions: effectivePermissions,
-      },
-    }
-    if (password && password.trim()) {
-      updateData.password = password.trim()
-    }
-
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      existingUser.id,
-      updateData
-    )
-
-    if (updateError) {
-      throw new Error("Erro ao atualizar credenciais do colaborador: " + updateError.message)
-    }
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
+      email, app_metadata, ...(password?.trim() ? { password: password.trim() } : {}),
+    })
+    if (error) throw new Error("Não foi possível atualizar as credenciais do colaborador.")
   } else {
-    if (!password || !password.trim()) {
-      throw new Error("Para criar um novo acesso, é necessário definir uma password inicial.")
-    }
-
-    const isSuperAdmin = email.toLowerCase().trim() === "stefano.remy@gmail.com"
-    const assignedRole = isSuperAdmin || accessLevel === "Administrador" ? "admin" : "employee"
-    const effectiveAccessLevel = isSuperAdmin ? "Administrador" : accessLevel
-    const effectivePermissions = isSuperAdmin
-      ? Array.from(new Set([...permissions, "Acesso Total (Super-Admin)"]))
-      : permissions
-
-    const { error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email: email.trim(),
-      password: password.trim(),
-      email_confirm: true,
-      app_metadata: {
-        role: assignedRole,
-        colaborador_id: colaboradorId,
-        access_level: effectiveAccessLevel,
-        permissions: effectivePermissions,
-      },
-      user_metadata: {
-        role: assignedRole,
-        colaborador_id: colaboradorId,
-        access_level: effectiveAccessLevel,
-        permissions: effectivePermissions,
-      },
-    })
-
-    if (createError) {
-      throw new Error("Erro ao criar utilizador no sistema de autenticação: " + createError.message)
-    }
+    if (!password?.trim()) throw new Error("Para criar um novo acesso, é necessário definir uma password inicial.")
+    const { error } = await supabaseAdmin.auth.admin.createUser({ email, password: password.trim(), email_confirm: true, app_metadata })
+    if (error) throw new Error("Não foi possível criar o acesso do colaborador.")
   }
-
-  // 2. Registar em audit_log
-  try {
-    await supabaseAdmin.from("audit_log").insert({
-      tenant_id: "11111111-1111-1111-1111-111111111111",
-      action: "colaborador_credentials_updated",
-      details: {
-        colaborador_id: colaboradorId,
-        email: email.trim(),
-        access_level: accessLevel,
-        permissions,
-        updated_at: new Date().toISOString(),
-      },
-      created_at: new Date().toISOString(),
-    })
-  } catch {}
-
-  return { success: true, message: `Acesso configurado com sucesso para ${email}.` }
+  const saved = await saveColaboradorAction({ ...profile, email, access_level: accessLevel, permissions: effectivePermissions })
+  return { success: true, message: `Acesso configurado com sucesso para ${email}.`, colaborador: saved.colaborador }
 }
-

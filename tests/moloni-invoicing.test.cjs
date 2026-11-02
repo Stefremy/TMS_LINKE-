@@ -67,6 +67,7 @@ test('manual billing page excludes cancelled test fixtures and drafts while keep
     react:{},
     'react/jsx-runtime':{jsx,jsxs:jsx},
     '@/lib/auth/context':{requirePermission:async()=>({tenant_id:TENANT,role:'admin'})},
+    '@/lib/auth/ops-page-access':{requireOpsPageAccess:async()=>{}},
     '@/app/actions/clientes':{getClientesAction:async()=>[]},
     '@/app/actions/shipments':{getShipmentsAction:async()=>shipments},
     '@/app/actions/moloni':{getBillingStatementsAction:async()=>[],getMoloniConfigAction:async()=>({})},

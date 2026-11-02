@@ -1,10 +1,13 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import * as React from "react"
 import Link from "next/link"
 import { ArrowLeft, Building2, Mail, Phone, MapPin } from "lucide-react"
 import { createCliente } from "@/app/actions/clientes"
 import { SubmitButton } from "./submit-button"
 
-export default function NovoClientePage() {
+export default async function NovoClientePage() {
+  await requireOpsPageAccess("/ops/clientes/novo")
+
   return (
     <div className="flex flex-col gap-6 max-w-4xl">
       

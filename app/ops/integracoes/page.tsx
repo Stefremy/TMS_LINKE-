@@ -1,9 +1,12 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import * as React from "react"
 import { Plug, Key, FileText, CheckCircle2 } from "lucide-react"
 import { getIntegrations, saveIntegration } from "@/app/actions/integracoes"
 import { SubmitButton } from "./submit-button"
 
 export default async function IntegracoesPage() {
+  await requireOpsPageAccess("/ops/integracoes")
+
   const integrations = await getIntegrations()
   const cttConfig = integrations.find((i: any) => i.provider === 'CTT')
   const isCttConnected = !!cttConfig?.credentials?.client_id

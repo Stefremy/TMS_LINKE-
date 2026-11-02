@@ -5,10 +5,8 @@ import { TrackingShipment } from "../types"
 import { 
   ScanLine, 
   MapPin, 
-  Clock, 
   CheckCircle2, 
-  Navigation,
-  ArrowRight
+  Navigation
 } from "lucide-react"
 
 interface MapSummaryBarProps {
@@ -16,7 +14,12 @@ interface MapSummaryBarProps {
 }
 
 export function MapSummaryBar({ shipment }: MapSummaryBarProps) {
-  const { metrics, origin, destination } = shipment
+  const { metrics, origin } = shipment
+  const distance = metrics.remainingDistanceKm
+  const distanceLabel = distance === null ? "Indisponível"
+    : distance === 0 ? "0 km"
+    : distance < 1 ? "< 1 km"
+    : `≈ ${Math.round(distance).toLocaleString("pt-PT")} km`
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl shadow-xs">
@@ -49,8 +52,13 @@ export function MapSummaryBar({ shipment }: MapSummaryBarProps) {
             Distância ao Destino
           </span>
           <span className="text-xs font-bold text-[var(--text-primary)]">
-            {metrics.remainingDistanceKm} km
+            {distanceLabel}
           </span>
+          {distance !== null && distance > 0 && (
+            <span className="text-[10px] text-[var(--text-tertiary)]">
+              Em linha reta
+            </span>
+          )}
         </div>
       </div>
 

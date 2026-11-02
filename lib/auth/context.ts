@@ -1,16 +1,18 @@
+import type { User } from "@supabase/supabase-js"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { cache } from "react"
 import { redirect } from "next/navigation"
 
 import { createAdminClient } from "@/lib/supabase/server"
-import { DEFAULT_COLABORADORES } from "@/app/ops/entidades/colaboradores/types"
+import { loadStaffDirectory, staffEmail } from "./staff-directory"
+import { hasPermission } from "./permissions"
 import { enforcePortalSuspension } from '@/lib/client-portal/suspension'
 
 export const LINKE_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 
 export type AuthContext = {
-  user: any
+  user: User
   role: "client" | "employee" | "admin" | null
   tenant_id: string
   client_id: string | null
@@ -47,7 +49,7 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
     return null
   }
 
-  // Phase 5: Query the `colaboradores` table directly, preventing user_metadata spoofing.
+  // Staff permissions come from trusted storage, shared with the employee editor.
   let role: "client" | "employee" | "admin" | null = null;
   let client_id: string | null = null;
   let colaborador_id: string | null = null;
@@ -83,56 +85,21 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
   }
 
   const supabaseAdmin = createAdminClient()
-  
-  // 1. Check if the user is an employee in the database
-  const { data: colab } = await supabaseAdmin
-    .from("colaboradores")
-    .select("id, access_level, permissions, status")
-    .eq("email", user.email)
-    .single()
-
-  if (colab) {
-    if (colab.status !== 'Inativo') {
-      role = colab.access_level === 'Administrador' ? 'admin' : 'employee'
-      colaborador_id = colab.id
-      permissions = Array.isArray(colab.permissions) ? colab.permissions : JSON.parse(colab.permissions || '[]')
+  const tenantId = typeof metadata.tenant_id === "string" ? metadata.tenant_id : LINKE_TENANT_ID
+  const directory = await loadStaffDirectory(supabaseAdmin, tenantId, [user])
+  const profile = directory.find(c => c.id === metadata.colaborador_id || staffEmail(c.email) === staffEmail(user.email))
+  if (profile) {
+    if (profile.status !== "Inativo") {
+      role = profile.access_level === "Administrador" ? "admin" : "employee"
+      colaborador_id = profile.id
+      permissions = profile.permissions
     }
-  } else {
-    // Only server-managed metadata may assign roles or client scope.
-    role = ['client', 'employee', 'admin'].includes(metadata.role) ? metadata.role : null
-
-    if (role === 'client') {
-      client_id = metadata.client_id || null
-    } else if (role === 'employee' || role === 'admin') {
-      // Legacy fallback for employees not yet in `colaboradores` table
-      colaborador_id = metadata.colaborador_id || null
-      permissions = metadata.permissions || []
-    }
-
-    if (!role || (role === 'client' && !client_id)) {
-      const { data: clientUser } = await supabaseAdmin
-        .from('client_users')
-        .select('client_id')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      if (clientUser?.client_id) {
-        role = 'client'
-        client_id = clientUser.client_id
-      }
-    }
-
-    // 3. Final fallback: check DEFAULT_COLABORADORES by exact email
-    //    This ensures hardcoded staff (Stefano, Nathalia, Gilberto) always
-    //    resolve correctly even when the DB table is unreachable.
-    if (!role || (role !== 'employee' && role !== 'admin')) {
-      const defaultColab = DEFAULT_COLABORADORES.find(
-        (c) => c.email?.toLowerCase() === user.email?.toLowerCase()
-      )
-      if (defaultColab) {
-        role = defaultColab.access_level === 'Administrador' ? 'admin' : 'employee'
-        colaborador_id = defaultColab.id
-        permissions = defaultColab.permissions || []
-      }
+  } else if (!["admin", "employee"].includes(metadata.role)) {
+    const { data: clientUser } = await supabaseAdmin.from("client_users")
+      .select("client_id").eq("user_id", user.id).maybeSingle()
+    if (clientUser?.client_id) {
+      role = "client"
+      client_id = clientUser.client_id
     }
   }
 
@@ -148,7 +115,7 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
   return {
     user,
     role,
-    tenant_id: LINKE_TENANT_ID,
+    tenant_id: tenantId,
     client_id,
     colaborador_id,
     permissions
@@ -158,22 +125,31 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
 /**
  * Ensures the caller is authenticated. Redirects to /login if not.
  */
-export async function requireUser(): Promise<AuthContext> {
+export async function requireUser(staffPermissions?: string | readonly string[]): Promise<AuthContext> {
   const ctx = await getAuthContext()
   if (!ctx || !ctx.role || (ctx.role === 'client' && !ctx.client_id)) {
     redirect("/login")
   }
+  if (staffPermissions && ctx.role !== "client") assertStaffPermissions(ctx, staffPermissions)
   return ctx
+}
+
+function assertStaffPermissions(ctx: AuthContext, permissions: string | readonly string[]) {
+  const required = typeof permissions === "string" ? [permissions] : permissions
+  if (!required.some(permission => hasPermission(ctx, permission))) {
+    throw new Error(`Acesso negado. Permissão necessária: ${required.join(" ou ")}.`)
+  }
 }
 
 /**
  * Ensures the caller is an authenticated employee or admin. Redirects if not.
  */
-export async function requireEmployee(): Promise<AuthContext> {
+export async function requireEmployee(permissions?: string | readonly string[]): Promise<AuthContext> {
   const ctx = await requireUser()
   if (ctx.role !== 'employee' && ctx.role !== 'admin') {
     redirect("/login")
   }
+  if (permissions) assertStaffPermissions(ctx, permissions)
   return ctx
 }
 
@@ -182,7 +158,7 @@ export async function requireEmployee(): Promise<AuthContext> {
  */
 export async function requirePermission(permission: string): Promise<AuthContext> {
   const ctx = await requireEmployee()
-  if (!ctx.permissions.includes(permission) && ctx.role !== 'admin') {
+  if (!hasPermission(ctx, permission)) {
     throw new Error(`Acesso negado. Permissão necessária: ${permission}.`)
   }
   return ctx

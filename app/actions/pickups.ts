@@ -38,7 +38,7 @@ async function enrich(db: ReturnType<typeof createAdminClient>, tenant: string, 
 
 /** Read associations from CTT for an owned pickup; never infer them from shipment scans. */
 export async function refreshPickupParcelsAction(id: string) {
-  await requireEmployee()
+  await requireEmployee("Pedidos de Recolha & Distribuição")
   try {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error("Identificador de recolha inválido.")
     const tenant = await getTenantId(), db = createAdminClient()
@@ -78,7 +78,7 @@ export async function refreshPickupParcelsAction(id: string) {
 
 /** Local operator confirmation only. Does not call CTT or change shipment states. */
 export async function markPickupCollectedAction(id: string) {
-  const actor = await requireEmployee()
+  const actor = await requireEmployee("Pedidos de Recolha & Distribuição")
   try {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error("Identificador de recolha inválido.")
     const tenant = await getTenantId(), db = createAdminClient()
@@ -118,7 +118,7 @@ export async function markPickupCollectedAction(id: string) {
 }
 
 export async function searchPickupsAction(input: PickupSearch = {}) {
-  await requireEmployee()
+  await requireEmployee("Pedidos de Recolha & Distribuição")
   try {
     const error = validatePickupSearch(input)
     if (error) return { success: false as const, error }
@@ -137,7 +137,7 @@ export async function searchPickupsAction(input: PickupSearch = {}) {
 }
 
 export async function getPickupDetailsAction(id: string) {
-  await requireEmployee()
+  await requireEmployee("Pedidos de Recolha & Distribuição")
   try {
     if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("Identificador de recolha inválido.")
     const tenant = await getTenantId(), db = createAdminClient()
@@ -151,7 +151,7 @@ export async function getPickupDetailsAction(id: string) {
 }
 
 export async function searchCttPickupsAction(input: PickupSearch) {
-  await requireEmployee()
+  await requireEmployee("Pedidos de Recolha & Distribuição")
   try {
     const error = validatePickupSearch(input, true)
     if (error) throw new Error(error)
@@ -164,7 +164,7 @@ export async function searchCttPickupsAction(input: PickupSearch) {
 }
 
 export async function getCttPickupDetailsAction(reference: string, connectionId?: string) {
-  await requireEmployee()
+  await requireEmployee("Pedidos de Recolha & Distribuição")
   try {
     const creds = await resolveCttCredentials(connectionId)
     const pickup = await new CTTPickupReadService().details(creds, reference)

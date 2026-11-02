@@ -1,9 +1,12 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { requireEmployee } from "@/lib/auth/context"
 import { readTeamChat, registerChatMember } from "@/lib/team-chat-server"
 import { ChatError, type ChatPage } from "@/lib/team-chat"
 import { TeamChatClient } from "./TeamChatClient"
 
 export default async function TeamChatPage() {
+  await requireOpsPageAccess("/ops/chat")
+
   const context = await requireEmployee()
   let initial: ChatPage = { viewerId: context.user.id, members: [], channels: [], activeChannel: "geral", messages: [], hasMore: false }
   let error: string | null = null

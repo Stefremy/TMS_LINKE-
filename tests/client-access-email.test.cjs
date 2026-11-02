@@ -37,6 +37,7 @@ test('delegated staff see the client Access tab and email button without adminis
     react:{...React,useState:initial=>React.useState(initial==='geral'?'acesso':initial)},
     'react/jsx-runtime':require('react/jsx-runtime'),'lucide-react':require('lucide-react'),
     '@/app/actions/clientes':{},'@/app/actions/client-invitations':{},
+    '@/app/actions/client-service-history':{},
     './ClientPortalAccessControl':{ClientPortalAccessControl:()=>React.createElement('p',null,'ADMIN_ACCESS_CONTROLS')},
   })
   const Modal=load('app/ops/entidades/clientes/components/ClienteModal.tsx').ClienteModal

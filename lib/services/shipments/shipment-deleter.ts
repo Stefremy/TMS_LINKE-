@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache"
 import { requireEmployee, getTenantId } from "@/lib/auth/context"
 
 export async function deleteShipment(shipmentId: string) {
-  await requireEmployee()
+  await requireEmployee("Emissão e Controlo de Guias CTT")
 
   const supabase = createAdminClient()
   try {
@@ -57,7 +57,7 @@ export async function deleteShipment(shipmentId: string) {
 }
 
 export async function deleteShipmentsBulk(shipmentIds: string[]) {
-  await requireEmployee()
+  await requireEmployee("Emissão e Controlo de Guias CTT")
 
   const supabase = createAdminClient()
   try {

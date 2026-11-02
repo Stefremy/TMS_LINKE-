@@ -12,7 +12,7 @@ export async function getRelatoriosDataAction(
   periodFilter: string = "este_mes",
   selectedFilters: { clientId?: string; carrier?: string; service?: string } = {},
 ): Promise<RelatoriosData> {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee("Relatórios Operacionais")
   if (!ctx.tenant_id) throw new Error("Conta sem empresa associada.")
   const period = REPORT_PERIODS.find(p => p.id === periodFilter)?.id
   if (!period) throw new Error("Período de relatório inválido.")

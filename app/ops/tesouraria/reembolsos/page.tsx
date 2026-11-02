@@ -1,3 +1,5 @@
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions"
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { getOpsCodWorkflowAction } from "@/app/actions/ops-client-cod"
 import { ReembolsosWorkspace } from "./ReembolsosWorkspace"
 import { currentCodMonth } from "@/lib/services/reembolsos/client-cod"
@@ -9,8 +11,10 @@ import { requireEmployee } from "@/lib/auth/context"
 export const dynamic = "force-dynamic"
 
 export default async function ReembolsosPage() {
+  await requireOpsPageAccess("/ops/tesouraria/reembolsos")
+
   const ctx = await requireEmployee()
-  if (ctx.role !== "admin" && !ctx.permissions.includes("Faturação & Contas Correntes")) {
+  if (!hasPermission(ctx, PERMISSIONS.finance)) {
     return (
       <div className="space-y-2">
         <h1 className="text-xl font-semibold">Acesso restrito</h1>

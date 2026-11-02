@@ -152,7 +152,8 @@ export async function getDestinatariosAction(targetClientId?: string): Promise<D
 
       if (!destMap.has(key)) {
         // Destinatário descoberto a partir de envio passado
-        const generatedId = "dest_" + Buffer.from(key).toString("hex").slice(0, 32)
+        // Preserve the full grouping key: shared name prefixes must not hide ZIP/client differences.
+        const generatedId = "dest_" + Buffer.from(key).toString("hex")
         destMap.set(key, {
           id: generatedId,
           name: rawName,

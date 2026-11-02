@@ -7,7 +7,7 @@ const input={connection_id:'selected',carrier_code:'ctt_expresso',date:'2026-10-
 const config={carrier_code:'ctt_expresso',client_id:'client-selected',contract_number:'contract-selected',auth_id:'fixture-auth',environment:'production',is_active:true}
 
 function setup(tables,denied=false){
-  const db=fakeSupabase(tables),initialized=[],pickups=[]
+  const db=fakeSupabase(tables),initialized=[],pickups=[],references=[]
   const load=createLoader({
     '@/lib/config/public-origins':{},
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
@@ -15,11 +15,11 @@ function setup(tables,denied=false){
     'next/cache':{revalidatePath(){}},
     '@/lib/services/tracking':{},
     '@/lib/services/carriers/ctt-provider':{CttProvider:class{async initialize(creds){initialized.push(creds)}async createPickup(value){pickups.push(value);return {success:false,error:'MOCK_ONLY_NO_BOOKING'}}}},
-    '@/lib/services/ctt':{},
+    '@/lib/services/ctt':{CTTReferencesService:class{async getAllDeliveryPoints(creds){references.push(creds);return [{codigo:'fixture-point',nome:'Fixture CTT'}]}}},
     '@/lib/label-utils':{},
     '@/lib/services/ctt/close-manifest':{},
   })
-  return {api:load('app/actions/ctt.ts'),db,initialized,pickups}
+  return {api:load('app/actions/ctt.ts'),db,initialized,pickups,references}
 }
 
 async function withoutEnvironment(run){
@@ -63,4 +63,48 @@ test('client accounts cannot resolve credentials or schedule a pickup through th
   const {api,db,initialized}=setup({},true)
   await assert.rejects(()=>api.scheduleCttPickupAction(input),/Forbidden/)
   assert.equal(db.queries.length,0);assert.equal(initialized.length,0)
+})
+
+test('CTT points load from the latest company account when several connections exist and env credentials are absent',()=>withoutEnvironment(async()=>{
+  const {api,references,db}=setup({carrier_connections:[
+    {...config,id:'older',tenant_id:'own',client_id:'old-client',created_at:'2026-10-01'},
+    {...config,id:'latest',tenant_id:'own',created_at:'2026-10-19'},
+    {...config,id:'foreign',tenant_id:'foreign',created_at:'2099-01-01'},
+  ]})
+  const result=await api.getPontosPickupCttAction(true)
+  assert.equal(result.success,true);assert.equal(result.total,1)
+  assert.equal(references.length,1);assert.equal(references[0].client_number,'client-selected')
+  assert.equal(references[0].environment,'production');assert.deepEqual(db.writes,[])
+  assert.ok(db.queries.every(q=>q.filters.some(f=>f.field==='tenant_id'&&f.value==='own')))
+}))
+
+test('CTT points resolve legacy saved credentials without requiring environment variables',()=>withoutEnvironment(async()=>{
+  const {api,references}=setup({audit_log:[
+    {id:'saved',tenant_id:'own',action:'carrier_connection_config',created_at:'2026-10-19',details:config},
+    {id:'foreign',tenant_id:'foreign',action:'carrier_connection_config',created_at:'2099-01-01',details:{...config,client_id:'foreign-client'}},
+  ]})
+  assert.equal((await api.getPontosPickupCttAction(true)).success,true)
+  assert.equal(references[0].client_number,'client-selected')
+}))
+
+test('CTT points accept the legacy ctt carrier code',()=>withoutEnvironment(async()=>{
+  const {api,references}=setup({carrier_connections:[{...config,carrier_code:'ctt',tenant_id:'own'}]})
+  assert.equal((await api.getPontosPickupCttAction(true)).success,true)
+  assert.equal(references[0].client_number,'client-selected')
+}))
+
+test('CTT points reject missing, incomplete or disabled configuration before calling the carrier',()=>withoutEnvironment(async()=>{
+  for(const connection of [null,{...config,auth_id:''},{...config,is_active:false}]){
+    const {api,references}=setup({carrier_connections:connection?[{...connection,tenant_id:'own'}]:[]})
+    const result=await api.getPontosPickupCttAction(true)
+    assert.equal(result.success,false);assert.equal(result.total,0)
+    assert.match(result.error,/credenciais completas|desativada/)
+    assert.equal(references.length,0)
+  }
+}))
+
+test('client accounts cannot load CTT points or resolve credentials through the employee action',async()=>{
+  const {api,db,references}=setup({},true)
+  await assert.rejects(()=>api.getPontosPickupCttAction(true),/Forbidden/)
+  assert.equal(db.queries.length,0);assert.equal(references.length,0)
 })

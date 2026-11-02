@@ -29,7 +29,7 @@ test('the configuration form submits dates and format directly to Accounts Curre
 })
 test('configuration page owns the automation control and date filters; the saved grouping default is passed to the form',async()=>{
  const jsx=(type,props)=>({type,props:props||{}})
- const load=createLoader({'react/jsx-runtime':{jsx,jsxs:jsx},'@/lib/auth/context':{requireEmployee:async()=>({tenant_id:'tenant',role:'admin'})},
+ const load=createLoader({'@/lib/auth/ops-page-access':{requireOpsPageAccess:async()=>{}},'react/jsx-runtime':{jsx,jsxs:jsx},'@/lib/auth/context':{requireEmployee:async()=>({tenant_id:'tenant',role:'admin'})},
   '@/lib/billing/recurring-statements':{recurringPreview:async()=>({enabled:false})},'@/app/ops/faturacao/contas-corrente/RecurringStatementsPanel':{RecurringStatementsPanel:'automation'},
   '@/app/actions/billing-config':{getBillingConfigAction:async()=>({defaultGrouping:'detailed'}),getMoloniDetailsAction:async()=>({})},
   './components/BillingConfigClient':{BillingConfigClient:'config'},'./components/BillingViewFilters':{BillingViewFilters:'filters'}})

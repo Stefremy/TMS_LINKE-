@@ -1,7 +1,10 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import * as React from "react"
 import { Building2, Construction } from "lucide-react"
 
-export default function TerceirosPage() {
+export default async function TerceirosPage() {
+  await requireOpsPageAccess("/ops/faturacao/terceiros")
+
   return (
     <div className="p-6 flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
       <div className="w-full max-w-lg bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] shadow-sm overflow-hidden">

@@ -117,7 +117,7 @@ export function ClientStoreShippingPortal() {
     }
 
     // Fuel Surcharge %
-    const fuelPct = pricing.fuel_surcharge_pct ?? 12.5
+    const fuelPct = pricing.standard_fuel_surcharge_pct ?? pricing.fuel_surcharge_pct ?? 12.5
     const fuelVal = base * (fuelPct / 100)
 
     // Special Services calculations

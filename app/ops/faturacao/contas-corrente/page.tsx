@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { loadBillingStatistics } from '@/lib/billing/statistics-data'
 import { BillingPlanningPanel } from './BillingPlanningPanel'
 import * as React from "react"
@@ -14,6 +15,8 @@ import { isPrepaidShipment } from '@/lib/billing/client-balance'
 export const dynamic = "force-dynamic"
 
 export default async function ContasCorrentePage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> } = {}) {
+  await requireOpsPageAccess("/ops/faturacao/contas-corrente")
+
   const ctx = await requirePermission('Faturação & Contas Correntes')
   const selection = billingViewSelection(await searchParams || {})
   const [clients, shipments, statements, moloniConfig, recurring, periodStatements] = await Promise.all([

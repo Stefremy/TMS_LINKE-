@@ -1,8 +1,11 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import * as React from "react"
 import { Settings, CheckCircle2, AlertCircle } from "lucide-react"
 import { TemplatesClient } from "./TemplatesClient"
 
-export default function NotificacoesPage() {
+export default async function NotificacoesPage() {
+  await requireOpsPageAccess("/ops/configuracao/notificacoes")
+
   const resendKey = process.env.RESEND_API_KEY
   const fromEmail = process.env.STORE_FROM_EMAIL || "notificacoes@linke.pt"
   

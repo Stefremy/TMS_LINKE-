@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { resolveCoordinates } from "@/lib/services/geo/geocoder"
 import { TrackingShipment } from "@/app/ops/tracking/types"
 import { buildTrackingCheckpoints } from "@/app/ops/tracking/checkpoints"
+import { buildTrackingDistances } from "@/app/ops/tracking/distances"
 import { DeliveryTrackingClient } from "@/app/ops/tracking/components/DeliveryTrackingClient"
 
 export const metadata: Metadata = {
@@ -194,8 +195,7 @@ export default async function ClientTrackingPage({
             clientName: client.short_name || client.legal_name || "Cliente",
           },
           metrics: {
-            totalDistanceKm: 260,
-            remainingDistanceKm: Math.round(260 * (1 - progressPercent / 100)),
+            ...buildTrackingDistances(originCoord, destCoord, pickagens, ["entregue", "entregue_pudo"].includes(s.status)),
             remainingTimeStr: dynamicRemaining,
             lastPickagemLocation: pickagens.find((p) => p.isCurrentPosition)?.locationName || originCoord.name,
             lastPickagemTime: pickagens.find((p) => p.isCurrentPosition)?.formattedTime || "Hoje",

@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { canAccessOpsRoute, type PermissionContext } from "@/lib/auth/permissions"
 import { 
   LayoutDashboard, 
   Package, 
@@ -100,10 +101,12 @@ const navConfig: NavSection[] = [
         icon: Settings,
         subItems: [
           { title: "Geral", href: "/ops/configuracao/geral" },
+          { title: "Mapa de acessos", href: "/ops/configuracao/permissoes" },
           { title: "Faturação & Moloni", href: "/ops/configuracao/faturacao" },
           { title: "Transportadoras & Logótipos", href: "/ops/configuracao/transportadoras" },
           { title: "Webservices Globais", href: "/ops/configuracao/webservices" },
           { title: "Taxas Adicionais", href: "/ops/configuracao/taxas" },
+          { title: "Taxa de Combustível", href: "/ops/configuracao/combustivel" },
           { title: "Zonas de Preço", href: "/ops/configuracao/zonas" },
           { title: "Comunicações", isSeparator: true },
           { title: "Email Templates", href: "/ops/configuracao/notificacoes" },
@@ -114,17 +117,26 @@ const navConfig: NavSection[] = [
 ]
 
 interface SidebarNavProps {
+  access?: PermissionContext
   collapsed?: boolean
   canAccessDocuments?: boolean
   canSendMessages?: boolean
 }
 
-export function SidebarNav({ collapsed = false, canAccessDocuments = false, canSendMessages = false }: SidebarNavProps) {
+export function SidebarNav({ collapsed = false, canAccessDocuments = false, canSendMessages = false, access }: SidebarNavProps) {
   const pathname = usePathname()
   const visibleNavConfig = React.useMemo(() => navConfig.map((section) => ({
     ...section,
-    items: section.items.filter((item) => (canAccessDocuments || item.href !== "/ops/documentos") && (canSendMessages || item.href !== "/ops/mensagens")),
-  })), [canAccessDocuments, canSendMessages])
+    items: section.items.flatMap((item) => {
+      if (!item.subItems) return canAccessOpsRoute(access, item.href)
+        && (canAccessDocuments || item.href !== "/ops/documentos")
+        && (canSendMessages || item.href !== "/ops/mensagens") ? [item] : []
+      const children = item.subItems.filter(sub => sub.isSeparator || sub.href && canAccessOpsRoute(access, sub.href))
+      const subItems = children.filter((sub, index) => !sub.isSeparator || children.slice(0, index).some(c => c.href) && children.slice(index + 1).some(c => c.href))
+      const first = subItems.find(sub => sub.href)
+      return first ? [{ ...item, href: first.href!, subItems }] : []
+    }),
+  })).filter(section => section.items.length > 0), [canAccessDocuments, canSendMessages, access])
   
   // Track open state of multiple accordions
   const [openItems, setOpenItems] = React.useState<Record<string, boolean>>({})

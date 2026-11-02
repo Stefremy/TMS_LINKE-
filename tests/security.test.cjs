@@ -517,16 +517,16 @@ for (const carrier of ['CTT', 'Correos']) {
       assert.equal(h.db.writes.length, 0)
     }
   })
-  test(`${carrier}: configured special services and COD retain their existing charges`, async () => {
+  test(`${carrier}: standard special services and COD match the shared catalogue`, async () => {
     const h = shipmentHarness({ carrier })
     const result = await emit(h, { selectedSpecialServices: carrier === 'CTT' ? ['cod', 'fragil'] : ['correos_cod', 'correos_saturday'], codValue: 100 })
     assert.equal(result.success, true)
     const stored = h.db.writes.find(w => w.table === 'shipments').value
-    assert.equal(stored.sell_price, carrier === 'CTT' ? 12.5 : 19.5)
+    assert.equal(stored.sell_price, carrier === 'CTT' ? 12.5 : 21)
     const audit = h.db.writes.find(w => w.table === 'audit_log').value.details
     assert.equal(audit.fuel_tax_amount, 1)
     assert.equal(audit.base_price, 8)
-    assert.equal(audit.special_fees_amount, carrier === 'CTT' ? 3.5 : 10.5)
+    assert.equal(audit.special_fees_amount, carrier === 'CTT' ? 3.5 : 12)
   })
 }
 
@@ -655,7 +655,7 @@ for (const carrier of ['CTT', 'Correos']) {
     assert.equal(preview.basePrice, 6)
     assert.equal(preview.fuelSurchargeAmount, 0.75)
     assert.equal(preview.buyPrice, 3)
-    assert.equal(preview.totalPrice, carrier === 'CTT' ? 10.25 : 17.25)
+    assert.equal(preview.totalPrice, carrier === 'CTT' ? 10.25 : 18.75)
     const result = await emit(h, input)
     assert.equal(result.success, true)
     assert.equal(result.sellPrice, preview.totalPrice)

@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getClientesAction } from "@/app/actions/clientes"
 import { IncidenciasClient, IncidentShipment } from "./IncidenciasClient"
@@ -10,6 +11,8 @@ export const metadata = {
 }
 
 export default async function IncidenciasPage() {
+  await requireOpsPageAccess("/ops/incidencias")
+
   const supabase = await import("@/lib/supabase/server").then(m => m.createAdminClient())
   
   const [ { data: dbShipments }, clients ] = await Promise.all([

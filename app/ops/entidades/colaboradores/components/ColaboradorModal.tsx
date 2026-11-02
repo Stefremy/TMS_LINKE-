@@ -4,16 +4,12 @@ import * as React from "react"
 import {
   X,
   User,
-  Building2,
-  Mail,
-  Phone,
-  Shield,
-  MapPin,
-  Calendar,
   Save,
   Loader2
 } from "lucide-react"
-import { Colaborador, DEPARTMENTS, ACCESS_LEVELS } from "../types"
+import { Colaborador, DEPARTMENTS } from "../types"
+import { StaffPermissionEditor } from "./StaffPermissionEditor"
+import { PERMISSION_PRESETS, parsePermissions } from "@/lib/auth/permissions"
 import { saveColaboradorAction } from "@/app/actions/colaboradores"
 
 interface ColaboradorModalProps {
@@ -49,12 +45,14 @@ export function ColaboradorModal({
   const [nif, setNif] = React.useState("")
   const [status, setStatus] = React.useState<"Ativo" | "Inativo" | "Férias">("Ativo")
   const [accessLevel, setAccessLevel] = React.useState<"Administrador" | "Operacional" | "Comercial / Suporte">("Operacional")
+  const [permissions, setPermissions] = React.useState<string[]>([...PERMISSION_PRESETS[0].permissions])
   const [agencyLocation, setAgencyLocation] = React.useState("Sede - Felgueiras / Guimarães")
   const [admissionDate, setAdmissionDate] = React.useState(new Date().toISOString().slice(0, 10))
   const [avatarColor, setAvatarColor] = React.useState(AVATAR_COLORS[0])
   const [emergencyContact, setEmergencyContact] = React.useState("")
   const [notes, setNotes] = React.useState("")
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Reset the form when opening a different staff profile. */
   React.useEffect(() => {
     if (colaborador) {
       setName(colaborador.name || "")
@@ -65,6 +63,7 @@ export function ColaboradorModal({
       setNif(colaborador.nif || "")
       setStatus(colaborador.status || "Ativo")
       setAccessLevel(colaborador.access_level || "Operacional")
+      setPermissions(parsePermissions(colaborador.permissions))
       setAgencyLocation(colaborador.agency_location || "Sede - Felgueiras / Guimarães")
       setAdmissionDate(colaborador.admission_date || new Date().toISOString().slice(0, 10))
       setAvatarColor(colaborador.avatar_color || AVATAR_COLORS[0])
@@ -79,6 +78,7 @@ export function ColaboradorModal({
       setNif("")
       setStatus("Ativo")
       setAccessLevel("Operacional")
+      setPermissions([...PERMISSION_PRESETS[0].permissions])
       setAgencyLocation("Sede - Felgueiras / Guimarães")
       setAdmissionDate(new Date().toISOString().slice(0, 10))
       setAvatarColor(AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)])
@@ -87,6 +87,7 @@ export function ColaboradorModal({
     }
     setError(null)
   }, [colaborador, isOpen])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!isOpen) return null
 
@@ -117,6 +118,7 @@ export function ColaboradorModal({
         nif: nif.trim(),
         status,
         access_level: accessLevel,
+        permissions,
         agency_location: agencyLocation.trim(),
         admission_date: admissionDate,
         avatar_color: avatarColor,
@@ -130,8 +132,8 @@ export function ColaboradorModal({
       } else {
         setError("Erro ao guardar registo do colaborador.")
       }
-    } catch (err: any) {
-      setError(err?.message || "Ocorreu um erro ao gravar.")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Ocorreu um erro ao gravar.")
     } finally {
       setLoading(false)
     }
@@ -225,21 +227,9 @@ export function ColaboradorModal({
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                Nível de Acesso / Perfil
-              </label>
-              <select
-                value={accessLevel}
-                onChange={(e) => setAccessLevel(e.target.value as any)}
-                className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
-              >
-                {ACCESS_LEVELS.map((lvl) => (
-                  <option key={lvl} value={lvl}>
-                    {lvl}
-                  </option>
-                ))}
-              </select>
+            <div className="sm:col-span-2">
+              <StaffPermissionEditor level={accessLevel} permissions={permissions} email={email}
+                onChange={(level, values) => { setAccessLevel(level); setPermissions(values) }} />
             </div>
           </div>
 
@@ -280,7 +270,7 @@ export function ColaboradorModal({
               </label>
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
+                onChange={(e) => setStatus(e.target.value as Colaborador["status"])}
                 className="w-full px-3.5 py-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-xl text-sm focus:bg-[var(--surface-bg)] focus:ring-2 focus:ring-[var(--accent)] focus:outline-none"
               >
                 <option value="Ativo">Ativo</option>

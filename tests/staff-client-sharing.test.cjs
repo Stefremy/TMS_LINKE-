@@ -7,7 +7,7 @@ const TENANT = '11111111-1111-1111-1111-111111111111'
 const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const FOREIGN = '99999999-9999-4999-8999-999999999999'
-const staff = (id, role) => ({ id, email: `${id}@example.invalid`, app_metadata: { role } })
+const staff = (id, role) => ({ id, email: `${id}@example.invalid`, app_metadata: { role, permissions: ['Gestão de Clientes & Contratos'] } })
 
 function harness(failure) {
   let user = staff('admin-user', 'admin')
@@ -179,7 +179,7 @@ test('every colleague sees older clients beyond the former row limits and all da
 test('a failed company registry or profile read reports an error instead of hiding shared clients', async () => {
   for (const table of ['clients', 'audit_log']) {
     const h = harness(query => query.table === table ? { message: 'private connection details' } : null)
-    await assert.rejects(h.actions.getClientesAction(), error => /carregar os clientes da empresa/.test(error.message)
+    await assert.rejects(h.actions.getClientesAction(), error => /carregar os clientes da empresa|consultar os acessos dos colaboradores/.test(error.message)
       && !error.message.includes('private connection details'))
     assert.equal(h.db.writes.length, 0)
   }

@@ -306,7 +306,7 @@ export function ClientDashboard() {
 
   // Contractual and pricing details from real client record
   const discountPct = currentClient?.pricing?.discount_pct ?? 0
-  const fuelPct = currentClient?.pricing?.fuel_surcharge_pct ?? 12.5
+  const fuelPct = currentClient?.pricing?.standard_fuel_surcharge_pct ?? currentClient?.pricing?.fuel_surcharge_pct ?? 12.5
   const creditLimit = currentClient?.credit_limit ?? 0
   const unlimitedCredit = currentClient?.billing_type !== 'pay_as_you_go' && currentClient?.credit_limit_enabled !== true
   const paymentTerms = currentClient?.payment_terms || "Pronto Pagamento"

@@ -1,3 +1,4 @@
+import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { billingViewSelection } from "@/lib/billing/view-filters"
 import { BillingViewFilters } from "./components/BillingViewFilters"
 import { requireEmployee } from "@/lib/auth/context"
@@ -9,6 +10,8 @@ import { BillingConfigClient } from "./components/BillingConfigClient"
 export const dynamic = "force-dynamic"
 
 export default async function FaturacaoConfigPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> } = {}) {
+  await requireOpsPageAccess("/ops/configuracao/faturacao")
+
   const ctx = await requireEmployee()
   const [billingConfig, moloniDetails, automationPreview] = await Promise.all([
     getBillingConfigAction(),

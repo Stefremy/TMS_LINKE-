@@ -463,7 +463,7 @@ export function ClientAccountDetailsModal({
                   <div>
                     <span className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">Taxa de Combustível Aplicável</span>
                     <div className="p-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg font-bold text-[var(--text-primary)]">
-                      {client.pricing?.fuel_surcharge_pct ? `${client.pricing.fuel_surcharge_pct}%` : "12.5% (Tabela Geral)"}
+                      {client.pricing?.standard_fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5}%{client.pricing?.standard_fuel_surcharge_pct !== undefined ? " (Standard)" : ""}
                     </div>
                   </div>
                 </div>

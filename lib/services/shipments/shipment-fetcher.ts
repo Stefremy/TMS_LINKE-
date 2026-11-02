@@ -78,6 +78,7 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
 }
 
 import { getCttShipmentLabel } from "@/lib/services/ctt/shipment-label"
+import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
 
 /** Retrieve only saved official carrier labels, never create another shipment or a substitute label. */
 export async function fetchShipmentLabel(identifier: string): Promise<string | null> {
@@ -118,6 +119,7 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
     if (!label) return null
     if (label.trimStart().startsWith("^XA")) label = await convertZplToPdfBase64(label)
     if (isCorreosShipment(saved) && await isCorreosPdfLabel(label)) label = await applyLinkeLogoToCorreosLabel(label)
+    else if (!isCorreosShipment(saved)) label = await applyLinkeLogoToCttLabel(label, saved.carrier_tracking_number || saved.ctt_object_id || shipment?.carrier_tracking_number || saved.tracking_number)
     return label
   } catch (err: any) {
     console.warn("fetchShipmentLabel: label lookup failed:", err?.message)

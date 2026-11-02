@@ -22,7 +22,7 @@ import { SHIPMENT_LIST_COLUMNS } from "@/lib/services/shipments/shipment-fetcher
 const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val))
 
 async function claimManualInvoiceShipments(clientId: string, shipmentIds: string[], expected?: { id: string; sell_price?: unknown }[]) {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   const guarded = expected && process.env.CARRIER_WEIGHT_REPRICING_ENABLED === 'true'
   const { error } = await createAdminClient().rpc(guarded ? 'claim_weight_safe_billing_shipments' : 'claim_billing_shipments', {
     p_tenant: ctx.tenant_id, p_client: clientId, p_emission: crypto.randomUUID(),
@@ -35,7 +35,7 @@ async function claimManualInvoiceShipments(clientId: string, shipmentIds: string
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
 export async function internalEmitInvoice(client: any, shipments: any[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false) {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   const supabase = createAdminClient()
   if (!client?.id || !shipments?.length) throw new Error("Cliente ou envios não encontrados.")
   const persistedClient = (await getClientesAction(client.id)).find((c: any) => c.id === client.id)
@@ -352,7 +352,7 @@ export async function getBillingStatementsAction(clientId?: string) {
  * Obtém o estado da ligação ao Moloni
  */
 export async function getMoloniConfigAction() {
-  await requireEmployee()
+  await requireEmployee("Faturação & Contas Correntes")
   const redirectUri = moloniRedirectUri()
   const supabase = createAdminClient()
   try {
@@ -396,7 +396,7 @@ export async function getMoloniConfigAction() {
  * Conecta ao Moloni através de Utilizador e Password (grant_type=password)
  */
 export async function connectMoloniWithPasswordAction(formData: FormData) {
-  await requireEmployee()
+  await requireEmployee("Faturação & Contas Correntes")
   try {
     const username = (formData.get("username") as string || "").trim()
     const password = (formData.get("password") as string || "").trim()
@@ -476,7 +476,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
  * Emite a fatura oficial no Moloni para um extrato previamente criado
  */
 export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string, groupShipments: boolean = true, isProForma: boolean = false) {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
     
@@ -762,7 +762,7 @@ export interface CustomInvoicePayload {
  * e guarda o registo no TMS audit_log.
  */
 export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
-  await requireEmployee()
+  await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
 
@@ -1018,7 +1018,7 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
  * Obtém a lista de faturas personalizadas emitidas anteriormente
  */
 export async function getCustomInvoicesAction() {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
     const { data: logs, error } = await supabase
@@ -1067,7 +1067,7 @@ export async function getCustomInvoicesAction() {
 export async function emitReceiptAction(statementId: string, clientId: string, moloniDocumentId: number, _totalValue: number) {
   // Keep the legacy call signature; the fiscal remainder always comes from Moloni.
   void _totalValue
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const { emitStatementReceipt } = await import("@/lib/billing/receipts")
     const result = await emitStatementReceipt(createAdminClient(), ctx, statementId, {}, {client: clientId, invoice: moloniDocumentId})
@@ -1079,7 +1079,7 @@ export async function emitReceiptAction(statementId: string, clientId: string, m
 }
 
 export async function getMoloniPaymentMethodsAction() {
-  await requireEmployee()
+  await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
     let moloniConfig: any = null
@@ -1116,7 +1116,7 @@ export async function emitMoloniReceiptForStatementAction(
   statementId: string,
   opts?: { date?: string; paymentMethodId?: number; notes?: string }
 ) {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const { emitStatementReceipt } = await import("@/lib/billing/receipts")
     const result = await emitStatementReceipt(createAdminClient(), ctx, statementId, opts)
@@ -1132,7 +1132,7 @@ export async function emitMoloniReceiptForStatementAction(
  * Emite a Guia de Transporte Oficial (GT) no Moloni para um envio do Ops
  */
 export async function emitMoloniWaybillForShipmentAction(shipmentId: string, notes?: string) {
-  await requireEmployee()
+  await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
 
@@ -1302,7 +1302,7 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
  * Criação da Fatura no Moloni (Action para ser chamada a partir da UI)
  */
 export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false) {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
     
@@ -1348,7 +1348,7 @@ export async function sendStatementInvoiceEmailAction(params: {
   includeMoloniPdf?: boolean
   includeStatementPdf?: boolean
 }) {
-  await requireEmployee()
+  await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
     const { statementIdOrNumber, recipientEmail, includeMoloniPdf = true, includeStatementPdf = true } = params

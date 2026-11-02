@@ -23,6 +23,7 @@ export function canSendClientMessages(ctx: { role: string | null; permissions: s
   return !!ctx && (ctx.role === 'admin' || ctx.role === 'employee' &&
     ctx.permissions.some(p => [
       'Gestão de Clientes & Contratos',
+      'Atendimento & Suporte a Incidências',
       'Pedidos de Recolha & Distribuição',
       'Emissão e Controlo de Guias CTT',
       'Acesso Total (Super-Admin)',

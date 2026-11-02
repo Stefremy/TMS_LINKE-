@@ -24,56 +24,18 @@ import {
 } from "@/lib/services/ctt"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
 import { closeCttManifest } from "@/lib/services/ctt/close-manifest"
+import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
 
 
 /**
- * Obtém credenciais ativas da CTT (de carrier_connections, tenant_integrations ou .env.local)
+ * Usa o mesmo carregamento de credenciais CTT das recolhas, incluindo configurações antigas.
  */
 async function getCttCredentials(): Promise<CTTConnectionCredentials> {
-  const supabase = createAdminClient()
-
-  // 1. Tentar ler de carrier_connections
-  try {
-    const { data: conn } = await supabase
-      .from("carrier_connections")
-      .select("*")
-      .eq("tenant_id", (await getTenantId()))
-      .eq("carrier_code", "ctt_expresso")
-      .single()
-
-    if (conn) {
-      return {
-        contract_number: conn.contract_number,
-        client_number: conn.client_id,
-        auth_id: conn.auth_id,
-        user_id: conn.user_id || undefined,
-        pickup_requester: getCttPickupRequester(),
-        distribution_channel: conn.distribution_channel || 99,
-        environment: (conn.environment as "qa" | "production") || "production",
-        default_subproduct: conn.default_subproduct || "EMSF056.01",
-      }
-    }
-  } catch {
-    // Ignorar se a tabela ainda não existir no schema cache
+  const creds = await resolveCttCredentials()
+  if (!creds.auth_id?.trim() || !creds.client_number?.trim() || !creds.contract_number?.trim()) {
+    throw new Error("A ligação CTT não tem as credenciais completas. Confirme o número de cliente, contrato e chave de autenticação em Configuração → Webservices.")
   }
-
-
-
-  // 3. Fallback para variáveis de ambiente
-  if (!process.env.CTT_CONTRACT_ID || !process.env.CTT_CLIENT_ID || !process.env.CTT_AUTHENTICATION_ID) {
-    throw new Error("Missing required CTT environment variables. Please check your configuration.")
-  }
-
-  return {
-    contract_number: process.env.CTT_CONTRACT_ID,
-    client_number: process.env.CTT_CLIENT_ID,
-    auth_id: process.env.CTT_AUTHENTICATION_ID,
-    user_id: process.env.CTT_USER_ID,
-    pickup_requester: getCttPickupRequester(),
-    distribution_channel: 99,
-    environment: "production",
-    default_subproduct: "EMSF056.01",
-  }
+  return creds
 }
 
 /**
@@ -89,7 +51,7 @@ export async function saveCttConnectionAction(creds: {
   description?: string
   supplier_id?: string
 }) {
-  await requireEmployee()
+  await requireEmployee("Configurações de Webservices & Integrações")
   const supabase = createAdminClient()
 
   const payload = {
@@ -135,7 +97,7 @@ export async function saveCttConnectionAction(creds: {
  * Obtém a lista de conexões configuradas
  */
 export async function getCarrierConnectionsAction() {
-  await requireEmployee()
+  await requireEmployee(["Configurações de Webservices & Integrações","Emissão e Controlo de Guias CTT","Pedidos de Recolha & Distribuição","Gestão de Clientes & Contratos","Faturação & Contas Correntes"])
   const supabase = createAdminClient()
 
   // 1. Tentar carrier_connections
@@ -200,7 +162,7 @@ export async function toggleCarrierConnectionAction(
   is_active: boolean,
   carrier_code: string = "ctt_expresso"
 ) {
-  await requireEmployee()
+  await requireEmployee("Configurações de Webservices & Integrações")
   const supabase = createAdminClient()
 
   // 1. Atualizar em carrier_connections
@@ -255,7 +217,7 @@ export async function deleteCarrierConnectionAction(
   id: string,
   carrier_code: string = "ctt_expresso"
 ) {
-  await requireEmployee()
+  await requireEmployee("Configurações de Webservices & Integrações")
   const supabase = createAdminClient()
 
   // 1. Eliminar em carrier_connections
@@ -298,7 +260,7 @@ export async function deleteCarrierConnectionAction(
  * Testa a conexão com os Web Services CTT
  */
 export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
-  await requireEmployee()
+  await requireEmployee("Configurações de Webservices & Integrações")
   try {
     const { CTTReferencesService } = await import("@/lib/services/ctt/ctt-references.service")
     const refService = new CTTReferencesService()
@@ -343,7 +305,7 @@ export async function emitCttShipmentAction(shipmentInput: {
   selectedSpecialServices?: string[]
   cttExportDetails?: import("@/lib/services/ctt/export-details").CttExportDetails
 }) {
-  await requireEmployee()
+  await requireEmployee("Emissão e Controlo de Guias CTT")
   assertShipmentDestinationAvailable(shipmentInput.recipient.country || "PT", shipmentInput.recipient.zip)
   const creds = await getCttCredentials()
   const provider = new CttProvider()
@@ -382,7 +344,7 @@ export async function emitCttShipmentAction(shipmentInput: {
   if (result.success && result.trackingNumber) {
     const trackingNumber = result.trackingNumber
     const rawLabel = result.labelBase64 || ""
-    const labelBase64 = await convertZplToPdfBase64(rawLabel)
+    const labelBase64 = await applyLinkeLogoToCttLabel(await convertZplToPdfBase64(rawLabel), trackingNumber)
 
     // Atualizar base de dados se shipmentId estiver presente
     if (shipmentInput.id) {
@@ -457,7 +419,7 @@ export async function emitCttShipmentAction(shipmentInput: {
 
 /** Fecha o manifesto confirmado pelos CTT, sem alterar o estado de transporte. */
 export async function closeCttShipmentsAction(shipmentIds?: string[]) {
-  const ctx = await requireUser()
+  const ctx = await requireUser("Emissão e Controlo de Guias CTT")
   let result
   try {
     result = await closeCttManifest(ctx.tenant_id, shipmentIds, ctx.role === 'client' ? ctx.client_id! : undefined)
@@ -481,7 +443,7 @@ export async function closeCttShipmentsAction(shipmentIds?: string[]) {
  * Mantém retrocompatibilidade total com todos os componentes da interface (UI).
  */
 export async function syncCttTrackingAction(trackingNumber: string, shipmentId?: string) {
-  const ctx = await requireUser()
+  const ctx = await requireUser(["Emissão e Controlo de Guias CTT","Atendimento & Suporte a Incidências"])
   const res = await syncShipmentTracking(
     { trackingNumber, shipmentId },
     {
@@ -519,7 +481,7 @@ export async function scheduleCttPickupAction(input: {
   sender: { name: string; contact?: string; address: string; country?: string; zip: string; city: string; phone: string; mobilePhone?: string; email?: string }
   observations?: string
 }) {
-  await requireEmployee()
+  await requireEmployee("Pedidos de Recolha & Distribuição")
   const heaviestWeightKg = input.heaviestWeightKg ?? input.weightKg
   if (!Number.isFinite(input.weightKg) || input.weightKg <= 0 ||
       !Number.isFinite(heaviestWeightKg) || heaviestWeightKg <= 0 || heaviestWeightKg > input.weightKg ||
@@ -707,7 +669,7 @@ export const scheduleCarrierPickupAction = scheduleCttPickupAction
  * Consulta a lista oficial de produtos/subprodutos ativados nos CTT via RecolhasWS (GetProdutosRecolha)
  */
 export async function fetchCttAvailableProductsAction() {
-  await requireEmployee()
+  await requireEmployee(["Configurações de Webservices & Integrações","Emissão e Controlo de Guias CTT","Gestão de Clientes & Contratos"])
   try {
     const creds = await getCttCredentials()
     const pickupService = new CTTPickupService()
@@ -728,7 +690,7 @@ export async function validateCttRouteAction(options: {
   cdPaisDestino?: string
   seps?: string[]
 }) {
-  await requireEmployee()
+  await requireEmployee(["Emissão e Controlo de Guias CTT","Pedidos de Recolha & Distribuição"])
   try {
     const creds = await getCttCredentials()
     const pickupService = new CTTPickupService()
@@ -819,7 +781,7 @@ export async function getPontosPickupCttAction(forceRefresh = false): Promise<{
   total: number
   error?: string
 }> {
-  await requireEmployee()
+  await requireEmployee(["Emissão e Controlo de Guias CTT","Pedidos de Recolha & Distribuição","Atendimento & Suporte a Incidências"])
   try {
     const now = Date.now()
     if (!forceRefresh && cachedDeliveryPoints && (now - cachedDeliveryPoints.timestamp < CACHE_TTL_MS)) {
@@ -879,7 +841,7 @@ export async function injectTrackingEventAction(
   reasonCode?: string,
   situationCode?: string
 ) {
-  const ctx = await requireUser()
+  const ctx = await requireUser(["Emissão e Controlo de Guias CTT","Atendimento & Suporte a Incidências"])
   const supabase = createAdminClient()
   if (ctx.role === 'client') {
     const { data: shipment } = await supabase.from('shipments').select('client_id').eq('id', shipmentId).single()

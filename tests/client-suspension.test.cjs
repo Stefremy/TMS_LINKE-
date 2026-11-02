@@ -53,7 +53,7 @@ test('staff keep their operations access; only administrators may change a clien
   for(const role of ['employee','admin']) {
     const h=harness({role,logs:[decision(A,true)]})
     assert.equal((await h.auth.requireEmployee()).role,role)
-    assert.equal(h.db.queries.some(q=>q.table==='audit_log'),false)
+    assert.equal(h.db.queries.some(q=>q.table==='audit_log'&&q.filters.some(f=>f.field==='action'&&f.value==='client_portal_access')),false)
   }
   for(const role of ['client','employee']) {
     const h=harness({role})

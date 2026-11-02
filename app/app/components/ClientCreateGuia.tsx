@@ -263,7 +263,7 @@ export function ClientCreateGuia() {
         [lengthCm, widthCm, heightCm].every(value => Number(value) >= 0.1) ? { lengthCm: Number(lengthCm), widthCm: Number(widthCm), heightCm: Number(heightCm), volumesCount: Number(volumesCount), parcelWeightsKg } : undefined)
       return {
         base: quote.basePrice.toFixed(2), fuel: quote.fuelSurchargeAmount.toFixed(2),
-        fuelPct: activeLinkeService.fuel_surcharge_pct ?? currentClient.pricing?.fuel_surcharge_pct ?? 12.5,
+        fuelPct: currentClient.pricing?.standard_fuel_surcharge_pct ?? activeLinkeService.fuel_surcharge_pct ?? currentClient.pricing?.fuel_surcharge_pct ?? 12.5,
         specialTotal: quote.specialFeesAmount.toFixed(2), specialItems: quote.specialItems,
         total: quote.totalPrice.toFixed(2), billableWeightKg: quote.billableWeightKg, volumetricWeightKg: quote.volumetricWeightKg, volumetricDivisor: quote.volumetricDivisor, destinationZone, isBlocked: false, blockedReason: null,
       }

@@ -23,7 +23,7 @@ export function captureWeightPricingBasis(client: Partial<Cliente>, service: Ser
     ...(weight?.volumetricWeightKg != null ? { volumetricWeightKg: weight.volumetricWeightKg, volumetricDivisor: weight.volumetricDivisor } : {}),
     service: { id: service.id, name: service.name, code: service.code, webservice_service_code: service.webservice_service_code,
       is_active: true, zones: [zone], allowed_zones: [zone.zone_code],
-      fuel_surcharge_pct: service.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5 },
+      fuel_surcharge_pct: client.pricing?.standard_fuel_surcharge_pct ?? service.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5 },
     client: { default_linke_table_id: service.id, ...(overrides ? { custom_tier_overrides: { [service.id]: overrides } } : {}) },
   }) as WeightPricingBasis
 }

@@ -1,5 +1,8 @@
 "use server"
 
+import { loadStandardSpecialFees } from "@/lib/pricing/standard-special-fees"
+import { withStandardSpecialFees, validateClientSpecialFees } from "@/lib/pricing/special-fees"
+
 import { applyClientActivityColor } from "@/lib/clients/activity-color"
 import { readLegacyServiceHistory } from "@/lib/clients/service-history"
 
@@ -163,15 +166,15 @@ function clearClientProfileMemoryCache(id?: string) {
 export async function getClientesAction(selectedClientId?: string): Promise<Cliente[]> {
   const ctx = await requireUser()
   const scopedId = ctx.role === "client" ? ctx.client_id! : selectedClientId
+  const supabase = createAdminClient()
+  const { fees: standardFees, fuelSurchargePct } = await loadStandardSpecialFees(supabase, ctx.tenant_id)
 
   if (scopedId) {
     const cached = clientProfileMemoryCache.get(scopedId)
     if (cached && cached.tenantId === ctx.tenant_id && (Date.now() - cached.timestamp) < 30_000) {
-      return [cached.profile]
+      return [withStandardSpecialFees(cached.profile, standardFees, fuelSurchargePct)]
     }
   }
-
-  const supabase = createAdminClient()
 
   // Read every page for the signed-in company. Never filter by the staff creator,
   // truncate older clients, or turn a failed read into an apparently empty list.
@@ -263,7 +266,7 @@ export async function getClientesAction(selectedClientId?: string): Promise<Clie
     })
   })
 
-  let result = Array.from(clientMap.values()).map(c => applyClientActivityColor(c, serviceCounts.get(c.id))).sort((a, b) => {
+  let result = Array.from(clientMap.values()).map(c => withStandardSpecialFees(applyClientActivityColor(c, serviceCounts.get(c.id)), standardFees, fuelSurchargePct)).sort((a, b) => {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
 
@@ -290,7 +293,7 @@ export async function getClienteByIdAction(id: string): Promise<Cliente | null> 
  * Grava ou atualiza um cliente
  */
 export async function saveClienteAction(cliente: Partial<Cliente>) {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee("Gestão de Clientes & Contratos")
 
   const supabase = createAdminClient()
 
@@ -355,7 +358,8 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     assigned_linke_service_ids: cliente.assigned_linke_service_ids || [],
     assigned_linke_profile: cliente.assigned_linke_profile || "Standard / Geral",
     volume_discount_pct: cliente.volume_discount_pct ?? 0,
-    pricing: cliente.pricing || DEFAULT_CLIENT_PRICING,
+    pricing: { ...DEFAULT_CLIENT_PRICING, ...previous?.details?.pricing, ...cliente.pricing,
+      special_services_fees: validateClientSpecialFees(cliente.pricing?.special_services_fees ?? previous?.details?.pricing?.special_services_fees ?? DEFAULT_CLIENT_PRICING.special_services_fees) },
     allowed_webservices: cliente.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.slice(0, 3),
     custom_tier_overrides: cliente.custom_tier_overrides || {},
   }
@@ -409,8 +413,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
  * Alterna estado de cliente (Ativo / Inativo)
  */
 export async function toggleClienteStatusAction(id: string, is_active: boolean) {
-  await requireEmployee()
-  await requireEmployee()
+  await requireEmployee("Gestão de Clientes & Contratos")
 
   const supabase = createAdminClient()
 
@@ -462,8 +465,7 @@ export async function toggleClienteStatusAction(id: string, is_active: boolean) 
  * Elimina cliente de forma permanente
  */
 export async function deleteClienteAction(id: string) {
-  await requireEmployee()
-  await requireEmployee()
+  await requireEmployee("Gestão de Clientes & Contratos")
 
   const supabase = createAdminClient()
 
@@ -536,8 +538,7 @@ export async function getClientes() {
 }
 
 export async function createCliente(formData: FormData) {
-  await requireEmployee()
-  await requireEmployee()
+  await requireEmployee("Gestão de Clientes & Contratos")
 
   const name = (formData.get("name") as string) || "Novo Cliente"
   await saveClienteAction({

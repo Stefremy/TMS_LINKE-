@@ -159,7 +159,7 @@ for (const autoClose of [false, true]) {
     assert.ok(!('PTZipCode3' in receiver)); assert.ok(!('PTZipCode4' in receiver))
     assert.equal(sender.Country, 'PT'); assert.equal(sender.PTZipCode4, '4800'); assert.equal(sender.PTZipCode3, '019')
     assert.ok(!('NonPTZipCode' in sender))
-    const fieldOrder = ['Address', 'City', 'ContactName', 'Country', 'Email', 'MobilePhone', 'Name', 'NonPTZipCode', 'NonPTZipCodeLocation', 'Type']
+    const fieldOrder = ['Address', 'City', 'Country', 'Email', 'MobilePhone', 'Name', 'NonPTZipCode', 'NonPTZipCodeLocation', 'Type']
     assert.deepEqual(Object.keys(receiver), fieldOrder)
   })
 }
@@ -403,4 +403,26 @@ test('international form fields require an explicit selection and read the conte
   assert.deepEqual(readCttExportForm(form), { exportType: 'Permanent', contentType: 'Goods', declaredValue: 25.5 })
   form.set('ctt_declared_value', '0')
   assert.equal(readCttExportForm(form).declaredValue, 0)
+})
+
+test('sender and recipient names are printed once when no separate contact was provided', async () => {
+ const {sender,receiver,xml}=await harness().send()
+ assert.equal(sender.Name,'Fixture PT');assert.equal(receiver.Name,'Fixture ES')
+ assert.equal(sender.ContactName,undefined);assert.equal(receiver.ContactName,undefined)
+ assert.doesNotMatch(xml,/<mod:ContactName>/)
+})
+
+test('a separate contact person is preserved for a company, including XML escaping', async () => {
+ const {sender,receiver}=await harness().send({contact:'Ana & João'}, {
+  sender:{name:'Fixture Company',contact:'Maria <Sales>',address:'Rua de teste',zip:'4800-019',city:'Guimarães',country:'PT',phone:'+351910000001'},
+ })
+ assert.equal(sender.Name,'Fixture Company');assert.equal(sender.ContactName,'Maria <Sales>')
+ assert.equal(receiver.ContactName,'Ana & João')
+})
+
+test('explicit contacts equal to the party name are omitted despite case, spaces or Unicode composition', async () => {
+ const {sender,receiver}=await harness().send({name:'JOÃO SILVA',contact:'  joa\u0303o   silva  '}, {
+  sender:{name:'GO Linke',contact:' GO   LINKE ',address:'Rua de teste',zip:'4800-019',city:'Guimarães',country:'PT',phone:'+351910000001'},
+ })
+ assert.equal(sender.ContactName,undefined);assert.equal(receiver.ContactName,undefined)
 })

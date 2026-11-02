@@ -38,7 +38,7 @@ export async function getBillingConfigAction(): Promise<BillingConfig> {
  * Guarda as configurações de faturação
  */
 export async function saveBillingConfigAction(config: Partial<BillingConfig>): Promise<{ success: boolean; error?: string }> {
-  await requireEmployee()
+  await requireEmployee("Faturação & Contas Correntes")
   const supabase = createAdminClient()
   const tenantId = await getTenantId()
 
@@ -77,7 +77,7 @@ export async function syncMoloniArticleAction(articleData: {
   name: string
   summary?: string
 }): Promise<{ success: boolean; message: string; productId?: number }> {
-  await requireEmployee()
+  await requireEmployee("Faturação & Contas Correntes")
   const supabase = createAdminClient()
 
   try {
@@ -164,7 +164,7 @@ export async function syncMoloniArticleAction(articleData: {
  * Obter status detalhado e opções disponíveis na conta Moloni conectada
  */
 export async function getMoloniDetailsAction() {
-  await requireEmployee()
+  await requireEmployee("Faturação & Contas Correntes")
   const supabase = createAdminClient()
 
   try {

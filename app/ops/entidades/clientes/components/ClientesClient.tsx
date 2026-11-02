@@ -24,7 +24,7 @@ import {
   ExternalLink
 } from "lucide-react"
 import { toggleClienteStatusAction, deleteClienteAction } from "@/app/actions/clientes"
-import { Cliente, DEFAULT_CLIENT_CATEGORIES } from "../types"
+import { Cliente, DEFAULT_CLIENT_CATEGORIES, type ClientSpecialServiceFee } from "../types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { ClienteModal } from "./ClienteModal"
 import { ClientAuthModal } from "./ClientAuthModal"
@@ -37,10 +37,12 @@ interface ClientesClientProps {
   initialServicosLinke?: ServicoLinke[]
   canManageAccess?: boolean
   canSendAccessEmail?: boolean
+  standardSpecialFees?: ClientSpecialServiceFee[]
+  standardFuelSurchargePct?: number
   defaultPaymentDays?: number
 }
 
-export function ClientesClient({ initialClientes, initialServicosLinke = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30 }: ClientesClientProps) {
+export function ClientesClient({ initialClientes, initialServicosLinke = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, standardSpecialFees, standardFuelSurchargePct }: ClientesClientProps) {
   const [clientes, setClientes] = React.useState<Cliente[]>(initialClientes || [])
   const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>(initialServicosLinke || [])
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -590,6 +592,8 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
           canManageAccess={canManageAccess}
           canSendAccessEmail={canSendAccessEmail}
           defaultPaymentDays={defaultPaymentDays}
+          standardSpecialFees={standardSpecialFees}
+          standardFuelSurchargePct={standardFuelSurchargePct}
           onManageAccess={() => { if (editingCliente) setAuthModalCliente(editingCliente) }}
           onClose={() => setIsModalOpen(false)}
           onSaved={handleSaved}

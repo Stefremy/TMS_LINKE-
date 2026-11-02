@@ -62,7 +62,7 @@ export async function saveCorreosConnectionAction(creds: {
  * Testa a conexão com os Web Services Correos Express
  */
 export async function testCorreosConnectionAction(creds: CorreosCredentials) {
-  await requireEmployee()
+  await requireEmployee("Configurações de Webservices & Integrações")
   try {
     const shipmentService = new CorreosShipmentService()
     
@@ -127,7 +127,7 @@ export async function emitCorreosShipmentAction(shipmentInput: {
   isReturn?: boolean
   selectedSpecialServices?: string[]
 }) {
-  await requireEmployee()
+  await requireEmployee("Emissão e Controlo de Guias CTT")
   const creds = await resolveCorreosCredentials()
   const shipmentService = new CorreosShipmentService()
 

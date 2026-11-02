@@ -15,6 +15,7 @@ function harness() {
   return {
     ...load('app/ops/tracking/checkpoints.ts'),
     ...load('app/ops/tracking/map-points.ts'),
+    ...load('app/ops/tracking/distances.ts'),
     ...load('lib/services/geo/coordinates.ts'),
     queries,
   }
@@ -126,15 +127,21 @@ test('map filtering rejects absent or invalid coordinates and accepts existing d
   assert.equal(origin.district, 'Braga')
 })
 
-test('the tracking page sends the corrected real scans and Guimarães locality to the client', async () => {
+for (const pagePath of ['app/ops/tracking/page.tsx', 'app/app/[storeSlug]/tracking/page.tsx']) {
+test(`${pagePath} sends real scans, Guimarães locality and geographic distances to the client`, async () => {
   const React = require('react')
   const load = createLoader({
     react: React,
     'react/jsx-runtime': require('react/jsx-runtime'),
     'next/link': { __esModule: true, default: () => null },
+    '@/lib/auth/ops-page-access': { requireOpsPageAccess: async () => {} },
     './components/DeliveryTrackingClient': { DeliveryTrackingClient: () => null },
+    '@/app/ops/tracking/components/DeliveryTrackingClient': { DeliveryTrackingClient: () => null },
+    '@/lib/client-portal/access': { requirePortalStore: async () => ({
+      client: { id: 'client-test' }, basePath: '/app/test',
+    }) },
     '@/app/actions/shipments': { getShipmentsAction: async () => [{
-      id: 'shipment-test', tracking_number: 'LTK-TEST', status: 'em_transito',
+      id: 'shipment-test', client_id: 'client-test', tracking_number: 'LTK-TEST', status: 'em_transito',
       sender_address: 'Morada de teste, Guimarães', sender_zip4: '4800', sender_zip3: '019',
     }] },
     '@/lib/supabase/server': { createAdminClient: () => ({ from: () => ({
@@ -149,8 +156,8 @@ test('the tracking page sends the corrected real scans and Guimarães locality t
       ? { lat: 41.442, lng: -8.291, name: 'Guimarães', district: 'Braga' }
       : options.destination },
   })
-  const Page = load('app/ops/tracking/page.tsx').default
-  const tree = await Page({ searchParams: Promise.resolve({ search: 'LTK-TEST' }) })
+  const Page = load(pagePath).default
+  const tree = await Page({ params: Promise.resolve({ storeSlug: 'test' }), searchParams: Promise.resolve({ search: 'LTK-TEST' }) })
   function findProps(node) {
     if (!node || typeof node !== 'object') return null
     if (node.props?.initialShipments) return node.props
@@ -167,6 +174,71 @@ test('the tracking page sends the corrected real scans and Guimarães locality t
   assert.equal(shipment.pickagens.length, 2)
   assert.equal(shipment.pickagens[0].lat, null)
   assert.equal(shipment.pickagens[1].city, 'Braga')
+  assert.ok(shipment.metrics.totalDistanceKm > 450 && shipment.metrics.totalDistanceKm < 550)
+  assert.ok(shipment.metrics.remainingDistanceKm > 450 && shipment.metrics.remainingDistanceKm < 550)
+  assert.notEqual(shipment.metrics.totalDistanceKm, shipment.metrics.remainingDistanceKm)
+})
+}
+
+test('great-circle calculation agrees with the known London to Paris distance', () => {
+  const { distanceKm } = harness()
+  const km = distanceKm({ lat: 51.5074, lng: -0.1278 }, { lat: 48.8566, lng: 2.3522 })
+  assert.ok(Math.abs(km - 343.56) < 0.1)
+})
+
+test('remaining distance uses the latest located scan, skipping unlocated and future scans', () => {
+  const h = harness()
+  const origin = { lat: 41.442, lng: -8.291 }
+  const destination = options.destination
+  const latest = { lat: 38.722, lng: -9.139, status: 'current' }
+  const distances = h.buildTrackingDistances(origin, destination, [
+    { ...origin, status: 'completed' }, latest,
+    { lat: null, lng: null, status: 'current' },
+    { ...destination, status: 'pending' },
+  ], false)
+  assert.equal(distances.totalDistanceKm, h.distanceKm(origin, destination))
+  assert.equal(distances.remainingDistanceKm, h.distanceKm(latest, destination))
+  assert.ok(distances.remainingDistanceKm < distances.totalDistanceKm)
+})
+
+test('without located scans distance falls back to origin; unknown coordinates stay unavailable', () => {
+  const h = harness()
+  const origin = { lat: 41.442, lng: -8.291 }
+  const unknown = { lat: 39.5, lng: -8.5 }
+  const distances = h.buildTrackingDistances(origin, options.destination, [{ lat: null, lng: null }], false)
+  assert.equal(distances.remainingDistanceKm, distances.totalDistanceKm)
+  assert.equal(h.buildTrackingDistances(origin, unknown, [], false).remainingDistanceKm, null)
+  assert.equal(h.buildTrackingDistances(unknown, options.destination, [], false).remainingDistanceKm, null)
+  assert.equal(h.distanceKm({ lat: NaN, lng: 0 }, origin), null)
+  assert.equal(h.distanceKm({ lat: 91, lng: 0 }, origin), null)
+  assert.equal(h.distanceKm({ lat: 40.416, lng: -3.703, district: 'Espanha' }, origin), null)
+  assert.ok(h.buildTrackingDistances(unknown, options.destination, [{ ...origin, status: 'current' }], false).remainingDistanceKm > 0)
+})
+
+test('confirmed delivery is zero even without coordinates; a return still uses its known location', () => {
+  const h = harness()
+  const origin = { lat: 41.442, lng: -8.291 }
+  const unknown = { lat: 39.5, lng: -8.5 }
+  assert.equal(h.buildTrackingDistances(unknown, unknown, [], true).remainingDistanceKm, 0)
+  assert.ok(h.buildTrackingDistances(origin, options.destination, [], false).remainingDistanceKm > 0)
+})
+
+test('distance card distinguishes unavailable, delivered, nearby and estimated distances', () => {
+  const React = require('react')
+  const { renderToStaticMarkup } = require('react-dom/server')
+  const load = createLoader({
+    react: React, 'react/jsx-runtime': require('react/jsx-runtime'),
+    'lucide-react': require('lucide-react'),
+  })
+  const { MapSummaryBar } = load('app/ops/tracking/components/MapSummaryBar.tsx')
+  for (const [distance, expected] of [[null, 'Indisponível'], [0, '0 km'], [0.2, '&lt; 1 km'], [343.56, '≈ 344 km']]) {
+    const html = renderToStaticMarkup(React.createElement(MapSummaryBar, {
+      shipment: { origin: {}, metrics: { remainingDistanceKm: distance } },
+    }))
+    assert.ok(html.includes(expected), html)
+    if (distance > 0) assert.match(html, /Em linha reta/)
+    if (distance === null) assert.doesNotMatch(html, /0 km/)
+  }
 })
 
 test('timeline explains the unlocated reading without removing it', async () => {

@@ -870,7 +870,7 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
 export async function saveServicoLinkeAction(
   servico: Partial<ServicoLinke>
 ): Promise<{ success: boolean; data?: ServicoLinke; error?: string }> {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
   const supabase = createAdminClient()
 
   const profile = typeof servico.pricing_profile === "string" ? servico.pricing_profile.trim() : "Standard / Geral"
@@ -1041,7 +1041,7 @@ export async function duplicateServicoForClientAction(
   targetProfile: string,
   targetClientName: string
 ): Promise<{ success: boolean; data?: ServicoLinke; error?: string }> {
-  await requireEmployee()
+  await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
   targetProfile = typeof targetProfile === "string" ? targetProfile.trim() : ""
   if (!targetProfile || targetProfile.length > 100) return { success: false, error: "Indique um perfil comercial com 1 a 100 caracteres." }
   const servicos = await getServicosLinkeAction()
@@ -1090,7 +1090,7 @@ export async function updateServicoMarkupAction(
   servicoId: string,
   newMarkupPct: number
 ): Promise<{ success: boolean; error?: string }> {
-  await requireEmployee()
+  await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
   const servicos = await getServicosLinkeAction()
   const target = servicos.find((s) => s.id === servicoId)
   if (!target) return { success: false }
@@ -1121,7 +1121,7 @@ export async function toggleServicoLinkeStatusAction(
   id: string,
   is_active: boolean
 ): Promise<{ success: boolean; error?: string }> {
-  await requireEmployee()
+  await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
   const servicos = await getServicosLinkeAction()
   const target = servicos.find((s) => s.id === id)
   if (!target) return { success: false }
@@ -1139,7 +1139,7 @@ export async function toggleServicoLinkeStatusAction(
  * Elimina um Serviço Linke personalizado. Tabelas base contratadas (primordiais) estão bloqueadas contra eliminação.
  */
 export async function deleteServicoLinkeAction(id: string): Promise<{ success: boolean; error?: string }> {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
   const supabase = createAdminClient()
   let protection: { found: boolean; isProtected: boolean }
   try {
@@ -1196,7 +1196,7 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
  * Obtém os dados consolidados de Fornecedores, Serviços Linke e Webservices para o Módulo
  */
 export async function getServicosDashboardDataAction() {
-  const ctx = await requireEmployee()
+  const ctx = await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
   const [servicos, fornecedores, webservices] = await Promise.all([
     getServicosLinkeAction(),
     getFornecedoresAction(),

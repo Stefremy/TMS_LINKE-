@@ -1,3 +1,5 @@
+import { loadStandardSpecialFees } from "./standard-special-fees"
+import { withStandardSpecialFees } from "./special-fees"
 import type { AuthContext } from "@/lib/auth/context"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
@@ -69,7 +71,8 @@ export async function loadShipmentPricingContext(
     throw new ShipmentPricingUnavailableError()
   }
   if (!clientResult.data || deletedClientResult.data) throw new ShipmentPricingError("Cliente inválido ou inacessível.")
-  const client = { ...clientResult.data, ...clientLogResult.data?.details, id: clientResult.data.id } as Cliente
+  const { fees: standardFees, fuelSurchargePct } = await loadStandardSpecialFees(supabase, ctx.tenant_id).catch(() => { throw new ShipmentPricingUnavailableError() })
+  const client = withStandardSpecialFees({ ...clientResult.data, ...clientLogResult.data?.details, id: clientResult.data.id } as Cliente, standardFees, fuelSurchargePct)
   if (client.is_active === false) throw new ShipmentPricingError("Conta de cliente inativa.")
 
   if ([serviceResult, serviceLogResult, deletedServiceResult].some(result => (result.data?.length ?? 0) >= 2000)) {
