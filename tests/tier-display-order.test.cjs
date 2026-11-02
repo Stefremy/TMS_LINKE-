@@ -37,7 +37,7 @@ test('editor grip supports drop and keyboard moves and submits the saved display
  const module=createLoader({react:React,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,p)=>p}),
   '@/components/ui/refresh-icon':{RefreshIcon:'icon'},'./DestinationIcons':{PortugalFlag:'icon',SpainFlag:'icon',EuFlag:'icon',DestinationBadge:'icon'},'@/components/ctt-service-badge':{CttServiceBadge:'span'},'@/lib/carrier-logos':{getCarrierLogo:()=>null}})
  const {ServicoModal}=module('app/ops/configuracao/servicos/components/ServicoModal.tsx')
- const flatten=n=>Array.isArray(n)?n.flatMap(flatten):n&&typeof n==='object'?[n,...flatten(n.props?.children)]:[]
+ const flatten=n=>n?.type?.name==='ServicoModalForm'?flatten(n.type(n.props)):Array.isArray(n)?n.flatMap(flatten):n&&typeof n==='object'?[n,...flatten(n.props?.children)]:[]
  let saved,closed=0,saveMode='success'
  const props={isOpen:true,initialData:{name:'Fixture',code:'LK-X',preferred_carrier_name:'CTT Expresso',webservice_service_code:'EMSF056.01',zones:[{zone_code:'PT-CONT',zone_name:'Portugal',tiers}]},fornecedores:[],webservices:[],onClose(){closed++},onSave:async data=>{saved=data;if(saveMode==='fail')return false;if(saveMode==='throw')throw Error('Falha simulada');return {...data,id:'fixture'}}}
  const render=()=>{cursor=0;const nodes=flatten(ServicoModal(props));effects.splice(0).forEach(fn=>fn());return nodes}

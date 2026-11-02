@@ -28,6 +28,25 @@ test('redacted DTOs preserve API-based mode without exposing the product',()=>{
  assert.equal(mode({...db,carrier_group:'correos'}),'other')
  assert.equal(mode({...db,island_transport_mode:'air'}),'sea')
 })
+test('Múltiplo remains mainland-only even with incorrectly configured island and foreign tariffs',()=>{
+ const {isMainlandOnlyService,calculateShipmentPrice}=load('lib/pricing/calculate-shipment-price.ts')
+ const multiplo=service('custom-multiplo','EMSF010.01',['PT-CONT','PT-ILHAS','ES-PENIN','EU 1'])
+ const redacted={...multiplo,webservice_service_code:undefined,mainland_only:isMainlandOnlyService(multiplo)}
+ const legacy={...multiplo,id:'srv_linke_multiplo_std',webservice_service_code:undefined}
+ const copied={...multiplo,id:'copied',code:'LK-MULT-123',webservice_service_code:undefined}
+ for(const s of [multiplo,redacted,legacy,copied]){
+  assert.deepEqual(countries([s]).map(c=>c.code),['PT'])
+  assert.deepEqual(ids(options([s],'PT','4000-001')),[s.id])
+  for(const [country,postal] of [['PT','9000-001'],['PT','9500-001'],['ES','28013'],['ES','07001'],['FR','75001']]){
+   assert.deepEqual(options([s],country,postal),[],`${s.id}: ${country}/${postal}`)
+   const client={default_linke_table_id:s.id}
+   assert.throws(()=>calculateShipmentPrice(1,client,[s],country,postal,{requireConfiguredTariff:true}),/indisponível/)
+   assert.equal(calculateShipmentPrice(1,client,[s],country,postal).isBlocked,true)
+  }
+ }
+ // Editable names cannot accidentally restrict a different carrier product.
+ assert.deepEqual(ids(options([{...dd,name:'Múltiplo'}],'PT','9500-001')),[dd.id])
+})
 test('country union is independent of selected service; disabled or missing coverage stays excluded',()=>{
  const es=service('Espanha','EMSF056.01',['ES-PENIN'])
  assert.deepEqual(countries([eq,dd,es]).map(c=>c.code),['PT','ES'])

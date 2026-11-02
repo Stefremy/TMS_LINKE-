@@ -911,6 +911,29 @@ test('service DTO retains safe island modality after redacting internal product 
  }
 })
 
+test('Múltiplo rejects islands and foreign destinations before reservations or carrier calls',async()=>{
+ for(const role of ['client','employee'])for(const [country,postal,zone] of [
+  ['PT','9000-001','PT-ILHAS'],['PT','9500-001','PT-ILHAS'],['ES','28013','ES-PENIN'],['FR','75001','EU 1'],
+ ]){
+  const h=shipmentHarness({ctx:{...clientContext,role},adjust:t=>{
+   const s=t.servicos_linke[0]
+   s.webservice_service_code='EMSF010.01';s.allowed_zones=[zone];s.zones[0].zone_code=zone
+  }})
+  const result=await emit(h,{recipientCountry:country,recipientPostal:postal})
+  assert.equal(result.success,false,`${role}: ${country}/${postal}`)
+  assert.equal(h.providerCalls.length,0)
+  assert.equal(h.db.writes.length,0)
+ }
+ const h=shipmentHarness({adjust:t=>{t.servicos_linke[0].webservice_service_code='EMSF010.01'}})
+ const list=await h.load('app/actions/servicos-linke.ts').getServicosLinkeAction()
+ const s=list.find(s=>s.id==='service-a')
+ assert.equal(s.mainland_only,true)
+ assert.equal(s.webservice_service_code,undefined)
+ const result=await emit(h)
+ assert.equal(result.success,true,result.error)
+ assert.equal(h.providerCalls[0].payload.subProduct,'EMSF010.01')
+})
+
 test('return authorization is accepted only in mainland Portugal and rejected before reservations/provider calls elsewhere',async()=>{
  for(const [country,postal,zone,product,allowed] of [
   ['PT','4000-001','PT-CONT','EMSF056.01',true],

@@ -354,7 +354,7 @@ export function getCarrierSubproductPreset(
   carrier: "ctt" | "correos",
   wsCode?: string
 ): CarrierSubproductPreset | null {
-  const code = (wsCode || "").trim()
+  const code = (wsCode || "").trim().toUpperCase()
   return (
     CARRIER_SUBPRODUCT_PRESETS.find((p) => p.carrier === carrier && p.wsCode === code) ||
     CARRIER_SUBPRODUCT_PRESETS.find((p) => p.wsCode === code) ||
@@ -362,9 +362,26 @@ export function getCarrierSubproductPreset(
   )
 }
 
+/** Product coverage is a ceiling: commercial tables can only select a subset. */
+export function getSubproductCompatibleZoneCodes(carrier: "ctt" | "correos", wsCode?: string): string[] {
+  const preset = getCarrierSubproductPreset(carrier, wsCode)
+  return preset ? [...preset.defaultZones] : wsCode?.trim() ? [] : ["PT-CONT"]
+}
+
+/** Expand legacy coverage aliases before validating or editing individual destinations. */
+export function expandAllowedZoneCodes(codes: string[]): string[] {
+  const airZones = ["EU 1", "EU 2", "EU 3", "NA", "SA", "O1", "O2", "A"]
+  return [...new Set(codes.flatMap(raw => {
+    const code = normalizeServiceZoneCode(raw)
+    if (code === "INTL" || code === "INTL-AERO") return airZones
+    if (code === "INTL-MAR") return ["PT-ILHAS", "ES-ILHAS"]
+    return code ? [code] : []
+  }))]
+}
+
 /**
- * Generates an official contract `ZonePriceMatrix` for any `(carrier, wsCode, zoneCode)` combination
- * so adding or enabling a destination zone always starts with real contracted partner costs.
+ * Generates a contract matrix only for destinations supported by the selected product.
+ * Unsupported combinations and products without tariffs never receive borrowed prices.
  */
 export function buildContractZoneMatrix(options: {
   carrier: "ctt" | "correos"
@@ -374,8 +391,12 @@ export function buildContractZoneMatrix(options: {
   zoneNameOverride?: string
 }): ZonePriceMatrix {
   const canonicalCode = normalizeServiceZoneCode(options.zoneCode)
-  const ws = (options.wsCode || "").trim()
+  const ws = (options.wsCode || "").trim().toUpperCase()
   const zoneName = options.zoneNameOverride || ZONE_DISPLAY_NAMES[canonicalCode] || canonicalCode
+
+  if (!getSubproductCompatibleZoneCodes(options.carrier, ws).includes(canonicalCode)) {
+    return { zone_code: canonicalCode, zone_name: zoneName, tiers: [] }
+  }
 
   if (options.carrier === "correos" && ["63", "93"].includes(ws) && PAQ24_ZONES.includes(canonicalCode)) {
     return buildPaq24Zone(canonicalCode, options.markupPct)
@@ -483,11 +504,11 @@ export function buildContractZoneMatrix(options: {
     }
   }
 
-  // Fallback for generic umbrella codes if explicitly added as a zone
+  // Coverage metadata alone does not prove that a contracted tariff exists.
   return {
-    zone_code: canonicalCode || "PT-CONT",
-    zone_name: zoneName || "Portugal Continental",
-    tiers: materializeTiers("gen", CTT_DD_PT_CONT, options.markupPct),
+    zone_code: canonicalCode,
+    zone_name: zoneName,
+    tiers: [],
   }
 }
 

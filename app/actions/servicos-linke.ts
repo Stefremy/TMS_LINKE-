@@ -4,6 +4,7 @@ import { applyPaq24Tariffs } from "@/lib/services/correos/paq24-tariffs"
 import correosProducts from "@/lib/services/correos/product-catalog.json"
 
 import { getServiceIslandTransportMode } from "@/lib/services/shipment-service-options"
+import { isMainlandOnlyService } from "@/lib/pricing/calculate-shipment-price"
 import { getServiceParcelLimitProduct } from "@/lib/pricing/oversize-surcharge"
 
 import { revalidatePath } from "next/cache"
@@ -24,6 +25,8 @@ import {
   ZONE_DISPLAY_NAMES,
   buildDefaultCustomServiceCode,
   buildSubproductContractZones,
+  expandAllowedZoneCodes,
+  getSubproductCompatibleZoneCodes,
   detectCarrierGroup,
   normalizeServiceZoneCode,
 } from "@/lib/pricing/carrier-zone-templates"
@@ -733,6 +736,7 @@ function normalizeLoadedServico(s: any): any {
     volumetric_rule: getServiceVolumetricRule(s),
     parcel_limit_product: getServiceParcelLimitProduct(s),
     island_transport_mode: getServiceIslandTransportMode(s),
+    mainland_only: isMainlandOnlyService(s),
     ...(carrierGroup ? { carrier_group: carrierGroup } : {}),
     ...(normalizedAllowed !== undefined ? { allowed_zones: normalizedAllowed } : {}),
     ...(Array.isArray(s.zones) ? { zones: normalizedZones } : {}),
@@ -929,14 +933,21 @@ export async function saveServicoLinkeAction(
   })
 
   const fallbackContract =
-    processedZones.length === 0
+    servico.zones === undefined && servico.allowed_zones === undefined
       ? buildSubproductContractZones(carrier, servico.webservice_service_code, servico.global_markup_pct)
       : null
-  const finalZones = processedZones.length > 0 ? processedZones : fallbackContract!.zones
-  const finalAllowedZones =
+  const finalZones = processedZones.length > 0 ? processedZones : fallbackContract?.zones || []
+  const finalAllowedZones = expandAllowedZoneCodes(
     servico.allowed_zones !== undefined
-      ? Array.from(new Set(servico.allowed_zones.map((c) => normalizeServiceZoneCode(c) || c)))
+      ? servico.allowed_zones
       : finalZones.map((z) => z.zone_code).filter(Boolean)
+  )
+  const compatibleZones = new Set(getSubproductCompatibleZoneCodes(carrier, servico.webservice_service_code))
+  const incompatibleZones = [...new Set([...finalAllowedZones, ...finalZones.map(z => z.zone_code)])]
+    .filter(code => !compatibleZones.has(code))
+  if (incompatibleZones.length) {
+    return { success: false, error: `Zonas incompatíveis com o serviço selecionado: ${incompatibleZones.join(", ")}. Selecione apenas destinos suportados pelo produto da transportadora.` }
+  }
 
   const fullRecord: ServicoLinke = {
     id,
@@ -961,7 +972,7 @@ export async function saveServicoLinkeAction(
     cod_min_fee: servico.cod_min_fee ?? 2.50,
     saturday_fee: servico.saturday_fee ?? 15.0,
     return_guide_fee: servico.return_guide_fee ?? 3.5,
-    allowed_zones: finalAllowedZones.length > 0 ? finalAllowedZones : ["PT-CONT"],
+    allowed_zones: finalAllowedZones,
     zones: finalZones,
     created_at: servico.created_at || new Date().toISOString(),
     updated_at: new Date().toISOString(),

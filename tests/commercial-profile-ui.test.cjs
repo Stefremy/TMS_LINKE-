@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict')
 const {createLoader}=require('./helpers/load-typescript.cjs')
-const flat=n=>Array.isArray(n)?n.flatMap(flat):n&&typeof n==='object'?[n,...flat(n.props?.children)]:[]
+const flat=n=>n?.type?.name==='ServicoModalForm'?flat(n.type(n.props)):Array.isArray(n)?n.flatMap(flat):n&&typeof n==='object'?[n,...flat(n.props?.children)]:[]
 const text=n=>Array.isArray(n)?n.map(text).join(''):n&&typeof n==='object'?text(n.props?.children):String(n??'')
 function harness(profile='Standard / Geral',initialOverride={}){
  const slots=[],effects=[];let cursor=0,saved
@@ -50,4 +50,45 @@ test('Baleares tariff zones are visible as selected destinations and toggle with
  nodes=h.render();nodes.find(n=>n.type==='button'&&text(n).includes('Tabela de Preços')).props.onClick();nodes=h.render()
  nodes.find(n=>n.type==='button'&&text(n).includes('Adicionar Zona')).props.onClick();nodes=h.render()
  assert.ok(!nodes.some(n=>n.type==='option'&&n.props.value==='ES-ILHAS'))
+})
+
+test('destination editor and price-zone picker expose only zones compatible with the selected product',async()=>{
+ for(const [product,expected] of [
+  ['EMSF010.01',['PT-CONT']],['ENCF008.01',['PT-CONT']],
+  ['EMSF056.01',['PT-CONT','PT-ILHAS','ES-PENIN']],['EMSF057.01',['PT-CONT','PT-ILHAS','ES-PENIN']],
+  ['ENCF008.02',['Zona 2','Zona 3']],['EMSF001.02',['EU 1','EU 2','EU 3','NA','SA','O1','O2','A']],
+  ['63',['PT-CONT','ES-PENIN']],['93',['PT-CONT','ES-PENIN']],['26',['ES-BALEARES-MAIORCA','ES-BALEARES-MENORES']],
+ ]){
+  const correos=/^\d+$/.test(product)
+  const h=harness('Standard / Geral',{webservice_service_code:product,preferred_carrier_name:correos?'Correos Express':'CTT Expresso',
+   allowed_zones:expected,zones:[]})
+  let nodes=h.render()
+  nodes.find(n=>n.type==='button'&&text(n).includes('Destinos Autorizados')).props.onClick();nodes=h.render()
+  const destinations=nodes.filter(n=>n.type==='button'&&n.props['aria-pressed']!==undefined&&expected.some(code=>text(n).endsWith(code)))
+  assert.equal(destinations.length,expected.length,product)
+  assert.ok(destinations.every(n=>n.props['aria-pressed']===true))
+  assert.ok(!nodes.some(n=>n.type==='button'&&text(n)==='Mundial 100%'))
+  nodes.find(n=>n.type==='button'&&text(n).includes('Tabela de Preços')).props.onClick();nodes=h.render()
+  nodes.find(n=>n.type==='button'&&text(n).includes('Adicionar Zona')).props.onClick();nodes=h.render()
+  assert.deepEqual(nodes.filter(n=>n.type==='option').map(n=>n.props.value),expected,product)
+ }
+})
+
+test('Múltiplo removes incompatible legacy coverage and can disable every destination without changing the valid tariff',async()=>{
+ const all=['PT-CONT','PT-ILHAS','ES-PENIN','EU 1']
+ const zones=all.map(zone_code=>({zone_code,zone_name:zone_code,tiers:[{id:zone_code,weight_max:1,cost_price:2,sell_price:3,margin_pct:50}]}))
+ const h=harness('Standard / Geral',{webservice_service_code:'EMSF010.01',allowed_zones:all,zones})
+ let nodes=h.render()
+ nodes.find(n=>n.type==='button'&&text(n).includes('Destinos Autorizados')).props.onClick();nodes=h.render()
+ assert.equal(nodes.filter(n=>n.type==='button'&&n.props['aria-pressed']!==undefined&&all.some(code=>text(n).endsWith(code))).length,1)
+ nodes.find(n=>n.type==='button'&&text(n)==='Limpar Todos').props.onClick();nodes=h.render()
+ assert.equal(nodes.find(n=>n.type==='button'&&text(n).endsWith('PT-CONT')).props['aria-pressed'],false)
+ await nodes.find(n=>n.type==='form').props.onSubmit({preventDefault(){}})
+ assert.deepEqual(h.saved().allowed_zones,[])
+ assert.deepEqual(h.saved().zones,[zones[0]])
+ nodes=h.render()
+ nodes.find(n=>n.type==='button'&&text(n).endsWith('PT-CONT')).props.onClick();nodes=h.render()
+ await nodes.find(n=>n.type==='form').props.onSubmit({preventDefault(){}})
+ assert.deepEqual(h.saved().allowed_zones,['PT-CONT'])
+ assert.deepEqual(h.saved().zones,[zones[0]])
 })

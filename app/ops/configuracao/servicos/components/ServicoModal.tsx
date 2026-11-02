@@ -28,7 +28,7 @@ import {
   Tag
 } from "lucide-react"
 import { RefreshIcon } from "@/components/ui/refresh-icon"
-import { PortugalFlag, SpainFlag, EuFlag, DestinationBadge } from "./DestinationIcons"
+import { DestinationBadge } from "./DestinationIcons"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import {
@@ -39,75 +39,31 @@ import {
   buildDefaultCustomServiceCode,
   buildSubproductContractZones,
   getCarrierSubproductPreset,
+  getSubproductCompatibleZoneCodes,
+  expandAllowedZoneCodes,
   normalizeServiceZoneCode,
 } from "@/lib/pricing/carrier-zone-templates"
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "../types"
 import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 
-// Available destination zones by carrier (incluindo as 8 zonas oficiais do contrato Linke)
-const CARRIER_ZONES: Record<string, { zone_code: string; zone_name: string }[]> = {
-  default: [
-    { zone_code: "PT-CONT",   zone_name: "Portugal Continental" },
-    { zone_code: "PT-ILHAS",  zone_name: "Açores & Madeira (Ilhas PT)" },
-    { zone_code: "ES-PENIN",  zone_name: "Espanha Peninsular" },
-    { zone_code: "ES-ILHAS",  zone_name: "Espanha — Ilhas (Canárias/Baleares)" },
-    { zone_code: "Zona 2",    zone_name: "Zona 2 — Europa Rodoviário (Alemanha, França, Holanda...)" },
-    { zone_code: "Zona 3",    zone_name: "Zona 3 — Europa Rodoviário (Polónia, Suécia, Dinamarca...)" },
-    { zone_code: "EU 1",      zone_name: "Europa 1 (DE, FR, IT, GB, BE, NL...)" },
-    { zone_code: "EU 2",      zone_name: "Europa 2 (PL, CZ, RO, HU, BG...)" },
-    { zone_code: "EU 3",      zone_name: "Europa 3 (CH, NO, FI, GR, AD...)" },
-    { zone_code: "NA",        zone_name: "América do Norte (EUA / Canadá / México)" },
-    { zone_code: "SA",        zone_name: "América do Sul & Central (Brasil, Argentina...)" },
-    { zone_code: "O1",        zone_name: "Oriente 1 (Japão, Coreia, Singapura, HK...)" },
-    { zone_code: "O2",        zone_name: "Oriente 2 (China, Austrália, EAU, Índia...)" },
-    { zone_code: "A",         zone_name: "África & Resto do Mundo (Angola, Cabo Verde...)" },
-    { zone_code: "INTL-AERO", zone_name: "Internacional Aéreo (Worldwide)" },
-    { zone_code: "INTL-MAR",  zone_name: "Internacional Marítimo / Ilhas" },
-    { zone_code: "INTL",      zone_name: "Internacional Geral" },
-  ],
-  ctt: [
-    { zone_code: "PT-CONT",   zone_name: "Portugal Continental" },
-    { zone_code: "PT-ILHAS",  zone_name: "Açores & Madeira (Ilhas)" },
-    { zone_code: "ES-PENIN",  zone_name: "Espanha Peninsular (CTT 24H/48H ES)" },
-    { zone_code: "Zona 2",    zone_name: "Zona 2 — Europa Rodoviário · Guia CE (DE, FR, NL, BE, IT...)" },
-    { zone_code: "Zona 3",    zone_name: "Zona 3 — Europa Rodoviário · Guia CE (PL, SE, DK, FI, MT...)" },
-    { zone_code: "EU 1",      zone_name: "Europa 1 (CTT Europa Ocidental)" },
-    { zone_code: "EU 2",      zone_name: "Europa 2 (CTT Europa do Leste)" },
-    { zone_code: "EU 3",      zone_name: "Europa 3 (CTT EFTA / Nórdicos)" },
-    { zone_code: "NA",        zone_name: "América do Norte (EUA / CA)" },
-    { zone_code: "SA",        zone_name: "América do Sul (Brasil / LATAM)" },
-    { zone_code: "O1",        zone_name: "Oriente 1 (Ásia Pacífico Z1)" },
-    { zone_code: "O2",        zone_name: "Oriente 2 (China / Médio Oriente)" },
-    { zone_code: "A",         zone_name: "África (PALOP e outros)" },
-    { zone_code: "INTL-AERO", zone_name: "Internacional Avião Express (CTT)" },
-    { zone_code: "INTL",      zone_name: "Internacional Express (CTT)" },
-  ],
-  correos: [
-    { zone_code: "PT-CONT",   zone_name: "Portugal Continental" },
-    { zone_code: "PT-ILHAS",  zone_name: "Açores & Madeira (Paq Marítimo)" },
-    { zone_code: "ES-PENIN",  zone_name: "Espanha Peninsular (Paq 24 / Paq 48)" },
-    { zone_code: "ES-ILHAS",  zone_name: "Espanha — Ilhas Baleares & Canárias" },
-    { zone_code: "ES-BALEARES-MAIORCA", zone_name: "Baleares — Maiorca" },
-    { zone_code: "ES-BALEARES-MENORES", zone_name: "Baleares — Ilhas menores (Menorca, Ibiza e Formentera)" },
-    { zone_code: "EU 1",      zone_name: "Europa 1 — Correos Internacional (DE, FR, IT, BE, NL...)" },
-    { zone_code: "EU 2",      zone_name: "Europa 2 — Correos Internacional (PL, CZ, RO, HU, BG...)" },
-    { zone_code: "EU 3",      zone_name: "Europa 3 — Correos Internacional (CH, NO, FI, GR, AD...)" },
-    { zone_code: "NA",        zone_name: "América do Norte — Correos Internacional" },
-    { zone_code: "SA",        zone_name: "América do Sul & Central — Correos Internacional" },
-    { zone_code: "O1",        zone_name: "Oriente 1 — Correos Internacional" },
-    { zone_code: "O2",        zone_name: "Oriente 2 — Correos Internacional" },
-    { zone_code: "A",         zone_name: "África & Resto do Mundo — Correos Internacional" },
-    { zone_code: "INTL-AERO", zone_name: "Internacional Aéreo (Correos)" },
-    { zone_code: "INTL-MAR",  zone_name: "Internacional Marítimo Correos" },
-    { zone_code: "INTL",      zone_name: "Internacional Geral" },
-  ],
+/** Only the selected product can define which destinations a commercial table may enable. */
+function getCarrierZones(carrierName: string, productCode?: string) {
+  const carrier = carrierName.toLowerCase().includes("correos") ? "correos" : "ctt"
+  return getSubproductCompatibleZoneCodes(carrier, productCode).map(zone_code => ({
+    zone_code,
+    zone_name: ZONE_DISPLAY_NAMES[zone_code] || zone_code,
+  }))
 }
 
-function getCarrierZones(carrierName: string, productCode?: string) {
-  const key = carrierName.toLowerCase()
-  const zones = key.includes("correos") ? CARRIER_ZONES.correos
-    : key.includes("ctt") ? CARRIER_ZONES.ctt : CARRIER_ZONES.default
-  return productCode === "26" ? zones.filter(zone => zone.zone_code !== "ES-ILHAS") : zones
+function constrainServiceCoverage(service: Partial<ServicoLinke>): Partial<ServicoLinke> {
+  const compatible = new Set(getCarrierZones(service.preferred_carrier_name || "", service.webservice_service_code)
+    .map(zone => zone.zone_code))
+  return {
+    ...service,
+    allowed_zones: expandAllowedZoneCodes(service.allowed_zones ?? (service.zones || []).map(zone => zone.zone_code))
+      .filter(code => compatible.has(code)),
+    zones: (service.zones || []).filter(zone => compatible.has(normalizeServiceZoneCode(zone.zone_code))),
+  }
 }
 
 function isAutoGeneratedServiceCode(code?: string): boolean {
@@ -247,9 +203,12 @@ function ServicoModalForm({
   const [showZonePicker, setShowZonePicker] = React.useState(false)
   const [selectedZoneCode, setSelectedZoneCode] = React.useState<string>("")
 
-  const [formData, setFormData] = React.useState<Partial<ServicoLinke>>(() =>
-    buildInitialServiceForm(initialData, fornecedores)
+  const [formData, setServiceFormData] = React.useState<Partial<ServicoLinke>>(() =>
+    constrainServiceCoverage(buildInitialServiceForm(initialData, fornecedores))
   )
+  const setFormData: React.Dispatch<React.SetStateAction<Partial<ServicoLinke>>> = update => {
+    setServiceFormData(previous => constrainServiceCoverage(typeof update === "function" ? update(previous) : update))
+  }
 
   const isSaved = savedSnapshot === JSON.stringify(formData)
 
@@ -271,7 +230,7 @@ function ServicoModalForm({
 
       const existingCodes = new Set((prev.zones || []).map((z) => normalizeServiceZoneCode(z.zone_code)))
       const hasAllPresetZones = preset.defaultZones.every((z) => existingCodes.has(z))
-      const shouldReplaceZones = !initialData || forceReloadZones || (wsCode === "ENCF008.02" && !hasAllPresetZones)
+      const shouldReplaceZones = !initialData || forceReloadZones || wsCode !== prev.webservice_service_code || (wsCode === "ENCF008.02" && !hasAllPresetZones)
 
       const customMarkup =
         !initialData || forceReloadZones || prev.global_markup_pct === preset.defaultMarkupPct
@@ -718,6 +677,8 @@ function ServicoModalForm({
 
   const currentCarrierLogo = getCarrierLogo(formData.preferred_carrier_name)
   const activeCarrierKey = getActiveCarrierKey(formData.preferred_carrier_name, formData.webservice_connection_id)
+  const compatibleZones = getCarrierZones(formData.preferred_carrier_name || "", formData.webservice_service_code)
+  const compatibleZoneCodes = compatibleZones.map(zone => zone.zone_code)
   const availableSubproductPresets = CARRIER_SUBPRODUCT_PRESETS.filter((p) => p.carrier === activeCarrierKey)
   const configuredZoneCodes = new Set(
     (formData.zones || []).map((z) => normalizeServiceZoneCode(z.zone_code) || z.zone_code)
@@ -1433,7 +1394,7 @@ function ServicoModalForm({
                     Matriz de Cobertura Geográfica
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    O TMS bloqueará a emissão de envios se o destino não constar nesta lista autorizada.
+                    Pode desativar destinos e reativar apenas zonas compatíveis com este serviço.
                   </p>
                 </div>
 
@@ -1444,40 +1405,20 @@ function ServicoModalForm({
                 </div>
               </div>
 
-              {/* Fast Presets Filter Bar */}
-              <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Atalhos Rápidos:</span>
-
-                {[
-                  { label: "Só Continental", zones: ["PT-CONT"] },
-                  { label: "Portugal + Ilhas", zones: ["PT-CONT", "PT-ILHAS"] },
-                  ...(getActiveCarrierKey(formData.preferred_carrier_name, formData.webservice_connection_id) === "correos" ? [
-                    { label: "Baleares · Ilhas Express", zones: ["ES-BALEARES-MAIORCA", "ES-BALEARES-MENORES"] },
-                  ] : []),
-                  { label: "Península Ibérica", zones: ["PT-CONT", "ES-PENIN"] },
-                  { label: "CTT 24H/48H (PT + Ilhas + ES)", zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN"] },
-                  { label: "Ibérico Total (c/ Ilhas)", zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN", "ES-ILHAS"] },
-                  { label: "Europa Terrestre (Guia CE)", zones: ["Zona 2", "Zona 3"] },
-                  { label: "Toda a Europa", zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN", "ES-ILHAS", "EU 1", "EU 2", "EU 3"] },
-                  { label: "Américas (NA+SA)", zones: ["PT-CONT", "NA", "SA"] },
-                  { label: "Oriente (O1+O2)", zones: ["PT-CONT", "O1", "O2"] },
-                  { label: "África (A)", zones: ["PT-CONT", "A"] },
-                  { label: "Mundial 100%", zones: ["PT-CONT", "PT-ILHAS", "ES-PENIN", "ES-ILHAS", "EU 1", "EU 2", "EU 3", "NA", "SA", "O1", "O2", "A"] },
-                ].filter(preset => formData.webservice_service_code !== "26" || !preset.zones.includes("ES-ILHAS")).map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => applyAllowedZonesWithTemplates(preset.zones, true)}
-                    className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 transition-colors shadow-2xs"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-
+              <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200/80">
+                <span className="text-xs text-slate-500 mr-auto">A cobertura máxima é definida pelo serviço da transportadora.</span>
                 <button
                   type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, allowed_zones: [] }))}
-                  className="px-2.5 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-lg transition-colors ml-auto"
+                  disabled={!compatibleZoneCodes.length}
+                  onClick={() => applyAllowedZonesWithTemplates(compatibleZoneCodes)}
+                  className="px-2.5 py-1 text-xs font-medium bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 disabled:opacity-50"
+                >
+                  Ativar zonas compatíveis
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, allowed_zones: [] }))}
+                  className="px-2.5 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-lg"
                 >
                   Limpar Todos
                 </button>
@@ -1502,271 +1443,39 @@ function ServicoModalForm({
                 </div>
               )}
 
-              {/* GROUPED DESTINATION CARDS */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                {/* Group 1: Território Nacional */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5">
-                  <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 text-xs font-semibold text-slate-800">
-                    <PortugalFlag className="w-4 h-3" />
-                    <span>Portugal (Nacional)</span>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    {[
-                      { code: "PT-CONT",  name: "Portugal Continental", desc: "Entrega em 24h/48h terrestre" },
-                      { code: "PT-ILHAS", name: "Açores & Madeira (Ilhas)", desc: "Aéreo Express & Marítimo Ilhas" },
-                    ].map((dest) => {
-                      const isAllowed = (formData.allowed_zones || []).some(
-                        (z) => (normalizeServiceZoneCode(z) || z) === dest.code
-                      )
-
-                      return (
-                        <button
-                          key={dest.code}
-                          type="button"
-                          aria-pressed={isAllowed}
-                          onClick={() => toggleAllowedDestination(dest.code)}
-                          className={`w-full p-2.5 rounded-lg border text-left flex items-center justify-between transition-all ${
-                            isAllowed
-                              ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
-                              : "bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-100/70"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
-                              isAllowed ? "bg-white text-slate-900 border-white" : "border-slate-300 bg-white"
-                            }`}>
-                              {isAllowed && <Check className="w-3 h-3 stroke-[3]" />}
-                            </span>
-                            <div>
-                              <p className="text-xs font-semibold">{dest.name}</p>
-                              <p className={`text-[10px] ${isAllowed ? "text-slate-300" : "text-slate-400"}`}>{dest.desc}</p>
-                            </div>
-                          </div>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${
-                            isAllowed ? "bg-slate-800 text-slate-200" : "bg-white border border-slate-200 text-slate-500"
-                          }`}>
-                            {dest.code}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Group 2: Espanha */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5">
-                  <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 text-xs font-semibold text-slate-800">
-                    <SpainFlag className="w-4 h-3" />
-                    <span>Espanha & Ilhas</span>
-                  </div>
-                  {formData.webservice_service_code === "26" && <p className="text-[11px] text-slate-500">No envio, selecione Espanha e indique o código postal completo: 070xx–076xx para Maiorca; 077xx–078xx para as ilhas menores.</p>}
-
-                  <div className="space-y-1.5">
-                    {[
-                      { code: "ES-PENIN", name: "Espanha Peninsular", desc: "Rede terrestre Ibérica 24h/48h" },
-                      ...(formData.webservice_service_code !== "26"
-                        ? [{ code: "ES-ILHAS", name: "Canárias, Baleares & Enclaves", desc: "Zona genérica de ilhas espanholas" }] : []),
-                      ...(getActiveCarrierKey(formData.preferred_carrier_name, formData.webservice_connection_id) === "correos" ? [
-                        { code: "ES-BALEARES-MAIORCA", name: "Baleares — Maiorca", desc: "Ilhas Express aéreo · códigos postais 070xx–076xx" },
-                        { code: "ES-BALEARES-MENORES", name: "Baleares — Ilhas menores", desc: "Menorca, Ibiza e Formentera · códigos postais 077xx–078xx" },
-                      ] : []),
-                    ].map((dest) => {
-                      const isAllowed = (formData.allowed_zones || []).some(
-                        (z) => (normalizeServiceZoneCode(z) || z) === dest.code
-                      )
-
-                      return (
-                        <button
-                          key={dest.code}
-                          type="button"
-                          aria-pressed={isAllowed}
-                          onClick={() => toggleAllowedDestination(dest.code)}
-                          className={`w-full p-2.5 rounded-lg border text-left flex items-center justify-between transition-all ${
-                            isAllowed
-                              ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
-                              : "bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-100/70"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
-                              isAllowed ? "bg-white text-slate-900 border-white" : "border-slate-300 bg-white"
-                            }`}>
-                              {isAllowed && <Check className="w-3 h-3 stroke-[3]" />}
-                            </span>
-                            <div>
-                              <p className="text-xs font-semibold">{dest.name}</p>
-                              <p className={`text-[10px] ${isAllowed ? "text-slate-300" : "text-slate-400"}`}>{dest.desc}</p>
-                            </div>
-                          </div>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${
-                            isAllowed ? "bg-slate-800 text-slate-200" : "bg-white border border-slate-200 text-slate-500"
-                          }`}>
-                            {dest.code}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Group 2b: Europa Rodoviário CTT (Guia CE) */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5">
-                  <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 text-xs font-semibold text-slate-800">
-                    <EuFlag className="w-4 h-3" />
-                    <span>Europa Terrestre · Guia CE (2 Zonas CTT)</span>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    {[
-                      { code: "Zona 2", name: "Zona 2 — Europa Rodoviário", desc: "Alemanha, França, Holanda, Bélgica, Áustria, Itália, Irlanda, Rep. Checa, Hungria..." },
-                      { code: "Zona 3", name: "Zona 3 — Europa Rodoviário", desc: "Polónia, Suécia, Dinamarca, Finlândia, Estónia, Letónia, Malta..." },
-                    ].map((dest) => {
-                      const isAllowed = (formData.allowed_zones || []).some(
-                        (z) => (normalizeServiceZoneCode(z) || z) === dest.code
-                      )
-
-                      return (
-                        <button
-                          key={dest.code}
-                          type="button"
-                          aria-pressed={isAllowed}
-                          onClick={() => toggleAllowedDestination(dest.code)}
-                          className={`w-full p-2.5 rounded-lg border text-left flex items-center justify-between transition-all ${
-                            isAllowed
-                              ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
-                              : "bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-100/70"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
-                              isAllowed ? "bg-white text-slate-900 border-white" : "border-slate-300 bg-white"
-                            }`}>
-                              {isAllowed && <Check className="w-3 h-3 stroke-[3]" />}
-                            </span>
-                            <div>
-                              <p className="text-xs font-semibold">{dest.name}</p>
-                              <p className={`text-[10px] ${isAllowed ? "text-slate-300" : "text-slate-400"}`}>{dest.desc}</p>
-                            </div>
-                          </div>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${
-                            isAllowed ? "bg-slate-800 text-slate-200" : "bg-white border border-slate-200 text-slate-500"
-                          }`}>
-                            {dest.code}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Group 3: União Europeia (Tabela Oficial Linke) */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5">
-                  <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 text-xs font-semibold text-slate-800">
-                    <EuFlag className="w-4 h-3" />
-                    <span>Europa (3 Zonas Contratuais)</span>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    {[
-                      { code: "EU 1", name: "Europa 1 (Ocidental & Central)", desc: "Alemanha, França, Reino Unido, Itália, Holanda, Bélgica, Espanha..." },
-                      { code: "EU 2", name: "Europa 2 (Leste & Bálcãs)", desc: "Polónia, Rep. Checa, Roménia, Bulgária, Hungria, Croácia, Ucrânia..." },
-                      { code: "EU 3", name: "Europa 3 (EFTA & Mediterrâneo)", desc: "Suíça, Noruega, Finlândia, Grécia, Andorra, Liechtenstein..." },
-                    ].map((dest) => {
-                      const isAllowed = (formData.allowed_zones || []).some(
-                        (z) => (normalizeServiceZoneCode(z) || z) === dest.code
-                      )
-
-                      return (
-                        <button
-                          key={dest.code}
-                          type="button"
-                          aria-pressed={isAllowed}
-                          onClick={() => toggleAllowedDestination(dest.code)}
-                          className={`w-full p-2.5 rounded-lg border text-left flex items-center justify-between transition-all ${
-                            isAllowed
-                              ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
-                              : "bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-100/70"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
-                              isAllowed ? "bg-white text-slate-900 border-white" : "border-slate-300 bg-white"
-                            }`}>
-                              {isAllowed && <Check className="w-3 h-3 stroke-[3]" />}
-                            </span>
-                            <div>
-                              <p className="text-xs font-semibold">{dest.name}</p>
-                              <p className={`text-[10px] ${isAllowed ? "text-slate-300" : "text-slate-400"}`}>{dest.desc}</p>
-                            </div>
-                          </div>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${
-                            isAllowed ? "bg-slate-800 text-slate-200" : "bg-white border border-slate-200 text-slate-500"
-                          }`}>
-                            {dest.code}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Group 4: Internacional & Continentes (Oficial Linke Exportação Aéreo) */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-white space-y-2.5">
-                  <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 text-xs font-semibold text-slate-800">
-                    <Globe className="w-4 h-4 text-slate-600" />
-                    <span>Mundo (5 Zonas Contratuais)</span>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    {[
-                      { code: "NA", name: "América do Norte (NA)", desc: "Canadá, Estados Unidos, México, Porto Rico" },
-                      { code: "SA", name: "América do Sul & Central (SA)", desc: "Brasil, Argentina, Chile, Colômbia, Peru, Panamá..." },
-                      { code: "O1", name: "Oriente 1 (O1)", desc: "Japão, Coreia do Sul, Hong Kong, Singapura, Tailândia, Egito..." },
-                      { code: "O2", name: "Oriente 2 (O2)", desc: "China, Austrália, Emiratos Árabes Unidos, Índia, Israel, Qatar..." },
-                      { code: "A",  name: "África & Resto do Mundo (A)", desc: "Angola, Cabo Verde, Moçambique, África do Sul, Marrocos, Nigéria..." },
-                    ].map((dest) => {
-                      const isAllowed = (formData.allowed_zones || []).some(
-                        (z) => (normalizeServiceZoneCode(z) || z) === dest.code
-                      )
-
-                      return (
-                        <button
-                          key={dest.code}
-                          type="button"
-                          aria-pressed={isAllowed}
-                          onClick={() => toggleAllowedDestination(dest.code)}
-                          className={`w-full p-2.5 rounded-lg border text-left flex items-center justify-between transition-all ${
-                            isAllowed
-                              ? "bg-slate-900 text-white border-slate-900 shadow-2xs"
-                              : "bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-100/70"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
-                              isAllowed ? "bg-white text-slate-900 border-white" : "border-slate-300 bg-white"
-                            }`}>
-                              {isAllowed && <Check className="w-3 h-3 stroke-[3]" />}
-                            </span>
-                            <div>
-                              <p className="text-xs font-semibold">{dest.name}</p>
-                              <p className={`text-[10px] ${isAllowed ? "text-slate-300" : "text-slate-400"}`}>{dest.desc}</p>
-                            </div>
-                          </div>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${
-                            isAllowed ? "bg-slate-800 text-slate-200" : "bg-white border border-slate-200 text-slate-500"
-                          }`}>
-                            {dest.code}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {compatibleZones.map(dest => {
+                  const isAllowed = (formData.allowed_zones || []).includes(dest.zone_code)
+                  return (
+                    <button
+                      key={dest.zone_code}
+                      type="button"
+                      aria-pressed={isAllowed}
+                      onClick={() => toggleAllowedDestination(dest.zone_code)}
+                      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-3 transition-colors ${
+                        isAllowed
+                          ? "bg-slate-900 text-white border-slate-900"
+                          : "bg-slate-50/50 border-slate-200 text-slate-700 hover:bg-slate-100/70"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                          isAllowed ? "bg-white text-slate-900 border-white" : "border-slate-300 bg-white"
+                        }`}>
+                          {isAllowed && <Check className="w-3 h-3 stroke-[3]" />}
+                        </span>
+                        <span className="text-xs font-semibold">{dest.zone_name}</span>
+                      </span>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${
+                        isAllowed ? "bg-slate-800 text-slate-200" : "bg-white border border-slate-200 text-slate-500"
+                      }`}>{dest.zone_code}</span>
+                    </button>
+                  )
+                })}
               </div>
-
+              {!compatibleZones.length && (
+                <p className="text-xs text-slate-500">Selecione um serviço da transportadora com cobertura definida no separador Webservice &amp; API.</p>
+              )}
             </div>
           )}
 
@@ -1822,6 +1531,7 @@ function ServicoModalForm({
                 {!showZonePicker ? (
                   <button
                     type="button"
+                    disabled={compatibleZones.every(zone => configuredZoneCodes.has(zone.zone_code))}
                     onClick={() => {
                       const available = getCarrierZones(formData.preferred_carrier_name || "", formData.webservice_service_code)
                       const existing = new Set(

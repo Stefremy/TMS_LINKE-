@@ -88,10 +88,10 @@ export function resolveZoneCode(countryCode: string = "PT", postalCode?: string)
 
 /**
  * Checks if a destination zone code is authorized by a service's allowed_zones list.
- * If allowed_zones is empty or undefined, all zones are permitted (legacy behavior).
+ * Missing coverage retains legacy behavior; an explicit empty list disables all destinations.
  */
 export function isZoneAllowedByService(allowedZones: string[] | undefined, zoneCode: string): boolean {
-  if (!allowedZones || allowedZones.length === 0) return true
+  if (!allowedZones) return true
   if (allowedZones.includes(zoneCode)) return true
 
   // Equivalences between official Linke codes and legacy codes:
@@ -208,9 +208,18 @@ export function isCeTruckService(service: Partial<ServicoLinke> | null | undefin
   )
 }
 
+/** Múltiplo coverage follows the carrier product, including client DTOs with redacted API codes. */
+export function isMainlandOnlyService(service: Partial<ServicoLinke> | null | undefined): boolean {
+  if (!service) return false
+  if (service.webservice_service_code) return service.webservice_service_code.trim().toUpperCase() === "EMSF010.01"
+  const code = service.code?.trim().toUpperCase() || ""
+  return service.mainland_only === true || service.id === "srv_linke_multiplo_std" || code.startsWith("LK-MULT-")
+}
+
 /** Resolve the tariff zone using the selected carrier product, including CE road zones. */
 export function resolveServiceZoneCode(service: Partial<ServicoLinke> | null | undefined, country: string, postal?: string): string {
   if (!country) return ""
+  if (isMainlandOnlyService(service) && resolveZoneCode(country, postal) !== "PT-CONT") return ""
   // Zone metadata survives client DTO redaction. Never collapse these prices into
   // generic ES-ILHAS, which also includes Canárias and the African enclaves.
   if (country.trim().toUpperCase() === "ES" && postal?.trim().startsWith("07") &&
@@ -333,7 +342,7 @@ export function calculateShipmentPrice(
 
   if (options.requireConfiguredTariff) {
     if (!Number.isFinite(weightKg) || weightKg <= 0) throw new ShipmentPricingError("Peso inválido.")
-    if (!clientTable || !isZoneAllowedByService(clientTable.allowed_zones, zoneCode)) {
+    if (!clientTable || !zoneCode || !isZoneAllowedByService(clientTable.allowed_zones, zoneCode)) {
       throw new ShipmentPricingError("Serviço indisponível para este destino.")
     }
     const configuredZone = findExactZone(clientTable.zones, zoneCode)
@@ -364,7 +373,7 @@ export function calculateShipmentPrice(
   let zone: ZonePriceMatrix | null = null
   let isDifferentTable = false
 
-  if (clientTable && isZoneAllowedByService(clientTable.allowed_zones, zoneCode)) {
+  if (clientTable && zoneCode && isZoneAllowedByService(clientTable.allowed_zones, zoneCode)) {
     zone = findExactZone(clientTable.zones, zoneCode)
     if (zone && zone.tiers && zone.tiers.length > 0) {
       effectiveTable = clientTable
@@ -378,6 +387,7 @@ export function calculateShipmentPrice(
         const targetZone = resolveServiceZoneCode(s, recipientCountry, recipientPostal)
         return (
           s.is_active !== false &&
+          !!targetZone &&
           isZoneAllowedByService(s.allowed_zones, targetZone) &&
           s.zones?.some((z) => (z.zone_code === targetZone || (targetZone.startsWith("EU-") && z.zone_code.startsWith("EU-"))) && z.tiers?.length > 0)
         )
@@ -394,7 +404,7 @@ export function calculateShipmentPrice(
 
   // 3. If no allowed table found at all, check if blocked by configuration
   if (!effectiveTable || !zone || !zone.tiers || zone.tiers.length === 0) {
-    const isExplicitlyBlocked = clientTable?.allowed_zones && clientTable.allowed_zones.length > 0 && !isZoneAllowedByService(clientTable.allowed_zones, zoneCode)
+    const isExplicitlyBlocked = clientTable && (!zoneCode || !isZoneAllowedByService(clientTable.allowed_zones, zoneCode))
     if (isExplicitlyBlocked) {
       return {
         basePrice: 0,

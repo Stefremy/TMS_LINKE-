@@ -455,3 +455,35 @@ test('duplicating a table also preserves explicit zero sell prices without recal
  assert.equal(result.success,true)
  assert.equal(result.data.zones[0].tiers[0].sell_price,0)
 })
+
+test('saving coverage rejects incompatible destinations and price matrices before any mutation',async()=>{
+ for(const auditOnly of [false,true])for(const [product,invalid] of [
+  ['EMSF010.01','PT-ILHAS'],['EMSF010.01','ES-PENIN'],['ENCF008.01','EU 1'],
+  ['EMSF056.01','NA'],['ENCF008.02','PT-CONT'],['63','PT-ILHAS'],['26','ES-ILHAS'],
+ ])for(const via of ['allowed','matrix']){
+  const source={...fixture,webservice_service_code:product,zones:[],allowed_zones:[]}
+  const h=harness({service:source,auditOnly})
+  const result=await h.actions.saveServicoLinkeAction({...source,
+   ...(via==='allowed'?{allowed_zones:[invalid]}:{zones:[{...fixture.zones[0],zone_code:invalid}]})})
+  assert.equal(result.success,false,`${product}/${invalid}/${via}`)
+  assert.match(result.error,/incompatíveis/)
+  assert.equal(h.db.writes.length,0)
+ }
+})
+
+test('removing all authorized destinations persists through save and reload without enabling mainland or regenerating zones',async()=>{
+ const {getServiceDestinationCountries}=createLoader({})('lib/services/service-destinations.ts')
+ const {calculateShipmentPrice}=createLoader({})('lib/pricing/calculate-shipment-price.ts')
+ for(const zones of [fixture.zones,[]]){
+  const source={...fixture,webservice_service_code:'EMSF010.01',allowed_zones:[],zones}
+  const h=harness({service:source})
+  const result=await h.actions.saveServicoLinkeAction(source)
+  assert.equal(result.success,true,result.error)
+  assert.deepEqual(result.data.allowed_zones,[])
+  assert.equal(result.data.zones.length,zones.length)
+  const loaded=(await h.actions.getServicosLinkeAction()).find(s=>s.id===source.id)
+  assert.deepEqual(loaded.allowed_zones,[])
+  assert.deepEqual(getServiceDestinationCountries(loaded),[])
+  assert.throws(()=>calculateShipmentPrice(1,{default_linke_table_id:loaded.id},[loaded],'PT','4000-001',{requireConfiguredTariff:true}),/indisponível/)
+ }
+})
