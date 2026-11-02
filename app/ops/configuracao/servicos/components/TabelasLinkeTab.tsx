@@ -12,6 +12,8 @@ import {
   Lock,
   Percent,
   ChevronDown,
+  FileDown,
+  LoaderCircle,
 } from "lucide-react"
 import { DestinationBadge } from "./DestinationIcons"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
@@ -50,6 +52,35 @@ export function TabelasLinkeTab({
   const [activeServicoId, setActiveServicoId] = React.useState<string>(
     servicos[0]?.id || ""
   )
+  const [exportingPdf, setExportingPdf] = React.useState(false)
+  const [pdfError, setPdfError] = React.useState<{ serviceId: string; message: string } | null>(null)
+  const pdfInFlight = React.useRef(false)
+
+  const downloadCustomerPdf = async (service: ServicoLinke) => {
+    if (pdfInFlight.current) return
+    pdfInFlight.current = true
+    setExportingPdf(true)
+    setPdfError(null)
+    try {
+      const response = await fetch(`/api/servicos-linke/${encodeURIComponent(service.id)}/pdf`, { cache: "no-store" })
+      if (!response.ok) throw new Error(await response.text() || "Não foi possível gerar o PDF.")
+      if (!response.headers.get("Content-Type")?.includes("application/pdf")) throw new Error("A sessão expirou ou o PDF está indisponível. Atualize a página e tente novamente.")
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] || "linke-tabela-precos.pdf"
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (error) {
+      setPdfError({ serviceId: service.id, message: error instanceof Error ? error.message : "Não foi possível gerar o PDF. Tente novamente." })
+    } finally {
+      pdfInFlight.current = false
+      setExportingPdf(false)
+    }
+  }
 
   const categories = ["Todas", ...new Set(servicos.map(s => s.category))]
   const profiles = ["Todos os Perfis", ...new Set(["Standard / Geral", "VIP / Alto Volume", "E-Commerce PME", "Tabela Negociada Cliente", ...servicos.map(service => service.pricing_profile).filter(Boolean)])]
@@ -297,6 +328,18 @@ export function TabelasLinkeTab({
                       Criar variante
                     </button>
 
+                    <button
+                      type="button"
+                      onClick={() => downloadCustomerPdf(currentServico)}
+                      disabled={exportingPdf}
+                      aria-busy={exportingPdf}
+                      title="Descarregar tabela de preços de venda, sem IVA, combustível ou serviços adicionais"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition-colors shadow-2xs disabled:opacity-50 disabled:cursor-wait"
+                    >
+                      {exportingPdf ? <LoaderCircle className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5 text-slate-400" />}
+                      {exportingPdf ? "A gerar PDF..." : "PDF para cliente"}
+                    </button>
+
                     {isCurrentLocked ? (
                       <span
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium rounded-lg"
@@ -352,6 +395,10 @@ export function TabelasLinkeTab({
                     )}
                   </div>
                 </div>
+
+                {pdfError?.serviceId === currentServico.id && (
+                  <p role="alert" className="mt-3 text-xs text-rose-700">{pdfError.message}</p>
+                )}
 
                 {/* Meta Parameters Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3 border-t border-slate-100 text-xs">
