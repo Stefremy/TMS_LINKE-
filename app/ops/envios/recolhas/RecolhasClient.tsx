@@ -31,7 +31,7 @@ import { scheduleCttPickupAction } from "@/app/actions/ctt"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { DEFAULT_CTT_REQUESTER_PHONE, readPickupContact, readPickupRequester } from "@/lib/pickup-contact"
 import type { CTTPickupRequester } from "@/lib/services/ctt/ctt-types"
-import type { PickupSummary } from "@/lib/pickup-management"
+import { formatPickupRequestTime, type PickupSummary } from "@/lib/pickup-management"
 import { PickupDetailsDialog, PickupSearchPanel } from "./PickupManagement"
 import { PickupCutoffNotice } from "./PickupCutoffNotice"
 
@@ -459,6 +459,8 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Operadora</th>
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">PickUp ID</th>
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Cliente</th>
+                    <th title="Data e hora do pedido, na hora de Lisboa" className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Pedido em<span className="mt-0.5 block text-[10px] font-normal normal-case">Hora de Lisboa</span></th>
+                    <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Pedido por</th>
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Data / Janela</th>
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Local de Recolha</th>
                     <th className="px-5 py-3 font-bold text-[var(--text-secondary)] text-xs uppercase tracking-wide">Volumes / Pesos</th>
@@ -533,6 +535,13 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                           ) : (
                             <span className="text-[var(--text-tertiary)] text-[12px]">Interno / Sem Cliente</span>
                           )}
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-4 text-xs tabular-nums text-[var(--text-secondary)]">
+                          {formatPickupRequestTime(r.requested_at || r.created_at)}
+                        </td>
+                        <td className="px-5 py-4 text-xs text-[var(--text-secondary)]">
+                          {r.requested_by?.email || r.requested_by?.user_id || "Não registado"}
                         </td>
 
                         {/* Date / Time */}

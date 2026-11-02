@@ -6,15 +6,15 @@ const {fakeSupabase}=require('./helpers/fake-supabase.cjs')
 const input={connection_id:'selected',carrier_code:'ctt_expresso',date:'2026-10-19',startHour:'09:00',endHour:'19:00',volumes:1,weightKg:1,sender:{name:'Store',address:'Street',zip:'4800-019',city:'Guimarães',phone:'910000001'}}
 const config={carrier_code:'ctt_expresso',client_id:'client-selected',contract_number:'contract-selected',auth_id:'fixture-auth',environment:'production',is_active:true}
 
-function setup(tables,denied=false){
+function setup(tables,denied=false,pickupResult={success:false,error:'MOCK_ONLY_NO_BOOKING'}){
   const db=fakeSupabase(tables),initialized=[],pickups=[],references=[]
   const load=createLoader({
     '@/lib/config/public-origins':{},
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
-    '@/lib/auth/context':{requireEmployee:async()=>{if(denied)throw new Error('Forbidden')},getTenantId:async()=>'own'},
+    '@/lib/auth/context':{requireEmployee:async()=>{if(denied)throw new Error('Forbidden');return {user:{id:'authenticated-user',email:'operator@example.test'},colaborador_id:'staff-profile'}},getTenantId:async()=>'own'},
     'next/cache':{revalidatePath(){}},
     '@/lib/services/tracking':{},
-    '@/lib/services/carriers/ctt-provider':{CttProvider:class{async initialize(creds){initialized.push(creds)}async createPickup(value){pickups.push(value);return {success:false,error:'MOCK_ONLY_NO_BOOKING'}}}},
+    '@/lib/services/carriers/ctt-provider':{CttProvider:class{async initialize(creds){initialized.push(creds)}async createPickup(value){pickups.push(value);return pickupResult}}},
     '@/lib/services/ctt':{CTTReferencesService:class{async getAllDeliveryPoints(creds){references.push(creds);return [{codigo:'fixture-point',nome:'Fixture CTT'}]}}},
     '@/lib/label-utils':{},
     '@/lib/services/ctt/close-manifest':{},
@@ -64,6 +64,21 @@ test('client accounts cannot resolve credentials or schedule a pickup through th
   await assert.rejects(()=>api.scheduleCttPickupAction(input),/Forbidden/)
   assert.equal(db.queries.length,0);assert.equal(initialized.length,0)
 })
+
+test('accepted pickups record the authenticated login, never a claimed operator from the form or carrier contact',()=>withoutEnvironment(async()=>{
+  const {api,db,pickups}=setup({carrier_connections:[{...config,id:'selected',tenant_id:'own'}]},false,{success:true,pickupNumber:'FIXTURE-ONLY'})
+  const result=await api.scheduleCttPickupAction({...input,
+    requested_by:{user_id:'forged-user',email:'forged@example.test'},
+    requester:{name:'Carrier contact',phone:'253000000'},
+  })
+  assert.equal(result.success,true)
+  assert.equal(pickups.length,1)
+  const audit=db.writes.find(w=>w.table==='audit_log'&&w.value.action==='recolha_data').value
+  assert.equal(audit.tenant_id,'own')
+  assert.deepEqual(audit.details.requested_by,{user_id:'authenticated-user',email:'operator@example.test',colaborador_id:'staff-profile'})
+  assert.equal(audit.details.requester.name,'Carrier contact')
+  assert.ok(Number.isFinite(Date.parse(audit.details.requested_at)))
+}))
 
 test('CTT points load from the latest company account when several connections exist and env credentials are absent',()=>withoutEnvironment(async()=>{
   const {api,references,db}=setup({carrier_connections:[

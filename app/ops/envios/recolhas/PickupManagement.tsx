@@ -4,7 +4,7 @@ import * as React from "react"
 import { Search, Loader2, X, Copy, ExternalLink, Calendar, MapPin, Clock, Ban, FileText } from "lucide-react"
 import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { searchPickupsAction, searchCttPickupsAction, getPickupDetailsAction, getCttPickupDetailsAction, markPickupCollectedAction, refreshPickupParcelsAction } from "@/app/actions/pickups"
-import { CTT_PICKUP_PORTAL_URL, PICKUP_PAGE_SIZE, type PickupSummary } from "@/lib/pickup-management"
+import { CTT_PICKUP_PORTAL_URL, PICKUP_PAGE_SIZE, formatPickupRequestTime, pickupObjectsView, type PickupSummary } from "@/lib/pickup-management"
 
 const inputClass = "w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]"
 const buttonClass = "inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
@@ -105,10 +105,12 @@ export function PickupSearchPanel({ onOpen, connections, updatedPickups = {} }: 
           {!visibleRows.length ? <p className="py-10 text-center text-sm text-[var(--text-secondary)]">Nenhuma recolha encontrada para estes filtros.</p> : (
             <div className="overflow-x-auto rounded-xl border border-[var(--border-subtle)]">
               <table className="w-full text-left text-sm">
-                <thead className="bg-[var(--surface-muted)] text-xs text-[var(--text-secondary)]"><tr><th className="p-3">Referência</th><th className="p-3">Data de recolha</th><th className="p-3">Local / Operadora</th><th className="p-3">Estado</th><th className="p-3"><span className="sr-only">Ação</span></th></tr></thead>
+                <thead className="bg-[var(--surface-muted)] text-xs text-[var(--text-secondary)]"><tr><th className="p-3">Referência</th><th className="p-3">Pedido em<span className="block text-[10px] font-normal">Hora de Lisboa</span></th><th className="p-3">Pedido por</th><th className="p-3">Data de recolha</th><th className="p-3">Local / Operadora</th><th className="p-3">Estado</th><th className="p-3"><span className="sr-only">Ação</span></th></tr></thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">{visibleRows.map(row => (
                   <tr key={`${row.source}:${row.id}`} className="hover:bg-[var(--surface-muted)]">
                     <td className="p-3"><button className="font-mono font-semibold text-[var(--accent)] underline-offset-4 hover:underline" onClick={() => onOpen(row)}>{row.ctt_pickup_id || "Sem referência"}</button></td>
+                    <td className="whitespace-nowrap p-3 text-xs tabular-nums text-[var(--text-secondary)]">{formatPickupRequestTime(row.requested_at || row.created_at)}</td>
+                    <td className="p-3 text-xs text-[var(--text-secondary)]">{row.requested_by?.email || row.requested_by?.user_id || "Não registado"}</td>
                     <td className="whitespace-nowrap p-3 text-[var(--text-primary)]">{displayDate(row.scheduled_date)}</td>
                     <td className="p-3 text-[var(--text-primary)]">{row.sender_name || row.carrier_name}<span className="block text-xs text-[var(--text-secondary)]">{row.sender_city || row.carrier_name}</span></td>
                     <td className="p-3 text-[var(--text-secondary)]">{row.status}</td>
@@ -180,7 +182,8 @@ export function PickupDetailsDialog({ selected, onClose, onUpdated }: { selected
     } catch { setError("Não foi possível confirmar a recolha. Volte a abrir os detalhes para verificar o estado antes de repetir.") }
   })
   const canConfirm = pickup.source === "tms" && ["Agendado", "pendente"].includes(pickup.status)
-  const objectData = remote || pickup
+  const objectData = pickupObjectsView(pickup, remote)
+  const objectsConfirmedByCtt = objectData.objects_source === "ctt_get_recolha"
   const field = (label: string, value?: string | number | null) => <div><dt className="text-xs text-[var(--text-secondary)]">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-[var(--text-primary)]">{value === undefined || value === null || value === "" ? "Não registado" : value}</dd></div>
 
   return (
@@ -207,14 +210,20 @@ export function PickupDetailsDialog({ selected, onClose, onUpdated }: { selected
           {pickup.manual_confirmation && <p role="status" className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-sm">Recolha confirmada manualmente por <strong>{pickup.manual_confirmation.confirmed_by}</strong> em {new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Lisbon" }).format(new Date(pickup.manual_confirmation.confirmed_at))}.</p>}
           <dl className="grid grid-cols-2 gap-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4 sm:grid-cols-3">
             {field(pickup.source === "tms" ? "Estado guardado" : "Estado devolvido pelos CTT", pickup.status)}{field("Data prevista", displayDate(pickup.scheduled_date))}{field("Período", pickup.period)}
+            {field("Pedido em (hora de Lisboa)", formatPickupRequestTime(pickup.requested_at || pickup.created_at))}
+            {field("Pedido por", pickup.requested_by?.email || pickup.requested_by?.user_id || "Não registado")}
             {field("Volumes", pickup.volumes)}{field("Peso total (kg)", pickup.weight_kg)}{field("Mais pesado (kg)", pickup.heaviest_weight_kg)}
           </dl>
           {pickup.carrier_code === "ctt_expresso" && <section className="space-y-3 rounded-xl border border-[var(--border-strong)] p-4" aria-labelledby="pickup-objects-title">
-            <div className="flex flex-wrap items-center justify-between gap-2"><h3 id="pickup-objects-title" className="text-sm font-bold">Encomendas associadas à recolha</h3><span className="text-xs text-[var(--text-secondary)]">{objectData.objects_checked_at ? `${objectData.objects?.length || 0} objeto(s) devolvido(s)` : "Por consultar"}</span></div>
-            <p className="text-xs text-[var(--text-secondary)]">Códigos de rastreio que os CTT devolveram para a recolha {pickup.ctt_pickup_id}. Após a leitura pelo estafeta, atualize para verificar se a associação já está disponível.</p>
+            <div className="flex flex-wrap items-center justify-between gap-2"><h3 id="pickup-objects-title" className="text-sm font-bold">Encomendas associadas à recolha</h3><span className="text-xs text-[var(--text-secondary)]">{objectData.objects_checked_at ? `${objectData.objects?.length || 0} ${objectsConfirmedByCtt ? "objeto(s) devolvido(s) pelos CTT" : "referência(s) guardada(s)"}` : "Por consultar"}</span></div>
+            <p className="text-xs text-[var(--text-secondary)]">{objectData.objects_source === "tms_shipments"
+              ? "Associação guardada no TMS, incluindo códigos de rastreio e referências internas. Atualize para consultar a lista oficial disponibilizada pelos CTT."
+              : objectData.objects_source === "unknown"
+                ? "Lista guardada anteriormente, sem origem identificada. Atualize para consultar a lista oficial disponibilizada pelos CTT."
+                : `Códigos de rastreio que os CTT devolveram para a recolha ${pickup.ctt_pickup_id}. Após a leitura pelo estafeta, atualize para verificar se a associação já está disponível.`}</p>
             {objectData.objects_unavailable_reason && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{objectData.objects_unavailable_reason} Peça aos CTT para ativar a consulta de objetos (GetRecolha) neste contrato.</p>}
             {!!objectData.objects?.length ? <ul className="grid gap-2 sm:grid-cols-2">{objectData.objects.map(code => <li key={code} className="select-text break-all rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2 font-mono text-sm font-semibold">{code}</li>)}</ul> : !objectData.objects_unavailable_reason && <p className="text-sm text-[var(--text-secondary)]">{objectData.objects_checked_at ? "Os CTT ainda não devolveram objetos associados nesta consulta. Isto não confirma que a recolha esteja vazia ou não tenha sido efetuada." : "Ainda não foi obtida uma lista dos CTT. Marcar a recolha como realizada não associa encomendas automaticamente."}</p>}
-            {objectData.objects_checked_at && <p className="text-xs text-[var(--text-secondary)]">Última consulta: {new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Lisbon" }).format(new Date(objectData.objects_checked_at))} · Origem: CTT</p>}
+            {objectData.objects_checked_at && <p className="text-xs text-[var(--text-secondary)]">{objectsConfirmedByCtt ? "Última consulta" : "Registo guardado"}: {new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Lisbon" }).format(new Date(objectData.objects_checked_at))} · Origem: {objectsConfirmedByCtt ? "CTT" : objectData.objects_source === "tms_shipments" ? "TMS" : "Não identificada"}</p>}
             <button onClick={() => void consultCtt()} disabled={loading || remoteLoading || !pickup.ctt_pickup_id} className={buttonClass}><RefreshIcon className={`h-4 w-4 ${remoteLoading ? "animate-spin" : ""}`} />{remoteLoading ? "A consultar os CTT…" : "Atualizar objetos e detalhes nos CTT"}</button>
             {parcelError && <p role="alert" className="text-sm text-red-700">{parcelError} A última lista guardada, se existir, foi mantida.</p>}
             <p className="text-xs text-[var(--text-secondary)]">A consulta requer autorização CTT. Os códigos só aparecem quando os CTT os disponibilizarem para esta referência.</p>

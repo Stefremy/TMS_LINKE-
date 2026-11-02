@@ -7,6 +7,7 @@ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { calculateShipmentPrice, isCeTruckService } from "./calculate-shipment-price"
 import { ShipmentPricingError } from "./shipment-pricing-errors"
 import { calculateChargeableWeight, type ParcelPricingDimensions } from "./chargeable-weight"
+import { resolveCodFee } from "./cod-destination-rates"
 
 export function getClientSpecialFees(client: Partial<Cliente>): ClientSpecialServiceFee[] {
   const configured = client.pricing?.special_services_fees
@@ -74,8 +75,9 @@ export function calculateShipmentSpecialFees(
     if (code.startsWith("correos_") !== (carrier === "correos")) {
       throw new ShipmentPricingError("Serviço especial não autorizado para esta transportadora.")
     }
-    const fee = fees.find(f => f.special_service_code === code && f.is_enabled)
-    if (!fee) throw new ShipmentPricingError("Serviço especial inexistente ou desativado.")
+    const configuredFee = fees.find(f => f.special_service_code === code && f.is_enabled)
+    if (!configuredFee) throw new ShipmentPricingError("Serviço especial inexistente ou desativado.")
+    const fee = resolveCodFee(configuredFee, destination?.country ?? "", destination?.postal ?? "")
     for (const amount of [fee.fixed_value, fee.percentage_value, fee.min_value]) {
       if (amount !== undefined && amount !== null && (!Number.isFinite(amount) || amount < 0)) {
         throw new ShipmentPricingError("Tarifa de serviço especial inválida.")

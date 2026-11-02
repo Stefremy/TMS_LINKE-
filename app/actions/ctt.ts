@@ -481,7 +481,9 @@ export async function scheduleCttPickupAction(input: {
   sender: { name: string; contact?: string; address: string; country?: string; zip: string; city: string; phone: string; mobilePhone?: string; email?: string }
   observations?: string
 }) {
-  await requireEmployee("Pedidos de Recolha & Distribuição")
+  const actor = await requireEmployee("Pedidos de Recolha & Distribuição")
+  const requestedAt = new Date().toISOString()
+  const requestedBy = { user_id: actor.user.id, email: actor.user.email || undefined, colaborador_id: actor.colaborador_id }
   const heaviestWeightKg = input.heaviestWeightKg ?? input.weightKg
   if (!Number.isFinite(input.weightKg) || input.weightKg <= 0 ||
       !Number.isFinite(heaviestWeightKg) || heaviestWeightKg <= 0 || heaviestWeightKg > input.weightKg ||
@@ -613,6 +615,8 @@ export async function scheduleCttPickupAction(input: {
           period: `${input.startHour}-${input.endHour}`,
           observations: input.observations,
           created_at: new Date().toISOString(),
+          requested_at: requestedAt,
+          requested_by: requestedBy,
         }
       })
       if (metadataError) {

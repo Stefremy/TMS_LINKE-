@@ -31,6 +31,8 @@ async function enrich(db: ReturnType<typeof createAdminClient>, tenant: string, 
     if (snapshot) {
       pickup.objects = normalizePickupObjects(snapshot.details.objects)
       pickup.objects_checked_at = snapshot.details.checked_at
+      pickup.objects_source = snapshot.details.source === "ctt_get_recolha" || snapshot.details.source === "tms_shipments"
+        ? snapshot.details.source : "unknown"
     }
     return pickup
   })
@@ -70,7 +72,7 @@ export async function refreshPickupParcelsAction(id: string) {
       recolha_id: local.id, pickup_id: local.ctt_pickup_id, objects, checked_at: checkedAt, source: "ctt_get_recolha",
     } })
     if (saved.error) throw new Error("Os CTT responderam, mas não foi possível guardar a lista de objetos. Tente atualizar novamente.")
-    return { success: true as const, pickup: { ...pickup, objects, objects_checked_at: checkedAt }, localPickup }
+    return { success: true as const, pickup: { ...pickup, objects, objects_checked_at: checkedAt, objects_source: "ctt_get_recolha" as const }, localPickup }
   } catch (error) {
     return { success: false as const, error: error instanceof Error ? error.message : "Não foi possível atualizar os objetos da recolha." }
   }

@@ -82,6 +82,7 @@ export class CTTPickupReadService {
     if (!pickup.ctt_pickup_id) throw new Error("Os CTT não devolveram detalhes para esta referência.")
     if (pickup.ctt_pickup_id.toUpperCase() !== reference.toUpperCase()) throw new Error("A referência devolvida pelos CTT não corresponde à recolha consultada.")
     pickup.objects_checked_at = new Date().toISOString()
+    pickup.objects_source = "ctt_get_recolha"
     return pickup
   }
 }

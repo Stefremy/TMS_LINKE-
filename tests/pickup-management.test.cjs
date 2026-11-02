@@ -3,10 +3,38 @@ const assert = require('node:assert/strict')
 const { createLoader } = require('./helpers/load-typescript.cjs')
 const { fakeSupabase } = require('./helpers/fake-supabase.cjs')
 
-const { validatePickupSearch, mapLocalPickup, normalizePickupObjects } = createLoader({})('lib/pickup-management.ts')
+const { validatePickupSearch, mapLocalPickup, normalizePickupObjects, formatPickupRequestTime, pickupObjectsView } = createLoader({})('lib/pickup-management.ts')
 const ownId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 const otherId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
 const own = { id: ownId, tenant_id: 'own', ctt_pickup_id: '1519176/26', scheduled_date: '2026-10-19', status: 'Agendado' }
+
+test('request times show seconds in Lisbon time, with summer time and offset-aware instants', () => {
+  assert.equal(formatPickupRequestTime('2026-11-02T14:13:11.505616+00:00'), '02/11/2026 14:13:11')
+  assert.equal(formatPickupRequestTime('2026-11-02T14:13:51.752001+00:00'), '02/11/2026 14:13:51')
+  assert.equal(formatPickupRequestTime('2026-07-02T14:13:11Z'), '02/07/2026 15:13:11')
+  assert.equal(formatPickupRequestTime('2026-07-02T15:13:11+01:00'), '02/07/2026 15:13:11')
+  assert.equal(formatPickupRequestTime('2026-07-02T15:13:11'), '02/07/2026 15:13:11')
+  for (const date of [undefined, '', 'invalid', '2026-11-02', '0001-01-01T00:00:00']) assert.equal(formatPickupRequestTime(date), 'Não registado')
+})
+
+test('new request times stay separate from booking acceptance and scheduled collection dates', () => {
+  const row = {...own, created_at:'2026-11-02T14:13:11Z'}
+  const historic = mapLocalPickup(row)
+  assert.equal(historic.requested_at, row.created_at)
+  const current = mapLocalPickup(row, {requested_at:'2026-11-02T14:13:00Z', created_at:'2026-11-02T14:13:12Z'})
+  assert.equal(current.requested_at, '2026-11-02T14:13:00Z')
+  assert.equal(current.created_at, row.created_at)
+  assert.equal(current.scheduled_date, own.scheduled_date)
+})
+
+test('the booking operator comes from saved attribution, not the requester, sender or current viewer', () => {
+  const meta={requested_by:{user_id:'original-user',email:'original@example.test',colaborador_id:'original-staff'},
+    requester:{name:'Carrier account contact'},sender_contact:'Warehouse contact'}
+  assert.deepEqual(mapLocalPickup(own,meta).requested_by,meta.requested_by)
+  assert.equal(mapLocalPickup(own,{requester:meta.requester,sender_contact:meta.sender_contact}).requested_by,undefined)
+  assert.equal(mapLocalPickup(own,{requested_by:{email:'unattributed@example.test'}}).requested_by,undefined)
+  assert.equal(mapLocalPickup(own,{requested_by:{user_id:'operator',email:{invalid:true}}}).requested_by.email,undefined)
+})
 
 test('date filters reject impossible, incomplete and reversed dates; carrier enforces 60 days', () => {
   for (const input of [{dateFrom:'2026-02-30',dateTo:'2026-03-01'}, {dateFrom:'2026-10-20',dateTo:'2026-10-19'}, {dateFrom:'2026-10-19'}, {page:-1}]) assert.ok(validatePickupSearch(input))
@@ -131,6 +159,7 @@ test('CTT object refresh saves only exact confirmed associations and reloads the
   tables.audit_log.push({...snapshot,created_at:result.pickup.objects_checked_at})
   const detail=await api.getPickupDetailsAction(ownId)
   assert.deepEqual(detail.pickup.objects,result.pickup.objects);assert.equal(detail.pickup.objects_checked_at,result.pickup.objects_checked_at)
+  assert.equal(detail.pickup.objects_source,'ctt_get_recolha')
   assert.equal(calls(),1);assert.equal(db.writes.length,1)
 })
 
@@ -151,6 +180,33 @@ test('permission failure preserves the last confirmed list and a successful empt
   assert.equal(result.success,true);assert.deepEqual(result.pickup.objects,[])
   tables.audit_log.push({...empty.db.writes[0].value,created_at:result.pickup.objects_checked_at})
   assert.deepEqual((await empty.api.getPickupDetailsAction(ownId)).pickup.objects,[])
+})
+
+test('a saved TMS association remains visible and keeps its origin when the carrier refuses object access',async()=>{
+  const tables={recolhas:[{...own}],audit_log:[{tenant_id:'own',action:'recolha_ctt_objects',created_at:'2026-10-19',details:{
+    recolha_id:ownId,pickup_id:own.ctt_pickup_id,objects:['EQ422116973PT','LTK1044749'],source:'tms_shipments',checked_at:'2026-10-19T15:52:24Z',
+  }}]}
+  const remote={...own,source:'ctt',objects:[],objects_unavailable_reason:'GetRecolha indisponível; estado lido da pesquisa'}
+  const {api,db}=actions(tables,false,undefined,{pickup:remote})
+  const saved=(await api.getPickupDetailsAction(ownId)).pickup
+  assert.equal(saved.objects_source,'tms_shipments')
+  const result=await api.refreshPickupParcelsAction(ownId)
+  assert.equal(result.success,true)
+  assert.deepEqual(db.writes,[],'a status-only reply must never replace the saved association')
+  const visible=pickupObjectsView(saved,result.pickup)
+  assert.deepEqual(visible.objects,['EQ422116973PT','LTK1044749'])
+  assert.equal(visible.objects_source,'tms_shipments')
+  assert.equal(visible.objects_checked_at,'2026-10-19T15:52:24Z')
+  assert.equal(visible.objects_unavailable_reason,remote.objects_unavailable_reason)
+})
+
+test('an authoritative fresh empty CTT list replaces the display while an unidentified archive stays unidentified',async()=>{
+  const saved={...own,source:'tms',objects:['EQ422116973PT'],objects_source:'tms_shipments'}
+  const remote={...own,source:'ctt',objects:[],objects_source:'ctt_get_recolha',objects_checked_at:'2026-11-02T14:00:00Z'}
+  assert.equal(pickupObjectsView(saved,remote),remote)
+  assert.equal(pickupObjectsView(saved,null),saved)
+  const {api}=actions({recolhas:[own],audit_log:[{tenant_id:'own',action:'recolha_ctt_objects',details:{recolha_id:ownId,pickup_id:own.ctt_pickup_id,objects:['EQ422116973PT']}}]})
+  assert.equal((await api.getPickupDetailsAction(ownId)).pickup.objects_source,'unknown')
 })
 
 const creds = {client_number:'client&1',contract_number:'contract',auth_id:'secret',environment:'production'}
@@ -175,6 +231,7 @@ test('CTT search uses the published operation, ordered parameters, escaping and 
 test('CTT detail maps weight in grams and never turns carrier errors into success', async () => {
   const {api,calls}=service({GetRecolhaResponse:{GetRecolhaResult:{_recolhas:{_IDRecolha:'1519176/26',_Peso:'1500',_CP4Exp:'4800',_CP3Exp:'019',_TelefoneExp:{'@_i:nil':'true'},_Objectos:{string:['A','B']}}}}})
   const detail=await api.details(creds,'1519176/26')
+  assert.equal(detail.objects_source,'ctt_get_recolha')
   assert.equal(detail.weight_kg,1.5); assert.equal(detail.sender_zip,'4800-019'); assert.deepEqual(detail.objects,['A','B'])
   assert.equal(detail.sender_phone,'')
   assert.ok(calls[0].action.endsWith('/GetRecolha'))

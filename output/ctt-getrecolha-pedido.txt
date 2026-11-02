@@ -1,0 +1,26 @@
+Assunto: Pedido de autorização GetRecolha - cliente 100032458 / contrato 300330941
+
+Boa tarde,
+
+Solicitamos a autorização da operação GetRecolha, do webservice RecolhasWS, para a autenticação já associada à nossa conta em produção:
+
+Empresa: GO LINKE UNIPESSOAL LDA
+Número de cliente: 100032458
+Número de contrato: 300330941
+Ambiente: Produção
+Operação: IRecolhasWS/GetRecolha
+
+O agendamento de recolhas está a funcionar, mas a consulta GetRecolha devolve a seguinte mensagem:
+"Utilizador não tem permissões para utilizar o serviço".
+
+Exemplo de recolha consultada: 1612242/26.
+
+Precisamos de consultar os códigos de objeto/tracking associados a cada recolha e apresentá-los no nosso TMS, quando essa associação estiver disponível nos CTT.
+
+Podem autorizar o acesso ao GetRecolha e confirmar se o campo _Objectos permite obter essa lista após a recolha/leitura dos objetos pelo estafeta? Caso seja necessária outra operação ou autorização adicional, agradecemos que nos indiquem qual.
+
+Agradecemos a confirmação quando a autorização estiver ativa, para repetirmos o teste.
+
+Obrigado,
+Equipa Linke
+geral@linke.pt

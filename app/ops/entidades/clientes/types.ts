@@ -41,6 +41,13 @@ export interface ClientSpecialServiceFee {
   percentage_value?: number
   fixed_value?: number
   min_value?: number
+  cod_destination_rates?: Partial<Record<"PT-CONT" | "PT-ILHAS" | "ES-PENIN", {
+    fee_type: "percentage" | "fixed"
+    percentage_value?: number
+    fixed_value?: number
+    min_value?: number
+    use_standard?: boolean
+  }>>
   description: string
   is_enabled: boolean
 }

@@ -12,6 +12,8 @@ export interface PickupSummary {
   status: string
   scheduled_date: string
   created_at: string
+  requested_at?: string
+  requested_by?: { user_id: string; email?: string; colaborador_id?: string | null }
   period?: string
   client_id?: string | null
   volumes?: number
@@ -33,6 +35,7 @@ export interface PickupSummary {
   connection_id?: string
   objects?: string[]
   objects_checked_at?: string
+  objects_source?: "ctt_get_recolha" | "tms_shipments" | "unknown"
   /** Set when CTT denied GetRecolha and only PesquisaRecolhas (status) could be read. */
   objects_unavailable_reason?: string
   collected_at?: string
@@ -44,6 +47,29 @@ export function normalizePickupObjects(value: unknown): string[] {
     .filter((code): code is string => typeof code === "string")
     .map(code => code.trim().toUpperCase())
     .filter(code => /^[A-Z0-9][A-Z0-9/_-]{0,63}$/.test(code)))]
+}
+
+/** A status-only response must not hide the last saved parcel list. */
+export function pickupObjectsView(saved: PickupSummary, remote: PickupSummary | null): PickupSummary {
+  return remote?.objects_unavailable_reason
+    ? { ...saved, objects_unavailable_reason: remote.objects_unavailable_reason }
+    : remote || saved
+}
+
+/** Request timestamps use Lisbon time, including its summer-time offset. */
+export function formatPickupRequestTime(value?: string): string {
+  if (!value) return "Não registado"
+  // CTT can return local wall-clock values without a timezone. Keep their stated
+  // time rather than interpreting it in the browser/server's local timezone.
+  const local = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?$/.exec(value)
+  const date = new Date(local ? `${value.replace(" ", "T")}Z` : value)
+  if (!Number.isFinite(date.getTime()) || date.getUTCFullYear() < 2000 || !/[T ]\d{2}:\d{2}/.test(value)) return "Não registado"
+  const parts = new Intl.DateTimeFormat("pt-PT", {
+    timeZone: local ? "UTC" : "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(p => p.type === type)?.value
+  return `${part("day")}/${part("month")}/${part("year")} ${part("hour")}:${part("minute")}:${part("second")}`
 }
 
 export interface PickupSearch {
@@ -77,10 +103,16 @@ export function mapLocalPickup(row: Record<string, unknown>, meta: Record<string
   }
   const reference = String(row.ctt_pickup_id || meta.pickup_id || "")
   const carrier = str("carrier_code") || (reference.startsWith("CEX") ? "correos_express" : "ctt_expresso")
+  const actor = meta.requested_by && typeof meta.requested_by === "object" ? meta.requested_by as Record<string, unknown> : {}
   return {
     id: String(row.id), source: "tms", ctt_pickup_id: reference, carrier_code: carrier,
     carrier_name: str("carrier_name") || (carrier === "correos_express" ? "Correos Express" : "CTT Expresso"),
     status: String(row.status || "Agendado"), scheduled_date: String(row.scheduled_date || ""), created_at: String(row.created_at || ""),
+    requested_at: str("requested_at") || String(row.created_at || ""),
+    requested_by: typeof actor.user_id === "string" && actor.user_id ? {
+      user_id: actor.user_id, email: typeof actor.email === "string" ? actor.email : undefined,
+      colaborador_id: typeof actor.colaborador_id === "string" ? actor.colaborador_id : null,
+    } : undefined,
     period: str("period"), client_id: str("client_id") || null,
     volumes: number("volumes"), weight_kg: number("weight_kg"), heaviest_weight_kg: number("heaviest_weight_kg"),
     sender_name: str("sender_name"), sender_address: str("sender_address"), sender_city: str("sender_city"),

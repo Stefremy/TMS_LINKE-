@@ -34,6 +34,7 @@ import { getServiceDestinationZone } from "@/lib/services/service-destinations"
 import { getAuthorizedDestinationCountries, getDestinationServiceOptions, getServiceIslandTransportMode, isDestinationPostalReady, isPortugueseIslandDestination, type IslandTransportMode } from "@/lib/services/shipment-service-options"
 import { getClientSpecialFees, isCorreosLinkeService } from "@/lib/pricing/calculate-shipment-quote"
 import { calculateClientShipmentPreview } from "@/lib/pricing/calculate-client-shipment-preview"
+import { resolveCodFee } from "@/lib/pricing/cod-destination-rates"
 import { assertShipmentDestinationAvailable } from "@/lib/services/shipment-destination-policy"
 import { focusCttCustomsFields } from "@/lib/ctt-customs-form"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
@@ -229,8 +230,8 @@ export function ClientCreateGuia() {
   }, [activeLinkeService, recipientCountry, weight, volumesCount, parcelWeights])
   // Available special services fees
   const specialFeesList: ClientSpecialServiceFee[] = React.useMemo(() => {
-    return getClientSpecialFees(currentClient)
-  }, [currentClient])
+    return getClientSpecialFees(currentClient).map(fee => resolveCodFee(fee, recipientCountry, recipientPostal))
+  }, [currentClient, recipientCountry, recipientPostal])
 
   const isCorreosService = Boolean(
     activeLinkeService?.carrier_group === "correos" ||
@@ -1029,7 +1030,7 @@ export function ClientCreateGuia() {
                         />
                       </div>
                     )}
-                    {fee.special_service_code !== "cod" && (
+                    {(
                       <p className="text-[10px] text-zinc-400 pl-6 mt-1 line-clamp-2" title={fee.description}>
                         {fee.fee_type === "fixed" ? `+${fee.fixed_value?.toFixed(2)}€` : `+${fee.percentage_value}% (mín. ${fee.min_value?.toFixed(2)}€)`} {fee.description ? `- ${fee.description}` : ""}
                       </p>
