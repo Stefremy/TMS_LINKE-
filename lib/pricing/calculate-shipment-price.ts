@@ -209,9 +209,18 @@ export function isCeTruckService(service: Partial<ServicoLinke> | null | undefin
 }
 
 /** Múltiplo coverage follows the carrier product, including client DTOs with redacted API codes. */
+export function isCttMultiVolumeService(service: Partial<ServicoLinke> | null | undefined): boolean {
+  if (!service) return false
+  if (service.carrier_group === "correos" || service.preferred_carrier_name?.toLowerCase().includes("correos")) return false
+  const product = service.webservice_service_code?.trim().toUpperCase()
+  if (product) return product === "EMSF010.01"
+  const code = service.code?.trim().toUpperCase() || ""
+  return service.mainland_only === true || service.id === "srv_linke_multiplo_std" || code.startsWith("LK-MULT-")
+}
+
 export function isMainlandOnlyService(service: Partial<ServicoLinke> | null | undefined): boolean {
   if (!service) return false
-  if (service.webservice_service_code) return service.webservice_service_code.trim().toUpperCase() === "EMSF010.01"
+  if (service.webservice_service_code) return isCttMultiVolumeService(service)
   const code = service.code?.trim().toUpperCase() || ""
   return service.mainland_only === true || service.id === "srv_linke_multiplo_std" || code.startsWith("LK-MULT-")
 }

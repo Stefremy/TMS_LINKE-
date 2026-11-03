@@ -33,8 +33,10 @@ function actualAuth(ctx) {
 function harness(ctx = client, failure) {
   const recipient = (id, owner, tenant = TENANT) => ({ id: `row-${id}-${tenant}`, tenant_id: tenant,
     action: 'saved_recipient', details: { id, name: id, client_id: owner, address: 'Fixture street', postal_code: '4000-001' } })
+  const payoutItem = (carrierTracking, amount) => ({ carrierTracking, amount, processingDate:'2026-10-15', deliveryDate:'2026-10-15', clientReference:'' })
+  const batchItems = [payoutItem('CARRIER-A',10), payoutItem('CARRIER-B',20)]
   const batch = (id, tenant = TENANT, action = 'reembolso_batch') => ({ id, tenant_id: tenant, action,
-    created_at: '2026-10-14', details: { id, filename: id, clientSummaries: [{ clientId: A, isPaid: false }, { clientId: B, isPaid: false }] } })
+    created_at: '2026-10-14', details: { id, filename: id, carrier:'ctt', items:batchItems, clientSummaries: [{ clientId: A, isPaid: false, totalAmount:10, items:[{...batchItems[0],reconcileStatus:'matched',shipmentId:'shipment-a'}] }, { clientId: B, isPaid: false, totalAmount:20, items:[{...batchItems[1],reconcileStatus:'matched',shipmentId:'shipment-b'}] }] } })
   const tables = {
     clients: [
       { id: A, tenant_id: TENANT, name: 'Store A' }, { id: B, tenant_id: TENANT, name: 'Store B' },
@@ -42,13 +44,14 @@ function harness(ctx = client, failure) {
     ],
     audit_log: [recipient('recipient-a', A), recipient('recipient-b', B), recipient('recipient-global', undefined),
       recipient('recipient-foreign', A, FOREIGN), recipient('recipient-a', A, FOREIGN),
+      ...[['shipment-a',A,10],['shipment-b',B,20]].map(([id,client_id,cod_value])=>({tenant_id:TENANT,action:'shipment_data',created_at:'2026-10-14',details:{id,client_id,cod_value,is_cod:true}})),
       batch('batch-own'), batch('batch-foreign', FOREIGN), batch('wrong-action', TENANT, 'billing_statement'),
       { tenant_id: TENANT, action: 'client_data', created_at: '2026-10-14', details: { id: A, short_name: 'Store A', iban: 'Fixture IBAN' } },
       { tenant_id: FOREIGN, action: 'client_data', created_at: '2026-12-01', details: { id: A, short_name: 'Foreign private store', iban: 'Foreign private IBAN' } },
     ],
     shipments: [
-      { id: 'shipment-a', tenant_id: TENANT, client_id: A, tracking_number: 'TRACK-A', carrier_tracking_number: 'CARRIER-A', recipient_name: 'Recipient A', created_at: '2026-10-14' },
-      { id: 'shipment-b', tenant_id: TENANT, client_id: B, tracking_number: 'TRACK-B', carrier_tracking_number: 'CARRIER-B', recipient_name: 'Recipient B', created_at: '2026-10-14' },
+      { id: 'shipment-a', tenant_id: TENANT, client_id: A, tracking_number: 'TRACK-A', carrier_tracking_number: 'CARRIER-A', recipient_name: 'Recipient A', status:'pendente', created_at: '2026-10-14' },
+      { id: 'shipment-b', tenant_id: TENANT, client_id: B, tracking_number: 'TRACK-B', carrier_tracking_number: 'CARRIER-B', recipient_name: 'Recipient B', status:'pendente', created_at: '2026-10-14' },
       { id: 'shipment-foreign', tenant_id: FOREIGN, client_id: A, tracking_number: 'FOREIGN-TRACK', carrier_tracking_number: 'FOREIGN-CARRIER', recipient_name: 'Foreign private recipient' },
     ],
   }
@@ -69,8 +72,8 @@ function harness(ctx = client, failure) {
     fs: { existsSync: () => { calls.filesystem++; return true }, readFileSync: () => { calls.filesystem++; return 'fixture' } },
     '@/lib/services/reembolsos/ctt-reembolso-parser': { parseCttReembolsoFile: () => {
       calls.parser++
-      return { items: [{ carrierTracking: 'CARRIER-A', clientReference: '', amount: 10 },
-        { carrierTracking: 'FOREIGN-CARRIER', clientReference: 'FOREIGN-TRACK', amount: 99 }] }
+      return { items: [payoutItem('CARRIER-A',10),
+        {...payoutItem('FOREIGN-CARRIER',99),clientReference:'FOREIGN-TRACK'}] }
     } },
   })
   return { db, tables, calls, recipients: load('app/actions/destinatarios.ts'), payouts: load('app/actions/reembolsos.ts') }

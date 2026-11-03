@@ -1,6 +1,6 @@
 import { CTTSoapClient } from "./ctt-soap-client"
 import type { CTTConnectionCredentials } from "./ctt-types"
-import { normalizePickupObjects, validatePickupSearch, type PickupSearch, type PickupSummary } from "@/lib/pickup-management"
+import { normalizePickupObjects, validatePickupSearch, readPickupCttStatus, CTT_PICKUP_STATUS_LABELS, type PickupSearch, type PickupSummary } from "@/lib/pickup-management"
 
 type RecordData = Record<string, unknown>
 const object = (value: unknown): RecordData => value && typeof value === "object" ? value as RecordData : {}
@@ -16,14 +16,15 @@ function mapRemote(value: unknown): PickupSummary {
   const s = (key: string) => {
     const value = row[`_${key}`] ?? row[key]
     // XML nil elements are parsed as attribute objects, not empty strings.
-    return typeof value === "string" || typeof value === "number" ? String(value) : ""
+    return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : ""
   }
   const n = (key: string) => row[`_${key}`] == null ? undefined : Number(row[`_${key}`])
   const id = s("IDRecolha")
   const start = s("HoraInicio"), end = s("HoraFim")
+  const cttStatus = readPickupCttStatus(s("RecolhaEfectuada"), s("DataRecolhaEfectuada"))
   return {
     id, source: "ctt", ctt_pickup_id: id, carrier_code: "ctt_expresso", carrier_name: "CTT Expresso",
-    status: s("RecolhaEfectuada") || "Consultar no portal CTT", scheduled_date: s("DataInicioRecolha") || s("Data"),
+    status: CTT_PICKUP_STATUS_LABELS[cttStatus.state], ctt_status: cttStatus, scheduled_date: s("DataInicioRecolha") || s("Data"),
     created_at: s("DataCriacao"), collected_at: s("DataRecolhaEfectuada"),
     sender_name: s("Expedidor"), sender_address: s("MoradaExp"), sender_city: s("LocalidadeExp"),
     sender_zip: [s("CP4Exp"), s("CP3Exp")].filter(Boolean).join("-"), sender_country: s("PaisExp"),

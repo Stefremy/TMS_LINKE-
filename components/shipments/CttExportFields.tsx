@@ -5,7 +5,7 @@ import { CTT_EXPORT_TYPES, CTT_CONTENT_TYPES } from "@/lib/services/ctt/export-d
 import { requiresCttCustoms } from "@/lib/services/ctt/customs-declaration"
 import { CttCustomsFields } from "./CttCustomsFields"
 
-export function CttExportFields({ country, postalCode = "" }: { country: string; postalCode?: string }) {
+export function CttExportFields({ country, postalCode = "", values = {} }: { country: string; postalCode?: string; values?: Record<string, string | string[]> }) {
   const id = useId()
   const isIceland = country.trim().toUpperCase() === "IS"
   const customsFields = requiresCttCustoms(country, postalCode)
@@ -19,21 +19,21 @@ export function CttExportFields({ country, postalCode = "" }: { country: string;
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="min-w-0">
           <label htmlFor={`${id}-export`} className="text-xs font-medium text-[var(--text-primary)]">Tipo de exportação *</label>
-          <select id={`${id}-export`} name="ctt_export_type" required defaultValue="" className={inputClass}>
+          <select id={`${id}-export`} name="ctt_export_type" required defaultValue={values.ctt_export_type ?? ""} className={inputClass}>
             <option value="" disabled>Selecionar…</option>
             {CTT_EXPORT_TYPES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </div>
         <div className="min-w-0">
           <label htmlFor={`${id}-content`} className="text-xs font-medium text-[var(--text-primary)]">Tipo de conteúdo *</label>
-          <select id={`${id}-content`} name="ctt_content_type" required defaultValue="" className={inputClass}>
+          <select id={`${id}-content`} name="ctt_content_type" required defaultValue={values.ctt_content_type ?? ""} className={inputClass}>
             <option value="" disabled>Selecionar…</option>
             {CTT_CONTENT_TYPES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </div>
         <div className="min-w-0">
           <label htmlFor={`${id}-value`} className="text-xs font-medium text-[var(--text-primary)]">Valor declarado do conteúdo (€) *</label>
-          <input id={`${id}-value`} name="ctt_declared_value" type="number" inputMode="decimal" min="0" step="0.01" required placeholder="Ex.: 25,50" className={inputClass} />
+          <input id={`${id}-value`} name="ctt_declared_value" defaultValue={values.ctt_declared_value ?? ""} type="number" inputMode="decimal" min="0" step="0.01" required placeholder="Ex.: 25,50" className={inputClass} />
         </div>
       </div>
       {!isIceland && customsFields}

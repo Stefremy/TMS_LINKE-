@@ -34,6 +34,7 @@ import type { CTTPickupRequester } from "@/lib/services/ctt/ctt-types"
 import { formatPickupRequestTime, type PickupSummary } from "@/lib/pickup-management"
 import { PickupDetailsDialog, PickupSearchPanel } from "./PickupManagement"
 import { PickupCutoffNotice } from "./PickupCutoffNotice"
+import { PickupStatus } from "./PickupStatus"
 
 interface MappedClient {
   id: string
@@ -66,18 +67,6 @@ interface RecolhasClientProps {
   carrierConnections: CarrierConnection[]
 }
 
-const STATUS_CFG: Record<string, { label: string; color: string; dot: string }> = {
-  Agendado:  { label: "Agendado",  color: "bg-blue-50 text-blue-700 border-blue-200",       dot: "bg-blue-500" },
-  Realizado: { label: "Realizado", color: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  Cancelado: { label: "Cancelado", color: "bg-red-50 text-red-600 border-red-200",           dot: "bg-red-500" },
-  pendente:  { label: "Pendente",  color: "bg-amber-50 text-amber-700 border-amber-200",     dot: "bg-amber-500" },
-  rascunho:  { label: "Rascunho",  color: "bg-slate-100 text-slate-600 border-slate-200",   dot: "bg-slate-400" },
-}
-
-function getStatusCfg(status: string) {
-  return STATUS_CFG[status] || { label: status, color: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400" }
-}
-
 function tomorrowDate() {
   const d = new Date()
   d.setDate(d.getDate() + 1)
@@ -96,7 +85,10 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
   const [view, setView] = React.useState<"list" | "search" | "form">("list")
   const [openedPickup, setOpenedPickup] = React.useState<PickupSummary | null>(null)
   const [loading, setLoading] = React.useState(false)
-  const [result, setResult] = React.useState<any>(null)
+  const [result, setResult] = React.useState<{
+    success?: boolean; Success?: boolean; error?: string; carrier_name?: string
+    metadata_saved?: boolean; pickupNumber?: string; PickUpID?: string
+  } | null>(null)
   const [copiedId, setCopiedId] = React.useState<string | null>(null)
 
   // List filters
@@ -250,8 +242,8 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
         observations: finalObs || undefined,
       })
       setResult(res)
-    } catch (err: any) {
-      setResult({ success: false, error: err.message })
+    } catch (err) {
+      setResult({ success: false, error: err instanceof Error ? err.message : "Não foi possível pedir a recolha." })
     } finally {
       setLoading(false)
     }
@@ -345,7 +337,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
 
       {initialError && view === "list" && <p role="alert" className="m-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{initialError} Tente novamente no separador Pesquisar.</p>}
       {view === "search" ? (
-        <PickupSearchPanel onOpen={setOpenedPickup} updatedPickups={updatedPickups} connections={carrierConnections.filter(c => c.carrier_code === "ctt_expresso")} />
+        <PickupSearchPanel onOpen={setOpenedPickup} onUpdated={pickup => setUpdatedPickups(previous => ({ ...previous, [pickup.id]: pickup }))} updatedPickups={updatedPickups} connections={carrierConnections.filter(c => c.carrier_code === "ctt_expresso")} />
       ) : view === "list" ? (
         /* ───── LIST VIEW ───── */
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -408,7 +400,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                 onChange={e => setStatusFilter(e.target.value)}
                 className="text-xs font-semibold bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-lg px-2.5 py-1.5 text-[var(--text-secondary)] focus:outline-none"
               >
-                <option value="all">Todos os Estados</option>
+                <option value="all">Todos os estados TMS</option>
                 <option value="Agendado">Agendado</option>
                 <option value="Realizado">Realizado</option>
                 <option value="Cancelado">Cancelado</option>
@@ -470,7 +462,6 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
                   {filteredRecolhas.map((r) => {
-                    const cfg = getStatusCfg(r.status)
                     const client = clients.find(c => c.id === r.client_id)
                     const isCorreos = r.carrier_code === "correos_express" || String(r.ctt_pickup_id || "").startsWith("CEX")
                     const carrierLogo = getCarrierLogo(isCorreos ? "correos_express" : "ctt_expresso")
@@ -575,10 +566,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
 
                         {/* Status */}
                         <td className="px-5 py-4">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${cfg.color}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
-                            {cfg.label}
-                          </span>
+                          <PickupStatus pickup={r} onUpdated={pickup => setUpdatedPickups(previous => ({ ...previous, [pickup.id]: pickup }))} />
                         </td>
                         <td className="px-5 py-4"><button onClick={() => setOpenedPickup(r)} className="whitespace-nowrap rounded-lg border border-[var(--border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)]">Ver detalhes</button></td>
                       </tr>
@@ -634,7 +622,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                       </span>
                       <button
                         type="button"
-                        onClick={() => handleCopy(result.pickupNumber || result.PickUpID)}
+                        onClick={() => handleCopy(result.pickupNumber || result.PickUpID || "")}
                         className="p-1 text-slate-400 hover:text-slate-700 transition-colors"
                         title="Copiar PickUp ID"
                       >

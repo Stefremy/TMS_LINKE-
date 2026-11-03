@@ -5,23 +5,26 @@ import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
 import { CTTPickupReadService } from "@/lib/services/ctt/ctt-pickup-read.service"
-import { mapLocalPickup, normalizePickupObjects, validatePickupSearch, PICKUP_PAGE_SIZE, type PickupSearch, type PickupSummary } from "@/lib/pickup-management"
+import { mapLocalPickup, normalizePickupObjects, validatePickupSearch, PICKUP_PAGE_SIZE, type PickupSearch, type PickupSummary, type PickupCttStatus } from "@/lib/pickup-management"
 
 async function enrich(db: ReturnType<typeof createAdminClient>, tenant: string, rows: Record<string, unknown>[]): Promise<PickupSummary[]> {
   if (!rows.length) return []
   const ids = rows.map(row => String(row.id))
   const refs = rows.map(row => String(row.ctt_pickup_id || "")).filter(Boolean)
   const query = () => db.from("audit_log").select("details,created_at").eq("tenant_id", tenant).eq("action", "recolha_data").order("created_at", { ascending: false }).limit(500)
-  const [byId, byRef, confirmations, objectSnapshots] = await Promise.all([
+  const [byId, byRef, confirmations, objectSnapshots, statusSnapshots] = await Promise.all([
     query().in("details->>recolha_id", ids), refs.length ? query().in("details->>pickup_id", refs) : Promise.resolve({ data: [], error: null }),
     db.from("audit_log").select("details,created_at").eq("tenant_id", tenant).eq("action", "recolha_manual_confirmation").in("details->>recolha_id", ids).order("created_at", { ascending: false }).limit(500),
     db.from("audit_log").select("details,created_at").eq("tenant_id", tenant).eq("action", "recolha_ctt_objects").in("details->>recolha_id", ids).order("created_at", { ascending: false }).limit(500),
+    db.from("audit_log").select("details,created_at").eq("tenant_id", tenant).eq("action", "recolha_ctt_status").in("details->>recolha_id", ids).order("created_at", { ascending: false }).limit(500),
   ])
-  if (byId.error || byRef.error || confirmations.error || objectSnapshots.error) throw new Error("Não foi possível carregar os detalhes guardados das recolhas.")
+  if (byId.error || byRef.error || confirmations.error || objectSnapshots.error || statusSnapshots.error) throw new Error("Não foi possível carregar os detalhes guardados das recolhas.")
   const logs = [...(byId.data || []), ...(byRef.data || [])].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
   return rows.map(row => {
     const log = logs.find(log => log.details?.recolha_id === row.id || (row.ctt_pickup_id && log.details?.pickup_id === row.ctt_pickup_id))
     const pickup = mapLocalPickup(row, log?.details || {})
+    const statusSnapshot = statusSnapshots.data?.find((entry: { details?: { recolha_id?: string; pickup_id?: string; ctt_status?: PickupCttStatus } }) => entry.details?.recolha_id === row.id && entry.details?.pickup_id === row.ctt_pickup_id)
+    if (statusSnapshot) pickup.ctt_status = statusSnapshot.details.ctt_status as PickupCttStatus
     const confirmation = confirmations.data?.find((entry: { details?: { recolha_id?: string; confirmed_at?: string; confirmed_by?: string } }) => entry.details?.recolha_id === row.id)
     if (row.status === "Realizado" && confirmation) pickup.manual_confirmation = {
       confirmed_at: confirmation.details.confirmed_at,
@@ -36,6 +39,31 @@ async function enrich(db: ReturnType<typeof createAdminClient>, tenant: string, 
     }
     return pickup
   })
+}
+
+/** Status comes from PesquisaRecolhas, independently of GetRecolha object permissions. */
+export async function refreshPickupStatusAction(id: string) {
+  await requireEmployee("Pedidos de Recolha & Distribuição")
+  try {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error("Identificador de recolha inválido.")
+    const tenant = await getTenantId(), db = createAdminClient()
+    const result = await db.from("recolhas").select("*").eq("tenant_id", tenant).eq("id", id).maybeSingle()
+    if (result.error || !result.data) throw new Error("Recolha não encontrada ou sem acesso.")
+    const [local] = await enrich(db, tenant, [result.data])
+    if (local.carrier_code !== "ctt_expresso" || !local.ctt_pickup_id) throw new Error("Esta recolha não tem uma referência CTT válida para consulta.")
+    const creds = await resolveCttCredentials(local.connection_id?.startsWith("default-") ? undefined : local.connection_id)
+    const rows = await new CTTPickupReadService().search(creds, { reference: local.ctt_pickup_id })
+    const found = rows.find(row => row.ctt_pickup_id.toUpperCase() === local.ctt_pickup_id.toUpperCase())
+    const cttStatus: PickupCttStatus = found?.ctt_status || { state: "unknown", raw_status: "", checked_at: new Date().toISOString(), not_found: !found }
+    const saved = await db.from("audit_log").insert({ tenant_id: tenant, action: "recolha_ctt_status", details: {
+      recolha_id: local.id, pickup_id: local.ctt_pickup_id, ctt_status: cttStatus, source: "ctt_pesquisa_recolhas",
+    } })
+    if (saved.error) throw new Error("Os CTT responderam, mas não foi possível guardar o estado. Tente novamente.")
+    revalidatePath("/ops/envios/recolhas")
+    return { success: true as const, pickup: { ...local, ctt_status: cttStatus } }
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : "Não foi possível consultar o estado nos CTT." }
+  }
 }
 
 /** Read associations from CTT for an owned pickup; never infer them from shipment scans. */

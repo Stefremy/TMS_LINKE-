@@ -11,7 +11,7 @@ function harness({snapshot={},packages,role='employee',foreign=false,failure,res
   tracking_number:'LTK-FIXTURE',service_type:'Linke Económico'}],
   audit_log:[{tenant_id:tenant,action:'shipment_data',created_at:'2020-01-01',details:{id,tenant_id:tenant,client_id:'store-a',
    weight_kg:1.5,package_count:2,length_cm:30.5,width_cm:20,height_cm:10.2,
-   webservice_service_code:'ENCF008.01',webservice_connection_id:'saved-connection',
+   webservice_service_code:'EMSF010.01',webservice_connection_id:'saved-connection',
    sender_name:'Fixture sender',sender_address:'Fixture street',sender_zip4:'4000',sender_zip3:'001',sender_city:'Porto',sender_phone:'+351910000001',
    recipient_name:'Fixture recipient',recipient_address:'Fixture street',recipient_postal:'4800-019',recipient_country:'PT',recipient_city:'Guimarães',recipient_phone:'+351910000002',
    ...snapshot}}],packages:packages||[]}
@@ -31,7 +31,7 @@ test('draft dispatch uses saved decimal weight, dimensions, volume count and act
  assert.equal(result.success,true);assert.equal(result.labelBase64,officialPdf)
  assert.equal(sent.weightKg,1.5);assert.equal(sent.volumes,2)
  assert.deepEqual(sent.dimensionsCm,{length:30.5,width:20,height:10.2})
- assert.equal(sent.subProduct,'ENCF008.01');assert.deepEqual(h.credentials,['saved-connection'])
+ assert.equal(sent.subProduct,'EMSF010.01');assert.deepEqual(h.credentials,['saved-connection'])
  assert.equal(sent.recipient.phone,'+351910000002');assert.equal(sent.recipient.zip,'4800-019')
  assert.equal(h.tables.shipments[0].carrier_tracking_number,'EQ-FIXTURE')
  assert.equal(h.tables.shipments[0].status,'pendente')
@@ -51,7 +51,7 @@ test('existing customs drafts stop before loading credentials, writing data or c
  }
 })
 test('legacy frozen tariff identity remains usable without inventing a default service',async()=>{
- const h=harness({snapshot:{webservice_service_code:undefined,weight_pricing_basis:{service:{webservice_service_code:'EMSF057.01'}}}})
+ const h=harness({snapshot:{package_count:1,webservice_service_code:undefined,weight_pricing_basis:{service:{webservice_service_code:'EMSF057.01'}}}})
  await h.dispatch();assert.equal(h.calls[0].subProduct,'EMSF057.01')
 })
 test('a single stored package supplies missing weight and cm dimensions without a default weight',async()=>{

@@ -2,9 +2,9 @@ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import type { ParcelPricingDimensions } from "@/lib/pricing/chargeable-weight"
 import { calculateOversizeSurcharge, getParcelLimits, getServiceParcelLimitProduct } from "@/lib/pricing/oversize-surcharge"
 
-export function ShipmentOversizeSummary({ service, country, weightKg, weights, onWeightsChange, ...parcel }: {
+export function ShipmentOversizeSummary({ service, country, weightKg, weights, onWeightsChange, showWeights = true, ...parcel }: {
   service?: ServicoLinke | null; country: string; weightKg: number
-  weights: string[]; onWeightsChange: (weights: string[]) => void
+  weights: string[]; onWeightsChange: (weights: string[]) => void; showWeights?: boolean
 } & ParcelPricingDimensions) {
   if (!service) return null
   const limits = getParcelLimits(service, country)
@@ -18,7 +18,7 @@ export function ShipmentOversizeSummary({ service, country, weightKg, weights, o
     if (result.count) message = `${result.count} volume(s) fora dos limites: +${result.amount.toLocaleString("pt-PT", { minimumFractionDigits: 2 })} € (69,90 € por volume).`
   } catch (err) { if (needsWeights) message = err instanceof Error ? err.message : "Indique os pesos por volume." }
   return <div className="space-y-3 text-xs text-[#735b39]">
-    {needsWeights && <fieldset className="rounded-lg border border-[#dfd4bf] bg-[#faf7ef] p-3">
+    {needsWeights && showWeights && <fieldset className="rounded-lg border border-[#dfd4bf] bg-[#faf7ef] p-3">
       <legend className="px-1 font-medium">Peso real de cada volume (kg)</legend>
       <p className="mb-2">Limite: {limits.maxWeightKg} kg por volume. A soma deve corresponder ao peso total do envio.</p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{Array.from({ length: count }, (_, i) => <label key={i} className="space-y-1">

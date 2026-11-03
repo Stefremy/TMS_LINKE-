@@ -856,6 +856,7 @@ for (const carrier of ['CTT','Correos']) {
 
 test('automatic per-parcel surcharge is authoritative and included once in saved extras', async () => {
   const h = shipmentHarness({adjust:t=>{
+    t.servicos_linke[0].webservice_service_code='EMSF010.01';t.servicos_linke[0].parcel_limit_product='domestic'
     t.servicos_linke[0].zones[0].tiers[0].weight_max=100
   }})
   const result=await emit(h,{weightKg:50,volumesCount:2,lengthCm:10,widthCm:10,heightCm:10,parcelWeightsKg:[31,19],calculatedPrice:0.01})
@@ -869,7 +870,7 @@ test('automatic per-parcel surcharge is authoritative and included once in saved
 })
 test('ambiguous or inconsistent individual weights stop before money reservation and carrier calls', async () => {
   for(const parcelWeightsKg of [undefined,[20,20],[50]]) {
-    const h=shipmentHarness({adjust:t=>{t.servicos_linke[0].zones[0].tiers[0].weight_max=100}})
+    const h=shipmentHarness({adjust:t=>{t.servicos_linke[0].webservice_service_code='EMSF010.01';t.servicos_linke[0].parcel_limit_product='domestic';t.servicos_linke[0].zones[0].tiers[0].weight_max=100}})
     const result=await emit(h,{weightKg:50,volumesCount:2,lengthCm:10,widthCm:10,heightCm:10,parcelWeightsKg})
     assert.equal(result.success,false)
     assert.match(result.error,/peso real de cada|pesos individuais/)
@@ -985,5 +986,13 @@ test('Correos 26 Baleares routes each island tariff and postcode through client/
   assert.equal(h.providerCalls[0].payload.destinatario.cpNacional,postal)
   const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
   assert.equal(saved.buy_price,cost)
+ }
+})
+
+test('direct shipment emission rejects client-supplied ops overrides before pricing, reservations and dispatch',async()=>{
+ for(const patch of [{manualPrice:0.01},{carrierOverride:'correos'},{internalNotes:'forged'},{specialFeeOverrides:[]}]) {
+  const h=shipmentHarness(),result=await emit(h,patch)
+  assert.equal(result.success,false);assert.match(result.error,/reservado/)
+  assert.equal(h.providerCalls.length,0);assert.deepEqual(h.db.writes,[])
  }
 })

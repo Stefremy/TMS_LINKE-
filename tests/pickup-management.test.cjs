@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const { createLoader } = require('./helpers/load-typescript.cjs')
 const { fakeSupabase } = require('./helpers/fake-supabase.cjs')
 
-const { validatePickupSearch, mapLocalPickup, normalizePickupObjects, formatPickupRequestTime, pickupObjectsView } = createLoader({})('lib/pickup-management.ts')
+const { validatePickupSearch, mapLocalPickup, normalizePickupObjects, formatPickupRequestTime, pickupObjectsView, readPickupCttStatus } = createLoader({})('lib/pickup-management.ts')
 const ownId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 const otherId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
 const own = { id: ownId, tenant_id: 'own', ctt_pickup_id: '1519176/26', scheduled_date: '2026-10-19', status: 'Agendado' }
@@ -63,14 +63,14 @@ function actions(tables = {}, denied = false, failure, remote = {}) {
     'next/cache': {revalidatePath(){}},
     '@/lib/supabase/server': {createAdminClient:()=>db.createAdminClient()},
     '@/lib/services/carriers/credentials': {resolveCttCredentials:async()=>{carrierCalls++;return {}}},
-    '@/lib/services/ctt/ctt-pickup-read.service': {CTTPickupReadService:class {async search(){return []} async details(){if(remote.error) throw new Error(remote.error);return remote.pickup || own}}},
+    '@/lib/services/ctt/ctt-pickup-read.service': {CTTPickupReadService:class {async search(){if(remote.error) throw new Error(remote.error);return remote.rows || []} async details(){if(remote.error) throw new Error(remote.error);return remote.pickup || own}}},
   })
   return { api:load('app/actions/pickups.ts'), db, calls:()=>carrierCalls }
 }
 
 test('all pickup actions refuse client accounts before any database or carrier access', async () => {
   const {api,db,calls} = actions({},true)
-  for(const call of [()=>api.searchPickupsAction(),()=>api.getPickupDetailsAction(ownId),()=>api.searchCttPickupsAction({reference:'123'}),()=>api.getCttPickupDetailsAction('123'),()=>api.markPickupCollectedAction(ownId),()=>api.refreshPickupParcelsAction(ownId)]) await assert.rejects(call,/Forbidden/)
+  for(const call of [()=>api.searchPickupsAction(),()=>api.getPickupDetailsAction(ownId),()=>api.searchCttPickupsAction({reference:'123'}),()=>api.getCttPickupDetailsAction('123'),()=>api.markPickupCollectedAction(ownId),()=>api.refreshPickupParcelsAction(ownId),()=>api.refreshPickupStatusAction(ownId)]) await assert.rejects(call,/Forbidden/)
   assert.equal(db.queries.length,0); assert.equal(calls(),0)
 })
 
@@ -243,4 +243,65 @@ test('CTT detail maps weight in grams and never turns carrier errors into succes
   await assert.rejects(()=>empty.api.details(creds,'1519176/26'),/vazia/)
   await assert.rejects(()=>empty.api.search(creds,{}),/intervalo/)
   assert.equal(empty.calls.length,1)
+})
+
+test('carrier status handles published codes, Portuguese descriptions, flags and sentinel dates', () => {
+  for (const raw of ['1','Concluída','S','Sim','true']) assert.equal(readPickupCttStatus(raw).state,'completed')
+  for (const raw of ['0','Não efectuada','Não efetuada','N','Não','false']) assert.equal(readPickupCttStatus(raw).state,'not_collected')
+  for (const raw of ['2','Por Confirmar']) assert.equal(readPickupCttStatus(raw).state,'pending')
+  for (const raw of ['', 'Estado inesperado']) assert.equal(readPickupCttStatus(raw,'0001-01-01T00:00:00').state,'unknown')
+  assert.equal(readPickupCttStatus('','2026-11-02T17:00:00').state,'completed')
+  assert.equal(readPickupCttStatus('0','2026-11-02T17:00:00').state,'not_collected','an explicit negative is never replaced by a date')
+})
+
+test('CTT search maps completion codes including zero and XML boolean false', async () => {
+  const {api}=service({PesquisaRecolhasResponse:{PesquisaRecolhasResult:{_recolhas:{RecolhasListBE:[
+    {_IDRecolha:'1/26',_RecolhaEfectuada:0,_DataRecolhaEfectuada:'0001-01-01T00:00:00'},
+    {_IDRecolha:'2/26',_RecolhaEfectuada:1,_DataRecolhaEfectuada:'2026-11-02T17:00:00'},
+    {_IDRecolha:'3/26',_RecolhaEfectuada:2},
+    {_IDRecolha:'4/26',_RecolhaEfectuada:false},
+  ]}}}})
+  const rows=await api.search(creds,{reference:'1/26'})
+  assert.deepEqual(rows.map(row=>row.status),['Não efetuada','Concluída','Por confirmar','Não efetuada'])
+  assert.equal(rows[1].ctt_status.collected_at,'2026-11-02T17:00:00')
+})
+
+test('status refresh persists the exact CTT answer without changing manual status or parcel associations', async () => {
+  const cttStatus=readPickupCttStatus('1','2026-11-02T17:00:00')
+  const tables={recolhas:[{...own}],audit_log:[]}
+  const {api,db}=actions(tables,false,undefined,{rows:[{...own,ctt_status:cttStatus}]})
+  const result=await api.refreshPickupStatusAction(ownId)
+  assert.equal(result.success,true);assert.deepEqual(result.pickup.ctt_status,cttStatus)
+  assert.equal(tables.recolhas[0].status,'Agendado')
+  assert.equal(db.writes.length,1)
+  const snapshot=db.writes[0].value
+  assert.equal(snapshot.action,'recolha_ctt_status');assert.equal(snapshot.details.source,'ctt_pesquisa_recolhas')
+  tables.audit_log.push({...snapshot,created_at:cttStatus.checked_at})
+  tables.audit_log.push({tenant_id:'other',action:'recolha_ctt_status',created_at:'2099',details:{...snapshot.details,ctt_status:{state:'not_collected'}}})
+  const reopened=await api.getPickupDetailsAction(ownId)
+  assert.deepEqual(reopened.pickup.ctt_status,cttStatus)
+  assert.equal(reopened.pickup.manual_confirmation,undefined)
+  for(const query of db.queries) assert.ok(query.filters.some(f=>f.field==='tenant_id' && f.value==='own') || query.write)
+})
+
+test('empty or mismatched CTT status results are unknown, never a negative collection confirmation', async () => {
+  for(const rows of [[],[{...own,ctt_pickup_id:'different/26',ctt_status:readPickupCttStatus('1')}]]) {
+    const {api}=actions({recolhas:[{...own}]},false,undefined,{rows})
+    const result=await api.refreshPickupStatusAction(ownId)
+    assert.equal(result.success,true)
+    assert.equal(result.pickup.ctt_status.state,'unknown');assert.equal(result.pickup.ctt_status.not_found,true)
+  }
+})
+
+test('status refresh rejects foreign, invalid and non-CTT pickups, and preserves saved state on carrier errors', async () => {
+  const foreign=actions({recolhas:[{...own,id:otherId,tenant_id:'other'},{...own,ctt_pickup_id:'CEX123'}]})
+  for(const id of [otherId,ownId,'invalid']) assert.equal((await foreign.api.refreshPickupStatusAction(id)).success,false)
+  assert.equal(foreign.calls(),0);assert.deepEqual(foreign.db.writes,[])
+  const old=readPickupCttStatus('1')
+  const refused=actions({recolhas:[{...own}],audit_log:[{tenant_id:'own',action:'recolha_ctt_status',details:{recolha_id:ownId,pickup_id:own.ctt_pickup_id,ctt_status:old}}]},false,undefined,{error:'CTT: Utilizador não tem permissões'})
+  assert.equal((await refused.api.refreshPickupStatusAction(ownId)).success,false)
+  assert.deepEqual(refused.db.writes,[])
+  assert.deepEqual((await refused.api.getPickupDetailsAction(ownId)).pickup.ctt_status,old)
+  const failedSave=actions({recolhas:[{...own}]},false,q=>q.write && q.table==='audit_log' ? {message:'Unavailable'} : undefined,{rows:[{...own,ctt_status:old}]})
+  assert.equal((await failedSave.api.refreshPickupStatusAction(ownId)).success,false)
 })

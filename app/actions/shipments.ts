@@ -1,11 +1,12 @@
 "use server"
 
 import { getServiceIslandTransportMode, isPortugueseIslandDestination, type IslandTransportMode } from "@/lib/services/shipment-service-options"
+import { shipmentOverrideError } from "@/lib/services/shipments/shipment-form-authorization"
 import { calculateOversizeSurcharge } from "@/lib/pricing/oversize-surcharge"
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { captureWeightPricingBasis, type WeightPricingBasis } from "@/lib/billing/carrier-weight-pricing"
-import { calculateShipmentPrice } from "@/lib/pricing/calculate-shipment-price"
+import { calculateShipmentPrice, isCttMultiVolumeService } from "@/lib/pricing/calculate-shipment-price"
 import { calculateChargeableWeight } from "@/lib/pricing/chargeable-weight"
 import { calculateShipmentSpecialFees, resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
 import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
@@ -254,6 +255,8 @@ export async function emitClientGuiaAction(data: {
   let confirmedRejection = false
   try {
     const ctx = await requireUser("Emissão e Controlo de Guias CTT")
+    const restricted = shipmentOverrideError(ctx.role, data)
+    if (restricted) return { success: false, error: restricted.message, fieldErrors: [restricted] }
 
     const finalClientId = ctx.role === "client" ? ctx.client_id! : data.clientId
 
@@ -299,6 +302,9 @@ export async function emitClientGuiaAction(data: {
       matchedClient = pricing.client
       const chosenService = pricing.service
       carrierCode = resolveServiceCarrier(chosenService)
+      if (carrierCode === "ctt" && (data.volumesCount || 1) > 1 && !isCttMultiVolumeService(chosenService)) {
+        throw new ShipmentPricingError("Envios com mais de um volume exigem uma tabela CTT associada ao Webservice EMSF010.01 (CTT Múltiplo).")
+      }
       if (!chosenService.webservice_service_code?.trim()) {
         throw new ShipmentPricingError("Serviço sem configuração de transportadora. Contacte o suporte.")
       }
@@ -363,7 +369,7 @@ export async function emitClientGuiaAction(data: {
       service_type: data.serviceName || "CTT Expresso 24H",
       correos_product_code: carrierCode === "correos" ? data.subProductId : undefined,
       status: "pendente",
-      sender_name: ctx.role === "client" ? matchedClient.short_name || "Empresa Cliente" : (data.clientName || "Empresa Cliente"),
+      sender_name: data.clientName?.trim() || matchedClient.short_name || matchedClient.legal_name || "Empresa Cliente",
       sender_address: `${data.senderAddress || "Sede Comercial"}${data.senderCity ? `, ${data.senderCity}` : ""}`,
       sender_zip3: senderZip3,
       sender_zip4: senderZip4,

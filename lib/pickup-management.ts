@@ -3,6 +3,29 @@ import type { CTTPickupRequester } from "@/lib/services/ctt/ctt-types"
 export const CTT_PICKUP_PORTAL_URL = "https://portal.cttexpresso.pt/Account/Login"
 export const PICKUP_PAGE_SIZE = 50
 
+export interface PickupCttStatus {
+  state: "completed" | "not_collected" | "pending" | "unknown"
+  raw_status: string
+  checked_at: string
+  collected_at?: string
+  not_found?: boolean
+}
+
+export const CTT_PICKUP_STATUS_LABELS: Record<PickupCttStatus["state"], string> = {
+  completed: "Concluída", not_collected: "Não efetuada", pending: "Por confirmar", unknown: "Sem confirmação",
+}
+
+/** Only an explicit carrier state or a real collection date establishes completion. */
+export function readPickupCttStatus(raw: string, collectedAt?: string): PickupCttStatus {
+  const value = raw.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase()
+  const validDate = collectedAt && Number.isFinite(Date.parse(collectedAt)) && Date.parse(collectedAt) > Date.parse("2000-01-01")
+  const state = ["1", "s", "sim", "true", "concluida", "efectuada", "efetuada"].includes(value) ? "completed"
+    : ["0", "n", "nao", "false", "nao efectuada", "nao efetuada"].includes(value) ? "not_collected"
+      : ["2", "por confirmar"].includes(value) ? "pending"
+        : validDate ? "completed" : "unknown"
+  return { state, raw_status: raw, checked_at: new Date().toISOString(), collected_at: state === "completed" && validDate ? collectedAt : undefined }
+}
+
 export interface PickupSummary {
   id: string
   source: "tms" | "ctt"
@@ -10,6 +33,7 @@ export interface PickupSummary {
   carrier_code: string
   carrier_name: string
   status: string
+  ctt_status?: PickupCttStatus
   scheduled_date: string
   created_at: string
   requested_at?: string

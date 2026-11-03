@@ -5,6 +5,7 @@ import { Search, Loader2, X, Copy, ExternalLink, Calendar, MapPin, Clock, Ban, F
 import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { searchPickupsAction, searchCttPickupsAction, getPickupDetailsAction, getCttPickupDetailsAction, markPickupCollectedAction, refreshPickupParcelsAction } from "@/app/actions/pickups"
 import { CTT_PICKUP_PORTAL_URL, PICKUP_PAGE_SIZE, formatPickupRequestTime, pickupObjectsView, type PickupSummary } from "@/lib/pickup-management"
+import { PickupStatus } from "./PickupStatus"
 
 const inputClass = "w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]"
 const buttonClass = "inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
@@ -19,8 +20,9 @@ function today() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
 }
 
-export function PickupSearchPanel({ onOpen, connections, updatedPickups = {} }: {
+export function PickupSearchPanel({ onOpen, onUpdated, connections, updatedPickups = {} }: {
   onOpen: (pickup: PickupSummary) => void
+  onUpdated?: (pickup: PickupSummary) => void
   connections: { id: string; label: string }[]
   updatedPickups?: Record<string, PickupSummary>
 }) {
@@ -113,7 +115,7 @@ export function PickupSearchPanel({ onOpen, connections, updatedPickups = {} }: 
                     <td className="p-3 text-xs text-[var(--text-secondary)]">{row.requested_by?.email || row.requested_by?.user_id || "Não registado"}</td>
                     <td className="whitespace-nowrap p-3 text-[var(--text-primary)]">{displayDate(row.scheduled_date)}</td>
                     <td className="p-3 text-[var(--text-primary)]">{row.sender_name || row.carrier_name}<span className="block text-xs text-[var(--text-secondary)]">{row.sender_city || row.carrier_name}</span></td>
-                    <td className="p-3 text-[var(--text-secondary)]">{row.status}</td>
+                    <td className="p-3 text-[var(--text-secondary)]"><PickupStatus pickup={row} onUpdated={onUpdated} /></td>
                     <td className="p-3"><button className={buttonClass} onClick={() => onOpen(row)}>Ver detalhes</button></td>
                   </tr>
                 ))}</tbody>
@@ -209,7 +211,7 @@ export function PickupDetailsDialog({ selected, onClose, onUpdated }: { selected
           </section>}
           {pickup.manual_confirmation && <p role="status" className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3 text-sm">Recolha confirmada manualmente por <strong>{pickup.manual_confirmation.confirmed_by}</strong> em {new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Lisbon" }).format(new Date(pickup.manual_confirmation.confirmed_at))}.</p>}
           <dl className="grid grid-cols-2 gap-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-4 sm:grid-cols-3">
-            {field(pickup.source === "tms" ? "Estado guardado" : "Estado devolvido pelos CTT", pickup.status)}{field("Data prevista", displayDate(pickup.scheduled_date))}{field("Período", pickup.period)}
+            <div><dt className="text-xs text-[var(--text-secondary)]">Estado</dt><dd className="mt-1"><PickupStatus pickup={pickup} onUpdated={updated => { setPickup(updated); onUpdated?.(updated) }} /></dd></div>{field("Data prevista", displayDate(pickup.scheduled_date))}{field("Período", pickup.period)}
             {field("Pedido em (hora de Lisboa)", formatPickupRequestTime(pickup.requested_at || pickup.created_at))}
             {field("Pedido por", pickup.requested_by?.email || pickup.requested_by?.user_id || "Não registado")}
             {field("Volumes", pickup.volumes)}{field("Peso total (kg)", pickup.weight_kg)}{field("Mais pesado (kg)", pickup.heaviest_weight_kg)}

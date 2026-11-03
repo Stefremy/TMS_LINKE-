@@ -116,8 +116,8 @@ function harness(t, portal, services = [service], realQuotes = false, configured
     '@/lib/hooks/usePostalCodeLookup': { usePostalCodeLookup: () => ({ lookup: value => value, loading: false, reset(){calls.postalResets++} }) },
     './ClientScope': { useClientScope: () => ({ client: scopedClient, basePath: '/app/fixture-a', isSuspended: false }) },
   })
-  const Component = portal ? load('app/app/components/ClientCreateGuia.tsx').ClientCreateGuia :
-    load('app/ops/envios/novo/NovoEnvioPageClient.tsx').NovoEnvioPageClient
+  const Component = portal ? load('app/app/components/LegacyClientCreateGuia.tsx').LegacyClientCreateGuia :
+    load('app/ops/envios/novo/LegacyNovoEnvioPageClient.tsx').LegacyNovoEnvioPageClient
   const render = () => {
     const nodes = flatten(h.render(() => portal ? Component() : Component({ clients: [scopedClient], servicosLinke: services })))
     for (const node of nodes) {

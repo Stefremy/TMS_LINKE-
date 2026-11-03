@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
 import { captureWeightPricingBasis, type WeightPricingBasis } from "@/lib/billing/carrier-weight-pricing"
-import { calculateShipmentPrice } from "@/lib/pricing/calculate-shipment-price"
+import { calculateShipmentPrice, isCttMultiVolumeService } from "@/lib/pricing/calculate-shipment-price"
 import { calculateChargeableWeight } from "@/lib/pricing/chargeable-weight"
 import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
@@ -89,6 +89,9 @@ export async function createShipment(formData: FormData) {
     })
     service_type = service.name
     carrierCode = resolveServiceCarrier(service)
+    if (carrierCode === "ctt" && volumesCount > 1 && !isCttMultiVolumeService(service)) {
+      throw new ShipmentPricingError("Envios com mais de um volume exigem uma tabela CTT associada ao Webservice EMSF010.01 (CTT Múltiplo).")
+    }
     serviceCode = service.webservice_service_code
     connectionId = service.webservice_connection_id
     pricingWeight = calculateChargeableWeight(weightKg, service, recipientCountry, recipient_zip, { lengthCm, widthCm, heightCm, volumesCount })
@@ -242,6 +245,9 @@ export async function dispatchShipment(shipmentId: string) {
   const subProduct = saved.webservice_service_code || saved.ctt_subproduct_id || saved.weight_pricing_basis?.service?.webservice_service_code
   if (saved.carrier_code === 'correos' || saved.carrier_code === 'correos_express' || !/^(?:EMS|ENC)F\d+\.\d+$/.test(subProduct || '')) {
     throw new Error("Confirme o serviço CTT associado ao rascunho antes de emitir.")
+  }
+  if (volumes > 1 && subProduct?.trim().toUpperCase() !== "EMSF010.01") {
+    throw new Error("Rascunhos com mais de um volume só podem ser emitidos com o serviço CTT Múltiplo (Webservice EMSF010.01).")
   }
   const recipientCountry = saved.recipient_country || saved.weight_pricing_basis?.country || 'PT'
   assertShipmentDestinationAvailable(recipientCountry, saved.recipient_postal || saved.recipient_zip || `${saved.recipient_zip4 || ''}-${saved.recipient_zip3 || ''}`)

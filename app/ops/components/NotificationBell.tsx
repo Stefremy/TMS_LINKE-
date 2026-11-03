@@ -1,242 +1,290 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useRouter } from "next/navigation"
-import { 
-  Bell, 
-  Package, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Layers, 
-  Users, 
-  Zap, 
-  ExternalLink, 
-  Check, 
-  Trash2, 
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import {
+  Bell,
+  CalendarDays,
+  Package,
+  AlertTriangle,
+  CheckCircle2,
+  Layers,
+  Users,
+  ExternalLink,
+  Check,
+  Trash2,
   X,
-  Radio
-} from "lucide-react"
-import { RefreshIcon } from "@/components/ui/refresh-icon"
-import { getOperationalNotificationsAction, OperationalNotification } from "@/app/actions/notifications"
+  Radio,
+} from "lucide-react";
+import { RefreshIcon } from "@/components/ui/refresh-icon";
+import {
+  getOperationalNotificationsAction,
+  OperationalNotification,
+} from "@/app/actions/notifications";
 
-const READ_STORAGE_KEY = "linke_notifications_read_ids_v1"
-const DISMISSED_STORAGE_KEY = "linke_notifications_dismissed_ids_v1"
+const READ_STORAGE_KEY = "linke_notifications_read_ids_v1";
+const DISMISSED_STORAGE_KEY = "linke_notifications_dismissed_ids_v1";
 
 function formatTimeAgo(dateString: string): string {
   try {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000)
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-    if (diffSec < 60) return "Agora mesmo"
-    if (diffSec < 3600) return `há ${Math.floor(diffSec / 60)} min`
-    if (diffSec < 86400) return `há ${Math.floor(diffSec / 3600)} h`
-    if (diffSec < 172800) return "Ontem"
-    return `há ${Math.floor(diffSec / 86400)} dias`
+    if (diffSec < 60) return "Agora mesmo";
+    if (diffSec < 3600) return `há ${Math.floor(diffSec / 60)} min`;
+    if (diffSec < 86400) return `há ${Math.floor(diffSec / 3600)} h`;
+    if (diffSec < 172800) return "Ontem";
+    return `há ${Math.floor(diffSec / 86400)} dias`;
   } catch {
-    return "Recentemente"
+    return "Recentemente";
   }
 }
 
 export function NotificationBell() {
-  const router = useRouter()
-  const [isOpen, setIsOpen] = React.useState(false)
-  const [loading, setLoading] = React.useState(true)
-  const [refreshing, setRefreshing] = React.useState(false)
-  const [notifications, setNotifications] = React.useState<OperationalNotification[]>([])
-  const [readIds, setReadIds] = React.useState<string[]>([])
-  const [dismissedIds, setDismissedIds] = React.useState<string[]>([])
-  const [filter, setFilter] = React.useState<"all" | "unread" | "alerts">("all")
+  const router = useRouter();
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [notifications, setNotifications] = React.useState<
+    OperationalNotification[]
+  >([]);
+  const [readIds, setReadIds] = React.useState<string[]>([]);
+  const [dismissedIds, setDismissedIds] = React.useState<string[]>([]);
+  const [filter, setFilter] = React.useState<"all" | "unread" | "alerts">(
+    "all",
+  );
 
-  const dropdownRef = React.useRef<HTMLDivElement>(null)
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
 
-  // Initialize read & dismissed IDs from localStorage
+  // Initialize persisted IDs after hydration.
   React.useEffect(() => {
-    try {
-      const storedRead = localStorage.getItem(READ_STORAGE_KEY)
-      if (storedRead) setReadIds(JSON.parse(storedRead))
-      const storedDismissed = localStorage.getItem(DISMISSED_STORAGE_KEY)
-      if (storedDismissed) setDismissedIds(JSON.parse(storedDismissed))
-    } catch {}
-  }, [])
+    const timer = window.setTimeout(() => {
+      try {
+        const storedRead = localStorage.getItem(READ_STORAGE_KEY);
+        if (storedRead) setReadIds(JSON.parse(storedRead));
+        const storedDismissed = localStorage.getItem(DISMISSED_STORAGE_KEY);
+        if (storedDismissed) setDismissedIds(JSON.parse(storedDismissed));
+      } catch {}
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Fetch notifications
   const fetchNotifications = React.useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true)
+    if (isManual) setRefreshing(true);
     try {
-      const list = await getOperationalNotificationsAction()
-      setNotifications(list)
+      const list = await getOperationalNotificationsAction();
+      setNotifications(list);
     } catch (err) {
-      console.error("Error loading notifications:", err)
+      console.error("Error loading notifications:", err);
     } finally {
-      setLoading(false)
+      setLoading(false);
       if (isManual) {
-        setTimeout(() => setRefreshing(false), 400)
+        setTimeout(() => setRefreshing(false), 400);
       }
     }
-  }, [])
+  }, []);
 
   React.useEffect(() => {
     // Defer the first (heavy) load so it doesn't compete with page navigation
-    const initial = setTimeout(() => fetchNotifications(), 4000)
+    const refreshCalendar = () => {
+      void fetchNotifications();
+    };
+    window.addEventListener("linke-calendar-events-changed", refreshCalendar);
+    const initial = setTimeout(() => fetchNotifications(), 4000);
     // Poll every 5 minutes, only while the tab is visible
     const interval = setInterval(() => {
-      if (document.visibilityState === "visible") fetchNotifications()
-    }, 300000)
+      if (document.visibilityState === "visible") fetchNotifications();
+    }, 300000);
     return () => {
-      clearTimeout(initial)
-      clearInterval(interval)
-    }
-  }, [fetchNotifications])
+      window.removeEventListener(
+        "linke-calendar-events-changed",
+        refreshCalendar,
+      );
+      clearTimeout(initial);
+      clearInterval(interval);
+    };
+  }, [fetchNotifications]);
 
   // Close dropdown on click outside
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
       }
     }
     if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside)
+      document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [isOpen])
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
 
   // Filter visible items
   const visibleNotifications = React.useMemo(() => {
     return notifications
       .filter((n) => !dismissedIds.includes(n.id))
       .filter((n) => {
-        const isRead = readIds.includes(n.id)
-        if (filter === "unread") return !isRead
-        if (filter === "alerts") return n.priority === "high" || n.type === "warning" || n.type === "batch"
-        return true
-      })
-  }, [notifications, dismissedIds, readIds, filter])
+        const isRead = readIds.includes(n.id);
+        if (filter === "unread") return !isRead;
+        if (filter === "alerts")
+          return (
+            n.priority === "high" || n.type === "warning" || n.type === "batch"
+          );
+        return true;
+      });
+  }, [notifications, dismissedIds, readIds, filter]);
 
   const unreadCount = React.useMemo(() => {
-    return notifications.filter((n) => !dismissedIds.includes(n.id) && !readIds.includes(n.id)).length
-  }, [notifications, dismissedIds, readIds])
+    return notifications.filter(
+      (n) => !dismissedIds.includes(n.id) && !readIds.includes(n.id),
+    ).length;
+  }, [notifications, dismissedIds, readIds]);
 
-  const prevNotificationsRef = React.useRef<OperationalNotification[]>([])
+  const prevNotificationsRef = React.useRef<OperationalNotification[]>([]);
 
   React.useEffect(() => {
     // Verifica se existem novas notificações de envio
     if (prevNotificationsRef.current.length > 0) {
       const newShipments = notifications.filter(
-        n => n.type === "shipment" && !prevNotificationsRef.current.find(prev => prev.id === n.id)
-      )
+        (n) =>
+          n.type === "shipment" &&
+          !prevNotificationsRef.current.find((prev) => prev.id === n.id),
+      );
       if (newShipments.length > 0) {
         try {
           // Play a nice double ding for new shipments
-          const AudioContext = window.AudioContext || (window as any).webkitAudioContext
-          const ctx = new AudioContext()
-          
+          const AudioContextConstructor =
+            window.AudioContext ||
+            (
+              window as Window & {
+                webkitAudioContext?: typeof window.AudioContext;
+              }
+            ).webkitAudioContext;
+          if (!AudioContextConstructor) throw new Error("Áudio indisponível");
+          const ctx = new AudioContextConstructor();
+
           const playDing = (delay: number, freq: number) => {
-            const osc = ctx.createOscillator()
-            const gain = ctx.createGain()
-            osc.connect(gain)
-            gain.connect(ctx.destination)
-            osc.type = "sine"
-            osc.frequency.setValueAtTime(freq, ctx.currentTime + delay)
-            gain.gain.setValueAtTime(0, ctx.currentTime + delay)
-            gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + delay + 0.05)
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.5)
-            osc.start(ctx.currentTime + delay)
-            osc.stop(ctx.currentTime + delay + 0.5)
-          }
-          
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+            gain.gain.setValueAtTime(0, ctx.currentTime + delay);
+            gain.gain.linearRampToValueAtTime(
+              0.1,
+              ctx.currentTime + delay + 0.05,
+            );
+            gain.gain.exponentialRampToValueAtTime(
+              0.001,
+              ctx.currentTime + delay + 0.5,
+            );
+            osc.start(ctx.currentTime + delay);
+            osc.stop(ctx.currentTime + delay + 0.5);
+          };
+
           // E6 (1318.51 Hz) -> G#6 (1661.22 Hz) - a nice modern notification chime
-          playDing(0, 1318.51)
-          playDing(0.12, 1661.22)
+          playDing(0, 1318.51);
+          playDing(0.12, 1661.22);
         } catch (e) {
-          console.warn("Could not play notification sound:", e)
+          console.warn("Could not play notification sound:", e);
         }
       }
     }
-    prevNotificationsRef.current = notifications
-  }, [notifications])
+    prevNotificationsRef.current = notifications;
+  }, [notifications]);
 
   const markAsRead = (id: string) => {
     setReadIds((prev) => {
-      if (prev.includes(id)) return prev
-      const updated = [...prev, id]
+      if (prev.includes(id)) return prev;
+      const updated = [...prev, id];
       try {
-        localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(updated))
+        localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(updated));
       } catch {}
-      return updated
-    })
-  }
+      return updated;
+    });
+  };
 
   const markAllAsRead = () => {
-    const allIds = notifications.map((n) => n.id)
-    setReadIds(allIds)
+    const allIds = notifications.map((n) => n.id);
+    setReadIds(allIds);
     try {
-      localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(allIds))
+      localStorage.setItem(READ_STORAGE_KEY, JSON.stringify(allIds));
     } catch {}
-  }
+  };
 
   const dismissNotification = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
+    e.stopPropagation();
     setDismissedIds((prev) => {
-      const updated = [...prev, id]
+      const updated = [...prev, id];
       try {
-        localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(updated))
+        localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(updated));
       } catch {}
-      return updated
-    })
-  }
+      return updated;
+    });
+  };
 
   const handleNotificationClick = (item: OperationalNotification) => {
-    markAsRead(item.id)
-    setIsOpen(false)
+    markAsRead(item.id);
+    setIsOpen(false);
     if (item.link) {
-      router.push(item.link)
+      router.push(item.link);
     }
-  }
+  };
 
-  const getNotificationIcon = (type: OperationalNotification["type"], priority: OperationalNotification["priority"]) => {
+  const getNotificationIcon = (type: OperationalNotification["type"]) => {
     switch (type) {
+      case "calendar":
+        return <CalendarDays className="w-4 h-4 text-violet-600" />;
       case "batch":
-        return <Layers className="w-4 h-4 text-amber-600" />
+        return <Layers className="w-4 h-4 text-amber-600" />;
       case "shipment":
-        return <Package className="w-4 h-4 text-emerald-600" />
+        return <Package className="w-4 h-4 text-emerald-600" />;
       case "client":
-        return <Users className="w-4 h-4 text-blue-600" />
+        return <Users className="w-4 h-4 text-blue-600" />;
       case "warning":
-        return <AlertTriangle className="w-4 h-4 text-rose-600" />
+        return <AlertTriangle className="w-4 h-4 text-rose-600" />;
       case "success":
-        return <CheckCircle2 className="w-4 h-4 text-teal-600" />
+        return <CheckCircle2 className="w-4 h-4 text-teal-600" />;
       default:
-        return <Radio className="w-4 h-4 text-emerald-600" />
+        return <Radio className="w-4 h-4 text-emerald-600" />;
     }
-  }
+  };
 
   const getIconBg = (type: OperationalNotification["type"]) => {
     switch (type) {
+      case "calendar":
+        return "bg-violet-100/70 border-violet-200";
       case "batch":
-        return "bg-amber-100/70 border-amber-200"
+        return "bg-amber-100/70 border-amber-200";
       case "shipment":
-        return "bg-emerald-100/70 border-emerald-200"
+        return "bg-emerald-100/70 border-emerald-200";
       case "client":
-        return "bg-blue-100/70 border-blue-200"
+        return "bg-blue-100/70 border-blue-200";
       case "warning":
-        return "bg-rose-100/70 border-rose-200"
+        return "bg-rose-100/70 border-rose-200";
       case "success":
-        return "bg-teal-100/70 border-teal-200"
+        return "bg-teal-100/70 border-teal-200";
       default:
-        return "bg-slate-100 border-slate-200"
+        return "bg-slate-100 border-slate-200";
     }
-  }
+  };
 
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Bell Button */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          setIsOpen(!isOpen);
+          if (!isOpen) void fetchNotifications();
+        }}
         aria-label="Abrir notificações operacionais"
         className={`relative p-2.5 rounded-xl transition-all cursor-pointer ${
           isOpen
@@ -255,7 +303,6 @@ export function NotificationBell() {
       {/* Notifications Popover Menu */}
       {isOpen && (
         <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col font-sans">
-          
           {/* Header */}
           <div className="p-4 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -271,7 +318,9 @@ export function NotificationBell() {
                     </span>
                   )}
                 </h3>
-                <p className="text-[10px] text-slate-400">Eventos em tempo real da rede Linke & CTT</p>
+                <p className="text-[10px] text-slate-400">
+                  Eventos em tempo real da rede Linke & CTT
+                </p>
               </div>
             </div>
 
@@ -282,7 +331,9 @@ export function NotificationBell() {
                 title="Atualizar"
                 className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 rounded-lg transition-colors cursor-pointer"
               >
-                <RefreshIcon className={`w-4 h-4 ${refreshing ? "animate-spin text-emerald-600" : ""}`} />
+                <RefreshIcon
+                  className={`w-4 h-4 ${refreshing ? "animate-spin text-emerald-600" : ""}`}
+                />
               </button>
               <button
                 type="button"
@@ -301,7 +352,9 @@ export function NotificationBell() {
                 type="button"
                 onClick={() => setFilter("all")}
                 className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
-                  filter === "all" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"
+                  filter === "all"
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-500 hover:bg-slate-100"
                 }`}
               >
                 Todas
@@ -310,7 +363,9 @@ export function NotificationBell() {
                 type="button"
                 onClick={() => setFilter("unread")}
                 className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
-                  filter === "unread" ? "bg-emerald-600 text-white" : "text-slate-500 hover:bg-slate-100"
+                  filter === "unread"
+                    ? "bg-emerald-600 text-white"
+                    : "text-slate-500 hover:bg-slate-100"
                 }`}
               >
                 Não Lidas ({unreadCount})
@@ -319,7 +374,9 @@ export function NotificationBell() {
                 type="button"
                 onClick={() => setFilter("alerts")}
                 className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
-                  filter === "alerts" ? "bg-amber-600 text-white" : "text-slate-500 hover:bg-slate-100"
+                  filter === "alerts"
+                    ? "bg-amber-600 text-white"
+                    : "text-slate-500 hover:bg-slate-100"
                 }`}
               >
                 Alertas
@@ -348,30 +405,40 @@ export function NotificationBell() {
             ) : visibleNotifications.length === 0 ? (
               <div className="p-8 text-center text-slate-400">
                 <CheckCircle2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-xs font-bold text-slate-600">Sem notificações pendentes</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">Tudo em dia com a sua operação logística.</p>
+                <p className="text-xs font-bold text-slate-600">
+                  Sem notificações pendentes
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Tudo em dia com a sua operação logística.
+                </p>
               </div>
             ) : (
               visibleNotifications.map((item) => {
-                const isRead = readIds.includes(item.id)
+                const isRead = readIds.includes(item.id);
 
                 return (
                   <div
                     key={item.id}
                     onClick={() => handleNotificationClick(item)}
                     className={`p-3.5 transition-all flex items-start gap-3 cursor-pointer group ${
-                      isRead ? "bg-white hover:bg-slate-50 opacity-80" : "bg-emerald-50/25 hover:bg-emerald-50/50"
+                      isRead
+                        ? "bg-white hover:bg-slate-50 opacity-80"
+                        : "bg-emerald-50/25 hover:bg-emerald-50/50"
                     }`}
                   >
                     {/* Icon */}
-                    <div className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 shadow-2xs ${getIconBg(item.type)}`}>
-                      {getNotificationIcon(item.type, item.priority)}
+                    <div
+                      className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 shadow-2xs ${getIconBg(item.type)}`}
+                    >
+                      {getNotificationIcon(item.type)}
                     </div>
 
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline justify-between gap-1 mb-0.5">
-                        <span className={`text-xs truncate ${isRead ? "font-semibold text-slate-700" : "font-bold text-slate-900"}`}>
+                        <span
+                          className={`text-xs truncate ${isRead ? "font-semibold text-slate-700" : "font-bold text-slate-900"}`}
+                        >
                           {item.title}
                         </span>
                         <span className="text-[10px] text-slate-400 shrink-0 font-medium">
@@ -397,8 +464,8 @@ export function NotificationBell() {
                             <button
                               type="button"
                               onClick={(e) => {
-                                e.stopPropagation()
-                                markAsRead(item.id)
+                                e.stopPropagation();
+                                markAsRead(item.id);
                               }}
                               title="Marcar como lida"
                               className="text-[10px] text-slate-400 hover:text-emerald-700 transition-colors p-1"
@@ -423,19 +490,21 @@ export function NotificationBell() {
                       <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1.5 shadow-2xs" />
                     )}
                   </div>
-                )
+                );
               })
             )}
           </div>
 
           {/* Footer */}
           <div className="p-2.5 border-t border-slate-100 bg-slate-50 text-center flex items-center justify-between text-xs">
-            <span className="text-[10px] text-slate-400 font-medium">TMS Linke v1.0</span>
+            <span className="text-[10px] text-slate-400 font-medium">
+              TMS Linke v1.0
+            </span>
             <button
               type="button"
               onClick={() => {
-                setIsOpen(false)
-                router.push("/ops/envios")
+                setIsOpen(false);
+                router.push("/ops/envios");
               }}
               className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 transition-colors flex items-center gap-1 cursor-pointer"
             >
@@ -443,9 +512,8 @@ export function NotificationBell() {
               <ExternalLink className="w-3 h-3" />
             </button>
           </div>
-
         </div>
       )}
     </div>
-  )
+  );
 }
