@@ -788,15 +788,27 @@ export function MailboxClient({
 
       {/* 3-Pane Split View Mail Container */}
       <div
-        className={`grid h-[calc(100dvh-146px)] min-h-[480px] max-h-[1040px] grid-cols-1 grid-rows-[minmax(0,1fr)] overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] shadow-xs ${
+        className={`grid h-[calc(100dvh-146px)] min-h-[480px] max-h-[1040px] grid-cols-1 grid-rows-[minmax(0,1fr)] overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] shadow-xs transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           isLeftPaneCollapsed
-            ? "lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[390px_minmax(0,1fr)]"
+            ? "lg:grid-cols-[0px_360px_minmax(0,1fr)] xl:grid-cols-[0px_390px_minmax(0,1fr)]"
             : "lg:grid-cols-[232px_350px_minmax(0,1fr)] xl:grid-cols-[246px_380px_minmax(0,1fr)]"
         }`}
       >
         {/* ─── LEFT PANE: Account Switcher, Compose, Folders & Labels ─── */}
-        {!isLeftPaneCollapsed && (
-          <aside className="hidden min-h-0 flex-col overflow-hidden border-r border-[var(--border-subtle)] bg-[var(--surface-muted)]/45 lg:flex">
+        <aside
+          aria-hidden={isLeftPaneCollapsed}
+          inert={isLeftPaneCollapsed ? true : undefined}
+          className={`hidden min-h-0 flex-col overflow-hidden bg-[var(--surface-muted)]/45 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
+            isLeftPaneCollapsed
+              ? "border-r-0 opacity-0 pointer-events-none"
+              : "border-r border-[var(--border-subtle)] opacity-100"
+          }`}
+        >
+          <div
+            className={`flex h-full min-h-0 w-[232px] xl:w-[246px] flex-col transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              isLeftPaneCollapsed ? "-translate-x-4" : "translate-x-0"
+            }`}
+          >
             {/* Account Switcher */}
             <div className="shrink-0 border-b border-[var(--border-subtle)] p-2.5">
               <div className="flex items-center gap-1.5">
@@ -981,8 +993,8 @@ export function MailboxClient({
                 </div>
               </div>
             </div>
-          </aside>
-        )}
+          </div>
+        </aside>
 
         {/* ─── MIDDLE PANE: Thread List, Tabs & Search ─── */}
         <section
