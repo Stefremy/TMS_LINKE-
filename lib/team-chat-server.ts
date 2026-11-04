@@ -214,7 +214,13 @@ export async function readTeamChatInbox(context: AuthContext): Promise<ChatInbox
       body = parsed.cleanBody
     }
     if (items.has(key)) continue
-    const preview = /^\[gif:https?:\/\//i.test(body) ? "GIF" : body.slice(0, 300)
+    const preview = /^\[gif:https?:\/\//i.test(body)
+      ? "GIF"
+      : /^\[call:video:/i.test(body)
+        ? "Videochamada"
+        : /^\[call:audio:/i.test(body)
+          ? "Chamada de voz"
+          : body.slice(0, 300)
     items.set(key, { key, kind, title, subtitle, avatar_url, preview, sender_name: row.sender_name, created_at: row.created_at, sequence: row.sequence })
   }
   for (const channel of channels) {

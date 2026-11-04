@@ -1,10 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ChevronDown, Film, Hash, LockKeyhole, MessageSquare, Pin, Plus, Search, Send, Smile, Star, Users, X } from "lucide-react"
+import { ChevronDown, Film, Hash, LockKeyhole, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorUp, Phone, PhoneCall, PhoneOff, Pin, Plus, Search, Send, Smile, Star, Users, Video, VideoOff, X } from "lucide-react"
 import { RefreshIcon } from "@/components/ui/refresh-icon"
+import { createClient } from "@/lib/supabase/client"
 import { CHAT_MAX_LENGTH, DEFAULT_CHANNELS, mergeChatMessages, type ChatChannel, type ChatInboxItem, type ChatPage } from "@/lib/team-chat"
-import { CURATED_GIFS, EMOJI_CATEGORIES, isOnlyEmojis, parseGifMessage, type GifItem } from "@/lib/team-chat-media"
+import { buildCallRoomId, CURATED_GIFS, EMOJI_CATEGORIES, formatCallMessage, isOnlyEmojis, parseCallMessage, parseGifMessage, type CallMode, type GifItem } from "@/lib/team-chat-media"
 import styles from "./TeamChat.module.css"
 
 function Avatar({ name, url }: { name: string; url: string | null }) {
@@ -25,6 +26,26 @@ const inboxDate = (value: string | null) => {
 }
 type InboxFilter = "all" | "unread" | "groups" | "favourites" | "pinned"
 type InboxPreferences = { favourites: string[]; pinned: string[]; read: Record<string, number> }
+type ActiveCallState = {
+  roomId: string
+  mode: CallMode
+  title: string
+  startedAt: number
+  minimized: boolean
+  micMuted: boolean
+  cameraEnabled: boolean
+  screenSharing: boolean
+  mediaNotice: string | null
+  remoteConnected: boolean
+  remotePeerName: string | null
+  remoteHasVideo: boolean
+}
+
+function formatCallDuration(seconds: number): string {
+  const mins = Math.floor(Math.max(0, seconds) / 60)
+  const secs = Math.floor(Math.max(0, seconds) % 60)
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
+}
 
 export function TeamChatClient({ initial, initialError, initialInbox }: { initial: ChatPage; initialError: string | null; initialInbox: ChatInboxItem[] }) {
   const [recipient, setRecipient] = useState<string | null>(null)
@@ -62,10 +83,23 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
   const [gifCategory, setGifCategory] = useState<string>("Tudo")
   const [gifSearch, setGifSearch] = useState("")
 
+  // Chamada de Voz e Vídeo (WebRTC + MediaDevices)
+  const [activeCall, setActiveCall] = useState<ActiveCallState | null>(null)
+  const [callElapsedSec, setCallElapsedSec] = useState(0)
+
   const scroll = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const emojiPopoverRef = useRef<HTMLDivElement>(null)
   const gifPopoverRef = useRef<HTMLDivElement>(null)
+  const localVideoRef = useRef<HTMLVideoElement>(null)
+  const remoteVideoRef = useRef<HTMLVideoElement>(null)
+  const remoteAudioRef = useRef<HTMLAudioElement>(null)
+  const localStreamRef = useRef<MediaStream | null>(null)
+  const screenStreamRef = useRef<MediaStream | null>(null)
+  const remoteStreamRef = useRef<MediaStream | null>(null)
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
+  const callSignalCleanupRef = useRef<(() => void) | null>(null)
+  const callInstanceIdRef = useRef<string>("")
   const latest = useRef(initial.messages.at(-1)?.sequence || 0)
   const initialized = useRef(!initialError)
   const firstEffect = useRef(true)
@@ -123,10 +157,11 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
     const timer = window.setTimeout(() => {
       setPreferences(previous => ({ ...previous, read: { ...previous.read, [activeKey]: Math.max(previous.read[activeKey] || 0, last.sequence) } }))
       const gif = parseGifMessage(last.body).isGif
+      const callInfo = parseCallMessage(last.body)
       setInbox(previous => {
         const existing = previous.find(item => item.key === activeKey)
         if (!existing) return previous
-        const preview = gif ? "GIF" : last.body.slice(0, 300)
+        const preview = gif ? "GIF" : callInfo.isCall ? (callInfo.mode === "video" ? "Videochamada" : "Chamada de voz") : last.body.slice(0, 300)
         return [{ ...existing, preview, sender_name: last.sender_name, created_at: last.created_at, sequence: last.sequence }, ...previous.filter(item => item.key !== activeKey)]
       })
     }, 0)
@@ -362,6 +397,378 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
     }
   }
 
+  const cleanupCallResources = useCallback(() => {
+    try {
+      callSignalCleanupRef.current?.()
+    } catch { /* ignore */ }
+    callSignalCleanupRef.current = null
+    if (peerConnectionRef.current) {
+      try { peerConnectionRef.current.close() } catch { /* ignore */ }
+      peerConnectionRef.current = null
+    }
+    if (localStreamRef.current) {
+      for (const track of localStreamRef.current.getTracks()) track.stop()
+      localStreamRef.current = null
+    }
+    if (screenStreamRef.current) {
+      for (const track of screenStreamRef.current.getTracks()) track.stop()
+      screenStreamRef.current = null
+    }
+    remoteStreamRef.current = null
+    if (localVideoRef.current) localVideoRef.current.srcObject = null
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      cleanupCallResources()
+    }
+  }, [cleanupCallResources])
+
+  useEffect(() => {
+    if (!activeCall) return
+    const timer = window.setInterval(() => {
+      setCallElapsedSec(Math.floor((Date.now() - activeCall.startedAt) / 1000))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [activeCall])
+
+  useEffect(() => {
+    if (!activeCall || activeCall.minimized) return
+    const activeVideoStream = activeCall.screenSharing && screenStreamRef.current ? screenStreamRef.current : localStreamRef.current
+    if (localVideoRef.current && activeVideoStream) {
+      localVideoRef.current.srcObject = activeVideoStream
+    }
+    if (remoteVideoRef.current && remoteStreamRef.current) {
+      remoteVideoRef.current.srcObject = remoteStreamRef.current
+    }
+    if (remoteAudioRef.current && remoteStreamRef.current) {
+      remoteAudioRef.current.srcObject = remoteStreamRef.current
+    }
+  }, [activeCall])
+
+  async function postCallInviteMessage(mode: CallMode, roomId: string, title: string) {
+    if (!ready || blocked) return
+    const callBody = formatCallMessage(mode, roomId, title)
+    const clientMessageId = crypto.randomUUID()
+    try {
+      const response = await fetch("/api/ops/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(20000),
+        body: JSON.stringify({
+          viewerId: initial.viewerId,
+          recipient,
+          channel: recipient ? null : (activeChannel || "geral"),
+          body: callBody,
+          clientMessageId,
+        }),
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data?.message) {
+          stickBottom.current = true
+          setMessages(previous => mergeChatMessages(previous, [data.message]))
+        }
+      }
+    } catch { /* Non-blocking: call session still starts even if chat message fails */ }
+  }
+
+  async function startOrJoinCall(mode: CallMode, customRoomId?: string, customTitle?: string, announce = false) {
+    const targetTitle = customTitle || (recipient ? (peer?.name || "Conversa privada") : `#${currentChannel.name}`)
+    const roomId = customRoomId || buildCallRoomId(initial.viewerId, recipient, activeChannel || "geral")
+
+    if (activeCall && activeCall.roomId === roomId) {
+      if (mode === "video" && !activeCall.cameraEnabled) {
+        await toggleCallCamera()
+      }
+      setActiveCall(prev => prev ? { ...prev, minimized: false } : null)
+      return
+    }
+
+    cleanupCallResources()
+    const instanceId = `${initial.viewerId}-${Math.random().toString(36).slice(2, 8)}`
+    callInstanceIdRef.current = instanceId
+
+    setCallElapsedSec(0)
+    setActiveCall({
+      roomId,
+      mode,
+      title: targetTitle,
+      startedAt: Date.now(),
+      minimized: false,
+      micMuted: false,
+      cameraEnabled: mode === "video",
+      screenSharing: false,
+      mediaNotice: null,
+      remoteConnected: false,
+      remotePeerName: recipient ? (peer?.name || "Colega") : null,
+      remoteHasVideo: false,
+    })
+
+    if (announce) {
+      void postCallInviteMessage(mode, roomId, targetTitle)
+    }
+
+    let stream: MediaStream | null = null
+    let cameraOk = mode === "video"
+    let notice: string | null = null
+
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: mode === "video" ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+        })
+      } catch {
+        if (mode === "video") {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+            cameraOk = false
+            notice = "Câmara indisponível — ligado apenas com áudio."
+          } catch {
+            cameraOk = false
+            notice = "Sem acesso ao microfone/câmara no navegador. A chamada está ativa em modo de escuta."
+          }
+        } else {
+          notice = "Sem acesso ao microfone no navegador. A chamada está ativa em modo de escuta."
+        }
+      }
+    } else {
+      cameraOk = false
+      notice = "Dispositivos de áudio/vídeo não suportados neste contexto."
+    }
+
+    if (callInstanceIdRef.current !== instanceId) {
+      if (stream) for (const t of stream.getTracks()) t.stop()
+      return
+    }
+
+    localStreamRef.current = stream
+    if (localVideoRef.current && stream) {
+      localVideoRef.current.srcObject = stream
+    }
+    setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, cameraEnabled: cameraOk, mediaNotice: notice } : prev)
+
+    if (typeof window === "undefined" || typeof RTCPeerConnection === "undefined") return
+
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    })
+    peerConnectionRef.current = pc
+
+    if (stream) {
+      for (const track of stream.getTracks()) {
+        pc.addTrack(track, stream)
+      }
+    }
+
+    const remoteStream = new MediaStream()
+    remoteStreamRef.current = remoteStream
+
+    pc.ontrack = event => {
+      const tracks = event.streams?.[0]?.getTracks() || [event.track]
+      for (const t of tracks) {
+        if (!remoteStream.getTracks().some(existing => existing.id === t.id)) {
+          remoteStream.addTrack(t)
+        }
+      }
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream
+      if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream
+      const hasVid = remoteStream.getVideoTracks().some(t => t.enabled && t.readyState === "live")
+      setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteConnected: true, remoteHasVideo: hasVid } : prev)
+    }
+
+    type SignalPayload = {
+      senderInstance: string
+      senderName: string
+      type: "join" | "offer" | "answer" | "ice" | "leave" | "video-toggle"
+      sdp?: RTCSessionDescriptionInit
+      candidate?: RTCIceCandidateInit
+      hasVideo?: boolean
+    }
+
+    let bc: BroadcastChannel | null = null
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        bc = new BroadcastChannel(`linke-call:${roomId}`)
+      }
+    } catch { /* ignore */ }
+
+    let supaChannel: ReturnType<ReturnType<typeof createClient>["channel"]> | null = null
+    try {
+      const sb = createClient()
+      supaChannel = sb.channel(`linke-call:${roomId}`, { config: { broadcast: { self: false } } })
+    } catch { /* ignore */ }
+
+    const sendSignal = (payload: Omit<SignalPayload, "senderInstance" | "senderName">) => {
+      const full: SignalPayload = {
+        ...payload,
+        senderInstance: instanceId,
+        senderName: me?.name || "Colega",
+      }
+      try { bc?.postMessage(full) } catch { /* ignore */ }
+      try {
+        void supaChannel?.send({ type: "broadcast", event: "signal", payload: full })
+      } catch { /* ignore */ }
+    }
+
+    pc.onicecandidate = event => {
+      if (event.candidate) {
+        sendSignal({ type: "ice", candidate: event.candidate.toJSON() })
+      }
+    }
+
+    const handleSignal = async (msg: SignalPayload) => {
+      if (!msg || msg.senderInstance === instanceId || peerConnectionRef.current !== pc) return
+      try {
+        if (msg.type === "join") {
+          setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteConnected: true, remotePeerName: msg.senderName, remoteHasVideo: Boolean(msg.hasVideo) } : prev)
+          const offer = await pc.createOffer()
+          await pc.setLocalDescription(offer)
+          sendSignal({ type: "offer", sdp: pc.localDescription || offer, hasVideo: cameraOk })
+        } else if (msg.type === "offer" && msg.sdp) {
+          setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteConnected: true, remotePeerName: msg.senderName, remoteHasVideo: Boolean(msg.hasVideo) } : prev)
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+          const answer = await pc.createAnswer()
+          await pc.setLocalDescription(answer)
+          sendSignal({ type: "answer", sdp: pc.localDescription || answer, hasVideo: cameraOk })
+        } else if (msg.type === "answer" && msg.sdp) {
+          setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteConnected: true, remotePeerName: msg.senderName, remoteHasVideo: Boolean(msg.hasVideo) } : prev)
+          if (pc.signalingState === "have-local-offer") {
+            await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+          }
+        } else if (msg.type === "ice" && msg.candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))
+        } else if (msg.type === "video-toggle") {
+          setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteHasVideo: Boolean(msg.hasVideo) } : prev)
+        } else if (msg.type === "leave") {
+          setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteConnected: false, remoteHasVideo: false } : prev)
+        }
+      } catch { /* keep call active on transient WebRTC state race */ }
+    }
+
+    if (bc) {
+      bc.onmessage = event => { void handleSignal(event.data as SignalPayload) }
+    }
+    if (supaChannel) {
+      supaChannel.on("broadcast", { event: "signal" }, ({ payload }) => {
+        void handleSignal(payload as SignalPayload)
+      }).subscribe(status => {
+        if (status === "SUBSCRIBED") {
+          sendSignal({ type: "join", hasVideo: cameraOk })
+        }
+      })
+    } else {
+      sendSignal({ type: "join", hasVideo: cameraOk })
+    }
+
+    callSignalCleanupRef.current = () => {
+      sendSignal({ type: "leave" })
+      try { bc?.close() } catch { /* ignore */ }
+      try { void supaChannel?.unsubscribe() } catch { /* ignore */ }
+    }
+  }
+
+  function toggleCallMic() {
+    if (!activeCall) return
+    const nextMuted = !activeCall.micMuted
+    if (localStreamRef.current) {
+      for (const track of localStreamRef.current.getAudioTracks()) {
+        track.enabled = !nextMuted
+      }
+    }
+    setActiveCall(prev => prev ? { ...prev, micMuted: nextMuted } : null)
+  }
+
+  async function toggleCallCamera() {
+    if (!activeCall) return
+    const stream = localStreamRef.current
+    const existingVideoTracks = stream?.getVideoTracks() || []
+    if (existingVideoTracks.length > 0) {
+      const nextEnabled = !activeCall.cameraEnabled
+      for (const track of existingVideoTracks) {
+        track.enabled = nextEnabled
+      }
+      setActiveCall(prev => prev ? { ...prev, cameraEnabled: nextEnabled, mode: nextEnabled ? "video" : prev.mode } : null)
+      return
+    }
+
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const videoStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } })
+        const videoTrack = videoStream.getVideoTracks()[0]
+        if (videoTrack) {
+          if (stream) {
+            stream.addTrack(videoTrack)
+          } else {
+            localStreamRef.current = videoStream
+          }
+          if (peerConnectionRef.current && localStreamRef.current) {
+            peerConnectionRef.current.addTrack(videoTrack, localStreamRef.current)
+          }
+          if (localVideoRef.current && localStreamRef.current) {
+            localVideoRef.current.srcObject = localStreamRef.current
+          }
+          setActiveCall(prev => prev ? { ...prev, cameraEnabled: true, mode: "video", mediaNotice: null } : null)
+        }
+      } catch {
+        setActiveCall(prev => prev ? { ...prev, mediaNotice: "Não foi possível ativar a câmara." } : null)
+      }
+    }
+  }
+
+  async function toggleScreenShare() {
+    if (!activeCall) return
+    if (activeCall.screenSharing) {
+      if (screenStreamRef.current) {
+        for (const track of screenStreamRef.current.getTracks()) track.stop()
+        screenStreamRef.current = null
+      }
+      const camTrack = localStreamRef.current?.getVideoTracks()[0] || null
+      const sender = peerConnectionRef.current?.getSenders().find(s => s.track?.kind === "video")
+      if (sender && camTrack) {
+        void sender.replaceTrack(camTrack)
+      }
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current
+      }
+      setActiveCall(prev => prev ? { ...prev, screenSharing: false } : null)
+      return
+    }
+
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getDisplayMedia) {
+      try {
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true })
+        const screenTrack = displayStream.getVideoTracks()[0]
+        if (!screenTrack) return
+        screenStreamRef.current = displayStream
+        const sender = peerConnectionRef.current?.getSenders().find(s => s.track?.kind === "video")
+        if (sender) {
+          void sender.replaceTrack(screenTrack)
+        } else if (peerConnectionRef.current) {
+          peerConnectionRef.current.addTrack(screenTrack, displayStream)
+        }
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = displayStream
+        }
+        screenTrack.onended = () => {
+          screenStreamRef.current = null
+          if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current
+          setActiveCall(prev => prev ? { ...prev, screenSharing: false } : null)
+        }
+        setActiveCall(prev => prev ? { ...prev, screenSharing: true, mode: "video" } : null)
+      } catch { /* User cancelled screen share picker */ }
+    }
+  }
+
+  function endCall() {
+    cleanupCallResources()
+    setActiveCall(null)
+    setCallElapsedSec(0)
+  }
+
   const filteredEmojis = emojiSearch.trim()
     ? EMOJI_CATEGORIES.flatMap(cat => cat.emojis).filter(e =>
         e.keywords.toLowerCase().includes(emojiSearch.trim().toLowerCase()) || e.char.includes(emojiSearch.trim())
@@ -516,9 +923,178 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
               <p>{recipient ? "Visível apenas aos dois participantes" : currentChannel.description || "Canal público para a equipa"}</p>
             </div>
           </div>
-          <div className={styles.threadActions}><span className={styles.privacyBadge}>{recipient ? <LockKeyhole size={12} /> : <Users size={12} />}{recipient ? "Privada" : "Canal da equipa"}</span>
-          <button type="button" className={styles.refresh} aria-label="Atualizar conversa" onClick={() => setRetry(value => value + 1)}><RefreshIcon size={17} /></button></div>
+          <div className={styles.threadActions}>
+            {activeCall && (
+              <span className={styles.activeCallPill} role="status">
+                <span className={styles.liveDot} aria-hidden="true" />
+                {activeCall.mode === "video" ? "Vídeo" : "Voz"} · {formatCallDuration(callElapsedSec)}
+              </span>
+            )}
+            <button
+              type="button"
+              className={`${styles.callBtn} ${activeCall && activeCall.mode === "audio" ? styles.callBtnActive : ""}`}
+              aria-label="Iniciar chamada de voz"
+              title="Iniciar chamada de voz"
+              disabled={!ready || blocked}
+              onClick={() => void startOrJoinCall("audio", undefined, undefined, true)}
+            >
+              <Phone size={15} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={`${styles.callBtn} ${activeCall && activeCall.mode === "video" ? styles.callBtnActive : ""}`}
+              aria-label="Iniciar videochamada"
+              title="Iniciar videochamada"
+              disabled={!ready || blocked}
+              onClick={() => void startOrJoinCall("video", undefined, undefined, true)}
+            >
+              <Video size={16} aria-hidden="true" />
+            </button>
+            <span className={styles.privacyBadge}>{recipient ? <LockKeyhole size={12} /> : <Users size={12} />}{recipient ? "Privada" : "Canal da equipa"}</span>
+            <button type="button" className={styles.refresh} aria-label="Atualizar conversa" onClick={() => setRetry(value => value + 1)}><RefreshIcon size={17} /></button>
+          </div>
         </div>
+
+        {activeCall && (
+          <div className={`${styles.callStage} ${activeCall.minimized ? styles.callStageMinimized : ""}`} role="region" aria-label={`Chamada em curso: ${activeCall.title}`}>
+            <audio ref={remoteAudioRef} autoPlay playsInline hidden />
+            <div className={styles.callStageHeader}>
+              <div className={styles.callStageTitle}>
+                <span className={styles.liveDot} aria-hidden="true" />
+                <strong>{activeCall.mode === "video" ? "Videochamada" : "Chamada de voz"} · {activeCall.title}</strong>
+                <span>{formatCallDuration(callElapsedSec)} · {activeCall.remoteConnected ? `Ligado com ${activeCall.remotePeerName || "colega"}` : "Sala pronta (a aguardar participantes)"}</span>
+              </div>
+              {activeCall.minimized && (
+                <div className={styles.callControls}>
+                  <button
+                    type="button"
+                    className={`${styles.callControlBtn} ${activeCall.micMuted ? styles.callControlMuted : ""}`}
+                    aria-pressed={!activeCall.micMuted}
+                    aria-label={activeCall.micMuted ? "Ativar microfone" : "Desativar microfone"}
+                    onClick={toggleCallMic}
+                  >
+                    {activeCall.micMuted ? <MicOff size={15} aria-hidden="true" /> : <Mic size={15} aria-hidden="true" />}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.callControlBtn}
+                    aria-label="Expandir painel de chamada"
+                    onClick={() => setActiveCall(prev => prev ? { ...prev, minimized: false } : null)}
+                  >
+                    <Maximize2 size={15} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.callHangupBtn}
+                    aria-label="Terminar chamada"
+                    onClick={endCall}
+                  >
+                    <PhoneOff size={15} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {!activeCall.minimized && (
+              <>
+                {activeCall.mediaNotice && <p className={styles.callMediaNote}>{activeCall.mediaNotice}</p>}
+                <div className={styles.callStageGrid}>
+                  <div className={styles.callTile}>
+                    {(activeCall.cameraEnabled || activeCall.screenSharing) ? (
+                      <video
+                        ref={localVideoRef}
+                        className={`${styles.callVideo} ${!activeCall.screenSharing ? styles.callVideoMirrored : ""}`}
+                        autoPlay
+                        muted
+                        playsInline
+                      />
+                    ) : (
+                      <div className={styles.callAvatarWrap}>
+                        <div className={styles.callAvatarRing}>
+                          <Avatar name={me?.name || "Tu"} url={me?.avatar_url || null} />
+                        </div>
+                      </div>
+                    )}
+                    <span className={styles.callTileLabel}>
+                      {activeCall.micMuted ? <MicOff size={12} aria-hidden="true" /> : <Mic size={12} aria-hidden="true" />}
+                      {me?.name || "Tu"} (tu){activeCall.screenSharing ? " · Ecrã" : ""}
+                    </span>
+                  </div>
+
+                  <div className={styles.callTile}>
+                    {activeCall.remoteConnected && activeCall.remoteHasVideo ? (
+                      <video ref={remoteVideoRef} className={styles.callVideo} autoPlay playsInline />
+                    ) : (
+                      <div className={styles.callAvatarWrap}>
+                        <div className={styles.callAvatarRing}>
+                          {recipient && peer ? (
+                            <Avatar name={peer.name} url={peer.avatar_url} />
+                          ) : (
+                            <span className={styles.generalIcon}><Users size={20} aria-hidden="true" /></span>
+                          )}
+                        </div>
+                        <small style={{ color: "#a7c4b5", fontSize: 11 }}>
+                          {activeCall.remoteConnected
+                            ? `${activeCall.remotePeerName || "Colega"} em chamada`
+                            : "Convite enviado na conversa"}
+                        </small>
+                      </div>
+                    )}
+                    <span className={styles.callTileLabel}>
+                      {activeCall.remotePeerName || (recipient ? peer?.name || "Colega" : `#${currentChannel.name}`)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className={styles.callControls}>
+                  <button
+                    type="button"
+                    className={`${styles.callControlBtn} ${activeCall.micMuted ? styles.callControlMuted : ""}`}
+                    aria-pressed={!activeCall.micMuted}
+                    onClick={toggleCallMic}
+                  >
+                    {activeCall.micMuted ? <MicOff size={15} aria-hidden="true" /> : <Mic size={15} aria-hidden="true" />}
+                    <span>{activeCall.micMuted ? "Ativar som" : "Silenciar"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.callControlBtn} ${!activeCall.cameraEnabled ? styles.callControlMuted : ""}`}
+                    aria-pressed={activeCall.cameraEnabled}
+                    onClick={() => void toggleCallCamera()}
+                  >
+                    {activeCall.cameraEnabled ? <Video size={15} aria-hidden="true" /> : <VideoOff size={15} aria-hidden="true" />}
+                    <span>{activeCall.cameraEnabled ? "Desligar câmara" : "Ligar câmara"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.callControlBtn}
+                    aria-pressed={activeCall.screenSharing}
+                    onClick={() => void toggleScreenShare()}
+                  >
+                    <MonitorUp size={15} aria-hidden="true" />
+                    <span>{activeCall.screenSharing ? "Parar partilha" : "Partilhar ecrã"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.callControlBtn}
+                    onClick={() => setActiveCall(prev => prev ? { ...prev, minimized: true } : null)}
+                  >
+                    <Minimize2 size={15} aria-hidden="true" />
+                    <span>Minimizar</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.callHangupBtn}
+                    onClick={endCall}
+                  >
+                    <PhoneOff size={15} aria-hidden="true" />
+                    <span>Terminar</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {error && <div className={styles.error} role="alert">{error}{blocked && " Volte a iniciar sessão se necessário."}</div>}
 
@@ -535,7 +1111,8 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
             const own = message.sender_id === initial.viewerId
             const showDate = !index || dateLabel(messages[index - 1].created_at) !== dateLabel(message.created_at)
             const gifInfo = parseGifMessage(message.body)
-            const onlyEmoji = !gifInfo.isGif && isOnlyEmojis(message.body)
+            const callInfo = !gifInfo.isGif ? parseCallMessage(message.body) : { isCall: false }
+            const onlyEmoji = !gifInfo.isGif && !callInfo.isCall && isOnlyEmojis(message.body)
             return <div key={message.id}>
               {showDate && <div className={styles.day}>{dateLabel(message.created_at)}</div>}
               <article className={`${styles.message} ${own ? styles.own : ""}`}>
@@ -551,6 +1128,25 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={gifInfo.gifUrl} alt="GIF animado" loading="lazy" />
                       </div>
+                    </div>
+                  ) : callInfo.isCall && callInfo.mode && callInfo.roomId ? (
+                    <div className={styles.callCard}>
+                      <div className={styles.callCardInfo}>
+                        <span className={styles.callCardIcon} aria-hidden="true">
+                          {callInfo.mode === "video" ? <Video size={16} /> : <PhoneCall size={16} />}
+                        </span>
+                        <div className={styles.callCardText}>
+                          <strong>{callInfo.mode === "video" ? "Videochamada de equipa" : "Chamada de voz"}</strong>
+                          <small>{callInfo.title}</small>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.callJoinBtn}
+                        onClick={() => void startOrJoinCall(callInfo.mode!, callInfo.roomId, callInfo.title, false)}
+                      >
+                        {activeCall?.roomId === callInfo.roomId ? "Na chamada" : "Entrar"}
+                      </button>
                     </div>
                   ) : onlyEmoji ? (
                     <p className={styles.largeEmoji}>{message.body}</p>

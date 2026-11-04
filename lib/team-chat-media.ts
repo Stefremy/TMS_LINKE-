@@ -207,3 +207,38 @@ export function isOnlyEmojis(text: string): boolean {
   const emojiRegex = /^(\p{Extended_Pictographic}|\p{Emoji_Presentation}|\s)+$/u
   return emojiRegex.test(trimmed) && trimmed.replace(/\s+/g, "").length <= 8
 }
+
+export type CallMode = "audio" | "video"
+
+export interface CallInviteInfo {
+  isCall: boolean
+  mode?: CallMode
+  roomId?: string
+  title?: string
+}
+
+export function buildCallRoomId(viewerId: string, recipient: string | null, activeChannel: string): string {
+  if (recipient) {
+    const pair = [viewerId, recipient].map(id => id.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 12)).sort()
+    return `dm-${pair[0]}-${pair[1]}`
+  }
+  const cleanChannel = (activeChannel || "geral").toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 40)
+  return `ch-${cleanChannel}`
+}
+
+export function formatCallMessage(mode: CallMode, roomId: string, title?: string): string {
+  const safeRoom = roomId.replace(/[^a-z0-9_-]/gi, "").slice(0, 64) || "geral"
+  const safeTitle = (title || "").replace(/[\]\r\n]+/g, " ").trim().slice(0, 80)
+  return safeTitle ? `[call:${mode}:${safeRoom}:${safeTitle}]` : `[call:${mode}:${safeRoom}]`
+}
+
+export function parseCallMessage(body: string): CallInviteInfo {
+  const trimmed = body.trim()
+  const match = trimmed.match(/^\[call:(audio|video):([a-z0-9_-]{2,64})(?::([^\]]*))?\]$/i)
+  if (!match) return { isCall: false }
+  const mode = match[1].toLowerCase() as CallMode
+  const roomId = match[2]
+  const title = match[3]?.trim() || (mode === "video" ? "Videochamada" : "Chamada de voz")
+  return { isCall: true, mode, roomId, title }
+}
+

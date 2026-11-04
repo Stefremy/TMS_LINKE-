@@ -80,7 +80,11 @@ function setup({ role = 'employee', userId = A, tenant = T, seed, failure, anony
     'server-only': {},
     '@/lib/team-chat-avatars': {
       getChatStaffAvatars: async () => new Map([[A, 'https://example.com/staff-a.png'], [B, null], [C, null]]),
-      getChatStaffMembers: async () => new Map([[A, { user_id: A, name: 'A', avatar_url: 'https://example.com/staff-a.png' }], [B, { user_id: B, name: 'B', avatar_url: null }], [C, { user_id: C, name: 'C', avatar_url: null }]]),
+      getChatStaffMembers: async (tenantId) => new Map(
+        db.tables.team_chat_members
+          .filter(row => row.tenant_id === tenantId)
+          .map(row => [row.user_id, { user_id: row.user_id, name: row.name, avatar_url: row.user_id === A ? 'https://example.com/staff-a.png' : null }])
+      ),
     },
     'next/server': { NextResponse: { json: (body, init) => ({ body, status: init?.status || 200, headers: init?.headers }) } },
     '@/lib/auth/context': { getAuthContext: async () => context },
@@ -218,4 +222,33 @@ test('polling and send acknowledgements merge without duplicating or reordering 
   const { shared } = setup()
   const merged = shared.mergeChatMessages([message(4, A, null), message(2, B, null)], [message(4, A, null), message(3, B, null)])
   assert.deepEqual(merged.map(row => row.sequence), [2, 3, 4])
+})
+
+test('audio and video call invitations format, parse and render clean inbox previews', async () => {
+  const load = createLoader({})
+  const media = load('lib/team-chat-media.ts')
+  const dmRoomA = media.buildCallRoomId(A, B, 'geral')
+  const dmRoomB = media.buildCallRoomId(B, A, 'geral')
+  assert.equal(dmRoomA, dmRoomB)
+  assert.equal(media.buildCallRoomId(A, null, 'operacoes'), 'ch-operacoes')
+
+  const videoPayload = media.formatCallMessage('video', dmRoomA, 'Conversa com B')
+  const parsedVideo = media.parseCallMessage(videoPayload)
+  assert.deepEqual(parsedVideo, { isCall: true, mode: 'video', roomId: dmRoomA, title: 'Conversa com B' })
+
+  const audioPayload = media.formatCallMessage('audio', 'ch-geral', '#Sala geral')
+  const parsedAudio = media.parseCallMessage(audioPayload)
+  assert.deepEqual(parsedAudio, { isCall: true, mode: 'audio', roomId: 'ch-geral', title: '#Sala geral' })
+
+  const { api } = setup({
+    seed: {
+      team_chat_messages: [
+        { ...message(1, A, null), body: audioPayload },
+        { ...message(2, B, A), body: videoPayload },
+      ],
+    },
+  })
+  const inbox = (await api.GET(get('?inbox=1'))).body
+  assert.equal(inbox.items.find(item => item.key === 'ch_geral').preview, 'Chamada de voz')
+  assert.equal(inbox.items.find(item => item.key === `dm_${B}`).preview, 'Videochamada')
 })
