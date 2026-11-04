@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { ImapFlow } from "imapflow"
 import { simpleParser, type ParsedMail } from "mailparser"
+import { getAllowedMailAccounts } from "@/lib/auth/permissions"
 import { normalizeMailAccount } from "@/lib/ops-mailbox"
 import { resolveImapCredentials } from "@/lib/ops-mailbox-imap"
 import { mailboxContext } from "@/lib/ops-mailbox-server"
@@ -20,13 +21,20 @@ const SPECIAL_USE_BY_BOX: Record<string, string> = {
 
 export async function GET(request: Request) {
   try {
-    await mailboxContext()
+    const context = await mailboxContext()
     const { searchParams } = new URL(request.url)
     const uidParam = searchParams.get("uid")
     const indexParam = searchParams.get("index") || "0"
     const boxParam = (searchParams.get("box") || "inbox").toLowerCase()
     const account = normalizeMailAccount(searchParams.get("account"))
     const download = searchParams.get("download") === "1"
+
+    if (!getAllowedMailAccounts(context).includes(account)) {
+      return NextResponse.json(
+        { error: "Não tem permissão para aceder aos anexos desta caixa de correio." },
+        { status: 403 }
+      )
+    }
 
     const uid = Number(uidParam)
     const attIndex = Number(indexParam)

@@ -64,7 +64,10 @@ export const DEFAULT_COLABORADORES: Colaborador[] = [
       "Pedidos de Recolha & Distribuição",
       "Faturação & Contas Correntes",
       "Gestão de Transportadoras & Frotas",
-      "Configurações de Webservices & Integrações"
+      "Configurações de Webservices & Integrações",
+      "Caixa de Correio: geral@linke.pt",
+      "Caixa de Correio: clientes@linke.pt",
+      "Caixa de Correio: notificacoes@linke.pt"
     ],
     emergency_contact: "+351 916 723 469",
     notes: "Super-Administrador com acesso total e irrestrito a todos os módulos do TMS.",
@@ -88,7 +91,9 @@ export const DEFAULT_COLABORADORES: Colaborador[] = [
     permissions: [
       "Emissão e Controlo de Guias CTT",
       "Pedidos de Recolha & Distribuição",
-      "Gestão de Transportadoras & Frotas"
+      "Gestão de Transportadoras & Frotas",
+      "Caixa de Correio: geral@linke.pt",
+      "Caixa de Correio: notificacoes@linke.pt"
     ],
     emergency_contact: "+351 910 000 002",
     notes: "Conta operacional da equipa de operações e logística.",
@@ -111,7 +116,8 @@ export const DEFAULT_COLABORADORES: Colaborador[] = [
     avatar_color: "#9333ea", // purple
     permissions: [
       "Gestão de Clientes & Contratos",
-      "Atendimento & Suporte a Incidências"
+      "Atendimento & Suporte a Incidências",
+      "Caixa de Correio: clientes@linke.pt"
     ],
     emergency_contact: "+351 910 000 003",
     notes: "Conta de suporte ao cliente, incidências e gestão de contas correntes.",
@@ -135,7 +141,9 @@ export const DEFAULT_COLABORADORES: Colaborador[] = [
     permissions: [
       "Emissão e Controlo de Guias CTT",
       "Pedidos de Recolha & Distribuição",
-      "Gestão de Transportadoras & Frotas"
+      "Gestão de Transportadoras & Frotas",
+      "Caixa de Correio: geral@linke.pt",
+      "Caixa de Correio: clientes@linke.pt"
     ],
     emergency_contact: "",
     notes: "Conta de logística e operações.",

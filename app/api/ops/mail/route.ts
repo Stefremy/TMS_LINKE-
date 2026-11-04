@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getAllowedMailAccounts } from "@/lib/auth/permissions"
 import {
   MailError,
   normalizeMailAccount,
@@ -56,7 +57,11 @@ export async function POST(request: Request) {
     }
 
     if (body.kind === "sync_imap") {
+      const allowedAccounts = getAllowedMailAccounts(context)
       const account = normalizeMailAccount(body.account)
+      if (!allowedAccounts.includes(account)) {
+        throw new MailError("Não tem permissão para aceder ou sincronizar esta caixa de correio.", 403)
+      }
       const folder = typeof body.folder === "string" ? (body.folder as any) : undefined
       const offset = typeof body.offset === "number" ? body.offset : 0
       const limit = typeof body.limit === "number" ? Math.min(50, Math.max(5, body.limit)) : 25

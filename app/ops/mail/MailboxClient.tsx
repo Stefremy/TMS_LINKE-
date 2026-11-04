@@ -147,7 +147,12 @@ export function MailboxClient({
   const [readFilter, setReadFilter] = React.useState<"all" | "unread">("all")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedId, setSelectedId] = React.useState<string | null>(
-    () => initialData.messages.find((m) => m.account === "geral@linke.pt" && m.folder === "inbox")?.id || initialData.messages[0]?.id || null
+    () =>
+      initialData.messages.find(
+        (m) => m.account === (initialData.account || "geral@linke.pt") && m.folder === "inbox"
+      )?.id ||
+      initialData.messages[0]?.id ||
+      null
   )
   const [mobileShowReader, setMobileShowReader] = React.useState(false)
 
@@ -687,8 +692,13 @@ export function MailboxClient({
     [account, replyAllMode, replyText, selectedMessage, sendingReply, showToast]
   )
 
+  const availableAccounts =
+    initialData.accounts && initialData.accounts.length > 0
+      ? initialData.accounts
+      : MAIL_ACCOUNTS
+
   const activeAccountMeta =
-    MAIL_ACCOUNTS.find((a) => a.id === account) || MAIL_ACCOUNTS[0]
+    availableAccounts.find((a) => a.id === account) || availableAccounts[0] || MAIL_ACCOUNTS[0]
 
   return (
     <div className="mx-auto flex w-full max-w-[1720px] flex-col gap-2.5">
@@ -830,7 +840,7 @@ export function MailboxClient({
                     }}
                     className="w-full appearance-none rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] py-1.5 pr-7 pl-8 text-xs font-semibold text-[var(--text-primary)] shadow-2xs focus:border-[var(--accent)] focus:outline-none"
                   >
-                    {MAIL_ACCOUNTS.map((acc) => (
+                    {availableAccounts.map((acc) => (
                       <option key={acc.id} value={acc.id}>
                         {acc.label} ({acc.email})
                       </option>

@@ -1,5 +1,6 @@
 import "server-only"
 import { getAuthContext, type AuthContext } from "@/lib/auth/context"
+import { getAllowedMailAccounts } from "@/lib/auth/permissions"
 import { createAdminClient } from "@/lib/supabase/server"
 import { sendEmail } from "@/lib/email/resend"
 import {
@@ -93,7 +94,11 @@ export async function listMailboxMessages(
   context: AuthContext,
   requestedAccount?: string | null
 ): Promise<MailListResponse> {
-  const account = normalizeMailAccount(requestedAccount)
+  const allowedAccounts = getAllowedMailAccounts(context)
+  const requested = normalizeMailAccount(requestedAccount)
+  const account = allowedAccounts.includes(requested)
+    ? requested
+    : allowedAccounts[0] || "geral@linke.pt"
   const admin = createAdminClient()
 
   const { data: rows } = await admin
@@ -213,14 +218,15 @@ export async function listMailboxMessages(
   }
 
   const allMessages = [...messageMap.values()]
-    .filter((m) => !deletedIds.has(m.id))
+    .filter((m) => !deletedIds.has(m.id) && allowedAccounts.includes(m.account))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
   const origin = process.env.CLIENT_PORTAL_ORIGIN || "https://app.toke.pt"
+  const allowedMailAccountsList = MAIL_ACCOUNTS.filter((a) => allowedAccounts.includes(a.id))
 
   return {
     account,
-    accounts: MAIL_ACCOUNTS,
+    accounts: allowedMailAccountsList.length > 0 ? allowedMailAccountsList : [MAIL_ACCOUNTS[0]],
     messages: allMessages,
     resendConnected: Boolean(process.env.RESEND_API_KEY),
     inboundWebhookUrl: `${origin.replace(/\/$/, "")}/api/webhooks/resend`,
@@ -231,7 +237,11 @@ export async function composeOrSaveMail(
   context: AuthContext,
   input: MailComposeInput
 ): Promise<MailMessage> {
-  const account = normalizeMailAccount(input.account || "geral@linke.pt")
+  const allowedAccounts = getAllowedMailAccounts(context)
+  const account = normalizeMailAccount(input.account || allowedAccounts[0] || "geral@linke.pt")
+  if (!allowedAccounts.includes(account)) {
+    throw new MailError("Não tem permissão para enviar emails a partir desta caixa de correio.", 403)
+  }
   const accountMeta = MAIL_ACCOUNTS.find((a) => a.id === account) || MAIL_ACCOUNTS[0]
   const isDraft = Boolean(input.isDraft)
 

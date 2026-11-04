@@ -174,3 +174,62 @@ test('recordInboundEmailWebhook parses incoming email for geral@linke.pt into In
   assert.equal(recorded.read, false)
 })
 
+test('colaborador mailbox permissions restrict visible email accounts and enforce send permissions', async () => {
+  const { server } = createMailHarness()
+  const { PERMISSIONS } = createLoader({})('lib/auth/permissions.ts')
+
+  const adminCtx = {
+    user: { id: 'admin-1', email: 'stefano.remy@gmail.com' },
+    role: 'admin',
+    tenant_id: TENANT,
+    permissions: [PERMISSIONS.all],
+  }
+  const clientesOnlyCtx = {
+    user: { id: 'staff-2', email: 'operador@linke.pt' },
+    role: 'employee',
+    tenant_id: TENANT,
+    permissions: [PERMISSIONS.mailClientes],
+  }
+
+  // Admin can send from both geral@linke.pt and clientes@linke.pt
+  await server.composeOrSaveMail(adminCtx, {
+    account: 'geral@linke.pt',
+    toEmail: 'a@cliente.pt',
+    subject: 'Email de Geral',
+    bodyText: 'Teste geral',
+  })
+  await server.composeOrSaveMail(adminCtx, {
+    account: 'clientes@linke.pt',
+    toEmail: 'b@cliente.pt',
+    subject: 'Email de Clientes',
+    bodyText: 'Teste clientes',
+  })
+
+  // Admin sees all 3 accounts
+  const adminView = await server.listMailboxMessages(adminCtx, 'geral@linke.pt')
+  assert.equal(adminView.accounts.length, 3)
+  assert.equal(adminView.messages.length, 2)
+
+  // Colaborador with only Caixa de Correio: clientes@linke.pt only sees clientes@linke.pt
+  const staffView = await server.listMailboxMessages(clientesOnlyCtx, 'geral@linke.pt')
+  assert.equal(staffView.account, 'clientes@linke.pt')
+  assert.deepEqual(
+    staffView.accounts.map((a) => a.id),
+    ['clientes@linke.pt']
+  )
+  assert.equal(staffView.messages.length, 1)
+  assert.equal(staffView.messages[0].account, 'clientes@linke.pt')
+
+  // Colaborador cannot send from geral@linke.pt
+  await assert.rejects(
+    () =>
+      server.composeOrSaveMail(clientesOnlyCtx, {
+        account: 'geral@linke.pt',
+        toEmail: 'c@cliente.pt',
+        subject: 'Bloqueado',
+        bodyText: 'Sem acesso',
+      }),
+    /permissão/
+  )
+})
+

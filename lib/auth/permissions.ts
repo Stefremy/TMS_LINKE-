@@ -12,6 +12,9 @@ export const PERMISSIONS = {
   reports: "Relatórios Operacionais",
   documents: "Documentos Internos",
   accessEmail: "Enviar email de acesso ao cliente",
+  mailGeral: "Caixa de Correio: geral@linke.pt",
+  mailClientes: "Caixa de Correio: clientes@linke.pt",
+  mailNotificacoes: "Caixa de Correio: notificacoes@linke.pt",
 } as const
 
 export type StaffAccessLevel = "Administrador" | "Operacional" | "Comercial / Suporte"
@@ -34,6 +37,11 @@ export const PERMISSION_GROUPS: readonly { title: string; items: readonly { id: 
     { id: PERMISSIONS.salaries, title: "Salários e vencimentos", description: "Autorização separada para os serviços de salários; não é incluída pela permissão de faturação. O ecrã de salários não está disponível no menu atual." },
     { id: PERMISSIONS.documents, title: "Documentos internos", description: "Consultar e gerir o arquivo interno reservado. A direção mantém o acesso existente." },
     { id: PERMISSIONS.integrations, title: "Webservices e integrações", description: "Gerir ligações, credenciais e integrações de transportadoras." },
+  ] },
+  { title: "Caixas de Correio (Email)", items: [
+    { id: PERMISSIONS.mailGeral, title: "Caixa de Correio: geral@linke.pt", description: "Visualizar, sincronizar, responder e enviar emails pela caixa principal Linke Geral (geral@linke.pt)." },
+    { id: PERMISSIONS.mailClientes, title: "Caixa de Correio: clientes@linke.pt", description: "Visualizar, sincronizar, responder e enviar emails pela caixa de Apoio ao Cliente (clientes@linke.pt / cliente@linke.pt)." },
+    { id: PERMISSIONS.mailNotificacoes, title: "Caixa de Correio: notificacoes@linke.pt", description: "Consultar o histórico de emails automáticos de tracking e notificações do sistema (notificacoes@linke.pt)." },
   ] },
 ] as const
 
@@ -64,6 +72,30 @@ export function hasPermission(ctx: PermissionContext | null | undefined, permiss
 export function hasClientAccessEmailGrant(ctx: PermissionContext | null | undefined) {
   return hasPermission(ctx, PERMISSIONS.accessEmail) || ctx?.role === "employee"
     && ["clientes@linke.pt", "aldara.linke@gmail.com"].includes(ctx.user?.email?.trim().toLowerCase() || "")
+}
+
+export function getAllowedMailAccounts(
+  ctx: PermissionContext | null | undefined
+): ("geral@linke.pt" | "clientes@linke.pt" | "notificacoes@linke.pt")[] {
+  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) return []
+  if (ctx.role === "admin" || ctx.permissions?.includes(PERMISSIONS.all)) {
+    return ["geral@linke.pt", "clientes@linke.pt", "notificacoes@linke.pt"]
+  }
+  const parsed = parsePermissions(ctx.permissions)
+  const explicit: ("geral@linke.pt" | "clientes@linke.pt" | "notificacoes@linke.pt")[] = []
+  if (parsed.includes(PERMISSIONS.mailGeral)) explicit.push("geral@linke.pt")
+  if (parsed.includes(PERMISSIONS.mailClientes)) explicit.push("clientes@linke.pt")
+  if (parsed.includes(PERMISSIONS.mailNotificacoes)) explicit.push("notificacoes@linke.pt")
+  if (explicit.length > 0) return explicit
+
+  const email = ctx.user?.email?.trim().toLowerCase() || ""
+  if (email === "clientes@linke.pt" || email === "cliente@linke.pt") {
+    return ["clientes@linke.pt"]
+  }
+  if (email === "geral@linke.pt") {
+    return ["geral@linke.pt", "notificacoes@linke.pt"]
+  }
+  return ["geral@linke.pt", "clientes@linke.pt", "notificacoes@linke.pt"]
 }
 
 export function isStaffAccessLevel(value: unknown): value is StaffAccessLevel {

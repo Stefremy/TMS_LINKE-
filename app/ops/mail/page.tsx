@@ -1,22 +1,26 @@
 import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { requireEmployee } from "@/lib/auth/context"
+import { getAllowedMailAccounts } from "@/lib/auth/permissions"
 import { getMyProfile } from "@/lib/auth/profile"
 import { getClientesAction } from "@/app/actions/clientes"
 import { listMailboxMessages } from "@/lib/ops-mailbox-server"
 import { getSeededMailboxMessages, MAIL_ACCOUNTS, type MailListResponse } from "@/lib/ops-mailbox"
 import { MailboxClient } from "./MailboxClient"
 
-export const metadata = { title: "Caixa de Correio (geral@linke.pt) | Linke TMS" }
+export const metadata = { title: "Caixa de Correio | Linke TMS" }
 
 export default async function OpsMailPage() {
   await requireOpsPageAccess("/ops/mail")
 
   const context = await requireEmployee()
   const profile = await getMyProfile()
+  const allowedIds = getAllowedMailAccounts(context)
+  const defaultAccount = allowedIds[0] || "geral@linke.pt"
+  const allowedAccounts = MAIL_ACCOUNTS.filter((a) => allowedIds.includes(a.id))
 
   let initialData: MailListResponse = {
-    account: "geral@linke.pt",
-    accounts: MAIL_ACCOUNTS,
+    account: defaultAccount,
+    accounts: allowedAccounts.length > 0 ? allowedAccounts : [MAIL_ACCOUNTS[0]],
     messages: getSeededMailboxMessages(),
     resendConnected: Boolean(process.env.RESEND_API_KEY),
     inboundWebhookUrl: `${(process.env.CLIENT_PORTAL_ORIGIN || "https://app.toke.pt").replace(/\/$/, "")}/api/webhooks/resend`,
@@ -26,7 +30,7 @@ export default async function OpsMailPage() {
 
   try {
     const [mailData, clientes] = await Promise.all([
-      listMailboxMessages(context, "geral@linke.pt"),
+      listMailboxMessages(context, defaultAccount),
       getClientesAction().catch(() => []),
     ])
     initialData = mailData
