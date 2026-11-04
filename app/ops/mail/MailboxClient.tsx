@@ -295,52 +295,63 @@ export function MailboxClient({
     }
   }, [selectedMessage])
 
-  const refreshMailbox = React.useCallback(async () => {
-    setRefreshing(true)
-    setErrorMessage(null)
-    try {
-      if (account === "geral@linke.pt") {
-        try {
-          const syncRes = await fetch("/api/ops/mail", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ kind: "sync_imap" }),
-          })
-          const syncData = await syncRes.json()
-          if (syncRes.ok && syncData.ok) {
-            setMessages(syncData.messages || [])
-            const syncInfo = syncData.sync
-            if (syncInfo?.connected) {
-              if (syncInfo.synced > 0) {
-                showToast(`Sincronizados ${syncInfo.synced} novos emails do Gmail (${account})`)
-              } else {
-                showToast(`Caixa ${account} sincronizada com o Gmail (sem novos emails)`)
+  const refreshMailbox = React.useCallback(
+    async (silent = false) => {
+      setRefreshing(true)
+      if (!silent) setErrorMessage(null)
+      try {
+        if (account === "geral@linke.pt") {
+          try {
+            const syncRes = await fetch("/api/ops/mail", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ kind: "sync_imap" }),
+            })
+            const syncData = await syncRes.json()
+            if (syncRes.ok && syncData.ok) {
+              setMessages(syncData.messages || [])
+              const syncInfo = syncData.sync
+              if (syncInfo?.connected) {
+                if (syncInfo.synced > 0) {
+                  showToast(`Sincronizados ${syncInfo.synced} novos emails do Gmail (${account})`)
+                } else if (!silent) {
+                  showToast(`Caixa ${account} sincronizada com o Gmail (sem novos emails)`)
+                }
+              } else if (syncInfo?.errors?.length && !silent) {
+                showToast(`Aviso de sincronização: ${syncInfo.errors[0]}`)
+              } else if (!silent) {
+                showToast(`Caixa ${account} sincronizada`)
               }
-            } else if (syncInfo?.errors?.length) {
-              showToast(`Aviso de sincronização: ${syncInfo.errors[0]}`)
-            } else {
-              showToast(`Caixa ${account} sincronizada`)
+              return
             }
-            return
+          } catch {
+            // Fallback to GET if sync fails
           }
-        } catch {
-          // Fallback to GET if sync fails
         }
-      }
 
-      const response = await fetch(`/api/ops/mail?account=${encodeURIComponent(account)}`, {
-        cache: "no-store",
-      })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.error || "Não foi possível sincronizar a caixa de correio.")
-      setMessages(data.messages || [])
-      showToast(`Caixa ${account} sincronizada`)
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Erro ao sincronizar emails.")
-    } finally {
-      setRefreshing(false)
-    }
-  }, [account, showToast])
+        const response = await fetch(`/api/ops/mail?account=${encodeURIComponent(account)}`, {
+          cache: "no-store",
+        })
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || "Não foi possível sincronizar a caixa de correio.")
+        setMessages(data.messages || [])
+        if (!silent) showToast(`Caixa ${account} sincronizada`)
+      } catch (err) {
+        if (!silent) {
+          setErrorMessage(err instanceof Error ? err.message : "Erro ao sincronizar emails.")
+        }
+      } finally {
+        setRefreshing(false)
+      }
+    },
+    [account, showToast]
+  )
+
+  // Auto-sync with Gmail on initial mount
+  React.useEffect(() => {
+    void refreshMailbox(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const runMutation = React.useCallback(
     async (
