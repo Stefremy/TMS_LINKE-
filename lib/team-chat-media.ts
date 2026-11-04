@@ -242,3 +242,62 @@ export function parseCallMessage(body: string): CallInviteInfo {
   return { isCall: true, mode, roomId, title }
 }
 
+export interface ChatAttachmentItem {
+  id: string
+  name: string
+  size: number
+  type: string
+  url: string
+}
+
+export function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B"
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1).replace(/\.0$/, "")} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, "")} MB`
+}
+
+export function formatAttachmentMessage(attachments: ChatAttachmentItem[], text?: string): string {
+  const tags = attachments
+    .filter(a => a && /^https?:\/\//i.test(a.url))
+    .map(a => {
+      const safeName = (a.name || "ficheiro").replace(/[|\][\r\n]+/g, "_").trim().slice(0, 140) || "ficheiro"
+      const safeType = (a.type || "application/octet-stream").replace(/[|\][\r\n]+/g, "").trim().slice(0, 80) || "application/octet-stream"
+      const safeSize = Math.max(0, Math.floor(Number(a.size) || 0))
+      return `[file:${a.url}|${safeName}|${safeType}|${safeSize}]`
+    })
+  const cleanText = (text || "").trim()
+  if (!tags.length) return cleanText
+  return cleanText ? `${tags.join("\n")}\n${cleanText}` : tags.join("\n")
+}
+
+export function parseAttachmentMessage(body: string): {
+  hasAttachments: boolean
+  attachments: ChatAttachmentItem[]
+  text: string
+} {
+  let remaining = body.trim()
+  const attachments: ChatAttachmentItem[] = []
+  const fileTagRegex = /^\[file:(https?:\/\/[^|\s\]]+)\|([^|\]]+)\|([^|\]]+)\|(\d+)\]\s*/i
+
+  let index = 0
+  while (remaining.startsWith("[file:")) {
+    const match = remaining.match(fileTagRegex)
+    if (!match) break
+    attachments.push({
+      id: `att-${index++}-${match[4]}`,
+      url: match[1],
+      name: match[2].trim(),
+      type: match[3].trim(),
+      size: Number(match[4]) || 0,
+    })
+    remaining = remaining.slice(match[0].length)
+  }
+
+  return {
+    hasAttachments: attachments.length > 0,
+    attachments,
+    text: remaining.trim(),
+  }
+}
+

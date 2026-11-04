@@ -252,3 +252,30 @@ test('audio and video call invitations format, parse and render clean inbox prev
   assert.equal(inbox.items.find(item => item.key === 'ch_geral').preview, 'Chamada de voz')
   assert.equal(inbox.items.find(item => item.key === `dm_${B}`).preview, 'Videochamada')
 })
+
+test('chat file attachments format, parse with optional text and show clean inbox previews', async () => {
+  const load = createLoader({})
+  const media = load('lib/team-chat-media.ts')
+  assert.equal(media.formatFileSize(1536), '1.5 KB')
+  assert.equal(media.formatFileSize(2 * 1024 * 1024), '2 MB')
+
+  const body = media.formatAttachmentMessage([
+    { id: '1', name: 'guia_recolha.pdf', size: 24576, type: 'application/pdf', url: 'https://example.com/guia_recolha.pdf' },
+  ], 'Segue a guia em anexo.')
+  const parsed = media.parseAttachmentMessage(body)
+  assert.equal(parsed.hasAttachments, true)
+  assert.equal(parsed.attachments.length, 1)
+  assert.equal(parsed.attachments[0].name, 'guia_recolha.pdf')
+  assert.equal(parsed.attachments[0].size, 24576)
+  assert.equal(parsed.text, 'Segue a guia em anexo.')
+
+  const { api } = setup({
+    seed: {
+      team_chat_messages: [
+        { ...message(1, A, null), body },
+      ],
+    },
+  })
+  const inbox = (await api.GET(get('?inbox=1'))).body
+  assert.equal(inbox.items.find(item => item.key === 'ch_geral').preview, 'Anexo: guia_recolha.pdf')
+})

@@ -214,13 +214,19 @@ export async function readTeamChatInbox(context: AuthContext): Promise<ChatInbox
       body = parsed.cleanBody
     }
     if (items.has(key)) continue
-    const preview = /^\[gif:https?:\/\//i.test(body)
-      ? "GIF"
-      : /^\[call:video:/i.test(body)
-        ? "Videochamada"
-        : /^\[call:audio:/i.test(body)
-          ? "Chamada de voz"
-          : body.slice(0, 300)
+    let preview: string
+    if (/^\[gif:https?:\/\//i.test(body)) {
+      preview = "GIF"
+    } else if (/^\[call:video:/i.test(body)) {
+      preview = "Videochamada"
+    } else if (/^\[call:audio:/i.test(body)) {
+      preview = "Chamada de voz"
+    } else if (/^\[file:https?:\/\//i.test(body)) {
+      const nameMatch = body.match(/^\[file:https?:\/\/[^|\s\]]+\|([^|\]]+)\|/i)
+      preview = nameMatch ? `Anexo: ${nameMatch[1].trim()}` : "Anexo"
+    } else {
+      preview = body.slice(0, 300)
+    }
     items.set(key, { key, kind, title, subtitle, avatar_url, preview, sender_name: row.sender_name, created_at: row.created_at, sequence: row.sequence })
   }
   for (const channel of channels) {

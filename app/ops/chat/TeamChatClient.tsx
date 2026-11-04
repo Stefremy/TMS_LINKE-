@@ -1,11 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ChevronDown, Film, Hash, LockKeyhole, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorUp, Phone, PhoneCall, PhoneOff, Pin, Plus, Search, Send, Smile, Star, Users, Video, VideoOff, X } from "lucide-react"
+import { ChevronDown, Download, FileSpreadsheet, FileText, Film, Hash, Image as ImageIcon, LockKeyhole, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorUp, Paperclip, Phone, PhoneCall, PhoneOff, Pin, Plus, Search, Send, Smile, Star, Users, Video, VideoOff, X } from "lucide-react"
 import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { createClient } from "@/lib/supabase/client"
 import { CHAT_MAX_LENGTH, DEFAULT_CHANNELS, mergeChatMessages, type ChatChannel, type ChatInboxItem, type ChatPage } from "@/lib/team-chat"
-import { buildCallRoomId, CURATED_GIFS, EMOJI_CATEGORIES, formatCallMessage, isOnlyEmojis, parseCallMessage, parseGifMessage, type CallMode, type GifItem } from "@/lib/team-chat-media"
+import { buildCallRoomId, CURATED_GIFS, EMOJI_CATEGORIES, formatAttachmentMessage, formatCallMessage, formatFileSize, isOnlyEmojis, parseAttachmentMessage, parseCallMessage, parseGifMessage, type CallMode, type ChatAttachmentItem, type GifItem } from "@/lib/team-chat-media"
 import styles from "./TeamChat.module.css"
 
 function Avatar({ name, url }: { name: string; url: string | null }) {
@@ -87,8 +87,13 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
   const [activeCall, setActiveCall] = useState<ActiveCallState | null>(null)
   const [callElapsedSec, setCallElapsedSec] = useState(0)
 
+  // Anexos (ficheiros e imagens)
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachmentItem[]>([])
+  const [uploadingAttachments, setUploadingAttachments] = useState(false)
+
   const scroll = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const emojiPopoverRef = useRef<HTMLDivElement>(null)
   const gifPopoverRef = useRef<HTMLDivElement>(null)
   const localVideoRef = useRef<HTMLVideoElement>(null)
@@ -158,10 +163,17 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       setPreferences(previous => ({ ...previous, read: { ...previous.read, [activeKey]: Math.max(previous.read[activeKey] || 0, last.sequence) } }))
       const gif = parseGifMessage(last.body).isGif
       const callInfo = parseCallMessage(last.body)
+      const attInfo = parseAttachmentMessage(last.body)
       setInbox(previous => {
         const existing = previous.find(item => item.key === activeKey)
         if (!existing) return previous
-        const preview = gif ? "GIF" : callInfo.isCall ? (callInfo.mode === "video" ? "Videochamada" : "Chamada de voz") : last.body.slice(0, 300)
+        const preview = gif
+          ? "GIF"
+          : callInfo.isCall
+            ? (callInfo.mode === "video" ? "Videochamada" : "Chamada de voz")
+            : attInfo.hasAttachments
+              ? `Anexo: ${attInfo.attachments[0].name}`
+              : last.body.slice(0, 300)
         return [{ ...existing, preview, sender_name: last.sender_name, created_at: last.created_at, sequence: last.sequence }, ...previous.filter(item => item.key !== activeKey)]
       })
     }, 0)
@@ -232,6 +244,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
     setRecipient(null)
     setActiveChannel(slug)
     setMessages([])
+    setPendingAttachments([])
     setHasOlder(false)
     setReady(false)
     setError(null)
@@ -244,6 +257,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
     if (sending || olderLoading || value === recipient) return
     setRecipient(value)
     setMessages([])
+    setPendingAttachments([])
     setHasOlder(false)
     setReady(false)
     setError(null)
@@ -296,9 +310,46 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
     finally { setOlderLoading(false) }
   }
 
+  async function handleUploadFiles(fileList: FileList | File[]) {
+    const files = Array.from(fileList)
+    if (!files.length || uploadingAttachments || !ready || blocked) return
+    setUploadingAttachments(true)
+    setError(null)
+    try {
+      const uploaded: ChatAttachmentItem[] = []
+      for (const file of files.slice(0, 5)) {
+        const form = new FormData()
+        form.append("file", file)
+        const response = await fetch("/api/ops/chat/attachments", {
+          method: "POST",
+          body: form,
+        })
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data.error || `Não foi possível anexar ${file.name}.`)
+        }
+        if (data.attachment) {
+          uploaded.push(data.attachment as ChatAttachmentItem)
+        }
+      }
+      if (uploaded.length) {
+        setPendingAttachments(prev => [...prev, ...uploaded])
+      }
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Não foi possível carregar o anexo.")
+    } finally {
+      setUploadingAttachments(false)
+    }
+  }
+
+  function handleRemovePendingAttachment(id: string) {
+    setPendingAttachments(prev => prev.filter(item => item.id !== id))
+  }
+
   async function send() {
-    const body = draft.trim()
-    if (!body || sending || !ready || blocked) return
+    const text = draft.trim()
+    const body = pendingAttachments.length > 0 ? formatAttachmentMessage(pendingAttachments, text) : text
+    if (!body || sending || uploadingAttachments || !ready || blocked) return
     setSending(true); setError(null)
     if (pending.current?.key !== key || pending.current?.body !== body) pending.current = { key, body, id: crypto.randomUUID() }
     try {
@@ -322,6 +373,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       stickBottom.current = true
       setMessages(previous => mergeChatMessages(previous, [data.message]))
       setDrafts(previous => ({ ...previous, [key]: "" }))
+      setPendingAttachments([])
       pending.current = null
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Não foi possível confirmar o envio. O texto foi mantido; pode tentar novamente.") }
     finally { setSending(false) }
@@ -1112,7 +1164,8 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
             const showDate = !index || dateLabel(messages[index - 1].created_at) !== dateLabel(message.created_at)
             const gifInfo = parseGifMessage(message.body)
             const callInfo = !gifInfo.isGif ? parseCallMessage(message.body) : { isCall: false }
-            const onlyEmoji = !gifInfo.isGif && !callInfo.isCall && isOnlyEmojis(message.body)
+            const attInfo = !gifInfo.isGif && !callInfo.isCall ? parseAttachmentMessage(message.body) : { hasAttachments: false, attachments: [], text: message.body }
+            const onlyEmoji = !gifInfo.isGif && !callInfo.isCall && !attInfo.hasAttachments && isOnlyEmojis(message.body)
             return <div key={message.id}>
               {showDate && <div className={styles.day}>{dateLabel(message.created_at)}</div>}
               <article className={`${styles.message} ${own ? styles.own : ""}`}>
@@ -1148,6 +1201,48 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
                         {activeCall?.roomId === callInfo.roomId ? "Na chamada" : "Entrar"}
                       </button>
                     </div>
+                  ) : attInfo.hasAttachments ? (
+                    <div>
+                      <div className={styles.messageAttachments}>
+                        {attInfo.attachments.map(att => {
+                          const isImage = att.type.startsWith("image/")
+                          const isSheet = /excel|spreadsheet|csv|xls/i.test(att.type) || /\.(xlsx?|csv)$/i.test(att.name)
+                          return isImage ? (
+                            <a
+                              key={att.id}
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.attachmentImageLink}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={att.url} alt={att.name} loading="lazy" />
+                            </a>
+                          ) : (
+                            <a
+                              key={att.id}
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download={att.name}
+                              className={styles.attachmentCard}
+                            >
+                              <span className={styles.attachmentCardLeft}>
+                                <span className={styles.attachmentCardIcon} aria-hidden="true">
+                                  {isSheet ? <FileSpreadsheet size={16} /> : <FileText size={16} />}
+                                </span>
+                                <span className={styles.attachmentCardCopy}>
+                                  <strong>{att.name}</strong>
+                                  <small>{(att.name.split(".").pop() || "FILE").toUpperCase()} · {formatFileSize(att.size)}</small>
+                                </span>
+                              </span>
+                              <Download size={14} className={styles.attachmentDownloadIcon} aria-hidden="true" />
+                            </a>
+                          )
+                        })}
+                      </div>
+                      {attInfo.text && <p>{attInfo.text}</p>}
+                    </div>
                   ) : onlyEmoji ? (
                     <p className={styles.largeEmoji}>{message.body}</p>
                   ) : (
@@ -1161,7 +1256,17 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
           })}
         </div>
 
-        <form className={styles.composer} onSubmit={event => { event.preventDefault(); void send() }}>
+        <form
+          className={styles.composer}
+          onSubmit={event => { event.preventDefault(); void send() }}
+          onDragOver={event => { if (event.dataTransfer?.types?.includes("Files")) event.preventDefault() }}
+          onDrop={event => {
+            if (event.dataTransfer?.files?.length) {
+              event.preventDefault()
+              void handleUploadFiles(event.dataTransfer.files)
+            }
+          }}
+        >
           {/* Emoji Popover */}
           {showEmojiPicker && (
             <div className={styles.emojiPopover} ref={emojiPopoverRef} role="dialog" aria-label="Seletor de emojis">
@@ -1280,6 +1385,68 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
             </div>
           )}
 
+          {(pendingAttachments.length > 0 || uploadingAttachments) && (
+            <div className={styles.attachmentsTray} role="region" aria-label="Anexos selecionados">
+              {pendingAttachments.map(att => {
+                const isImage = att.type.startsWith("image/")
+                const isSheet = /excel|spreadsheet|csv|xls/i.test(att.type) || /\.(xlsx?|csv)$/i.test(att.name)
+                return (
+                  <div key={att.id} className={styles.attachmentChip}>
+                    <span className={styles.attachmentThumb} aria-hidden="true">
+                      {isImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={att.url} alt="" />
+                      ) : isSheet ? (
+                        <FileSpreadsheet size={16} />
+                      ) : (
+                        <FileText size={16} />
+                      )}
+                    </span>
+                    <span className={styles.attachmentChipMeta}>
+                      <strong>{att.name}</strong>
+                      <small>{(att.name.split(".").pop() || "FILE").toUpperCase()} · {formatFileSize(att.size)}</small>
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.attachmentRemoveBtn}
+                      aria-label={`Remover anexo ${att.name}`}
+                      onClick={() => handleRemovePendingAttachment(att.id)}
+                    >
+                      <X size={13} aria-hidden="true" />
+                    </button>
+                  </div>
+                )
+              })}
+              {uploadingAttachments && (
+                <div className={styles.attachmentChip} role="status">
+                  <span className={styles.attachmentThumb} aria-hidden="true">
+                    <ImageIcon size={15} />
+                  </span>
+                  <span className={styles.attachmentChipMeta}>
+                    <strong>A carregar anexo…</strong>
+                    <small>Por favor aguarde</small>
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <label className={styles.visuallyHidden} htmlFor="team-chat-attachments">Adicionar anexos</label>
+          <input
+            ref={fileInputRef}
+            id="team-chat-attachments"
+            type="file"
+            multiple
+            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+            className={styles.visuallyHidden}
+            onChange={event => {
+              if (event.target.files?.length) {
+                void handleUploadFiles(event.target.files)
+              }
+              event.target.value = ""
+            }}
+          />
+
           <label className="sr-only" htmlFor="team-chat-message">Mensagem</label>
           <textarea
             ref={textareaRef}
@@ -1290,10 +1457,33 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
             value={draft}
             disabled={!ready || blocked || sending}
             onChange={event => setDrafts(previous => ({ ...previous, [key]: event.target.value }))}
-            onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }}
+            onPaste={event => {
+              if (event.clipboardData?.files?.length) {
+                event.preventDefault()
+                void handleUploadFiles(event.clipboardData.files)
+              }
+            }}
+            onKeyDown={event => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault()
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
+                void send()
+              }
+            }}
           />
           <div className={styles.composerFooter}>
             <div className={styles.composerTools}>
+              <button
+                type="button"
+                className={styles.mediaBtn}
+                disabled={!ready || blocked || sending || uploadingAttachments}
+                onClick={() => fileInputRef.current?.click()}
+                title="Anexar ficheiro ou imagem"
+                aria-label="Anexar ficheiro ou imagem"
+              >
+                <Paperclip size={15} aria-hidden="true" />
+                <span>{uploadingAttachments ? "A anexar…" : "Anexar"}</span>
+              </button>
               <button
                 type="button"
                 className={`${styles.mediaBtn} ${showEmojiPicker ? styles.active : ""}`}
@@ -1305,7 +1495,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
                 aria-label="Adicionar emoji"
                 aria-expanded={showEmojiPicker}
               >
-                <Smile size={16} />
+                <Smile size={16} aria-hidden="true" />
                 <span>Emoji</span>
               </button>
               <button
@@ -1319,13 +1509,13 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
                 aria-label="Inserir GIF animado"
                 aria-expanded={showGifPicker}
               >
-                <Film size={15} />
+                <Film size={15} aria-hidden="true" />
                 <span>GIF</span>
               </button>
             </div>
 
-            <button className={styles.sendButton} type="submit" disabled={!ready || blocked || sending || !draft.trim()}>
-              <Send size={15} />{sending ? "A enviar…" : "Enviar mensagem"}
+            <button className={styles.sendButton} type="submit" disabled={!ready || blocked || sending || uploadingAttachments || (!draft.trim() && pendingAttachments.length === 0)}>
+              <Send size={15} aria-hidden="true" />{sending ? "A enviar…" : "Enviar mensagem"}
             </button>
           </div>
           <div className={styles.composerHint}><small className={styles.keyboardHint}>Enter para enviar · Shift + Enter para nova linha</small><small>{draft.length}/{CHAT_MAX_LENGTH}</small></div>
