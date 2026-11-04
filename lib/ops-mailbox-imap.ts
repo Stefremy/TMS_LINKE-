@@ -4,12 +4,15 @@ import { simpleParser, type ParsedMail } from "mailparser"
 import { createAdminClient } from "@/lib/supabase/server"
 import {
   buildMailSnippet,
+  normalizeMailAccount,
+  type MailAccountId,
   type MailFolder,
   type MailLabelId,
   type MailMessage,
 } from "@/lib/ops-mailbox"
 
 export interface ImapSyncOptions {
+  account?: MailAccountId
   limit?: number
   offset?: number
   folder?: MailFolder
@@ -21,6 +24,46 @@ export interface ImapSyncResult {
   errors: string[]
   connected: boolean
   totalInFolder?: number
+}
+
+export function resolveImapCredentials(account: MailAccountId): {
+  host: string
+  port: number
+  user: string
+  pass: string
+  idPrefix: string
+  defaultToName: string
+} {
+  const host = process.env.IMAP_HOST || "imap.gmail.com"
+  const port = Number(process.env.IMAP_PORT || 993)
+
+  if (account === "clientes@linke.pt") {
+    const user = (process.env.IMAP_CLIENTES_USER || "clientes@linke.pt").trim()
+    const pass = (
+      process.env.GMAIL_CLIENTES_APP_PASSWORD ||
+      process.env.IMAP_CLIENTES_PASSWORD ||
+      ""
+    ).trim()
+    return {
+      host,
+      port,
+      user,
+      pass,
+      idPrefix: "imap-clientes",
+      defaultToName: "Apoio ao Cliente Linke",
+    }
+  }
+
+  const user = (process.env.IMAP_USER || "geral@linke.pt").trim()
+  const pass = (process.env.GMAIL_APP_PASSWORD || process.env.IMAP_PASSWORD || "").trim()
+  return {
+    host,
+    port,
+    user,
+    pass,
+    idPrefix: "imap-gmail",
+    defaultToName: "Linke Geral",
+  }
 }
 
 function classifyEmailLabels(fromEmail: string, toEmail: string, subject: string): MailLabelId[] {
@@ -66,17 +109,19 @@ export async function syncGmailImap(
   tenantId: string,
   options?: ImapSyncOptions
 ): Promise<ImapSyncResult> {
-  const host = process.env.IMAP_HOST || "imap.gmail.com"
-  const port = Number(process.env.IMAP_PORT || 993)
-  const user = (process.env.IMAP_USER || "geral@linke.pt").trim()
-  const pass = (process.env.GMAIL_APP_PASSWORD || process.env.IMAP_PASSWORD || "").trim()
+  const account = normalizeMailAccount(options?.account)
+  if (account === "notificacoes@linke.pt") {
+    return { synced: 0, errors: [], connected: true }
+  }
 
-  if (!pass) {
+  const creds = resolveImapCredentials(account)
+
+  if (!creds.pass) {
+    const envVarName =
+      account === "clientes@linke.pt" ? "GMAIL_CLIENTES_APP_PASSWORD" : "GMAIL_APP_PASSWORD"
     return {
       synced: 0,
-      errors: [
-        "IMAP_PASSWORD ou GMAIL_APP_PASSWORD não configurado em .env.local para geral@linke.pt.",
-      ],
+      errors: [`${envVarName} ainda não configurado em .env.local para ${account}.`],
       connected: false,
     }
   }
@@ -97,12 +142,12 @@ export async function syncGmailImap(
   )
 
   const client = new ImapFlow({
-    host,
-    port,
-    secure: port === 993,
+    host: creds.host,
+    port: creds.port,
+    secure: creds.port === 993,
     auth: {
-      user,
-      pass,
+      user: creds.user,
+      pass: creds.pass,
     },
     logger: false,
     tls: {
@@ -124,6 +169,9 @@ export async function syncGmailImap(
   }
   const rawMessages: RawFetchedMessage[] = []
 
+  const buildMsgId = (boxKey: string, uid: number) =>
+    boxKey === "inbox" ? `${creds.idPrefix}-${uid}` : `${creds.idPrefix}-${boxKey}-${uid}`
+
   try {
     await client.connect()
     const mailboxes = await client.list()
@@ -138,12 +186,11 @@ export async function syncGmailImap(
     const fetchLimit = options?.limit || 25
     const offset = Math.max(0, options?.offset || 0)
 
-    // Determine which folder(s) to sync
     const foldersToSync: Exclude<MailFolder, "starred">[] = []
     if (options?.folder && options.folder !== "starred") {
       foldersToSync.push(options.folder)
     } else if (searchQuery) {
-      foldersToSync.push("archive") // Search across \All ([Gmail]/Todo o correio)
+      foldersToSync.push("archive")
     } else {
       foldersToSync.push("inbox", "sent")
     }
@@ -166,7 +213,6 @@ export async function syncGmailImap(
         let targetUids: number[] = []
 
         if (searchQuery) {
-          // Search across all historical messages in Gmail IMAP
           let matchedUids: number[] | false | undefined = false
           try {
             matchedUids = await client.search({ gmraw: searchQuery } as Record<string, unknown>, {
@@ -188,21 +234,15 @@ export async function syncGmailImap(
 
           if (Array.isArray(matchedUids) && matchedUids.length > 0) {
             const slice = matchedUids.slice(-fetchLimit)
-            targetUids = slice.filter((uid) => {
-              const id1 = boxKey === "inbox" ? `imap-gmail-${uid}` : `imap-gmail-${boxKey}-${uid}`
-              return !existingIds.has(id1)
-            })
+            targetUids = slice.filter((uid) => !existingIds.has(buildMsgId(boxKey, uid)))
           }
         } else {
-          // Sequence pagination (latest or older with offset)
           const endSeq = Math.max(1, totalMessages - offset)
           const startSeq = Math.max(1, endSeq - fetchLimit + 1)
           if (endSeq >= 1 && startSeq <= endSeq) {
             const range = `${startSeq}:${endSeq}`
             for await (const meta of client.fetch(range, { uid: true })) {
-              const id1 =
-                boxKey === "inbox" ? `imap-gmail-${meta.uid}` : `imap-gmail-${boxKey}-${meta.uid}`
-              if (!existingIds.has(id1)) {
+              if (!existingIds.has(buildMsgId(boxKey, meta.uid))) {
                 targetUids.push(meta.uid)
               }
             }
@@ -237,12 +277,11 @@ export async function syncGmailImap(
   } catch (err) {
     return {
       synced,
-      errors: [err instanceof Error ? err.message : "Falha na ligação IMAP com o Gmail"],
+      errors: [err instanceof Error ? err.message : `Falha na ligação IMAP com ${account}`],
       connected: false,
     }
   }
 
-  // Parse and persist outside the IMAP lock
   const rowsToInsert: {
     tenant_id: string
     user_id: null
@@ -253,10 +292,7 @@ export async function syncGmailImap(
 
   for (const item of rawMessages) {
     try {
-      const messageId =
-        item.boxKey === "inbox"
-          ? `imap-gmail-${item.uid}`
-          : `imap-gmail-${item.boxKey}-${item.uid}`
+      const messageId = buildMsgId(item.boxKey, item.uid)
       if (existingIds.has(messageId)) continue
       existingIds.add(messageId)
 
@@ -267,8 +303,8 @@ export async function syncGmailImap(
 
       const toList = Array.isArray(parsed.to) ? parsed.to : parsed.to ? [parsed.to] : []
       const firstTo = toList[0]?.value?.[0]
-      const toName = firstTo?.name || firstTo?.address?.split("@")[0] || "Linke Geral"
-      const toEmail = (firstTo?.address || "geral@linke.pt").trim()
+      const toName = firstTo?.name || firstTo?.address?.split("@")[0] || creds.defaultToName
+      const toEmail = (firstTo?.address || account).trim()
 
       const ccList = Array.isArray(parsed.cc) ? parsed.cc : parsed.cc ? [parsed.cc] : []
       const ccEmails = ccList
@@ -276,7 +312,7 @@ export async function syncGmailImap(
         .filter(Boolean)
 
       const isSentByLinke =
-        item.targetFolder === "sent" || fromEmail.toLowerCase() === "geral@linke.pt"
+        item.targetFolder === "sent" || fromEmail.toLowerCase() === account.toLowerCase()
       const resolvedFolder: Exclude<MailFolder, "starred"> =
         item.boxKey === "all" ? (isSentByLinke ? "sent" : "inbox") : item.targetFolder
 
@@ -299,10 +335,10 @@ export async function syncGmailImap(
       const messageRecord: MailMessage = {
         id: messageId,
         threadId: parsed.messageId ? `thread-${parsed.messageId}` : messageId,
-        account: "geral@linke.pt",
+        account,
         folder: resolvedFolder,
-        fromName: isSentByLinke ? fromName || "Linke Geral" : fromName,
-        fromEmail: isSentByLinke ? "geral@linke.pt" : fromEmail,
+        fromName: isSentByLinke ? fromName || creds.defaultToName : fromName,
+        fromEmail: isSentByLinke ? account : fromEmail,
         toName,
         toEmail,
         cc: ccEmails,
@@ -320,7 +356,7 @@ export async function syncGmailImap(
             name: filename,
             size: att.size || 1024,
             type: att.contentType || "application/octet-stream",
-            url: `/api/ops/mail/attachment?uid=${item.uid}&index=${idx}&box=${item.boxKey}&name=${encodeURIComponent(filename)}`,
+            url: `/api/ops/mail/attachment?uid=${item.uid}&index=${idx}&box=${item.boxKey}&account=${encodeURIComponent(account)}&name=${encodeURIComponent(filename)}`,
           }
         }),
         createdAt: dateIso,

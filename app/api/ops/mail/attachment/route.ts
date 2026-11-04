@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { ImapFlow } from "imapflow"
 import { simpleParser, type ParsedMail } from "mailparser"
+import { normalizeMailAccount } from "@/lib/ops-mailbox"
+import { resolveImapCredentials } from "@/lib/ops-mailbox-imap"
 import { mailboxContext } from "@/lib/ops-mailbox-server"
 
 export const runtime = "nodejs"
@@ -23,6 +25,7 @@ export async function GET(request: Request) {
     const uidParam = searchParams.get("uid")
     const indexParam = searchParams.get("index") || "0"
     const boxParam = (searchParams.get("box") || "inbox").toLowerCase()
+    const account = normalizeMailAccount(searchParams.get("account"))
     const download = searchParams.get("download") === "1"
 
     const uid = Number(uidParam)
@@ -31,20 +34,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "UID de mensagem inválido." }, { status: 400 })
     }
 
-    const host = process.env.IMAP_HOST || "imap.gmail.com"
-    const port = Number(process.env.IMAP_PORT || 993)
-    const user = (process.env.IMAP_USER || "geral@linke.pt").trim()
-    const pass = (process.env.GMAIL_APP_PASSWORD || process.env.IMAP_PASSWORD || "").trim()
+    const creds = resolveImapCredentials(account)
 
-    if (!pass) {
-      return NextResponse.json({ error: "Credenciais IMAP não configuradas." }, { status: 500 })
+    if (!creds.pass) {
+      return NextResponse.json(
+        { error: `Credenciais IMAP não configuradas para ${account}.` },
+        { status: 500 }
+      )
     }
 
     const client = new ImapFlow({
-      host,
-      port,
-      secure: port === 993,
-      auth: { user, pass },
+      host: creds.host,
+      port: creds.port,
+      secure: creds.port === 993,
+      auth: { user: creds.user, pass: creds.pass },
       logger: false,
       tls: { rejectUnauthorized: false },
     })

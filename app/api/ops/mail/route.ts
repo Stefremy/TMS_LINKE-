@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { MailError, type MailComposeInput, type MailMutationAction } from "@/lib/ops-mailbox"
+import {
+  MailError,
+  normalizeMailAccount,
+  type MailComposeInput,
+  type MailMutationAction,
+} from "@/lib/ops-mailbox"
 import {
   composeOrSaveMail,
   listMailboxMessages,
@@ -51,17 +56,19 @@ export async function POST(request: Request) {
     }
 
     if (body.kind === "sync_imap") {
+      const account = normalizeMailAccount(body.account)
       const folder = typeof body.folder === "string" ? (body.folder as any) : undefined
       const offset = typeof body.offset === "number" ? body.offset : 0
       const limit = typeof body.limit === "number" ? Math.min(50, Math.max(5, body.limit)) : 25
       const searchQuery = typeof body.searchQuery === "string" ? body.searchQuery : undefined
       const result = await syncGmailImap(context.tenant_id, {
+        account,
         folder,
         offset,
         limit,
         searchQuery,
       })
-      const data = await listMailboxMessages(context, "geral@linke.pt")
+      const data = await listMailboxMessages(context, account)
       return NextResponse.json({ ok: true, sync: result, ...data }, { headers })
     }
 

@@ -328,17 +328,19 @@ export function MailboxClient({
     }
   }, [selectedMessage])
 
+  const isImapAccount = account === "geral@linke.pt" || account === "clientes@linke.pt"
+
   const refreshMailbox = React.useCallback(
     async (silent = false) => {
       setRefreshing(true)
       if (!silent) setErrorMessage(null)
       try {
-        if (account === "geral@linke.pt") {
+        if (isImapAccount) {
           try {
             const syncRes = await fetch("/api/ops/mail", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ kind: "sync_imap" }),
+              body: JSON.stringify({ kind: "sync_imap", account }),
             })
             const syncData = await syncRes.json()
             if (syncRes.ok && syncData.ok) {
@@ -377,17 +379,16 @@ export function MailboxClient({
         setRefreshing(false)
       }
     },
-    [account, showToast]
+    [account, isImapAccount, showToast]
   )
 
-  // Auto-sync with Gmail on initial mount
+  // Auto-sync with Gmail on initial mount & when switching accounts
   React.useEffect(() => {
     void refreshMailbox(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [account, refreshMailbox])
 
   const handleLoadOlderEmails = React.useCallback(async () => {
-    if (loadingOlder || account !== "geral@linke.pt") return
+    if (loadingOlder || !isImapAccount) return
     setLoadingOlder(true)
     try {
       const targetFolder = activeFolder === "starred" ? "inbox" : activeFolder
@@ -397,6 +398,7 @@ export function MailboxClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind: "sync_imap",
+          account,
           folder: targetFolder,
           offset: currentFolderCount,
           limit: 25,
@@ -407,7 +409,7 @@ export function MailboxClient({
         setMessages(syncData.messages || [])
         const syncedCount = syncData.sync?.synced || 0
         if (syncedCount > 0) {
-          showToast(`Carregados +${syncedCount} emails antigos do Gmail`)
+          showToast(`Carregados +${syncedCount} emails antigos do Gmail (${account})`)
         } else {
           showToast("Mais emails antigos verificados no Gmail")
         }
@@ -417,11 +419,11 @@ export function MailboxClient({
     } finally {
       setLoadingOlder(false)
     }
-  }, [loadingOlder, account, activeFolder, accountMessages, showToast])
+  }, [loadingOlder, isImapAccount, account, activeFolder, accountMessages, showToast])
 
   const handleSearchGmailHistory = React.useCallback(async () => {
     const q = searchQuery.trim()
-    if (!q || searchingHistory || account !== "geral@linke.pt") return
+    if (!q || searchingHistory || !isImapAccount) return
     setSearchingHistory(true)
     try {
       const syncRes = await fetch("/api/ops/mail", {
@@ -429,6 +431,7 @@ export function MailboxClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind: "sync_imap",
+          account,
           searchQuery: q,
           limit: 30,
         }),
@@ -448,7 +451,7 @@ export function MailboxClient({
     } finally {
       setSearchingHistory(false)
     }
-  }, [searchQuery, searchingHistory, account, showToast])
+  }, [searchQuery, searchingHistory, isImapAccount, account, showToast])
 
   const runMutation = React.useCallback(
     async (
@@ -1112,7 +1115,7 @@ export function MailboxClient({
               )}
             </div>
 
-            {searchQuery.trim() && account === "geral@linke.pt" && (
+            {searchQuery.trim() && isImapAccount && (
               <button
                 type="button"
                 disabled={searchingHistory}
@@ -1143,7 +1146,7 @@ export function MailboxClient({
                 <p className="mt-1 max-w-[220px] text-[11px] text-[var(--text-secondary)]">
                   Não existem mensagens nesta vista ou com os filtros aplicados.
                 </p>
-                {account === "geral@linke.pt" && (
+                {isImapAccount && (
                   <button
                     type="button"
                     disabled={loadingOlder || searchingHistory}
@@ -1281,7 +1284,7 @@ export function MailboxClient({
                   )
                 })}
 
-                {account === "geral@linke.pt" && (
+                {isImapAccount && (
                   <div className="pt-2 pb-3 text-center">
                     <button
                       type="button"
@@ -2171,7 +2174,7 @@ export function MailboxClient({
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-[var(--accent)]" aria-hidden="true" />
               <h2 id="connection-modal-title" className="text-sm font-bold">
-                Ligação de Email · geral@linke.pt
+                Ligação de Email · {account}
               </h2>
             </div>
             <button
@@ -2196,15 +2199,20 @@ export function MailboxClient({
             <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-3.5 text-sky-950">
               <p className="font-bold">Sincronização Direta Google Workspace (IMAP)</p>
               <p className="mt-1 text-[11px] opacity-90 leading-relaxed">
-                A ligação IMAP lê a caixa de entrada real de <strong>geral@linke.pt</strong> (servidor <code>imap.gmail.com:993</code>) e descarrega novas mensagens automaticamente ao carregar no botão <strong>Sincronizar</strong>.
+                A ligação IMAP lê a caixa de correio real de <strong>{account}</strong> (servidor <code>imap.gmail.com:993</code>) e descarrega mensagens recebidas, enviadas, histórico e anexos ao carregar em <strong>Sincronizar</strong>.
               </p>
               <div className="mt-2.5 rounded-lg bg-[var(--surface-bg)]/80 p-2.5 font-mono text-[10px] text-slate-800 space-y-1 border border-sky-500/20">
                 <div><strong>Host:</strong> imap.gmail.com:993 (SSL)</div>
-                <div><strong>Conta:</strong> geral@linke.pt</div>
-                <div><strong>Autenticação:</strong> Google App Password (GMAIL_APP_PASSWORD)</div>
+                <div><strong>Conta:</strong> {account}</div>
+                <div>
+                  <strong>Autenticação:</strong>{" "}
+                  {account === "clientes@linke.pt"
+                    ? "Google App Password (GMAIL_CLIENTES_APP_PASSWORD)"
+                    : "Google App Password (GMAIL_APP_PASSWORD)"}
+                </div>
               </div>
               <p className="mt-2 text-[10px] text-slate-600">
-                Dica: Se a conta tiver verificação de 2 passos (2FA), gere uma senha de aplicação de 16 caracteres em <em>myaccount.google.com/apppasswords</em>.
+                Dica: Para ativar uma caixa no Google Workspace com 2FA, gere uma senha de aplicação de 16 caracteres em <em>myaccount.google.com/apppasswords</em>.
               </p>
             </div>
 
@@ -2213,7 +2221,7 @@ export function MailboxClient({
                 Webhook de Receção Automática (Inbound Emails)
               </p>
               <p className="text-[11px]">
-                Para encaminhar emails recebidos em <strong>geral@linke.pt</strong> (Google Workspace / Resend Inbound) diretamente para esta Caixa de Entrada em tempo real, aponte o Webhook ou encaminhamento para:
+                Para encaminhar emails recebidos em <strong>{account}</strong> (Google Workspace / Resend Inbound) diretamente para esta Caixa de Entrada em tempo real, aponte o Webhook ou encaminhamento para:
               </p>
               <div className="mt-2 flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3 py-2 font-mono text-[11px] text-[var(--text-primary)]">
                 <span className="flex-1 truncate">{initialData.inboundWebhookUrl}</span>
