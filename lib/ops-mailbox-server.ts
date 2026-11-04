@@ -58,7 +58,13 @@ function sanitizeAttachments(attachments?: unknown): ChatAttachmentItem[] {
   for (const item of attachments) {
     if (item && typeof item === "object") {
       const att = item as Partial<ChatAttachmentItem>
-      if (typeof att.url === "string" && att.url.startsWith("http") && typeof att.name === "string") {
+      if (
+        typeof att.url === "string" &&
+        (att.url.startsWith("http") ||
+          att.url.startsWith("/api/ops/mail/attachment") ||
+          att.url.startsWith("data:")) &&
+        typeof att.name === "string"
+      ) {
         list.push({
           id: typeof att.id === "string" ? att.id : crypto.randomUUID(),
           name: att.name.slice(0, 140),
@@ -96,7 +102,7 @@ export async function listMailboxMessages(
     .eq("tenant_id", context.tenant_id)
     .in("action", [ACTION_MESSAGE, ACTION_MUTATION, "tracking_email_sent"])
     .order("created_at", { ascending: true })
-    .limit(500)
+    .limit(2500)
 
   const messageMap = new Map<string, MailMessage>()
   const deletedIds = new Set<string>()

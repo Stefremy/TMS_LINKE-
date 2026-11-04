@@ -157,6 +157,8 @@ export function MailboxClient({
 
   // Sync / status
   const [refreshing, setRefreshing] = React.useState(false)
+  const [loadingOlder, setLoadingOlder] = React.useState(false)
+  const [searchingHistory, setSearchingHistory] = React.useState(false)
   const [toastMessage, setToastMessage] = React.useState<string | null>(null)
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
   const [showConnectionModal, setShowConnectionModal] = React.useState(false)
@@ -357,6 +359,70 @@ export function MailboxClient({
     void refreshMailbox(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const handleLoadOlderEmails = React.useCallback(async () => {
+    if (loadingOlder || account !== "geral@linke.pt") return
+    setLoadingOlder(true)
+    try {
+      const targetFolder = activeFolder === "starred" ? "inbox" : activeFolder
+      const currentFolderCount = accountMessages.filter((m) => m.folder === targetFolder).length
+      const syncRes = await fetch("/api/ops/mail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "sync_imap",
+          folder: targetFolder,
+          offset: currentFolderCount,
+          limit: 25,
+        }),
+      })
+      const syncData = await syncRes.json()
+      if (syncRes.ok && syncData.ok) {
+        setMessages(syncData.messages || [])
+        const syncedCount = syncData.sync?.synced || 0
+        if (syncedCount > 0) {
+          showToast(`Carregados +${syncedCount} emails antigos do Gmail`)
+        } else {
+          showToast("Mais emails antigos verificados no Gmail")
+        }
+      }
+    } catch {
+      showToast("Não foi possível carregar mais emails antigos.")
+    } finally {
+      setLoadingOlder(false)
+    }
+  }, [loadingOlder, account, activeFolder, accountMessages, showToast])
+
+  const handleSearchGmailHistory = React.useCallback(async () => {
+    const q = searchQuery.trim()
+    if (!q || searchingHistory || account !== "geral@linke.pt") return
+    setSearchingHistory(true)
+    try {
+      const syncRes = await fetch("/api/ops/mail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "sync_imap",
+          searchQuery: q,
+          limit: 30,
+        }),
+      })
+      const syncData = await syncRes.json()
+      if (syncRes.ok && syncData.ok) {
+        setMessages(syncData.messages || [])
+        const syncedCount = syncData.sync?.synced || 0
+        if (syncedCount > 0) {
+          showToast(`Importados ${syncedCount} emails do histórico do Gmail para «${q}»`)
+        } else {
+          showToast(`Pesquisa concluída em todo o histórico do Gmail para «${q}»`)
+        }
+      }
+    } catch {
+      showToast("Erro ao pesquisar no arquivo do Gmail.")
+    } finally {
+      setSearchingHistory(false)
+    }
+  }, [searchQuery, searchingHistory, account, showToast])
 
   const runMutation = React.useCallback(
     async (
@@ -943,7 +1009,13 @@ export function MailboxClient({
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Pesquisar remetente, assunto, cliente ou guia…"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && searchQuery.trim()) {
+                    e.preventDefault()
+                    void handleSearchGmailHistory()
+                  }
+                }}
+                placeholder="Pesquisar remetente, assunto, cliente ou guia… (Enter p/ histórico)"
                 aria-label="Pesquisar emails"
                 className="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)]/60 py-1.5 pr-8 pl-8.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent)] focus:bg-[var(--surface-bg)] focus:outline-none"
               />
@@ -958,6 +1030,23 @@ export function MailboxClient({
                 </button>
               )}
             </div>
+
+            {searchQuery.trim() && account === "geral@linke.pt" && (
+              <button
+                type="button"
+                disabled={searchingHistory}
+                onClick={() => void handleSearchGmailHistory()}
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-[var(--accent)]/30 bg-[var(--accent)]/[0.08] px-3 py-1.5 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/15 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                <RefreshCw
+                  className={`h-3 w-3 ${searchingHistory ? "animate-spin" : ""}`}
+                  aria-hidden="true"
+                />
+                {searchingHistory
+                  ? `A pesquisar «${searchQuery.trim()}» no arquivo Gmail…`
+                  : `Pesquisar «${searchQuery.trim()}» em todo o histórico do Gmail`}
+              </button>
+            )}
           </search>
 
           {/* Scrollable Message Cards List */}
@@ -973,122 +1062,163 @@ export function MailboxClient({
                 <p className="mt-1 max-w-[220px] text-[11px] text-[var(--text-secondary)]">
                   Não existem mensagens nesta vista ou com os filtros aplicados.
                 </p>
+                {account === "geral@linke.pt" && (
+                  <button
+                    type="button"
+                    disabled={loadingOlder || searchingHistory}
+                    onClick={() =>
+                      searchQuery.trim()
+                        ? void handleSearchGmailHistory()
+                        : void handleLoadOlderEmails()
+                    }
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)] hover:bg-[var(--surface-muted)] disabled:opacity-50 cursor-pointer"
+                  >
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 ${loadingOlder || searchingHistory ? "animate-spin" : ""}`}
+                      aria-hidden="true"
+                    />
+                    {searchQuery.trim()
+                      ? `Procurar «${searchQuery.trim()}» no arquivo do Gmail`
+                      : "Importar emails desta pasta do Gmail"}
+                  </button>
+                )}
               </div>
             ) : (
-              filteredMessages.map((msg) => {
-                const isSelected = selectedMessage?.id === msg.id
-                const displayParty =
-                  msg.folder === "sent" || msg.folder === "drafts"
-                    ? `Para: ${msg.toName || msg.toEmail}`
-                    : msg.fromName || msg.fromEmail
+              <>
+                {filteredMessages.map((msg) => {
+                  const isSelected = selectedMessage?.id === msg.id
+                  const displayParty =
+                    msg.folder === "sent" || msg.folder === "drafts"
+                      ? `Para: ${msg.toName || msg.toEmail}`
+                      : msg.fromName || msg.fromEmail
 
-                return (
-                  <div
-                    key={msg.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleSelectMessage(msg)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault()
-                        handleSelectMessage(msg)
-                      }
-                    }}
-                    className={`group relative flex flex-col gap-1.5 rounded-xl border p-3 text-left transition-all cursor-pointer ${
-                      isSelected
-                        ? "border-[var(--accent)]/40 bg-[var(--accent)]/[0.06] shadow-2xs"
-                        : "border-[var(--border-subtle)] bg-[var(--surface-bg)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)]/40"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        {!msg.read && (
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-full bg-[var(--accent)]"
-                            title="Não lido"
-                          />
-                        )}
-                        <span
-                          className={`truncate text-xs ${
-                            !msg.read
-                              ? "font-bold text-[var(--text-primary)]"
-                              : "font-semibold text-[var(--text-primary)]"
-                          }`}
-                        >
-                          {displayParty}
-                        </span>
-                      </div>
-
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <span
-                          className={`text-[11px] ${
-                            !msg.read
-                              ? "font-semibold text-[var(--accent)]"
-                              : "text-[var(--text-tertiary)]"
-                          }`}
-                        >
-                          {formatRelativeTime(msg.createdAt)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            void runMutation("toggle_star", [msg.id])
-                          }}
-                          aria-label={msg.starred ? "Remover estrela" : "Marcar com estrela"}
-                          className={`p-0.5 transition-colors ${
-                            msg.starred
-                              ? "text-amber-500"
-                              : "text-transparent group-hover:text-[var(--text-tertiary)] hover:text-amber-500"
-                          }`}
-                        >
-                          <Star
-                            className="h-3.5 w-3.5"
-                            fill={msg.starred ? "currentColor" : "none"}
-                            aria-hidden="true"
-                          />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="truncate text-xs font-medium text-[var(--text-primary)]">
-                      {msg.subject}
-                    </div>
-
-                    <p className="line-clamp-2 text-[11px] leading-relaxed text-[var(--text-secondary)]">
-                      {msg.snippet}
-                    </p>
-
-                    {(msg.labels.length > 0 || msg.attachments.length > 0 || msg.folder === "drafts") && (
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                        {msg.folder === "drafts" && (
-                          <span className="inline-flex items-center rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                            Rascunho
-                          </span>
-                        )}
-                        {msg.labels.map((lblId) => {
-                          const meta = MAIL_LABELS.find((l) => l.id === lblId)
-                          if (!meta) return null
-                          return (
+                  return (
+                    <div
+                      key={msg.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleSelectMessage(msg)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          handleSelectMessage(msg)
+                        }
+                      }}
+                      className={`group relative flex flex-col gap-1.5 rounded-xl border p-3 text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? "border-[var(--accent)]/40 bg-[var(--accent)]/[0.06] shadow-2xs"
+                          : "border-[var(--border-subtle)] bg-[var(--surface-bg)] hover:border-[var(--border-strong)] hover:bg-[var(--surface-muted)]/40"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          {!msg.read && (
                             <span
-                              key={lblId}
-                              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold ${meta.badgeClass}`}
-                            >
-                              {meta.name}
-                            </span>
-                          )
-                        })}
-                        {msg.attachments.length > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-secondary)]">
-                            <Paperclip className="h-2.5 w-2.5" aria-hidden="true" />
-                            {msg.attachments.length}
+                              className="h-2 w-2 shrink-0 rounded-full bg-[var(--accent)]"
+                              title="Não lido"
+                            />
+                          )}
+                          <span
+                            className={`truncate text-xs ${
+                              !msg.read
+                                ? "font-bold text-[var(--text-primary)]"
+                                : "font-semibold text-[var(--text-primary)]"
+                            }`}
+                          >
+                            {displayParty}
                           </span>
-                        )}
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <span
+                            className={`text-[11px] ${
+                              !msg.read
+                                ? "font-semibold text-[var(--accent)]"
+                                : "text-[var(--text-tertiary)]"
+                            }`}
+                          >
+                            {formatRelativeTime(msg.createdAt)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void runMutation("toggle_star", [msg.id])
+                            }}
+                            aria-label={msg.starred ? "Remover estrela" : "Marcar com estrela"}
+                            className={`p-0.5 transition-colors ${
+                              msg.starred
+                                ? "text-amber-500"
+                                : "text-transparent group-hover:text-[var(--text-tertiary)] hover:text-amber-500"
+                            }`}
+                          >
+                            <Star
+                              className="h-3.5 w-3.5"
+                              fill={msg.starred ? "currentColor" : "none"}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </div>
                       </div>
-                    )}
+
+                      <div className="truncate text-xs font-medium text-[var(--text-primary)]">
+                        {msg.subject}
+                      </div>
+
+                      <p className="line-clamp-2 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+                        {msg.snippet}
+                      </p>
+
+                      {(msg.labels.length > 0 || msg.attachments.length > 0 || msg.folder === "drafts") && (
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          {msg.folder === "drafts" && (
+                            <span className="inline-flex items-center rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              Rascunho
+                            </span>
+                          )}
+                          {msg.labels.map((lblId) => {
+                            const meta = MAIL_LABELS.find((l) => l.id === lblId)
+                            if (!meta) return null
+                            return (
+                              <span
+                                key={lblId}
+                                className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold ${meta.badgeClass}`}
+                              >
+                                {meta.name}
+                              </span>
+                            )
+                          })}
+                          {msg.attachments.length > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-secondary)]">
+                              <Paperclip className="h-2.5 w-2.5" aria-hidden="true" />
+                              {msg.attachments.length}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {account === "geral@linke.pt" && (
+                  <div className="pt-2 pb-3 text-center">
+                    <button
+                      type="button"
+                      disabled={loadingOlder}
+                      onClick={() => void handleLoadOlderEmails()}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-muted)]/40 px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-50 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw
+                        className={`h-3.5 w-3.5 ${loadingOlder ? "animate-spin" : ""}`}
+                        aria-hidden="true"
+                      />
+                      {loadingOlder
+                        ? "A carregar emails anteriores do Gmail…"
+                        : "Carregar +25 emails antigos do Gmail"}
+                    </button>
                   </div>
-                )
-              })
+                )}
+              </>
             )}
           </div>
         </section>

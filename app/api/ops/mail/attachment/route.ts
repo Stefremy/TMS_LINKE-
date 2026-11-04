@@ -6,12 +6,23 @@ import { mailboxContext } from "@/lib/ops-mailbox-server"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+const SPECIAL_USE_BY_BOX: Record<string, string> = {
+  inbox: "\\Inbox",
+  sent: "\\Sent",
+  drafts: "\\Drafts",
+  trash: "\\Trash",
+  junk: "\\Junk",
+  archive: "\\All",
+  all: "\\All",
+}
+
 export async function GET(request: Request) {
   try {
     await mailboxContext()
     const { searchParams } = new URL(request.url)
     const uidParam = searchParams.get("uid")
     const indexParam = searchParams.get("index") || "0"
+    const boxParam = (searchParams.get("box") || "inbox").toLowerCase()
     const download = searchParams.get("download") === "1"
 
     const uid = Number(uidParam)
@@ -40,7 +51,18 @@ export async function GET(request: Request) {
 
     let rawSource: Buffer | null = null
     await client.connect()
-    const lock = await client.getMailboxLock("INBOX")
+
+    let mailboxPath = "INBOX"
+    if (boxParam !== "inbox") {
+      const targetSpecial = SPECIAL_USE_BY_BOX[boxParam]
+      const list = await client.list()
+      const matched = list.find((m) => m.specialUse === targetSpecial)
+      if (matched?.path) {
+        mailboxPath = matched.path
+      }
+    }
+
+    const lock = await client.getMailboxLock(mailboxPath)
     try {
       for await (const msg of client.fetch(String(uid), { uid: true, source: true }, { uid: true })) {
         if (msg.source) {
@@ -88,4 +110,3 @@ export async function GET(request: Request) {
     )
   }
 }
-
