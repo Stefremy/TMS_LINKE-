@@ -21,6 +21,8 @@ import {
   Mail,
   MailOpen,
   MoreVertical,
+  PanelLeftClose,
+  PanelLeftOpen,
   Paperclip,
   PenSquare,
   Plus,
@@ -170,6 +172,30 @@ export function MailboxClient({
   const [viewPlainText, setViewPlainText] = React.useState(false)
   const [iframeHeight, setIframeHeight] = React.useState(420)
   const [previewAttachment, setPreviewAttachment] = React.useState<ChatAttachmentItem | null>(null)
+  const [isLeftPaneCollapsed, setIsLeftPaneCollapsed] = React.useState(false)
+
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem("linke_mail_left_collapsed")
+      if (saved !== null) {
+        setIsLeftPaneCollapsed(saved === "true")
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  const toggleLeftPane = React.useCallback(() => {
+    setIsLeftPaneCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem("linke_mail_left_collapsed", String(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }, [])
 
   // Compose Modal state
   const [showComposeModal, setShowComposeModal] = React.useState(false)
@@ -662,11 +688,24 @@ export function MailboxClient({
     MAIL_ACCOUNTS.find((a) => a.id === account) || MAIL_ACCOUNTS[0]
 
   return (
-    <div className="mx-auto flex w-full max-w-[1720px] flex-col gap-3">
+    <div className="mx-auto flex w-full max-w-[1720px] flex-col gap-2.5">
       {/* Top Header Strip */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <div>
           <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={toggleLeftPane}
+              title={isLeftPaneCollapsed ? "Mostrar barra de pastas" : "Esconder barra de pastas"}
+              aria-label={isLeftPaneCollapsed ? "Mostrar barra de pastas" : "Esconder barra de pastas"}
+              className="hidden h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer lg:inline-flex"
+            >
+              {isLeftPaneCollapsed ? (
+                <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <PanelLeftClose className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+            </button>
             <span className="h-2 w-2 rounded-full bg-[var(--accent)]" aria-hidden="true" />
             <h1 className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
               Caixa de Correio
@@ -747,195 +786,225 @@ export function MailboxClient({
         </div>
       )}
 
-      {/* 3-Pane Split View Mail Container (modeled after shadcn/admincn /apps/mail) */}
-      <div className="grid h-[calc(100dvh-185px)] min-h-[560px] max-h-[1040px] grid-cols-1 overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] shadow-xs lg:grid-cols-[240px_380px_minmax(0,1fr)] xl:grid-cols-[256px_410px_minmax(0,1fr)]">
+      {/* 3-Pane Split View Mail Container */}
+      <div
+        className={`grid h-[calc(100dvh-146px)] min-h-[480px] max-h-[1040px] grid-cols-1 grid-rows-[minmax(0,1fr)] overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] shadow-xs ${
+          isLeftPaneCollapsed
+            ? "lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[390px_minmax(0,1fr)]"
+            : "lg:grid-cols-[232px_350px_minmax(0,1fr)] xl:grid-cols-[246px_380px_minmax(0,1fr)]"
+        }`}
+      >
         {/* ─── LEFT PANE: Account Switcher, Compose, Folders & Labels ─── */}
-        <aside className="hidden flex-col border-r border-[var(--border-subtle)] bg-[var(--surface-muted)]/45 lg:flex">
-          {/* Account Switcher */}
-          <div className="border-b border-[var(--border-subtle)] p-3">
-            <label htmlFor="mailbox-account-select" className="sr-only">
-              Selecionar conta de email
-            </label>
-            <div className="relative">
-              <select
-                id="mailbox-account-select"
-                value={account}
-                onChange={(e) => {
-                  const nextAcc = e.target.value as MailAccountId
-                  setAccount(nextAcc)
-                  const first = messages.find((m) => m.account === nextAcc && m.folder === activeFolder)
-                  setSelectedId(first?.id || null)
-                }}
-                className="w-full appearance-none rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] py-2 pr-8 pl-9 text-xs font-semibold text-[var(--text-primary)] shadow-2xs focus:border-[var(--accent)] focus:outline-none"
-              >
-                {MAIL_ACCOUNTS.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.label} ({acc.email})
-                  </option>
-                ))}
-              </select>
-              <Mail
-                className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--accent)]"
-                aria-hidden="true"
-              />
-              <ChevronDown
-                className="pointer-events-none absolute top-1/2 right-2.5 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-tertiary)]"
-                aria-hidden="true"
-              />
-            </div>
-            <p className="mt-1.5 truncate px-1 text-[11px] text-[var(--text-secondary)]">
-              {activeAccountMeta.roleLabel}
-            </p>
-          </div>
-
-          {/* Primary Compose Button */}
-          <div className="p-3 pb-2">
-            <button
-              type="button"
-              onClick={() => openComposeModal()}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-bold text-white shadow-xs hover:bg-[var(--accent-hover)] transition-colors cursor-pointer"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Escrever Email
-            </button>
-          </div>
-
-          {/* Folders List */}
-          <nav aria-label="Pastas de email" className="flex-1 space-y-5 overflow-y-auto px-2.5 py-2">
-            <div className="space-y-0.5">
-              {FOLDER_CONFIG.map((item) => {
-                const Icon = item.icon
-                const isSelected = activeFolder === item.id && activeLabel === null
-                const countInfo = folderCounts[item.id]
-                const badgeCount =
-                  item.id === "inbox" || item.id === "starred"
-                    ? countInfo?.unread || countInfo?.total || 0
-                    : countInfo?.total || 0
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveFolder(item.id)
-                      setActiveLabel(null)
-                      setMobileShowReader(false)
+        {!isLeftPaneCollapsed && (
+          <aside className="hidden min-h-0 flex-col overflow-hidden border-r border-[var(--border-subtle)] bg-[var(--surface-muted)]/45 lg:flex">
+            {/* Account Switcher */}
+            <div className="shrink-0 border-b border-[var(--border-subtle)] p-2.5">
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="mailbox-account-select" className="sr-only">
+                  Selecionar conta de email
+                </label>
+                <div className="relative min-w-0 flex-1">
+                  <select
+                    id="mailbox-account-select"
+                    value={account}
+                    onChange={(e) => {
+                      const nextAcc = e.target.value as MailAccountId
+                      setAccount(nextAcc)
+                      const first = messages.find((m) => m.account === nextAcc && m.folder === activeFolder)
+                      setSelectedId(first?.id || null)
                     }}
-                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium transition-colors cursor-pointer ${
-                      isSelected
-                        ? "bg-[var(--accent)] text-white font-semibold shadow-2xs"
-                        : "text-[var(--text-primary)] hover:bg-[var(--surface-bg)]"
-                    }`}
+                    className="w-full appearance-none rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] py-1.5 pr-7 pl-8 text-xs font-semibold text-[var(--text-primary)] shadow-2xs focus:border-[var(--accent)] focus:outline-none"
                   >
-                    <span className="flex items-center gap-2.5 truncate">
-                      <Icon
-                        className={`h-4 w-4 shrink-0 ${
-                          isSelected ? "text-white" : "text-[var(--text-secondary)]"
-                        }`}
-                        aria-hidden="true"
-                      />
-                      <span className="truncate">{item.label}</span>
-                    </span>
-                    {badgeCount > 0 && (
-                      <span
-                        className={`ml-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
-                          isSelected
-                            ? "bg-white/20 text-white"
-                            : item.id === "inbox" && countInfo.unread > 0
-                            ? "bg-[var(--accent)]/15 text-[var(--accent)]"
-                            : "bg-[var(--surface-bg)] text-[var(--text-secondary)]"
-                        }`}
-                      >
-                        {badgeCount}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
+                    {MAIL_ACCOUNTS.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.label} ({acc.email})
+                      </option>
+                    ))}
+                  </select>
+                  <Mail
+                    className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-[var(--accent)]"
+                    aria-hidden="true"
+                  />
+                  <ChevronDown
+                    className="pointer-events-none absolute top-1/2 right-2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-tertiary)]"
+                    aria-hidden="true"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleLeftPane}
+                  title="Esconder barra lateral"
+                  aria-label="Esconder barra lateral"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                >
+                  <PanelLeftClose className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+              <p className="mt-1 truncate px-1 text-[10px] text-[var(--text-secondary)]">
+                {activeAccountMeta.roleLabel}
+              </p>
             </div>
 
-            {/* Categories / Labels */}
-            <div className="border-t border-[var(--border-subtle)] pt-4">
-              <div className="mb-2 flex items-center justify-between px-2.5">
-                <span className="text-[10px] font-bold tracking-wider text-[var(--text-tertiary)] uppercase">
-                  Etiquetas Linke
-                </span>
-                {activeLabel && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveLabel(null)}
-                    className="text-[10px] font-semibold text-[var(--accent)] hover:underline"
-                  >
-                    Limpar
-                  </button>
-                )}
-              </div>
+            {/* Primary Compose Button */}
+            <div className="shrink-0 p-2.5 pb-1.5">
+              <button
+                type="button"
+                onClick={() => openComposeModal()}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-[var(--accent-hover)] transition-colors cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                Escrever Email
+              </button>
+            </div>
+
+            {/* Folders List */}
+            <nav aria-label="Pastas de email" className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-2 py-1.5">
               <div className="space-y-0.5">
-                {MAIL_LABELS.map((lbl) => {
-                  const isSelected = activeLabel === lbl.id
-                  const count = labelCounts[lbl.id] || 0
+                {FOLDER_CONFIG.map((item) => {
+                  const Icon = item.icon
+                  const isSelected = activeFolder === item.id && activeLabel === null
+                  const countInfo = folderCounts[item.id]
+                  const badgeCount =
+                    item.id === "inbox" || item.id === "starred"
+                      ? countInfo?.unread || countInfo?.total || 0
+                      : countInfo?.total || 0
+
                   return (
                     <button
-                      key={lbl.id}
+                      key={item.id}
                       type="button"
                       onClick={() => {
-                        setActiveLabel((prev) => (prev === lbl.id ? null : lbl.id))
+                        setActiveFolder(item.id)
+                        setActiveLabel(null)
                         setMobileShowReader(false)
                       }}
-                      className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition-colors cursor-pointer ${
+                      className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                         isSelected
-                          ? "bg-[var(--surface-bg)] font-semibold text-[var(--text-primary)] ring-1 ring-[var(--border-subtle)]"
-                          : "text-[var(--text-secondary)] hover:bg-[var(--surface-bg)] hover:text-[var(--text-primary)]"
+                          ? "bg-[var(--accent)] text-white font-semibold shadow-2xs"
+                          : "text-[var(--text-primary)] hover:bg-[var(--surface-bg)]"
                       }`}
                     >
-                      <span className="flex items-center gap-2.5 truncate">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: lbl.color }}
+                      <span className="flex items-center gap-2 truncate">
+                        <Icon
+                          className={`h-3.5 w-3.5 shrink-0 ${
+                            isSelected ? "text-white" : "text-[var(--text-secondary)]"
+                          }`}
                           aria-hidden="true"
                         />
-                        <span className="truncate">{lbl.name}</span>
+                        <span className="truncate">{item.label}</span>
                       </span>
-                      {count > 0 && (
-                        <span className="text-[11px] font-medium text-[var(--text-tertiary)]">
-                          {count}
+                      {badgeCount > 0 && (
+                        <span
+                          className={`ml-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                            isSelected
+                              ? "bg-white/20 text-white"
+                              : item.id === "inbox" && countInfo.unread > 0
+                              ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                              : "bg-[var(--surface-bg)] text-[var(--text-secondary)]"
+                          }`}
+                        >
+                          {badgeCount}
                         </span>
                       )}
                     </button>
                   )
                 })}
               </div>
-            </div>
-          </nav>
 
-          {/* Operator Footer */}
-          <div className="border-t border-[var(--border-subtle)] bg-[var(--surface-bg)]/60 p-3">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/15 text-xs font-bold text-[var(--accent)]">
-                {getInitials(viewerName)}
+              {/* Categories / Labels */}
+              <div className="border-t border-[var(--border-subtle)] pt-2.5">
+                <div className="mb-1.5 flex items-center justify-between px-2">
+                  <span className="text-[10px] font-bold tracking-wider text-[var(--text-tertiary)] uppercase">
+                    Etiquetas Linke
+                  </span>
+                  {activeLabel && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveLabel(null)}
+                      className="text-[10px] font-semibold text-[var(--accent)] hover:underline"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-0.5">
+                  {MAIL_LABELS.map((lbl) => {
+                    const isSelected = activeLabel === lbl.id
+                    const count = labelCounts[lbl.id] || 0
+                    return (
+                      <button
+                        key={lbl.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveLabel((prev) => (prev === lbl.id ? null : lbl.id))
+                          setMobileShowReader(false)
+                        }}
+                        className={`flex w-full items-center justify-between rounded-lg px-2 py-1 text-xs transition-colors cursor-pointer ${
+                          isSelected
+                            ? "bg-[var(--surface-bg)] font-semibold text-[var(--text-primary)] ring-1 ring-[var(--border-subtle)]"
+                            : "text-[var(--text-secondary)] hover:bg-[var(--surface-bg)] hover:text-[var(--text-primary)]"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2 truncate">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: lbl.color }}
+                            aria-hidden="true"
+                          />
+                          <span className="truncate">{lbl.name}</span>
+                        </span>
+                        {count > 0 && (
+                          <span className="text-[10px] font-medium text-[var(--text-tertiary)]">
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
-                  {viewerName}
-                </p>
-                <p className="truncate text-[10px] text-[var(--text-secondary)]">
-                  Ligado a {account}
-                </p>
+            </nav>
+
+            {/* Operator Footer */}
+            <div className="shrink-0 border-t border-[var(--border-subtle)] bg-[var(--surface-bg)]/60 p-2.5">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/15 text-[11px] font-bold text-[var(--accent)]">
+                  {getInitials(viewerName)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
+                    {viewerName}
+                  </p>
+                  <p className="truncate text-[10px] text-[var(--text-secondary)]">
+                    Ligado a {account}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        </aside>
+          </aside>
+        )}
 
         {/* ─── MIDDLE PANE: Thread List, Tabs & Search ─── */}
         <section
           aria-label="Lista de mensagens"
-          className={`flex flex-col border-r border-[var(--border-subtle)] bg-[var(--surface-bg)] min-h-0 ${
+          className={`flex min-h-0 flex-col overflow-hidden border-r border-[var(--border-subtle)] bg-[var(--surface-bg)] ${
             mobileShowReader ? "hidden lg:flex" : "flex"
           }`}
         >
           {/* Middle Pane Header (Folder Title + All/Unread Segmented Tabs) */}
-          <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between border-b border-[var(--border-subtle)] px-4 py-2.5">
             <div className="flex items-center gap-2">
+              {isLeftPaneCollapsed && (
+                <button
+                  type="button"
+                  onClick={toggleLeftPane}
+                  title="Mostrar barra de pastas"
+                  aria-label="Mostrar barra de pastas"
+                  className="hidden h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)]/60 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer lg:inline-flex"
+                >
+                  <PanelLeftOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
               <h2 className="text-sm font-bold text-[var(--text-primary)]">
                 {FOLDER_CONFIG.find((f) => f.id === activeFolder)?.label || "Caixa de Entrada"}
               </h2>
@@ -1226,14 +1295,14 @@ export function MailboxClient({
         {/* ─── RIGHT PANE: Reading View, Action Toolbar & Quick Reply ─── */}
         <section
           aria-label="Leitura da mensagem"
-          className={`flex flex-col bg-[var(--surface-bg)] min-h-0 ${
+          className={`flex min-h-0 flex-col overflow-hidden bg-[var(--surface-bg)] ${
             mobileShowReader ? "flex" : "hidden lg:flex"
           }`}
         >
           {selectedMessage ? (
             <>
               {/* Action Toolbar (Matching shadcn/admincn mail header) */}
-              <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-2.5">
+              <div className="flex shrink-0 items-center justify-between border-b border-[var(--border-subtle)] px-4 py-2.5">
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
@@ -1712,10 +1781,10 @@ export function MailboxClient({
               {/* Inline Bottom Quick Reply Box (Modeled directly after shadcn/admincn mail bottom composer) */}
               <form
                 onSubmit={handleQuickReply}
-                className="border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/30 p-4"
+                className="shrink-0 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/30 p-3"
               >
                 <div className="overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] shadow-2xs focus-within:border-[var(--accent)]">
-                  <div className="flex items-center justify-between border-b border-[var(--border-subtle)]/60 bg-[var(--surface-muted)]/40 px-3.5 py-1.5 text-[11px] text-[var(--text-secondary)]">
+                  <div className="flex items-center justify-between border-b border-[var(--border-subtle)]/60 bg-[var(--surface-muted)]/40 px-3 py-1 text-[11px] text-[var(--text-secondary)]">
                     <span className="truncate">
                       {replyAllMode ? "Responder a todos:" : "Responder a"}{" "}
                       <strong className="font-semibold text-[var(--text-primary)]">
@@ -1731,7 +1800,7 @@ export function MailboxClient({
 
                   <textarea
                     id="mail-quick-reply-input"
-                    rows={3}
+                    rows={2}
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     placeholder={`Responder a ${
@@ -1739,10 +1808,10 @@ export function MailboxClient({
                         ? selectedMessage.toName
                         : selectedMessage.fromName
                     }…`}
-                    className="w-full resize-none bg-transparent p-3.5 text-xs leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none"
+                    className="w-full resize-none bg-transparent p-2.5 text-xs leading-relaxed text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none"
                   />
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)]/60 px-3.5 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)]/60 px-3 py-1.5">
                     <label className="inline-flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer select-none">
                       <input
                         type="checkbox"
