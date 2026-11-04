@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ChevronDown, Download, FileSpreadsheet, FileText, Film, Hash, Image as ImageIcon, LockKeyhole, Maximize2, MessageSquare, Mic, MicOff, Minimize2, MonitorUp, Paperclip, Phone, PhoneCall, PhoneOff, Pin, Plus, Search, Send, Smile, Star, Users, Video, VideoOff, X } from "lucide-react"
 import { RefreshIcon } from "@/components/ui/refresh-icon"
-import { createClient } from "@/lib/supabase/client"
+import { createCallNegotiator } from "@/lib/chat-call-peer"
+import { openCallTransport } from "@/lib/chat-call-transport"
+import { useIncomingCall } from "./hooks/useIncomingCall"
 import { CHAT_MAX_LENGTH, DEFAULT_CHANNELS, mergeChatMessages, type ChatChannel, type ChatInboxItem, type ChatPage } from "@/lib/team-chat"
-import { buildCallRoomId, CURATED_GIFS, EMOJI_CATEGORIES, formatAttachmentMessage, formatCallMessage, formatFileSize, isOnlyEmojis, parseAttachmentMessage, parseCallMessage, parseGifMessage, type CallMode, type ChatAttachmentItem, type GifItem } from "@/lib/team-chat-media"
+import { CURATED_GIFS, EMOJI_CATEGORIES, formatAttachmentMessage, formatCallMessage, formatFileSize, isOnlyEmojis, parseAttachmentMessage, parseCallMessage, parseGifMessage, type CallMode, type ChatAttachmentItem, type GifItem } from "@/lib/team-chat-media"
 import styles from "./TeamChat.module.css"
 
 function Avatar({ name, url }: { name: string; url: string | null }) {
@@ -105,6 +107,9 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
   const callSignalCleanupRef = useRef<(() => void) | null>(null)
   const callInstanceIdRef = useRef<string>("")
+  const callStartingRef = useRef(false)
+  const notifyCallVideoRef = useRef<(() => void) | null>(null)
+  const incomingCalls = useIncomingCall(initial.viewerId, activeCall?.roomId)
   const latest = useRef(initial.messages.at(-1)?.sequence || 0)
   const initialized = useRef(!initialError)
   const firstEffect = useRef(true)
@@ -454,6 +459,8 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       callSignalCleanupRef.current?.()
     } catch { /* ignore */ }
     callSignalCleanupRef.current = null
+    notifyCallVideoRef.current = null
+    callInstanceIdRef.current = ""
     if (peerConnectionRef.current) {
       try { peerConnectionRef.current.close() } catch { /* ignore */ }
       peerConnectionRef.current = null
@@ -501,7 +508,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
   }, [activeCall])
 
   async function postCallInviteMessage(mode: CallMode, roomId: string, title: string) {
-    if (!ready || blocked) return
+    if (!ready || blocked) throw new Error("A conversa ainda não está pronta para ligar.")
     const callBody = formatCallMessage(mode, roomId, title)
     const clientMessageId = crypto.randomUUID()
     try {
@@ -517,19 +524,16 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
           clientMessageId,
         }),
       })
-      if (response.ok) {
-        const data = await response.json()
-        if (data?.message) {
-          stickBottom.current = true
-          setMessages(previous => mergeChatMessages(previous, [data.message]))
-        }
-      }
-    } catch { /* Non-blocking: call session still starts even if chat message fails */ }
+      const data = await response.json()
+      if (!response.ok || !data?.message) throw new Error(data.error || "Não foi possível chamar o colega.")
+      stickBottom.current = true
+      setMessages(previous => mergeChatMessages(previous, [data.message]))
+    } catch (error) { throw error }
   }
 
   async function startOrJoinCall(mode: CallMode, customRoomId?: string, customTitle?: string, announce = false) {
     const targetTitle = customTitle || (recipient ? (peer?.name || "Conversa privada") : `#${currentChannel.name}`)
-    const roomId = customRoomId || buildCallRoomId(initial.viewerId, recipient, activeChannel || "geral")
+    const roomId = customRoomId || `call-${crypto.randomUUID()}`
 
     if (activeCall && activeCall.roomId === roomId) {
       if (mode === "video" && !activeCall.cameraEnabled) {
@@ -539,8 +543,14 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       return
     }
 
+    if (callStartingRef.current) return
+    callStartingRef.current = true
+    if (announce) {
+      try { await postCallInviteMessage(mode, roomId, targetTitle) }
+      catch (error) { setError(error instanceof Error ? error.message : "Não foi possível chamar o colega."); callStartingRef.current = false; return }
+    }
     cleanupCallResources()
-    const instanceId = `${initial.viewerId}-${Math.random().toString(36).slice(2, 8)}`
+    const instanceId = crypto.randomUUID()
     callInstanceIdRef.current = instanceId
 
     setCallElapsedSec(0)
@@ -548,6 +558,8 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       roomId,
       mode,
       title: targetTitle,
+      // This function runs only from call/answer buttons, never during rendering.
+      // eslint-disable-next-line react-hooks/purity
       startedAt: Date.now(),
       minimized: false,
       micMuted: false,
@@ -555,13 +567,9 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       screenSharing: false,
       mediaNotice: null,
       remoteConnected: false,
-      remotePeerName: recipient ? (peer?.name || "Colega") : null,
+      remotePeerName: customTitle || (recipient ? (peer?.name || "Colega") : null),
       remoteHasVideo: false,
     })
-
-    if (announce) {
-      void postCallInviteMessage(mode, roomId, targetTitle)
-    }
 
     let stream: MediaStream | null = null
     let cameraOk = mode === "video"
@@ -594,6 +602,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
 
     if (callInstanceIdRef.current !== instanceId) {
       if (stream) for (const t of stream.getTracks()) t.stop()
+      callStartingRef.current = false
       return
     }
 
@@ -603,124 +612,58 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
     }
     setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, cameraEnabled: cameraOk, mediaNotice: notice } : prev)
 
-    if (typeof window === "undefined" || typeof RTCPeerConnection === "undefined") return
-
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-    })
-    peerConnectionRef.current = pc
-
-    if (stream) {
-      for (const track of stream.getTracks()) {
-        pc.addTrack(track, stream)
-      }
+    const reportError = (error: unknown) => {
+      if (callInstanceIdRef.current !== instanceId) return
+      setActiveCall(previous => previous?.roomId === roomId ? { ...previous, mediaNotice: error instanceof Error ? error.message : "Falha de ligação à chamada. Tente novamente." } : previous)
     }
-
-    const remoteStream = new MediaStream()
-    remoteStreamRef.current = remoteStream
-
-    pc.ontrack = event => {
-      const tracks = event.streams?.[0]?.getTracks() || [event.track]
-      for (const t of tracks) {
-        if (!remoteStream.getTracks().some(existing => existing.id === t.id)) {
-          remoteStream.addTrack(t)
-        }
-      }
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream
-      if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream
-      const hasVid = remoteStream.getVideoTracks().some(t => t.enabled && t.readyState === "live")
-      setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteConnected: true, remoteHasVideo: hasVid } : prev)
-    }
-
-    type SignalPayload = {
-      senderInstance: string
-      senderName: string
-      type: "join" | "offer" | "answer" | "ice" | "leave" | "video-toggle"
-      sdp?: RTCSessionDescriptionInit
-      candidate?: RTCIceCandidateInit
-      hasVideo?: boolean
-    }
-
-    let bc: BroadcastChannel | null = null
     try {
-      if (typeof BroadcastChannel !== "undefined") {
-        bc = new BroadcastChannel(`linke-call:${roomId}`)
-      }
-    } catch { /* ignore */ }
-
-    let supaChannel: ReturnType<ReturnType<typeof createClient>["channel"]> | null = null
-    try {
-      const sb = createClient()
-      supaChannel = sb.channel(`linke-call:${roomId}`, { config: { broadcast: { self: false } } })
-    } catch { /* ignore */ }
-
-    const sendSignal = (payload: Omit<SignalPayload, "senderInstance" | "senderName">) => {
-      const full: SignalPayload = {
-        ...payload,
-        senderInstance: instanceId,
-        senderName: me?.name || "Colega",
-      }
-      try { bc?.postMessage(full) } catch { /* ignore */ }
-      try {
-        void supaChannel?.send({ type: "broadcast", event: "signal", payload: full })
-      } catch { /* ignore */ }
-    }
-
-    pc.onicecandidate = event => {
-      if (event.candidate) {
-        sendSignal({ type: "ice", candidate: event.candidate.toJSON() })
-      }
-    }
-
-    const handleSignal = async (msg: SignalPayload) => {
-      if (!msg || msg.senderInstance === instanceId || peerConnectionRef.current !== pc) return
-      try {
-        if (msg.type === "join") {
-          setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteConnected: true, remotePeerName: msg.senderName, remoteHasVideo: Boolean(msg.hasVideo) } : prev)
-          const offer = await pc.createOffer()
-          await pc.setLocalDescription(offer)
-          sendSignal({ type: "offer", sdp: pc.localDescription || offer, hasVideo: cameraOk })
-        } else if (msg.type === "offer" && msg.sdp) {
-          setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteConnected: true, remotePeerName: msg.senderName, remoteHasVideo: Boolean(msg.hasVideo) } : prev)
-          await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-          const answer = await pc.createAnswer()
-          await pc.setLocalDescription(answer)
-          sendSignal({ type: "answer", sdp: pc.localDescription || answer, hasVideo: cameraOk })
-        } else if (msg.type === "answer" && msg.sdp) {
-          setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteConnected: true, remotePeerName: msg.senderName, remoteHasVideo: Boolean(msg.hasVideo) } : prev)
-          if (pc.signalingState === "have-local-offer") {
-            await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-          }
-        } else if (msg.type === "ice" && msg.candidate) {
-          await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))
-        } else if (msg.type === "video-toggle") {
-          setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteHasVideo: Boolean(msg.hasVideo) } : prev)
-        } else if (msg.type === "leave") {
-          setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, remoteConnected: false, remoteHasVideo: false } : prev)
+      if (typeof RTCPeerConnection === "undefined") throw new Error("Este navegador não suporta chamadas WebRTC.")
+      const transport = await openCallTransport({ room: roomId, viewer: initial.viewerId, instance: instanceId, onError: reportError })
+      if (callInstanceIdRef.current !== instanceId) { transport.close(); return }
+      callSignalCleanupRef.current = () => transport.close()
+      const pc = new RTCPeerConnection({ iceServers: transport.iceServers })
+      peerConnectionRef.current = pc
+      if (stream) for (const track of stream.getTracks()) pc.addTrack(track, stream)
+      // Keep both media sections available when a voice call gains video later.
+      if (!pc.getTransceivers().some(item => item.sender.track?.kind === "video")) pc.addTransceiver("video", { direction: "sendrecv" })
+      if (!pc.getTransceivers().some(item => item.sender.track?.kind === "audio")) pc.addTransceiver("audio", { direction: "sendrecv" })
+      const remoteStream = new MediaStream()
+      remoteStreamRef.current = remoteStream
+      pc.ontrack = event => {
+        const tracks = event.streams[0]?.getTracks() || [event.track]
+        for (const track of tracks) {
+          if (!remoteStream.getTrackById(track.id)) remoteStream.addTrack(track)
+          const updateVideo = () => setActiveCall(previous => previous?.roomId === roomId ? { ...previous, remoteHasVideo: remoteStream.getVideoTracks().some(video => !video.muted && video.readyState === "live") } : previous)
+          track.onunmute = updateVideo
+          track.onmute = updateVideo
+          track.onended = updateVideo
         }
-      } catch { /* keep call active on transient WebRTC state race */ }
-    }
-
-    if (bc) {
-      bc.onmessage = event => { void handleSignal(event.data as SignalPayload) }
-    }
-    if (supaChannel) {
-      supaChannel.on("broadcast", { event: "signal" }, ({ payload }) => {
-        void handleSignal(payload as SignalPayload)
-      }).subscribe(status => {
-        if (status === "SUBSCRIBED") {
-          sendSignal({ type: "join", hasVideo: cameraOk })
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream
+        if (remoteAudioRef.current) {
+          remoteAudioRef.current.srcObject = remoteStream
+          void remoteAudioRef.current.play().catch(() => reportError(new Error("O navegador bloqueou o áudio. Carregue em «Ouvir áudio».")))
         }
+        setActiveCall(previous => previous?.roomId === roomId ? { ...previous, remoteHasVideo: remoteStream.getVideoTracks().some(track => !track.muted && track.readyState === "live") } : previous)
+      }
+      pc.onconnectionstatechange = () => {
+        if (peerConnectionRef.current !== pc) return
+        if (pc.connectionState === "connected") setActiveCall(previous => previous?.roomId === roomId ? { ...previous, remoteConnected: true, mediaNotice: notice } : previous)
+        if (pc.connectionState === "failed") setActiveCall(previous => previous?.roomId === roomId ? { ...previous, remoteConnected: false, mediaNotice: "Não foi possível estabelecer áudio/vídeo nesta rede. Tente novamente ou contacte o administrador." } : previous)
+        if (pc.connectionState === "disconnected") setActiveCall(previous => previous?.roomId === roomId ? { ...previous, remoteConnected: false, mediaNotice: "A ligação ao colega foi interrompida." } : previous)
+      }
+      const negotiator = createCallNegotiator(pc, {
+        instance: instanceId,
+        hasVideo: () => Boolean(screenStreamRef.current?.getVideoTracks().length || localStreamRef.current?.getVideoTracks().some(track => track.enabled)),
+        send: transport.send,
+        onPeer: (name, hasVideo) => setActiveCall(previous => previous?.roomId === roomId ? { ...previous, remotePeerName: name, remoteHasVideo: hasVideo } : previous),
+        onLeave: () => { cleanupCallResources(); setActiveCall(null); setCallElapsedSec(0) },
+        onError: reportError,
       })
-    } else {
-      sendSignal({ type: "join", hasVideo: cameraOk })
-    }
-
-    callSignalCleanupRef.current = () => {
-      sendSignal({ type: "leave" })
-      try { bc?.close() } catch { /* ignore */ }
-      try { void supaChannel?.unsubscribe() } catch { /* ignore */ }
-    }
+      notifyCallVideoRef.current = negotiator.notifyVideo
+      transport.start(negotiator.handle)
+      transport.send({ type: "join", hasVideo: cameraOk })
+    } catch (error) { reportError(error) }
+    finally { callStartingRef.current = false }
   }
 
   function toggleCallMic() {
@@ -743,6 +686,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       for (const track of existingVideoTracks) {
         track.enabled = nextEnabled
       }
+      notifyCallVideoRef.current?.()
       setActiveCall(prev => prev ? { ...prev, cameraEnabled: nextEnabled, mode: nextEnabled ? "video" : prev.mode } : null)
       return
     }
@@ -758,11 +702,14 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
             localStreamRef.current = videoStream
           }
           if (peerConnectionRef.current && localStreamRef.current) {
-            peerConnectionRef.current.addTrack(videoTrack, localStreamRef.current)
+            const sender = peerConnectionRef.current.getTransceivers().find(item => item.receiver.track.kind === "video")?.sender
+            if (sender) await sender.replaceTrack(videoTrack)
+            else peerConnectionRef.current.addTrack(videoTrack, localStreamRef.current)
           }
           if (localVideoRef.current && localStreamRef.current) {
             localVideoRef.current.srcObject = localStreamRef.current
           }
+          notifyCallVideoRef.current?.()
           setActiveCall(prev => prev ? { ...prev, cameraEnabled: true, mode: "video", mediaNotice: null } : null)
         }
       } catch {
@@ -779,10 +726,9 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
         screenStreamRef.current = null
       }
       const camTrack = localStreamRef.current?.getVideoTracks()[0] || null
-      const sender = peerConnectionRef.current?.getSenders().find(s => s.track?.kind === "video")
-      if (sender && camTrack) {
-        void sender.replaceTrack(camTrack)
-      }
+      const sender = peerConnectionRef.current?.getTransceivers().find(item => item.receiver.track.kind === "video")?.sender
+      if (sender) await sender.replaceTrack(camTrack)
+      notifyCallVideoRef.current?.()
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = localStreamRef.current
       }
@@ -796,9 +742,9 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
         const screenTrack = displayStream.getVideoTracks()[0]
         if (!screenTrack) return
         screenStreamRef.current = displayStream
-        const sender = peerConnectionRef.current?.getSenders().find(s => s.track?.kind === "video")
+        const sender = peerConnectionRef.current?.getTransceivers().find(item => item.receiver.track.kind === "video")?.sender
         if (sender) {
-          void sender.replaceTrack(screenTrack)
+          await sender.replaceTrack(screenTrack)
         } else if (peerConnectionRef.current) {
           peerConnectionRef.current.addTrack(screenTrack, displayStream)
         }
@@ -807,9 +753,13 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
         }
         screenTrack.onended = () => {
           screenStreamRef.current = null
+          const cameraTrack = localStreamRef.current?.getVideoTracks()[0] || null
+          const videoSender = peerConnectionRef.current?.getTransceivers().find(item => item.receiver.track.kind === "video")?.sender
+          if (videoSender) void videoSender.replaceTrack(cameraTrack).then(() => notifyCallVideoRef.current?.())
           if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current
           setActiveCall(prev => prev ? { ...prev, screenSharing: false } : null)
         }
+        notifyCallVideoRef.current?.()
         setActiveCall(prev => prev ? { ...prev, screenSharing: true, mode: "video" } : null)
       } catch { /* User cancelled screen share picker */ }
     }
@@ -890,6 +840,25 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       </div>
       <span className={styles.headingBadge}><LockKeyhole size={13} /> Espaço da equipa</span>
     </div>
+
+    {incomingCalls.incoming && <div className={styles.incomingCall} role="alert">
+      <PhoneCall size={22} aria-hidden="true" />
+      <div><strong>{incomingCalls.incoming.senderName} está a ligar</strong><p>{incomingCalls.incoming.mode === "video" ? "Videochamada" : "Chamada de voz"} · {incomingCalls.incoming.title}</p></div>
+      {!incomingCalls.soundReady && <button type="button" className={styles.callControlBtn} onClick={incomingCalls.enableSound}>Ativar toque</button>}
+      <button type="button" className={styles.callHangupBtn} onClick={() => {
+        const call = incomingCalls.incoming!
+        incomingCalls.dismiss(call.roomId)
+        void fetch("/api/ops/chat/calls", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ viewerId: initial.viewerId, room: call.roomId, signal: { id: crypto.randomUUID(), instance: crypto.randomUUID(), type: "leave" } }) }).catch(() => setError("Não foi possível recusar a chamada. Tente novamente."))
+      }}><PhoneOff size={15} />Recusar</button>
+      <button type="button" className={styles.sendButton} onClick={() => {
+        const call = incomingCalls.incoming!
+        incomingCalls.enableSound()
+        incomingCalls.dismiss(call.roomId)
+        if (call.conversationKey.startsWith("dm_")) selectConversation(call.conversationKey.slice(3))
+        else selectChannel(call.conversationKey.slice(3))
+        void startOrJoinCall(call.mode, call.roomId, call.title, false)
+      }}><Phone size={15} />Atender</button>
+    </div>}
 
     <div className={styles.mobileConversation}>
       <label htmlFor="chat-conversation">Conversa</label>
@@ -1066,6 +1035,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
             {!activeCall.minimized && (
               <>
                 {activeCall.mediaNotice && <p className={styles.callMediaNote}>{activeCall.mediaNotice}</p>}
+                {activeCall.remoteConnected && <button type="button" className={styles.callControlBtn} onClick={() => { void remoteAudioRef.current?.play().then(() => setActiveCall(previous => previous ? { ...previous, mediaNotice: null } : previous)).catch(() => setActiveCall(previous => previous ? { ...previous, mediaNotice: "Confirme a saída de áudio e as permissões do navegador." } : previous)) }}>Ouvir áudio</button>}
                 <div className={styles.callStageGrid}>
                   <div className={styles.callTile}>
                     {(activeCall.cameraEnabled || activeCall.screenSharing) ? (
@@ -1091,7 +1061,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
 
                   <div className={styles.callTile}>
                     {activeCall.remoteConnected && activeCall.remoteHasVideo ? (
-                      <video ref={remoteVideoRef} className={styles.callVideo} autoPlay playsInline />
+                      <video ref={remoteVideoRef} className={styles.callVideo} autoPlay playsInline muted />
                     ) : (
                       <div className={styles.callAvatarWrap}>
                         <div className={styles.callAvatarRing}>

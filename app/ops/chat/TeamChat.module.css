@@ -293,3 +293,10 @@ dialog::backdrop { overflow:hidden; overscroll-behavior:contain; }
   .callStageGrid { min-height:150px; }
   .callControlBtn span,.callHangupBtn span { display:none; }
 }
+
+.incomingCall { display:flex; align-items:center; gap:12px; margin-bottom:14px; padding:14px 16px; border:1px solid var(--chat-accent); border-radius:12px; background:var(--surface-bg); color:var(--text-primary); box-shadow:0 4px 16px #162d2310; }
+.incomingCall > svg { color:var(--chat-accent); flex-shrink:0; }
+.incomingCall > div { flex:1; min-width:0; }
+.incomingCall strong { font-size:13px; }
+.incomingCall p { margin-top:3px; color:var(--text-secondary); font-size:11px; }
+@media (max-width:767px) { .incomingCall { flex-wrap:wrap; padding:12px; gap:9px; } .incomingCall > div { flex-basis:70%; } }
