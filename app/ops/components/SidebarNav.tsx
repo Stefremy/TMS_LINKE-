@@ -46,10 +46,15 @@ const navConfig: NavSection[] = [
       { title: "Envios", href: "/ops/envios", icon: Package },
       { title: "Tracking & Mapa", href: "/ops/tracking", icon: Navigation },
       { title: "Recolhas", href: "/ops/envios/recolhas", icon: CalendarCheck },
-      { title: "Calendário", href: "/ops/calendario", icon: CalendarDays },
-      { title: "Chat da Equipa", href: "/ops/chat", icon: MessageSquare },
-      { title: "Caixa de Correio", href: "/ops/mail", icon: Mail },
       { title: "Incidências", href: "/ops/incidencias", icon: AlertTriangle },
+    ]
+  },
+  {
+    label: "Apps",
+    items: [
+      { title: "Caixa de Correio", href: "/ops/mail", icon: Mail },
+      { title: "Chat da Equipa", href: "/ops/chat", icon: MessageSquare },
+      { title: "Calendário", href: "/ops/calendario", icon: CalendarDays },
     ]
   },
   {
