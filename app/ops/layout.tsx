@@ -16,6 +16,7 @@ import {
   HelpCircle,
   User,
   MessageSquare,
+  Mail,
   LogOut
 } from "lucide-react"
 
@@ -55,6 +56,7 @@ export default async function OpsLayout({
             </Link>)}
             
             <div className="flex items-center gap-4 border-r border-[var(--border-subtle)] pr-5">
+              <Link href="/ops/mail" aria-label="Caixa de Correio (geral@linke.pt)" title="Caixa de Correio (geral@linke.pt)" className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"><Mail className="w-5 h-5" /></Link>
               <Link href="/ops/chat" aria-label="Chat da equipa" title="Chat da equipa" className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"><MessageSquare className="w-5 h-5" /></Link>
               <NotificationBell />
               <HelpCircle className="w-5 h-5 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] cursor-pointer transition-colors" />

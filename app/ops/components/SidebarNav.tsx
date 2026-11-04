@@ -20,7 +20,8 @@ import {
   Euro,
   Navigation,
   Tags,
-  MessageSquare
+  MessageSquare,
+  Mail
 } from "lucide-react"
 
 type NavItem = {
@@ -47,6 +48,7 @@ const navConfig: NavSection[] = [
       { title: "Recolhas", href: "/ops/envios/recolhas", icon: CalendarCheck },
       { title: "Calendário", href: "/ops/calendario", icon: CalendarDays },
       { title: "Chat da Equipa", href: "/ops/chat", icon: MessageSquare },
+      { title: "Caixa de Correio", href: "/ops/mail", icon: Mail },
       { title: "Incidências", href: "/ops/incidencias", icon: AlertTriangle },
     ]
   },
