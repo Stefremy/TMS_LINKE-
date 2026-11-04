@@ -30,27 +30,33 @@ export default async function OpsMailPage() {
       getClientesAction().catch(() => []),
     ])
     initialData = mailData
-    contacts = clientes
-      .flatMap((c) => {
-        const items: { name: string; email: string; category?: string }[] = []
-        const label = c.short_name || c.legal_name || "Cliente"
-        if (c.email && c.email.includes("@")) {
-          items.push({ name: label, email: c.email.trim(), category: "Cliente" })
+    const contactMap = new Map<string, { name: string; email: string; category?: string }>()
+    for (const c of clientes) {
+      const label = c.short_name || c.legal_name || "Cliente"
+      if (c.email && c.email.includes("@")) {
+        const cleanEmail = c.email.trim()
+        const key = `${cleanEmail.toLowerCase()}:${label.toLowerCase()}`
+        if (!contactMap.has(key)) {
+          contactMap.set(key, { name: label, email: cleanEmail, category: "Cliente" })
         }
-        if (
-          c.billing_email &&
-          c.billing_email.includes("@") &&
-          c.billing_email.trim().toLowerCase() !== c.email?.trim().toLowerCase()
-        ) {
-          items.push({
+      }
+      if (
+        c.billing_email &&
+        c.billing_email.includes("@") &&
+        c.billing_email.trim().toLowerCase() !== c.email?.trim().toLowerCase()
+      ) {
+        const cleanBilling = c.billing_email.trim()
+        const key = `${cleanBilling.toLowerCase()}:${label.toLowerCase()}:billing`
+        if (!contactMap.has(key)) {
+          contactMap.set(key, {
             name: `${label} (Faturação)`,
-            email: c.billing_email.trim(),
+            email: cleanBilling,
             category: "Faturação",
           })
         }
-        return items
-      })
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-PT"))
+      }
+    }
+    contacts = [...contactMap.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-PT"))
   } catch {
     // Fallback to seeded data if DB query fails
   }

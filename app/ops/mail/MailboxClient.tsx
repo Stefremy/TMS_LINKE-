@@ -1595,8 +1595,8 @@ export function MailboxClient({
                   />
                 </label>
                 <datalist id="linke-mail-contacts">
-                  {contacts.map((c) => (
-                    <option key={`${c.email}-${c.name}`} value={c.email}>
+                  {contacts.map((c, index) => (
+                    <option key={`${c.email}-${c.name}-${index}`} value={c.email}>
                       {c.name} {c.category ? `(${c.category})` : ""}
                     </option>
                   ))}
