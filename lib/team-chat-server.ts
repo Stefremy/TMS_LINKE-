@@ -1,8 +1,9 @@
 import "server-only"
 import { getAuthContext, type AuthContext } from "@/lib/auth/context"
+import { getChatStaffAvatars, getChatStaffMembers } from "@/lib/team-chat-avatars"
 import { getMyProfile } from "@/lib/auth/profile"
 import { createAdminClient } from "@/lib/supabase/server"
-import { CHAT_PAGE_SIZE, ChatError, DEFAULT_CHANNELS, normalizeChannelSlug, type ChatChannel, type ChatMember, type ChatMessage, type ChatPage } from "@/lib/team-chat"
+import { CHAT_PAGE_SIZE, ChatError, DEFAULT_CHANNELS, normalizeChannelSlug, type ChatChannel, type ChatInboxItem, type ChatMember, type ChatMessage, type ChatPage } from "@/lib/team-chat"
 
 const MESSAGE_FIELDS = "id, sequence, sender_id, recipient_id, sender_name, sender_avatar_url, body, created_at"
 
@@ -97,7 +98,8 @@ export async function registerChatMember(context: AuthContext): Promise<ChatMemb
   const metadata = context.user.user_metadata || {}
   const name = [profile?.name, metadata.full_name, metadata.name, context.user.email?.split("@")[0], "Colaborador"]
     .find(value => typeof value === "string" && value.trim()).trim().slice(0, 120)
-  const rawAvatar = profile?.avatar_url || metadata.avatar
+  const staffAvatars = await getChatStaffAvatars(context.tenant_id)
+  const rawAvatar = staffAvatars.has(context.user.id) ? staffAvatars.get(context.user.id) : profile?.avatar_url || metadata.avatar
   const avatar = typeof rawAvatar === "string" && rawAvatar.length <= 500 && /^https:\/\//i.test(rawAvatar) ? rawAvatar : null
   const member: ChatMember = { user_id: context.user.id, name, avatar_url: avatar }
   const { error } = await createAdminClient().from("team_chat_members").upsert({ tenant_id: context.tenant_id, ...member }, { onConflict: "tenant_id,user_id" })
@@ -121,12 +123,18 @@ export async function readTeamChat(
   after: number | null = null
 ): Promise<ChatPage> {
   const admin = createAdminClient()
-  const [membersData, channels] = await Promise.all([
+  const [membersData, channels, staff] = await Promise.all([
     admin.from("team_chat_members").select("user_id, name, avatar_url").eq("tenant_id", context.tenant_id).order("name"),
     listTeamChatChannels(context.tenant_id),
+    getChatStaffMembers(context.tenant_id),
   ])
   databaseError(membersData.error)
-  const members: ChatMember[] = membersData.data || []
+  const avatars = new Map([...staff].map(([id, member]) => [id, member.avatar_url]))
+  const memberMap = new Map<string, ChatMember>((membersData.data || []).map((member: ChatMember) => [member.user_id, {
+    ...member, avatar_url: avatars.has(member.user_id) ? avatars.get(member.user_id)! : member.avatar_url,
+  }]))
+  for (const [id, member] of staff) memberMap.set(id, member)
+  const members = [...memberMap.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-PT"))
   if (!members.some(member => member.user_id === context.user.id)) members.push(await registerChatMember(context))
   if (recipient && (recipient === context.user.id || !members.some(member => member.user_id === recipient))) {
     throw new ChatError("Colega não encontrado nesta equipa.", 404)
@@ -158,6 +166,7 @@ export async function readTeamChat(
     return {
       ...row,
       body: cleanBody,
+      sender_avatar_url: avatars.has(row.sender_id) ? avatars.get(row.sender_id)! : row.sender_avatar_url,
       channel_slug: foundChannel,
     }
   })
@@ -172,6 +181,54 @@ export async function readTeamChat(
   }
 }
 
+/** Returns one private-safe latest-message preview for every channel and staff DM. */
+export async function readTeamChatInbox(context: AuthContext): Promise<ChatInboxItem[]> {
+  const admin = createAdminClient()
+  const [messageResult, memberResult, channels, staff] = await Promise.all([
+    admin.from("team_chat_messages").select(MESSAGE_FIELDS).eq("tenant_id", context.tenant_id)
+      .order("sequence", { ascending: false }).limit(1000),
+    admin.from("team_chat_members").select("user_id, name, avatar_url").eq("tenant_id", context.tenant_id),
+    listTeamChatChannels(context.tenant_id),
+    getChatStaffMembers(context.tenant_id),
+  ])
+  databaseError(messageResult.error)
+  databaseError(memberResult.error)
+  const members = new Map<string, ChatMember>((memberResult.data || []).map((member: ChatMember) => [member.user_id, member]))
+  for (const [id, member] of staff) members.set(id, member)
+  const channelMap = new Map(channels.map(channel => [channel.slug, channel]))
+  const items = new Map<string, ChatInboxItem>()
+  for (const row of (messageResult.data || []) as ChatMessage[]) {
+    let key: string, kind: ChatInboxItem["kind"], title: string, subtitle: string, avatar_url: string | null
+    let body = row.body
+    if (row.recipient_id) {
+      if (row.sender_id !== context.user.id && row.recipient_id !== context.user.id) continue
+      const peerId = row.sender_id === context.user.id ? row.recipient_id : row.sender_id
+      const peer = members.get(peerId)
+      if (!peer) continue
+      key = `dm_${peerId}`; kind = "dm"; title = peer.name; subtitle = "Conversa privada"; avatar_url = peer.avatar_url
+    } else {
+      const parsed = parseMessageBody(body)
+      const channel = channelMap.get(parsed.channelSlug)
+      if (!channel) continue
+      key = `ch_${channel.slug}`; kind = "channel"; title = channel.name; subtitle = channel.description || "Canal da equipa"; avatar_url = null
+      body = parsed.cleanBody
+    }
+    if (items.has(key)) continue
+    const preview = /^\[gif:https?:\/\//i.test(body) ? "GIF" : body.slice(0, 300)
+    items.set(key, { key, kind, title, subtitle, avatar_url, preview, sender_name: row.sender_name, created_at: row.created_at, sequence: row.sequence })
+  }
+  for (const channel of channels) {
+    const key = `ch_${channel.slug}`
+    if (!items.has(key)) items.set(key, { key, kind: "channel", title: channel.name, subtitle: channel.description || "Canal da equipa", avatar_url: null, preview: "Sem mensagens", sender_name: null, created_at: null, sequence: 0 })
+  }
+  for (const [id, person] of staff) {
+    if (id === context.user.id) continue
+    const key = `dm_${id}`
+    if (!items.has(key)) items.set(key, { key, kind: "dm", title: person.name, subtitle: "Conversa privada", avatar_url: person.avatar_url, preview: "Iniciar conversa", sender_name: null, created_at: null, sequence: 0 })
+  }
+  return [...items.values()].sort((a, b) => (Date.parse(b.created_at || "") || 0) - (Date.parse(a.created_at || "") || 0) || a.title.localeCompare(b.title, "pt-PT"))
+}
+
 export async function sendTeamChat(
   context: AuthContext,
   recipient: string | null,
@@ -183,10 +240,9 @@ export async function sendTeamChat(
   const sender = await registerChatMember(context)
   if (recipient) {
     if (recipient === context.user.id) throw new ChatError("Selecione outro colega.")
-    const { data, error } = await admin.from("team_chat_members").select("user_id")
-      .eq("tenant_id", context.tenant_id).eq("user_id", recipient).maybeSingle()
-    databaseError(error)
-    if (!data) throw new ChatError("Colega não encontrado nesta equipa.", 404)
+    if (!(await getChatStaffMembers(context.tenant_id)).has(recipient)) {
+      throw new ChatError("Colega não encontrado nesta equipa.", 404)
+    }
   }
 
   const effectiveChannel = !recipient ? (channelSlug || "geral") : null

@@ -1,9 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Film, Hash, LockKeyhole, MessageSquare, Plus, Search, Send, Smile, Users, X } from "lucide-react"
+import { ChevronDown, Film, Hash, LockKeyhole, MessageSquare, Pin, Plus, Search, Send, Smile, Star, Users, X } from "lucide-react"
 import { RefreshIcon } from "@/components/ui/refresh-icon"
-import { CHAT_MAX_LENGTH, DEFAULT_CHANNELS, mergeChatMessages, type ChatChannel, type ChatMember, type ChatPage } from "@/lib/team-chat"
+import { CHAT_MAX_LENGTH, DEFAULT_CHANNELS, mergeChatMessages, type ChatChannel, type ChatInboxItem, type ChatPage } from "@/lib/team-chat"
 import { CURATED_GIFS, EMOJI_CATEGORIES, isOnlyEmojis, parseGifMessage, type GifItem } from "@/lib/team-chat-media"
 import styles from "./TeamChat.module.css"
 
@@ -16,8 +16,17 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
 }
 const dateLabel = (value: string) => new Intl.DateTimeFormat("pt-PT", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Lisbon" }).format(new Date(value))
 const timeLabel = (value: string) => new Intl.DateTimeFormat("pt-PT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Lisbon" }).format(new Date(value))
+const inboxDate = (value: string | null) => {
+  if (!value) return ""
+  const date = new Date(value), today = new Date()
+  return date.toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" }) === today.toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" })
+    ? timeLabel(value)
+    : new Intl.DateTimeFormat("pt-PT", { day: "2-digit", month: "short", timeZone: "Europe/Lisbon" }).format(date)
+}
+type InboxFilter = "all" | "unread" | "groups" | "favourites" | "pinned"
+type InboxPreferences = { favourites: string[]; pinned: string[]; read: Record<string, number> }
 
-export function TeamChatClient({ initial, initialError }: { initial: ChatPage; initialError: string | null }) {
+export function TeamChatClient({ initial, initialError, initialInbox }: { initial: ChatPage; initialError: string | null; initialInbox: ChatInboxItem[] }) {
   const [recipient, setRecipient] = useState<string | null>(null)
   const [channels, setChannels] = useState<ChatChannel[]>(initial.channels?.length ? initial.channels : DEFAULT_CHANNELS)
   const [activeChannel, setActiveChannel] = useState<string>(initial.activeChannel || "geral")
@@ -32,6 +41,11 @@ export function TeamChatClient({ initial, initialError }: { initial: ChatPage; i
   const [search, setSearch] = useState("")
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [retry, setRetry] = useState(0)
+  const [inbox, setInbox] = useState(initialInbox)
+  const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all")
+  const [showMembers, setShowMembers] = useState(false)
+  const [preferences, setPreferences] = useState<InboxPreferences>({ favourites: [], pinned: [], read: {} })
+  const [preferencesReady, setPreferencesReady] = useState(false)
 
   // Modal para criar novo canal
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -63,6 +77,61 @@ export function TeamChatClient({ initial, initialError }: { initial: ChatPage; i
   const peer = members.find(member => member.user_id === recipient)
   const me = members.find(member => member.user_id === initial.viewerId)
   const currentChannel = channels.find(c => c.slug === activeChannel) || channels[0] || { name: "Sala geral", description: "Toda a equipa", slug: "geral" }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(`linke-team-chat:${initial.viewerId}`)
+        if (saved) {
+          const parsed = JSON.parse(saved) as Partial<InboxPreferences>
+          const read: Record<string, number> = {}
+          if (parsed.read && typeof parsed.read === "object") {
+            for (const [conversation, sequence] of Object.entries(parsed.read)) {
+              if (typeof sequence === "number" && Number.isSafeInteger(sequence) && sequence >= 0) read[conversation] = sequence
+            }
+          }
+          setPreferences({ favourites: Array.isArray(parsed.favourites) ? parsed.favourites.filter(v => typeof v === "string") : [], pinned: Array.isArray(parsed.pinned) ? parsed.pinned.filter(v => typeof v === "string") : [], read })
+        }
+      } catch { /* Keep the inbox usable if local storage is unavailable. */ }
+      setPreferencesReady(true)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [initial.viewerId])
+
+  useEffect(() => {
+    if (preferencesReady) localStorage.setItem(`linke-team-chat:${initial.viewerId}`, JSON.stringify(preferences))
+  }, [initial.viewerId, preferences, preferencesReady])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const refresh = async () => {
+      try {
+        const response = await fetch(`/api/ops/chat?viewer=${initial.viewerId}&inbox=1`, { cache: "no-store", signal: controller.signal })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.viewerId === initial.viewerId && Array.isArray(data.items)) setInbox(data.items)
+        }
+      } catch { /* Keep the last inbox snapshot and retry on the next interval. */ }
+    }
+    const timer = setInterval(() => { if (document.visibilityState === "visible") void refresh() }, 15000)
+    return () => { controller.abort(); clearInterval(timer) }
+  }, [initial.viewerId])
+
+  useEffect(() => {
+    if (!ready || !messages.length) return
+    const activeKey = key, last = messages.at(-1)!
+    const timer = window.setTimeout(() => {
+      setPreferences(previous => ({ ...previous, read: { ...previous.read, [activeKey]: Math.max(previous.read[activeKey] || 0, last.sequence) } }))
+      const gif = parseGifMessage(last.body).isGif
+      setInbox(previous => {
+        const existing = previous.find(item => item.key === activeKey)
+        if (!existing) return previous
+        const preview = gif ? "GIF" : last.body.slice(0, 300)
+        return [{ ...existing, preview, sender_name: last.sender_name, created_at: last.created_at, sequence: last.sequence }, ...previous.filter(item => item.key !== activeKey)]
+      })
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [key, messages, ready])
 
   const endpoint = useCallback((extra = "") => {
     const target = recipient ? `&recipient=${recipient}` : `&channel=${encodeURIComponent(activeChannel || "geral")}`
@@ -314,80 +383,120 @@ export function TeamChatClient({ initial, initialError }: { initial: ChatPage; i
     return true
   })
 
-  const colleagues = members.filter(member => member.user_id !== initial.viewerId && member.name.toLocaleLowerCase("pt").includes(search.toLocaleLowerCase("pt")))
+  const searchTerm = search.trim().toLocaleLowerCase("pt-PT")
+  const privateMembers = members.filter(member => member.user_id !== initial.viewerId)
+  const unread = (item: ChatInboxItem) => item.sequence > 0 && item.sequence > (preferences.read[item.key] || 0)
+  const unreadCount = inbox.filter(unread).length
+  const favouriteCount = inbox.filter(item => preferences.favourites.includes(item.key)).length
+  const pinnedCount = inbox.filter(item => preferences.pinned.includes(item.key)).length
+  const inboxItems = inbox.filter(item => {
+    const matchesSearch = !searchTerm || `${item.title} ${item.subtitle} ${item.preview} ${item.sender_name || ""}`.toLocaleLowerCase("pt-PT").includes(searchTerm)
+    if (!matchesSearch) return false
+    if (inboxFilter === "unread") return unread(item)
+    if (inboxFilter === "groups") return item.kind === "channel"
+    if (inboxFilter === "favourites") return preferences.favourites.includes(item.key)
+    if (inboxFilter === "pinned") return preferences.pinned.includes(item.key)
+    return true
+  }).sort((a, b) => Number(preferences.pinned.includes(b.key)) - Number(preferences.pinned.includes(a.key)) ||
+    (Date.parse(b.created_at || "") || 0) - (Date.parse(a.created_at || "") || 0) || a.title.localeCompare(b.title, "pt-PT"))
+  const memberItems = inboxItems.filter(item => item.kind === "dm" && item.sequence === 0)
+  const conversationItems = inboxItems.filter(item => item.kind !== "dm" || item.sequence > 0)
 
-  return <div className="relative p-4 md:p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
+  function selectInboxItem(item: ChatInboxItem) {
+    if (item.kind === "channel") selectChannel(item.key.slice(3))
+    else selectConversation(item.key.slice(3))
+  }
+
+  function toggleInboxPreference(field: "favourites" | "pinned", itemKey: string) {
+    setPreferences(previous => {
+      const values = new Set(previous[field])
+      if (values.has(itemKey)) values.delete(itemKey)
+      else values.add(itemKey)
+      return { ...previous, [field]: [...values] }
+    })
+  }
+
+  return <div className={styles.page}>
     <div className={styles.heading}>
       <div>
-        <h1>Chat da equipa</h1>
+        <h1>Chat da equipa<span className={styles.headingDot} aria-hidden="true" /></h1>
         <p>Canais temáticos e conversas privadas com a equipa.</p>
       </div>
-      <span><Users size={15} /> Interno · OPS</span>
+      <span className={styles.headingBadge}><LockKeyhole size={13} /> Espaço da equipa</span>
     </div>
 
+    <div className={styles.mobileConversation}>
+      <label htmlFor="chat-conversation">Conversa</label>
+      <div>
+        <select id="chat-conversation" value={key} disabled={sending || olderLoading} onChange={event => {
+          const value = event.target.value
+          if (value.startsWith("ch_")) selectChannel(value.slice(3))
+          else selectConversation(value.slice(3))
+        }}>
+          <optgroup label="Canais">{channels.map(channel => <option key={channel.slug} value={`ch_${channel.slug}`}># {channel.name}</option>)}</optgroup>
+          <optgroup label="Conversas privadas">{privateMembers.map(member => <option key={member.user_id} value={`dm_${member.user_id}`}>{member.name}</option>)}</optgroup>
+        </select>
+        <button type="button" className={styles.refresh} aria-label="Criar novo canal" onClick={() => { setChannelError(null); setShowCreateModal(true) }}><Plus size={18} /></button>
+      </div>
+    </div>
     <div className={styles.workspace}>
       <aside className={styles.sidebar} aria-label="Conversas">
-        {/* Secção de Canais */}
-        <div className={styles.sectionHeader}>
-          <span className={styles.sectionLabel}>CANAIS</span>
-          <button
-            type="button"
-            className={styles.createChannelBtn}
-            onClick={() => { setChannelError(null); setShowCreateModal(true) }}
-            title="Criar novo canal"
-            aria-label="Criar novo canal"
-          >
-            <Plus size={15} />
-          </button>
-        </div>
-
-        <div className={styles.channelsList}>
-          {channels.map(ch => {
-            const isSelected = !recipient && activeChannel === ch.slug
-            return (
-              <button
-                type="button"
-                key={ch.slug}
-                className={`${styles.conversation} ${isSelected ? styles.selected : ""}`}
-                onClick={() => selectChannel(ch.slug)}
-                disabled={sending}
-                aria-pressed={isSelected}
-              >
-                <span className={styles.generalIcon}><Hash size={18} /></span>
-                <span>
-                  <strong>#{ch.name}</strong>
-                  <small>{ch.description || "Canal de equipa"}</small>
-                </span>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Secção de Conversas Privadas */}
+        <div className={styles.sidebarHeader}><div><MessageSquare size={17} /><h2>Conversas</h2></div><button type="button" className={styles.createChannelBtn} onClick={() => { setChannelError(null); setShowCreateModal(true) }} aria-label="Criar novo canal" title="Criar novo canal"><Plus size={16} /></button></div>
         <label className={styles.search}>
           <Search size={16} />
-          <input aria-label="Procurar colega" placeholder="Procurar colega" value={search} onChange={event => setSearch(event.target.value)} />
+          <input aria-label="Procurar conversa" placeholder="Procurar…" value={search} onChange={event => setSearch(event.target.value)} />
         </label>
-        <p className={styles.sectionLabel}>CONVERSAS PRIVADAS</p>
-        <div className={styles.colleagues}>
-          {colleagues.map((member: ChatMember) => (
-            <button
-              type="button"
-              key={member.user_id}
-              className={`${styles.conversation} ${recipient === member.user_id ? styles.selected : ""}`}
-              disabled={sending || olderLoading}
-              onClick={() => selectConversation(member.user_id)}
-              aria-pressed={recipient === member.user_id}
-            >
-              <Avatar name={member.name} url={member.avatar_url} />
-              <span>
-                <strong>{member.name}</strong>
-                <small>Conversa privada</small>
-              </span>
+        <nav className={styles.inboxFilters} aria-label="Filtros de conversas">
+          {([
+            ["all", "Todas", inbox.length], ["unread", "Não lidas", unreadCount], ["groups", "Grupos", inbox.filter(item => item.kind === "channel").length],
+            ["favourites", "Favoritos", favouriteCount], ["pinned", "Afixadas", pinnedCount],
+          ] as [InboxFilter, string, number][]).map(([filter, label, count]) => <button key={filter} type="button" className={inboxFilter === filter ? styles.activeInboxFilter : ""} aria-pressed={inboxFilter === filter} onClick={() => setInboxFilter(filter)}><span>{label}</span><span>{count}</span></button>)}
+        </nav>
+        <div className={styles.inboxList}>
+          {conversationItems.map(item => {
+            const selected = key === item.key
+            const isUnread = unread(item)
+            const preview = item.sender_name ? `${item.sender_name === me?.name ? "Tu" : item.sender_name}: ${item.preview}` : item.preview
+            return <div className={`${styles.inboxItem} ${selected ? styles.selectedInboxItem : ""}`} key={item.key}>
+              <button type="button" className={styles.inboxOpen} onClick={() => selectInboxItem(item)} disabled={sending || olderLoading} aria-pressed={selected} aria-label={`${item.kind === "channel" ? "Grupo" : "Conversa com"} ${item.title}${isUnread ? ", mensagem não lida" : ""}`}>
+                {item.kind === "channel" ? <span className={styles.inboxGroupIcon}><Hash size={17} /></span> : <Avatar name={item.title} url={item.avatar_url} />}
+                <span className={styles.inboxCopy}>
+                  <span className={styles.inboxTitle}><strong>{item.title}</strong><time>{inboxDate(item.created_at)}</time></span>
+                  <span className={`${styles.inboxPreview} ${isUnread ? styles.unreadPreview : ""}`}>{preview}</span>
+                </span>
+                {isUnread && <span className={styles.unreadDot} aria-label="Não lida" />}
+              </button>
+              <div className={styles.inboxActions}>
+                <button type="button" aria-label={`${preferences.favourites.includes(item.key) ? "Remover dos" : "Adicionar aos"} favoritos: ${item.title}`} aria-pressed={preferences.favourites.includes(item.key)} title="Favorito" onClick={() => toggleInboxPreference("favourites", item.key)}><Star size={13} fill={preferences.favourites.includes(item.key) ? "currentColor" : "none"} /></button>
+                <button type="button" aria-label={`${preferences.pinned.includes(item.key) ? "Desafixar" : "Afixar"}: ${item.title}`} aria-pressed={preferences.pinned.includes(item.key)} title="Afixar" onClick={() => toggleInboxPreference("pinned", item.key)}><Pin size={13} fill={preferences.pinned.includes(item.key) ? "currentColor" : "none"} /></button>
+              </div>
+            </div>
+          })}
+          {!!memberItems.length && <div className={styles.membersSection}>
+            <div className={`${styles.membersContent} ${showMembers ? styles.membersContentOpen : ""}`} aria-hidden={!showMembers}>
+              <div className={styles.membersContentInner}>
+                {memberItems.map(item => {
+                  const selected = key === item.key
+                  return <div className={`${styles.inboxItem} ${selected ? styles.selectedInboxItem : ""}`} key={item.key}>
+                    <button type="button" className={styles.inboxOpen} onClick={() => selectInboxItem(item)} disabled={sending || olderLoading || !showMembers} aria-pressed={selected} aria-label={`Iniciar conversa privada com ${item.title}`}>
+                      <Avatar name={item.title} url={item.avatar_url} />
+                      <span className={styles.inboxCopy}><span className={styles.inboxTitle}><strong>{item.title}</strong></span><span className={styles.inboxPreview}>Iniciar conversa</span></span>
+                    </button>
+                    <div className={styles.inboxActions}>
+                      <button type="button" disabled={!showMembers} aria-label={`${preferences.favourites.includes(item.key) ? "Remover dos" : "Adicionar aos"} favoritos: ${item.title}`} aria-pressed={preferences.favourites.includes(item.key)} title="Favorito" onClick={() => toggleInboxPreference("favourites", item.key)}><Star size={13} fill={preferences.favourites.includes(item.key) ? "currentColor" : "none"} /></button>
+                      <button type="button" disabled={!showMembers} aria-label={`${preferences.pinned.includes(item.key) ? "Desafixar" : "Afixar"}: ${item.title}`} aria-pressed={preferences.pinned.includes(item.key)} title="Afixar" onClick={() => toggleInboxPreference("pinned", item.key)}><Pin size={13} fill={preferences.pinned.includes(item.key) ? "currentColor" : "none"} /></button>
+                    </div>
+                  </div>
+                })}
+              </div>
+            </div>
+            <button type="button" className={styles.membersToggle} aria-expanded={showMembers} onClick={() => setShowMembers(value => !value)}>
+              <span>{showMembers ? "Ocultar membros" : "Ver membros"}<small>{memberItems.length}</small></span>
+              <ChevronDown size={14} className={showMembers ? styles.membersChevronOpen : ""} />
             </button>
-          ))}
+          </div>}
+          {!inboxItems.length && <p className={styles.directoryNote}>{inboxFilter === "unread" ? "Não tens conversas por ler." : inboxFilter === "favourites" ? "Adiciona conversas aos favoritos com a estrela." : inboxFilter === "pinned" ? "Afixa conversas com o ícone do alfinete." : "Não foram encontradas conversas."}</p>}
         </div>
-        {!colleagues.length && <p className={styles.directoryNote}>{search ? "Nenhum colega encontrado." : "Os colegas aparecem aqui depois de abrirem o chat pela primeira vez."}</p>}
         <div className={styles.myProfile}>
           {me && <Avatar name={me.name} url={me.avatar_url} />}
           <span>
@@ -401,13 +510,14 @@ export function TeamChatClient({ initial, initialError }: { initial: ChatPage; i
       <section className={styles.thread} aria-label={recipient ? `Conversa com ${peer?.name || "colega"}` : `#${currentChannel.name}`}>
         <div className={styles.threadHeader}>
           <div className={styles.threadTitle}>
-            {recipient ? <LockKeyhole size={20} /> : <Hash size={22} />}
+            {recipient && peer ? <Avatar name={peer.name} url={peer.avatar_url} /> : <span className={styles.generalIcon}><Hash size={21} /></span>}
             <div>
               <h2>{recipient ? peer?.name || "Conversa privada" : `# ${currentChannel.name}`}</h2>
               <p>{recipient ? "Visível apenas aos dois participantes" : currentChannel.description || "Canal público para a equipa"}</p>
             </div>
           </div>
-          <button type="button" className={styles.refresh} aria-label="Atualizar conversa" onClick={() => setRetry(value => value + 1)}><RefreshIcon size={17} /></button>
+          <div className={styles.threadActions}><span className={styles.privacyBadge}>{recipient ? <LockKeyhole size={12} /> : <Users size={12} />}{recipient ? "Privada" : "Canal da equipa"}</span>
+          <button type="button" className={styles.refresh} aria-label="Atualizar conversa" onClick={() => setRetry(value => value + 1)}><RefreshIcon size={17} /></button></div>
         </div>
 
         {error && <div className={styles.error} role="alert">{error}{blocked && " Volte a iniciar sessão se necessário."}</div>}
@@ -429,11 +539,10 @@ export function TeamChatClient({ initial, initialError }: { initial: ChatPage; i
             return <div key={message.id}>
               {showDate && <div className={styles.day}>{dateLabel(message.created_at)}</div>}
               <article className={`${styles.message} ${own ? styles.own : ""}`}>
-                {!own && <Avatar name={message.sender_name} url={message.sender_avatar_url} />}
+                {!own && <Avatar name={message.sender_name} url={members.find(member => member.user_id === message.sender_id)?.avatar_url ?? message.sender_avatar_url} />}
                 <div className={styles.bubble}>
                   <div className={styles.messageMeta}>
                     <strong>{own ? `${message.sender_name} (tu)` : message.sender_name}</strong>
-                    <time dateTime={message.created_at} title={dateLabel(message.created_at)}>{timeLabel(message.created_at)}</time>
                   </div>
                   {gifInfo.isGif ? (
                     <div>
@@ -448,7 +557,9 @@ export function TeamChatClient({ initial, initialError }: { initial: ChatPage; i
                   ) : (
                     <p>{message.body}</p>
                   )}
+                  <time className={styles.messageTime} dateTime={message.created_at} title={dateLabel(message.created_at)}>{timeLabel(message.created_at)}</time>
                 </div>
+                {own && <Avatar name={me?.name || message.sender_name} url={me ? me.avatar_url : message.sender_avatar_url} />}
               </article>
             </div>
           })}
@@ -573,38 +684,6 @@ export function TeamChatClient({ initial, initialError }: { initial: ChatPage; i
             </div>
           )}
 
-          <div className={styles.composerTools}>
-            <button
-              type="button"
-              className={`${styles.mediaBtn} ${showEmojiPicker ? styles.active : ""}`}
-              onClick={() => {
-                setShowEmojiPicker(v => !v)
-                setShowGifPicker(false)
-              }}
-              title="Adicionar emoji"
-              aria-label="Adicionar emoji"
-              aria-expanded={showEmojiPicker}
-            >
-              <Smile size={16} />
-              <span>Emoji</span>
-            </button>
-            <button
-              type="button"
-              className={`${styles.mediaBtn} ${showGifPicker ? styles.active : ""}`}
-              onClick={() => {
-                setShowGifPicker(v => !v)
-                setShowEmojiPicker(false)
-              }}
-              title="Inserir GIF animado"
-              aria-label="Inserir GIF animado"
-              aria-expanded={showGifPicker}
-            >
-              <Film size={15} />
-              <span>GIF</span>
-              <span className={styles.gifBadge}>HD</span>
-            </button>
-          </div>
-
           <label className="sr-only" htmlFor="team-chat-message">Mensagem</label>
           <textarea
             ref={textareaRef}
@@ -618,14 +697,42 @@ export function TeamChatClient({ initial, initialError }: { initial: ChatPage; i
             onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }}
           />
           <div className={styles.composerFooter}>
-            <small>
-              <span className={styles.keyboardHint}>Enter para enviar · Shift + Enter para nova linha · </span>
-              {draft.length}/{CHAT_MAX_LENGTH}
-            </small>
-            <button type="submit" disabled={!ready || blocked || sending || !draft.trim()}>
-              <Send size={16} />{sending ? "A enviar…" : "Enviar"}
+            <div className={styles.composerTools}>
+              <button
+                type="button"
+                className={`${styles.mediaBtn} ${showEmojiPicker ? styles.active : ""}`}
+                onClick={() => {
+                  setShowEmojiPicker(v => !v)
+                  setShowGifPicker(false)
+                }}
+                title="Adicionar emoji"
+                aria-label="Adicionar emoji"
+                aria-expanded={showEmojiPicker}
+              >
+                <Smile size={16} />
+                <span>Emoji</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.mediaBtn} ${showGifPicker ? styles.active : ""}`}
+                onClick={() => {
+                  setShowGifPicker(v => !v)
+                  setShowEmojiPicker(false)
+                }}
+                title="Inserir GIF animado"
+                aria-label="Inserir GIF animado"
+                aria-expanded={showGifPicker}
+              >
+                <Film size={15} />
+                <span>GIF</span>
+              </button>
+            </div>
+
+            <button className={styles.sendButton} type="submit" disabled={!ready || blocked || sending || !draft.trim()}>
+              <Send size={15} />{sending ? "A enviar…" : "Enviar mensagem"}
             </button>
           </div>
+          <div className={styles.composerHint}><small className={styles.keyboardHint}>Enter para enviar · Shift + Enter para nova linha</small><small>{draft.length}/{CHAT_MAX_LENGTH}</small></div>
         </form>
       </section>
     </div>

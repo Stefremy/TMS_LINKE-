@@ -1,5 +1,7 @@
 "use server";
 
+import { supportsDatabaseFeature } from "@/lib/supabase/schema-capabilities";
+
 import { createAdminClient } from "@/lib/supabase/server";
 import { getClientesAction } from "@/app/actions/clientes";
 import { getCarrierConnectionsAction } from "@/app/actions/ctt";
@@ -37,6 +39,12 @@ export async function getOperationalNotificationsAction(): Promise<
   try {
     const supabase = createAdminClient();
 
+    let pendingQuery = supabase.from("shipments")
+      .select("id, created_at, ops_substatus").eq("tenant_id", ctx.tenant_id)
+      .eq("status", "pendente").in("carrier_code", ["ctt", "ctt_expresso"])
+    if (await supportsDatabaseFeature(supabase, "shipments.ctt_manifest_pdf"))
+      pendingQuery = pendingQuery.is("ctt_manifest_pdf", null)
+
     // Run highly optimized direct queries instead of downloading all table data to memory
     const [
       { data: pendingRows },
@@ -44,14 +52,7 @@ export async function getOperationalNotificationsAction(): Promise<
       clients,
       connections,
     ] = await Promise.all([
-      supabase
-        .from("shipments")
-        .select("id, created_at, ops_substatus")
-        .eq("tenant_id", ctx.tenant_id)
-        .eq("status", "pendente")
-        .in("carrier_code", ["ctt", "ctt_expresso"])
-        .is("ctt_manifest_pdf", null)
-        .order("created_at", { ascending: true }),
+      pendingQuery.order("created_at", { ascending: true }),
       supabase
         .from("shipments")
         .select(

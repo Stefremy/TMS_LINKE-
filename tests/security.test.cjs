@@ -379,7 +379,9 @@ test('draft FormData cannot omit any dimension and retains valid decimal dimensi
     assert.match(result.error, /Dimensões obrigatórias/)
     assert.equal(h.db.writes.length, 0)
   }
-  const h = shipmentHarness(), form = withDimensions(new FormData())
+  const h = shipmentHarness({ adjust: tables => {
+    tables.servicos_linke[0].webservice_service_code = 'EMSF010.01'
+  } }), form = withDimensions(new FormData())
   form.set('weight_kg', '2.5'); form.set('service_id', 'service-a'); form.set('volumes','3')
   form.set('recipient_phone','+351910000002')
   assert.equal((await h.load('lib/services/shipments/shipment-creator.ts').createShipment(form)).success, true)
@@ -387,7 +389,7 @@ test('draft FormData cannot omit any dimension and retains valid decimal dimensi
     { length_cm: 30.5, width_cm: 20, height_cm: 10, unit: 'cm' })
   assert.equal(h.db.writes.find(w => w.table === 'packages').value.weight_g, 2500)
   const draft=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
-  assert.equal(draft.package_count,3);assert.equal(draft.webservice_service_code,'EMSF056.01')
+  assert.equal(draft.package_count,3);assert.equal(draft.webservice_service_code,'EMSF010.01')
   assert.equal(draft.webservice_connection_id,'verified-connection');assert.equal(draft.recipient_phone,'+351910000002')
   const native = h.db.writes.find(w => w.table === 'shipments').value
   for (const unsupported of ['length_cm', 'width_cm', 'height_cm', 'weight_kg', 'base_price', 'tier_label']) {

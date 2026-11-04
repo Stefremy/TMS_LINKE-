@@ -1,5 +1,9 @@
 "use server"
 
+import { findShipmentAuditRecords } from "@/lib/services/shipments/audit-records"
+
+import { supportsDatabaseFeature } from "@/lib/supabase/schema-capabilities"
+
 import { publicUrl } from "@/lib/config/public-origins"
 import { getCttPickupRequester } from "@/lib/config/ctt-pickup-requester"
 
@@ -97,18 +101,21 @@ export async function saveCttConnectionAction(creds: {
  * Obtém a lista de conexões configuradas
  */
 export async function getCarrierConnectionsAction() {
-  await requireEmployee(["Configurações de Webservices & Integrações","Emissão e Controlo de Guias CTT","Pedidos de Recolha & Distribuição","Gestão de Clientes & Contratos","Faturação & Contas Correntes"])
+  const ctx = await requireEmployee(["Configurações de Webservices & Integrações","Emissão e Controlo de Guias CTT","Pedidos de Recolha & Distribuição","Gestão de Clientes & Contratos","Faturação & Contas Correntes"])
   const supabase = createAdminClient()
 
   // 1. Tentar carrier_connections
   try {
-    const { data, error } = await supabase
-      .from("carrier_connections")
-      .select("*")
-      .order("created_at", { ascending: false })
+    if (await supportsDatabaseFeature(supabase, "carrier_connections")) {
+      const { data, error } = await supabase
+        .from("carrier_connections")
+        .select("*")
+        .eq("tenant_id", ctx.tenant_id)
+        .order("created_at", { ascending: false })
 
-    if (!error && data && data.length > 0) {
-      return data
+      if (!error && data && data.length > 0) {
+        return data
+      }
     }
   } catch {}
 
@@ -116,7 +123,8 @@ export async function getCarrierConnectionsAction() {
   try {
     const { data: logs } = await supabase
       .from("audit_log")
-      .select("*")
+      .select("id, details, created_at")
+      .eq("tenant_id", ctx.tenant_id)
       .eq("action", "carrier_connection_config")
       .order("created_at", { ascending: false })
 
@@ -145,7 +153,7 @@ export async function getCarrierConnectionsAction() {
       }
       if (list.length > 0) {
         return list
-      }
+        }
     }
   } catch (err: any) {
     console.warn("Fallback audit_log read error:", err?.message)
@@ -200,7 +208,7 @@ export async function toggleCarrierConnectionAction(
             })
             .eq("id", item.id)
         }
-      }
+        }
     }
   } catch (err: any) {
     console.warn("audit_log toggle error:", err?.message)
@@ -246,7 +254,7 @@ export async function deleteCarrierConnectionAction(
         ) {
           await supabase.from("audit_log").delete().eq("id", item.id)
         }
-      }
+        }
     }
   } catch (err: any) {
     console.warn("audit_log delete error:", err?.message)
@@ -277,7 +285,7 @@ export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
       return { 
         success: false, 
         message: "Resposta inesperada da API (Autenticação falhou ou conta inativa)." 
-      }
+        }
     }
   } catch (err: any) {
     return {
@@ -366,10 +374,7 @@ export async function emitCttShipmentAction(shipmentInput: {
 
       // Atualizar audit_log com metadados ricos CTT
       try {
-        const { data: existingLogs } = await supabase
-          .from("audit_log")
-          .select("id, details")
-          .eq("action", "shipment_data")
+        const existingLogs = await findShipmentAuditRecords(supabase, await getTenantId(), shipmentInput.id)
         
         const targetLog = existingLogs?.find((l: any) => l.details?.id === shipmentInput.id)
         if (targetLog) {

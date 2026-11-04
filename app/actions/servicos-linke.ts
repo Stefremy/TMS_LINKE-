@@ -1,5 +1,7 @@
 "use server"
 
+import { supportsDatabaseFeature } from "@/lib/supabase/schema-capabilities"
+
 import { applyPaq24Tariffs } from "@/lib/services/correos/paq24-tariffs"
 import correosProducts from "@/lib/services/correos/product-catalog.json"
 
@@ -671,8 +673,9 @@ for (let i = 0; i < DEFAULT_SERVICOS_LINKE.length; i++) {
 /** Resolve the stored base-table marker and whether a catalogue entry exists. */
 async function readStoredServiceProtection(supabase: ReturnType<typeof createAdminClient>, id: string, tenantId: string) {
   if (isPrimordialServico({ id })) return { found: true, isProtected: true }
-  const { data: native, error: nativeError } = await supabase.from("servicos_linke")
-    .select("*").eq("id", id).maybeSingle()
+  const { data: native, error: nativeError } = await supportsDatabaseFeature(supabase, "servicos_linke")
+    ? await supabase.from("servicos_linke").select("*").eq("id", id).maybeSingle()
+    : { data: null, error: null }
   // Legacy services use text IDs and may exist only in audit_log when the native table uses UUIDs.
   if (nativeError && !["42P01", "PGRST205", "22P02"].includes(nativeError.code)) {
     throw new Error("Não foi possível verificar a proteção da tabela. Tente novamente.")
@@ -771,41 +774,43 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
 
   // 1. Tentar ler da tabela servicos_linke se existir
   try {
-    const { data, error } = await supabase
-      .from("servicos_linke")
-      .select("*")
-      .order("created_at", { ascending: true })
+    if (await supportsDatabaseFeature(supabase, "servicos_linke")) {
+      const { data, error } = await supabase
+        .from("servicos_linke")
+        .select("*")
+        .order("created_at", { ascending: true })
 
-    if (!error && data && data.length > 0) {
-      return data
-        .filter((s: any) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
-        .sort((a: any, b: any) => getCarrierRank(a) - getCarrierRank(b))
-        .map((s: any) => normalizeLoadedServico(s))
-        .filter((s: any) => {
-          if (isClient && s.client_id && s.client_id !== ctx.client_id) return false;
-          return true;
-        })
-        .map((s: any) => {
-          if (isClient) {
-            return {
-              ...s,
-              global_markup_pct: undefined,
-              preferred_carrier_id: undefined,
-              preferred_carrier_name: undefined,
-              webservice_connection_id: undefined,
-              webservice_service_code: undefined,
-              zones: s.zones?.map((z: any) => ({
-                ...z,
-                tiers: z.tiers?.map((t: any) => ({
-                  ...t,
-                  cost_price: undefined,
-                  margin_pct: undefined
+      if (!error && data && data.length > 0) {
+        return data
+          .filter((s: any) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
+          .sort((a: any, b: any) => getCarrierRank(a) - getCarrierRank(b))
+          .map((s: any) => normalizeLoadedServico(s))
+          .filter((s: any) => {
+            if (isClient && s.client_id && s.client_id !== ctx.client_id) return false;
+            return true;
+          })
+          .map((s: any) => {
+            if (isClient) {
+              return {
+                ...s,
+                global_markup_pct: undefined,
+                preferred_carrier_id: undefined,
+                preferred_carrier_name: undefined,
+                webservice_connection_id: undefined,
+                webservice_service_code: undefined,
+                zones: s.zones?.map((z: any) => ({
+                  ...z,
+                  tiers: z.tiers?.map((t: any) => ({
+                    ...t,
+                    cost_price: undefined,
+                    margin_pct: undefined
+                  }))
                 }))
-              }))
+              }
             }
-          }
-          return s;
-        })
+            return s;
+          })
+      }
     }
   } catch {}
 
@@ -990,7 +995,7 @@ export async function saveServicoLinkeAction(
         if (d.id && d.details?.id === id) {
           await supabase.from("audit_log").delete().eq("id", d.id)
         }
-      }
+        }
     }
   } catch {}
 
@@ -1184,7 +1189,7 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
         if (item.id && item.details?.id === id) {
           await supabase.from("audit_log").delete().eq("tenant_id", ctx.tenant_id).eq("id", item.id)
         }
-      }
+        }
     }
   } catch {}
 

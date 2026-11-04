@@ -1,5 +1,7 @@
 "use server"
 
+import { findShipmentAuditRecords } from "@/lib/services/shipments/audit-records"
+
 import { getServiceIslandTransportMode, isPortugueseIslandDestination, type IslandTransportMode } from "@/lib/services/shipment-service-options"
 import { shipmentOverrideError } from "@/lib/services/shipments/shipment-form-authorization"
 import { calculateOversizeSurcharge } from "@/lib/pricing/oversize-surcharge"
@@ -742,7 +744,7 @@ export async function updateShipmentStatusAction(
   location?: string
 ) {
   
-  await requireEmployee("Emissão e Controlo de Guias CTT")
+  const ctx = await requireEmployee("Emissão e Controlo de Guias CTT")
 
   const supabase = createAdminClient()
   const now = new Date().toISOString()
@@ -762,10 +764,7 @@ export async function updateShipmentStatusAction(
 
   // 2. Dual-write in audit_log
   try {
-    const { data: logs } = await supabase
-      .from("audit_log")
-      .select("id, details")
-      .eq("action", "shipment_data")
+    const logs = await findShipmentAuditRecords(supabase, ctx.tenant_id, shipmentId)
 
     if (logs) {
       for (const item of logs) {
@@ -1417,10 +1416,7 @@ export async function resolveShipmentIncidentAction(params: {
     await supabase.from("shipments").update(updatePayload).eq("id", shipmentId)
 
     // 2. Atualizar em audit_log
-    const { data: logs } = await supabase
-      .from("audit_log")
-      .select("id, details")
-      .eq("action", "shipment_data")
+    const logs = await findShipmentAuditRecords(supabase, await getTenantId(), shipmentId)
 
     if (logs) {
       for (const item of logs) {

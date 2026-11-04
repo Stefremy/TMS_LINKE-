@@ -1,3 +1,4 @@
+import { supportsDatabaseFeature } from "@/lib/supabase/schema-capabilities"
 import { cache } from "react"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getAuthContext } from "@/lib/auth/context"
@@ -15,7 +16,9 @@ export const getMyProfile = cache(async (): Promise<UserProfile | null> => {
   try {
     const ctx = await getAuthContext()
     if (!ctx?.user?.id) return null
-    const { data, error } = await createAdminClient()
+    const db = createAdminClient()
+    if (!await supportsDatabaseFeature(db, "user_profiles")) return null
+    const { data, error } = await db
       .from("user_profiles")
       .select("name, phone, department, location, avatar_url")
       .eq("user_id", ctx.user.id)

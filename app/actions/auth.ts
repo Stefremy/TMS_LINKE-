@@ -94,7 +94,9 @@ export async function setColaboradorCredentialsAction(
     if (error) throw new Error("Não foi possível atualizar as credenciais do colaborador.")
   } else {
     if (!password?.trim()) throw new Error("Para criar um novo acesso, é necessário definir uma password inicial.")
-    const { error } = await supabaseAdmin.auth.admin.createUser({ email, password: password.trim(), email_confirm: true, app_metadata })
+    const { error } = await supabaseAdmin.auth.admin.createUser({ email, password: password.trim(), email_confirm: true, app_metadata,
+      ...(profile.avatar?.startsWith('https://') && profile.avatar.length <= 500 ? { user_metadata: { avatar: profile.avatar } } : {}),
+    })
     if (error) throw new Error("Não foi possível criar o acesso do colaborador.")
   }
   const saved = await saveColaboradorAction({ ...profile, email, access_level: accessLevel, permissions: effectivePermissions })

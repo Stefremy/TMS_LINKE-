@@ -1,3 +1,4 @@
+import { supportsDatabaseFeature } from "@/lib/supabase/schema-capabilities"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { DEFAULT_COLABORADORES, type Colaborador } from "@/app/ops/entidades/colaboradores/types"
 import { AVAILABLE_STAFF_PERMISSIONS, isStaffAccessLevel, parsePermissions } from "./permissions"
@@ -62,8 +63,10 @@ export async function loadStaffDirectory(db: SupabaseClient, tenantId: string, u
     profiles.set(id, { ...previous, ...fields, id } as Colaborador)
   }
   try {
-    const { data, error } = await db.from("colaboradores").select("*").eq("tenant_id", tenantId)
-    if (!error) for (const row of data || []) merge(row.id, { ...row, permissions: parsePermissions(row.permissions) })
+    if (await supportsDatabaseFeature(db, "colaboradores")) {
+      const { data, error } = await db.from("colaboradores").select("*").eq("tenant_id", tenantId)
+      if (!error) for (const row of data || []) merge(row.id, { ...row, permissions: parsePermissions(row.permissions) })
+    }
   } catch { /* Older installations persist profiles in audit_log. */ }
 
   for (let offset = 0; ; offset += 1000) {

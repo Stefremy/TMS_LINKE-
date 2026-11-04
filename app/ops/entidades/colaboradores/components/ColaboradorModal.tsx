@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import {
   X,
   User,
@@ -34,6 +35,7 @@ export function ColaboradorModal({
   colaborador,
   onSaved,
 }: ColaboradorModalProps) {
+  const router = useRouter()
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -49,11 +51,23 @@ export function ColaboradorModal({
   const [agencyLocation, setAgencyLocation] = React.useState("Sede - Felgueiras / Guimarães")
   const [admissionDate, setAdmissionDate] = React.useState(new Date().toISOString().slice(0, 10))
   const [avatarColor, setAvatarColor] = React.useState(AVATAR_COLORS[0])
+  const [avatar, setAvatar] = React.useState("")
+  const [avatarPreview, setAvatarPreview] = React.useState("")
+  const [avatarFile, setAvatarFile] = React.useState<File | null>(null)
+  const avatarInput = React.useRef<HTMLInputElement>(null)
+  const objectUrl = React.useRef<string | null>(null)
+  const avatarInputId = React.useId()
   const [emergencyContact, setEmergencyContact] = React.useState("")
   const [notes, setNotes] = React.useState("")
 
   /* eslint-disable react-hooks/set-state-in-effect -- Reset the form when opening a different staff profile. */
   React.useEffect(() => {
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current)
+    objectUrl.current = null
+    setAvatarFile(null)
+    setAvatar(colaborador?.avatar || "")
+    setAvatarPreview(colaborador?.avatar || "")
+    if (avatarInput.current) avatarInput.current.value = ""
     if (colaborador) {
       setName(colaborador.name || "")
       setRole(colaborador.role || "")
@@ -89,6 +103,33 @@ export function ColaboradorModal({
   }, [colaborador, isOpen])
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  React.useEffect(() => () => {
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current)
+  }, [])
+
+  const chooseAvatar = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+    if (!['image/jpeg', 'image/png'].includes(file.type) || !file.size || file.size > 2 * 1024 * 1024) {
+      setError('Escolha uma imagem JPEG ou PNG até 2 MB.')
+      return
+    }
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current)
+    objectUrl.current = URL.createObjectURL(file)
+    setAvatarPreview(objectUrl.current)
+    setAvatarFile(file)
+    setError(null)
+  }
+
+  const removeAvatar = () => {
+    if (objectUrl.current) URL.revokeObjectURL(objectUrl.current)
+    objectUrl.current = null
+    setAvatar("")
+    setAvatarPreview("")
+    setAvatarFile(null)
+  }
+
   if (!isOpen) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -106,6 +147,8 @@ export function ColaboradorModal({
     setError(null)
 
     try {
+      const photo = avatarFile ? new FormData() : undefined
+      if (photo && avatarFile) photo.set('avatar', avatarFile)
       const res = await saveColaboradorAction({
         id: colaborador?.id,
         code: colaborador?.code,
@@ -122,13 +165,15 @@ export function ColaboradorModal({
         agency_location: agencyLocation.trim(),
         admission_date: admissionDate,
         avatar_color: avatarColor,
+        avatar,
         emergency_contact: emergencyContact.trim(),
         notes: notes.trim(),
-      })
+      }, photo)
 
       if (res.success && res.colaborador) {
         onSaved(res.colaborador)
         onClose()
+        router.refresh()
       } else {
         setError("Erro ao guardar registo do colaborador.")
       }
@@ -172,10 +217,30 @@ export function ColaboradorModal({
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
           {error && (
-            <div className="p-3.5 bg-[var(--status-critical-soft)] border border-[rgba(220,38,38,0.2)] rounded-xl text-xs text-[var(--status-critical)] font-medium">
+            <div role="alert" className="p-3.5 bg-[var(--status-critical-soft)] border border-[rgba(220,38,38,0.2)] rounded-xl text-xs text-[var(--status-critical)] font-medium">
               {error}
             </div>
           )}
+
+          <div className="flex flex-wrap items-center gap-4 rounded-xl border border-[var(--border-subtle)] p-4">
+            <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full text-white" style={{ backgroundColor: avatarColor }}>
+              {avatarPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element -- Preview local image files before uploading them.
+                <img src={avatarPreview} alt="Pré-visualização da fotografia" className="size-full object-cover" />
+              ) : <User className="size-7" aria-hidden="true" />}
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">Fotografia do colaborador</p>
+              <input ref={avatarInput} id={avatarInputId} type="file" accept="image/jpeg,image/png" className="hidden" aria-label="Escolher fotografia do colaborador" onChange={chooseAvatar} disabled={loading} />
+              <div className="flex flex-wrap gap-3">
+                <button type="button" disabled={loading} onClick={() => avatarInput.current?.click()} aria-controls={avatarInputId} className="text-xs font-semibold text-[var(--accent)] disabled:opacity-50">
+                  {avatarPreview ? 'Alterar fotografia' : 'Carregar fotografia'}
+                </button>
+                {avatarPreview && <button type="button" disabled={loading} onClick={removeAvatar} className="text-xs text-[var(--text-secondary)] disabled:opacity-50">Remover fotografia</button>}
+              </div>
+              <p className="text-xs text-[var(--text-tertiary)]">JPEG ou PNG · Até 2 MB. A alteração é aplicada ao guardar.</p>
+            </div>
+          </div>
 
           {/* Nome e Cargo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

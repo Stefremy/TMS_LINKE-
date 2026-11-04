@@ -24,6 +24,17 @@ export type ChatPage = {
   messages: ChatMessage[]
   hasMore: boolean
 }
+export type ChatInboxItem = {
+  key: string
+  kind: "channel" | "dm"
+  title: string
+  subtitle: string
+  avatar_url: string | null
+  preview: string
+  sender_name: string | null
+  created_at: string | null
+  sequence: number
+}
 
 export const DEFAULT_CHANNELS: ChatChannel[] = [
   { id: "geral", slug: "geral", name: "Sala geral", description: "Toda a equipa", is_default: true },

@@ -169,7 +169,6 @@ export function CalendarShell({
           <h1 id="calendar-title" tabIndex={-1}>
             Calendário
           </h1>
-          <p>As pessoas, os compromissos e a operação no mesmo lugar.</p>
         </div>
         <span className="hidden items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs text-[var(--text-secondary)] sm:flex">
           <Users size={14} />

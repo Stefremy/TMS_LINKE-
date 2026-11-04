@@ -1,3 +1,4 @@
+import { supportsDatabaseFeature } from "@/lib/supabase/schema-capabilities"
 /**
  * Shared carrier credential helpers.
  * Importable from both server actions AND lib/ services without crossing action boundaries.
@@ -21,11 +22,13 @@ export async function resolveCttCredentials(connectionId?: string): Promise<CTTC
   const supabase = createAdminClient()
   let connection: (Partial<CTTConnectionCredentials> & { client_id?: string; is_active?: boolean }) | null = null
   try {
-    let query = supabase.from("carrier_connections").select("*").eq("tenant_id", tenantId)
-      .in("carrier_code", ["ctt_expresso", "ctt"])
-    if (connectionId) query = query.eq("id", connectionId)
-    const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle()
-    if (!error) connection = data
+    if (await supportsDatabaseFeature(supabase, "carrier_connections")) {
+      let query = supabase.from("carrier_connections").select("*").eq("tenant_id", tenantId)
+        .in("carrier_code", ["ctt_expresso", "ctt"])
+      if (connectionId) query = query.eq("id", connectionId)
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(1).maybeSingle()
+      if (!error) connection = data
+    }
   } catch {}
 
   if (!connection) {
@@ -75,40 +78,41 @@ export async function resolveCttCredentials(connectionId?: string): Promise<CTTC
 
 // ─── CORREOS EXPRESS ────────────────────────────────────────────────────────
 
-let correosCredentialsCache: CorreosCredentials | null = null
-let correosCredentialsCacheTime = 0
+const correosCredentialsCache = new Map<string, { credentials: CorreosCredentials; time: number }>()
 
 export async function resolveCorreosCredentials(connectionId?: string): Promise<CorreosCredentials> {
+  const tenantId = await getTenantId()
   const isDefaultCorreosId = !connectionId || connectionId === "correos_express"
-  if (isDefaultCorreosId && correosCredentialsCache && Date.now() - correosCredentialsCacheTime < 60000) {
-    return correosCredentialsCache
-  }
+  const cacheKey = `${tenantId}:${isDefaultCorreosId ? "default" : connectionId}`
+  const cached = correosCredentialsCache.get(cacheKey)
+  if (cached && Date.now() - cached.time < 60000) return cached.credentials
 
   const supabase = createAdminClient()
   let result: CorreosCredentials | null = null
 
   try {
-    const tenantId = await getTenantId()
-    let query = supabase
-      .from("carrier_connections")
-      .select("*")
-      .eq("tenant_id", tenantId)
+    if (await supportsDatabaseFeature(supabase, "carrier_connections")) {
+      let query = supabase
+        .from("carrier_connections")
+        .select("*")
+        .eq("tenant_id", tenantId)
 
-    if (!isDefaultCorreosId && connectionId) {
-      query = query.eq("id", connectionId)
-    } else {
-      query = query.eq("carrier_code", "correos_express")
-    }
+      if (!isDefaultCorreosId && connectionId) {
+        query = query.eq("id", connectionId)
+      } else {
+        query = query.eq("carrier_code", "correos_express")
+      }
 
-    const { data: conn } = await query.single()
+      const { data: conn } = await query.single()
 
-    if (conn) {
-      result = {
-        solicitante: conn.client_id,
-        codRte: conn.contract_number,
-        user: conn.auth_id,
-        pass: conn.user_id || "",
-        environment: (conn.environment === "qa" ? "test" : (conn.environment as "test" | "production")) || "production",
+      if (conn) {
+        result = {
+          solicitante: conn.client_id,
+          codRte: conn.contract_number,
+          user: conn.auth_id,
+          pass: conn.user_id || "",
+          environment: (conn.environment === "qa" ? "test" : (conn.environment as "test" | "production")) || "production",
+        }
       }
     }
   } catch {}
@@ -118,6 +122,7 @@ export async function resolveCorreosCredentials(connectionId?: string): Promise<
       const { data: logs } = await supabase
         .from("audit_log")
         .select("*")
+        .eq("tenant_id", tenantId)
         .eq("action", "carrier_connection_config")
         .eq("details->>carrier_code", "correos_express")
         .order("created_at", { ascending: false })
@@ -146,8 +151,8 @@ export async function resolveCorreosCredentials(connectionId?: string): Promise<
   }
 
   if (isDefaultCorreosId) {
-    correosCredentialsCache = finalResult
-    correosCredentialsCacheTime = Date.now()
+    correosCredentialsCache.set(cacheKey, { credentials: finalResult, time: Date.now() })
+    if (correosCredentialsCache.size > 256) correosCredentialsCache.delete(correosCredentialsCache.keys().next().value!)
   }
 
   return finalResult

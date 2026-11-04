@@ -2,6 +2,13 @@
 /CTT API/
 /correos api/
 /docs/
+/output/
+/scratch/
+/tests/
+/*.txt
+/*.pdf
+/*.xlsx
+/*.csv
 
 # Local dependencies, build outputs, credentials and development files.
 /.git/

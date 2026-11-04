@@ -6,6 +6,9 @@ import type { Colaborador } from "@/app/ops/entidades/colaboradores/types"
 import { requireAdmin, requireEmployee } from "@/lib/auth/context"
 import { listStaffAuthUsers, loadStaffDirectory, OWNER_EMAIL, staffEmail } from "@/lib/auth/staff-directory"
 import { hasPermission, PERMISSIONS, PERMISSION_PRESETS, validateStaffAccess } from "@/lib/auth/permissions"
+import { invalidateChatAvatars } from "@/lib/team-chat-avatars"
+import { uploadStaffAvatar } from "@/lib/staff-avatar"
+import { supportsDatabaseFeature } from "@/lib/supabase/schema-capabilities"
 
 export async function getColaboradoresAction(): Promise<Colaborador[]> {
   const ctx = await requireEmployee()
@@ -18,7 +21,7 @@ export async function getColaboradoresAction(): Promise<Colaborador[]> {
 /**
  * Cria ou atualiza um colaborador
  */
-export async function saveColaboradorAction(colaboradorData: Partial<Colaborador> & { name: string; role: string; department: string }) {
+export async function saveColaboradorAction(colaboradorData: Partial<Colaborador> & { name: string; role: string; department: string }, photo?: FormData) {
   const ctx = await requireAdmin()
 
   const supabase = createAdminClient()
@@ -54,7 +57,7 @@ export async function saveColaboradorAction(colaboradorData: Partial<Colaborador
     agency_location: input.agency_location || "Sede - Felgueiras / Guimarães",
     admission_date: input.admission_date || now.slice(0, 10),
     avatar_color: input.avatar_color || "#16a34a",
-    avatar: input.avatar || undefined,
+    avatar: input.avatar || "",
     permissions,
     emergency_contact: input.emergency_contact || "",
     notes: input.notes || "",
@@ -69,15 +72,33 @@ export async function saveColaboradorAction(colaboradorData: Partial<Colaborador
   const authUser = authUsers.find(u => u.app_metadata?.colaborador_id === id || staffEmail(u.email) === staffEmail(existing?.email || fullColaborador.email))
   if (authUser && (authUser.app_metadata?.role === "client" || authUser.app_metadata?.tenant_id && authUser.app_metadata.tenant_id !== ctx.tenant_id)) throw new Error("Esta conta não pertence aos colaboradores desta empresa.")
   if (authUsers.some(u => u.id !== authUser?.id && staffEmail(u.email) === staffEmail(fullColaborador.email))) throw new Error("Este email já está associado a outra conta.")
+  if (colaboradorData.avatar !== undefined && (typeof colaboradorData.avatar !== 'string' || (colaboradorData.avatar !== existing?.avatar && colaboradorData.avatar && (!/^https:\/\//i.test(colaboradorData.avatar) || colaboradorData.avatar.length > 500)))) {
+    throw new Error("Endereço de fotografia inválido.")
+  }
+  if (photo !== undefined && !(photo instanceof FormData)) throw new Error("Escolha uma imagem JPEG ou PNG.")
+  const file = photo?.get('avatar')
+  if (file != null && !(file instanceof File)) throw new Error("Escolha uma imagem JPEG ou PNG.")
+  const uploaded = file instanceof File ? await uploadStaffAvatar(supabase, file, ctx.tenant_id, id) : null
+  if (uploaded) fullColaborador.avatar = uploaded.url
+  const avatarChanged = Boolean(uploaded) || (Object.hasOwn(colaboradorData, 'avatar') && (colaboradorData.avatar || '') !== (existing?.avatar || ''))
   const { error: auditError } = await supabase.from("audit_log").insert({
     tenant_id: ctx.tenant_id,
     action: existing ? "colaborador_updated" : "colaborador_created",
     details: fullColaborador,
     created_at: now,
   })
-  if (auditError) throw new Error("Não foi possível guardar os acessos do colaborador.")
+  if (auditError) {
+    if (uploaded) {
+      try { await supabase.storage.from('avatars').remove([uploaded.path]) } catch { /* Preserve the original save error. */ }
+    }
+    throw new Error("Não foi possível guardar os acessos do colaborador.")
+  }
+  invalidateChatAvatars(ctx.tenant_id)
   // Older installations use audit_log when the colaboradores table is unavailable.
-  try { await supabase.from("colaboradores").upsert({ ...fullColaborador, tenant_id: ctx.tenant_id }, { onConflict: "id" }) } catch {}
+  try {
+    if (await supportsDatabaseFeature(supabase, "colaboradores"))
+      await supabase.from("colaboradores").upsert({ ...fullColaborador, tenant_id: ctx.tenant_id }, { onConflict: "id" })
+  } catch {}
 
   // Keep the trusted auth fallback aligned too, including ordinary profile edits.
   if (authUser) {
@@ -86,8 +107,15 @@ export async function saveColaboradorAction(colaboradorData: Partial<Colaborador
       app_metadata: { ...authUser.app_metadata, tenant_id: ctx.tenant_id, colaborador_id: id,
         role: accessLevel === "Administrador" ? "admin" : "employee", access_level: accessLevel,
         permissions, staff_status: fullColaborador.status },
+      // Keep only a short Storage URL in Auth, never the image bytes.
+      ...(avatarChanged ? { user_metadata: { ...authUser.user_metadata, avatar: fullColaborador.avatar || null } } : {}),
     })
     if (error) throw new Error("Perfil guardado, mas a conta de acesso não foi sincronizada. Tente novamente.")
+    if (avatarChanged && await supportsDatabaseFeature(supabase, 'user_profiles')) {
+      const { error: profileError } = await supabase.from('user_profiles')
+        .update({ avatar_url: fullColaborador.avatar || null, updated_at: now }).eq('user_id', authUser.id)
+      if (profileError) throw new Error('Fotografia guardada, mas não foi possível atualizar o perfil da conta. Tente novamente.')
+    }
   }
 
   revalidatePath("/ops", "layout")

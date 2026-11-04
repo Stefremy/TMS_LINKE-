@@ -189,11 +189,14 @@ test('manifest notification excludes other carriers, companies and already close
   const db = fakeSupabase({ shipments: [row(), row(B, { carrier_code: 'correos_express' }),
     row('44444444-4444-4444-4444-444444444444', { tenant_id: FOREIGN }),
     row('55555555-5555-5555-5555-555555555555', { ops_substatus: 'manifesto_fechado' })] })
+  db.client.rpc = async () => ({ data: { 'shipments.ctt_manifest_pdf': false }, error: null })
   const action = createLoader({ '@/lib/supabase/server': { createAdminClient: () => db.createAdminClient() },
     '@/lib/auth/context': { requireEmployee: async () => ({ role: 'employee', tenant_id: TENANT }) },
     '@/app/actions/clientes': { getClientesAction: async () => [] },
     '@/app/actions/ctt': { getCarrierConnectionsAction: async () => [] },
+    './calendar': { fetchCalendarEventRange: async () => ({ events: [] }) },
   })('app/actions/notifications.ts').getOperationalNotificationsAction
   const batch = (await action()).find(n => n.type === 'batch')
   assert.match(batch.message, /Existem 1 envio/)
+  assert.ok(db.queries.every(query => !query.filters.some(filter => filter.field === 'ctt_manifest_pdf')))
 })

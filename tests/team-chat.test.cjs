@@ -12,7 +12,7 @@ const message = (sequence, sender_id, recipient_id, tenant_id = T) => ({ id: `me
 
 // In-memory database with the constraints/defaults used by the chat. No live messages.
 function database(seed = {}, failure) {
-  const tables = { team_chat_members: [member(A), member(B), member(C)], team_chat_messages: [], ...seed }
+  const tables = { team_chat_members: [member(A), member(B), member(C)], team_chat_messages: [], audit_log: [], ...seed }
   const calls = []
   let clients = 0
   function from(table) {
@@ -21,6 +21,12 @@ function database(seed = {}, failure) {
       select() { return q },
       eq(field, value) { state.filters.push([field, value]); state.predicates.push(row => row[field] === value); return q },
       is(field, value) { return q.eq(field, value) },
+      like(field, pattern) { state.predicates.push(row => row[field].startsWith(pattern.slice(0, -1))); return q },
+      not(field, operator, pattern) {
+        assert.equal(operator, 'like')
+        state.predicates.push(row => !row[field].startsWith(pattern.slice(0, -1)))
+        return q
+      },
       lt(field, value) { state.predicates.push(row => row[field] < value); return q },
       gt(field, value) { state.predicates.push(row => row[field] > value); return q },
       or(expression) {
@@ -72,6 +78,10 @@ function setup({ role = 'employee', userId = A, tenant = T, seed, failure, anony
   const context = anonymous ? null : { role, user: { id: userId, email: 'colleague@example.com', user_metadata: { name: 'Login Name' } }, tenant_id: tenant }
   const load = createLoader({
     'server-only': {},
+    '@/lib/team-chat-avatars': {
+      getChatStaffAvatars: async () => new Map([[A, 'https://example.com/staff-a.png'], [B, null], [C, null]]),
+      getChatStaffMembers: async () => new Map([[A, { user_id: A, name: 'A', avatar_url: 'https://example.com/staff-a.png' }], [B, { user_id: B, name: 'B', avatar_url: null }], [C, { user_id: C, name: 'C', avatar_url: null }]]),
+    },
     'next/server': { NextResponse: { json: (body, init) => ({ body, status: init?.status || 200, headers: init?.headers }) } },
     '@/lib/auth/context': { getAuthContext: async () => context },
     '@/lib/auth/profile': { getMyProfile: async () => ({ name: 'Actual Profile', avatar_url: 'https://example.com/photo.png' }) },
@@ -102,6 +112,32 @@ test('general history excludes all DMs and other tenants', async () => {
   for (const query of db.calls) assert.ok(query.filters.some(([key, value]) => key === 'tenant_id' && value === T))
 })
 
+test('channel histories remain separate from the general room and private conversations', async () => {
+  const tagged = (sequence, body, recipient = null, tenant = T) => ({ ...message(sequence, A, recipient, tenant), body })
+  const { api } = setup({ seed: { team_chat_messages: [
+    message(1, A, null), tagged(2, '[c:operacoes]Recolha confirmada'),
+    tagged(3, '[c:clientes]Outro canal'), tagged(4, '[c:operacoes]Privada', B),
+    tagged(5, '[c:operacoes]Outra equipa', null, OTHER),
+  ] } })
+  const general = await api.GET(get())
+  assert.deepEqual(general.body.messages.map(row => row.sequence), [1])
+  const operations = await api.GET(get('?channel=operacoes'))
+  assert.equal(operations.status, 200)
+  assert.deepEqual(operations.body.messages.map(row => [row.sequence, row.body]), [[2, 'Recolha confirmada']])
+  assert.equal(operations.body.activeChannel, 'operacoes')
+})
+
+test('history uses current staff photos, including explicit photo removal', async () => {
+  const { api } = setup({ seed: { team_chat_messages: [
+    { ...message(1, A, null), sender_avatar_url: 'https://example.com/old.png' },
+    { ...message(2, B, null), sender_avatar_url: 'https://example.com/removed.png' },
+  ] } })
+  const { body } = await api.GET(get())
+  assert.equal(body.members.find(member => member.user_id === A).avatar_url, 'https://example.com/staff-a.png')
+  assert.equal(body.messages[0].sender_avatar_url, 'https://example.com/staff-a.png')
+  assert.equal(body.messages[1].sender_avatar_url, null)
+})
+
 test('DM history contains only the two signed-in participants, even for administrators', async () => {
   for (const role of ['employee', 'admin']) {
     const { api } = setup({ role, seed: { team_chat_messages: [message(1, A, B), message(2, B, A), message(3, B, C), message(4, A, C), message(5, A, null), message(6, A, B, OTHER)] } })
@@ -118,7 +154,7 @@ test('message identity and tenant come from the verified login, never from the r
   assert.equal(row.sender_id, A)
   assert.equal(row.tenant_id, T)
   assert.equal(row.sender_name, 'Actual Profile')
-  assert.equal(row.sender_avatar_url, 'https://example.com/photo.png')
+  assert.equal(row.sender_avatar_url, 'https://example.com/staff-a.png')
   assert.equal(row.recipient_id, null)
 })
 
