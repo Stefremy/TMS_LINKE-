@@ -851,14 +851,14 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
     }
     return item.sequence > 0 && item.sequence > lastRead ? 1 : 0
   }
-  const unread = (item: ChatInboxItem) => getUnreadCount(item) > 0
-  const unreadCount = inbox.filter(unread).length
+  const hasUnreadMessages = (item: ChatInboxItem) => getUnreadCount(item) > 0
+  const unreadCount = inbox.filter(hasUnreadMessages).length
   const favouriteCount = inbox.filter(item => preferences.favourites.includes(item.key)).length
   const pinnedCount = inbox.filter(item => preferences.pinned.includes(item.key)).length
   const inboxItems = inbox.filter(item => {
     const matchesSearch = !searchTerm || `${item.title} ${item.subtitle} ${item.preview} ${item.sender_name || ""}`.toLocaleLowerCase("pt-PT").includes(searchTerm)
     if (!matchesSearch) return false
-    if (inboxFilter === "unread") return unread(item)
+    if (inboxFilter === "unread") return hasUnreadMessages(item)
     if (inboxFilter === "groups") return item.kind === "channel"
     if (inboxFilter === "favourites") return preferences.favourites.includes(item.key)
     if (inboxFilter === "pinned") return preferences.pinned.includes(item.key)
