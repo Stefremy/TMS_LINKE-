@@ -165,6 +165,9 @@ export function MailboxClient({
   // Label dropdown in toolbar
   const [showLabelMenu, setShowLabelMenu] = React.useState(false)
   const [showMoreMenu, setShowMoreMenu] = React.useState(false)
+  const [viewPlainText, setViewPlainText] = React.useState(false)
+  const [iframeHeight, setIframeHeight] = React.useState(420)
+  const [previewAttachment, setPreviewAttachment] = React.useState<ChatAttachmentItem | null>(null)
 
   // Compose Modal state
   const [showComposeModal, setShowComposeModal] = React.useState(false)
@@ -292,6 +295,8 @@ export function MailboxClient({
   React.useEffect(() => {
     if (selectedMessage) {
       setMuteThread(Boolean(selectedMessage.muted))
+      setPreviewAttachment(null)
+      setIframeHeight(420)
     }
   }, [selectedMessage])
 
@@ -1433,9 +1438,43 @@ export function MailboxClient({
 
               {/* Message Body Area */}
               <div className="flex-1 overflow-y-auto px-6 py-5">
-                <div className="prose prose-sm max-w-none whitespace-pre-wrap text-[13.5px] leading-relaxed text-[var(--text-primary)]">
-                  {selectedMessage.bodyText}
-                </div>
+                {selectedMessage.bodyHtml && (
+                  <div className="mb-3 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setViewPlainText((v) => !v)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)]/60 px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      {viewPlainText ? "Ver HTML Original (Assinaturas & Formatação)" : "Ver Texto Simples"}
+                    </button>
+                  </div>
+                )}
+
+                {selectedMessage.bodyHtml && !viewPlainText ? (
+                  <iframe
+                    key={selectedMessage.id}
+                    title={selectedMessage.subject || "Conteúdo do email"}
+                    sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                    style={{ height: `${iframeHeight}px` }}
+                    onLoad={(e) => {
+                      try {
+                        const doc = e.currentTarget.contentDocument
+                        if (doc?.body) {
+                          const h = Math.max(260, doc.documentElement.scrollHeight || doc.body.scrollHeight)
+                          setIframeHeight(h + 24)
+                        }
+                      } catch {
+                        // ignore cross-origin if any
+                      }
+                    }}
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"/><base target="_blank"/><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.6;color:#0f172a;margin:0;padding:4px;overflow-wrap:break-word;background:transparent;}img{max-width:100%;height:auto;}table{max-width:100%!important;}a{color:#16a34a;}</style></head><body>${selectedMessage.bodyHtml}</body></html>`}
+                    className="w-full rounded-lg border-0 bg-white"
+                  />
+                ) : (
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap text-[13.5px] leading-relaxed text-[var(--text-primary)]">
+                    {selectedMessage.bodyText}
+                  </div>
+                )}
 
                 {/* Attachments Tray */}
                 {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
@@ -1445,29 +1484,100 @@ export function MailboxClient({
                       Anexos ({selectedMessage.attachments.length})
                     </p>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {selectedMessage.attachments.map((att) => (
-                        <a
-                          key={att.id}
-                          href={att.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-2.5 text-xs hover:border-[var(--accent)] transition-colors"
-                        >
-                          <div className="flex min-w-0 items-center gap-2.5">
-                            <FileText className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden="true" />
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-[var(--text-primary)]">
-                                {att.name}
-                              </p>
-                              <p className="text-[10px] text-[var(--text-tertiary)]">
-                                {formatFileSize(att.size)}
-                              </p>
+                      {selectedMessage.attachments.map((att) => {
+                        const isPreviewable =
+                          att.type.includes("pdf") ||
+                          att.type.includes("image") ||
+                          att.name.toLowerCase().endsWith(".pdf") ||
+                          /\.(png|jpe?g|gif|webp|svg)$/i.test(att.name)
+                        const downloadHref = att.url.includes("?")
+                          ? `${att.url}&download=1`
+                          : att.url
+
+                        return (
+                          <div
+                            key={att.id}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-2.5 text-xs hover:border-[var(--accent)] transition-colors"
+                          >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <FileText className="h-4 w-4 shrink-0 text-[var(--accent)]" aria-hidden="true" />
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-[var(--text-primary)]" title={att.name}>
+                                  {att.name}
+                                </p>
+                                <p className="text-[10px] text-[var(--text-tertiary)]">
+                                  {formatFileSize(att.size)}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              {isPreviewable && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewAttachment((curr) => (curr?.id === att.id ? null : att))
+                                  }
+                                  className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-muted)] px-2 py-1 text-[10px] font-semibold text-[var(--text-primary)] hover:border-[var(--accent)]"
+                                >
+                                  {previewAttachment?.id === att.id ? "Fechar" : "Ver"}
+                                </button>
+                              )}
+                              <a
+                                href={att.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-2 py-1 text-[10px] font-semibold text-[var(--accent)] hover:bg-[var(--surface-muted)]"
+                              >
+                                Abrir
+                              </a>
+                              <a
+                                href={downloadHref}
+                                download={att.name}
+                                title="Descarregar anexo"
+                                aria-label={`Descarregar ${att.name}`}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"
+                              >
+                                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                              </a>
                             </div>
                           </div>
-                          <Download className="h-3.5 w-3.5 shrink-0 text-[var(--text-secondary)]" aria-hidden="true" />
-                        </a>
-                      ))}
+                        )
+                      })}
                     </div>
+
+                    {previewAttachment && (
+                      <div className="mt-4 overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-white">
+                        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs">
+                          <span className="font-semibold text-[var(--text-primary)]">
+                            Pré-visualização: {previewAttachment.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewAttachment(null)}
+                            className="text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                          >
+                            Fechar pré-visualização
+                          </button>
+                        </div>
+                        {previewAttachment.type.includes("image") ||
+                        /\.(png|jpe?g|gif|webp|svg)$/i.test(previewAttachment.name) ? (
+                          <div className="flex justify-center p-4">
+                            <img
+                              src={previewAttachment.url}
+                              alt={previewAttachment.name}
+                              className="max-h-[480px] rounded-lg object-contain"
+                            />
+                          </div>
+                        ) : (
+                          <iframe
+                            src={previewAttachment.url}
+                            title={previewAttachment.name}
+                            className="h-[520px] w-full border-0"
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1488,7 +1598,7 @@ export function MailboxClient({
                       </strong>
                     </span>
                     <span className="shrink-0 text-[10px] text-[var(--text-tertiary)]">
-                      De: {account}
+                      De: {account} · Assinatura Linke ativa
                     </span>
                   </div>
 
@@ -1742,7 +1852,7 @@ export function MailboxClient({
             <label className="block text-[11px] font-semibold text-[var(--text-secondary)]">
               Mensagem
               <textarea
-                rows={8}
+                rows={7}
                 required
                 value={composeBody}
                 onChange={(e) => setComposeBody(e.target.value)}
@@ -1750,6 +1860,21 @@ export function MailboxClient({
                 className="mt-1 w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-3 text-xs leading-relaxed text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none"
               />
             </label>
+
+            {/* Institutional Signature Preview */}
+            <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)]/35 px-3.5 py-2.5 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[var(--text-primary)]">
+                  Linke Logística &amp; Transportes
+                </span>
+                <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">
+                  Assinatura Automática
+                </span>
+              </div>
+              <div className="mt-0.5 text-[10px]">
+                {viewerName} &lt;{account}&gt; · <span className="text-[var(--accent)]">app.toke.pt</span>
+              </div>
+            </div>
 
             {/* Attached Files Preview */}
             {composeAttachments.length > 0 && (

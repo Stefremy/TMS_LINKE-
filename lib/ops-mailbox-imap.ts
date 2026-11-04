@@ -10,6 +10,8 @@ export interface ImapSyncResult {
   connected: boolean
 }
 
+let activeSyncPromise: Promise<ImapSyncResult> | null = null
+
 function classifyEmailLabels(fromEmail: string, subject: string): MailLabelId[] {
   const combined = `${fromEmail} ${subject}`.toLowerCase()
   const labels: MailLabelId[] = []
@@ -44,6 +46,19 @@ export async function syncGmailImap(
   tenantId: string,
   options?: { limit?: number }
 ): Promise<ImapSyncResult> {
+  if (activeSyncPromise) {
+    return activeSyncPromise
+  }
+  activeSyncPromise = runSyncGmailImap(tenantId, options).finally(() => {
+    activeSyncPromise = null
+  })
+  return activeSyncPromise
+}
+
+async function runSyncGmailImap(
+  tenantId: string,
+  options?: { limit?: number }
+): Promise<ImapSyncResult> {
   const host = process.env.IMAP_HOST || "imap.gmail.com"
   const port = Number(process.env.IMAP_PORT || 993)
   const user = (process.env.IMAP_USER || "geral@linke.pt").trim()
@@ -66,7 +81,7 @@ export async function syncGmailImap(
     .eq("tenant_id", tenantId)
     .eq("action", "ops_mailbox_message")
     .order("created_at", { ascending: false })
-    .limit(400)
+    .limit(500)
 
   const existingIds = new Set<string>(
     (existingRows || [])
@@ -113,12 +128,12 @@ export async function syncGmailImap(
         }
       }
 
-      // Step 2: Download source only for new messages
+      // Step 2: Download full RFC822 source for new messages so inline cid: signatures & attachments parse completely
       if (missingUids.length > 0) {
         const uidRange = missingUids.join(",")
         for await (const msg of client.fetch(
           uidRange,
-          { uid: true, flags: true, source: { maxLength: 512000 } },
+          { uid: true, flags: true, source: true },
           { uid: true }
         )) {
           if (msg.source) {
@@ -156,6 +171,9 @@ export async function syncGmailImap(
   for (const item of rawMessages) {
     try {
       const messageId = `imap-gmail-${item.uid}`
+      if (existingIds.has(messageId)) continue
+      existingIds.add(messageId)
+
       const parsed = (await simpleParser(item.source)) as ParsedMail
       const fromAddr = parsed.from?.value?.[0]
       const fromName = fromAddr?.name || fromAddr?.address?.split("@")[0] || "Remetente"
@@ -164,9 +182,17 @@ export async function syncGmailImap(
       const htmlContent = typeof parsed.html === "string" ? parsed.html : undefined
       const bodyText =
         parsed.text ||
-        htmlContent?.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ||
+        htmlContent
+          ?.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim() ||
         subject
       const dateIso = parsed.date ? parsed.date.toISOString() : new Date().toISOString()
+
+      const nonInlineAttachments = (parsed.attachments || []).filter(
+        (att) => !(att.contentDisposition === "inline" && att.cid)
+      )
 
       const messageRecord: MailMessage = {
         id: messageId,
@@ -184,16 +210,14 @@ export async function syncGmailImap(
         read: item.seen,
         starred: item.flagged,
         labels: classifyEmailLabels(fromEmail, subject),
-        attachments: (parsed.attachments || []).map((att) => {
-          const isSmall = (att.size || 0) <= 180000 && Buffer.isBuffer(att.content)
+        attachments: nonInlineAttachments.map((att, idx) => {
+          const filename = att.filename || `anexo-${idx + 1}`
           return {
             id: crypto.randomUUID(),
-            name: att.filename || "anexo",
+            name: filename,
             size: att.size || 1024,
             type: att.contentType || "application/octet-stream",
-            url: isSmall
-              ? `data:${att.contentType || "application/octet-stream"};base64,${att.content.toString("base64")}`
-              : "#",
+            url: `/api/ops/mail/attachment?uid=${item.uid}&index=${idx}&name=${encodeURIComponent(filename)}`,
           }
         }),
         createdAt: dateIso,
@@ -224,4 +248,3 @@ export async function syncGmailImap(
 
   return { synced, errors, connected: true }
 }
-
