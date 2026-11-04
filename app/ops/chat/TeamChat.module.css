@@ -193,6 +193,7 @@
 .inboxTitle time { flex:0 0 auto; color:var(--text-secondary); font-size:9px; }
 .inboxPreview { overflow:hidden; color:var(--text-secondary); font-size:10px; line-height:1.4; text-overflow:ellipsis; white-space:nowrap; }
 .unreadPreview { color:var(--text-primary); font-weight:600; }
+.unreadBadge { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:#ef4444; color:#ffffff; font-size:10px; font-weight:750; line-height:1; flex:0 0 auto; box-shadow:0 1px 3px rgba(239,68,68,0.35); }
 .unreadDot { width:7px; height:7px; flex:0 0 7px; border-radius:50%; background:var(--chat-accent); }
 .inboxActions { display:flex; flex:0 0 auto; gap:1px; padding-right:4px; opacity:.55; }
 .inboxItem:hover .inboxActions,.inboxItem:focus-within .inboxActions { opacity:1; }

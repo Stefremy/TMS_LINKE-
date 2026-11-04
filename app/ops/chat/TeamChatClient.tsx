@@ -844,7 +844,14 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
 
   const searchTerm = search.trim().toLocaleLowerCase("pt-PT")
   const privateMembers = members.filter(member => member.user_id !== initial.viewerId)
-  const unread = (item: ChatInboxItem) => item.sequence > 0 && item.sequence > (preferences.read[item.key] || 0)
+  const getUnreadCount = (item: ChatInboxItem) => {
+    const lastRead = preferences.read[item.key] || 0
+    if (item.sequences && item.sequences.length) {
+      return item.sequences.filter(seq => seq > lastRead).length
+    }
+    return item.sequence > 0 && item.sequence > lastRead ? 1 : 0
+  }
+  const unread = (item: ChatInboxItem) => getUnreadCount(item) > 0
   const unreadCount = inbox.filter(unread).length
   const favouriteCount = inbox.filter(item => preferences.favourites.includes(item.key)).length
   const pinnedCount = inbox.filter(item => preferences.pinned.includes(item.key)).length
@@ -892,8 +899,16 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
           if (value.startsWith("ch_")) selectChannel(value.slice(3))
           else selectConversation(value.slice(3))
         }}>
-          <optgroup label="Canais">{channels.map(channel => <option key={channel.slug} value={`ch_${channel.slug}`}># {channel.name}</option>)}</optgroup>
-          <optgroup label="Conversas privadas">{privateMembers.map(member => <option key={member.user_id} value={`dm_${member.user_id}`}>{member.name}</option>)}</optgroup>
+          <optgroup label="Canais">{channels.map(channel => {
+            const item = inbox.find(i => i.key === `ch_${channel.slug}`)
+            const count = item ? getUnreadCount(item) : 0
+            return <option key={channel.slug} value={`ch_${channel.slug}`}># {channel.name}{count > 0 ? ` (${count} não lida${count > 1 ? "s" : ""})` : ""}</option>
+          })}</optgroup>
+          <optgroup label="Conversas privadas">{privateMembers.map(member => {
+            const item = inbox.find(i => i.key === `dm_${member.user_id}`)
+            const count = item ? getUnreadCount(item) : 0
+            return <option key={member.user_id} value={`dm_${member.user_id}`}>{member.name}{count > 0 ? ` (${count} não lida${count > 1 ? "s" : ""})` : ""}</option>
+          })}</optgroup>
         </select>
         <button type="button" className={styles.refresh} aria-label="Criar novo canal" onClick={() => { setChannelError(null); setShowCreateModal(true) }}><Plus size={18} /></button>
       </div>
@@ -914,16 +929,17 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
         <div className={styles.inboxList}>
           {conversationItems.map(item => {
             const selected = key === item.key
-            const isUnread = unread(item)
+            const itemUnreadCount = getUnreadCount(item)
+            const isUnread = itemUnreadCount > 0
             const preview = item.sender_name ? `${item.sender_name === me?.name ? "Tu" : item.sender_name}: ${item.preview}` : item.preview
             return <div className={`${styles.inboxItem} ${selected ? styles.selectedInboxItem : ""}`} key={item.key}>
-              <button type="button" className={styles.inboxOpen} onClick={() => selectInboxItem(item)} disabled={sending || olderLoading} aria-pressed={selected} aria-label={`${item.kind === "channel" ? "Grupo" : "Conversa com"} ${item.title}${isUnread ? ", mensagem não lida" : ""}`}>
+              <button type="button" className={styles.inboxOpen} onClick={() => selectInboxItem(item)} disabled={sending || olderLoading} aria-pressed={selected} aria-label={`${item.kind === "channel" ? "Grupo" : "Conversa com"} ${item.title}${isUnread ? `, ${itemUnreadCount} mensagens não lidas` : ""}`}>
                 {item.kind === "channel" ? <span className={styles.inboxGroupIcon}><Hash size={17} /></span> : <Avatar name={item.title} url={item.avatar_url} />}
                 <span className={styles.inboxCopy}>
                   <span className={styles.inboxTitle}><strong>{item.title}</strong><time>{inboxDate(item.created_at)}</time></span>
                   <span className={`${styles.inboxPreview} ${isUnread ? styles.unreadPreview : ""}`}>{preview}</span>
                 </span>
-                {isUnread && <span className={styles.unreadDot} aria-label="Não lida" />}
+                {isUnread && <span className={styles.unreadBadge} aria-label={`${itemUnreadCount} não lidas`}>{itemUnreadCount > 99 ? "99+" : itemUnreadCount}</span>}
               </button>
               <div className={styles.inboxActions}>
                 <button type="button" aria-label={`${preferences.favourites.includes(item.key) ? "Remover dos" : "Adicionar aos"} favoritos: ${item.title}`} aria-pressed={preferences.favourites.includes(item.key)} title="Favorito" onClick={() => toggleInboxPreference("favourites", item.key)}><Star size={13} fill={preferences.favourites.includes(item.key) ? "currentColor" : "none"} /></button>

@@ -34,6 +34,7 @@ export type ChatInboxItem = {
   sender_name: string | null
   created_at: string | null
   sequence: number
+  sequences?: number[]
 }
 
 export const DEFAULT_CHANNELS: ChatChannel[] = [

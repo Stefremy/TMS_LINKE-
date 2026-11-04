@@ -197,6 +197,7 @@ export async function readTeamChatInbox(context: AuthContext): Promise<ChatInbox
   for (const [id, member] of staff) members.set(id, member)
   const channelMap = new Map(channels.map(channel => [channel.slug, channel]))
   const items = new Map<string, ChatInboxItem>()
+  const itemSequences = new Map<string, number[]>()
   for (const row of (messageResult.data || []) as ChatMessage[]) {
     let key: string, kind: ChatInboxItem["kind"], title: string, subtitle: string, avatar_url: string | null
     let body = row.body
@@ -213,6 +214,9 @@ export async function readTeamChatInbox(context: AuthContext): Promise<ChatInbox
       key = `ch_${channel.slug}`; kind = "channel"; title = channel.name; subtitle = channel.description || "Canal da equipa"; avatar_url = null
       body = parsed.cleanBody
     }
+    const seqList = itemSequences.get(key) || []
+    seqList.push(row.sequence)
+    itemSequences.set(key, seqList)
     if (items.has(key)) continue
     let preview: string
     if (/^\[gif:https?:\/\//i.test(body)) {
@@ -229,14 +233,17 @@ export async function readTeamChatInbox(context: AuthContext): Promise<ChatInbox
     }
     items.set(key, { key, kind, title, subtitle, avatar_url, preview, sender_name: row.sender_name, created_at: row.created_at, sequence: row.sequence })
   }
+  for (const [key, item] of items) {
+    item.sequences = itemSequences.get(key) || [item.sequence]
+  }
   for (const channel of channels) {
     const key = `ch_${channel.slug}`
-    if (!items.has(key)) items.set(key, { key, kind: "channel", title: channel.name, subtitle: channel.description || "Canal da equipa", avatar_url: null, preview: "Sem mensagens", sender_name: null, created_at: null, sequence: 0 })
+    if (!items.has(key)) items.set(key, { key, kind: "channel", title: channel.name, subtitle: channel.description || "Canal da equipa", avatar_url: null, preview: "Sem mensagens", sender_name: null, created_at: null, sequence: 0, sequences: [] })
   }
   for (const [id, person] of staff) {
     if (id === context.user.id) continue
     const key = `dm_${id}`
-    if (!items.has(key)) items.set(key, { key, kind: "dm", title: person.name, subtitle: "Conversa privada", avatar_url: person.avatar_url, preview: "Iniciar conversa", sender_name: null, created_at: null, sequence: 0 })
+    if (!items.has(key)) items.set(key, { key, kind: "dm", title: person.name, subtitle: "Conversa privada", avatar_url: person.avatar_url, preview: "Iniciar conversa", sender_name: null, created_at: null, sequence: 0, sequences: [] })
   }
   return [...items.values()].sort((a, b) => (Date.parse(b.created_at || "") || 0) - (Date.parse(a.created_at || "") || 0) || a.title.localeCompare(b.title, "pt-PT"))
 }
