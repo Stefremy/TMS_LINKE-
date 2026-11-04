@@ -610,9 +610,6 @@ export function MailboxClient({
               {account}
             </span>
           </div>
-          <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
-            Gestão centralizada de emails operacionais, clientes, faturação e recolhas da Linke.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
