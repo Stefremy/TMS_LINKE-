@@ -50,7 +50,7 @@ test('MAIL_ACCOUNTS defaults to geral@linke.pt as primary company mailbox', () =
   assert.equal(mailbox.normalizeMailAccount('unknown@domain.pt'), 'geral@linke.pt')
 })
 
-test('listMailboxMessages returns seeded geral@linke.pt inbox and sent messages plus tracking logs', async () => {
+test('listMailboxMessages returns clean mailbox without mock seeds and includes tracking logs', async () => {
   const { server } = createMailHarness({
     rows: [
       {
@@ -73,7 +73,9 @@ test('listMailboxMessages returns seeded geral@linke.pt inbox and sent messages 
   const result = await server.listMailboxMessages(ctx, 'geral@linke.pt')
 
   assert.equal(result.account, 'geral@linke.pt')
-  assert.ok(result.messages.some((m) => m.id === 'mail-seed-ctt-recolhas' && m.toEmail === 'geral@linke.pt'))
+  // Verify clean state: zero mock/fake seeds
+  assert.equal(result.messages.some((m) => m.id === 'mail-seed-ctt-recolhas'), false)
+  // Tracking notifications are still listed under notificacoes@linke.pt
   assert.ok(result.messages.some((m) => m.account === 'notificacoes@linke.pt' && m.toEmail === 'cliente@loja.pt'))
 })
 
@@ -109,23 +111,46 @@ test('mutateMailMessages updates read state, star, folder and labels persistentl
   const { server } = createMailHarness()
   const ctx = await server.mailboxContext()
 
+  // First create two messages to mutate
+  const inbound1 = await server.recordInboundEmailWebhook({
+    data: {
+      email_id: 'test-mutate-1',
+      from: 'fornecedor@exemplo.pt',
+      to: ['geral@linke.pt'],
+      subject: 'Teste de Fornecedor',
+      text: 'Corpo da mensagem 1',
+      created_at: '2026-11-04T10:00:00.000Z',
+    },
+  })
+
+  const inbound2 = await server.recordInboundEmailWebhook({
+    data: {
+      email_id: 'test-mutate-2',
+      from: 'contato@cliente.pt',
+      to: ['geral@linke.pt'],
+      subject: 'Pedido de Cotação',
+      text: 'Corpo da mensagem 2',
+      created_at: '2026-11-04T10:30:00.000Z',
+    },
+  })
+
   await server.mutateMailMessages(ctx, {
     action: 'mark_read',
-    ids: ['mail-seed-ctt-recolhas'],
+    ids: [inbound1.id],
   })
 
   await server.mutateMailMessages(ctx, {
     action: 'move_folder',
-    ids: ['mail-seed-cacto-pedido'],
+    ids: [inbound2.id],
     folder: 'archive',
   })
 
   const after = await server.listMailboxMessages(ctx, 'geral@linke.pt')
-  const ctt = after.messages.find((m) => m.id === 'mail-seed-ctt-recolhas')
-  const cacto = after.messages.find((m) => m.id === 'mail-seed-cacto-pedido')
+  const msg1 = after.messages.find((m) => m.id === inbound1.id)
+  const msg2 = after.messages.find((m) => m.id === inbound2.id)
 
-  assert.equal(ctt.read, true)
-  assert.equal(cacto.folder, 'archive')
+  assert.equal(msg1.read, true)
+  assert.equal(msg2.folder, 'archive')
 })
 
 test('recordInboundEmailWebhook parses incoming email for geral@linke.pt into Inbox', async () => {

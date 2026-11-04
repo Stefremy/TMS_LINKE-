@@ -299,6 +299,35 @@ export function MailboxClient({
     setRefreshing(true)
     setErrorMessage(null)
     try {
+      if (account === "geral@linke.pt") {
+        try {
+          const syncRes = await fetch("/api/ops/mail", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ kind: "sync_imap" }),
+          })
+          const syncData = await syncRes.json()
+          if (syncRes.ok && syncData.ok) {
+            setMessages(syncData.messages || [])
+            const syncInfo = syncData.sync
+            if (syncInfo?.connected) {
+              if (syncInfo.synced > 0) {
+                showToast(`Sincronizados ${syncInfo.synced} novos emails do Gmail (${account})`)
+              } else {
+                showToast(`Caixa ${account} sincronizada com o Gmail (sem novos emails)`)
+              }
+            } else if (syncInfo?.errors?.length) {
+              showToast(`Aviso de sincronização: ${syncInfo.errors[0]}`)
+            } else {
+              showToast(`Caixa ${account} sincronizada`)
+            }
+            return
+          }
+        } catch {
+          // Fallback to GET if sync fails
+        }
+      }
+
       const response = await fetch(`/api/ops/mail?account=${encodeURIComponent(account)}`, {
         cache: "no-store",
       })
@@ -1817,6 +1846,21 @@ export function MailboxClient({
               <p className="mt-1 text-[11px] opacity-90">
                 Todos os emails enviados a partir desta Caixa de Correio utilizam o domínio{" "}
                 <strong>linke.pt</strong> ({account}) com assinatura institucional Linke e ficam sincronizados para toda a equipa.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-3.5 text-sky-950">
+              <p className="font-bold">Sincronização Direta Google Workspace (IMAP)</p>
+              <p className="mt-1 text-[11px] opacity-90 leading-relaxed">
+                A ligação IMAP lê a caixa de entrada real de <strong>geral@linke.pt</strong> (servidor <code>imap.gmail.com:993</code>) e descarrega novas mensagens automaticamente ao carregar no botão <strong>Sincronizar</strong>.
+              </p>
+              <div className="mt-2.5 rounded-lg bg-[var(--surface-bg)]/80 p-2.5 font-mono text-[10px] text-slate-800 space-y-1 border border-sky-500/20">
+                <div><strong>Host:</strong> imap.gmail.com:993 (SSL)</div>
+                <div><strong>Conta:</strong> geral@linke.pt</div>
+                <div><strong>Autenticação:</strong> Google App Password (GMAIL_APP_PASSWORD)</div>
+              </div>
+              <p className="mt-2 text-[10px] text-slate-600">
+                Dica: Se a conta tiver verificação de 2 passos (2FA), gere uma senha de aplicação de 16 caracteres em <em>myaccount.google.com/apppasswords</em>.
               </p>
             </div>
 
