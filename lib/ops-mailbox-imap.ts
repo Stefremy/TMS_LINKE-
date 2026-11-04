@@ -38,7 +38,7 @@ export function resolveImapCredentials(account: MailAccountId): {
   const port = Number(process.env.IMAP_PORT || 993)
 
   if (account === "clientes@linke.pt") {
-    const user = (process.env.IMAP_CLIENTES_USER || "clientes@linke.pt").trim()
+    const user = (process.env.IMAP_CLIENTES_USER || "cliente@linke.pt").trim()
     const pass = (
       process.env.GMAIL_CLIENTES_APP_PASSWORD ||
       process.env.IMAP_CLIENTES_PASSWORD ||
@@ -312,7 +312,9 @@ export async function syncGmailImap(
         .filter(Boolean)
 
       const isSentByLinke =
-        item.targetFolder === "sent" || fromEmail.toLowerCase() === account.toLowerCase()
+        item.targetFolder === "sent" ||
+        fromEmail.toLowerCase() === account.toLowerCase() ||
+        fromEmail.toLowerCase() === creds.user.toLowerCase()
       const resolvedFolder: Exclude<MailFolder, "starred"> =
         item.boxKey === "all" ? (isSentByLinke ? "sent" : "inbox") : item.targetFolder
 
