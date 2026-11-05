@@ -20,9 +20,9 @@ export function calculateClientShipmentPreview(
 ) {
   const displayService: ServicoLinke = {
     ...service,
-    zones: service.zones.map(zone => ({
+    zones: (service.zones || []).map(zone => ({
       ...zone,
-      tiers: zone.tiers.map(tier => ({ ...tier, cost_price: 0, margin_pct: 0 })),
+      tiers: (zone.tiers || []).map(tier => ({ ...tier, cost_price: 0, margin_pct: 0 })),
     })),
   }
   const quote = calculateShipmentQuote(weightKg, client, displayService, country, postal, specialCodes, codValue, parcel)

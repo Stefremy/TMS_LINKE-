@@ -3,6 +3,9 @@
 import { requireUser } from "@/lib/auth/context"
 import { createAdminClient } from "@/lib/supabase/server"
 import { emitClientGuiaAction } from "./shipments"
+import type { CttExportDetails } from "@/lib/services/ctt/export-details"
+import type { Cliente } from "@/app/ops/entidades/clientes/types"
+import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { shipmentFormSchema, type ShipmentFieldError } from "@/components/shipments/form/schema"
 import { shipmentOverrideError } from "@/lib/services/shipments/shipment-form-authorization"
 import { loadShipmentPricingContext } from "@/lib/pricing/shipment-pricing-context"
@@ -30,13 +33,14 @@ export async function submitShipmentFormAction(input: unknown, clientId?: string
   const values = parsed.data
   const effectiveClientId = ctx.role === "client" ? ctx.client_id : clientId
   if (!effectiveClientId) return failure("root", "Selecione o cliente do envio.")
-  let service, carrier, exportDetails, client
+  let service: ServicoLinke | undefined, carrier: "ctt" | "correos" | undefined, exportDetails: CttExportDetails | undefined, client: Cliente | undefined
   try {
     const context = await loadShipmentPricingContext(createAdminClient(), ctx, effectiveClientId, { serviceId: values.serviceId })
     service = context.service
     client = context.client
     carrier = resolveServiceCarrier(service)
   } catch { return failure("serviceId", "O serviço não está disponível para este cliente. Volte a selecionar o serviço.") }
+  if (!service || !client || !carrier) return failure("serviceId", "O serviço não está disponível para este cliente. Volte a selecionar o serviço.")
   if (ctx.role !== "client" && values.carrierOverride && values.carrierOverride !== carrier) return failure("carrierOverride", "Escolha um serviço da transportadora selecionada.")
   if (requiresCorreosQuotation(carrier, values.recipientCountry, service)) {
     if (ctx.role !== "client") return failure("serviceId", "Os pedidos de cotação Correos Internacional Standard são feitos pelo cliente no portal. A equipa trata-os em Envios › Cotações.")

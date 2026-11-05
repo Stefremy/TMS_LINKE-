@@ -15,19 +15,20 @@ const countryCodes = [...new Set([
 const countryNames = new Intl.DisplayNames(["pt-PT"], { type: "region" })
 
 /** Countries with both permitted coverage and an enabled weight tier in this service's table. */
-export function getServiceDestinationCountries(service?: ServicoLinke): { code: string; name: string }[] {
+export function getServiceDestinationCountries(service?: ServicoLinke | null): { code: string; name: string }[] {
   if (!service || service.is_active === false) return []
+  const activeService = service
   return countryCodes.filter(country => {
     // A country remains selectable for an islands-only service; postal validation refines coverage.
     const postals = country === "PT" ? ["", "9000-001"]
       : country === "ES" ? ["", "07001", "07701", "07800", "35001", "38001", "51001", "52001"] : [""]
     return postals.some(postal => {
-      const manualQuote = requiresCorreosQuotation(detectCarrierGroup(service) || "", country, service)
+      const manualQuote = requiresCorreosQuotation(detectCarrierGroup(activeService) || "", country, activeService)
       if (!manualQuote && !isShipmentDestinationAvailable(country, postal)) return false
-      const zoneCode = resolveServiceZoneCode(service, country, postal)
-      if (!zoneCode || !isZoneAllowedByService(service.allowed_zones, zoneCode)) return false
+      const zoneCode = resolveServiceZoneCode(activeService, country, postal)
+      if (!zoneCode || !isZoneAllowedByService(activeService.allowed_zones, zoneCode)) return false
       if (manualQuote) return true
-      return findExactZone(service.zones, zoneCode)?.tiers?.some(tier =>
+      return findExactZone(activeService.zones, zoneCode)?.tiers?.some(tier =>
         tier.enabled !== false && Number.isFinite(tier.weight_max) && tier.weight_max > 0) ?? false
     })
   }).map(code => ({ code, name: countryNames.of(code) || code }))

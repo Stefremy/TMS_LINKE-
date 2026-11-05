@@ -6,7 +6,8 @@ export type VolumetricRule = { divisor: number; zoneDivisors?: Record<string, nu
 export type ParcelPricingDimensions = { lengthCm: number; widthCm: number; heightCm: number; volumesCount?: number; parcelWeightsKg?: number[] }
 
 /** Contract rules are keyed by API product, never by editable marketing names. */
-export function getServiceVolumetricRule(service: Partial<ServicoLinke>): VolumetricRule | undefined {
+export function getServiceVolumetricRule(service?: Partial<ServicoLinke> | null): VolumetricRule | undefined {
+  if (!service) return undefined
   if (service.volumetric_rule) return service.volumetric_rule
   const code = service.webservice_service_code?.trim().toUpperCase()
   if (code === "26") return { divisor: 1_000_000 / 167, excludeZones: ["PT-CONT"] }

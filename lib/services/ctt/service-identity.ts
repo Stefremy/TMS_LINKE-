@@ -17,12 +17,13 @@ const CTT_SERVICE_IDENTITIES: Record<string, CttServiceIdentity> = {
 }
 
 /** Display identity follows the configured carrier product, never an editable table name. */
-export function getCttServiceIdentity(service: ServiceIdentityInput): CttServiceIdentity | null {
-  if (!service.preferred_carrier_name?.toLowerCase().includes("ctt")) return null
+export function getCttServiceIdentity(service?: ServiceIdentityInput | null): CttServiceIdentity | null {
+  if (!service || !service.preferred_carrier_name?.toLowerCase().includes("ctt")) return null
   return CTT_SERVICE_IDENTITIES[service.webservice_service_code?.trim().toUpperCase() || ""] ?? null
 }
 
-export function getServiceDisplayLabel(service: ServiceIdentityInput): string {
+export function getServiceDisplayLabel(service?: ServiceIdentityInput | null): string {
+  if (!service) return ""
   const identity = getCttServiceIdentity(service)
   return identity ? `${identity.label} — ${service.name || ""}` : service.name || ""
 }

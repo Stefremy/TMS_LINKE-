@@ -3,8 +3,8 @@ import type { CorreosShipmentOutput } from "./types"
 
 export const CORREOS_PARTNER_PORTAL_URL = "https://my.correosexpress.pt/account"
 
-export function isCorreosSingleParcelService(service: Partial<ServicoLinke>): boolean {
-  if (service.carrier_group === "ctt") return false
+export function isCorreosSingleParcelService(service?: Partial<ServicoLinke> | null): boolean {
+  if (!service || service.carrier_group === "ctt") return false
   if (service.webservice_service_code) return service.webservice_service_code.trim() === "90"
   return service.single_parcel_only === true
 }

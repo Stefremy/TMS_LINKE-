@@ -5,7 +5,8 @@ import { ShipmentPricingError } from "./shipment-pricing-errors"
 // Business charge confirmed by Linke; limits from CTT, not an acceptance guarantee.
 export const OVERSIZE_FEE_EUR = 69.9
 export type ParcelLimitProduct = "domestic" | "europa" | "international"
-export function getServiceParcelLimitProduct(service: Partial<ServicoLinke>): ParcelLimitProduct | undefined {
+export function getServiceParcelLimitProduct(service?: Partial<ServicoLinke> | null): ParcelLimitProduct | undefined {
+  if (!service) return undefined
   if (service.carrier_group === "correos" || service.preferred_carrier_name?.toLowerCase().includes("correos")) return undefined
   if (service.parcel_limit_product) return service.parcel_limit_product
   switch (service.webservice_service_code?.trim().toUpperCase()) {
@@ -19,7 +20,8 @@ export function getServiceParcelLimitProduct(service: Partial<ServicoLinke>): Pa
 // Internacional: produto_internacional_atributos_por_pais_destino.pdf (May 2025).
 // Verified EU rows; do not invent limits for other destinations.
 const INTERNATIONAL_BOX_COUNTRIES = new Set("AT BE BG CY CZ DE DK EE FI FR GR HR HU IE IT LT LU LV MT NL PL RO SE SI SK".split(" "))
-export function getParcelLimits(service: Partial<ServicoLinke>, country: string) {
+export function getParcelLimits(service: Partial<ServicoLinke> | null | undefined, country: string) {
+  if (!service) return null
   const product = getServiceParcelLimitProduct(service)
   const iso = country.trim().toUpperCase()
   if (product === "domestic") return { maxWeightKg: 30, maxSideCm: 150, maxSumCm: 240, maxGirthCm: null, sidesCm: null }

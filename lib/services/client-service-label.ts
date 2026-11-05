@@ -23,7 +23,8 @@ export function getClientServiceName(name?: string | null): string {
   return label || "Serviço de transporte"
 }
 
-export function getClientServiceLabel(service: { name?: string; category?: string }): string {
+export function getClientServiceLabel(service?: { name?: string; category?: string } | null): string {
+  if (!service) return "Serviço de transporte"
   const category = service.category?.trim()
   const name = getClientServiceName(service.name)
   const existingCategory = name.match(/^\[([^\]]+)\]\s*/)

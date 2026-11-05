@@ -9,7 +9,8 @@ import { requiresCorreosQuotation } from "./correos/shipment-policy"
 export type IslandTransportMode = "air" | "sea" | "other"
 
 /** Only the configured API product defines the CTT island mode. Names are editable. */
-export function getServiceIslandTransportMode(service: Partial<ServicoLinke>): IslandTransportMode {
+export function getServiceIslandTransportMode(service?: Partial<ServicoLinke> | null): IslandTransportMode {
+  if (!service) return "other"
   if (service.carrier_group === "correos" || service.preferred_carrier_name?.toLowerCase().includes("correos")) return "other"
   if (service.webservice_service_code) {
     switch (service.webservice_service_code.trim().toUpperCase()) {
