@@ -10,10 +10,10 @@ function harness(t) {
  globalThis.confirm=msg=>{prompts.push(msg);return approved}
  t.after(()=>{if(savedConfirm===undefined)delete globalThis.confirm;else globalThis.confirm=savedConfirm})
  const slots=[];let cursor=0
- const react={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useEffect(){}}
+ const react={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useRef(initial){const i=cursor++;return slots[i]??={current:initial}},useEffect(){}}
  const jsx=(type,props,key)=>({type,props:props||{},key})
  const load=createLoader({react,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,p)=>p}),
-  '@/app/actions/clientes':{},'@/app/actions/client-invitations':{},'./ClientPortalAccessControl':{ClientPortalAccessControl:()=>null}})
+  '@/app/actions/clientes':{},'@/app/actions/client-invitations':{},'./ClientPortalAccessControl':{ClientPortalAccessControl:()=>null},'./ClientServiceHistory':{ClientServiceHistory:()=>null}})
  const Modal=load('app/ops/entidades/clientes/components/ClienteModal.tsx').ClienteModal
  const services=[{id:'base',name:'Tabela mãe de teste',is_primordial:true},{id:'custom',name:'Variante cliente'},{id:'new-base',name:'Outra mãe',is_primordial:true},{id:'new-custom',name:'Outra variante'}].map(s=>({...s,code:s.id,zones:[],pricing_profile:'Standard / Geral'}))
  const props={initialData:{id:'fixture',short_name:'Cliente teste',assigned_linke_service_ids:['base','custom'],default_linke_table_id:'base',custom_tier_overrides:{base:[5]}},servicosLinke:services,onClose(){},onSaved(){}}

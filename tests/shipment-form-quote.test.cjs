@@ -47,3 +47,33 @@ test('postal code and volume count eliminate non-matching services and isolate M
  const es1=quote({recipientCountry:'ES',recipientPostal:'28013',volumesCount:1,serviceId:'es-24h'},c,all)
  assert.deepEqual(es1.options.map(o=>o.service.id),['es-24h'])
 })
+test('multi-carrier matrix has zero conflicts across PT Continental, PT Islands, ES Peninsula, Baleares, EU and Múltiplo',()=>{
+ const {buildBalearesExpressZones}=load('lib/services/correos/baleares-tariffs.ts')
+ const {buildOfficialCeTruckZones}=load('lib/services/geo/international-zones.ts')
+ const ctt19={...service,id:'ctt-19',name:'CTT 19h',carrier_group:'ctt',webservice_service_code:'EMSF001.01',allowed_zones:['PT-CONT'],zones:[{zone_code:'PT-CONT',tiers:[tier]}]}
+ const cttMult={...service,id:'ctt-mult',name:'CTT Múltiplo',code:'LK-MULT-STD',carrier_group:'ctt',webservice_service_code:'EMSF010.01',allowed_zones:['PT-CONT'],zones:[{zone_code:'PT-CONT',tiers:[{...tier,sell_price:8}]}]}
+ const cttAir={...service,id:'ctt-air',name:'CTT Ilhas Avião',carrier_group:'ctt',webservice_service_code:'EMSF056.01',allowed_zones:['PT-ILHAS'],zones:[{zone_code:'PT-ILHAS',tiers:[{...tier,sell_price:14}]}]}
+ const cttSea={...service,id:'ctt-sea',name:'CTT Ilhas Barco',carrier_group:'ctt',webservice_service_code:'EMSF057.01',allowed_zones:['PT-ILHAS'],zones:[{zone_code:'PT-ILHAS',tiers:[{...tier,sell_price:11}]}]}
+ const corIber={...service,id:'cor-iber',name:'Correos Paq 24',code:'LK-COR-PAQ24',carrier_group:'correos',webservice_service_code:'93',allowed_zones:['PT-CONT','ES-PENIN'],zones:[{zone_code:'PT-CONT',tiers:[{...tier,sell_price:6}]},{zone_code:'ES-PENIN',tiers:[{...tier,sell_price:7}]}]}
+ const balearesZones=buildBalearesExpressZones(25)
+ const corBal={...service,id:'cor-bal',name:'Correos Baleares',code:'LK-COR-ISLAS-EXPRESS',carrier_group:'correos',webservice_service_code:'26',allowed_zones:balearesZones.map(z=>z.zone_code),zones:balearesZones}
+ const cttEu={...service,id:'ctt-eu',name:'CTT Europa',code:'LK-CE-STD',carrier_group:'ctt',webservice_service_code:'ENCF008.02',allowed_zones:['Zona 2','Zona 3'],zones:buildOfficialCeTruckZones()}
+ const all=[ctt19,cttMult,cttAir,cttSea,corIber,corBal,cttEu]
+ const c={assigned_linke_service_ids:all.map(s=>s.id)}
+ // 1) PT Continental 1 volume -> ctt-19 and cor-iber only (ctt-mult, islands, Spain, EU excluded)
+ assert.deepEqual(quote({recipientCountry:'PT',recipientPostal:'4000-001',volumesCount:1},c,all).options.map(o=>o.service.id),['ctt-19','cor-iber'])
+ // 2) PT Continental 2 volumes -> ctt-mult and cor-iber only (ctt-19 excluded)
+ assert.deepEqual(quote({recipientCountry:'PT',recipientPostal:'4000-001',volumesCount:2,parcelWeightsKg:[0.5,0.5]},c,all).options.map(o=>o.service.id),['ctt-mult','cor-iber'])
+ // 3) PT Islands 1 volume air vs sea -> only matching island service
+ assert.deepEqual(quote({recipientCountry:'PT',recipientPostal:'9000-001',volumesCount:1,islandTransportMode:'air'},c,all).options.map(o=>o.service.id),['ctt-air'])
+ assert.deepEqual(quote({recipientCountry:'PT',recipientPostal:'9500-001',volumesCount:1,islandTransportMode:'sea'},c,all).options.map(o=>o.service.id),['ctt-sea'])
+ // 4) PT Islands 2 volumes -> CTT island tables excluded for multi-volume; clear block reason
+ const islMulti=quote({recipientCountry:'PT',recipientPostal:'9000-001',volumesCount:2,parcelWeightsKg:[0.5,0.5],islandTransportMode:'air'},c,all)
+ assert.deepEqual(islMulti.options,[]);assert.equal(islMulti.multiVolumeServiceUnavailable,true)
+ // 5) ES Peninsula -> cor-iber only
+ assert.deepEqual(quote({recipientCountry:'ES',recipientPostal:'28013',volumesCount:1},c,all).options.map(o=>o.service.id),['cor-iber'])
+ // 6) ES Baleares (Mallorca 07001) -> cor-bal only
+ assert.deepEqual(quote({recipientCountry:'ES',recipientPostal:'07001',volumesCount:1},c,all).options.map(o=>o.service.id),['cor-bal'])
+ // 7) Belgium (BE 1000) -> ctt-eu only
+ assert.deepEqual(quote({recipientCountry:'BE',recipientPostal:'1000',volumesCount:1},c,all).options.map(o=>o.service.id),['ctt-eu'])
+})

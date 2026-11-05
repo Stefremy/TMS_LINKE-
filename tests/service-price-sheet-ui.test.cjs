@@ -24,7 +24,7 @@ function harness(t, fetch) {
   const { TabelasLinkeTab } = load('app/ops/configuracao/servicos/components/TabelasLinkeTab.tsx')
   const service = { id: 'srv_linke_multiplo_std', code: 'LK-MULT-STD', name: 'Linke Múltiplo', category: 'Nacional', is_active: true,
     pricing_profile: 'Standard / Geral', allowed_zones: ['PT-CONT'], zones: [{ zone_code: 'PT-CONT', tiers: [{ weight_max: 1, sell_price: 3.33, cost_price: 2 }] }] }
-  const render = () => { cursor = 0; return flat(TabelasLinkeTab({ servicos: [service], canManageBaseTables: false })) }
+  const render = () => { cursor = 0; return flat(TabelasLinkeTab({ servicos: [service], canManageBaseTables: false, canManageCreatedTables: true })) }
   return { render, downloads }
 }
 
@@ -36,7 +36,7 @@ test('customer PDF button sits beside create variant, works on a protected base 
   const buttons = nodes.filter(n => n.type === 'button')
   const index = buttons.findIndex(n => text(n) === 'Criar variante')
   assert.equal(text(buttons[index + 1]), 'PDF para cliente')
-  assert.ok(nodes.some(n => text(n) === 'Protegida · Bloqueada'))
+  assert.ok(nodes.some(n => text(n).includes('Apenas consulta')))
   const click = buttons[index + 1].props.onClick
   const first = click()
   await click()
