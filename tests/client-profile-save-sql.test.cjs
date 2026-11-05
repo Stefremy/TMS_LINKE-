@@ -21,7 +21,7 @@ async function reset() {
   await db.query("INSERT INTO public.audit_log(tenant_id,action,details) VALUES ($1,'client_data',$2)",
     [T,JSON.stringify({ id:C, short_name:'GO Linke fixture', credit_limit:15000, assigned_linke_service_ids:['national'] })])
 }
-const profile = async () => (await db.query("SELECT details FROM public.audit_log WHERE tenant_id=$1 AND action='client_data'",[T])).rows[0].details
+const profile = async () => (await db.query("SELECT details FROM public.audit_log WHERE tenant_id=$1 AND action='client_data' AND details->>'id'=$2",[T,C])).rows[0].details
 const save = (details, expected=15000, tenant=T) => db.query('SELECT public.save_client_financial_profile($1,$2,$3,$4)', [tenant,C,JSON.stringify(details),expected])
 
 test('standalone migration publishes the RPC without wallet tables and reruns without changing existing clients or money', async () => {
@@ -72,4 +72,28 @@ test('the client save action refuses invalid custom weight ladders before any wr
  })
  await assert.rejects(load('app/actions/clientes.ts').saveClienteAction({id:C,short_name:'Fixture',pricing:{service_weight_tiers:{'svc::PT-CONT':[]}}}),/escalões/)
  assert.equal(fake.writes.length,0)
+})
+
+test('importing and editing a customer ladder only persists the target customer, preserving the source and service tables',async()=>{
+ const {createLoader}=require('./helpers/load-typescript.cjs')
+ const {importClientServices}=createLoader({})('lib/clients/import-service-pricing.ts')
+ await reset()
+ const source={id:OTHER,short_name:'Source fixture',credit_limit:15000,assigned_linke_service_ids:['national'],default_linke_table_id:'national',
+  pricing:{service_weight_tiers:{'national::PT-CONT':[{id:'source-tier',label:'Até 5 kg',weight_max:5,sell_price:4}]}}}
+ const service={id:'national',name:'Service fixture',is_active:true,zones:[{zone_code:'PT-CONT',zone_name:'Continente',tiers:[{id:'standard-tier',label:'Até 10 kg',weight_max:10,sell_price:6,cost_price:3,enabled:true}]}]}
+ await db.query('INSERT INTO public.clients VALUES ($1,$2)',[OTHER,T])
+ await db.query("INSERT INTO public.audit_log(tenant_id,action,details) VALUES ($1,'client_data',$2),($1,'servicos_linke_data',$3)",[T,JSON.stringify(source),JSON.stringify(service)])
+ await db.exec('CREATE TABLE IF NOT EXISTS public.servicos_linke(id text PRIMARY KEY,zones jsonb)')
+ await db.query('INSERT INTO public.servicos_linke VALUES ($1,$2)',[service.id,JSON.stringify(service.zones)])
+ const unchanged=()=>db.query("SELECT * FROM public.audit_log WHERE action<>'client_data' OR details->>'id'<>$1 ORDER BY id",[C])
+ const beforeOthers=(await unchanged()).rows
+ const beforeTables=(await db.query('SELECT * FROM public.servicos_linke')).rows
+ const draft=importClientServices({...await profile(),assigned_linke_service_ids:[]},source,[service]).client
+ draft.pricing.service_weight_tiers['national::PT-CONT'][0].sell_price=4.5
+ draft.pricing.service_weight_tiers['national::PT-CONT'].push({id:'new-client-tier',label:'Até 8 kg',weight_max:8,sell_price:5.5})
+ await save(draft)
+ assert.deepEqual(await profile(),draft)
+ assert.deepEqual((await unchanged()).rows,beforeOthers)
+ assert.deepEqual((await db.query('SELECT * FROM public.servicos_linke')).rows,beforeTables)
+ assert.deepEqual(source.pricing.service_weight_tiers['national::PT-CONT'],[{id:'source-tier',label:'Até 5 kg',weight_max:5,sell_price:4}])
 })
