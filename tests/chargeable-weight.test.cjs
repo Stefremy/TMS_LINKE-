@@ -82,6 +82,25 @@ test('carrier reconciliation retains the frozen volumetric floor and never rewri
  assert.equal(planWeightAdjustment({...input,weightKg:31}).difference,11)
 })
 
+test('Correos excludes volumetric weight in PT-CONT and applies volumetric equation outside PT-CONT (e.g. ES-PENIN)',()=>{
+ for(const code of ['63','93']){
+  const cor={id:`cor-${code}`,name:`Correos ${code}`,carrier_group:'correos',preferred_carrier_name:'CORREOS.EXPRESS',webservice_service_code:code,is_active:true,fuel_surcharge_pct:10,allowed_zones:['PT-CONT','ES-PENIN'],zones:[{zone_code:'PT-CONT',zone_name:'PT-CONT',tiers},{zone_code:'ES-PENIN',zone_name:'ES-PENIN',tiers}]}
+  const c={default_linke_table_id:cor.id,pricing:{}}
+  // PT-CONT: volumetric is excluded, real weight (10 kg) wins
+  const pt=calculateChargeableWeight(10,cor,'PT','4000-001',dimensions)
+  assert.equal(pt.volumetricDivisor,null)
+  assert.equal(pt.volumetricWeightKg,null)
+  assert.equal(pt.billableWeightKg,10)
+  assert.equal(calculateShipmentQuote(10,c,cor,'PT','4000-001',[],0,dimensions).tierLabel,'Até 10 kg')
+  // ES-PENIN (outside PT-CONT): volumetric equation applies (50*40*40/6000 = 13.333 kg -> Até 15 kg)
+  const es=calculateChargeableWeight(10,cor,'ES','28001',dimensions)
+  assert.equal(es.volumetricDivisor,6000)
+  assert.equal(es.volumetricWeightKg,80000/6000)
+  assert.equal(es.billableWeightKg,80000/6000)
+  assert.equal(calculateShipmentQuote(10,c,cor,'ES','28001',[],0,dimensions).tierLabel,'Até 15 kg')
+ }
+})
+
 test('the configuration simulator uses the real additional-kg pricing and refuses unconfigured upper ranges',()=>{
  const s=service('EMSF057.01','PT-ILHAS')
  s.zones[0].tiers=[{...tiers[5],weight_max:30,sell_price:30,cost_price:15},

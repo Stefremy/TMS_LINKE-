@@ -13,7 +13,12 @@ export function ShipmentVolumetricSummary({ service, country, postal, weightKg, 
   if (!getServiceVolumetricRule(service)) {
     message = "Este serviço não tem uma regra de peso volumétrico configurada."
   } else if (country && postal.trim()) {
-    try { result = calculateChargeableWeight(weightKg, service, country, postal, parcel) }
+    try {
+      result = calculateChargeableWeight(weightKg, service, country, postal, parcel)
+      if (result && result.volumetricDivisor === null) {
+        message = "Envios para Portugal Continental não aplicam taxa de peso volumétrico (usa o peso real)."
+      }
+    }
     catch { /* Keep incomplete input editable; submission validates the full parcel. */ }
   }
   const kg = (value: number) => `${value.toLocaleString("pt-PT", { maximumFractionDigits: 3 })} kg`

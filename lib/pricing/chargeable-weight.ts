@@ -2,15 +2,25 @@ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { resolveServiceZoneCode } from "./calculate-shipment-price"
 import { ShipmentPricingError } from "./shipment-pricing-errors"
 
-export type VolumetricRule = { divisor: number; zoneDivisors?: Record<string, number> }
+export type VolumetricRule = { divisor: number; zoneDivisors?: Record<string, number>; excludeZones?: string[] }
 export type ParcelPricingDimensions = { lengthCm: number; widthCm: number; heightCm: number; volumesCount?: number; parcelWeightsKg?: number[] }
 
 /** Contract rules are keyed by API product, never by editable marketing names. */
 export function getServiceVolumetricRule(service: Partial<ServicoLinke>): VolumetricRule | undefined {
   if (service.volumetric_rule) return service.volumetric_rule
-  if (service.webservice_service_code === "26") return { divisor: 1_000_000 / 167 }
-  if (service.carrier_group === "correos" || service.preferred_carrier_name?.toLowerCase().includes("correos")) return undefined
-  switch (service.webservice_service_code?.trim().toUpperCase()) {
+  const code = service.webservice_service_code?.trim().toUpperCase()
+  if (code === "26") return { divisor: 1_000_000 / 167, excludeZones: ["PT-CONT"] }
+  const isCorreos = service.carrier_group === "correos" ||
+    service.preferred_carrier_name?.toLowerCase().includes("correos") ||
+    service.webservice_connection_id === "correos_express" ||
+    service.code?.trim().toUpperCase().startsWith("LK-COR")
+  if (isCorreos) {
+    if (code && (code.startsWith("EMSF") || code.startsWith("ENCF"))) return undefined
+    if (code === "90" || code === "91") return { divisor: 5000, excludeZones: ["PT-CONT"] }
+    if (code === "79") return { divisor: 6000, zoneDivisors: { "PT-ILHAS": 3000, "ES-ILHAS": 3000 }, excludeZones: ["PT-CONT"] }
+    return { divisor: 6000, zoneDivisors: { "PT-ILHAS": 3000 }, excludeZones: ["PT-CONT"] }
+  }
+  switch (code) {
     case "EMSF056.01": return { divisor: 6000 }
     case "EMSF057.01": return { divisor: 6000, zoneDivisors: { "PT-ILHAS": 3000 } }
     case "EMSF001.02": return { divisor: 5000 }
@@ -28,7 +38,8 @@ export function calculateChargeableWeightForZone(weightKg: number, service: Serv
   parcel?: ParcelPricingDimensions) {
   if (!Number.isFinite(weightKg) || weightKg <= 0) throw new ShipmentPricingError("Peso inválido.")
   const rule = getServiceVolumetricRule(service)
-  const divisor = rule ? (rule.zoneDivisors?.[zone] ?? rule.divisor) : null
+  const excluded = Boolean(zone && rule?.excludeZones?.includes(zone))
+  const divisor = rule && !excluded ? (rule.zoneDivisors?.[zone] ?? rule.divisor) : null
   if (divisor !== null && (!Number.isFinite(divisor) || divisor <= 0)) throw new ShipmentPricingError("Fator de conversão volumétrica inválido neste serviço.")
   if (parcel) {
     if (![parcel.lengthCm, parcel.widthCm, parcel.heightCm].every(value => Number.isFinite(value) && value >= 0.1)) {
