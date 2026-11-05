@@ -259,9 +259,27 @@ export async function sendTeamChat(
   const sender = await registerChatMember(context)
   if (recipient) {
     if (recipient === context.user.id) throw new ChatError("Selecione outro colega.")
-    if (!(await getChatStaffMembers(context.tenant_id)).has(recipient)) {
+    const staff = await getChatStaffMembers(context.tenant_id)
+    const peer = staff.get(recipient)
+    if (!peer) {
       throw new ChatError("Colega não encontrado nesta equipa.", 404)
     }
+    const peerAvatar =
+      typeof peer.avatar_url === "string" &&
+      peer.avatar_url.length <= 500 &&
+      /^https:\/\//i.test(peer.avatar_url)
+        ? peer.avatar_url
+        : null
+    const { error: peerError } = await admin.from("team_chat_members").upsert(
+      {
+        tenant_id: context.tenant_id,
+        user_id: peer.user_id,
+        name: (peer.name || "Colaborador").trim().slice(0, 120),
+        avatar_url: peerAvatar,
+      },
+      { onConflict: "tenant_id,user_id" }
+    )
+    databaseError(peerError)
   }
 
   const effectiveChannel = !recipient ? (channelSlug || "geral") : null
