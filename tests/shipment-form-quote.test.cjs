@@ -34,3 +34,16 @@ test('COD resolves destination rates and ignores stale extras from the other car
  const result=quote({recipientPostal:'9000-001',selectedSpecialServices:['cod','correos_cod'],codValue:50},{pricing:{standard_fuel_surcharge_pct:0,special_services_fees:fees}})
  assert.equal(result.quote.specialFeesAmount,3);assert.deepEqual(result.activeSpecialServices,['cod'])
 })
+test('postal code and volume count eliminate non-matching services and isolate Múltiplo tables',()=>{
+ const ptSingle={...service,id:'pt-19h',name:'CTT 19h',webservice_service_code:'EMSF001.01',allowed_zones:['PT-CONT'],zones:[{zone_code:'PT-CONT',tiers:[tier]}]}
+ const ptMulti={...service,id:'pt-mult',name:'CTT Múltiplo',code:'LK-MULT-STD',webservice_service_code:'EMSF010.01',allowed_zones:['PT-CONT'],zones:[{zone_code:'PT-CONT',tiers:[{...tier,sell_price:8}]}]}
+ const esOnly={...service,id:'es-24h',name:'Espanha 24h',webservice_service_code:'EMSF056.01',allowed_zones:['ES-PENIN'],zones:[{zone_code:'ES-PENIN',tiers:[{...tier,sell_price:9}]}]}
+ const all=[ptSingle,ptMulti,esOnly]
+ const c={assigned_linke_service_ids:['pt-19h','pt-mult','es-24h']}
+ const pt1=quote({recipientCountry:'PT',recipientPostal:'4000-001',volumesCount:1,serviceId:'pt-19h'},c,all)
+ assert.deepEqual(pt1.options.map(o=>o.service.id),['pt-19h'])
+ const pt2=quote({recipientCountry:'PT',recipientPostal:'4000-001',volumesCount:2,parcelWeightsKg:[0.5,0.5],serviceId:'pt-mult'},c,all)
+ assert.deepEqual(pt2.options.map(o=>o.service.id),['pt-mult'])
+ const es1=quote({recipientCountry:'ES',recipientPostal:'28013',volumesCount:1,serviceId:'es-24h'},c,all)
+ assert.deepEqual(es1.options.map(o=>o.service.id),['es-24h'])
+})

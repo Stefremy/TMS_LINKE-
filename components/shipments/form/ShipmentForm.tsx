@@ -68,7 +68,10 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
     return () => { active = false }
   }, [providedServices])
   React.useEffect(() => {
-    if (!resource.loading && values.serviceId && !quote.options.some(option => option.service.id === values.serviceId)) form.setValue("serviceId", "")
+    if (resource.loading) return
+    if (values.serviceId && quote.options.some(option => option.service.id === values.serviceId)) return
+    const nextServiceId = quote.options.length === 1 ? quote.options[0].service.id : ""
+    if (values.serviceId !== nextServiceId) form.setValue("serviceId", nextServiceId)
   }, [form, quote.options, values.serviceId, resource.loading])
   React.useEffect(() => {
     if (!quote.selected) return

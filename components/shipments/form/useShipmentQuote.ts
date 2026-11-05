@@ -30,7 +30,7 @@ export function getShipmentQuote({ client, services, values, role }: ShipmentQuo
   const compatible = isIsland && !selectedMode ? [] : getDestinationServiceOptions(available, values.recipientCountry, values.recipientPostal, selectedMode as IslandTransportMode | undefined)
   const fees = getClientSpecialFees(client).map(fee => resolveCodFee(fee, values.recipientCountry, values.recipientPostal))
   const codesFor = (service: ServicoLinke) => values.selectedSpecialServices.filter(code => fees.some(fee => fee.is_enabled && fee.special_service_code === code && code.startsWith("correos_") === isCorreosLinkeService(service) && isCttSpecialServiceAvailable(code, values.recipientCountry, values.recipientPostal)))
-  const options: ShipmentQuoteOption[] = compatible.filter(service => role !== "ops" || !values.carrierOverride || values.carrierOverride === (isCorreosLinkeService(service) ? "correos" : "ctt")).map(service => {
+  const rawOptions: ShipmentQuoteOption[] = compatible.filter(service => role !== "ops" || !values.carrierOverride || values.carrierOverride === (isCorreosLinkeService(service) ? "correos" : "ctt")).map(service => {
     const carrier: ShipmentQuoteOption["carrier"] = isCorreosLinkeService(service) ? "correos" : "ctt"
     const zone = getServiceDestinationZone(service, values.recipientCountry, values.recipientPostal)
     try {
@@ -42,7 +42,11 @@ export function getShipmentQuote({ client, services, values, role }: ShipmentQuo
           parcelWeightsKg: values.parcelWeightsKg.length ? values.parcelWeightsKg : undefined })
       return { service, carrier, zone, quote, error: null }
     } catch (error) { return { service, carrier, zone, quote: null, error: error instanceof Error ? error.message : "Não foi possível calcular o preço." } }
-  }).filter(option => !multiVolumeServiceRequired || option.carrier === "correos" || isCttMultiVolumeService(option.service))
+  })
+  const hasSingleVolumeCtt = rawOptions.some(option => option.carrier === "ctt" && !isCttMultiVolumeService(option.service))
+  const options = rawOptions.filter(option => multiVolumeServiceRequired
+    ? option.carrier === "correos" || isCttMultiVolumeService(option.service)
+    : option.carrier === "correos" || !hasSingleVolumeCtt || !isCttMultiVolumeService(option.service))
   const selected = options.find(option => option.service.id === values.serviceId)
   let blockedReason: string | null = null
   if (client.is_active === false || client.portal_access_status === "suspended" || client.portal_access_status === "blocked") blockedReason = "Esta conta está suspensa para a criação de novos envios. Contacte o apoio Linke."
