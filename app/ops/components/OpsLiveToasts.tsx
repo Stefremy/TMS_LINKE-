@@ -6,8 +6,8 @@ import { MessageSquare, Phone, PhoneOff, Video, X } from "lucide-react"
 import { useIncomingCall } from "../chat/hooks/useIncomingCall"
 import type { ChatNotification } from "@/lib/team-chat"
 
-const MESSAGE_POLL_MS = 6000
-const MESSAGE_TOAST_MS = 8000
+const MESSAGE_POLL_MS = 3500
+const MESSAGE_TOAST_MS = 9000
 const MAX_VISIBLE_MESSAGES = 3
 
 type MessageToast = Omit<ChatNotification, "id" | "sequence"> & { id: string }
@@ -109,8 +109,21 @@ export function OpsLiveToasts({ viewerId }: { viewerId: string }) {
       }
       if (!controller.signal.aborted) timer = setTimeout(() => { void poll() }, MESSAGE_POLL_MS)
     }
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === "visible") {
+        clearTimeout(timer)
+        void poll()
+      }
+    }
+    document.addEventListener("visibilitychange", onFocusOrVisible)
+    window.addEventListener("focus", onFocusOrVisible)
     void poll()
-    return () => { controller.abort(); clearTimeout(timer) }
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+      document.removeEventListener("visibilitychange", onFocusOrVisible)
+      window.removeEventListener("focus", onFocusOrVisible)
+    }
   }, [viewerId, onChat, playChime])
 
   React.useEffect(() => {

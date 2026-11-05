@@ -38,10 +38,23 @@ export function useIncomingCall(viewer: string, activeRoom?: string, enabled = t
           }
         }
       } catch { /* The next bounded poll retries a temporary network failure. */ }
-      if (!controller.signal.aborted) timer = setTimeout(() => { void poll() }, 3000)
+      if (!controller.signal.aborted) timer = setTimeout(() => { void poll() }, 2500)
     }
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === "visible") {
+        clearTimeout(timer)
+        void poll()
+      }
+    }
+    document.addEventListener("visibilitychange", onFocusOrVisible)
+    window.addEventListener("focus", onFocusOrVisible)
     void poll()
-    return () => { controller.abort(); clearTimeout(timer) }
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+      document.removeEventListener("visibilitychange", onFocusOrVisible)
+      window.removeEventListener("focus", onFocusOrVisible)
+    }
   }, [viewer, activeRoom, enabled])
   const incomingRoom = incoming?.roomId
   useEffect(() => { if (incomingRoom) enableSound() }, [incomingRoom, enableSound])

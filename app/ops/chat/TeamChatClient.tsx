@@ -860,24 +860,41 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       <span className={styles.headingBadge}><LockKeyhole size={13} /> Espaço da equipa</span>
     </div>
 
-    {incomingCalls.incoming && <div className={styles.incomingCall} role="alert">
-      <PhoneCall size={22} aria-hidden="true" />
-      <div><strong>{incomingCalls.incoming.senderName} está a ligar</strong><p>{incomingCalls.incoming.mode === "video" ? "Videochamada" : "Chamada de voz"} · {incomingCalls.incoming.title}</p></div>
-      {!incomingCalls.soundReady && <button type="button" className={styles.callControlBtn} onClick={incomingCalls.enableSound}>Ativar toque</button>}
-      <button type="button" className={styles.callHangupBtn} onClick={() => {
-        const call = incomingCalls.incoming!
-        incomingCalls.dismiss(call.roomId)
-        void fetch("/api/ops/chat/calls", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ viewerId: initial.viewerId, room: call.roomId, signal: { id: crypto.randomUUID(), instance: crypto.randomUUID(), type: "leave" } }) }).catch(() => setError("Não foi possível recusar a chamada. Tente novamente."))
-      }}><PhoneOff size={15} />Recusar</button>
-      <button type="button" className={styles.sendButton} onClick={() => {
-        const call = incomingCalls.incoming!
-        incomingCalls.enableSound()
-        incomingCalls.dismiss(call.roomId)
-        if (call.conversationKey.startsWith("dm_")) selectConversation(call.conversationKey.slice(3))
-        else selectChannel(call.conversationKey.slice(3))
-        void startOrJoinCall(call.mode, call.roomId, call.title, false)
-      }}><Phone size={15} />Atender</button>
-    </div>}
+    {incomingCalls.incoming && (() => {
+      const callerAvatar =
+        incomingCalls.incoming.senderAvatarUrl ||
+        members.find(m => m.user_id === incomingCalls.incoming?.senderId)?.avatar_url ||
+        null
+      return (
+        <div className={styles.incomingCall} role="alert">
+          {callerAvatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={callerAvatar}
+              alt={incomingCalls.incoming.senderName}
+              className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-[var(--accent)]"
+            />
+          ) : (
+            <PhoneCall size={22} aria-hidden="true" />
+          )}
+          <div><strong>{incomingCalls.incoming.senderName} está a ligar</strong><p>{incomingCalls.incoming.mode === "video" ? "Videochamada" : "Chamada de voz"} · {incomingCalls.incoming.title}</p></div>
+          {!incomingCalls.soundReady && <button type="button" className={styles.callControlBtn} onClick={incomingCalls.enableSound}>Ativar toque</button>}
+          <button type="button" className={styles.callHangupBtn} onClick={() => {
+            const call = incomingCalls.incoming!
+            incomingCalls.dismiss(call.roomId)
+            void fetch("/api/ops/chat/calls", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ viewerId: initial.viewerId, room: call.roomId, signal: { id: crypto.randomUUID(), instance: crypto.randomUUID(), type: "leave" } }) }).catch(() => setError("Não foi possível recusar a chamada. Tente novamente."))
+          }}><PhoneOff size={15} />Recusar</button>
+          <button type="button" className={styles.sendButton} onClick={() => {
+            const call = incomingCalls.incoming!
+            incomingCalls.enableSound()
+            incomingCalls.dismiss(call.roomId)
+            if (call.conversationKey.startsWith("dm_")) selectConversation(call.conversationKey.slice(3))
+            else selectChannel(call.conversationKey.slice(3))
+            void startOrJoinCall(call.mode, call.roomId, call.title, false)
+          }}><Phone size={15} />Atender</button>
+        </div>
+      )
+    })()}
 
     <div className={styles.mobileConversation}>
       <label htmlFor="chat-conversation">Conversa</label>
