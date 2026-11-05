@@ -90,7 +90,7 @@ function harness({
       requireUser: async () => ctx,
       getTenantId: async () => T,
     },
-    '@/app/actions/fornecedores': { getFornecedoresAction: async () => [] },
+    '@/app/actions/fornecedores': { getFornecedoresPricingAction: async () => [] },
     '@/app/actions/ctt': { getCarrierConnectionsAction: async () => [] },
     '@/lib/services/geo/international-zones': {
       buildOfficialLinkeInternationalZones: () => [],
@@ -486,4 +486,73 @@ test('removing all authorized destinations persists through save and reload with
   assert.deepEqual(getServiceDestinationCountries(loaded),[])
   assert.throws(()=>calculateShipmentPrice(1,{default_linke_table_id:loaded.id},[loaded],'PT','4000-001',{requireConfiguredTariff:true}),/indisponível/)
  }
+})
+
+// Regression for the pricing page failing with digest 1550126684 when a
+// commercial/finance employee lacked the unrelated carrier-management grant.
+test('pricing dashboard accepts commercial and finance grants without allowing carrier management', async () => {
+  const policy = createLoader({})('lib/auth/permissions.ts')
+  const { PERMISSIONS: P } = policy
+  for (const permission of [P.clients, P.finance]) {
+    const ctx = { role: 'employee', permissions: [permission], tenant_id: T, user: { email: 'staff@example.invalid' } }
+    const carrier = {
+      id: 'carrier-a', tenant_id: T, code: 'TEST', short_name: 'Carrier', legal_name: 'Carrier SA',
+      price_families: [{ id: 'family-a', tiers: [{ cost_price: 2, sell_price: 3 }] }],
+      iban: 'private-bank-account', ledger_entries: [{ amount: 100 }], drivers: [{ name: 'Private driver' }],
+      documents: [{ id: 'private-doc' }], email: 'private-contact@example.invalid',
+    }
+    const tables = {
+      fornecedores: [carrier, { ...carrier, id: 'foreign', tenant_id: 'other' }],
+      audit_log: [{ tenant_id: 'other', action: 'deleted_fornecedor', details: { id: carrier.id } }],
+    }
+    const db = fakeSupabase(tables)
+    const requireEmployee = async permissions => {
+      if (ctx.role !== 'employee' || permissions && ![permissions].flat().some(p => policy.hasPermission(ctx, p))) throw Error('Acesso negado')
+      return ctx
+    }
+    const load = createLoader({
+      'next/cache': { revalidatePath() {} },
+      '@/lib/supabase/server': { createAdminClient: () => db.client },
+      '@/lib/auth/context': { requireEmployee, requireUser: async () => ctx, getTenantId: async () => T },
+      '@/app/actions/ctt': { getCarrierConnectionsAction: async () => [] },
+      '@/lib/services/geo/international-zones': { buildOfficialLinkeInternationalZones: () => [], buildOfficialCeTruckZones: () => [] },
+    })
+    const providers = load('app/actions/fornecedores.ts')
+    assert.equal(policy.canAccessOpsRoute(ctx, '/ops/configuracao/servicos'), true)
+    const result = await load('app/actions/servicos-linke.ts').getServicosDashboardDataAction()
+    assert.deepEqual(result.fornecedores.map(f => f.id), ['carrier-a'])
+    assert.deepEqual(result.fornecedores[0].price_families, carrier.price_families)
+    for (const key of ['iban', 'ledger_entries', 'drivers', 'documents', 'email', 'tenant_id']) assert.equal(key in result.fornecedores[0], false)
+    assert.equal(result.canManageBaseTables, false)
+    const carrierQueries = db.queries.filter(q => q.table === 'fornecedores' || q.table === 'audit_log'
+      && q.filters.some(f => ['fornecedor_data', 'deleted_fornecedor'].includes(f.value)))
+    assert.ok(carrierQueries.every(q => q.filters.some(f => f.field === 'tenant_id' && f.value === T)))
+    await assert.rejects(providers.getFornecedoresAction(), /Acesso negado/)
+    await assert.rejects(providers.saveFornecedorAction({ id: carrier.id }), /Acesso negado/)
+    await assert.rejects(providers.toggleFornecedorStatusAction(carrier.id, false), /Acesso negado/)
+    await assert.rejects(providers.deleteFornecedorAction(carrier.id), /Acesso negado/)
+    for (const denied of [{ role: 'employee', permissions: [P.shipments] }, { role: 'client', permissions: [P.clients] }]) {
+      Object.assign(ctx, denied)
+      await assert.rejects(providers.getFornecedoresPricingAction(), /Acesso negado/)
+    }
+    assert.equal(db.writes.length, 0)
+  }
+})
+
+test('pricing carrier data retains the scoped audit fallback and deletion tombstones', async () => {
+  const db = fakeSupabase({ audit_log: [
+    { tenant_id: T, action: 'fornecedor_data', created_at: '2026-11-01', details: { id: 'saved', short_name: 'Saved', iban: 'private' } },
+    { tenant_id: T, action: 'fornecedor_data', created_at: '2026-11-01', details: { id: 'deleted' } },
+    { tenant_id: T, action: 'deleted_fornecedor', details: { id: 'deleted' } },
+    { tenant_id: 'other', action: 'fornecedor_data', details: { id: 'foreign' } },
+  ] })
+  const load = createLoader({
+    'next/cache': { revalidatePath() {} },
+    '@/lib/supabase/server': { createAdminClient: () => db.client },
+    '@/lib/auth/context': { requireEmployee: async () => ({ tenant_id: T }) },
+  })
+  const result = await load('app/actions/fornecedores.ts').getFornecedoresPricingAction()
+  assert.deepEqual(result.map(f => f.id), ['saved'])
+  assert.equal('iban' in result[0], false)
+  assert.ok(db.queries.every(q => q.filters.some(f => f.field === 'tenant_id' && f.value === T)))
 })

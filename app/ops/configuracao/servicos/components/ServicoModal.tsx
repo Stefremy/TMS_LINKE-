@@ -44,7 +44,7 @@ import {
   normalizeServiceZoneCode,
 } from "@/lib/pricing/carrier-zone-templates"
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "../types"
-import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
+import type { FornecedorPricing } from "@/app/ops/entidades/fornecedores/types"
 
 /** Only the selected product can define which destinations a commercial table may enable. */
 function getCarrierZones(carrierName: string, productCode?: string) {
@@ -76,11 +76,11 @@ interface ServicoModalProps {
   onClose: () => void
   onSave: (servico: Partial<ServicoLinke>) => Promise<ServicoLinke | boolean | void>
   initialData?: ServicoLinke | null
-  fornecedores: Fornecedor[]
+  fornecedores: FornecedorPricing[]
   webservices?: unknown[]
 }
 
-function buildInitialServiceForm(initialData: ServicoLinke | null | undefined, fornecedores: Fornecedor[]): Partial<ServicoLinke> {
+function buildInitialServiceForm(initialData: ServicoLinke | null | undefined, fornecedores: FornecedorPricing[]): Partial<ServicoLinke> {
   if (initialData) {
     let carrierId = initialData.preferred_carrier_id
     let carrierName = initialData.preferred_carrier_name

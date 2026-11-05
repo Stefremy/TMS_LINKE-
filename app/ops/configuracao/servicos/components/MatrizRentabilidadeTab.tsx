@@ -15,11 +15,11 @@ import {
 } from "lucide-react"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import type { ServicoLinke } from "../types"
-import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
+import type { FornecedorPricing } from "@/app/ops/entidades/fornecedores/types"
 
 interface MatrizRentabilidadeTabProps {
   servicos: ServicoLinke[]
-  fornecedores: Fornecedor[]
+  fornecedores: FornecedorPricing[]
 }
 
 interface RentabilidadeRow {

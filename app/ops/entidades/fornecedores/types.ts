@@ -284,3 +284,9 @@ export const DEFAULT_CERTIFICATES: CertificateCompliance[] = [
   { id: "cert_at", title: "Certidão de Não Dívida Autoridade Tributária (AT)", doc_number: "AT-CERT-2026-99", issue_date: "2026-06-01", expiry_date: "2026-12-01", alert_days: 15, notes: "Situação fiscal regularizada.", status: "Válido" },
   { id: "cert_ss", title: "Certidão de Não Dívida Segurança Social", doc_number: "SS-DECL-2026-44", issue_date: "2026-06-01", expiry_date: "2026-12-01", alert_days: 15, notes: "Situação contributiva regularizada.", status: "Válido" },
 ]
+
+/** Carrier information needed to consult tariffs and select a shipment service. */
+export type FornecedorPricing = Pick<Fornecedor,
+  "id" | "code" | "short_name" | "legal_name" | "color" | "nif" | "role" | "city" |
+  "payment_terms" | "is_active" | "global_markup_pct" | "price_families" | "additional_fees" | "volumetrics"
+>

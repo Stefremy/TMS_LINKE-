@@ -11,7 +11,7 @@ import {
 
 import type { ServicoLinke } from "../types"
 import { isPrimordialServico } from "../types"
-import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
+import type { FornecedorPricing } from "@/app/ops/entidades/fornecedores/types"
 import { 
   saveServicoLinkeAction, 
   duplicateServicoForClientAction,
@@ -28,7 +28,7 @@ import { DuplicateServicoModal } from "./DuplicateServicoModal"
 
 interface ServicosLinkeClientProps {
   initialServicos: ServicoLinke[]
-  initialFornecedores: Fornecedor[]
+  initialFornecedores: FornecedorPricing[]
   initialWebservices?: any[]
   canManageBaseTables?: boolean
 }
@@ -42,7 +42,7 @@ export function ServicosLinkeClient({
   canManageBaseTables = false,
 }: ServicosLinkeClientProps) {
   const [servicos, setServicos] = React.useState<ServicoLinke[]>(initialServicos)
-  const [fornecedores] = React.useState<Fornecedor[]>(initialFornecedores)
+  const [fornecedores] = React.useState<FornecedorPricing[]>(initialFornecedores)
   const [webservices] = React.useState<any[]>(initialWebservices)
   const [activeTab, setActiveTab] = React.useState<TabType>("servicos_linke")
   

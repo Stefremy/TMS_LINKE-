@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getTenantId, requireEmployee } from "@/lib/auth/context"
-import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
+import type { Fornecedor, FornecedorPricing } from "@/app/ops/entidades/fornecedores/types"
 import { 
   DEFAULT_PRICE_FAMILIES, 
   DEFAULT_ADDITIONAL_FEES, 
@@ -212,7 +212,22 @@ const DEFAULT_FORNECEDORES: Fornecedor[] = [
  * Obtém todos os fornecedores cadastrados
  */
 export async function getFornecedoresAction(): Promise<Fornecedor[]> {
-  await requireEmployee("Gestão de Transportadoras & Frotas")
+  const ctx = await requireEmployee("Gestão de Transportadoras & Frotas")
+  return loadFornecedores(ctx.tenant_id)
+}
+
+/** Read-only carrier identity and tariff data for the pricing module. */
+export async function getFornecedoresPricingAction(): Promise<FornecedorPricing[]> {
+  const ctx = await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
+  const fornecedores = await loadFornecedores(ctx.tenant_id)
+  return fornecedores.map(({ id, code, short_name, legal_name, color, nif, role, city,
+    payment_terms, is_active, global_markup_pct, price_families, additional_fees, volumetrics }) => ({
+    id, code, short_name, legal_name, color, nif, role, city, payment_terms, is_active,
+    global_markup_pct, price_families, additional_fees, volumetrics,
+  }))
+}
+
+async function loadFornecedores(tenantId: string): Promise<Fornecedor[]> {
   const supabase = createAdminClient()
 
   // 0. Obter lista de IDs eliminados (tombstones)
@@ -221,6 +236,7 @@ export async function getFornecedoresAction(): Promise<Fornecedor[]> {
     const { data: deletedLogs } = await supabase
       .from("audit_log")
       .select("details")
+      .eq("tenant_id", tenantId)
       .eq("action", "deleted_fornecedor")
 
     if (deletedLogs) {
@@ -237,6 +253,7 @@ export async function getFornecedoresAction(): Promise<Fornecedor[]> {
     const { data, error } = await supabase
       .from("fornecedores")
       .select("*")
+      .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
 
     if (!error && data && data.length > 0) {
@@ -249,6 +266,7 @@ export async function getFornecedoresAction(): Promise<Fornecedor[]> {
     const { data: logs } = await supabase
       .from("audit_log")
       .select("*")
+      .eq("tenant_id", tenantId)
       .eq("action", "fornecedor_data")
       .order("created_at", { ascending: false })
 

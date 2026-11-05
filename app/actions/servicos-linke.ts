@@ -11,7 +11,7 @@ import { getServiceParcelLimitProduct } from "@/lib/pricing/oversize-surcharge"
 
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
-import { getFornecedoresAction, saveFornecedorAction } from "@/app/actions/fornecedores"
+import { getFornecedoresPricingAction } from "@/app/actions/fornecedores"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { getServiceVolumetricRule } from "@/lib/pricing/chargeable-weight"
@@ -1204,7 +1204,7 @@ export async function getServicosDashboardDataAction() {
   const ctx = await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
   const [servicos, fornecedores, webservices] = await Promise.all([
     getServicosLinkeAction(),
-    getFornecedoresAction(),
+    getFornecedoresPricingAction(),
     getCarrierConnectionsAction(),
   ])
 
