@@ -6,7 +6,6 @@ import { getMyProfile } from "@/lib/auth/profile"
 import { NotificationBell } from "./components/NotificationBell"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
 import { OpsPageSurface } from "./components/OpsPageSurface"
-import { signout } from "@/app/login/actions"
 import { canAccessOpsRoute } from "@/lib/auth/permissions"
 import { requireEmployee } from "@/lib/auth/context"
 import { canSendClientMessages } from "@/lib/client-messages/types"
@@ -79,7 +78,7 @@ export default async function OpsLayout({
                 </div>
               </Link>
               <div className="h-6 w-[1px] bg-[var(--border-subtle)] mx-1"></div>
-              <form action={signout}>
+              <form action="/api/auth/logout" method="post">
                 <button 
                   type="submit" 
                   title="Terminar Sessão"

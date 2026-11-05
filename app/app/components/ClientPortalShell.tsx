@@ -10,7 +10,6 @@ import {
 import { Suspense } from "react"
 import { ClientImpersonationBanner, ClientProfileSidebar } from "./ClientImpersonationBanner"
 import { ClientSidebarNav, ClientTopHeaderAction } from "./ClientSidebarNav"
-import { signout } from "@/app/login/actions"
 import type { requirePortalStore } from "@/lib/client-portal/access"
 import { ClientScopeProvider } from "./ClientScope"
 import { ClientAnnouncements } from "./ClientAnnouncements"
@@ -82,7 +81,7 @@ export function ClientPortalShell({ children, store, isSuspended = false, access
                 <span>Sair para o TMS</span>
               </Link>
             ) : (
-              <form action={signout}>
+              <form action="/api/auth/logout" method="post">
                 <button type="submit" className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Terminar sessão</span>

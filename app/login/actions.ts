@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect, unstable_rethrow } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { logoutSession } from '@/lib/auth/logout'
 import { getAuthContext } from '@/lib/auth/context'
 import { clientLoginPath, safePortalReturn } from '@/lib/client-portal/login-paths'
 import { cookies } from 'next/headers'
@@ -76,11 +77,5 @@ export async function clientLogin(formData: FormData) {
 }
 
 export async function signout() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
-  const cookieStore = await cookies()
-  const source = cookieStore.get('portal_login_source')?.value
-  cookieStore.delete('impersonated_client_id')
-  cookieStore.delete('portal_login_source')
-  redirect(source === 'client' ? '/app/login' : '/login')
+  redirect(await logoutSession())
 }

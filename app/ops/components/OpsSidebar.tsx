@@ -21,7 +21,6 @@ import { canAccessOpsRoute, type PermissionContext } from "@/lib/auth/permission
 import { SidebarNav } from "./SidebarNav"
 import styles from "./SidebarPattern.module.css"
 import { APP_VERSION } from "@/lib/config/version"
-import { signout } from "@/app/login/actions"
 
 export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false, access }: { canAccessDocuments?: boolean; canSendMessages?: boolean; access?: PermissionContext }) {
   const [isCollapsed, setIsCollapsed] = React.useState(false)
@@ -151,7 +150,7 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
                 <span>O meu perfil</span>
               </Link>
 
-              <form action={signout}>
+              <form action="/api/auth/logout" method="post">
                 <button
                   type="submit"
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-rose-600 hover:bg-rose-50 font-medium transition-colors cursor-pointer"

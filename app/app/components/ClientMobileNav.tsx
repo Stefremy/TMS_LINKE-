@@ -23,7 +23,6 @@ import { ClientAccountDetailsModal } from "./ClientAccountDetailsModal"
 import { ClientProfileSidebar } from "./ClientImpersonationBanner"
 import { ClientMessageBell } from "./ClientMessages"
 import { ClientSidebarNav } from "./ClientSidebarNav"
-import { signout } from "@/app/login/actions"
 import sidebarStyles from "@/app/ops/components/SidebarPattern.module.css"
 
 export function ClientMobileNav() {
@@ -154,7 +153,7 @@ export function ClientMobileNav() {
                   <span>Sair para o TMS</span>
                 </Link>
               ) : (
-                <form action={signout}>
+                <form action="/api/auth/logout" method="post">
                   <button type="submit" className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer">
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Terminar sessão</span>

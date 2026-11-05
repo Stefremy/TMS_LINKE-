@@ -222,3 +222,38 @@ test('a valid suspended login reaches the suspension notice instead of being swa
   assert.equal(h.calls.signOut,0)
   assert.equal(h.calls.revalidate,0)
 })
+
+test('native logout redirects with 303 and removes auth cookies even with expired sessions or provider failures',async()=>{
+ for(const options of [{},{signOutThrow:true},{signOutError:true},{createError:true}]){
+  const h=harness(null,options)
+  h.calls.cookies.set('portal_login_source',{value:'ops'})
+  h.calls.cookies.set('impersonated_client_id',{value:'store-a'})
+  for(const name of ['sb-fixture-auth-token','sb-fixture-auth-token.0','sb-fixture-auth-token.1','sb-other-auth-token']) h.calls.cookies.set(name,{value:'fixture'})
+  const route=h.load('app/api/auth/logout/route.ts')
+  const result=await route.POST(new Request('https://ops.example.invalid/api/auth/logout',{method:'POST',headers:{Origin:'https://ops.example.invalid'}}))
+  assert.equal(result.status,303)
+  assert.equal(result.headers.get('location'),'/login')
+  assert.equal(result.headers.get('cache-control'),'no-store')
+  assert.deepEqual([...h.calls.cookies.keys()],['sb-other-auth-token'])
+  assert.equal(h.calls.signOut,options.createError?0:1)
+  const repeated=await route.POST(new Request('https://ops.example.invalid/api/auth/logout',{method:'POST',headers:{Origin:'https://ops.example.invalid'}}))
+  assert.equal(repeated.status,303)
+  assert.equal(repeated.headers.get('location'),'/login')
+ }
+ const client=harness()
+ client.calls.cookies.set('portal_login_source',{value:'client'})
+ const result=await client.load('app/api/auth/logout/route.ts').POST(new Request('https://portal.example.invalid/api/auth/logout',{method:'POST',headers:{Origin:'https://portal.example.invalid'}}))
+ assert.equal(result.status,303)
+ assert.equal(result.headers.get('location'),'/app/login')
+})
+
+test('logout rejects foreign or missing origins before touching sessions or cookies',async()=>{
+ for(const origin of ['https://foreign.example.invalid',null]){
+  const h=harness()
+  h.calls.cookies.set('sb-fixture-auth-token',{value:'fixture'})
+  const result=await h.load('app/api/auth/logout/route.ts').POST(new Request('https://ops.example.invalid/api/auth/logout',{method:'POST',headers:origin?{Origin:origin}:{}}))
+  assert.equal(result.status,403)
+  assert.equal(h.calls.signOut,0)
+  assert.equal(h.calls.cookies.size,1)
+ }
+})
