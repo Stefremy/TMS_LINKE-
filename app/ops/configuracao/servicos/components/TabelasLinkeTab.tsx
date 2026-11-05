@@ -26,6 +26,7 @@ interface TabelasLinkeTabProps {
   mode?: "base" | "custom" | "linke_services"
   servicos: ServicoLinke[]
   canManageBaseTables?: boolean
+  canManageCreatedTables?: boolean
   onEditServico: (servico: ServicoLinke) => void
   onDuplicateServico: (servico: ServicoLinke) => void
   onDeleteServico: (id: string) => void
@@ -37,6 +38,7 @@ export function TabelasLinkeTab({
   mode = "base",
   servicos,
   canManageBaseTables = false,
+  canManageCreatedTables = false,
   onEditServico,
   onDuplicateServico,
   onDeleteServico,
@@ -124,7 +126,7 @@ export function TabelasLinkeTab({
   const servicePrefix = currentServico ? getCttServiceIdentity(currentServico)?.prefix : undefined
   const islandTransportLabel = servicePrefix === "DD" ? "Via aérea" : servicePrefix === "DB" ? "Via marítima (barco)" : null
   const isCurrentBase = currentServico ? isPrimordialServico(currentServico) : false
-  const isCurrentLocked = isCurrentBase && !canManageBaseTables
+  const isCurrentLocked = isCurrentBase ? !canManageBaseTables : !canManageCreatedTables
   const [quickMarkupInput, setQuickMarkupInput] = React.useState<number>(currentServico?.global_markup_pct ?? 22)
 
   React.useEffect(() => {
@@ -319,14 +321,14 @@ export function TabelasLinkeTab({
 
                   {/* Actions Bar */}
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <button
+                    {canManageCreatedTables && <button
                       onClick={() => onDuplicateServico(currentServico)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition-colors shadow-2xs"
                       title="Criar variante para cliente específico"
                     >
                       <Copy className="w-3.5 h-3.5 text-slate-400" />
                       Criar variante
-                    </button>
+                    </button>}
 
                     <button
                       type="button"
@@ -343,10 +345,10 @@ export function TabelasLinkeTab({
                     {isCurrentLocked ? (
                       <span
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium rounded-lg"
-                        title="Apenas stefano.remy e geral@linke podem editar tabelas base contratadas"
+                        title="Sem permissão de edição. Peça ao administrador para rever os seus acessos."
                       >
                         <Lock className="w-3.5 h-3.5 text-amber-600" />
-                        Protegida · Bloqueada
+                        Apenas consulta
                       </span>
                     ) : (
                       <>

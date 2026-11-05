@@ -4,6 +4,8 @@ const { createLoader } = require('./helpers/load-typescript.cjs')
 const { fakeSupabase } = require('./helpers/fake-supabase.cjs')
 
 const T = '11111111-1111-1111-1111-111111111111'
+const policy = createLoader({})('lib/auth/permissions.ts')
+const { PERMISSIONS: P } = policy
 const types = createLoader({})('app/ops/configuracao/servicos/types.ts')
 
 const TWELVE_CONTRACTED_BASE_TABLES = [
@@ -25,7 +27,7 @@ const AUTHORIZED_EMAILS = ['stefano.remy@gmail.com', 'geral@linke.pt']
 const UNAUTHORIZED_STAFF = [
   { role: 'employee', email: 'clientes@linke.pt', colaborador_id: 'col-clientes-003' },
   { role: 'employee', email: 'aldara.linke@gmail.com', colaborador_id: 'col-aldara-004' },
-  { role: 'admin', email: 'outro.admin@linke.pt', colaborador_id: 'col-outro-999' },
+  { role: 'employee', email: 'outro.staff@linke.pt', colaborador_id: 'col-outro-999' },
 ]
 
 const fixture = {
@@ -64,6 +66,7 @@ function harness({
   role = 'admin',
   email = 'stefano.remy@gmail.com',
   colaborador_id = 'col-stefano-001',
+  permissions = [P.clients, P.editCreatedTables, ...(email === 'geral@linke.pt' ? [P.editBaseTables] : [])],
 } = {}) {
   const tables = {
     servicos_linke: auditOnly ? [] : [service],
@@ -77,9 +80,10 @@ function harness({
     ],
   }
   const db = fakeSupabase(tables, failure, { persistInserts: true })
-  const ctx = { role, tenant_id: T, user: { email }, colaborador_id }
-  const employee = async () => {
+  const ctx = { role, tenant_id: T, user: { email }, colaborador_id, permissions }
+  const employee = async required => {
     if (!['admin', 'employee'].includes(role)) throw Error('Unauthorized')
+    if (required && ![required].flat().some(p => policy.hasPermission(ctx, p))) throw Error('Unauthorized')
     return ctx
   }
   const load = createLoader({
@@ -118,24 +122,14 @@ test('all 12 contracted base tables and built-in core IDs/codes remain protected
   assert.equal(types.isPrimordialServico(fixture), false)
 })
 
-test('only stefano.remy@gmail.com and geral@linke.pt are authorized to manage primordial base tables', () => {
-  assert.equal(types.canManagePrimordialServices('stefano.remy@gmail.com'), true)
-  assert.equal(types.canManagePrimordialServices('  STEFANO.REMY@GMAIL.COM '), true)
-  assert.equal(types.canManagePrimordialServices({ email: 'geral@linke.pt' }), true)
-  assert.equal(types.canManagePrimordialServices({ email: ' GERAL@LINKE.PT ' }), true)
-
-  for (const denied of [
-    'clientes@linke.pt',
-    'aldara.linke@gmail.com',
-    'stefano@linke.pt',
-    'stefano.remy@gmail.com.evil.com',
-    'evil+geral@linke.pt',
-    '',
-    null,
-    undefined,
-  ]) {
-    assert.equal(types.canManagePrimordialServices(denied), false)
+test('base table editing is granted by trusted staff permissions rather than an email allowlist', () => {
+  assert.equal(types.canManagePrimordialServices({ role: 'admin', permissions: [] }), true)
+  for (const email of ['aldara.linke@gmail.com', 'clientes@linke.pt', 'geral@linke.pt', 'other@example.invalid']) {
+    assert.equal(types.canManagePrimordialServices({ role: 'employee', permissions: [P.editBaseTables], user: { email } }), true)
+    assert.equal(types.canManagePrimordialServices({ role: 'employee', permissions: [P.clients, P.editCreatedTables], user: { email } }), false)
   }
+  assert.equal(types.canManagePrimordialServices({ role: 'client', permissions: [P.all, P.editBaseTables] }), false)
+  assert.equal(types.canManagePrimordialServices(null), false)
 })
 
 for (const staff of UNAUTHORIZED_STAFF) {
@@ -379,7 +373,7 @@ test('non-manager staff can still create custom variants from base tables and ma
   assert.equal(client.db.writes.length, 0)
 })
 
-test('catalogue UI locks base tables for non-authorized staff and keeps the delete button locked on base tables even for stefano.remy / geral@linke', () => {
+test('catalogue UI respects independent custom and base editing grants and never enables base deletion', () => {
   const React = require('react')
   const { renderToStaticMarkup } = require('react-dom/server')
   const load = createLoader({
@@ -388,11 +382,12 @@ test('catalogue UI locks base tables for non-authorized staff and keeps the dele
     'lucide-react': require('lucide-react'),
   })
   const { TabelasLinkeTab } = load('app/ops/configuracao/servicos/components/TabelasLinkeTab.tsx')
-  const render = (service, canManageBaseTables) =>
+  const render = (service, canManageBaseTables, canManageCreatedTables = false) =>
     renderToStaticMarkup(
       React.createElement(TabelasLinkeTab, {
         mode: 'linke_services',
         servicos: [service],
+        canManageCreatedTables,
         ...(canManageBaseTables === undefined ? {} : { canManageBaseTables }),
       })
     )
@@ -401,26 +396,35 @@ test('catalogue UI locks base tables for non-authorized staff and keeps the dele
   for (const base of TWELVE_CONTRACTED_BASE_TABLES) {
     for (const flag of [undefined, false]) {
       const markup = render({ ...fixture, ...base, is_primordial: false }, flag)
-      assert.match(markup, /Protegida · Bloqueada/)
+      assert.match(markup, /Apenas consulta/)
       assert.doesNotMatch(markup, /Editar tabela/)
       assert.doesNotMatch(markup, /title="Eliminar Tabela"/)
       assert.doesNotMatch(markup, /Ajustar margem e recalcular preços/)
-      assert.match(markup, /Criar variante/)
+      assert.doesNotMatch(markup, /Criar variante/)
     }
   }
 
-  // 2. Unauthorized staff on custom tables: edit, toggle, delete, and markup controls remain visible
-  const customMarkup = render(fixture, false)
-  assert.doesNotMatch(customMarkup, /Protegida · Bloqueada/)
+  // Read-only and base-only staff cannot edit or duplicate a custom table.
+  for (const baseGrant of [false, true]) {
+    const readOnly = render(fixture, baseGrant, false)
+    assert.match(readOnly, /Apenas consulta/)
+    assert.doesNotMatch(readOnly, /Editar tabela|Criar variante|Ajustar margem e recalcular preços/)
+    assert.doesNotMatch(readOnly, /title="Eliminar Tabela"/)
+  }
+
+  // 2. Custom editing allows variants and edits while the base grant stays independent.
+  const customMarkup = render(fixture, false, true)
+  assert.doesNotMatch(customMarkup, /Apenas consulta/)
   assert.match(customMarkup, /Editar tabela/)
   assert.match(customMarkup, /title="Eliminar Tabela"/)
   assert.match(customMarkup, /Ajustar margem e recalcular preços/)
 
-  // 3. Authorized managers (canManageBaseTables=true) on base tables: edit/markup controls visible, delete button stays locked/disabled
+  // 3. Base editing allows edits but never deletion or creating a variant without the custom grant.
   for (const base of TWELVE_CONTRACTED_BASE_TABLES) {
     const managerMarkup = render({ ...fixture, ...base, is_primordial: true }, true)
-    assert.doesNotMatch(managerMarkup, /Protegida · Bloqueada/)
+    assert.doesNotMatch(managerMarkup, /Apenas consulta/)
     assert.match(managerMarkup, /Editar tabela/)
+    assert.doesNotMatch(managerMarkup, /Criar variante/)
     assert.doesNotMatch(managerMarkup, /title="Eliminar Tabela"/)
     assert.match(managerMarkup, /Eliminação bloqueada para tabela base/)
     assert.match(managerMarkup, /disabled=""/)
@@ -493,7 +497,7 @@ test('removing all authorized destinations persists through save and reload with
 test('pricing dashboard accepts commercial and finance grants without allowing carrier management', async () => {
   const policy = createLoader({})('lib/auth/permissions.ts')
   const { PERMISSIONS: P } = policy
-  for (const permission of [P.clients, P.finance]) {
+  for (const permission of [P.clients, P.finance, P.editCreatedTables, P.editBaseTables]) {
     const ctx = { role: 'employee', permissions: [permission], tenant_id: T, user: { email: 'staff@example.invalid' } }
     const carrier = {
       id: 'carrier-a', tenant_id: T, code: 'TEST', short_name: 'Carrier', legal_name: 'Carrier SA',
@@ -523,7 +527,8 @@ test('pricing dashboard accepts commercial and finance grants without allowing c
     assert.deepEqual(result.fornecedores.map(f => f.id), ['carrier-a'])
     assert.deepEqual(result.fornecedores[0].price_families, carrier.price_families)
     for (const key of ['iban', 'ledger_entries', 'drivers', 'documents', 'email', 'tenant_id']) assert.equal(key in result.fornecedores[0], false)
-    assert.equal(result.canManageBaseTables, false)
+    assert.equal(result.canManageBaseTables, permission === P.editBaseTables)
+    assert.equal(result.canManageCreatedTables, permission === P.editCreatedTables)
     const carrierQueries = db.queries.filter(q => q.table === 'fornecedores' || q.table === 'audit_log'
       && q.filters.some(f => ['fornecedor_data', 'deleted_fornecedor'].includes(f.value)))
     assert.ok(carrierQueries.every(q => q.filters.some(f => f.field === 'tenant_id' && f.value === T)))
@@ -555,4 +560,34 @@ test('pricing carrier data retains the scoped audit fallback and deletion tombst
   assert.deepEqual(result.map(f => f.id), ['saved'])
   assert.equal('iban' in result[0], false)
   assert.ok(db.queries.every(q => q.filters.some(f => f.field === 'tenant_id' && f.value === T)))
+})
+
+test('custom and mother table grants authorize independent server mutations and can be revoked', async () => {
+  const base = { ...fixture, id: 'srv_linke_dd_std', code: 'LK-DD-STD', is_primordial: true }
+  for (const permission of [P.editCreatedTables, P.editBaseTables]) {
+    for (const service of [fixture, base]) {
+      const make = () => harness({ role: 'employee', email: 'aldara.linke@gmail.com', permissions: [permission], service })
+      const expected = service === base ? permission === P.editBaseTables : permission === P.editCreatedTables
+      const save = make()
+      assert.equal((await save.actions.saveServicoLinkeAction({ ...service, name: 'Adjusted' })).success, expected)
+      assert.equal((await make().actions.toggleServicoLinkeStatusAction(service.id, false)).success, expected)
+      assert.equal((await make().actions.updateServicoMarkupAction(service.id, 30)).success, expected)
+      assert.equal((await make().actions.deleteServicoLinkeAction(service.id)).success, service !== base && expected)
+      assert.equal((await make().actions.duplicateServicoForClientAction(service.id, 'Variante', 'Cliente')).success, permission === P.editCreatedTables)
+      if (!expected) assert.equal(save.db.writes.length, 0)
+    }
+  }
+  for (const permission of [P.clients, P.finance]) {
+    for (const service of [fixture, base]) {
+      const h = harness({ role: 'employee', email: 'geral@linke.pt', permissions: [permission], service })
+      assert.equal((await h.actions.saveServicoLinkeAction({ ...service, name: 'Denied' })).success, false)
+      assert.equal((await h.actions.toggleServicoLinkeStatusAction(service.id, false)).success, false)
+      assert.equal((await h.actions.updateServicoMarkupAction(service.id, 40)).success, false)
+      assert.equal((await h.actions.deleteServicoLinkeAction(service.id)).success, false)
+      assert.equal((await h.actions.duplicateServicoForClientAction(service.id, 'Denied', 'Client')).success, false)
+      assert.equal(h.db.writes.length, 0)
+    }
+  }
+  const admin = harness({ role: 'admin', email: 'new-admin@example.invalid', permissions: [], service: base })
+  assert.equal((await admin.actions.saveServicoLinkeAction({ ...base, name: 'Admin edit' })).success, true)
 })

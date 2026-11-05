@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
+import { PERMISSIONS } from "@/lib/auth/permissions"
 import { getTenantId, requireEmployee } from "@/lib/auth/context"
 import type { Fornecedor, FornecedorPricing } from "@/app/ops/entidades/fornecedores/types"
 import { 
@@ -218,7 +219,7 @@ export async function getFornecedoresAction(): Promise<Fornecedor[]> {
 
 /** Read-only carrier identity and tariff data for the pricing module. */
 export async function getFornecedoresPricingAction(): Promise<FornecedorPricing[]> {
-  const ctx = await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
+  const ctx = await requireEmployee([PERMISSIONS.clients, PERMISSIONS.finance, PERMISSIONS.editCreatedTables, PERMISSIONS.editBaseTables])
   const fornecedores = await loadFornecedores(ctx.tenant_id)
   return fornecedores.map(({ id, code, short_name, legal_name, color, nif, role, city,
     payment_terms, is_active, global_markup_pct, price_families, additional_fees, volumetrics }) => ({

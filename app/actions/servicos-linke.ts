@@ -12,7 +12,6 @@ import { getServiceParcelLimitProduct } from "@/lib/pricing/oversize-surcharge"
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getFornecedoresPricingAction } from "@/app/actions/fornecedores"
-import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { getServiceVolumetricRule } from "@/lib/pricing/chargeable-weight"
 import {
@@ -20,6 +19,7 @@ import {
   canManagePrimordialServices,
   isPrimordialServico,
 } from "@/app/ops/configuracao/servicos/types"
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions"
 import { getTenantId, requireUser, requireEmployee } from "@/lib/auth/context"
 import { buildOfficialLinkeInternationalZones, buildOfficialCeTruckZones } from "@/lib/services/geo/international-zones"
 import { isTemporarilyWithdrawnService } from "@/lib/services/service-availability"
@@ -875,7 +875,7 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
 export async function saveServicoLinkeAction(
   servico: Partial<ServicoLinke>
 ): Promise<{ success: boolean; data?: ServicoLinke; error?: string }> {
-  const ctx = await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
+  const ctx = await requireEmployee([PERMISSIONS.clients, PERMISSIONS.finance, PERMISSIONS.editCreatedTables, PERMISSIONS.editBaseTables])
   const supabase = createAdminClient()
 
   const profile = typeof servico.pricing_profile === "string" ? servico.pricing_profile.trim() : "Standard / Geral"
@@ -892,13 +892,17 @@ export async function saveServicoLinkeAction(
     }
   }
   const isProtected = isPrimordialServico(servico) || storedProtected
-  if (isProtected && !canManagePrimordialServices(ctx.user?.email)) {
+  if (isProtected && !canManagePrimordialServices(ctx)) {
     return {
       success: false,
-      error: "Esta tabela base contratada está bloqueada. Apenas stefano.remy e geral@linke podem editar tabelas base.",
+      error: "Esta tabela mãe está bloqueada. É necessária a permissão «Editar tabelas mãe».",
     }
   }
   
+  if (!isProtected && !hasPermission(ctx, PERMISSIONS.editCreatedTables)) {
+    return { success: false, error: "É necessária a permissão «Editar tabelas criadas»." }
+  }
+
   const carrier = detectCarrierGroup(servico) || "ctt"
 
   // Processamento e normalização de zonas e escalões
@@ -1046,7 +1050,10 @@ export async function duplicateServicoForClientAction(
   targetProfile: string,
   targetClientName: string
 ): Promise<{ success: boolean; data?: ServicoLinke; error?: string }> {
-  await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
+  const ctx = await requireEmployee([PERMISSIONS.clients, PERMISSIONS.finance, PERMISSIONS.editCreatedTables, PERMISSIONS.editBaseTables])
+  if (!hasPermission(ctx, PERMISSIONS.editCreatedTables)) {
+    return { success: false, error: "É necessária a permissão «Editar tabelas criadas»." }
+  }
   targetProfile = typeof targetProfile === "string" ? targetProfile.trim() : ""
   if (!targetProfile || targetProfile.length > 100) return { success: false, error: "Indique um perfil comercial com 1 a 100 caracteres." }
   const servicos = await getServicosLinkeAction()
@@ -1095,7 +1102,7 @@ export async function updateServicoMarkupAction(
   servicoId: string,
   newMarkupPct: number
 ): Promise<{ success: boolean; error?: string }> {
-  await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
+  await requireEmployee([PERMISSIONS.clients, PERMISSIONS.finance, PERMISSIONS.editCreatedTables, PERMISSIONS.editBaseTables])
   const servicos = await getServicosLinkeAction()
   const target = servicos.find((s) => s.id === servicoId)
   if (!target) return { success: false }
@@ -1126,7 +1133,7 @@ export async function toggleServicoLinkeStatusAction(
   id: string,
   is_active: boolean
 ): Promise<{ success: boolean; error?: string }> {
-  await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
+  await requireEmployee([PERMISSIONS.clients, PERMISSIONS.finance, PERMISSIONS.editCreatedTables, PERMISSIONS.editBaseTables])
   const servicos = await getServicosLinkeAction()
   const target = servicos.find((s) => s.id === id)
   if (!target) return { success: false }
@@ -1144,7 +1151,7 @@ export async function toggleServicoLinkeStatusAction(
  * Elimina um Serviço Linke personalizado. Tabelas base contratadas (primordiais) estão bloqueadas contra eliminação.
  */
 export async function deleteServicoLinkeAction(id: string): Promise<{ success: boolean; error?: string }> {
-  const ctx = await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
+  const ctx = await requireEmployee([PERMISSIONS.clients, PERMISSIONS.finance, PERMISSIONS.editCreatedTables, PERMISSIONS.editBaseTables])
   const supabase = createAdminClient()
   let protection: { found: boolean; isProtected: boolean }
   try {
@@ -1158,6 +1165,10 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
       success: false,
       error: "Esta tabela base contratada está bloqueada e não pode ser eliminada.",
     }
+  }
+
+  if (!hasPermission(ctx, PERMISSIONS.editCreatedTables)) {
+    return { success: false, error: "É necessária a permissão «Editar tabelas criadas»." }
   }
 
   // Persist the tombstone first so default/fallback tables cannot reappear after a refresh.
@@ -1198,20 +1209,20 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
 }
 
 /**
- * Obtém os dados consolidados de Fornecedores, Serviços Linke e Webservices para o Módulo
+ * Obtém os serviços, dados de tarifas e permissões de edição para o módulo
  */
 export async function getServicosDashboardDataAction() {
-  const ctx = await requireEmployee(["Gestão de Clientes & Contratos", "Faturação & Contas Correntes"])
-  const [servicos, fornecedores, webservices] = await Promise.all([
+  const ctx = await requireEmployee([PERMISSIONS.clients, PERMISSIONS.finance, PERMISSIONS.editCreatedTables, PERMISSIONS.editBaseTables])
+  const [servicos, fornecedores] = await Promise.all([
     getServicosLinkeAction(),
     getFornecedoresPricingAction(),
-    getCarrierConnectionsAction(),
   ])
 
   return {
     servicos,
     fornecedores,
-    webservices: webservices || [],
-    canManageBaseTables: canManagePrimordialServices(ctx.user?.email),
+    webservices: [],
+    canManageCreatedTables: hasPermission(ctx, PERMISSIONS.editCreatedTables),
+    canManageBaseTables: canManagePrimordialServices(ctx),
   }
 }

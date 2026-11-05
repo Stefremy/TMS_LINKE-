@@ -201,3 +201,26 @@ test('access changes after the first 1000 audit events still take effect',async(
  assert.deepEqual((await h.auth.requireEmployee()).permissions,[P.support])
  assert.ok(h.db.queries.some(q=>q.table==='audit_log'&&q.range?.[0]===1000))
 })
+
+test('table editing grants are selectable separately, persist in staff access, and only unlock the tables route', async () => {
+ const grants=[P.editCreatedTables,P.editBaseTables]
+ for(const grant of grants){
+  assert.ok(policy.AVAILABLE_STAFF_PERMISSIONS.includes(grant))
+  assert.ok(policy.PERMISSION_GROUPS.some(group=>group.items.some(item=>item.id===grant)))
+  assert.deepEqual(policy.validateStaffAccess('Operacional',[grant]),[grant])
+  const ctx={role:'employee',permissions:[grant]}
+  assert.equal(policy.canAccessOpsRoute(ctx,'/ops/configuracao/servicos'),true)
+  for(const route of ['/ops/configuracao/webservices','/ops/entidades/fornecedores','/ops/entidades/colaboradores','/ops/faturacao']) assert.equal(policy.canAccessOpsRoute(ctx,route),false)
+ }
+ assert.ok(policy.PERMISSION_PRESETS.every(preset=>!grants.some(grant=>preset.permissions.includes(grant))))
+ const h=harness({rows:[{...profile,tenant_id:TENANT}]})
+ const result=await h.actions.saveColaboradorAction({...profile,permissions:grants})
+ assert.equal(result.success,true)
+ assert.deepEqual(h.accountUsers.find(user=>user.id===employee.id).app_metadata.permissions,grants)
+ assert.deepEqual(h.db.writes.find(w=>w.kind==='insert'&&w.value.action==='colaborador_updated').value.details.permissions,grants)
+ for(const permissions of [[P.editCreatedTables],[P.editBaseTables],[]]){
+  const current=harness({user:employee,events:[saved({...profile,permissions})]})
+  const ctx=await current.auth.requireEmployee()
+  for(const grant of grants) assert.equal(policy.hasPermission(ctx,grant),permissions.includes(grant))
+ }
+})

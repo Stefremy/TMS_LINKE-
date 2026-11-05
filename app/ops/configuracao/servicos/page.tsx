@@ -11,7 +11,7 @@ export default async function ServicosPage() {
 
   const dashboardData = await getServicosDashboardDataAction()
 
-  const { servicos, fornecedores, webservices, canManageBaseTables } = dashboardData
+  const { servicos, fornecedores, webservices, canManageBaseTables, canManageCreatedTables } = dashboardData
 
   return (
     <div className="min-h-[calc(100vh-8rem)]">
@@ -20,6 +20,7 @@ export default async function ServicosPage() {
         initialFornecedores={fornecedores}
         initialWebservices={webservices || []}
         canManageBaseTables={canManageBaseTables}
+        canManageCreatedTables={canManageCreatedTables}
       />
     </div>
   )

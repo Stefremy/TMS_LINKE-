@@ -1,3 +1,4 @@
+import { hasPermission, PERMISSIONS, type PermissionContext } from "@/lib/auth/permissions"
 import correosProducts from "@/lib/services/correos/product-catalog.json"
 
 export interface PriceTierLinke {
@@ -114,17 +115,9 @@ export const PRIMORDIAL_SERVICE_IDS = new Set([
   "srv_linke_1793009571268", // CTT Expresso Económico 48 (Guia EQ), promoted to core.
 ])
 
-export const PRIMORDIAL_SERVICE_MANAGER_EMAILS = new Set([
-  "stefano.remy@gmail.com",
-  "geral@linke.pt",
-])
-
-export function canManagePrimordialServices(
-  userOrEmail?: { email?: string | null } | string | null
-): boolean {
-  const rawEmail = typeof userOrEmail === "string" ? userOrEmail : userOrEmail?.email
-  if (!rawEmail) return false
-  return PRIMORDIAL_SERVICE_MANAGER_EMAILS.has(rawEmail.trim().toLowerCase())
+/** Only trusted staff context can authorize changing contracted base tables. */
+export function canManagePrimordialServices(ctx?: PermissionContext | null): boolean {
+  return hasPermission(ctx, PERMISSIONS.editBaseTables)
 }
 
 export function isPrimordialServico(servico?: Partial<ServicoLinke> | null): boolean {

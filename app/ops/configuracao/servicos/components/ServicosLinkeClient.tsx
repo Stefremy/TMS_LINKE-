@@ -31,6 +31,7 @@ interface ServicosLinkeClientProps {
   initialFornecedores: FornecedorPricing[]
   initialWebservices?: any[]
   canManageBaseTables?: boolean
+  canManageCreatedTables?: boolean
 }
 
 type TabType = "servicos_linke" | "matriz_margens" | "simulador"
@@ -40,6 +41,7 @@ export function ServicosLinkeClient({
   initialFornecedores,
   initialWebservices = [],
   canManageBaseTables = false,
+  canManageCreatedTables = false,
 }: ServicosLinkeClientProps) {
   const [servicos, setServicos] = React.useState<ServicoLinke[]>(initialServicos)
   const [fornecedores] = React.useState<FornecedorPricing[]>(initialFornecedores)
@@ -190,7 +192,7 @@ export function ServicosLinkeClient({
           </div>
         </div>
 
-        {activeTab === "servicos_linke" && (
+        {activeTab === "servicos_linke" && canManageCreatedTables && (
           <div className="flex items-center gap-3">
           <button
             type="button"
@@ -260,9 +262,10 @@ export function ServicosLinkeClient({
             mode="linke_services"
             servicos={servicos}
             canManageBaseTables={canManageBaseTables}
+            canManageCreatedTables={canManageCreatedTables}
             onEditServico={(servico) => {
-              if (isPrimordialServico(servico) && !canManageBaseTables) {
-                showNotification("Esta tabela base contratada está bloqueada. Apenas stefano.remy e geral@linke podem editar tabelas base.")
+              if (isPrimordialServico(servico) ? !canManageBaseTables : !canManageCreatedTables) {
+                showNotification("Sem permissão para editar esta tabela. Peça ao administrador para rever os seus acessos.")
                 return
               }
               setSelectedServicoForEdit(servico)

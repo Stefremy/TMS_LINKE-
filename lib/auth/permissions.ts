@@ -7,6 +7,8 @@ export const PERMISSIONS = {
   support: "Atendimento & Suporte a Incidências",
   finance: "Faturação & Contas Correntes",
   carriers: "Gestão de Transportadoras & Frotas",
+  editCreatedTables: "Editar tabelas criadas",
+  editBaseTables: "Editar tabelas mãe",
   integrations: "Configurações de Webservices & Integrações",
   salaries: "Gestão de Salários & Vencimentos",
   reports: "Relatórios Operacionais",
@@ -27,10 +29,14 @@ export const PERMISSION_GROUPS: readonly { title: string; items: readonly { id: 
     { id: PERMISSIONS.support, title: "Incidências e apoio operacional", description: "Acompanhar envios e tracking, tratar incidências e comunicar com os clientes." },
   ] },
   { title: "Clientes e gestão", items: [
-    { id: PERMISSIONS.clients, title: "Clientes, destinatários e contratos", description: "Gerir contas de clientes, destinatários, serviços e tabelas de preço; enviar mensagens aos clientes." },
+    { id: PERMISSIONS.clients, title: "Clientes, destinatários e contratos", description: "Gerir contas de clientes, destinatários e contratos; consultar tabelas de preço e enviar mensagens aos clientes. A edição de tabelas exige uma permissão própria." },
     { id: PERMISSIONS.accessEmail, title: "Enviar email de acesso", description: "Enviar o convite de acesso ao portal do cliente. Não permite alterar credenciais de colaboradores." },
     { id: PERMISSIONS.carriers, title: "Transportadoras e frotas", description: "Gerir fornecedores de transporte e logótipos das transportadoras." },
     { id: PERMISSIONS.reports, title: "Relatórios operacionais", description: "Consultar e exportar os relatórios de operação." },
+  ] },
+  { title: "Tabelas de preços", items: [
+    { id: PERMISSIONS.editCreatedTables, title: "Editar tabelas criadas", description: "Criar, duplicar, editar, ativar e eliminar tabelas personalizadas. Não permite alterar tabelas mãe." },
+    { id: PERMISSIONS.editBaseTables, title: "Editar tabelas mãe", description: "Editar preços, margens e disponibilidade das tabelas base contratadas. Estas tabelas continuam protegidas contra eliminação." },
   ] },
   { title: "Financeiro e áreas reservadas", items: [
     { id: PERMISSIONS.finance, title: "Faturação, contas correntes e tesouraria", description: "Gerir faturas, notas de crédito, extratos, reembolsos e reconciliação. Inclui a configuração de faturação." },
@@ -118,7 +124,7 @@ export const OPS_ACCESS_RULES: { path: string; permissions?: readonly string[]; 
   { path: "/ops/entidades/colaboradores", adminOnly: true },
   { path: "/ops/configuracao/permissoes", adminOnly: true },
   { path: "/ops/configuracao/faturacao", permissions: [PERMISSIONS.finance] },
-  { path: "/ops/configuracao/servicos", permissions: [PERMISSIONS.clients, PERMISSIONS.finance] },
+  { path: "/ops/configuracao/servicos", permissions: [PERMISSIONS.clients, PERMISSIONS.finance, PERMISSIONS.editCreatedTables, PERMISSIONS.editBaseTables] },
   { path: "/ops/configuracao/precos", permissions: [PERMISSIONS.clients, PERMISSIONS.finance] },
   { path: "/ops/configuracao/taxas", permissions: [PERMISSIONS.clients, PERMISSIONS.finance] },
   { path: "/ops/configuracao/combustivel", permissions: [PERMISSIONS.clients, PERMISSIONS.finance] },
