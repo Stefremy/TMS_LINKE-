@@ -26,6 +26,21 @@ export function ReviewStep({ quote, role, onEdit }: { quote: ShipmentQuote; role
       {quote.activeSpecialServices.some(code => code === "cod" || code === "correos_cod") && <p className="mt-2 text-sm text-zinc-600">Cobrança ao destinatário: {money(values.codValue)}</p>}
       {values.saveToAgenda && <p className="mt-2 text-xs text-zinc-500">O destinatário será guardado na agenda após a emissão.</p>}
     </div>
+    {quote.quote && <div className="border-t border-zinc-100 pt-5">
+      <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-zinc-900">Discriminação do preço e IVA</h3><span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600">{quote.quote.vatPct > 0 ? `IVA ${quote.quote.vatPct}% (PT-CONT)` : "Isento de IVA (0%)"}</span></div>
+      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50/70">
+        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 gap-y-2 p-3 text-xs">
+          <span className="font-medium text-zinc-400">Parcela</span><span className="text-right font-medium text-zinc-400">Sem IVA</span><span className="text-right font-medium text-zinc-400">IVA ({quote.quote.vatPct}%)</span><span className="text-right font-medium text-zinc-400">Com IVA</span>
+          <span className="text-zinc-700">Transporte base (tabela)</span><span className="text-right tabular-nums text-zinc-700">{money(quote.quote.basePrice)}</span><span className="text-right tabular-nums text-zinc-500">{money(quote.quote.baseVatAmount)}</span><span className="text-right font-medium tabular-nums text-zinc-900">{money(quote.quote.basePriceWithVat)}</span>
+          <span className="text-zinc-700">Taxa de combustível{quote.fuelPct !== null ? ` (${quote.fuelPct.toLocaleString("pt-PT")}%)` : ""}</span><span className="text-right tabular-nums text-zinc-700">{money(quote.quote.fuelSurchargeAmount)}</span><span className="text-right tabular-nums text-zinc-500">{money(quote.quote.fuelVatAmount)}</span><span className="text-right font-medium tabular-nums text-zinc-900">{money(quote.quote.fuelSurchargeWithVat)}</span>
+          {quote.quote.specialItems.map((item, idx) => <span key={`${item.name}-${idx}`} className="contents"><span className="text-zinc-700">{shipmentOptionLabel(item.name)}</span><span className="text-right tabular-nums text-zinc-700">{money(item.amount)}</span><span className="text-right tabular-nums text-zinc-500">{money(item.vatAmount)}</span><span className="text-right font-medium tabular-nums text-zinc-900">{money(item.totalWithVat)}</span></span>)}
+        </div>
+        <div className="flex items-center justify-between border-t border-zinc-200 bg-white px-3 py-2.5 text-xs">
+          <span className="text-zinc-600">Subtotal s/ IVA: <strong>{money(quote.quote.totalPrice)}</strong> · IVA: <strong>{money(quote.quote.vatAmount)}</strong></span>
+          <span className="text-sm font-semibold tabular-nums text-zinc-900">Total: {money(quote.quote.totalWithVat)}</span>
+        </div>
+      </div>
+    </div>}
     <label className="block space-y-2 text-sm font-medium text-zinc-700">Observações para a transportadora <span className="font-normal text-zinc-400">(opcional)</span><textarea {...form.register("observations")} rows={3} maxLength={500} className={`${inputClass} resize-y`} placeholder="Indicações úteis para a entrega…" /></label>
   </FormSection>
 }

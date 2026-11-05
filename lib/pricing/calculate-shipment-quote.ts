@@ -4,10 +4,15 @@ import { isCttSpecialServiceAvailable } from "@/lib/services/ctt/special-service
 import { calculateOversizeSurcharge } from "./oversize-surcharge"
 import type { Cliente, ClientSpecialServiceFee } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
-import { calculateShipmentPrice, isCeTruckService } from "./calculate-shipment-price"
+import { calculateShipmentPrice, isCeTruckService, resolveServiceZoneCode } from "./calculate-shipment-price"
 import { ShipmentPricingError } from "./shipment-pricing-errors"
 import { calculateChargeableWeight, type ParcelPricingDimensions } from "./chargeable-weight"
 import { resolveCodFee } from "./cod-destination-rates"
+
+/** PT-CONT tables apply 23% IVA; Islands (PT-ILHAS / ES-ILHAS) and International are VAT-exempt (0%). */
+export function resolveShipmentVatPct(zoneCode: string): number {
+  return zoneCode.trim().toUpperCase() === "PT-CONT" ? 23 : 0
+}
 
 export function getClientSpecialFees(client: Partial<Cliente>): ClientSpecialServiceFee[] {
   const configured = client.pricing?.special_services_fees
@@ -122,6 +127,31 @@ export function calculateShipmentQuote(
     [service], country, postal, { requireConfiguredTariff: true })
   const oversize = calculateOversizeSurcharge(service, country, weightKg, parcel)
   const specials = calculateShipmentSpecialFees(transport.sellPrice, client, resolveServiceCarrier(service), specialCodes, codValue, { country, postal })
-  return { ...transport, ...weight, oversizeSurcharge: oversize, specialFeesAmount: Number((specials.amount + oversize.amount).toFixed(2)), specialItems: [...specials.items, ...oversize.items], totalPrice: Number((specials.totalPrice + oversize.amount).toFixed(2)) }
+  const zoneCode = resolveServiceZoneCode(service, country, postal)
+  const vatPct = resolveShipmentVatPct(zoneCode)
+  const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+  const calcVat = (amount: number) => vatPct > 0 ? Math.round(Math.round(amount * 100) * vatPct / 100) / 100 : 0
+  const baseVatAmount = calcVat(transport.basePrice)
+  const basePriceWithVat = round2(transport.basePrice + baseVatAmount)
+  const fuelVatAmount = calcVat(transport.fuelSurchargeAmount)
+  const fuelSurchargeWithVat = round2(transport.fuelSurchargeAmount + fuelVatAmount)
+  const specialItems = [...specials.items, ...oversize.items].map(item => {
+    const itemVat = calcVat(item.amount)
+    return { ...item, vatPct, vatAmount: itemVat, totalWithVat: round2(item.amount + itemVat) }
+  })
+  const specialFeesAmount = round2(specials.amount + oversize.amount)
+  const specialVatAmount = round2(specialItems.reduce((sum, item) => sum + item.vatAmount, 0))
+  const specialFeesWithVat = round2(specialFeesAmount + specialVatAmount)
+  const totalPrice = round2(specials.totalPrice + oversize.amount)
+  const vatAmount = round2(baseVatAmount + fuelVatAmount + specialVatAmount)
+  const totalWithVat = round2(totalPrice + vatAmount)
+  return {
+    ...transport, ...weight, oversizeSurcharge: oversize,
+    specialFeesAmount, specialItems, totalPrice,
+    vatPct, baseVatAmount, basePriceWithVat,
+    fuelVatAmount, fuelSurchargeWithVat,
+    specialVatAmount, specialFeesWithVat,
+    vatAmount, totalWithVat,
+  }
 }
 

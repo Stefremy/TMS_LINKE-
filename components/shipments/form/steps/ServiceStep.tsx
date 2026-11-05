@@ -31,6 +31,7 @@ export function ServiceStep({ quote, role }: { quote: ShipmentQuote; role: Shipm
     }
     form.setValue("exportFields", fields, { shouldDirty: true })
   }
+  const isPtContSelected = quote.selected?.zone === "PT-CONT"
   const renderFees = (fees: typeof quote.specialFees) => <div className="grid gap-1.5 sm:grid-cols-2">
     {fees.map(fee => <label key={fee.special_service_code} className="flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700 hover:border-zinc-300">
       <input {...specialServicesField} type="checkbox" value={fee.special_service_code} className="size-4 shrink-0 accent-emerald-700"
@@ -42,7 +43,7 @@ export function ServiceStep({ quote, role }: { quote: ShipmentQuote; role: Shipm
           }
         }} />
       <span className="min-w-0 flex-1 leading-tight">{shipmentOptionLabel(fee.special_service_name)}</span>
-      <span className="min-w-0 shrink text-right text-[10px] text-zinc-500">{fee.fee_type === "fixed" ? money(fee.fixed_value ?? 0) : `${fee.percentage_value ?? 0}%${fee.min_value ? ` · mín. ${money(fee.min_value)}` : ""}`}</span>
+      <span className="min-w-0 shrink text-right text-[10px] text-zinc-500">{fee.fee_type === "fixed" ? money(fee.fixed_value ?? 0) : `${fee.percentage_value ?? 0}%${fee.min_value ? ` · mín. ${money(fee.min_value)}` : ""}`}{isPtContSelected ? " + IVA 23%" : ""}</span>
     </label>)}
   </div>
   return <div className="space-y-5">
@@ -59,13 +60,14 @@ export function ServiceStep({ quote, role }: { quote: ShipmentQuote; role: Shipm
         {quote.options.map(option => {
           const selected = values.serviceId === option.service.id
           const logo = getCarrierLogo(option.carrier)
+          const hasVat = (option.quote?.vatPct ?? (option.zone === "PT-CONT" ? 23 : 0)) > 0
           return <label key={option.service.id} className={`relative flex min-h-16 w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg border p-2.5 transition-colors motion-reduce:transition-none ${selected ? "border-emerald-600 bg-emerald-50/40 ring-1 ring-emerald-600" : "border-zinc-200 bg-white hover:border-zinc-400"}`}>
             <input type="radio" {...form.register("serviceId")} value={option.service.id} className="size-4 shrink-0 accent-emerald-700" />
             {logo && <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-zinc-200 bg-white p-1"><Image unoptimized src={logo} width={27} height={23} alt={option.carrier === "correos" ? "Correos Express" : "CTT Expresso"} className="max-h-6 object-contain" /></span>}
             <div className="min-w-0 flex-1"><div className="flex items-center gap-1"><span className="truncate text-xs font-semibold text-zinc-900">{role === "client" ? getClientServiceName(option.service.name) : option.service.name}</span>{selected && <Check aria-hidden size={13} className="shrink-0 text-emerald-700" />}</div>
-              <span className="mt-1 inline-flex rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">{option.zone}</span>
+              <div className="mt-1 flex flex-wrap items-center gap-1"><span className="inline-flex rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600">{option.zone}</span><span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-medium ${hasVat ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}>{hasVat ? "IVA 23%" : "Isento IVA"}</span></div>
               {option.error && <p className="mt-1 text-[10px] leading-tight text-zinc-500">{option.error}</p>}
-            </div><div className="shrink-0 text-right"><strong className="text-sm font-semibold tabular-nums text-zinc-900">{option.quote ? money(option.quote.totalPrice) : "—"}</strong><span className="block text-[9px] text-zinc-500">Estimado</span></div>
+            </div><div className="shrink-0 text-right"><strong className="text-sm font-semibold tabular-nums text-zinc-900">{option.quote ? money(option.quote.totalWithVat) : "—"}</strong><span className="block text-[9px] text-zinc-500">{option.quote ? (hasVat ? `${money(option.quote.totalPrice)} + IVA` : "Isento IVA") : "Estimado"}</span></div>
           </label>
         })}
         {!quote.options.length && <p className="rounded-lg border border-dashed border-zinc-200 p-4 text-center text-sm text-zinc-500">{quote.isIsland && !quote.selectedMode ? "Escolha primeiro a modalidade de transporte." : quote.multiVolumeServiceUnavailable ? quote.blockedReason : "Preencha o destino para consultar os serviços disponíveis."}</p>}

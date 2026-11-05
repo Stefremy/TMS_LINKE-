@@ -77,3 +77,32 @@ test('multi-carrier matrix has zero conflicts across PT Continental, PT Islands,
  // 7) Belgium (BE 1000) -> ctt-eu only
  assert.deepEqual(quote({recipientCountry:'BE',recipientPostal:'1000',volumesCount:1},c,all).options.map(o=>o.service.id),['ctt-eu'])
 })
+test('PT-CONT applies 23% IVA on table price, fuel surcharge and each supplement (Frágil, COD), while Islands and International apply 0% IVA',()=>{
+ const fees=[
+  {special_service_code:'fragil',special_service_name:'Frágil',is_enabled:true,fee_type:'fixed',fixed_value:1.5},
+  {special_service_code:'cod',special_service_name:'Cobrança',is_enabled:true,fee_type:'fixed',fixed_value:2.5},
+ ]
+ const pt=quote({recipientCountry:'PT',recipientPostal:'4000-001',selectedSpecialServices:['fragil','cod'],codValue:50},{pricing:{standard_fuel_surcharge_pct:10,special_services_fees:fees}})
+ assert.equal(pt.quote.vatPct,23)
+ assert.equal(pt.quote.basePrice,5)
+ assert.equal(pt.quote.baseVatAmount,1.15)
+ assert.equal(pt.quote.basePriceWithVat,6.15)
+ assert.equal(pt.quote.fuelSurchargeAmount,0.5)
+ assert.equal(pt.quote.fuelVatAmount,0.12)
+ assert.equal(pt.quote.fuelSurchargeWithVat,0.62)
+ assert.deepEqual(pt.quote.specialItems.map(i=>({name:i.name,amount:i.amount,vatAmount:i.vatAmount,totalWithVat:i.totalWithVat})),[
+  {name:'Frágil',amount:1.5,vatAmount:0.35,totalWithVat:1.85},
+  {name:'Cobrança',amount:2.5,vatAmount:0.58,totalWithVat:3.08},
+ ])
+ assert.equal(pt.quote.totalPrice,9.5)
+ assert.equal(pt.quote.vatAmount,2.2)
+ assert.equal(pt.quote.totalWithVat,11.7)
+ // PT Islands -> 0% IVA
+ const ilhas=quote({recipientCountry:'PT',recipientPostal:'9000-001',selectedSpecialServices:['fragil','cod'],codValue:50},{pricing:{standard_fuel_surcharge_pct:10,special_services_fees:fees}})
+ assert.equal(ilhas.quote.vatPct,0)
+ assert.equal(ilhas.quote.baseVatAmount,0)
+ assert.equal(ilhas.quote.fuelVatAmount,0)
+ assert.equal(ilhas.quote.specialVatAmount,0)
+ assert.equal(ilhas.quote.vatAmount,0)
+ assert.equal(ilhas.quote.totalWithVat,ilhas.quote.totalPrice)
+})
