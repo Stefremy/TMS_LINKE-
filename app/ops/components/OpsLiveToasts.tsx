@@ -36,6 +36,43 @@ export function OpsLiveToasts({ viewerId }: { viewerId: string }) {
   const calls = useIncomingCall(viewerId, undefined, !onChat)
   const [messages, setMessages] = React.useState<MessageToast[]>([])
   const cursor = React.useRef<number | null>(null)
+  const chimeContext = React.useRef<AudioContext | null>(null)
+
+  // Browsers only allow sound after a click/key press on the page, so unlock on the first one.
+  React.useEffect(() => {
+    const unlock = () => {
+      try {
+        chimeContext.current ||= new AudioContext()
+        void chimeContext.current.resume()
+      } catch { /* No audio support: the visual pop-up still works. */ }
+    }
+    document.addEventListener("pointerdown", unlock)
+    document.addEventListener("keydown", unlock)
+    return () => {
+      document.removeEventListener("pointerdown", unlock)
+      document.removeEventListener("keydown", unlock)
+      void chimeContext.current?.close()
+      chimeContext.current = null
+    }
+  }, [])
+
+  const playChime = React.useCallback(() => {
+    const context = chimeContext.current
+    if (!context || context.state !== "running") return
+    // Two soft rising notes.
+    ;[[880, 0], [1175, 0.14]].forEach(([frequency, offset]) => {
+      const oscillator = context.createOscillator(), gain = context.createGain()
+      const start = context.currentTime + offset
+      oscillator.type = "sine"
+      oscillator.frequency.value = frequency
+      gain.gain.setValueAtTime(0, start)
+      gain.gain.linearRampToValueAtTime(0.12, start + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35)
+      oscillator.connect(gain); gain.connect(context.destination)
+      oscillator.start(start); oscillator.stop(start + 0.36)
+      oscillator.onended = () => { oscillator.disconnect(); gain.disconnect() }
+    })
+  }, [])
 
   const dismissMessage = React.useCallback((id: string) => setMessages(previous => previous.filter(item => item.id !== id)), [])
 
@@ -59,6 +96,7 @@ export function OpsLiveToasts({ viewerId }: { viewerId: string }) {
               const fresh = cursor.current !== null ? data.items : []
               cursor.current = data.latestSequence
               if (fresh.length) {
+                playChime()
                 setMessages(previous => {
                   const known = new Set(previous.map(item => item.id))
                   const added = fresh.filter(item => !known.has(item.id)).map(item => ({ id: item.id, key: item.key, kind: item.kind, title: item.title, sender_id: item.sender_id, sender_name: item.sender_name, sender_avatar_url: item.sender_avatar_url, preview: item.preview, created_at: item.created_at }))
@@ -73,7 +111,7 @@ export function OpsLiveToasts({ viewerId }: { viewerId: string }) {
     }
     void poll()
     return () => { controller.abort(); clearTimeout(timer) }
-  }, [viewerId, onChat])
+  }, [viewerId, onChat, playChime])
 
   React.useEffect(() => {
     if (!messages.length) return
