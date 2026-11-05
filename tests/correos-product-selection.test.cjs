@@ -21,3 +21,29 @@ for(const producto of ['61','62','63','66','90','93'])test(`selected product ${p
  assert.equal(h.requests.length,1)
  assert.equal(h.requests[0].producto,producto)
 })
+test('product 90 refuses multiple parcels before contacting Correos and never switches to product 91',async()=>{
+ const h=harness({codigoRetorno:0})
+ await assert.rejects(()=>h.service.createShipment(credentials,{...input,producto:'90',bultos:3}),/90.*apenas um volume/)
+ assert.equal(h.requests.length,0)
+ await h.service.createShipment(credentials,{...input,producto:'91',bultos:3})
+ assert.equal(h.requests[0].producto,'91');assert.equal(h.requests[0].numBultos,'3')
+})
+for(const country of ['LT','DE','FR']) test(`international ${country} COD is refused before any Correos call`,async()=>{
+ const h=harness({codigoRetorno:0})
+ await assert.rejects(()=>h.service.createShipment(credentials,{...input,producto:'90',reembolso:'50',
+  destinatario:{...input.destinatario,paisISO:country,cpNacional:'',cpInternacional:'12345'}}),/COD.*destino/)
+ assert.equal(h.requests.length,0)
+})
+for(const country of ['LT','DE']) test(`Correos 90 ${country}: TASAR is kept as a rejection and never retried under another product`,async()=>{
+ const response={codigoRetorno:500,mensajeRetorno:'ERROR TASAR-1-0-ORA-0000: normal, successful completion'}
+ const h=harness(response)
+ const result=await h.service.createShipment(credentials,{...input,producto:'90',destinatario:{...input.destinatario,
+  paisISO:country,cpNacional:'',cpInternacional:'12345'}})
+ assert.equal(result.codigoRetorno,500)
+ assert.equal(h.requests.length,1)
+ assert.equal(h.requests[0].producto,'90')
+ const {correosShipmentError}=createLoader({})('lib/services/correos/shipment-policy.ts')
+ const message=correosShipmentError(result,'90',country)
+ assert.ok(message.includes(`produto 90 e destino ${country}`))
+ assert.match(message,/contrato Correos/)
+})

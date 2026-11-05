@@ -10,6 +10,7 @@ import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPrici
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
+import { requiresCorreosQuotation } from "@/lib/services/correos/shipment-policy"
 import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
 import { positiveMeasurement } from "../tracking/carrier-measurements"
 import { resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
@@ -89,6 +90,7 @@ export async function createShipment(formData: FormData) {
     })
     service_type = service.name
     carrierCode = resolveServiceCarrier(service)
+    if (requiresCorreosQuotation(carrierCode, recipientCountry)) throw new ShipmentPricingError("Os envios internacionais da Correos são tratados por cotação. Abra Novo envio para enviar o pedido à equipa.")
     if (carrierCode === "ctt" && volumesCount > 1 && !isCttMultiVolumeService(service)) {
       throw new ShipmentPricingError("Envios com mais de um volume exigem uma tabela CTT associada ao Webservice EMSF010.01 (CTT Múltiplo).")
     }

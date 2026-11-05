@@ -22,6 +22,39 @@ test('quote rejects missing service, incomplete destinations, unavailable tables
  assert.equal(quote({}, {assigned_linke_service_ids:[]}).options.length,0)
  assert.equal(quote({}, {portal_access_status:'suspended'}).isBlocked,true)
 })
+test('international CTT and Correos services hide stale COD; server quotes reject COD outside the agreed regions',()=>{
+ const {calculateShipmentQuote}=load('lib/pricing/calculate-shipment-quote.ts')
+ for(const carrier of ['ctt','correos']) for(const [country,postal,zone] of [['DE','10115','EU 1'],['LT','01100','EU 2']]) {
+  const code=carrier==='ctt'?'cod':'correos_cod'
+  const table={...service,id:'international',name:carrier==='ctt'?'CTT Internacional':'Correos Internacional',code:carrier==='ctt'?'LK-EU-STD':'LK-COR-INTL',
+   carrier_group:carrier,webservice_service_code:carrier==='ctt'?'EMSF001.02':'90',allowed_zones:[zone],zones:[{zone_code:zone,tiers:[tier]}]}
+  const customer={...client,assigned_linke_service_ids:[table.id]}
+  const result=getShipmentQuote({role:'client',services:[table],client:customer,values:{...values,serviceId:table.id,
+   recipientCountry:country,recipientPostal:postal,selectedSpecialServices:[code],codValue:50}})
+  assert.equal(result.isBlocked,false,result.blockedReason)
+  assert.ok(result.specialFees.every(f=>!['cod','correos_cod'].includes(f.special_service_code)))
+  assert.deepEqual(result.activeSpecialServices,[])
+  if(carrier==='ctt') assert.equal(result.quote.specialFeesAmount,0)
+  else { assert.equal(result.quote,null);assert.equal(result.requiresQuotation,true) }
+  assert.throws(()=>calculateShipmentQuote(1,customer,table,country,postal,[code],50),/COD.*apenas/)
+  if(carrier==='correos') {
+   const multi=getShipmentQuote({role:'client',services:[table],client:customer,values:{...values,serviceId:table.id,
+    recipientCountry:country,recipientPostal:postal,volumesCount:3,parcelWeightsKg:[0.3,0.3,0.4]}})
+   assert.equal(multi.isBlocked,false);assert.equal(multi.requiresQuotation,true)
+  }
+ }
+})
+test('Correos international requests remain available without tariffs and for customs destinations, while CTT retains its emission policy',()=>{
+ const table={...service,code:'LK-COR-INTL',carrier_group:'correos',name:'Correos Internacional',webservice_service_code:'90',
+  allowed_zones:['EU 1','NA'],zones:[]}
+ for(const [country,postal] of [['FR','75001'],['US','10001']]) {
+  const result=quote({recipientCountry:country,recipientPostal:postal,volumesCount:3,selectedSpecialServices:['correos_cod'],codValue:50},{},[table])
+  assert.equal(result.isBlocked,false,result.blockedReason)
+  assert.equal(result.requiresQuotation,true);assert.equal(result.quote,null)
+  assert.deepEqual(result.activeSpecialServices,[]);assert.deepEqual(result.specialFees,[])
+  assert.ok(result.countries.some(c=>c.code===country))
+ }
+})
 test('islands require a choice when configured air and sea services coexist',()=>{
  const sea={...service,id:'sea',name:'CTT Marítimo',webservice_service_code:'EMSF057.01'}
  const input={client:{...client,assigned_linke_service_ids:['air','sea']},services:[service,sea],role:'client',values:{...values,recipientPostal:'9000-001'}}
@@ -33,6 +66,32 @@ test('COD resolves destination rates and ignores stale extras from the other car
  const fees=[{special_service_code:'cod',special_service_name:'Cobrança',is_enabled:true,fee_type:'fixed',fixed_value:1,cod_destination_rates:{'PT-ILHAS':{fee_type:'fixed',fixed_value:3}}}]
  const result=quote({recipientPostal:'9000-001',selectedSpecialServices:['cod','correos_cod'],codValue:50},{pricing:{standard_fuel_surcharge_pct:0,special_services_fees:fees}})
  assert.equal(result.quote.specialFeesAmount,3);assert.deepEqual(result.activeSpecialServices,['cod'])
+})
+test('CTT DD, CTT DB and Correos expose COD for mainland Spain in both portals using the customer Spain tariff',()=>{
+ const fees=['cod','correos_cod'].map(code=>({special_service_code:code,special_service_name:'Cobrança',is_enabled:true,
+  fee_type:'fixed',fixed_value:9,cod_destination_rates:{'ES-PENIN':{fee_type:'percentage',percentage_value:3,min_value:2.5}}}))
+ for(const [carrier,product] of [['ctt','EMSF056.01'],['ctt','EMSF057.01'],['correos','93']]) {
+  const table={...service,id:product,code:carrier==='correos'?'LK-COR-PAQ24':product==='EMSF056.01'?'LK-DD-STD':'LK-DB-STD',
+   name:carrier==='correos'?'Correos Paq 24':'CTT Expresso',carrier_group:carrier,webservice_service_code:product,
+   allowed_zones:['ES-PENIN'],zones:[{zone_code:'ES-PENIN',tiers:[tier]}]}
+  const customer={...client,assigned_linke_service_ids:[product],pricing:{standard_fuel_surcharge_pct:0,special_services_fees:fees}}
+  const code=carrier==='ctt'?'cod':'correos_cod'
+  for(const role of ['client','ops']) for(const postal of ['28013','08001']) for(const [codValue,feeAmount] of [[20,2.5],[100,3]]) {
+   const input={role,services:[table],client:customer,values:{...values,serviceId:product,recipientCountry:'ES',recipientPostal:postal,
+    selectedSpecialServices:['cod','correos_cod'],codValue}}
+   const result=getShipmentQuote(input)
+   assert.equal(result.isBlocked,false,`${role} ${product} ${postal}: ${result.blockedReason}`)
+   assert.equal(result.selected.zone,'ES-PENIN')
+   assert.deepEqual(result.activeSpecialServices,[code])
+   assert.deepEqual(result.specialFees.map(f=>f.special_service_code),[code])
+   assert.equal(result.quote.specialFeesAmount,feeAmount)
+   assert.equal(result.quote.totalPrice,5+feeAmount)
+   const disabled={...customer,pricing:{...customer.pricing,special_services_fees:fees.map(f=>({...f,is_enabled:false}))}}
+   const unavailable=getShipmentQuote({...input,client:disabled})
+   assert.deepEqual(unavailable.specialFees,[])
+   assert.deepEqual(unavailable.activeSpecialServices,[])
+  }
+ }
 })
 test('postal code and volume count eliminate non-matching services and isolate Múltiplo tables',()=>{
  const ptSingle={...service,id:'pt-19h',name:'CTT 19h',webservice_service_code:'EMSF001.01',allowed_zones:['PT-CONT'],zones:[{zone_code:'PT-CONT',tiers:[tier]}]}

@@ -145,6 +145,7 @@ export const OPS_ACCESS_RULES: { path: string; permissions?: readonly string[]; 
   { path: "/ops/entidades", permissions: [PERMISSIONS.clients] },
   { path: "/ops/envios/recolhas", permissions: [PERMISSIONS.pickups] },
   { path: "/ops/envios/novo", permissions: [PERMISSIONS.shipments] },
+  { path: "/ops/envios/cotacoes", permissions: [PERMISSIONS.shipments, PERMISSIONS.clients, PERMISSIONS.support] },
   { path: "/ops/envios", permissions: [PERMISSIONS.shipments, PERMISSIONS.support] },
   { path: "/ops/tracking", permissions: [PERMISSIONS.shipments, PERMISSIONS.support] },
   { path: "/ops/incidencias", permissions: [PERMISSIONS.support, PERMISSIONS.shipments, PERMISSIONS.pickups] },

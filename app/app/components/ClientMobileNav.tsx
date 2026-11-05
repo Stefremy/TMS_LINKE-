@@ -43,6 +43,7 @@ export function ClientMobileNav() {
     { href: `${basePath}/criar-guia`, label: "Novo Envio", icon: PlusCircle },
     { href: `${basePath}/tracking`, label: "Mapa", icon: MapPin },
     { href: `${basePath}/envios`, label: "Envios", icon: Package },
+    { href: `${basePath}/cotacoes`, label: "Cotações", icon: FileText },
     { href: `${basePath}/faturas`, label: "Faturas", icon: FileText },
   ]
 

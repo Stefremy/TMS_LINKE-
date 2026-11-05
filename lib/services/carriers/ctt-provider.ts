@@ -1,7 +1,9 @@
 import { CarrierProvider, ShipmentInput, ShipmentResult, PickupInput, PickupResult, TrackingResult, type Address } from './types'
 import { CTTShipmentService, CTTPickupService, CTTTrackingService, CTTConnectionCredentials, CTTAddressData, CTTShipmentData } from '../ctt'
 import { validateCttExportDetails } from '../ctt/export-details'
-import { getCttShipmentLabel } from '../ctt/shipment-label'
+import { getCttShipmentLabels } from '../ctt/shipment-label'
+import { combineCarrierLabels } from '../shipments/label-bundle'
+import { isCodDestinationAvailable } from '@/lib/pricing/cod-destination-rates'
 import { getCttRecipientContactError } from '../ctt/recipient-contact'
 import { cttParcelObservations, validateParcelDimensions } from '../shipments/parcel-dimensions'
 
@@ -51,6 +53,9 @@ export class CttProvider implements CarrierProvider {
 
   async createShipment(input: ShipmentInput): Promise<ShipmentResult> {
     try {
+      if (input.codValue && !isCodDestinationAvailable(input.recipient.country || "PT", input.recipient.zip)) {
+        return { success: false, confirmedRejection: true, error: "A cobrança COD não está disponível para este destino." }
+      }
       const senderData = this.shipmentAddress(input.sender, 1)
       const recipientData = this.shipmentAddress(input.recipient, 2)
       if (input.dimensionsCm) {
@@ -142,7 +147,10 @@ export class CttProvider implements CarrierProvider {
       
       if (result.Status === 1) {
         const shipmentOutput = result.ShipmentData?.[0]
-        const label = getCttShipmentLabel(shipmentOutput)
+        // Label processing must not turn an accepted shipment into a failed creation.
+        let label = null
+        try { label = await combineCarrierLabels((result.ShipmentData || []).flatMap(getCttShipmentLabels)) }
+        catch { console.warn("CTT: envio emitido; não foi possível reunir as etiquetas oficiais.") }
         return {
           success: true,
           trackingNumber: shipmentOutput?.FirstObject,

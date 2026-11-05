@@ -19,6 +19,9 @@ import { validateCttExportDetails, type CttExportDetails } from "@/lib/services/
 import { getCttRecipientContactError } from "@/lib/services/ctt/recipient-contact"
 import { assertShipmentDestinationAvailable } from "@/lib/services/shipment-destination-policy"
 import { CorreosShipmentService } from "@/lib/services/correos/correos-shipment.service"
+import { getCorreosShipmentLabels } from "@/lib/services/correos/shipment-labels"
+import { combineCarrierLabels, type CarrierLabel } from "@/lib/services/shipments/label-bundle"
+import { isCorreosSingleParcelService, correosShipmentError, requiresCorreosQuotation } from "@/lib/services/correos/shipment-policy"
 import { resolveCttCredentials, resolveCorreosCredentials } from "@/lib/services/carriers/credentials"
 import { convertZplToPdfBase64 } from "@/lib/label-utils"
 import { applyLinkeLogoToCorreosLabel } from "@/lib/services/correos/correos-label-customizer"
@@ -29,7 +32,7 @@ import { syncAuthorizedShipmentBatch } from "@/lib/services/tracking/tracking-ba
 import { loadShipmentParcelSummaries } from '@/lib/services/shipments/shipment-parcel-summaries'
 import { publicUrl } from "@/lib/config/public-origins"
 import type { CTTShipment2Close, CTTCompleteShipmentOutput, CTTDocumentData } from "@/lib/services/ctt/ctt-types"
-import { getCttShipmentLabel } from "@/lib/services/ctt/shipment-label"
+import { getCttShipmentLabels } from "@/lib/services/ctt/shipment-label"
 import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
 
 export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
@@ -189,7 +192,7 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
     ...shipment,
     parcel_summary: parcelSummaries.get(shipment.id) || null,
     // Prepaid shipments are settled from the wallet: no invoice, shown as paid.
-    ...(isPrepaidShipment(client, shipment) && shipment.status !== "anulado" ? { payment_status: "paid" as const } : {}),
+    ...(isPrepaidShipment(client, shipment) && !["anulado", "rascunho", "draft"].includes(shipment.status) ? { payment_status: "paid" as const } : {}),
   }))
 
   return {
@@ -304,6 +307,12 @@ export async function emitClientGuiaAction(data: {
       matchedClient = pricing.client
       const chosenService = pricing.service
       carrierCode = resolveServiceCarrier(chosenService)
+      if (requiresCorreosQuotation(carrierCode, data.recipientCountry || "PT")) {
+        throw new ShipmentPricingError("Os envios internacionais da Correos são tratados por cotação. Envie o pedido em Novo envio para a equipa tratar da emissão com o parceiro.")
+      }
+      if ((data.volumesCount || 1) > 1 && isCorreosSingleParcelService(chosenService)) {
+        throw new ShipmentPricingError("O produto Correos 90 (Internacional Standard) permite apenas um volume por envio. Escolha outro serviço contratado.")
+      }
       if (carrierCode === "ctt" && (data.volumesCount || 1) > 1 && !isCttMultiVolumeService(chosenService)) {
         throw new ShipmentPricingError("Envios com mais de um volume exigem uma tabela CTT associada ao Webservice EMSF010.01 (CTT Múltiplo).")
       }
@@ -340,6 +349,7 @@ export async function emitClientGuiaAction(data: {
 
       // Carrier routing and credentials come from the verified service, not the request.
       data = { ...data, recipientCountry, recipientPostal, serviceName: chosenService.name, subProductId: chosenService.webservice_service_code,
+        codValue: data.selectedSpecialServices?.includes(carrierCode === "ctt" ? "cod" : "correos_cod") ? data.codValue : 0,
         webserviceConnectionId: chosenService.webservice_connection_id }
 
       weightPricingBasis = captureWeightPricingBasis(matchedClient, chosenService, recipientCountry, recipientPostal, pricingWeight)
@@ -414,6 +424,7 @@ export async function emitClientGuiaAction(data: {
     // ─── STEP 1: Call carrier API — only write to DB if carrier accepts ──────────
     let realGuia = trackingNumber
     let labelBase64: string | null = null
+    let carrierLabels: CarrierLabel[] = []
     let cttDocuments: CTTDocumentData[] = []
     let cttCloseData: (CTTShipment2Close & { shipmentId: string; connectionId?: string }) | undefined
 
@@ -465,17 +476,16 @@ export async function emitClientGuiaAction(data: {
         })
 
         // codigoRetorno === 0 = success; 404 with datosResultado = created but no label (sandbox warning)
-        console.log("CORREOS PRODUCTION RESPONSE:", JSON.stringify(result, null, 2))
+        console.log("Correos shipment response", { product: data.subProductId, country: data.recipientCountry,
+          volumes: data.volumesCount || 1, code: result.codigoRetorno, hasCarrierReference: Boolean(result.datosResultado) })
         if (result.codigoRetorno === 0 || (result.codigoRetorno === 404 && result.datosResultado)) {
           realGuia = result.datosResultado || trackingNumber
           let rawLabel = ""
-          if (result.etiqueta && result.etiqueta.length > 0) {
-            const firstEtiqueta = result.etiqueta[0]
-            rawLabel = firstEtiqueta.etiqueta1 || Object.values(firstEtiqueta)[0] || ""
-          }
-          if (!rawLabel && result.listaInformacionAdicional && result.listaInformacionAdicional.length > 0) {
-            rawLabel = result.listaInformacionAdicional[0].etiquetaPDF || ""
-          }
+          try {
+            carrierLabels = getCorreosShipmentLabels(result)
+            const bundle = await combineCarrierLabels(carrierLabels)
+            rawLabel = bundle ? await convertZplToPdfBase64(bundle.data) : ""
+          } catch { console.warn("Correos: envio emitido; não foi possível reunir as etiquetas oficiais.") }
           // Fallback mock label in test environment if test endpoint returns 404
           labelBase64 = rawLabel || (creds.environment === "test"
             ? "JVBERi0xLjcKCjEgMCBvYmogICUgZW50cnkgcG9pbnQKPDwKICAvVHlwZSAvQ2F0YWxvZwogIC9QYWdlcyAyIDAgUgo+PgplbmRvYmoKCjIgMCBvYmoKPDwKICAvVHlwZSAvUGFnZXMKICAvTWVkaWFCb3ggWyAwIDAgNDAwIDIwMCBdCiAgL0NvdW50IDEKICAvS2lkcyBbIDMgMCBSIF0KPj4KZW5kb2JqCgozIDAgb2JqCjw8CiAgL1R5cGUgL1BhZ2UKICAvUGFyZW50IDIgMCBSCiAgL1Jlc291cmNlcyA8PAogICAgL0ZvbnQgPDwKICAgICAgL0YxIDQgMCBSCiAgICA+PgogID4+CiAgL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iagoKNCAwIG9iago8PAogIC9UeXBlIC9Gb250CiAgL1N1YnR5cGUgL1R5cGUxCiAgL0Jhc2VGb250IC9UaW1lcy1Sb21hbgo+PgplbmRvYmoKCjUgMCBvYmogICUgcGFnZSBjb250ZW50Cjw8CiAgL0xlbmd0aCA4MAo+PgpzdHJlYW0KQlQKNTAgMTAwIFRECi9GMSAyNCBUZgooRXRpcXVldGEgQ29ycmVvcyBUZXN0ZSkgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDEwIDAwMDAwIG4gCjAwMDAwMDAwNzkgMDAwMDAgbiAKMDAwMDAwMDE3MyAwMDAwMCBuIAowMDAwMDAwMzAwIDAwMDAwIG4gCjAwMDAwMDAzODggMDAwMDAgbiAKdHJhaWxlcgo8PAogIC9TaXplIDYKICAvUm9vdCAxIDAgUgo+PgpzdGFydHhyZWYKNTM2CiUlRU9GCg=="
@@ -486,7 +496,24 @@ export async function emitClientGuiaAction(data: {
           }
         } else {
           confirmedRejection = typeof result.codigoRetorno === 'number' && result.codigoRetorno !== 0 && !result.datosResultado
-          throw new Error(`Correos Express: ${result.mensajeRetorno || "Erro desconhecido"} (Código ${result.codigoRetorno})`)
+          let diagnosticId: string | null = null
+          try {
+            const id = crypto.randomUUID()
+            const saved = await supabase.from("audit_log").insert({ tenant_id: ctx.tenant_id,
+              action: "carrier_shipment_rejected", created_at: new Date().toISOString(), details: {
+                id, attempt_id: shipmentId, carrier: "correos", client_id: validatedClientId, user_id: ctx.user.id,
+                service_id: data.serviceId, product: data.subProductId, environment: creds.environment,
+                country: data.recipientCountry, postal_code: data.recipientPostal,
+                weight_kg: data.weightKg, volumes: data.volumesCount || 1,
+                dimensions_cm: { length: data.lengthCm, width: data.widthCm, height: data.heightCm },
+                special_service_codes: data.selectedSpecialServices || [], cod_enabled: Boolean(data.codValue),
+                response_code: result.codigoRetorno, response_message: result.mensajeRetorno?.slice(0, 2000),
+                confirmed_rejection: confirmedRejection,
+              } })
+            if (!saved.error) diagnosticId = id
+          } catch { console.warn("Correos: não foi possível guardar o diagnóstico da rejeição.") }
+          const message = correosShipmentError(result, data.subProductId || "", data.recipientCountry || "")
+          throw new Error(diagnosticId ? `${message} Referência técnica: ${diagnosticId}` : message)
         }
       } catch (e: any) {
         throw new Error("Erro Correos Express: " + (e?.message || "Tente novamente."))
@@ -548,7 +575,9 @@ export async function emitClientGuiaAction(data: {
 
         realGuia = cttResult.trackingNumber || trackingNumber
         const emitted = (cttResult.rawResponse as CTTCompleteShipmentOutput | undefined)?.ShipmentData?.[0]
-        cttDocuments = emitted?.DocumentsList || []
+        const cttOutputs = (cttResult.rawResponse as CTTCompleteShipmentOutput | undefined)?.ShipmentData || []
+        cttDocuments = cttOutputs.flatMap(output => output.DocumentsList || [])
+        carrierLabels = cttOutputs.flatMap(getCttShipmentLabels)
         if (emitted?.FirstObject && emitted.LastObject) {
           cttCloseData = {
             shipmentId,
@@ -558,8 +587,10 @@ export async function emitClientGuiaAction(data: {
             SubProductCode: data.subProductId || "EMSF056.01",
           }
         }
-        const rawZpl = cttResult.labelBase64 || getCttShipmentLabel(emitted)?.data || ""
-        labelBase64 = rawZpl ? await applyLinkeLogoToCttLabel(await convertZplToPdfBase64(rawZpl), cttResult.trackingNumber) : null
+        try {
+          const rawLabel = cttResult.labelBase64 || (await combineCarrierLabels(carrierLabels))?.data
+          labelBase64 = rawLabel ? await applyLinkeLogoToCttLabel(await convertZplToPdfBase64(rawLabel), cttResult.trackingNumber) : null
+        } catch { console.warn("CTT: envio emitido; não foi possível preparar o PDF das etiquetas oficiais.") }
       } catch (e: any) {
         if (confirmedRejection || e.message?.includes("rejeitaram") || e.message?.includes("inválido") || e.message?.includes("suportado")) {
           throw e
@@ -571,6 +602,7 @@ export async function emitClientGuiaAction(data: {
     await transitionWallet(supabase, reservation, submitted ? 'submitted' : 'reserved', 'consumed', {
       shipment: shipmentData, carrier_tracking_number: realGuia, carrier_code: carrierCode,
       label_base64: labelBase64, ctt_close_data: cttCloseData || null,
+      carrier_labels: carrierLabels,
       ctt_documents: cttDocuments,
     })
 
@@ -627,6 +659,7 @@ export async function emitClientGuiaAction(data: {
           ...shipmentData,
           id: shipmentId,
           ctt_label_base64: labelBase64,
+          carrier_labels: carrierLabels,
           ctt_documents: cttDocuments,
           ctt_close_data: cttCloseData,
           carrier_tracking_number: realGuia,

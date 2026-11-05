@@ -3,6 +3,7 @@
 import { supportsDatabaseFeature } from "@/lib/supabase/schema-capabilities"
 
 import { applyPaq24Tariffs } from "@/lib/services/correos/paq24-tariffs"
+import { isCorreosSingleParcelService } from "@/lib/services/correos/shipment-policy"
 import correosProducts from "@/lib/services/correos/product-catalog.json"
 
 import { getServiceIslandTransportMode } from "@/lib/services/shipment-service-options"
@@ -740,6 +741,7 @@ function normalizeLoadedServico(s: any): any {
     parcel_limit_product: getServiceParcelLimitProduct(s),
     island_transport_mode: getServiceIslandTransportMode(s),
     mainland_only: isMainlandOnlyService(s),
+    single_parcel_only: isCorreosSingleParcelService(s),
     ...(carrierGroup ? { carrier_group: carrierGroup } : {}),
     ...(normalizedAllowed !== undefined ? { allowed_zones: normalizedAllowed } : {}),
     ...(Array.isArray(s.zones) ? { zones: normalizedZones } : {}),

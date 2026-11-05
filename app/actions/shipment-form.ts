@@ -10,11 +10,15 @@ import { resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
 import { getServiceIslandTransportMode, isPortugueseIslandDestination } from "@/lib/services/shipment-service-options"
 import { getCttRecipientContactError } from "@/lib/services/ctt/recipient-contact"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
+import { requiresCorreosQuotation } from "@/lib/services/correos/shipment-policy"
+import { createQuotation } from "@/lib/shipments/quotations/server"
+import { isZoneAllowedByService, resolveServiceZoneCode } from "@/lib/pricing/calculate-shipment-price"
+import { readPortalAccess } from "@/lib/client-portal/suspension"
 
 const failure = (field: ShipmentFieldError["field"], message: string) => ({ success: false as const, error: message, fieldErrors: [{ field, message }] })
 
 /** Validation adapter only. Dispatch, pricing and wallet reservations stay in emitClientGuiaAction. */
-export async function submitShipmentFormAction(input: unknown, clientId?: string) {
+export async function submitShipmentFormAction(input: unknown, clientId?: string, quotationKey?: string) {
   const ctx = await requireUser("Emissão e Controlo de Guias CTT")
   const restricted = shipmentOverrideError(ctx.role, input)
   if (restricted) return failure("root", restricted.message)
@@ -26,13 +30,25 @@ export async function submitShipmentFormAction(input: unknown, clientId?: string
   const values = parsed.data
   const effectiveClientId = ctx.role === "client" ? ctx.client_id : clientId
   if (!effectiveClientId) return failure("root", "Selecione o cliente do envio.")
-  let service, carrier, exportDetails
+  let service, carrier, exportDetails, client
   try {
     const context = await loadShipmentPricingContext(createAdminClient(), ctx, effectiveClientId, { serviceId: values.serviceId })
     service = context.service
+    client = context.client
     carrier = resolveServiceCarrier(service)
   } catch { return failure("serviceId", "O serviço não está disponível para este cliente. Volte a selecionar o serviço.") }
   if (ctx.role !== "client" && values.carrierOverride && values.carrierOverride !== carrier) return failure("carrierOverride", "Escolha um serviço da transportadora selecionada.")
+  if (requiresCorreosQuotation(carrier, values.recipientCountry)) {
+    if (values.codValue || values.selectedSpecialServices.length) return failure("selectedSpecialServices", "As opções de entrega são acordadas na cotação. A cobrança COD não está disponível para este destino.")
+    const zone = resolveServiceZoneCode(service, values.recipientCountry, values.recipientPostal)
+    if (!zone || !isZoneAllowedByService(service.allowed_zones, zone)) return failure("serviceId", "O serviço não tem cobertura autorizada para este destino.")
+    try {
+      const access = await readPortalAccess(ctx.tenant_id, effectiveClientId)
+      if (client.is_active === false || access.suspended || access.blocked) return failure("root", "Esta conta está suspensa para novos pedidos. Contacte o apoio Linke.")
+      const quotation = await createQuotation(createAdminClient(), ctx, quotationKey || "", client, service, values)
+      return { success: true as const, kind: "quotation" as const, quotation: { id: quotation.id, reference: quotation.reference }, dbWarning: null }
+    } catch (error) { return failure("root", error instanceof Error ? error.message : "Não foi possível guardar o pedido de cotação.") }
+  }
   if (carrier === "correos" && !values.recipientPhone) return failure("recipientPhone", "Indique o telefone do destinatário para este envio Correos Express.")
   if (carrier === "ctt" && values.recipientCountry !== "PT") {
     const contactError = getCttRecipientContactError({ country: values.recipientCountry, phone: values.recipientPhone, email: values.recipientEmail })
@@ -63,6 +79,6 @@ export async function submitShipmentFormAction(input: unknown, clientId?: string
       if (saved.error) notesWarning = "O envio foi emitido, mas não foi possível guardar as notas internas. Não repita a emissão."
     } catch { notesWarning = "O envio foi emitido, mas não foi possível guardar as notas internas. Não repita a emissão." }
   }
-  return { ...result, success: true as const, dbWarning: notesWarning || result.dbWarning }
+  return { ...result, success: true as const, kind: "shipment" as const, dbWarning: notesWarning || result.dbWarning }
 }
-export type ShipmentFormResult = Extract<Awaited<ReturnType<typeof submitShipmentFormAction>>, { success: true }>
+export type ShipmentFormResult = Extract<Awaited<ReturnType<typeof submitShipmentFormAction>>, { success: true; kind: "shipment" }>

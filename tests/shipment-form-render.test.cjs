@@ -39,3 +39,12 @@ test('the client portal never exposes ops controls, including staff previews wit
   assert.match(html,/href="\/app\/fixture"/)
  } finally {portalScope=null}
 })
+test('Correos international form shows a quotation request instead of a sale price or COD',()=>{
+ const table={...service,carrier_group:'correos',code:'LK-COR-INTL',name:'Correos Internacional',webservice_service_code:'90',
+  allowed_zones:['EU 1'],zones:[]}
+ const html=renderToStaticMarkup(React.createElement(ShipmentForm,{role:'client',client,services:[table],initialValues:{
+  recipientName:'Destino',recipientCountry:'FR',recipientPostal:'75001',lengthCm:20,widthCm:15,heightCm:10,serviceId:'service'}}))
+ assert.match(html,/Sob cotação/);assert.match(html,/Rever pedido de cotação/)
+ assert.match(html,/Após aceitar a proposta, cria o envio no TMS/)
+ assert.doesNotMatch(html,/Valor a cobrar ao destinatário|Transporte base \(tabela\)|9187|9876/)
+})

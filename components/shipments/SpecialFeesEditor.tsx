@@ -96,7 +96,7 @@ export function SpecialFeesEditor({ fees, onChange, standards = [], mode, disabl
             {!isCodFee(fee.special_service_code) ? rateInputs(fee, fee.special_service_name, patch => change(fee.special_service_code, patch)) : (
               <div className="w-full space-y-3">
                 <p className="text-xs text-[var(--text-secondary)]">Cobrança calculada pelo país e código postal do destinatário. A percentagem incide sobre o valor a cobrar.</p>
-                <div className="grid gap-3 xl:grid-cols-3">{COD_DESTINATIONS.map(({ code, label }) => <div key={code} className="space-y-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
+                <div className="grid gap-3 xl:grid-cols-2">{COD_DESTINATIONS.map(({ code, label }) => <div key={code} className="space-y-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-semibold">{label}</p>
                     {mode === "client" && <span className="text-[10px] font-semibold text-[var(--text-secondary)]">{rates[code].use_standard ? "Standard" : "Personalizado"}</span>}
                   </div>
@@ -109,7 +109,7 @@ export function SpecialFeesEditor({ fees, onChange, standards = [], mode, disabl
                       cod_destination_rates: { ...rates, [code]: { ...codRateForZone(standard, code), use_standard: true } } })}
                     className="text-[11px] font-semibold text-[var(--accent)] underline">Usar standard em {label}</button>}
                 </div>)}</div>
-                <details className="text-xs text-[var(--text-secondary)]"><summary className="cursor-pointer">Valor geral para outros destinos</summary>
+                <details className="text-xs text-[var(--text-secondary)]"><summary className="cursor-pointer">Valor base das zonas sem taxa específica</summary>
                   <div className="mt-3">{rateInputs(fee, fee.special_service_name, patch => change(fee.special_service_code, patch))}</div>
                 </details>
               </div>

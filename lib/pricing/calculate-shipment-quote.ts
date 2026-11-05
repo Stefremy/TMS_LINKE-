@@ -7,7 +7,8 @@ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { calculateShipmentPrice, isCeTruckService, resolveServiceZoneCode } from "./calculate-shipment-price"
 import { ShipmentPricingError } from "./shipment-pricing-errors"
 import { calculateChargeableWeight, type ParcelPricingDimensions } from "./chargeable-weight"
-import { resolveCodFee } from "./cod-destination-rates"
+import { resolveCodFee, isCodFee } from "./cod-destination-rates"
+import { isCorreosSingleParcelService } from "@/lib/services/correos/shipment-policy"
 
 /** PT-CONT tables apply 23% IVA; Islands (PT-ILHAS / ES-ILHAS) and International are VAT-exempt (0%). */
 export function resolveShipmentVatPct(zoneCode: string): number {
@@ -75,6 +76,7 @@ export function calculateShipmentSpecialFees(
   const fees = getClientSpecialFees(client)
   const items = codes.map(code => {
     if (!isCttSpecialServiceAvailable(code, destination?.country ?? "", destination?.postal ?? "")) {
+      if (isCodFee(code)) throw new ShipmentPricingError("A cobrança COD está disponível apenas para Portugal Continental, Açores, Madeira, Espanha Peninsular e Baleares.")
       throw new ShipmentPricingError("AuthorizeReturn / Back (Logística Inversa) está disponível apenas para Portugal Continental.")
     }
     if (code.startsWith("correos_") !== (carrier === "correos")) {
@@ -122,6 +124,9 @@ export function calculateShipmentQuote(
   codValue: number = 0,
   parcel?: ParcelPricingDimensions,
 ) {
+  if ((parcel?.volumesCount ?? 1) > 1 && isCorreosSingleParcelService(service)) {
+    throw new ShipmentPricingError("O produto Correos 90 (Internacional Standard) permite apenas um volume por envio. Escolha um serviço contratado que aceite vários volumes.")
+  }
   const weight = calculateChargeableWeight(weightKg, service, country, postal, parcel)
   const transport = calculateShipmentPrice(weight.billableWeightKg, { ...client, default_linke_table_id: service.id },
     [service], country, postal, { requireConfiguredTariff: true })

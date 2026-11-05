@@ -260,14 +260,16 @@ const codRates={
  'PT-CONT':{fee_type:'percentage',percentage_value:2,min_value:1.8},
  'PT-ILHAS':{fee_type:'percentage',percentage_value:3,min_value:4},
  'ES-PENIN':{fee_type:'fixed',fixed_value:5},
+ 'ES-BALEARES':{fee_type:'percentage',percentage_value:4,min_value:6},
 }
 const regionalStandards=()=>defaults.map(f=>['cod','correos_cod'].includes(f.special_service_code)?{...f,cod_destination_rates:structuredClone(codRates)}:{...f})
 
-test('COD destination classification separates mainland Portugal, Madeira, Azores and mainland Spain',()=>{
+test('COD destination classification separates mainland Portugal, Madeira, Azores, mainland Spain and Baleares',()=>{
  for(const postal of ['4800-019','8000-001'])assert.equal(codDestination('PT',postal),'PT-CONT')
  for(const postal of ['9000-001','9500001'])assert.equal(codDestination('PT',postal),'PT-ILHAS')
  for(const postal of ['28013','08001'])assert.equal(codDestination(' es ',postal),'ES-PENIN')
- for(const postal of ['07001','35001','38001','51001','52001'])assert.equal(codDestination('ES',postal),undefined)
+ for(const postal of ['07001','07701','07800','07860'])assert.equal(codDestination('ES',postal),'ES-BALEARES')
+ for(const postal of ['35001','38001','51001','52001','0700'])assert.equal(codDestination('ES',postal),undefined)
  assert.equal(codDestination('PT','9'),undefined)
  assert.equal(codDestination('FR','75001'),undefined)
 })
@@ -281,7 +283,12 @@ test('both carriers charge COD by destination on the collection value, respectin
   }
   assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],1000,{country:'PT',postal:'9500-001'}).amount,30)
   assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],1,{country:'PT',postal:'4800-019'}).amount,1.8)
-  assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],100,{country:'ES',postal:'07001'}).amount,2,'Spanish islands keep their general rate')
+  for(const postal of ['07001','07701','07800','07860']) {
+   assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],100,{country:'ES',postal}).amount,6)
+   assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],200,{country:'ES',postal}).amount,8)
+  }
+  const legacy=withStandardSpecialFees({},defaults)
+  assert.equal(calculateShipmentSpecialFees(10,legacy,carrier,[code],100,{country:'ES',postal:'07001'}).amount,2,'unspecified Baleares rates retain the existing general commission')
  }
 })
 
@@ -298,6 +305,7 @@ test('legacy negotiated COD remains unchanged in every new zone while inherited 
  assert.equal(next.cod_destination_rates['PT-ILHAS'].fixed_value,0)
  assert.equal(next.cod_destination_rates['PT-CONT'].percentage_value,9)
  assert.equal(next.cod_destination_rates['ES-PENIN'].fixed_value,5)
+ assert.equal(next.cod_destination_rates['ES-BALEARES'].min_value,6)
  assert.equal(next.cod_destination_rates['PT-CONT'].use_standard,true)
 })
 
@@ -306,13 +314,16 @@ test('COD region validation survives standard and client saves and rejects malfo
  assert.equal((await h.actions.saveStandardSpecialFeesAction(regionalStandards())).success,true)
  const saved=(await h.actions.getStandardSpecialFeesAction()).fees
  assert.equal(saved[0].cod_destination_rates['PT-ILHAS'].min_value,4)
+ assert.equal(saved.find(f=>f.special_service_code==='correos_cod').cod_destination_rates['ES-BALEARES'].min_value,6)
  const clients=h.load('app/actions/clientes.ts')
  const client=(await clients.getClientesAction(clientId))[0]
  client.pricing.special_services_fees[0].use_standard=false
  client.pricing.special_services_fees[0].cod_destination_rates['PT-ILHAS']={fee_type:'fixed',fixed_value:0,use_standard:false}
+ client.pricing.special_services_fees.find(f=>f.special_service_code==='correos_cod').cod_destination_rates['ES-BALEARES']={fee_type:'fixed',fixed_value:7,use_standard:false}
  const result=await clients.saveClienteAction({...client,short_name:'Fixture'})
  assert.equal(result.success,true)
  assert.equal(result.data.pricing.special_services_fees[0].cod_destination_rates['PT-ILHAS'].fixed_value,0)
+ assert.equal(result.data.pricing.special_services_fees.find(f=>f.special_service_code==='correos_cod').cod_destination_rates['ES-BALEARES'].fixed_value,7)
  for(const bad of [null,[],{'ES-ILHAS':{fee_type:'fixed',fixed_value:1}},{'PT-ILHAS':{fee_type:'fixed',fixed_value:-1}},{'PT-ILHAS':{fee_type:'percentage',percentage_value:Infinity}},{'PT-ILHAS':{fee_type:'fixed'}},{'PT-ILHAS':{fee_type:'fixed',fixed_value:1,use_standard:'yes'}}]){
   const rows=defaults.map(f=>f.special_service_code==='cod'?{...f,cod_destination_rates:bad}:f)
   assert.throws(()=>validateStandardSpecialFees(rows))
@@ -339,7 +350,40 @@ test('server quotes and client previews select identical regional COD after load
  }
 })
 
-test('editing and resetting one COD region leaves other regions inherited and never writes a different fee',()=>{
+test('Correos Ilhas Express server quotes and portal previews apply saved Baleares rates and customer exceptions',async()=>{
+ const h=setup({events:[settings(regionalStandards())]})
+ const {buildBalearesExpressZones}=h.load('lib/services/correos/baleares-tariffs.ts')
+ const service=h.tables.servicos_linke[0]
+ const zones=buildBalearesExpressZones()
+ Object.assign(service,{name:'Correos Ilhas Express',code:'LK-COR-ISLAS-EXPRESS',carrier_group:'correos',
+  webservice_service_code:'26',allowed_zones:zones.map(z=>z.zone_code),fuel_surcharge_pct:0,zones})
+ const {loadShipmentPricingContext}=h.load('lib/pricing/shipment-pricing-context.ts')
+ const {calculateShipmentQuote}=h.load('lib/pricing/calculate-shipment-quote.ts')
+ const {calculateClientShipmentPreview}=h.load('lib/pricing/calculate-client-shipment-preview.ts')
+ const clients=h.load('app/actions/clientes.ts')
+ const verify=async expected=>{
+  const ctx=await loadShipmentPricingContext(h.db.client,h.ctx,clientId,{serviceId:'service'})
+  const client=(await clients.getClientesAction()).find(c=>c.id===clientId)
+  for(const postal of ['07001','07701','07800','07860']) {
+   const server=calculateShipmentQuote(1,ctx.client,ctx.service,'ES',postal,['correos_cod'],100)
+   const preview=calculateClientShipmentPreview(1,client,service,'ES',postal,['correos_cod'],100)
+   assert.equal(server.specialFeesAmount,expected)
+   assert.equal(preview.specialFeesAmount,expected)
+   assert.equal(preview.totalPrice,server.totalPrice)
+  }
+ }
+ await verify(6)
+ const client=(await clients.getClientesAction()).find(c=>c.id===clientId)
+ client.pricing.special_services_fees.find(f=>f.special_service_code==='correos_cod').cod_destination_rates['ES-BALEARES']={fee_type:'fixed',fixed_value:7,use_standard:false}
+ assert.equal((await clients.saveClienteAction(client)).success,true)
+ await verify(7)
+ assert.equal((await h.actions.getStandardSpecialFeesAction()).fees.find(f=>f.special_service_code==='correos_cod').cod_destination_rates['ES-BALEARES'].min_value,6)
+})
+
+for(const [carrier,code,label,zone,initialRate] of [
+ ['ctt','cod','Ilhas portuguesas (Açores e Madeira)','PT-ILHAS',3],
+ ['correos','correos_cod','Espanha — Ilhas Baleares','ES-BALEARES',4],
+]) test(`editing and resetting ${zone} leaves other regions inherited and never writes a different fee`,()=>{
  let cursor=0,slots=[],changed
  const jsx=(type,props)=>({type,props:props||{}})
  const editor=createLoader({react:{useState:initial=>{const i=cursor++;if(slots[i]===undefined)slots[i]=initial;return[slots[i],v=>slots[i]=v]}},'react/jsx-runtime':{jsx,jsxs:jsx}})('components/shipments/SpecialFeesEditor.tsx').SpecialFeesEditor
@@ -348,20 +392,25 @@ test('editing and resetting one COD region leaves other regions inherited and ne
  const render=fees=>{cursor=0;return flat(editor({fees,standards,mode:'client',onChange:v=>changed=v}))}
  const initial=resolveClientSpecialFees(undefined,standards)
  let nodes=render(initial)
- nodes.find(n=>n.type==='input'&&n.props['aria-label']===`Percentagem de ${defaults[0].special_service_name} · Ilhas portuguesas (Açores e Madeira)`).props.onChange({target:{value:'7'}})
- let fee=changed.find(f=>f.special_service_code==='cod')
+ if(carrier==='correos') {
+  nodes.find(n=>n.type==='button'&&n.props['aria-pressed']===false).props.onClick()
+  nodes=render(initial)
+ }
+ const name=defaults.find(f=>f.special_service_code===code).special_service_name
+ nodes.find(n=>n.type==='input'&&n.props['aria-label']===`Percentagem de ${name} · ${label}`).props.onChange({target:{value:'7'}})
+ let fee=changed.find(f=>f.special_service_code===code)
  assert.equal(fee.use_standard,true,'general rate and enabled state continue to follow standard')
- assert.equal(fee.cod_destination_rates['PT-ILHAS'].percentage_value,7)
- assert.equal(fee.cod_destination_rates['PT-ILHAS'].use_standard,false)
+ assert.equal(fee.cod_destination_rates[zone].percentage_value,7)
+ assert.equal(fee.cod_destination_rates[zone].use_standard,false)
  assert.equal(fee.cod_destination_rates['PT-CONT'].use_standard,true)
  assert.equal(fee.cod_destination_rates['ES-PENIN'].use_standard,true)
  assert.deepEqual(changed.find(f=>f.special_service_code==='fragil'),initial.find(f=>f.special_service_code==='fragil'))
  const refreshed=resolveClientSpecialFees(changed,standards)
- assert.equal(refreshed[0].cod_destination_rates['PT-ILHAS'].percentage_value,7)
+ assert.equal(refreshed.find(f=>f.special_service_code===code).cod_destination_rates[zone].percentage_value,7)
  nodes=render(refreshed)
- const reset=nodes.find(n=>n.type==='button'&&Array.isArray(n.props.children)&&n.props.children.join('')==='Usar standard em Ilhas portuguesas (Açores e Madeira)')
+ const reset=nodes.find(n=>n.type==='button'&&Array.isArray(n.props.children)&&n.props.children.join('')===`Usar standard em ${label}`)
  assert.ok(reset);reset.props.onClick()
- fee=changed.find(f=>f.special_service_code==='cod')
- assert.equal(fee.cod_destination_rates['PT-ILHAS'].percentage_value,3)
+ fee=changed.find(f=>f.special_service_code===code)
+ assert.equal(fee.cod_destination_rates[zone].percentage_value,initialRate)
  assert.ok(COD_DESTINATIONS.every(({code})=>fee.cod_destination_rates[code].use_standard))
 })

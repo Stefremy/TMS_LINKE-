@@ -81,10 +81,11 @@ function correosHarness() {
   }
 }
 
-test('Correos Internacional service resolves carrier as correos and exposes all 25 non-Iberian EU countries under customs-free policy', () => {
+test('Correos Internacional exposes authorized international quotation destinations, including EU countries and customs destinations', () => {
   assert.equal(resolveServiceCarrier(service), 'correos')
   const selectable = getServiceDestinationCountries(service).map(c => c.code)
-  assert.equal(selectable.length, 25)
+  assert.ok(selectable.includes('US'))
+  assert.ok(selectable.includes('GB'))
   assert.equal(selectable.includes('PT'), false)
   assert.equal(selectable.includes('ES'), false)
   for (const dest of allDestinations) {
@@ -133,7 +134,7 @@ for (const destination of allDestinations) {
     test(`Correos Internacional ${destination.country}: REST grabacionEnvio payload & PDF label (${profile.weightKg}kg / ${profile.volumes} vol) — ${destination.place}`, async () => {
       const h = correosHarness()
       const ref = `TEST-CEX-${destination.country}`
-      const res = await h.service.createShipment(h.creds, {
+      const send = () => h.service.createShipment(h.creds, {
         ref,
         fecha: '27102026',
         remitente: {
@@ -166,6 +167,13 @@ for (const destination of allDestinations) {
         observaciones: 'TESTE CORREOS INTL — NÃO EXPEDIR',
         tipoEtiqueta: '1',
       })
+
+      if (profile.volumes > 1) {
+        await assert.rejects(send, /90.*apenas um volume/)
+        assert.equal(h.requests.length, 0)
+        return
+      }
+      const res = await send()
 
       assert.equal(res.codigoRetorno, 0)
       assert.ok(res.datosResultado?.startsWith('323000999'))

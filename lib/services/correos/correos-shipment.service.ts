@@ -1,6 +1,7 @@
 import { CorreosRestClient } from "./correos-rest-client"
 import { CorreosCredentials, CorreosShipmentInput, CorreosShipmentOutput } from "./types"
 import { validateParcelDimensions } from "../shipments/parcel-dimensions"
+import { isCodDestinationAvailable } from "@/lib/pricing/cod-destination-rates"
 
 const PROD_ENDPOINT = "https://www.cexpr.es/wspsc/apiRestGrabacionEnviok8s/json/grabacionEnvio"
 const TEST_ENDPOINT = "https://www.test.cexpr.es/wspsc/apiRestGrabacionEnviok8s/json/grabacionEnvio"
@@ -20,6 +21,13 @@ export class CorreosShipmentService {
     creds: CorreosCredentials,
     input: CorreosShipmentInput
   ): Promise<CorreosShipmentOutput> {
+    if (input.producto.trim() === "90" && input.bultos > 1) {
+      throw new Error("O produto Correos 90 (Internacional Standard) permite apenas um volume por envio.")
+    }
+    if (input.reembolso && Number(input.reembolso) !== 0 && !isCodDestinationAvailable(input.destinatario.paisISO,
+      input.destinatario.cpNacional || input.destinatario.cpInternacional || "")) {
+      throw new Error("A cobrança COD não está disponível para este destino.")
+    }
     const endpoint = this.getEndpoint(creds.environment)
 
     const isRemitentePT = input.remitente.paisISO.toUpperCase() === "PT"

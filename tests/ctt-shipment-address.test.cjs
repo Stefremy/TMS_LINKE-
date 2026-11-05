@@ -49,6 +49,20 @@ function harness() {
   } }
 }
 
+for (const subProduct of ['EMSF056.01','EMSF057.01']) for (const autoClose of [false,true]) {
+ test(`CTT ${subProduct}: mainland Spain COD reaches ${autoClose?'CompleteShipment':'CreateShipment'} with the collection amount`,async()=>{
+  const h=harness()
+  await h.send({country:'ES',zip:'28013'}, {subProduct,autoClose,codValue:123.45})
+  const parsed=new XMLParser({removeNSPrefix:true,parseTagValue:false}).parse(h.calls[0].soapBodyXml)
+  const request=(parsed.CreateShipment||parsed.CompleteShipment).Input.DeliveryNote
+  assert.equal(request.SubProductId,subProduct)
+  const shipment=request.ShipmentCTT.ShipmentCTT
+  assert.equal(shipment.ReceiverData.Country,'ES')
+  assert.equal(shipment.ReceiverData.NonPTZipCode,'28013')
+  assert.deepEqual(shipment.SpecialServices.SpecialService,{SpecialServiceType:'AgainstReimbursement',Value:'123.45'})
+ })
+}
+
 for (const country of ['IS','GB','US']) for (const autoClose of [false,true]) {
   test(`${country}: ${autoClose?'CompleteShipment':'CreateShipment'} sends an explicit full declaration with real items`,async()=>{
     const h=harness()

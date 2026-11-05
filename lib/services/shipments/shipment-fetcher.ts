@@ -77,7 +77,8 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
   }
 }
 
-import { getCttShipmentLabel } from "@/lib/services/ctt/shipment-label"
+import { getCttShipmentLabels } from "@/lib/services/ctt/shipment-label"
+import { combineCarrierLabels } from "@/lib/services/shipments/label-bundle"
 import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
 
 /** Retrieve only saved official carrier labels, never create another shipment or a substitute label. */
@@ -106,15 +107,19 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
     }
     const saved = snapshot || shipment
     if (!saved) return null
+    const rawOutputs = saved.rawResponse?.ShipmentData || []
+    const storedLabels = saved.carrier_labels?.length ? saved.carrier_labels : rawOutputs.flatMap(getCttShipmentLabels)
     let label = saved.ctt_label_base64 || saved.carrier_label_base64 || saved.labelBase64 ||
       shipment?.ctt_label_base64 || shipment?.carrier_label_base64 || null
+    // Older records may have cached only the first page while retaining all originals.
+    if (storedLabels.length && (!label || !saved.carrier_labels?.length)) label = (await combineCarrierLabels(storedLabels))?.data || null
     if (!label && (saved.ctt_documents || saved.rawResponse?.ShipmentData?.[0])) {
       const rawShipment = saved.rawResponse?.ShipmentData?.[0]
-      label = getCttShipmentLabel({
+      label = (await combineCarrierLabels(getCttShipmentLabels({
         FirstObject: saved.carrier_tracking_number || rawShipment?.FirstObject,
         LabelList: rawShipment?.LabelList,
         DocumentsList: saved.ctt_documents || rawShipment?.DocumentsList,
-      })?.data || null
+      })))?.data || null
     }
     if (!label) return null
     if (label.trimStart().startsWith("^XA")) label = await convertZplToPdfBase64(label)

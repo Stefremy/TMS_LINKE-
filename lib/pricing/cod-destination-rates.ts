@@ -4,10 +4,15 @@ export const COD_DESTINATIONS = [
   { code: "PT-CONT", label: "Portugal Continental" },
   { code: "PT-ILHAS", label: "Ilhas portuguesas (Açores e Madeira)" },
   { code: "ES-PENIN", label: "Espanha Peninsular" },
+  { code: "ES-BALEARES", label: "Espanha — Ilhas Baleares" },
 ] as const
 export type CodDestination = typeof COD_DESTINATIONS[number]["code"]
 export type CodRate = NonNullable<NonNullable<ClientSpecialServiceFee["cod_destination_rates"]>[CodDestination]>
 export const isCodFee = (code: string) => code === "cod" || code === "correos_cod"
+
+export function isCodDestinationAvailable(country: string, postal: string): boolean {
+  return codDestination(country, postal) !== undefined
+}
 
 export function baseCodRate(fee: ClientSpecialServiceFee): CodRate {
   return { fee_type: fee.fee_type as CodRate["fee_type"], fixed_value: fee.fixed_value ?? 0,
@@ -22,6 +27,7 @@ export function codRateForZone(fee: ClientSpecialServiceFee, zone: CodDestinatio
 export function codDestination(country: string, postal: string): CodDestination | undefined {
   const code = country.trim().toUpperCase(), zip = postal.replace(/\D/g, "")
   if (code === "PT" && /^\d{7}$/.test(zip)) return zip.startsWith("9") ? "PT-ILHAS" : "PT-CONT"
+  if (code === "ES" && /^07\d{3}$/.test(zip)) return "ES-BALEARES"
   if (code === "ES" && /^\d{5}$/.test(zip) && !/^(07|35|38|51|52)/.test(zip)) return "ES-PENIN"
 }
 

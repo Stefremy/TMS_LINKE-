@@ -60,7 +60,8 @@ export async function convertZplToPdfBase64(zpl: string): Promise<string> {
     return trimmed
   }
   try {
-    const res = await fetch("https://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/", {
+    // Omitting the index returns every ZPL label as a separate PDF page.
+    const res = await fetch("https://api.labelary.com/v1/printers/8dpmm/labels/4x6/", {
       method: "POST",
       headers: {
         "Accept": "application/pdf",

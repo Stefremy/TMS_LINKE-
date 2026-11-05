@@ -3,6 +3,8 @@ import { findExactZone, isZoneAllowedByService, resolveServiceZoneCode } from "@
 import { getServiceDestinationCountries } from "./service-destinations"
 import { internationalPostalQuery } from "./geo/international-postal-code"
 import { isShipmentDestinationAvailable } from "./shipment-destination-policy"
+import { detectCarrierGroup } from "@/lib/pricing/carrier-zone-templates"
+import { requiresCorreosQuotation } from "./correos/shipment-policy"
 
 export type IslandTransportMode = "air" | "sea" | "other"
 
@@ -50,13 +52,16 @@ export function getAuthorizedDestinationCountries(services: ServicoLinke[]) {
 
 export function getDestinationServiceOptions(services: ServicoLinke[], country: string, postal: string,
   mode?: IslandTransportMode) {
-  if (!isDestinationPostalReady(country, postal) || !isShipmentDestinationAvailable(country, postal)) return []
+  if (!isDestinationPostalReady(country, postal)) return []
   const islands = isPortugueseIslandDestination(country, postal)
   return services.filter(service => {
     if (service.is_active === false) return false
+    const manualQuote = requiresCorreosQuotation(detectCarrierGroup(service) || "", country)
+    if (!manualQuote && !isShipmentDestinationAvailable(country, postal)) return false
     if (islands && mode && getServiceIslandTransportMode(service) !== mode) return false
     const zone = resolveServiceZoneCode(service, country, postal)
     if (!zone || !isZoneAllowedByService(service.allowed_zones, zone)) return false
+    if (manualQuote) return true
     return findExactZone(service.zones, zone)?.tiers?.some(tier => tier.enabled !== false && Number.isFinite(tier.weight_max) && tier.weight_max > 0) ?? false
   })
 }

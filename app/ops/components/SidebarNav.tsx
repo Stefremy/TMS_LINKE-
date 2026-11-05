@@ -44,6 +44,7 @@ const navConfig: NavSection[] = [
       { title: "Visão geral", href: "/ops", icon: LayoutDashboard },
       { title: "Novo Envio", href: "/ops/envios/novo", icon: PackagePlus },
       { title: "Envios", href: "/ops/envios", icon: Package },
+      { title: "Cotações", href: "/ops/envios/cotacoes", icon: FileText },
       { title: "Tracking & Mapa", href: "/ops/tracking", icon: Navigation },
       { title: "Recolhas", href: "/ops/envios/recolhas", icon: CalendarCheck },
       { title: "Incidências", href: "/ops/incidencias", icon: AlertTriangle },

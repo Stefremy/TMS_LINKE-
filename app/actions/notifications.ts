@@ -9,6 +9,8 @@ import { requireEmployee } from "@/lib/auth/context";
 import { fetchCalendarEventRange } from "./calendar";
 import { addDays, todayKey } from "@/features/calendar/lib/dates";
 import { upcomingPersonalEvents } from "@/features/calendar/lib/reminders";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
+import { QUOTATION_ACTION } from "@/lib/shipments/quotations/types";
 
 export interface OperationalNotification {
   id: string;
@@ -158,6 +160,20 @@ export async function getOperationalNotificationsAction(): Promise<
       "Error gathering operational notifications:",
       err instanceof Error ? err.message : "Consulta indisponível",
     );
+  }
+
+  if ([PERMISSIONS.shipments, PERMISSIONS.clients, PERMISSIONS.support].some(permission => hasPermission(ctx, permission))) {
+    try {
+      const { data, error } = await createAdminClient().from("audit_log")
+        .select("id,created_at,reference:details->>reference,client_name:details->>client_name,status:details->>status,updated_at:details->>updated_at")
+        .eq("tenant_id", ctx.tenant_id).eq("action", QUOTATION_ACTION)
+        .in("details->>status", ["pending", "reviewing", "accepted"])
+        .order("created_at", { ascending: false }).limit(5);
+      if (!error) for (const row of data || []) notifications.push({ id: `quotation-${row.id}-${row.status}`,
+        type: "shipment", title: row.status === "accepted" ? "Cotação aceite pelo cliente" : "Pedido de cotação internacional",
+        message: `${row.reference} · ${row.client_name}`, timestamp: row.updated_at || row.created_at,
+        link: `/ops/envios/cotacoes?pedido=${row.id}`, actionLabel: "Ver cotação", priority: "medium" });
+    } catch { /* Other operational notifications remain available. */ }
   }
 
   // Personal calendar reminders remain available throughout Ops, not only on the calendar page.

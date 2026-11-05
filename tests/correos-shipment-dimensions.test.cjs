@@ -27,6 +27,16 @@ test('Correos multi-parcel rounding preserves the exact total and the declared c
  assert.equal(payload.listaBultos.reduce((sum,p)=>sum+Math.round(Number(p.kilos)*1000),0),1500)
  assert.ok(payload.listaBultos.every(p=>p.alto==='10.2'&&p.largo==='30.5'&&p.ancho==='20'))
 })
+test('Correos mainland Spain sends the COD amount and Spanish postal code to the carrier',async()=>{
+ const payload=await harness().send({producto:'93',reembolso:'123.45',destinatario:{nombre:'Fixture',direccion:'Fixture',poblacion:'Madrid',
+  cpNacional:'28013',cpInternacional:'28013',paisISO:'ES'}})
+ assert.equal(payload.producto,'93')
+ assert.equal(payload.paisISODest,'ES')
+ assert.equal(payload.codPosNacDest,'28013')
+ assert.equal(payload.reembolso,'123.45')
+ const ordinary=await harness().send({reembolso:undefined})
+ assert.equal(ordinary.reembolso,'')
+})
 test('explicit parcel weights and different sizes are retained without mutation or blanket replacement',async()=>{
  const parcels=[{orden:'1',kilos:'0.500',alto:'10',largo:'20',ancho:'15'},{orden:'2',kilos:'1.000',alto:'15',largo:'40.5',ancho:'20'}]
  const before=structuredClone(parcels)

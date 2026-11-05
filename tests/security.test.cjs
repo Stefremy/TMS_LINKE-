@@ -105,7 +105,7 @@ function service(carrier = 'CTT') {
     ] }],
   }
 }
-function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = clientContext, carrierResult, carrierError, savedLabel=null } = {}) {
+function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = clientContext, carrierResult, carrierError, correosResult, savedLabel=null } = {}) {
   const tables = {
     clients: [{ id: CLIENT, tenant_id: TENANT, name: 'Fixture' }],
     audit_log: [{ tenant_id: TENANT, action: 'client_data', details: { id: CLIENT, short_name: 'Fixture', billing_type: 'conta_corrente' } }],
@@ -133,7 +133,7 @@ function shipmentHarness({ carrier = 'CTT', adjust = () => {}, failure, ctx = cl
       }
     } },
     '@/lib/services/correos/correos-shipment.service': { CorreosShipmentService: class {
-      async createShipment(creds, payload) { providerCalls.push({ carrier: 'Correos', payload }); return { codigoRetorno: 0, datosResultado: '1234567890123456' } }
+      async createShipment(creds, payload) { providerCalls.push({ carrier: 'Correos', payload }); return correosResult || { codigoRetorno: 0, datosResultado: '1234567890123456' } }
     } },
     '@/lib/services/carriers/credentials': {
       resolveCttCredentials: async id => { credentials.push(id); return {} },
@@ -179,6 +179,61 @@ function withDimensions(form) {
   return form
 }
 async function emit(h, extra) { return h.load('app/actions/shipments.ts').emitClientGuiaAction(shipmentInput(extra)) }
+
+test('unselected stale COD values are cleared before carrier creation and financial persistence',async()=>{
+ const h=shipmentHarness()
+ const result=await emit(h,{codValue:80,selectedSpecialServices:[]})
+ assert.equal(result.success,true,result.error)
+ assert.equal(h.providerCalls[0].payload.codValue,0)
+ const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+ assert.equal(saved.cod_value,0)
+})
+
+test('international COD and multi-parcel product 90 are refused before carrier calls or wallet writes',async()=>{
+ for(const role of ['client','employee']) for(const [country,zone] of [['DE','EU 1'],['LT','EU 2']]) {
+  for(const patch of [{selectedSpecialServices:['correos_cod'],codValue:50},{volumesCount:3}]) {
+   const h=shipmentHarness({carrier:'Correos',ctx:{...clientContext,role},adjust:t=>{
+    const s=t.servicos_linke[0];s.webservice_service_code='90';s.allowed_zones=[zone];s.zones[0].zone_code=zone
+   }})
+   const result=await emit(h,{clientId:CLIENT,recipientCountry:country,recipientPostal:'12345',...patch})
+   assert.equal(result.success,false)
+   assert.match(result.error,/cotação/)
+   assert.equal(h.providerCalls.length,0);assert.equal(h.db.writes.length,0)
+  }
+ }
+})
+
+test('client service DTO preserves the public single-parcel capability while hiding the Correos API configuration',async()=>{
+ const h=shipmentHarness({carrier:'Correos',adjust:t=>{t.servicos_linke[0].webservice_service_code='90'}})
+ const service=(await h.load('app/actions/servicos-linke.ts').getServicosLinkeAction()).find(s=>s.id==='service-a')
+ assert.equal(service.single_parcel_only,true)
+ assert.equal(service.webservice_service_code,undefined)
+ assert.equal(service.webservice_connection_id,undefined)
+})
+
+test('Correos Iberian rejection records a scoped technical reference without changing product or creating a shipment',async()=>{
+ for(const [country,zone] of [['PT','PT-CONT'],['ES','ES-PENIN']]) for(const auditFailure of [false,true]) {
+  const h=shipmentHarness({carrier:'Correos',correosResult:{codigoRetorno:500,mensajeRetorno:'ERROR TASAR-1-0-ORA-0000: normal, successful completion'},
+   failure:q=>auditFailure&&q.write?.value?.action==='carrier_shipment_rejected'?{message:'Private database failure'}:null,
+   adjust:t=>{const s=t.servicos_linke[0];s.webservice_service_code='63';s.allowed_zones=[zone];s.zones[0].zone_code=zone}})
+  const result=await emit(h,{recipientCountry:country,recipientPostal:country==='PT'?'4000-001':'28013',volumesCount:1,selectedSpecialServices:[]})
+  assert.equal(result.success,false)
+  assert.equal(h.providerCalls.length,1)
+  assert.equal(h.providerCalls[0].payload.producto,'63')
+  assert.equal(h.db.writes.filter(w=>w.table==='shipments').length,0)
+  assert.doesNotMatch(result.error,/Private database failure/)
+  const row=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='carrier_shipment_rejected')?.value
+  if(auditFailure){assert.equal(row,undefined);assert.doesNotMatch(result.error,/Referência técnica/);continue}
+  assert.equal(row.tenant_id,TENANT)
+  assert.equal(row.details.client_id,CLIENT)
+  assert.equal(row.details.user_id,clientContext.user.id)
+  assert.equal(row.details.product,'63');assert.equal(row.details.country,country)
+  assert.equal(row.details.volumes,1);assert.equal(row.details.cod_enabled,false)
+  assert.equal(row.details.response_code,500)
+  assert.ok(result.error.includes(row.details.id))
+  for(const field of ['pass','user','solicitante','codRte','sender_address','recipient_address','recipient_name'])assert.equal(row.details[field],undefined)
+ }
+})
 
 test('CTT client and OPS emissions keep the selected Spanish destination through the provider and stored details', async () => {
   for (const ctx of [clientContext, { ...clientContext, role: 'employee' }]) {
@@ -259,7 +314,7 @@ test('volumetric tariffs are calculated server-side while the carrier receives t
  }
 })
 
-test('Correos client and OPS emissions preserve the chosen country and postal code',async()=>{
+test('Correos client and OPS Iberian emissions preserve the destination, while international emissions require a quotation',async()=>{
   for(const role of ['client','employee']){
     for(const [country,postal,zone] of [['ES','28013','ES-PENIN'],['FR','75001','EU 1'],['DE','10115','EU 1']]){
       const h=shipmentHarness({carrier:'Correos',ctx:{...clientContext,role},adjust:t=>{
@@ -267,6 +322,11 @@ test('Correos client and OPS emissions preserve the chosen country and postal co
         t.servicos_linke[0].zones[0].zone_code=zone
       }})
       const result=await emit(h,{clientId:CLIENT,recipientCountry:country,recipientPostal:postal})
+      if(country!=='ES') {
+        assert.equal(result.success,false);assert.match(result.error,/cotação/)
+        assert.equal(h.providerCalls.length,0);assert.equal(h.db.writes.length,0)
+        continue
+      }
       assert.equal(result.success,true)
       const destination=h.providerCalls[0].payload.destinatario
       assert.equal(destination.paisISO,country)
@@ -288,12 +348,12 @@ test('Spanish postcodes with Portuguese masks are rejected before wallet reserva
   assert.equal(h.providerCalls.length, 0); assert.equal(h.db.writes.length, 0)
 })
 
-test('customs pause rejects stale forms for both carriers and roles before reserving money',async()=>{
+test('customs pause or manual quotation rejects stale forms before reserving money',async()=>{
   for(const role of ['client','employee'])for(const carrier of ['CTT','Correos'])for(const [country,postal] of [['NO','0010'],['GB','SW1A 1AA'],['CH','8001'],['IS','101'],['ES','35001'],['FI','22100']]){
     const h=shipmentHarness({carrier,ctx:{...clientContext,role}})
     const result=await emit(h,{clientId:CLIENT,recipientCountry:country,recipientPostal:postal})
     assert.equal(result.success,false,`${role}/${carrier}/${country}`)
-    assert.match(result.error,/aduaneiros.*temporariamente indisponíveis/)
+    assert.match(result.error,carrier==='Correos'&&country!=='ES'?/cotação/:/aduaneiros.*temporariamente indisponíveis/)
     assert.equal(h.providerCalls.length,0)
     assert.equal((h.tables.wallet_reservations||[]).length,0)
   }
@@ -668,7 +728,7 @@ for (const carrier of ['CTT', 'Correos']) {
     assert.equal(audit.base_price, preview.basePrice)
     assert.equal(audit.fuel_tax_amount, preview.fuelSurchargeAmount)
     assert.equal(audit.special_fees_amount, preview.specialFeesAmount)
-    assert.deepEqual(JSON.parse(audit.special_fees_description), preview.specialItems)
+    assert.deepEqual(JSON.parse(audit.special_fees_description), preview.specialItems.map(({ name, amount }) => ({ name, amount })))
     assert.equal(h.tables.servicos_linke[0].zones[0].tiers[0].sell_price, 8)
   })
   test(`${carrier}: invalid negotiated prices stop every provider call and database write`, async () => {
@@ -798,7 +858,10 @@ test('preview percentage supplements use the same COD base, transport base and c
   } })
   const input = { selectedSpecialServices: ['correos_cod', 'correos_insurance'], codValue: 150.3 }
   const preview = fixtureQuote(h, input)
-  assert.deepEqual(preview.specialItems, [{ name: 'COD', amount: 3.01 }, { name: 'Seguro', amount: 0.68 }])
+  assert.deepEqual(preview.specialItems, [
+    { name: 'COD', amount: 3.01, vatPct: 23, vatAmount: 0.69, totalWithVat: 3.70 },
+    { name: 'Seguro', amount: 0.68, vatPct: 23, vatAmount: 0.16, totalWithVat: 0.84 },
+  ])
   assert.equal(preview.totalPrice, 10.44)
   assert.equal((await emit(h, input)).sellPrice, preview.totalPrice)
 })

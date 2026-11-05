@@ -21,6 +21,8 @@ export interface ZonePriceMatrix {
 }
 
 export interface ServicoLinke {
+  /** Public carrier capability; product 90 is always single-parcel. */
+  single_parcel_only?: boolean
   id: string
   code: string
   name: string

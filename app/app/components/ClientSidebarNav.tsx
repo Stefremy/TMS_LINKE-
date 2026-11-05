@@ -16,6 +16,7 @@ export function ClientSidebarNav() {
     { href: `${basePath}/criar-guia`, label: "Novo Envio", icon: Plus },
     { href: `${basePath}/tracking`, label: "Rastreio & Mapa", icon: MapPin },
     { href: `${basePath}/envios`, label: "Histórico & Envios", icon: Search },
+    { href: `${basePath}/cotacoes`, label: "Cotações", icon: FileText },
     { href: `${basePath}/destinatarios`, label: "Destinatários", icon: UserCheck },
     { href: `${basePath}/reembolsos`, label: "Reembolsos", icon: Banknote },
     { href: `${basePath}/faturas`, label: "Faturas e Extratos", icon: FileText },

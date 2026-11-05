@@ -32,10 +32,10 @@ type Props = {
   role: ShipmentFormRole; client: Cliente; initialValues?: Partial<ShipmentFormValues>
   onCreated?: (result: ShipmentFormResult) => void; services?: ServicoLinke[]
 }
-type Feedback = { created: ShipmentFormResult | null; label: string | null; labelError: string; warning: string; labelBusy: boolean }
+type Feedback = { created: ShipmentFormResult | null; quotation: { id: string; reference: string } | null; label: string | null; labelError: string; warning: string; labelBusy: boolean }
 const SERVICE_STEP = stepForField("serviceId")
 const REVIEW_STEP = SHIPMENT_STEPS.length - 1
-const emptyFeedback: Feedback = { created: null, label: null, labelError: "", warning: "", labelBusy: false }
+const emptyFeedback: Feedback = { created: null, quotation: null, label: null, labelError: "", warning: "", labelBusy: false }
 
 export function ShipmentForm({ role: requestedRole, client, initialValues, onCreated, services: providedServices }: Props) {
   const scope = useOptionalClientScope()
@@ -50,6 +50,7 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
   const [feedback, setFeedback] = React.useState<Feedback>(emptyFeedback)
   const [topUpOpen, setTopUpOpen] = React.useState(false)
   const submissionLock = React.useRef(false)
+  const quotationKey = React.useRef<string | null>(null)
   const top = React.useRef<HTMLDivElement>(null)
   const summaryDialog = React.useRef<HTMLDialogElement>(null)
   const errorSummary = React.useRef<HTMLDivElement>(null)
@@ -76,16 +77,17 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
   React.useEffect(() => {
     if (!quote.selected) return
     if (quote.activeSpecialServices.length !== values.selectedSpecialServices.length) form.setValue("selectedSpecialServices", quote.activeSpecialServices)
-  }, [form, quote.selected, quote.activeSpecialServices, values.selectedSpecialServices])
+    if (!quote.activeSpecialServices.some(code => code === "cod" || code === "correos_cod") && values.codValue !== 0) form.setValue("codValue", 0)
+  }, [form, quote.selected, quote.activeSpecialServices, values.selectedSpecialServices, values.codValue])
   React.useEffect(() => {
     const count = values.volumesCount
     if (count === 1 && values.parcelWeightsKg.length) form.setValue("parcelWeightsKg", [])
     else if (Number.isSafeInteger(count) && count > 1 && values.parcelWeightsKg.length > count) form.setValue("parcelWeightsKg", values.parcelWeightsKg.slice(0, count))
   }, [form, values.volumesCount, values.parcelWeightsKg])
   React.useEffect(() => {
-    if (!feedback.created) return
+    if (!feedback.created && !feedback.quotation) return
     top.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })
-  }, [feedback.created])
+  }, [feedback.created, feedback.quotation])
 
   const focusField = (field: string) => {
     requestAnimationFrame(() => {
@@ -105,6 +107,7 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
   const validateExport = () => {
     if (!quote.selected) return true
     const current = form.getValues()
+    if (quote.requiresQuotation) return true
     if (quote.selected.carrier === "correos") {
       if (!current.recipientPhone) { form.setError("recipientPhone", { message: "Indique o telefone do destinatário para este envio Correos Express." }); setStep(0); focusField("recipientPhone"); return false }
       return true
@@ -159,16 +162,18 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
     finally { setFeedback(previous => ({ ...previous, labelBusy: false })) }
   }
   const submit = form.handleSubmit(async submitted => {
-    if (submissionLock.current || feedback.created) return
+    if (submissionLock.current || feedback.created || feedback.quotation) return
     submissionLock.current = true
     form.clearErrors("root")
     try {
       const fresh = getShipmentQuote({ client: effectiveClient, services: providedServices || resource.services, values: submitted, role })
       if (fresh.isBlocked) { form.setError("serviceId", { message: fresh.blockedReason || "Não foi possível calcular o preço." }); setStep(SERVICE_STEP); focusField("serviceId"); return }
       if (!validateExport()) return
-      const payload = { ...submitted, selectedSpecialServices: fresh.activeSpecialServices }
+      const payload = { ...submitted, selectedSpecialServices: fresh.activeSpecialServices,
+        codValue: fresh.activeSpecialServices.some(code => code === "cod" || code === "correos_cod") ? submitted.codValue : 0 }
       if (role === "client") { delete payload.carrierOverride; delete payload.internalNotes; delete payload.manualPrice }
-      const result = await submitShipmentFormAction(payload, client.id)
+      if (fresh.requiresQuotation && !quotationKey.current) quotationKey.current = crypto.randomUUID()
+      const result = await submitShipmentFormAction(payload, client.id, quotationKey.current || undefined)
       if (!result.success) {
         const issues = result.fieldErrors
         for (const issue of issues) form.setError(issue.field as FieldPath<ShipmentFormValues> | "root", { type: "server", message: issue.message })
@@ -176,12 +181,14 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
         if (first?.field !== "root") setStep(stepForField(first.field))
         focusField(first?.field || "root"); return
       }
-      setFeedback({ ...emptyFeedback, created: result, warning: result.dbWarning || "" })
+      const isQuotation = result.kind === "quotation"
+      setFeedback({ ...emptyFeedback, created: isQuotation ? null : result, quotation: isQuotation ? result.quotation : null, warning: result.dbWarning || "" })
       if (submitted.saveToAgenda) {
         try { const saved = await saveDestinatarioAction({ client_id: client.id, name: submitted.recipientName, address: submitted.recipientAddress, postal_code: submitted.recipientPostal,
           city: submitted.recipientCity, country: submitted.recipientCountry, phone: submitted.recipientPhone, email: submitted.recipientEmail }); if (!saved.success) throw new Error("Agenda indisponível") }
-        catch { setFeedback(previous => ({ ...previous, warning: [previous.warning, "O envio foi emitido, mas não foi possível guardar o destinatário na agenda."].filter(Boolean).join(" ") })) }
+        catch { setFeedback(previous => ({ ...previous, warning: [previous.warning, `${isQuotation ? "O pedido foi guardado" : "O envio foi emitido"}, mas não foi possível guardar o destinatário na agenda.`].filter(Boolean).join(" ") })) }
       }
+      if (isQuotation) return
       onCreated?.(result)
       if (result.labelBase64) await prepareLabel(result)
     } catch { form.setError("root", { message: "Não foi possível confirmar o resultado do pedido. Consulte o histórico antes de repetir a emissão." }); focusField("root") }
@@ -191,7 +198,7 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
     setStep(stepForField(field)); focusField(field)
   })
   const next = () => step === REVIEW_STEP ? void submit() : void goToStep(step + 1)
-  const nextLabel = step === REVIEW_STEP ? "Emitir guia" : "Continuar"
+  const nextLabel = step === REVIEW_STEP ? quote.requiresQuotation ? "Pedir cotação" : "Emitir guia" : "Continuar"
   const rootError = form.formState.errors.root?.message || resource.error
   const progress = (step + 1) / SHIPMENT_STEPS.length * 100
 
@@ -201,7 +208,14 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
         <div className="flex max-w-full items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-xs">{client.logo_url ? <Image unoptimized src={client.logo_url} alt="" width={30} height={26} className="size-8 rounded-md object-contain" /> : <span className="flex size-8 items-center justify-center rounded-md bg-zinc-100"><Building2 size={16} className="text-zinc-500" /></span>}<div className="min-w-0"><p className="truncate text-xs font-semibold">{client.short_name || client.legal_name}</p><p className="mt-0.5 text-[10px] font-medium text-zinc-400">{client.code}</p></div></div>
       </div>
     </header>
-    {feedback.created ? <section role="status" aria-live="polite" className="mx-auto max-w-3xl overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xs">
+    {feedback.quotation ? <section role="status" className="mx-auto max-w-3xl space-y-5 rounded-xl border border-zinc-200 bg-white p-6 sm:p-8">
+      <CheckCircle2 size={28} className="text-emerald-700" /><h2 className="text-2xl font-semibold text-zinc-900">Pedido de cotação enviado</h2>
+      <p className="text-sm text-zinc-600">Referência <strong className="select-text font-mono text-zinc-900">{feedback.quotation.reference}</strong>. A equipa irá tratar do pedido com o parceiro e responder na área Cotações.</p>
+      <p className="text-sm text-zinc-500">O pedido ficou registado, sem emissão de guia ou débito de saldo.</p>
+      {feedback.warning && <p role="alert" className="text-sm text-amber-800">{feedback.warning}</p>}
+      <div className="flex flex-wrap gap-3"><Link href={role === "ops" ? "/ops/envios/cotacoes" : `${basePath}/cotacoes`} className={primaryButton}>Ver cotações<ArrowRight size={15} /></Link>
+        <button type="button" className={secondaryButton} onClick={() => { form.reset(shipmentDefaults(client)); quotationKey.current = null; setFeedback(emptyFeedback); setStep(0) }}>Criar outro pedido</button></div>
+    </section> : feedback.created ? <section role="status" aria-live="polite" className="mx-auto max-w-3xl overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xs">
       <div className="space-y-4 border-b border-zinc-100 bg-emerald-50/60 p-6 sm:p-8"><span className="inline-flex rounded-xl border border-emerald-100 bg-white p-3 text-emerald-700"><CheckCircle2 size={26} /></span><div><h2 className="text-2xl font-semibold tracking-tight text-zinc-900">Pronto. O seu envio foi emitido.</h2><p className="mt-2 text-sm text-zinc-500">Guia <strong className="select-text font-mono text-zinc-900">{feedback.created.guia}</strong></p></div></div>
       <div className="space-y-5 p-6 sm:p-8"><div className="flex flex-wrap justify-between gap-3 text-sm"><p className="text-zinc-600">{values.recipientName} · {values.recipientCity}</p><p className="font-semibold text-zinc-900">{typeof feedback.created.sellPrice === "number" ? money(feedback.created.sellPrice) : "Preço final por consultar"}</p></div>
         {feedback.warning && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{feedback.warning}</p>}
@@ -224,12 +238,12 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
             {[<div key="shipment-data" className="space-y-2.5"><div id="shipment-section-parties" className="scroll-mt-6"><PartiesStep clientId={client.id} quote={quote} /></div><div id="shipment-section-parcel" className="scroll-mt-6"><ParcelStep quote={quote} /></div><div id="shipment-section-service" className="scroll-mt-6"><ServiceStep quote={quote} role={role} /></div></div>, <ReviewStep key="review" quote={quote} role={role} onEdit={editShipmentSection} />].map((component, index) => <div key={index} hidden={step !== index}><h2 id={`shipment-step-${index}-title`} tabIndex={-1} className="sr-only outline-none">{SHIPMENT_STEPS[index]}</h2>{component}</div>)}
             {quote.isBlocked && values.recipientPostal.trim() && (values.serviceId || (!quote.options.length && !quote.multiVolumeServiceUnavailable && (!quote.isIsland || !!quote.selectedMode))) && <p role="alert" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900"><AlertCircle size={15} className="mt-0.5 shrink-0" />{quote.blockedReason}</p>}
             {role === "ops" && <OpsOverridesPanel client={client} quote={quote} />}
-            <div className="hidden items-center justify-between gap-3 pt-1 lg:flex"><button type="button" disabled={step === 0 || busy} onClick={() => setStep(step - 1)} className={secondaryButton}><ArrowLeft size={15} />Anterior</button><button type="button" onClick={next} disabled={busy || resource.loading || step === REVIEW_STEP && quote.isBlocked} className={primaryButton}>{form.formState.isSubmitting ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : null}{form.formState.isSubmitting ? "A emitir…" : nextLabel}{!form.formState.isSubmitting && <ArrowRight size={15} />}</button></div>
+            <div className="hidden items-center justify-between gap-3 pt-1 lg:flex"><button type="button" disabled={step === 0 || busy} onClick={() => setStep(step - 1)} className={secondaryButton}><ArrowLeft size={15} />Anterior</button><button type="button" onClick={next} disabled={busy || resource.loading || step === REVIEW_STEP && quote.isBlocked} className={primaryButton}>{form.formState.isSubmitting ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : null}{form.formState.isSubmitting ? quote.requiresQuotation ? "A enviar pedido…" : "A emitir…" : nextLabel}{!form.formState.isSubmitting && <ArrowRight size={15} />}</button></div>
           </fieldset>
         </form>
-        <aside className="sticky top-6 hidden space-y-4 lg:block"><ShipmentSummary quote={quote} values={values} />{role === "client" && client.billing_type === "pay_as_you_go" && <button type="button" className={`${secondaryButton} w-full`} onClick={() => setTopUpOpen(true)}>Carregar saldo</button>}<p className="px-2 text-xs leading-relaxed text-zinc-400">A guia e a etiqueta ficam disponíveis no histórico após a emissão.</p></aside>
+        <aside className="sticky top-6 hidden space-y-4 lg:block"><ShipmentSummary quote={quote} values={values} />{role === "client" && client.billing_type === "pay_as_you_go" && <button type="button" className={`${secondaryButton} w-full`} onClick={() => setTopUpOpen(true)}>Carregar saldo</button>}<p className="px-2 text-xs leading-relaxed text-zinc-400">{quote.requiresQuotation ? "A proposta fica disponível na área Cotações." : "A guia e a etiqueta ficam disponíveis no histórico após a emissão."}</p></aside>
       </div>
-      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-zinc-200 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] lg:hidden"><button type="button" aria-haspopup="dialog" onClick={() => summaryDialog.current?.showModal()} className="flex min-w-0 items-center gap-2 text-left"><div><span className="block text-[10px] uppercase tracking-wider text-zinc-400">Resumo{quote.quote ? (quote.quote.vatPct > 0 ? ` (c/ IVA ${quote.quote.vatPct}%)` : " (Isento IVA)") : ""}</span><strong className="text-xl font-semibold tabular-nums">{quote.quote ? money(quote.quote.totalWithVat) : "—"}</strong></div><ChevronUp size={17} className="text-zinc-400" /></button><div className="flex gap-2">{step > 0 && <button type="button" aria-label="Passo anterior" disabled={busy} onClick={() => setStep(step - 1)} className={`${secondaryButton} !px-3`}><ArrowLeft size={16} /></button>}<button type="button" onClick={next} disabled={busy || resource.loading || step === REVIEW_STEP && quote.isBlocked} className={primaryButton}>{busy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <>{nextLabel}<ArrowRight size={15} /></>}</button></div></div>
+      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-zinc-200 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] lg:hidden"><button type="button" aria-haspopup="dialog" onClick={() => summaryDialog.current?.showModal()} className="flex min-w-0 items-center gap-2 text-left"><div><span className="block text-[10px] uppercase tracking-wider text-zinc-400">Resumo{quote.quote ? (quote.quote.vatPct > 0 ? ` (c/ IVA ${quote.quote.vatPct}%)` : " (Isento IVA)") : ""}</span><strong className="text-xl font-semibold tabular-nums">{quote.requiresQuotation ? "Sob cotação" : quote.quote ? money(quote.quote.totalWithVat) : "—"}</strong></div><ChevronUp size={17} className="text-zinc-400" /></button><div className="flex gap-2">{step > 0 && <button type="button" aria-label="Passo anterior" disabled={busy} onClick={() => setStep(step - 1)} className={`${secondaryButton} !px-3`}><ArrowLeft size={16} /></button>}<button type="button" onClick={next} disabled={busy || resource.loading || step === REVIEW_STEP && quote.isBlocked} className={primaryButton}>{busy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <>{nextLabel}<ArrowRight size={15} /></>}</button></div></div>
       <dialog ref={summaryDialog} aria-labelledby="shipment-mobile-summary-title" className="fixed inset-x-0 bottom-0 top-auto m-0 max-h-[85dvh] w-full max-w-none overflow-y-auto rounded-t-2xl border-0 bg-zinc-50 p-4 backdrop:bg-zinc-950/40 lg:hidden"><div className="mb-4 flex items-center justify-between"><h2 id="shipment-mobile-summary-title" className="text-base font-semibold">Resumo do envio</h2><button type="button" aria-label="Fechar resumo" onClick={() => summaryDialog.current?.close()} className="rounded-lg p-2 text-zinc-500"><X size={20} /></button></div><ShipmentSummary quote={quote} values={values} /><button type="button" disabled={busy || resource.loading || step === REVIEW_STEP && quote.isBlocked} onClick={() => { summaryDialog.current?.close(); next() }} className={`${primaryButton} mt-4 w-full`}>{nextLabel}<ArrowRight size={15} /></button>{role === "client" && client.billing_type === "pay_as_you_go" && <button type="button" onClick={() => { summaryDialog.current?.close(); setTopUpOpen(true) }} className={`${secondaryButton} mt-3 w-full`}>Carregar saldo</button>}</dialog>
     </FormProvider>}
     {role === "client" && <ClientTopUpModal isOpen={topUpOpen} onClose={() => setTopUpOpen(false)} clientId={client.id} />}

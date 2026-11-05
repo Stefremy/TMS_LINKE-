@@ -743,7 +743,7 @@ export async function convertZplToPdfAction(
   try {
     console.log(`[Labelary] Iniciando conversão ZPL→PDF (${zpl.length} chars)`)
 
-    const res = await fetch("https://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/", {
+    const res = await fetch("https://api.labelary.com/v1/printers/8dpmm/labels/4x6/", {
       method: "POST",
       headers: {
         "Accept": "application/pdf",

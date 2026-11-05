@@ -126,7 +126,7 @@ export default async function EnviosPage(props: { searchParams?: Promise<Record<
       dotColor: statusCfg.dotColor
     },
     value: { 
-      amount: s.sell_price ? `${s.sell_price}€` : "0.00€", 
+      amount: s.ops_substatus === "aguarda_emissao_parceiro" ? "Aguarda guia" : s.sell_price ? `${s.sell_price}€` : "0.00€", 
       diff: "0.00€", 
       diffColor: "text-[var(--text-secondary)] border-[var(--border-subtle)] bg-[var(--surface-muted)]", 
       ref: "REF" 

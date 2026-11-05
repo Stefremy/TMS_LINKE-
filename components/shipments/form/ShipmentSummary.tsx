@@ -10,6 +10,13 @@ export function ShipmentSummary({ quote, values }: { quote: ShipmentQuote; value
   const price = quote.quote
   const hasVat = (price?.vatPct ?? 0) > 0
   const kg = (weight: number | null | undefined) => weight == null ? "—" : `${weight.toLocaleString("pt-PT", { maximumFractionDigits: 3 })} kg`
+  if (quote.requiresQuotation) return <section aria-label="Resumo do pedido de cotação" className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs">
+    <h2 className="text-sm font-semibold text-zinc-900">Pedido de cotação</h2>
+    <p className="text-sm text-zinc-700">{values.recipientName || "Destinatário"} · {values.recipientCountry}</p>
+    <p className="text-xs text-zinc-500">{values.volumesCount} volume(s) · {kg(values.weightKg)} · {values.lengthCm} × {values.widthCm} × {values.heightCm} cm</p>
+    <div className="rounded-lg bg-emerald-50 p-3"><p className="font-semibold text-emerald-900">Sob cotação</p><p className="mt-1 text-xs leading-relaxed text-emerald-800">A equipa confirma o valor com o parceiro. Pode acompanhar a proposta em Cotações.</p></div>
+    <p className="text-xs leading-relaxed text-zinc-500">Após aceitar a proposta, cria o envio no TMS. A guia é emitida pela Linke na sua conta Correos.</p>
+  </section>
   return <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xs">
     <div className="flex items-center gap-2 border-b border-zinc-100 px-4 py-3"><ReceiptText size={16} className="text-zinc-400" /><h2 className="text-sm font-semibold tracking-tight text-zinc-900">Resumo</h2>{price && <span className={`rounded-md px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${hasVat ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-600"}`}>{hasVat ? `IVA ${price.vatPct}%` : "Isento IVA (0%)"}</span>}<span className="ml-auto rounded-md bg-zinc-100 px-2 py-1 text-[9px] font-medium uppercase tracking-wide text-zinc-500">Estimativa</span></div>
     <div className="space-y-3 p-4">
