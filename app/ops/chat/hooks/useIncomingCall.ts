@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { IncomingCall } from "@/lib/team-chat-calls"
 
-export function useIncomingCall(viewer: string, activeRoom?: string) {
+export function useIncomingCall(viewer: string, activeRoom?: string, enabled = true) {
   const [incoming, setIncoming] = useState<IncomingCall | null>(null)
   const [soundReady, setSoundReady] = useState(false)
   const dismissed = useRef(new Set<string>())
@@ -24,6 +24,7 @@ export function useIncomingCall(viewer: string, activeRoom?: string) {
     }
   }, [enableSound])
   useEffect(() => {
+    if (!enabled) { const reset = setTimeout(() => setIncoming(null), 0); return () => clearTimeout(reset) }
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout>
     const poll = async () => {
@@ -41,7 +42,7 @@ export function useIncomingCall(viewer: string, activeRoom?: string) {
     }
     void poll()
     return () => { controller.abort(); clearTimeout(timer) }
-  }, [viewer, activeRoom])
+  }, [viewer, activeRoom, enabled])
   const incomingRoom = incoming?.roomId
   useEffect(() => { if (incomingRoom) enableSound() }, [incomingRoom, enableSound])
   useEffect(() => {

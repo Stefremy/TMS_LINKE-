@@ -37,6 +37,19 @@ export type ChatInboxItem = {
   sequences?: number[]
 }
 
+export type ChatNotification = {
+  id: string
+  sequence: number
+  key: string
+  kind: "dm" | "channel"
+  title: string
+  sender_id: string
+  sender_name: string
+  sender_avatar_url: string | null
+  preview: string
+  created_at: string
+}
+
 export const DEFAULT_CHANNELS: ChatChannel[] = [
   { id: "geral", slug: "geral", name: "Sala geral", description: "Toda a equipa", is_default: true },
   { id: "operacoes", slug: "operacoes", name: "Operações", description: "Recolhas, trânsito e incidências" },

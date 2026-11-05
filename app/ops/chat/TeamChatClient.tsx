@@ -122,6 +122,25 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
   const me = members.find(member => member.user_id === initial.viewerId)
   const currentChannel = channels.find(c => c.slug === activeChannel) || channels[0] || { name: "Sala geral", description: "Toda a equipa", slug: "geral" }
 
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (deepLinkHandled.current) return
+    const params = new URLSearchParams(window.location.search)
+    const conversation = params.get("conv"), answer = params.get("answer")
+    if (!conversation) return
+    // Opened from the global pop-up: jump to that conversation and optionally join the call.
+    const timer = window.setTimeout(() => {
+      deepLinkHandled.current = true
+      if (conversation.startsWith("dm_")) selectConversation(conversation.slice(3))
+      else if (conversation.startsWith("ch_")) selectChannel(conversation.slice(3))
+      const mode = params.get("mode") === "video" ? "video" : "audio"
+      if (answer && /^[a-z0-9_-]{2,64}$/i.test(answer)) void startOrJoinCall(mode, answer, params.get("title") || undefined, false)
+      window.history.replaceState(null, "", "/ops/chat")
+    }, 0)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {

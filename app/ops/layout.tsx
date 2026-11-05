@@ -4,6 +4,7 @@ import Link from "next/link"
 import { OpsSidebar } from "./components/OpsSidebar"
 import { getMyProfile } from "@/lib/auth/profile"
 import { NotificationBell } from "./components/NotificationBell"
+import { OpsLiveToasts } from "./components/OpsLiveToasts"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
 import { OpsPageSurface } from "./components/OpsPageSurface"
 import { canAccessOpsRoute } from "@/lib/auth/permissions"
@@ -39,6 +40,7 @@ export default async function OpsLayout({
     <div className="tms-shell tms-workspace bg-[var(--canvas-bg)] flex flex-col text-[var(--text-primary)]">
       {/* Interactive Collapsible Sidebar */}
       <OpsSidebar canAccessDocuments={canAccessStaffDocuments(authContext)} canSendMessages={canSendClientMessages(authContext)} access={access} />
+      {user?.id && <OpsLiveToasts viewerId={user.id} />}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">

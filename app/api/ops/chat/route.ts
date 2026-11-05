@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { ChatError, chatBody, chatCursor, chatRecipient, isChatUuid } from "@/lib/team-chat"
-import { chatContext, readTeamChat, readTeamChatInbox, sendTeamChat } from "@/lib/team-chat-server"
+import { chatContext, readTeamChat, readTeamChatInbox, readTeamChatNotifications, sendTeamChat } from "@/lib/team-chat-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams
     const context = await chatContext(params.get("viewer") || undefined)
     if (params.get("inbox") === "1") return NextResponse.json({ viewerId: context.user.id, items: await readTeamChatInbox(context) }, { headers })
+    if (params.get("notify") === "1") return NextResponse.json({ viewerId: context.user.id, ...await readTeamChatNotifications(context, chatCursor(params.get("after"))) }, { headers })
     const before = chatCursor(params.get("before")), after = chatCursor(params.get("after"))
     if (before && after) throw new ChatError("Página inválida.")
     const channel = params.get("channel") || "geral"

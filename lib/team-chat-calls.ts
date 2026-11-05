@@ -4,6 +4,7 @@ import type { AuthContext } from "@/lib/auth/context"
 import { createAdminClient } from "@/lib/supabase/server"
 import { ChatError } from "@/lib/team-chat"
 import { getCallIceConfiguration } from "@/lib/chat-call-ice"
+import { getChatStaffAvatars } from "@/lib/team-chat-avatars"
 import { parseCallMessage } from "@/lib/team-chat-media"
 
 const roomSchema = z.string().regex(/^[a-z0-9_-]{2,64}$/i)
@@ -21,7 +22,7 @@ export const callSignalSchema = z.object({
 })
 export type CallSignalInput = z.infer<typeof callSignalSchema>
 type StoredSignalRow = { id: string; created_at: string; details: { room_id: string; sender_id: string; sender_name: string; signal: Omit<CallSignalInput, "id"> } }
-export type IncomingCall = { roomId: string; mode: "audio" | "video"; title: string; senderId: string; senderName: string; conversationKey: string; createdAt: string }
+export type IncomingCall = { roomId: string; mode: "audio" | "video"; title: string; senderId: string; senderName: string; senderAvatarUrl?: string | null; conversationKey: string; createdAt: string }
 
 type InviteRow = { sender_id: string; recipient_id: string | null; sender_name: string; body: string; created_at: string }
 const cleanBody = (body: string) => body.replace(/^\[c:[a-z0-9_-]+\]\s*/, "")
@@ -83,5 +84,10 @@ export async function readIncomingCalls(ctx: AuthContext): Promise<IncomingCall[
     .eq("details->signal->>type", "leave").gte("created_at", cutoff).limit(100)
   if (endedError) throw new ChatError("Não foi possível confirmar as chamadas recebidas.", 503)
   const endedRooms = new Set(((ended || []) as { details: { room_id: string } }[]).map(row => row.details.room_id))
-  return calls.filter(call => !endedRooms.has(call.roomId))
+  const active = calls.filter(call => !endedRooms.has(call.roomId))
+  if (!active.length) return active
+  // Avatars are cosmetic: a lookup failure must never hide a ringing call.
+  let avatars = new Map<string, string | null>()
+  try { avatars = await getChatStaffAvatars(ctx.tenant_id) } catch { /* keep the call without a photo */ }
+  return active.map(call => ({ ...call, senderAvatarUrl: avatars.get(call.senderId) ?? null }))
 }

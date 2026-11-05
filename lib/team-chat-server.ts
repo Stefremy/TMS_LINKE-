@@ -3,7 +3,7 @@ import { getAuthContext, type AuthContext } from "@/lib/auth/context"
 import { getChatStaffAvatars, getChatStaffMembers } from "@/lib/team-chat-avatars"
 import { getMyProfile } from "@/lib/auth/profile"
 import { createAdminClient } from "@/lib/supabase/server"
-import { CHAT_PAGE_SIZE, ChatError, DEFAULT_CHANNELS, normalizeChannelSlug, type ChatChannel, type ChatInboxItem, type ChatMember, type ChatMessage, type ChatPage } from "@/lib/team-chat"
+import { CHAT_PAGE_SIZE, ChatError, DEFAULT_CHANNELS, normalizeChannelSlug, type ChatChannel, type ChatInboxItem, type ChatMember, type ChatNotification, type ChatMessage, type ChatPage } from "@/lib/team-chat"
 
 const MESSAGE_FIELDS = "id, sequence, sender_id, recipient_id, sender_name, sender_avatar_url, body, created_at"
 
@@ -294,3 +294,51 @@ export async function sendTeamChat(
   return { ...data, body: cleanBody, channel_slug: ch } as ChatMessage
 }
 
+
+
+function notificationPreview(body: string): string {
+  if (/^\[gif:https?:\/\//i.test(body)) return "Enviou um GIF"
+  if (/^\[call:video:/i.test(body)) return "Videochamada"
+  if (/^\[call:audio:/i.test(body)) return "Chamada de voz"
+  if (/^\[file:https?:\/\//i.test(body)) {
+    const name = body.match(/^\[file:https?:\/\/[^|\s\]]+\|([^|\]]+)\|/i)
+    return name ? `Anexo: ${name[1].trim()}` : "Enviou um anexo"
+  }
+  return body.slice(0, 140)
+}
+
+/**
+ * Lightweight feed for the global top-of-page toasts: only messages from
+ * colleagues that this viewer may read. Without a cursor it just returns the
+ * latest sequence so the client can start from "now" without replaying history.
+ */
+export async function readTeamChatNotifications(context: AuthContext, after: number | null): Promise<{ latestSequence: number; items: ChatNotification[] }> {
+  const admin = createAdminClient()
+  if (after === null) {
+    const { data, error } = await admin.from("team_chat_messages").select("sequence").eq("tenant_id", context.tenant_id)
+      .order("sequence", { ascending: false }).limit(1)
+    databaseError(error)
+    return { latestSequence: (data?.[0] as { sequence: number } | undefined)?.sequence || 0, items: [] }
+  }
+  const { data, error } = await admin.from("team_chat_messages").select(MESSAGE_FIELDS).eq("tenant_id", context.tenant_id)
+    .gt("sequence", after).order("sequence", { ascending: true }).limit(30)
+  databaseError(error)
+  const rows = (data || []) as ChatMessage[]
+  let latestSequence = after
+  const staff = rows.length ? await getChatStaffMembers(context.tenant_id) : new Map<string, ChatMember>()
+  const channels = rows.some(row => !row.recipient_id) ? await listTeamChatChannels(context.tenant_id) : []
+  const channelNames = new Map(channels.map(channel => [channel.slug, channel.name]))
+  const items: ChatNotification[] = []
+  for (const row of rows) {
+    latestSequence = Math.max(latestSequence, row.sequence)
+    if (row.sender_id === context.user.id) continue
+    if (row.recipient_id && row.recipient_id !== context.user.id) continue
+    const parsed = parseMessageBody(row.body)
+    const staffMember = staff.get(row.sender_id)
+    const base = { id: row.id, sequence: row.sequence, sender_id: row.sender_id, sender_name: staffMember?.name || row.sender_name,
+      sender_avatar_url: staffMember ? staffMember.avatar_url : row.sender_avatar_url, preview: notificationPreview(parsed.cleanBody), created_at: row.created_at }
+    if (row.recipient_id) items.push({ ...base, key: `dm_${row.sender_id}`, kind: "dm", title: base.sender_name })
+    else items.push({ ...base, key: `ch_${parsed.channelSlug}`, kind: "channel", title: channelNames.get(parsed.channelSlug) || parsed.channelSlug })
+  }
+  return { latestSequence, items }
+}
