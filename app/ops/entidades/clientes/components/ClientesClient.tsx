@@ -589,6 +589,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
         <ClienteModal
           initialData={editingCliente}
           servicosLinke={servicosLinke}
+          sourceClients={clientes}
           canManageAccess={canManageAccess}
           canSendAccessEmail={canSendAccessEmail}
           defaultPaymentDays={defaultPaymentDays}

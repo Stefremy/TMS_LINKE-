@@ -22,7 +22,7 @@
     "test:reports": "node --test tests/operational-reports.test.cjs",
     "test:domains": "node --test tests/domain-routing.test.cjs",
     "test:manifests": "node --test tests/ctt-manifest.test.cjs tests/ctt-close-protocol.test.cjs",
-    "test:finance": "node --test tests/current-account-credit.test.cjs tests/stripe-wallet-audit.test.cjs tests/wallet-sql.test.cjs tests/client-balance.test.cjs tests/carrier-weight-pricing.test.cjs tests/carrier-weight-adjustment-sql.test.cjs",
+    "test:finance": "node --test tests/client-service-import.test.cjs tests/current-account-credit.test.cjs tests/stripe-wallet-audit.test.cjs tests/wallet-sql.test.cjs tests/client-balance.test.cjs tests/carrier-weight-pricing.test.cjs tests/carrier-weight-adjustment-sql.test.cjs",
     "test:shipment-form": "node --test tests/shipment-form-schema.test.cjs tests/shipment-form-quote.test.cjs tests/shipment-form-security.test.cjs tests/shipment-form-render.test.cjs",
     "test:database-efficiency": "node --test tests/database-query-efficiency.test.cjs",
     "test:calendar": "node --test tests/calendar-dates.test.cjs tests/calendar-reminders.test.cjs tests/calendar-events.test.cjs tests/calendar-actions.test.cjs tests/calendar-cache.test.cjs tests/calendar-groups-sql.test.cjs tests/dashboard-calendar.test.cjs"

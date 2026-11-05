@@ -4,6 +4,7 @@ import { SpecialFeesEditor } from "@/components/shipments/SpecialFeesEditor"
 import { DEFAULT_STANDARD_SPECIAL_FEES } from "@/lib/pricing/special-fee-catalogue"
 import { resolveClientSpecialFees } from "@/lib/pricing/special-fees"
 
+import { importClientServices, importableClientServiceIds, type ClientServiceImportSource } from "@/lib/clients/import-service-pricing"
 import { CLIENT_ACTIVITY_COLORS, clientActivityColor } from "@/lib/clients/activity-color"
 import { CountrySelect } from "@/components/country-select"
 import { normalizeClientBillingFields, usesPrincipalBillingAddress, getClientBillingAddress } from "@/lib/client-addresses"
@@ -73,6 +74,7 @@ import {
 interface ClienteModalProps {
   initialData?: Cliente | null
   servicosLinke?: ServicoLinke[]
+  sourceClients?: ClientServiceImportSource[]
   canManageAccess?: boolean
   canSendAccessEmail?: boolean
   standardSpecialFees?: ClientSpecialServiceFee[]
@@ -86,7 +88,7 @@ interface ClienteModalProps {
 type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario" | "acesso"
 type PrecarioSubTab = "servicos_linke" | "suplementares" | "geral"
 
-export function ClienteModal({ initialData, servicosLinke = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, standardSpecialFees = DEFAULT_STANDARD_SPECIAL_FEES, standardFuelSurchargePct, onManageAccess, onClose, onSaved }: ClienteModalProps) {
+export function ClienteModal({ initialData, servicosLinke = [], sourceClients = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, standardSpecialFees = DEFAULT_STANDARD_SPECIAL_FEES, standardFuelSurchargePct, onManageAccess, onClose, onSaved }: ClienteModalProps) {
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
@@ -147,6 +149,9 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
   const [expandedPriceServico, setExpandedPriceServico] = React.useState<string | null>(null)
   const [activeZoneByServico, setActiveZoneByServico] = React.useState<Record<string, number>>({})
   const [isEditingCredit, setIsEditingCredit] = React.useState(false)
+  const [importSourceId, setImportSourceId] = React.useState("")
+  const [replaceImportedPrices, setReplaceImportedPrices] = React.useState(false)
+  const [importNotice, setImportNotice] = React.useState("")
 
   React.useEffect(() => {
     if (initialData) {
@@ -387,6 +392,24 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
       default_linke_table_id: !authorize && prev.default_linke_table_id === service.id ? "" : prev.default_linke_table_id,
     }))
     if (!authorize && expandedPriceServico === service.id) setExpandedPriceServico(null)
+  }
+  const importSources = sourceClients.filter(client => client.id !== (initialData?.id || draftId))
+    .sort((a, b) => a.short_name.localeCompare(b.short_name, "pt-PT"))
+  const importSource = importSources.find(client => client.id === importSourceId)
+  const importServiceIds = importSource ? importableClientServiceIds(importSource, servicosLinke, initialData?.id || draftId) : []
+  const importOverlap = importServiceIds.filter(id => (formData.assigned_linke_service_ids || []).includes(id)).length
+  const handleImportServices = () => {
+    if (!importSource) return
+    try {
+      const result = importClientServices(formData, importSource, servicosLinke, replaceImportedPrices)
+      setFormData(result.client)
+      setExpandedPriceServico(null)
+      setImportNotice(`${result.added} ${result.added === 1 ? "serviço adicionado" : "serviços adicionados"}${result.updated ? ` e ${result.updated} ${result.updated === 1 ? "serviço com preços atualizados" : "serviços com preços atualizados"}` : ""} de ${importSource.short_name}. Clique em «Gravar Cliente» para guardar.`)
+      setSaveError("")
+    } catch (error) {
+      setImportNotice("")
+      setSaveError(error instanceof Error ? error.message : "Não foi possível importar os serviços.")
+    }
   }
   const visibleAssignedTablesCount = assignedServices.length
   const activeSpecialFeesCount = specialFeesList.filter((fee) => fee.is_enabled).length
@@ -1552,6 +1575,34 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
               {/* SUBTAB 1: SERVIÇOS AUTORIZADOS */}
               {precarioSubTab === "servicos_linke" && (
                 <div className="space-y-4">
+                  <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 shadow-xs">
+                    <div className="mb-3">
+                      <h4 className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)]"><Upload className="h-4 w-4 text-[var(--accent)]" />Importar serviços de outro cliente</h4>
+                      <p className="mt-1 text-[11px] text-[var(--text-secondary)]">Copia os serviços autorizados e os respetivos preços e escalões personalizados por zona.</p>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="min-w-0 flex-1 text-[11px] font-semibold text-[var(--text-secondary)]">
+                        Cliente de origem
+                        <select value={importSourceId} disabled={isSaving || importSources.length === 0}
+                          onChange={e => { setImportSourceId(e.target.value); setReplaceImportedPrices(false); setImportNotice("") }}
+                          className="mt-1 block w-full min-w-48 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs text-[var(--text-primary)]">
+                          <option value="">{importSources.length ? "Escolher cliente…" : "Não existem outros clientes disponíveis"}</option>
+                          {importSources.map(client => <option key={client.id} value={client.id}>{client.short_name} · {client.code}</option>)}
+                        </select>
+                      </label>
+                      <button type="button" onClick={handleImportServices}
+                        disabled={isSaving || !importServiceIds.length || importOverlap === importServiceIds.length && !replaceImportedPrices}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40">
+                        <Upload className="h-3.5 w-3.5" />Importar serviços{importSource ? ` (${importServiceIds.length})` : ""}
+                      </button>
+                    </div>
+                    {importSource && <p className="mt-2 text-[11px] text-[var(--text-secondary)]">{importServiceIds.length ? `${importServiceIds.length} ${importServiceIds.length === 1 ? "serviço disponível" : "serviços disponíveis"}.` : "Este cliente não tem serviços ativos disponíveis para importar."}</p>}
+                    {importOverlap > 0 && <label className="mt-2 flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+                      <input type="checkbox" checked={replaceImportedPrices} disabled={isSaving} onChange={e => setReplaceImportedPrices(e.target.checked)} className="accent-[var(--accent)]" />
+                      Substituir também os preços e escalões dos serviços já autorizados ({importOverlap})
+                    </label>}
+                    {importNotice && <p role="status" className="mt-3 rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent)]">{importNotice}</p>}
+                  </div>
                   {/* Grid de Serviços Linke Autorizados */}
                   <div className="bg-[var(--surface-bg)] rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)] overflow-hidden">
                     <div className="px-5 py-3 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-3">
@@ -1566,12 +1617,12 @@ export function ClienteModal({ initialData, servicosLinke = [], canManageAccess 
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {Object.keys(formData.custom_tier_overrides || {}).length > 0 && (
+                        {(Object.keys(formData.custom_tier_overrides || {}).length > 0 || Object.keys(formData.pricing?.service_weight_tiers || {}).length > 0) && (
                           <button
                             type="button"
                             onClick={() => {
                               if (confirm("Deseja repor todas as tabelas e escalões personalizados deste cliente para os valores originais dos Serviços Linke?")) {
-                                setFormData((prev) => ({ ...prev, custom_tier_overrides: {} }))
+                                setFormData((prev) => ({ ...prev, custom_tier_overrides: {}, pricing: { ...(prev.pricing || DEFAULT_CLIENT_PRICING), service_weight_tiers: {} } }))
                               }
                             }}
                             className="px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md hover:bg-amber-100 transition-colors flex items-center gap-1 cursor-pointer"
