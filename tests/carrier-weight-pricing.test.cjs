@@ -125,3 +125,43 @@ test('per-zone client overrides price Zona 2 and Zona 3 independently and surviv
   sellPrice:qPl.sellPrice,buyPrice:qPl.buyPrice,basePrice:qPl.basePrice,fuelAmount:qPl.fuelSurchargeAmount,specialAmount:0})
  assert.equal(adjPl.basePrice,32.00)
 })
+
+test('client-only weight ladders add and delete thresholds, preserving carrier costs and other clients/zones',()=>{
+ const custom={pricing:{service_weight_tiers:{'svc::PT-CONT':[
+  {id:'a',label:'Até 1 kg',weight_max:1,sell_price:3},
+  {id:'b',label:'Até 3 kg',weight_max:3,sell_price:5},
+  {id:'c',label:'Até 20 kg',weight_max:20,sell_price:14},
+ ]}}}
+ const quote=(w,c=custom,country='PT')=>calculateShipmentPrice(w,{...c,default_linke_table_id:service.id},[service],country,country==='PT'?'4800-001':'28001',{requireConfiguredTariff:true})
+ assert.equal(quote(2.5).basePrice,5)
+ assert.equal(quote(2.5).buyPrice,4)
+ assert.equal(quote(4).basePrice,14)
+ assert.equal(quote(4).buyPrice,4)
+ assert.equal(quote(2.5,{}).basePrice,6)
+ assert.equal(quote(2.5,custom,'ES').basePrice,15)
+ assert.throws(()=>quote(21),/Tarifa/)
+ const shortened={...custom,pricing:{service_weight_tiers:{'svc::PT-CONT':custom.pricing.service_weight_tiers['svc::PT-CONT'].slice(0,2)}}}
+ assert.throws(()=>quote(4,shortened),/escalão personalizado/)
+ const frozen=pure.captureWeightPricingBasis(custom,service,'PT','4800-001')
+ custom.pricing.service_weight_tiers['svc::PT-CONT'][1].sell_price=99
+ assert.equal(quote(2.5,frozen.client).basePrice,5)
+ assert.deepEqual(Object.keys(frozen.client.pricing),['service_weight_tiers'])
+})
+
+test('client tier validation, additional kilograms, legacy migration and preview stay consistent',()=>{
+ const h=loadPure('lib/pricing/client-weight-tiers.ts')
+ const base=[tier(10,12,8),{...tier(999,0.5,0.2),label:'Kg adicional'}]
+ const rows=h.materializeClientWeightTiers(base,[14,0.7])
+ assert.equal(h.clientWeightTierPrice(rows,12).price,15.4)
+ assert.deepEqual(h.clientTierReference(base,12),{cost:8.4,standard:13})
+ const svc={...service,zones:[{zone_code:'PT-CONT',zone_name:'Continente',tiers:base}]}
+ const c={default_linke_table_id:svc.id,pricing:{service_weight_tiers:{'svc::PT-CONT':rows}}}
+ const result=calculateShipmentPrice(12,c,[svc],'PT','4800-001',{requireConfiguredTariff:true})
+ assert.equal(result.basePrice,15.4);assert.equal(result.buyPrice,8.4);assert.equal(result.fuelSurchargeAmount,1.54)
+ const preview=loadPure('lib/pricing/calculate-client-shipment-preview.ts').calculateClientShipmentPreview(12,c,svc,'PT','4800-001')
+ assert.equal(preview.basePrice,result.basePrice)
+ for(const invalid of [[],[rows[0],{...rows[0],id:'duplicate-weight'}],[{...rows[0],sell_price:0}],[rows[1]],[{...rows[0],weight_max:Infinity}]])assert.throws(()=>h.validateClientWeightTiers({'svc::PT-CONT':invalid}),/escal|peso|preço/i)
+ const stripped=h.validateClientWeightTiers({'svc::PT-CONT':[{...rows[0],cost_price:999}]})
+ assert.equal(stripped['svc::PT-CONT'][0].cost_price,undefined)
+ assert.deepEqual(base.map(t=>t.weight_max),[10,999])
+})

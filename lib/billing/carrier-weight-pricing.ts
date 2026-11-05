@@ -18,13 +18,15 @@ export function captureWeightPricingBasis(client: Partial<Cliente>, service: Ser
   weight?: { volumetricWeightKg: number | null; volumetricDivisor: number | null }): WeightPricingBasis {
   const zone = findExactZone(service.zones, resolveServiceZoneCode(service, country, postal))
   if (!zone) throw new Error('Zona tarifária não encontrada.')
+  const customTiers = resolveZoneTierOverrides(client.pricing?.service_weight_tiers, service, zone.zone_code)
   const overrides = resolveZoneTierOverrides(client.custom_tier_overrides, service, zone.zone_code)
   return structuredClone({ version: 1, country, postal,
     ...(weight?.volumetricWeightKg != null ? { volumetricWeightKg: weight.volumetricWeightKg, volumetricDivisor: weight.volumetricDivisor } : {}),
     service: { id: service.id, name: service.name, code: service.code, webservice_service_code: service.webservice_service_code,
       is_active: true, zones: [zone], allowed_zones: [zone.zone_code],
       fuel_surcharge_pct: client.pricing?.standard_fuel_surcharge_pct ?? service.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5 },
-    client: { default_linke_table_id: service.id, ...(overrides ? { custom_tier_overrides: { [service.id]: overrides } } : {}) },
+    client: { default_linke_table_id: service.id,
+      ...(customTiers ? { pricing: { service_weight_tiers: { [`${service.id}::${zone.zone_code}`]: customTiers } } } : {}), ...(overrides ? { custom_tier_overrides: { [service.id]: overrides } } : {}) },
   }) as WeightPricingBasis
 }
 

@@ -1,5 +1,7 @@
 "use server"
 
+import { validateClientWeightTiers } from "@/lib/pricing/client-weight-tiers"
+
 import { loadStandardSpecialFees } from "@/lib/pricing/standard-special-fees"
 import { withStandardSpecialFees, validateClientSpecialFees } from "@/lib/pricing/special-fees"
 
@@ -359,6 +361,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     assigned_linke_profile: cliente.assigned_linke_profile || "Standard / Geral",
     volume_discount_pct: cliente.volume_discount_pct ?? 0,
     pricing: { ...DEFAULT_CLIENT_PRICING, ...previous?.details?.pricing, ...cliente.pricing,
+      service_weight_tiers: validateClientWeightTiers(cliente.pricing?.service_weight_tiers ?? previous?.details?.pricing?.service_weight_tiers),
       special_services_fees: validateClientSpecialFees(cliente.pricing?.special_services_fees ?? previous?.details?.pricing?.special_services_fees ?? DEFAULT_CLIENT_PRICING.special_services_fees) },
     allowed_webservices: cliente.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.slice(0, 3),
     custom_tier_overrides: cliente.custom_tier_overrides || {},

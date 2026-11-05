@@ -1,3 +1,4 @@
+import type { ClientWeightTierMap } from "@/lib/pricing/client-weight-tiers"
 import { DEFAULT_CTT_SPECIAL_SERVICES_FEES } from "@/lib/pricing/special-fee-catalogue"
 export { DEFAULT_CTT_SPECIAL_SERVICES_FEES } from "@/lib/pricing/special-fee-catalogue"
 import { DEFAULT_CORREOS_SPECIAL_SERVICES_FEES } from "@/lib/services/correos/complementary-services"
@@ -53,6 +54,7 @@ export interface ClientSpecialServiceFee {
 }
 
 export interface ClientPricingConfig {
+  service_weight_tiers?: ClientWeightTierMap
   table_name: string
   fuel_surcharge_pct: number
   /** Effective tenant standard, supplied by the server on each read. */

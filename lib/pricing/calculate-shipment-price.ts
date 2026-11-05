@@ -1,3 +1,4 @@
+import { clientWeightTierPrice } from "@/lib/pricing/client-weight-tiers"
 import { BALEARES_ZONE_NAMES, resolveBalearesTariffZone } from "@/lib/services/correos/baleares-tariffs"
 /**
  * Shared shipment price calculator (server authority and form previews).
@@ -141,11 +142,11 @@ export function getServiceZoneOverrideKey(serviceId: string, zoneCode: string): 
  * Supports explicit per-zone keys (`${serviceId}::${zoneCode}`) while preserving
  * backwards compatibility with legacy `{ [serviceId]: number[] }` entries on `zones[0]`.
  */
-export function resolveZoneTierOverrides(
-  overridesMap: Record<string, number[]> | undefined,
+export function resolveZoneTierOverrides<T = number>(
+  overridesMap: Record<string, T[]> | undefined,
   service: Pick<Partial<ServicoLinke>, "id" | "zones">,
   zoneCode: string
-): number[] | undefined {
+): T[] | undefined {
   if (!overridesMap || !service.id || !zoneCode) return undefined
   const zoneKey = getServiceZoneOverrideKey(service.id, zoneCode)
   if (Object.prototype.hasOwnProperty.call(overridesMap, zoneKey)) {
@@ -538,6 +539,17 @@ function calculateFromZone(
     baseSell = Number((base.sell + extraKg * baseSell).toFixed(2))
     buyPrice = Number((base.buy + extraKg * buyPrice).toFixed(2))
   }
+  let tierLabel = tier.label
+  const customTiers = resolveZoneTierOverrides(client.pricing?.service_weight_tiers, table, zone.zone_code)
+  if (customTiers !== undefined) {
+    try {
+      const custom = clientWeightTierPrice(customTiers, weightKg)
+      baseSell = custom.price
+      tierLabel = custom.label
+    } catch (error) {
+      throw new ShipmentPricingError(error instanceof Error ? error.message : "Escalões personalizados inválidos.")
+    }
+  }
   const fuelPct = (client.pricing?.standard_fuel_surcharge_pct ?? table.fuel_surcharge_pct ?? client.pricing?.fuel_surcharge_pct ?? 12.5) / 100
   const fuelAmount = Number((baseSell * fuelPct).toFixed(2))
   const finalSell = Number((baseSell + fuelAmount).toFixed(2))
@@ -546,7 +558,7 @@ function calculateFromZone(
     basePrice: baseSell,
     sellPrice: finalSell,
     buyPrice,
-    tierLabel: tier.label,
+    tierLabel,
     zoneName: zone.zone_name,
     fuelSurchargeAmount: fuelAmount,
     tableUsed: table.name,

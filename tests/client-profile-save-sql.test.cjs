@@ -33,7 +33,7 @@ test('standalone migration publishes the RPC without wallet tables and reruns wi
 })
 test('the real PostgreSQL function saves two price tables and a default, preserving all other submitted fields', async () => {
   await reset()
-  const details = { ...await profile(), assigned_linke_service_ids:['national','spain'], default_linke_table_id:'national' }
+  const details = { ...await profile(), assigned_linke_service_ids:['national','spain'], default_linke_table_id:'national', pricing:{service_weight_tiers:{'national::PT-CONT':[{id:'new-tier',label:'Até 3 kg',weight_max:3,sell_price:4.2}]}} }
   await save(details)
   assert.deepEqual(await profile(), details)
   assert.equal((await db.query("SELECT count(*)::int n FROM public.audit_log WHERE action='client_data'")).rows[0].n, 1)
@@ -59,4 +59,17 @@ test('only the server role can execute the client-save function', async () => {
     const result=await db.query("SELECT has_function_privilege($1,'public.save_client_financial_profile(uuid,uuid,jsonb,numeric)','EXECUTE') allowed",[role])
     assert.equal(result.rows[0].allowed,role==='service_role')
   }
+})
+
+test('the client save action refuses invalid custom weight ladders before any write',async()=>{
+ const {createLoader}=require('./helpers/load-typescript.cjs')
+ const {fakeSupabase}=require('./helpers/fake-supabase.cjs')
+ const fake=fakeSupabase({clients:[{id:C,tenant_id:T}],audit_log:[]})
+ const load=createLoader({
+  'next/cache':{revalidatePath(){}},'next/navigation':{redirect(){throw Error('Redirect')}},
+  '@/lib/auth/context':{requireEmployee:async()=>({role:'admin',tenant_id:T})},
+  '@/lib/supabase/server':{createAdminClient:()=>fake.client},
+ })
+ await assert.rejects(load('app/actions/clientes.ts').saveClienteAction({id:C,short_name:'Fixture',pricing:{service_weight_tiers:{'svc::PT-CONT':[]}}}),/escalões/)
+ assert.equal(fake.writes.length,0)
 })
