@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams
     const ctx = await chatContext(params.get("viewer") || undefined)
     if (params.get("incoming") === "1") return NextResponse.json({ viewerId: ctx.user.id, calls: await readIncomingCalls(ctx) }, { headers })
-    return NextResponse.json({ viewerId: ctx.user.id, ...await readCallSignals(ctx, params.get("room") || "", params.get("since")) }, { headers })
+    return NextResponse.json({ viewerId: ctx.user.id, ...await readCallSignals(ctx, params.get("room") || "", params.get("since"), params.get("configuration") !== "0") }, { headers })
   } catch (error) { return failure(error) }
 }
 export async function POST(request: Request) {

@@ -3,6 +3,7 @@ import { z } from "zod"
 import type { AuthContext } from "@/lib/auth/context"
 import { createAdminClient } from "@/lib/supabase/server"
 import { ChatError } from "@/lib/team-chat"
+import { getCallIceConfiguration } from "@/lib/chat-call-ice"
 import { parseCallMessage } from "@/lib/team-chat-media"
 
 const roomSchema = z.string().regex(/^[a-z0-9_-]{2,64}$/i)
@@ -40,21 +41,15 @@ export async function requireCallRoom(ctx: AuthContext, room: string) {
   return invite
 }
 
-export function callIceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }]
-  const urls = (process.env.CHAT_TURN_URLS || "").split(",").map(value => value.trim()).filter(value => /^turns?:/i.test(value))
-  if (urls.length && process.env.CHAT_TURN_USERNAME && process.env.CHAT_TURN_CREDENTIAL) servers.push({ urls, username: process.env.CHAT_TURN_USERNAME, credential: process.env.CHAT_TURN_CREDENTIAL })
-  return servers
-}
-
-export async function readCallSignals(ctx: AuthContext, room: string, since?: string | null) {
+export async function readCallSignals(ctx: AuthContext, room: string, since?: string | null, includeConfiguration = true) {
   const invite = await requireCallRoom(ctx, room)
   const after = since && Number.isFinite(Date.parse(since)) ? new Date(Math.max(Date.parse(invite.created_at), Date.parse(since) - 1000)).toISOString() : invite.created_at
   const { data, error } = await createAdminClient().from("audit_log").select("id,created_at,details")
     .eq("tenant_id", ctx.tenant_id).eq("action", "team_chat_call_signal").eq("details->>room_id", room)
     .gte("created_at", after).order("created_at", { ascending: false }).limit(200)
   if (error) throw new ChatError("Não foi possível receber os sinais da chamada.", 503)
-  return { iceServers: callIceServers(), signals: ((data || []) as StoredSignalRow[]).reverse().map(row => ({ id: row.id, createdAt: row.created_at, ...row.details.signal, senderId: row.details.sender_id, senderName: row.details.sender_name })) }
+  const configuration = includeConfiguration ? await getCallIceConfiguration(`${ctx.tenant_id}:${ctx.user.id}:${room}`) : {}
+  return { ...configuration, signals: ((data || []) as StoredSignalRow[]).reverse().map(row => ({ id: row.id, createdAt: row.created_at, ...row.details.signal, senderId: row.details.sender_id, senderName: row.details.sender_name })) }
 }
 
 export async function writeCallSignal(ctx: AuthContext, room: string, input: unknown) {

@@ -7,13 +7,13 @@ export async function openCallTransport(options: { room: string; viewer: string;
   let since = ""
   let sendQueue = Promise.resolve()
   const seen = new Set<string>()
-  const read = async () => {
-    const response = await fetch(`${base}${since ? `&since=${encodeURIComponent(since)}` : ""}`, { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12000)]) })
+  const read = async (configuration = false) => {
+    const response = await fetch(`${base}&configuration=${configuration ? "1" : "0"}${since ? `&since=${encodeURIComponent(since)}` : ""}`, { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12000)]) })
     const data = await response.json()
     if (!response.ok || data.viewerId !== options.viewer) throw new Error(data.error || "Não foi possível ligar a chamada.")
-    return data as { signals: CallSignal[]; iceServers: RTCIceServer[] }
+    return data as { signals: CallSignal[]; iceServers?: RTCIceServer[]; relayConfigured?: boolean; iceTransportPolicy?: RTCIceTransportPolicy }
   }
-  const initial = await read()
+  const initial = await read(true)
   const post = async (signal: OutgoingCallSignal, keepalive = false) => {
     const body = JSON.stringify({ viewerId: options.viewer, room: options.room, signal: { ...signal, id: crypto.randomUUID(), instance: options.instance } })
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -25,7 +25,9 @@ export async function openCallTransport(options: { room: string; viewer: string;
     }
   }
   return {
-    iceServers: initial.iceServers,
+    iceServers: initial.iceServers || [],
+    relayConfigured: initial.relayConfigured === true,
+    iceTransportPolicy: initial.iceTransportPolicy || "all",
     send(signal: OutgoingCallSignal) {
       if (stopped) return
       sendQueue = sendQueue.then(() => post(signal)).catch(options.onError)

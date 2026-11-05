@@ -621,7 +621,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       const transport = await openCallTransport({ room: roomId, viewer: initial.viewerId, instance: instanceId, onError: reportError })
       if (callInstanceIdRef.current !== instanceId) { transport.close(); return }
       callSignalCleanupRef.current = () => transport.close()
-      const pc = new RTCPeerConnection({ iceServers: transport.iceServers })
+      const pc = new RTCPeerConnection({ iceServers: transport.iceServers, iceTransportPolicy: transport.iceTransportPolicy })
       peerConnectionRef.current = pc
       if (stream) for (const track of stream.getTracks()) pc.addTrack(track, stream)
       // Keep both media sections available when a voice call gains video later.
@@ -648,7 +648,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       pc.onconnectionstatechange = () => {
         if (peerConnectionRef.current !== pc) return
         if (pc.connectionState === "connected") setActiveCall(previous => previous?.roomId === roomId ? { ...previous, remoteConnected: true, mediaNotice: notice } : previous)
-        if (pc.connectionState === "failed") setActiveCall(previous => previous?.roomId === roomId ? { ...previous, remoteConnected: false, mediaNotice: "Não foi possível estabelecer áudio/vídeo nesta rede. Tente novamente ou contacte o administrador." } : previous)
+        if (pc.connectionState === "failed") setActiveCall(previous => previous?.roomId === roomId ? { ...previous, remoteConnected: false, mediaNotice: transport.relayConfigured ? "Não foi possível estabelecer áudio/vídeo nesta rede. Tente novamente ou contacte o administrador." : "Esta rede precisa de retransmissão para as chamadas. O serviço da equipa ainda não está configurado." } : previous)
         if (pc.connectionState === "disconnected") setActiveCall(previous => previous?.roomId === roomId ? { ...previous, remoteConnected: false, mediaNotice: "A ligação ao colega foi interrompida." } : previous)
       }
       const negotiator = createCallNegotiator(pc, {
