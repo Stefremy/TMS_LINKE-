@@ -90,7 +90,7 @@ export async function createShipment(formData: FormData) {
     })
     service_type = service.name
     carrierCode = resolveServiceCarrier(service)
-    if (requiresCorreosQuotation(carrierCode, recipientCountry)) throw new ShipmentPricingError("Os envios internacionais da Correos são tratados por cotação. Abra Novo envio para enviar o pedido à equipa.")
+    if (requiresCorreosQuotation(carrierCode, recipientCountry, service)) throw new ShipmentPricingError("Os envios internacionais da Correos são tratados por cotação. Abra Novo envio para enviar o pedido à equipa.")
     if (carrierCode === "ctt" && volumesCount > 1 && !isCttMultiVolumeService(service)) {
       throw new ShipmentPricingError("Envios com mais de um volume exigem uma tabela CTT associada ao Webservice EMSF010.01 (CTT Múltiplo).")
     }

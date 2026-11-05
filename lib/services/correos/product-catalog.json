@@ -115,7 +115,7 @@
     "code": "LK-COR-INTL",
     "title": "Internacional Standard",
     "category": "Internacional",
-    "active": false,
+    "active": true,
     "coverage": [
       "EU 1",
       "EU 2",
@@ -127,7 +127,7 @@
       "A"
     ],
     "transit": "Consultar destino",
-    "description": "Serviço internacional económico porta a porta. Código 90 (monovolume). Mantido desativado; validar tarifas e cobertura do produto antes de ativar."
+    "description": "Serviço internacional económico porta a porta. Código 90 (monovolume). Emitido pela Linke na conta Correos do parceiro: o cliente envia um pedido de cotação e a equipa regista a guia."
   },
   {
     "api": "91",

@@ -56,7 +56,7 @@ export function getDestinationServiceOptions(services: ServicoLinke[], country: 
   const islands = isPortugueseIslandDestination(country, postal)
   return services.filter(service => {
     if (service.is_active === false) return false
-    const manualQuote = requiresCorreosQuotation(detectCarrierGroup(service) || "", country)
+    const manualQuote = requiresCorreosQuotation(detectCarrierGroup(service) || "", country, service)
     if (!manualQuote && !isShipmentDestinationAvailable(country, postal)) return false
     if (islands && mode && getServiceIslandTransportMode(service) !== mode) return false
     const zone = resolveServiceZoneCode(service, country, postal)

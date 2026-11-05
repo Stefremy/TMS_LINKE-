@@ -34,7 +34,7 @@ export function getShipmentQuote({ client, services, values, role }: ShipmentQuo
   const rawOptions: ShipmentQuoteOption[] = compatible.filter(service => role !== "ops" || !values.carrierOverride || values.carrierOverride === (isCorreosLinkeService(service) ? "correos" : "ctt")).map(service => {
     const carrier: ShipmentQuoteOption["carrier"] = isCorreosLinkeService(service) ? "correos" : "ctt"
     const zone = getServiceDestinationZone(service, values.recipientCountry, values.recipientPostal)
-    if (requiresCorreosQuotation(carrier, values.recipientCountry)) return { service, carrier, zone, quote: null, error: null, requiresQuotation: true }
+    if (requiresCorreosQuotation(carrier, values.recipientCountry, service)) return { service, carrier, zone, quote: null, error: null, requiresQuotation: true }
     try {
       if (!service.name.trim()) throw new Error("O serviço não tem um nome configurado.")
       const selectedCodes = codesFor(service)
@@ -55,8 +55,9 @@ export function getShipmentQuote({ client, services, values, role }: ShipmentQuo
   else if (!countries.length) blockedReason = "Este cliente não tem destinos e tarifas autorizados. Contacte o apoio Linke."
   else if (!destinationReady) blockedReason = "Preencha o país e o código postal completo do destinatário."
   else {
-    try { if (!selected?.requiresQuotation && !options.some(o => o.requiresQuotation)) assertShipmentDestinationAvailable(values.recipientCountry, values.recipientPostal) }
+    try { if (selected ? !selected.requiresQuotation : !options.some(o => o.requiresQuotation)) assertShipmentDestinationAvailable(values.recipientCountry, values.recipientPostal) }
     catch (error) { blockedReason = error instanceof Error ? error.message : "Destino indisponível." }
+    if (!blockedReason && role === "ops" && selected?.requiresQuotation) blockedReason = "Os pedidos de cotação Correos Internacional Standard são feitos pelo cliente no portal. A equipa trata-os em Envios › Cotações."
     if (!blockedReason && isIsland && !selectedMode) blockedReason = "Escolha o transporte para as ilhas: aéreo ou marítimo."
     if (!blockedReason && multiVolumeServiceRequired && !options.length) blockedReason = "Para envios CTT com mais de um volume, o cliente precisa de uma tabela Linke associada ao serviço CTT Múltiplo (Webservice EMSF010.01). Este produto só está disponível para Portugal Continental."
     if (!blockedReason && !options.length) blockedReason = "Não existem serviços autorizados com cobertura e tarifas para este destino."

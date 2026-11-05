@@ -320,6 +320,7 @@ test('Correos client and OPS Iberian emissions preserve the destination, while i
       const h=shipmentHarness({carrier:'Correos',ctx:{...clientContext,role},adjust:t=>{
         t.servicos_linke[0].allowed_zones=[zone]
         t.servicos_linke[0].zones[0].zone_code=zone
+        if(country!=='ES')t.servicos_linke[0].webservice_service_code='90'
       }})
       const result=await emit(h,{clientId:CLIENT,recipientCountry:country,recipientPostal:postal})
       if(country!=='ES') {
@@ -350,12 +351,15 @@ test('Spanish postcodes with Portuguese masks are rejected before wallet reserva
 
 test('customs pause or manual quotation rejects stale forms before reserving money',async()=>{
   for(const role of ['client','employee'])for(const carrier of ['CTT','Correos'])for(const [country,postal] of [['NO','0010'],['GB','SW1A 1AA'],['CH','8001'],['IS','101'],['ES','35001'],['FI','22100']]){
-    const h=shipmentHarness({carrier,ctx:{...clientContext,role}})
+    for(const product of carrier==='Correos'?['90','63']:[null]){
+    const h=shipmentHarness({carrier,ctx:{...clientContext,role},adjust:t=>{if(product)t.servicos_linke[0].webservice_service_code=product}})
     const result=await emit(h,{clientId:CLIENT,recipientCountry:country,recipientPostal:postal})
-    assert.equal(result.success,false,`${role}/${carrier}/${country}`)
-    assert.match(result.error,carrier==='Correos'&&country!=='ES'?/cotação/:/aduaneiros.*temporariamente indisponíveis/)
+    assert.equal(result.success,false,`${role}/${carrier}/${product}/${country}`)
+    // Only Correos 90 (Internacional Standard) is routed to a quotation; other products keep the customs pause.
+    assert.match(result.error,product==='90'&&country!=='ES'?/cotação/:/aduaneiros.*temporariamente indisponíveis/)
     assert.equal(h.providerCalls.length,0)
     assert.equal((h.tables.wallet_reservations||[]).length,0)
+    }
   }
 })
 

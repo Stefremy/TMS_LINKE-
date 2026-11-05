@@ -22,7 +22,7 @@ export function getServiceDestinationCountries(service?: ServicoLinke): { code: 
     const postals = country === "PT" ? ["", "9000-001"]
       : country === "ES" ? ["", "07001", "07701", "07800", "35001", "38001", "51001", "52001"] : [""]
     return postals.some(postal => {
-      const manualQuote = requiresCorreosQuotation(detectCarrierGroup(service) || "", country)
+      const manualQuote = requiresCorreosQuotation(detectCarrierGroup(service) || "", country, service)
       if (!manualQuote && !isShipmentDestinationAvailable(country, postal)) return false
       const zoneCode = resolveServiceZoneCode(service, country, postal)
       if (!zoneCode || !isZoneAllowedByService(service.allowed_zones, zoneCode)) return false

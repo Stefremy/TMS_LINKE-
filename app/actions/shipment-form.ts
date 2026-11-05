@@ -38,7 +38,8 @@ export async function submitShipmentFormAction(input: unknown, clientId?: string
     carrier = resolveServiceCarrier(service)
   } catch { return failure("serviceId", "O serviço não está disponível para este cliente. Volte a selecionar o serviço.") }
   if (ctx.role !== "client" && values.carrierOverride && values.carrierOverride !== carrier) return failure("carrierOverride", "Escolha um serviço da transportadora selecionada.")
-  if (requiresCorreosQuotation(carrier, values.recipientCountry)) {
+  if (requiresCorreosQuotation(carrier, values.recipientCountry, service)) {
+    if (ctx.role !== "client") return failure("serviceId", "Os pedidos de cotação Correos Internacional Standard são feitos pelo cliente no portal. A equipa trata-os em Envios › Cotações.")
     if (values.codValue || values.selectedSpecialServices.length) return failure("selectedSpecialServices", "As opções de entrega são acordadas na cotação. A cobrança COD não está disponível para este destino.")
     const zone = resolveServiceZoneCode(service, values.recipientCountry, values.recipientPostal)
     if (!zone || !isZoneAllowedByService(service.allowed_zones, zone)) return failure("serviceId", "O serviço não tem cobertura autorizada para este destino.")

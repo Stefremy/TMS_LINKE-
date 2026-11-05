@@ -2,9 +2,9 @@ const test=require('node:test'),assert=require('node:assert/strict')
 const {plan}=require('../scripts/configure-correos-contract.cjs')
 const products=require('../lib/services/correos/product-catalog.json')
 const {createLoader}=require('./helpers/load-typescript.cjs')
-test('only PAQ24, ePAQ24 and Ilhas Express are enabled; product codes are distinct',()=>{
+test('only PAQ24, ePAQ24, Ilhas Express and Internacional Standard (quotation) are enabled; product codes are distinct',()=>{
  const records=plan([])
- assert.deepEqual(records.filter(s=>s.is_active).map(s=>s.webservice_service_code).sort(),['26','63','93'])
+ assert.deepEqual(records.filter(s=>s.is_active).map(s=>s.webservice_service_code).sort(),['26','63','90','93'])
  assert.equal(new Set(products.map(s=>s.api)).size,products.length)
  assert.equal(records.find(s=>s.webservice_service_code==='26').zones.every(z=>z.tiers.length===8),true)
  assert.equal(records.find(s=>s.webservice_service_code==='90').name.includes('Standard'),true)

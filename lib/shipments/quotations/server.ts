@@ -48,7 +48,7 @@ function sameRequest(a: StoredQuotation, b: StoredQuotation) {
 export async function createQuotation(db: SupabaseClient, ctx: AuthContext, id: string, client: Cliente, service: ServicoLinke, values: ShipmentFormValues) {
   checkScope(ctx)
   if (!uuid.safeParse(id).success || ctx.role === "client" && client.id !== ctx.client_id) throw new Error("Pedido de cotação inválido.")
-  if (!requiresCorreosQuotation(resolveServiceCarrier(service), values.recipientCountry) || values.codValue || values.selectedSpecialServices.length || client.is_active === false || service.is_active === false) throw new Error("Este pedido não está disponível para cotação internacional.")
+  if (!requiresCorreosQuotation(resolveServiceCarrier(service), values.recipientCountry, service) || values.codValue || values.selectedSpecialServices.length || client.is_active === false || service.is_active === false) throw new Error("Este pedido não está disponível para cotação internacional.")
   const now = new Date().toISOString()
   const details: StoredQuotation = { id, reference: `COT-${id.replace(/-/g, "").slice(0, 12).toUpperCase()}`,
     client_id: client.id, client_name: client.short_name || client.legal_name, service_id: service.id, service_name: service.name,

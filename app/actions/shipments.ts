@@ -307,7 +307,7 @@ export async function emitClientGuiaAction(data: {
       matchedClient = pricing.client
       const chosenService = pricing.service
       carrierCode = resolveServiceCarrier(chosenService)
-      if (requiresCorreosQuotation(carrierCode, data.recipientCountry || "PT")) {
+      if (requiresCorreosQuotation(carrierCode, data.recipientCountry || "PT", chosenService)) {
         throw new ShipmentPricingError("Os envios internacionais da Correos são tratados por cotação. Envie o pedido em Novo envio para a equipa tratar da emissão com o parceiro.")
       }
       if ((data.volumesCount || 1) > 1 && isCorreosSingleParcelService(chosenService)) {

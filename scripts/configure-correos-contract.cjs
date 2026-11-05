@@ -37,7 +37,7 @@ function plan(existing, now = new Date().toISOString()) {
     }
   })
   // Preserve custom variants and negotiated prices, disable unselected products only.
-  records.push(...remaining.map(s => ({...s,is_active:['63','93','26'].includes(s.webservice_service_code) && s.is_active,updated_at:now})))
+  records.push(...remaining.map(s => ({...s,is_active:['63','93','26','90'].includes(s.webservice_service_code) && s.is_active,updated_at:now})))
   return records
 }
 async function main() {

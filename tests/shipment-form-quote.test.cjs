@@ -165,3 +165,28 @@ test('PT-CONT applies 23% IVA on table price, fuel surcharge and each supplement
  assert.equal(ilhas.quote.vatAmount,0)
  assert.equal(ilhas.quote.totalWithVat,ilhas.quote.totalPrice)
 })
+test('only Correos Internacional Standard (90) can request a quotation; other Correos and CTT products never do',()=>{
+ const {requiresCorreosQuotation,isCorreosQuotationService}=load('lib/services/correos/shipment-policy.ts')
+ const intl={...service,id:'srv_linke_cor_intl',code:'LK-COR-INTL',carrier_group:'correos',name:'Correos Internacional Standard',webservice_service_code:'90',allowed_zones:['EU 1'],zones:[]}
+ assert.equal(requiresCorreosQuotation('correos','FR',intl),true)
+ assert.equal(requiresCorreosQuotation('correos','FR',{carrier_group:'correos',single_parcel_only:true}),true,'redacted client DTO')
+ for(const country of ['PT','ES']) assert.equal(requiresCorreosQuotation('correos',country,intl),false)
+ for(const api of ['91','63','93','26','61','62']) {
+  const other={...intl,id:`cor-${api}`,code:`LK-COR-${api}`,webservice_service_code:api}
+  assert.equal(isCorreosQuotationService(other),false,api)
+  assert.equal(requiresCorreosQuotation('correos','FR',other),false,api)
+ }
+ assert.equal(requiresCorreosQuotation('correos','FR',{id:'srv_linke_cor_intl_express',code:'LK-COR-INTL-EXPRESS',carrier_group:'correos'}),false)
+ assert.equal(requiresCorreosQuotation('correos','FR'),false,'no service, no quotation')
+ assert.equal(requiresCorreosQuotation('ctt','FR',{...intl,carrier_group:'ctt'}),false)
+ const express={...intl,id:'cor-91',code:'LK-COR-INTL-EXPRESS',webservice_service_code:'91'}
+ const result=quote({recipientCountry:'FR',recipientPostal:'75001',serviceId:'cor-91'},{assigned_linke_service_ids:['cor-91']},[express])
+ assert.equal(result.requiresQuotation,false);assert.ok(result.options.every(o=>!o.requiresQuotation))
+})
+test('ops cannot raise a quotation from the new shipment form; requests come from the client portal',()=>{
+ const intl={...service,id:'intl',code:'LK-COR-INTL',carrier_group:'correos',name:'Correos Internacional Standard',webservice_service_code:'90',allowed_zones:['EU 1'],zones:[]}
+ const input={services:[intl],client:{...client,assigned_linke_service_ids:['intl']},values:{...values,serviceId:'intl',recipientCountry:'FR',recipientPostal:'75001'}}
+ assert.equal(getShipmentQuote({...input,role:'client'}).isBlocked,false)
+ const ops=getShipmentQuote({...input,role:'ops'})
+ assert.equal(ops.isBlocked,true);assert.match(ops.blockedReason,/cliente no portal/)
+})
