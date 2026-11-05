@@ -33,7 +33,7 @@ export function importClientServices(target: Partial<Cliente>, source: ClientSer
       assigned_linke_service_ids: assigned,
       default_linke_table_id: target.default_linke_table_id || sourceDefault || addedIds[0] || "",
       custom_tier_overrides: copyMap(target.custom_tier_overrides, source.custom_tier_overrides),
-      pricing: { ...target.pricing, service_weight_tiers: copyMap(target.pricing?.service_weight_tiers, source.pricing?.service_weight_tiers) } as Cliente["pricing"],
+      pricing: { ...target.pricing, service_tier_order: copyMap(target.pricing?.service_tier_order, source.pricing?.service_tier_order), service_weight_tiers: copyMap(target.pricing?.service_weight_tiers, source.pricing?.service_weight_tiers) } as Cliente["pricing"],
     },
     added: addedIds.length,
     updated: replaceExistingPrices ? sourceIds.length - addedIds.length : 0,

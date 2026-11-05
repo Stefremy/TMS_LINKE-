@@ -33,7 +33,7 @@ test('standalone migration publishes the RPC without wallet tables and reruns wi
 })
 test('the real PostgreSQL function saves two price tables and a default, preserving all other submitted fields', async () => {
   await reset()
-  const details = { ...await profile(), assigned_linke_service_ids:['national','spain'], default_linke_table_id:'national', pricing:{service_weight_tiers:{'national::PT-CONT':[{id:'new-tier',label:'Até 3 kg',weight_max:3,sell_price:4.2}]}} }
+  const details = { ...await profile(), assigned_linke_service_ids:['national','spain'], default_linke_table_id:'national', pricing:{service_weight_tiers:{'national::PT-CONT':[{id:'new-tier',label:'Até 3 kg',weight_max:3,sell_price:4.2}]},service_tier_order:{'national::PT-CONT':['new-tier','other-tier']}} }
   await save(details)
   assert.deepEqual(await profile(), details)
   assert.equal((await db.query("SELECT count(*)::int n FROM public.audit_log WHERE action='client_data'")).rows[0].n, 1)

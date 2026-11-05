@@ -8,7 +8,7 @@ const catalog=['a','b','c'].map(id=>({id,name:id,is_active:id!=='c',fuel_surchar
 const row={id:'new-tier',label:'Até 2 kg',weight_max:2,sell_price:3.5}
 const source=()=>({id:'source',code:'CL1',short_name:'Origem',assigned_linke_service_ids:['a','b','c','missing','b'],default_linke_table_id:'b',
  custom_tier_overrides:{a:[4],'a::ES-PENIN':[8],b:[6],c:[999],unrelated:[123]},
- pricing:{fuel_surcharge_pct:99,discount_pct:50,special_services_fees:[{id:'private-fee'}],service_weight_tiers:{'b::PT-CONT':[row],'unrelated::PT-CONT':[row]}}})
+ pricing:{service_tier_order:{'b::PT-CONT':['new-tier','other-tier']},fuel_surcharge_pct:99,discount_pct:50,special_services_fees:[{id:'private-fee'}],service_weight_tiers:{'b::PT-CONT':[row],'unrelated::PT-CONT':[row]}}})
 const target=()=>({id:'target',short_name:'Destino',email:'target@example.invalid',iban:'target-bank',credit_limit:321,assigned_linke_service_ids:['a'],default_linke_table_id:'a',
  custom_tier_overrides:{a:[7],'a::ES-PENIN':[9],unrelated:[11]},
  pricing:{fuel_surcharge_pct:8,special_services_fees:[{id:'target-fee'}],service_weight_tiers:{'a::PT-CONT':[{...row,id:'kept',sell_price:7}],'unrelated::PT-CONT':[row]}}})
@@ -22,6 +22,7 @@ test('import merges only active authorized services and preserves existing custo
  assert.deepEqual(result.client.custom_tier_overrides,{a:[7],'a::ES-PENIN':[9],unrelated:[11],b:[6]})
  assert.deepEqual(result.client.pricing.service_weight_tiers['a::PT-CONT'],before.pricing.service_weight_tiers['a::PT-CONT'])
  assert.deepEqual(result.client.pricing.service_weight_tiers['b::PT-CONT'],[row])
+ assert.deepEqual(result.client.pricing.service_tier_order['b::PT-CONT'],['new-tier','other-tier'])
  assert.equal(result.client.pricing.fuel_surcharge_pct,8)
  assert.deepEqual(result.client.pricing.special_services_fees,[{id:'target-fee'}])
  for(const field of ['id','short_name','email','iban','credit_limit']) assert.equal(result.client[field],before[field])

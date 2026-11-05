@@ -18,3 +18,26 @@ export function moveTierDisplayOrder(tiers: PriceTierLinke[], fromIndex: number,
   const positions = new Map(entries.map((entry, index) => [entry.index, index]))
   return tiers.map((tier, index) => ({ ...tier, display_order: positions.get(index)! }))
 }
+
+
+export type ClientTierOrderMap = Record<string, string[]>
+
+export function validateClientTierOrder(value: unknown): ClientTierOrderMap {
+  if (value === undefined) return {}
+  if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).length > 300) throw new Error("Ordem dos escalões inválida.")
+  const result: ClientTierOrderMap = {}
+  for (const [key, ids] of Object.entries(value)) {
+    if (!key.includes("::") || key.length > 240 || !Array.isArray(ids) || ids.length > 100 || new Set(ids).size !== ids.length
+      || ids.some(id => typeof id !== "string" || !id || id.length > 120)) throw new Error("Ordem dos escalões inválida.")
+    result[key] = [...ids]
+  }
+  return result
+}
+
+/** Preserve storage indexes and price inheritance; only the editor's display changes. */
+export function applyClientTierOrder(tiers: PriceTierLinke[], ids?: string[]): PriceTierLinke[] {
+  if (!ids) return tiers
+  const ranks = new Map(ids.map((id, index) => [id, index]))
+  const fallback = new Map(getTierDisplayEntries(tiers).map((entry, index) => [entry.tier.id, index]))
+  return tiers.map(tier => ({ ...tier, display_order: ranks.get(tier.id) ?? ids.length + fallback.get(tier.id)! }))
+}

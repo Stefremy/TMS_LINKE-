@@ -51,6 +51,7 @@ import {
   Edit3,
   ChevronDown,
   ChevronUp,
+  GripVertical,
 } from "lucide-react"
 import { saveClienteAction } from "@/app/actions/clientes"
 import { inviteClientAccessAction } from "@/app/actions/client-invitations"
@@ -58,6 +59,7 @@ import { paymentDueDays } from "@/lib/billing/payment-terms"
 import { normalizeStoreSlug } from "@/lib/client-portal/paths"
 import { getServiceZoneOverrideKey, resolveZoneTierOverrides } from "@/lib/pricing/calculate-shipment-price"
 import { materializeClientWeightTiers, validateClientWeightTiers, clientTierReference, type ClientWeightTier } from "@/lib/pricing/client-weight-tiers"
+import { getTierDisplayEntries, moveTierDisplayOrder, applyClientTierOrder, validateClientTierOrder } from "@/lib/pricing/tier-display-order"
 import { isPrimordialServico } from "@/app/ops/configuracao/servicos/types"
 import type { ServicoLinke, PriceTierLinke, ZonePriceMatrix } from "@/app/ops/configuracao/servicos/types"
 import { CttServiceBadge } from "@/components/ctt-service-badge"
@@ -152,6 +154,9 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
   const [importSourceId, setImportSourceId] = React.useState("")
   const [replaceImportedPrices, setReplaceImportedPrices] = React.useState(false)
   const [importNotice, setImportNotice] = React.useState("")
+  const clientTierDrag = React.useRef<{ scope: string; tierId: string } | null>(null)
+  const [draggedClientTier, setDraggedClientTier] = React.useState<string | null>(null)
+  const [tierOrderAnnouncement, setTierOrderAnnouncement] = React.useState("")
 
   React.useEffect(() => {
     if (initialData) {
@@ -234,6 +239,14 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
     })
   }
 
+  const moveClientTier = (servico: ServicoLinke, zoneCode: string, fromId: string, toId: string, rows: PriceTierLinke[]) => {
+    const moved = moveTierDisplayOrder(rows, rows.findIndex(row => row.id === fromId), rows.findIndex(row => row.id === toId))
+    const order = getTierDisplayEntries(moved).map(entry => entry.tier.id)
+    setFormData(prev => ({ ...prev, pricing: { ...(prev.pricing || DEFAULT_CLIENT_PRICING), service_tier_order: {
+      ...prev.pricing?.service_tier_order, [getServiceZoneOverrideKey(servico.id, zoneCode)]: order,
+    } } }))
+  }
+
   const addClientTier = (servico: ServicoLinke, zone: ZonePriceMatrix) => {
     const id = `client_${crypto.randomUUID()}`
     updateClientTiers(servico, zone.zone_code, rows => {
@@ -262,7 +275,7 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
         custom_tier_overrides: nextOverrides,
         pricing: { ...(prev.pricing || DEFAULT_CLIENT_PRICING), service_weight_tiers: Object.fromEntries(
           Object.entries(prev.pricing?.service_weight_tiers || {}).filter(([key]) => key !== getServiceZoneOverrideKey(servico.id, zoneCode))
-        ) },
+        ), service_tier_order: Object.fromEntries(Object.entries(prev.pricing?.service_tier_order || {}).filter(([key]) => key !== getServiceZoneOverrideKey(servico.id, zoneCode))) },
       }
     })
   }
@@ -280,7 +293,7 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
         custom_tier_overrides: nextOverrides,
         pricing: { ...(prev.pricing || DEFAULT_CLIENT_PRICING), service_weight_tiers: Object.fromEntries(
           Object.entries(prev.pricing?.service_weight_tiers || {}).filter(([key]) => !key.startsWith(prefix))
-        ) },
+        ), service_tier_order: Object.fromEntries(Object.entries(prev.pricing?.service_tier_order || {}).filter(([key]) => !key.startsWith(prefix))) },
       }
     })
   }
@@ -292,6 +305,7 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
         pricing: {
           ...DEFAULT_CLIENT_PRICING,
           service_weight_tiers: {},
+          service_tier_order: {},
           special_services_fees: resolveClientSpecialFees(undefined, standardSpecialFees),
           services_pricing: prev.pricing?.services_pricing ?? DEFAULT_CLIENT_PRICING.services_pricing,
         },
@@ -339,6 +353,7 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
     let persisted = false
     const submittedSnapshot = JSON.stringify(formData)
     try {
+      validateClientTierOrder(formData.pricing?.service_tier_order)
       validateClientWeightTiers(formData.pricing?.service_weight_tiers)
       paymentDueDays(formData.payment_due_days, NaN)
       const res = await saveClienteAction({
@@ -422,18 +437,21 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
     const activeZone = zonesList[selectedZoneIdx] || zonesList[0]
     const savedTiers = activeZone ? resolveZoneTierOverrides(formData.pricing?.service_weight_tiers, servico, activeZone.zone_code) : undefined
     const customTiers = savedTiers ? [...savedTiers].sort((a, b) => a.weight_max - b.weight_max) : undefined
-    const tiers: PriceTierLinke[] = customTiers && activeZone ? customTiers.map(row => {
+    const baseTiers: PriceTierLinke[] = customTiers && activeZone ? customTiers.map(row => {
       const reference = clientTierReference(activeZone.tiers, row.weight_max)
       return { ...row, cost_price: reference?.cost || 0, sell_price: reference?.standard || 0,
         margin_pct: 0, delivery_time: "", enabled: true }
     }) : activeZone?.tiers || []
+    const tierOrder = activeZone ? resolveZoneTierOverrides(formData.pricing?.service_tier_order, servico, activeZone.zone_code) : undefined
+    const tiers = applyClientTierOrder(baseTiers, tierOrder)
     const isExpanded = expandedPriceServico === servico.id
     const activeZoneOverrides = activeZone
       ? resolveZoneTierOverrides(formData.custom_tier_overrides, servico, activeZone.zone_code)
       : undefined
     const zoneHasCustomPrices = (zone: ZonePriceMatrix) => {
       const zOverrides = resolveZoneTierOverrides(formData.custom_tier_overrides, servico, zone.zone_code)
-      return resolveZoneTierOverrides(formData.pricing?.service_weight_tiers, servico, zone.zone_code) !== undefined || !!(
+      return resolveZoneTierOverrides(formData.pricing?.service_tier_order, servico, zone.zone_code) !== undefined
+        || resolveZoneTierOverrides(formData.pricing?.service_weight_tiers, servico, zone.zone_code) !== undefined || !!(
         zOverrides &&
         zOverrides.some((val, idx) => val !== undefined && zone.tiers?.[idx] && Math.abs(val - zone.tiers[idx].sell_price) > 0.001)
       )
@@ -634,6 +652,7 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
               </button>
             </div>
 
+            <p role="status" aria-live="polite" className="sr-only">{tierOrderAnnouncement}</p>
             <div
               tabIndex={0}
               role="region"
@@ -643,6 +662,7 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] text-[var(--text-secondary)] font-semibold text-[11px]">
+                    <th className="w-8 px-1 py-2"><span className="sr-only">Ordenar escalão</span></th>
                     <th className="py-2 px-3">Escalão</th>
                     <th className="py-2 px-3 text-center">Peso Máx</th>
                     <th className="py-2 px-3 text-right">Custo Parceiro</th>
@@ -656,15 +676,54 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
-                  {tiers.map((tier, tIdx) => {
+                  {getTierDisplayEntries(tiers).map(({ tier, index: tIdx }, displayIndex, entries) => {
                     const currentVal = customTiers?.[tIdx]?.sell_price ?? activeZoneOverrides?.[tIdx] ?? tier.sell_price
                     const original = activeZone.tiers.find(row => row.id === tier.id)
                     const isOverridden = !original || original.weight_max !== tier.weight_max || original.label !== tier.label || Math.abs(currentVal - tier.sell_price) > 0.001
+                    const dragScope = getServiceZoneOverrideKey(servico.id, activeZone.zone_code)
                     const marginEur = currentVal - tier.cost_price
                     const marginPct = currentVal > 0 ? (marginEur / currentVal) * 100 : 0
 
                     return (
-                      <tr key={tier.id || tIdx} className={`hover:bg-[var(--surface-muted)]/60 transition-colors ${isOverridden ? "bg-amber-50/40" : ""}`}>
+                      <tr key={tier.id || tIdx}
+                        onDragOver={event => {
+                          if (clientTierDrag.current?.scope !== dragScope || isSaving) return
+                          event.preventDefault()
+                          event.dataTransfer.dropEffect = "move"
+                        }}
+                        onDrop={event => {
+                          const drag = clientTierDrag.current
+                          if (!drag || drag.scope !== dragScope || isSaving) return
+                          event.preventDefault()
+                          moveClientTier(servico, activeZone.zone_code, drag.tierId, tier.id, tiers)
+                          setTierOrderAnnouncement(`Escalão movido para a posição ${displayIndex + 1}.`)
+                          clientTierDrag.current = null
+                          setDraggedClientTier(null)
+                        }}
+                        className={`hover:bg-[var(--surface-muted)]/60 transition-colors ${isOverridden ? "bg-amber-50/40" : ""} ${draggedClientTier === `${dragScope}::${tier.id}` ? "opacity-40" : ""}`}>
+                        <td className="px-1 py-2 text-center">
+                          <button type="button" draggable={!isSaving && tiers.length > 1} disabled={isSaving || tiers.length < 2}
+                            aria-label={`Mover escalão ${tier.label} (${activeZone.zone_code})`}
+                            title="Arrastar para ordenar. Também pode usar as setas ↑ e ↓."
+                            onDragStart={event => {
+                              clientTierDrag.current = { scope: dragScope, tierId: tier.id }
+                              setDraggedClientTier(`${dragScope}::${tier.id}`)
+                              event.dataTransfer.effectAllowed = "move"
+                              event.dataTransfer.setData("text/plain", tier.id)
+                            }}
+                            onDragEnd={() => { clientTierDrag.current = null; setDraggedClientTier(null) }}
+                            onKeyDown={event => {
+                              if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return
+                              event.preventDefault()
+                              const next = displayIndex + (event.key === "ArrowUp" ? -1 : 1)
+                              if (!entries[next]) return
+                              moveClientTier(servico, activeZone.zone_code, tier.id, entries[next].tier.id, tiers)
+                              setTierOrderAnnouncement(`Escalão ${tier.label} movido para a posição ${next + 1}.`)
+                            }}
+                            className="inline-flex cursor-grab rounded p-1 text-[var(--text-tertiary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-[var(--accent)] active:cursor-grabbing disabled:cursor-default disabled:opacity-30">
+                            <GripVertical aria-hidden="true" className="h-4 w-4" />
+                          </button>
+                        </td>
                         <td className="py-2 px-3 font-semibold text-[var(--text-primary)]">
                           <input type="text" value={tier.label} maxLength={120}
                             aria-label={`Nome do escalão ${tIdx + 1} (${activeZone.zone_code})`}
@@ -1617,12 +1676,12 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {(Object.keys(formData.custom_tier_overrides || {}).length > 0 || Object.keys(formData.pricing?.service_weight_tiers || {}).length > 0) && (
+                        {(Object.keys(formData.custom_tier_overrides || {}).length > 0 || Object.keys(formData.pricing?.service_weight_tiers || {}).length > 0 || Object.keys(formData.pricing?.service_tier_order || {}).length > 0) && (
                           <button
                             type="button"
                             onClick={() => {
                               if (confirm("Deseja repor todas as tabelas e escalões personalizados deste cliente para os valores originais dos Serviços Linke?")) {
-                                setFormData((prev) => ({ ...prev, custom_tier_overrides: {}, pricing: { ...(prev.pricing || DEFAULT_CLIENT_PRICING), service_weight_tiers: {} } }))
+                                setFormData((prev) => ({ ...prev, custom_tier_overrides: {}, pricing: { ...(prev.pricing || DEFAULT_CLIENT_PRICING), service_weight_tiers: {}, service_tier_order: {} } }))
                               }
                             }}
                             className="px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-md hover:bg-amber-100 transition-colors flex items-center gap-1 cursor-pointer"

@@ -1,3 +1,4 @@
+import type { ClientTierOrderMap } from "@/lib/pricing/tier-display-order"
 import type { ClientWeightTierMap } from "@/lib/pricing/client-weight-tiers"
 import { DEFAULT_CTT_SPECIAL_SERVICES_FEES } from "@/lib/pricing/special-fee-catalogue"
 export { DEFAULT_CTT_SPECIAL_SERVICES_FEES } from "@/lib/pricing/special-fee-catalogue"
@@ -54,6 +55,7 @@ export interface ClientSpecialServiceFee {
 }
 
 export interface ClientPricingConfig {
+  service_tier_order?: ClientTierOrderMap
   service_weight_tiers?: ClientWeightTierMap
   table_name: string
   fuel_surcharge_pct: number

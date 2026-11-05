@@ -79,3 +79,55 @@ test('editor grip supports drop and keyboard moves and submits the saved display
  assert.equal(closed,1)
 
 })
+
+test('client tier handles reorder by drag and keyboard, save the order and keep negotiated prices on their weights',async()=>{
+ const slots=[],effects=[];let cursor=0,saved
+ const React={
+  useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial==='geral'?'precario':initial;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]},
+  useRef(initial){const i=cursor++;return slots[i]??={current:initial}},
+  useEffect(fn){const i=cursor++;if(!(i in slots)){slots[i]=true;effects.push(fn)}},
+ }
+ const jsx=(type,props,key)=>({type,props:props||{},key})
+ const stub={}
+ const loadClient=createLoader({react:React,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,name)=>name}),
+  '@/components/shipments/SpecialFeesEditor':stub,'@/components/country-select':stub,
+  './ClientPortalAccessControl':stub,'./ClientServiceHistory':stub,'@/components/ctt-service-badge':stub,
+  '@/lib/carrier-logos':{getCarrierLogo:()=>null},
+  '@/app/actions/clientes':{saveClienteAction:async value=>{saved=value;return {success:true,data:value}}},
+  '@/app/actions/client-invitations':stub,
+ })
+ const {ClienteModal}=loadClient('app/ops/entidades/clientes/components/ClienteModal.tsx')
+ const flatten=n=>Array.isArray(n)?n.flatMap(flatten):n&&typeof n==='object'?[n,...flatten(n.props?.children)]:[]
+ const text=n=>Array.isArray(n)?n.map(text).join(''):n&&typeof n==='object'?text(n.props?.children):String(n??'')
+ const service={id:'fixture',name:'CTT fixture',category:'Nacional',is_active:true,preferred_carrier_name:'CTT Expresso',fuel_surcharge_pct:0,allowed_zones:['PT-CONT'],zones:[{zone_code:'PT-CONT',zone_name:'Continente',tiers}]}
+ const original={id:'target',code:'CL1',short_name:'Destino',assigned_linke_service_ids:['fixture'],default_linke_table_id:'fixture',custom_tier_overrides:{'fixture::PT-CONT':[3,7,12]}}
+ const props={initialData:original,servicosLinke:[service],onClose(){},onSaved(){}}
+ const render=()=>{cursor=0;const nodes=flatten(ClienteModal(props));effects.splice(0).forEach(fn=>fn());return nodes}
+ render();let nodes=render()
+ nodes.find(n=>n.type==='button'&&text(n).includes('Ajustar Preços')).props.onClick({stopPropagation(){}})
+ nodes=render()
+ const handles=()=>nodes.filter(n=>n.type==='button'&&n.props['aria-label']?.startsWith('Mover escalão'))
+ const transfer={setData(){}}
+ handles()[0].props.onDragStart({dataTransfer:transfer})
+ nodes.find(n=>n.type==='tr'&&n.props.children?.some(c=>c?.props?.children?.props?.value==='Até 10 kg')).props.onDrop({preventDefault(){},dataTransfer:transfer})
+ nodes=render()
+ assert.deepEqual(handles().map(n=>n.props['aria-label']),['Mover escalão Até 5 kg (PT-CONT)','Mover escalão Até 10 kg (PT-CONT)','Mover escalão Até 1 kg (PT-CONT)'])
+ handles()[2].props.onKeyDown({key:'ArrowUp',preventDefault(){}});nodes=render()
+ assert.deepEqual(handles().map(n=>n.props['aria-label']),['Mover escalão Até 5 kg (PT-CONT)','Mover escalão Até 1 kg (PT-CONT)','Mover escalão Até 10 kg (PT-CONT)'])
+ await nodes.find(n=>n.type==='button'&&text(n)==='Gravar Cliente').props.onClick()
+ const {validateClientTierOrder}=loadClient('lib/pricing/tier-display-order.ts')
+ const persisted=validateClientTierOrder(JSON.parse(JSON.stringify(saved.pricing.service_tier_order)))
+ assert.deepEqual(persisted['fixture::PT-CONT'],['t5','t1','t10'])
+ assert.equal(saved.pricing.service_weight_tiers,undefined)
+ for(const weight of [1,4,9]){
+  const before=calculateShipmentPrice(weight,original,[service],'PT','4000-001',{requireConfiguredTariff:true})
+  const after=calculateShipmentPrice(weight,{...saved,pricing:{...saved.pricing,service_tier_order:persisted}},[service],'PT','4000-001',{requireConfiguredTariff:true})
+  assert.equal(after.basePrice,before.basePrice)
+  assert.equal(after.buyPrice,before.buyPrice)
+ }
+ const inherited={...saved,custom_tier_overrides:{}}
+ const revised={...service,zones:[{...service.zones[0],tiers:tiers.map(t=>({...t,sell_price:t.sell_price+1}))}]}
+ assert.equal(calculateShipmentPrice(1,inherited,[revised],'PT','4000-001',{requireConfiguredTariff:true}).basePrice,3)
+ assert.deepEqual(original.custom_tier_overrides['fixture::PT-CONT'],[3,7,12])
+ assert.deepEqual(tiers.map(t=>t.display_order),[undefined,undefined,undefined])
+})
