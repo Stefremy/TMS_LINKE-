@@ -122,6 +122,7 @@ function QuoteDetail({ request: q, mode, basePath, canRecordBooking, busy, updat
       <p className="mt-2 whitespace-pre-wrap text-sm">{q.response}</p>
     </div>}
     {q.tracking_number && <p className="text-sm">Tracking {q.tracking_carrier === "fedex" ? "FedEx" : "Correos"}: <strong className="select-text font-mono">{q.tracking_number}</strong>{trackingUrl && <> · <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--accent)] underline">Acompanhar na FedEx</a></>}</p>}
+    {q.completion_notes && <p className="whitespace-pre-wrap rounded-lg bg-[var(--surface-muted)] p-3 text-xs text-[var(--text-secondary)]">Nota de emissão: {q.completion_notes}</p>}
     {trackingUrl && <p className="text-xs text-[var(--text-secondary)]">O estado e os movimentos da entrega podem ser consultados diretamente no site da FedEx.</p>}
     {q.shipment_id && <div className="space-y-2"><p className="text-xs text-[var(--text-secondary)]">{q.status === "accepted" ? "O envio está criado em rascunho. A Linke irá emitir a guia pela sua conta Correos." : q.billing_type === "pay_as_you_go" ? "O envio está no histórico e segue as condições de saldo pré-pago da conta." : "O envio está no histórico, com o preço acordado, disponível para faturação."}</p><Link className={button} href={mode === "ops" ? `/ops/envios?search=${encodeURIComponent(q.reference)}` : `${basePath}/envios`}>Ver envio no histórico</Link></div>}
     {mode === "client" && q.status === "quoted" && <div className="space-y-3">

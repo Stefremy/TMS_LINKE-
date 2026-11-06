@@ -46,6 +46,7 @@ export function publicCorreosQuotationReference(service: ServicoLinke): ServicoL
 export function canRequestCorreosQuotation(service: ServicoLinke, country: string): boolean {
   const iso = country.trim().toUpperCase()
   return service.is_active !== false && service.allowed_zones?.length !== 0 &&
+    isCorreosQuotationService(service) &&
     !!(COUNTRY_TO_ZONE_MAP[iso] || COUNTRY_TO_ZONE_MAP[`${iso}_ISO`]) &&
     requiresCorreosQuotation(detectCarrierGroup(service) || "", iso, service)
 }

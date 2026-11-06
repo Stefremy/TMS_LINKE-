@@ -51,6 +51,13 @@ export async function createQuotation(db: SupabaseClient, ctx: AuthContext, id: 
   checkScope(ctx)
   if (!service || !client || !uuid.safeParse(id).success || ctx.role === "client" && client.id !== ctx.client_id) throw new Error("Pedido de cotação inválido.")
   if (!canRequestCorreosQuotation(service, values.recipientCountry) || values.codValue || values.selectedSpecialServices.length || client.is_active === false) throw new Error("Este pedido não está disponível para cotação internacional.")
+  if (values.weightKg > 2000 || values.lengthCm > 500 || values.widthCm > 300 || values.heightCm > 300 || values.parcelWeightsKg.some(w => w > 1000)) throw new Error("O envio excede as dimensões ou o peso físico máximo suportado.")
+  if (ctx.role === "client") {
+    const { count } = await db.from("audit_log").select("id", { count: "exact", head: true })
+      .eq("tenant_id", ctx.tenant_id).eq("action", QUOTATION_ACTION).eq("details->>client_id", client.id)
+      .in("details->>status", ["pending", "reviewing"])
+    if (count && count >= 20) throw new Error("Atingiu o limite de pedidos de cotação pendentes em análise. Aguarde a resposta da equipa Linke antes de submeter novos pedidos.")
+  }
   const estimate = correosQuotationEstimate(requestedTransport === "air" ? generalCorreosQuotationClient(client, service, client.pricing?.standard_fuel_surcharge_pct) : client, service, values.recipientCountry, values.recipientPostal, values.weightKg,
     { lengthCm: values.lengthCm, widthCm: values.widthCm, heightCm: values.heightCm, volumesCount: values.volumesCount,
       parcelWeightsKg: values.parcelWeightsKg.length ? values.parcelWeightsKg : undefined })
@@ -110,6 +117,15 @@ export async function updateQuotation(db: SupabaseClient, ctx: AuthContext, id: 
   if (error || !data) throw new Error("Cotação indisponível ou sem acesso.")
   const current = data.details as StoredQuotation
   if (current.revision !== revision) throw new Error("Esta cotação foi atualizada. Atualize a lista antes de continuar.")
+  if (update.action === "accept") {
+    const clientId = ctx.role === "client" ? ctx.client_id! : current.client_id
+    const { data: accessData } = await db.from("audit_log").select("details")
+      .eq("tenant_id", ctx.tenant_id).eq("action", "client_portal_access").eq("details->>id", clientId)
+      .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle()
+    const blocked = accessData?.details?.blocked === true
+    const suspended = !blocked && accessData?.details?.suspended === true
+    if (blocked || suspended) throw new Error("A sua conta encontra-se suspensa para a criação de novos envios. Contacte o apoio Linke.")
+  }
   if (update.action === "accept" || update.action === "complete") {
     const result = await db.rpc("materialize_shipment_quotation", { p_tenant: ctx.tenant_id, p_quote: id, p_revision: revision,
       p_actor: ctx.user.id, p_client: ctx.role === "client" ? ctx.client_id : null, p_action: update.action,

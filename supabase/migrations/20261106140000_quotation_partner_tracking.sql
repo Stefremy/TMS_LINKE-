@@ -77,9 +77,16 @@ BEGIN
       s->>'senderName',s->>'senderAddress',split_part(s->>'senderPostal','-',1),split_part(s->>'senderPostal','-',2),s->>'senderPhone',
       s->>'recipientName',s->>'recipientAddress',s->>'recipientPostal','',s->>'recipientPhone',s->>'recipientEmail',
       NULL,0,stamp,stamp);
-    INSERT INTO public.packages(tenant_id,shipment_id,weight_g,dimensions)
-      VALUES(p_tenant,p_quote,round((s->>'weightKg')::numeric*1000)::integer,
-        jsonb_build_object('length_cm',s->'lengthCm','width_cm',s->'widthCm','height_cm',s->'heightCm','unit','cm'));
+    IF jsonb_typeof(s->'parcelWeightsKg') = 'array' AND jsonb_array_length(s->'parcelWeightsKg') > 0 THEN
+      INSERT INTO public.packages(tenant_id,shipment_id,weight_g,dimensions)
+        SELECT p_tenant, p_quote, round(w::numeric * 1000)::integer,
+          jsonb_build_object('length_cm',s->'lengthCm','width_cm',s->'widthCm','height_cm',s->'heightCm','unit','cm')
+        FROM jsonb_array_elements_text(s->'parcelWeightsKg') AS w;
+    ELSE
+      INSERT INTO public.packages(tenant_id,shipment_id,weight_g,dimensions)
+        VALUES(p_tenant,p_quote,round((s->>'weightKg')::numeric*1000)::integer,
+          jsonb_build_object('length_cm',s->'lengthCm','width_cm',s->'widthCm','height_cm',s->'heightCm','unit','cm'));
+    END IF;
   END IF;
   next_quote := q || jsonb_build_object('shipment_id',p_quote,'shipment_audit_id',snapshot_id,
     'revision',p_revision+1,'updated_at',stamp,'updated_by',p_actor);
@@ -125,7 +132,7 @@ BEGIN
       'booked_by',p_actor,'booked_at',stamp);
     next_quote := next_quote || jsonb_build_object('status','completed','tracking_number',p_tracking,'tracking_carrier',p_tracking_carrier,'partner_cost',p_buy_price,
       'billing_type',profile->>'billing_type','booked_by',p_actor,'booked_at',stamp);
-    IF coalesce(p_response,'')<>'' THEN next_quote := next_quote || jsonb_build_object('response',p_response); END IF;
+    IF coalesce(p_response,'')<>'' THEN next_quote := next_quote || jsonb_build_object('completion_notes',p_response); END IF;
     IF reservation->>'reserved'='true' THEN
       IF credit_hold THEN
         IF NOT public.transition_credit_limit_reservation(p_tenant,quote_client,p_quote,'reserved','consumed',snapshot) THEN

@@ -53,7 +53,8 @@ test('client acceptance creates one non-billable zero-charge draft, with full ad
  const snapshot=(await rows('audit_log')).find(r=>r.action==='shipment_data').details
  assert.equal(snapshot.quotation_id,Q);assert.equal(snapshot.agreed_price,25.5);assert.equal(snapshot.sell_price,0)
  assert.equal(snapshot.package_count,3);assert.equal(snapshot.recipient_country,'FR');assert.deepEqual(snapshot.parcel_weights_kg,[1,1,1])
- assert.equal((await rows('packages')).length,1);assert.equal((await rows('wallet_reservations')).length,0)
+ assert.equal((await rows('packages')).length,3);assert.deepEqual((await rows('packages')).map(p=>p.weight_g),[1000,1000,1000])
+ assert.equal((await rows('wallet_reservations')).length,0)
  await assert.rejects(run('accept'),/atualizada/);assert.equal((await rows('shipments')).length,1)
 })
 test('Linke booking makes the same shipment billable at the approved net price, without adding fuel twice',async()=>{
@@ -61,12 +62,14 @@ test('Linke booking makes the same shipment billable at the approved net price, 
  await db.query("UPDATE shipments SET created_at='2026-01-01T12:00:00Z'")
  const completed=await run('complete');const [shipment]=await rows('shipments')
  assert.equal(completed.status,'completed');assert.equal(completed.shipment_id,Q);assert.equal(shipment.carrier_tracking_number,'PARTNER-123')
+ assert.equal(completed.response,'Prazo acordado.')
+ assert.equal(completed.completion_notes,'Emitido pela Linke.')
  assert.equal(shipment.sell_price,'25.5');assert.equal(shipment.buy_price,'12.5');assert.equal(canInvoiceShipment(shipment),true)
  assert.ok(new Date(shipment.created_at)>new Date('2026-01-01T12:00:00Z'),'invoice date follows emission, preserving old request dates in metadata')
  const snapshot=(await rows('audit_log')).find(r=>r.action==='shipment_data').details
  assert.equal(snapshot.billing_type,'conta_corrente');assert.equal(snapshot.booking_source,'linke_partner_account');assert.equal(snapshot.base_price,25.5)
  assert.equal(shipmentChargeBreakdown(snapshot).total,2550);assert.equal(snapshot.fuel_tax_amount,0);assert.equal(snapshot.special_fees_amount,0)
- assert.equal((await rows('packages')).length,1)
+ assert.equal((await rows('packages')).length,3)
  await assert.rejects(run('complete'),/atualizada/);assert.equal((await rows('shipments')).length,1)
 })
 test('bindings, state and partner cost fail closed; a customer cannot record a carrier booking',async()=>{
