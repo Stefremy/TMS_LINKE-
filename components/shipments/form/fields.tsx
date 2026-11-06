@@ -8,9 +8,9 @@ export const inputClass = "w-full rounded-lg border border-zinc-200 bg-white px-
 export const secondaryButton = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-xs hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
 export const primaryButton = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
 
-export function FormField({ name, label, type = "text", hint, placeholder, onValueChange, autoComplete, step, min, compact = false }: {
+export function FormField({ name, label, type = "text", hint, placeholder, onValueChange, autoComplete, step, min, max, disabled, compact = false }: {
   name: FieldPath<ShipmentFormValues>; label: string; type?: string; hint?: string; placeholder?: string
-  onValueChange?: (value: string) => string | void; autoComplete?: string; step?: string; min?: number; compact?: boolean
+  onValueChange?: (value: string) => string | void; autoComplete?: string; step?: string; min?: number; max?: number; disabled?: boolean; compact?: boolean
 }) {
   const id = useId()
   const { register, getFieldState, formState } = useFormContext<ShipmentFormValues>()
@@ -19,7 +19,7 @@ export function FormField({ name, label, type = "text", hint, placeholder, onVal
   const field = register(name, type === "number" ? { valueAsNumber: true } : undefined)
   return <div className="min-w-0 space-y-1.5">
     <label htmlFor={id} className={`block font-medium text-zinc-700 ${compact ? "text-xs" : "text-sm"}`}>{label}</label>
-    <input {...field} id={id} type={type} step={step} min={min} placeholder={placeholder} autoComplete={autoComplete}
+    <input {...field} id={id} type={type} step={step} min={min} max={max} disabled={disabled} placeholder={placeholder} autoComplete={autoComplete}
       aria-invalid={!!error} aria-describedby={error || hint ? `${id}-help` : undefined} className={compact ? `${inputClass.replace("py-2.5", "py-2")} min-h-11 sm:min-h-10` : inputClass}
       onChange={event => { const value = onValueChange?.(event.target.value); if (typeof value === "string") event.target.value = value; void field.onChange(event) }} />
     {(error || hint) && <p id={`${id}-help`} role={error ? "alert" : undefined} className={`text-xs leading-relaxed ${error ? "text-red-700" : "text-zinc-500"}`}>{message || hint}</p>}
