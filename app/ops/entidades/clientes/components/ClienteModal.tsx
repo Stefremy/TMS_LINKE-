@@ -84,13 +84,14 @@ interface ClienteModalProps {
   defaultPaymentDays?: number
   onManageAccess?: () => void
   onClose: () => void
+  onDeleted: (clientId: string) => void
   onSaved: (saved: Cliente) => void
 }
 
 type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario" | "acesso"
 type PrecarioSubTab = "servicos_linke" | "suplementares" | "geral"
 
-export function ClienteModal({ initialData, servicosLinke = [], sourceClients = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, standardSpecialFees = DEFAULT_STANDARD_SPECIAL_FEES, standardFuelSurchargePct, onManageAccess, onClose, onSaved }: ClienteModalProps) {
+export function ClienteModal({ initialData, servicosLinke = [], sourceClients = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, standardSpecialFees = DEFAULT_STANDARD_SPECIAL_FEES, standardFuelSurchargePct, onManageAccess, onClose, onDeleted, onSaved }: ClienteModalProps) {
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
@@ -1865,7 +1866,7 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
                   )}
 
                   {/* Controlos de Bloqueio e Suspensão */}
-                  {canManageAccess && <ClientPortalAccessControl key={initialData.id} clientId={initialData.id} disabled={isSaving} />}
+                  {canManageAccess && <ClientPortalAccessControl key={initialData.id} clientId={initialData.id} clientName={initialData.short_name || initialData.legal_name} disabled={isSaving} onDeleted={() => onDeleted(initialData.id)} />}
                 </div>
               ) : (
                 <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-muted)]/50 p-5 space-y-4">

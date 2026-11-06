@@ -7,15 +7,16 @@ import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import type { ShipmentFormValues } from "@/components/shipments/form/schema"
 import { QUOTATION_ACTION, type QuotationPage, type ShipmentQuotation, type StoredQuotation, type QuotationShipment } from "./types"
-import { requiresCorreosQuotation } from "@/lib/services/correos/shipment-policy"
-import { resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
+import { canRequestCorreosQuotation, correosQuotationEstimate, generalCorreosQuotationClient } from "@/lib/services/correos/quotation-pricing"
+import { readQuotationIds } from "./reads"
+import { QUOTATION_PERMISSIONS } from "./access"
+export { QUOTATION_PERMISSIONS } from "./access"
 
-export const QUOTATION_PERMISSIONS = [PERMISSIONS.shipments, PERMISSIONS.clients, PERMISSIONS.support]
 const uuid = z.uuid()
 export const quotationUpdateSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reply"), amount: z.number().finite().positive().max(1_000_000).refine(v => Number.isSafeInteger(Math.round(v * 100)) && Math.abs(v * 100 - Math.round(v * 100)) < 0.000001), response: z.string().trim().min(1).max(2000) }),
   z.object({ action: z.enum(["review", "accept", "decline", "cancel"]) }),
-  z.object({ action: z.literal("complete"), trackingNumber: z.string().trim().min(3).max(80).regex(/^[A-Za-z0-9._/-]+$/), buyPrice: z.number().finite().nonnegative().max(1_000_000).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.000001), response: z.string().trim().max(2000) }),
+  z.object({ action: z.literal("complete"), trackingCarrier: z.enum(["correos", "fedex"]).default("correos"), trackingNumber: z.string().trim().min(3).max(80).regex(/^[A-Za-z0-9._/-]+$/), buyPrice: z.number().finite().nonnegative().max(1_000_000).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.000001), response: z.string().trim().max(2000) }),
 ])
 
 function checkScope(ctx: AuthContext) {
@@ -23,9 +24,10 @@ function checkScope(ctx: AuthContext) {
   if (ctx.role !== "client" && !QUOTATION_PERMISSIONS.some(p => hasPermission(ctx, p))) throw new Error("Sem permissão para gerir cotações.")
 }
 function publicQuote(quote: StoredQuotation, ctx: AuthContext): ShipmentQuotation {
-  const { requested_by: _requester, updated_by: _updater, shipment_audit_id: _audit, partner_cost: _cost, booked_by: _booker, internal_notes, ...publicFields } = quote
-  void _requester; void _updater; void _audit; void _cost; void _booker
-  return ctx.role === "client" ? publicFields : { ...publicFields, internal_notes }
+  const { requested_by: _requester, requested_by_collaborator_id: _collaborator, requested_by_email, requested_by_role,
+    updated_by: _updater, shipment_audit_id: _audit, partner_cost: _cost, booked_by: _booker, internal_notes, ...publicFields } = quote
+  void _requester; void _collaborator; void _updater; void _audit; void _cost; void _booker
+  return ctx.role === "client" ? publicFields : { ...publicFields, internal_notes, requested_by_email, requested_by_role }
 }
 function shipmentFields(v: ShipmentFormValues): QuotationShipment {
   return { senderName: v.senderName, senderAddress: v.senderAddress, senderCity: v.senderCity, senderPostal: v.senderPostal, senderPhone: v.senderPhone,
@@ -41,19 +43,25 @@ function sameRequest(a: StoredQuotation, b: StoredQuotation) {
     return Array.isArray(requested) ? Array.isArray(saved) && saved.length === requested.length && requested.every((weight, index) => weight === saved[index]) : saved === requested
   })
   return a.client_id === b.client_id && a.service_id === b.service_id && a.requested_by === b.requested_by &&
-    sameShipment && a.internal_notes === b.internal_notes
+    sameShipment && a.internal_notes === b.internal_notes && a.requested_transport === b.requested_transport
 }
 
 /** An explicit primary key makes a retry idempotent; never upsert a request. */
-export async function createQuotation(db: SupabaseClient, ctx: AuthContext, id: string, client: Cliente, service: ServicoLinke, values: ShipmentFormValues) {
+export async function createQuotation(db: SupabaseClient, ctx: AuthContext, id: string, client: Cliente, service: ServicoLinke, values: ShipmentFormValues, requestedTransport?: "air") {
   checkScope(ctx)
   if (!service || !client || !uuid.safeParse(id).success || ctx.role === "client" && client.id !== ctx.client_id) throw new Error("Pedido de cotação inválido.")
-  if (!requiresCorreosQuotation(resolveServiceCarrier(service), values.recipientCountry, service) || values.codValue || values.selectedSpecialServices.length || client.is_active === false || service.is_active === false) throw new Error("Este pedido não está disponível para cotação internacional.")
+  if (!canRequestCorreosQuotation(service, values.recipientCountry) || values.codValue || values.selectedSpecialServices.length || client.is_active === false) throw new Error("Este pedido não está disponível para cotação internacional.")
+  const estimate = correosQuotationEstimate(requestedTransport === "air" ? generalCorreosQuotationClient(client, service, client.pricing?.standard_fuel_surcharge_pct) : client, service, values.recipientCountry, values.recipientPostal, values.weightKg,
+    { lengthCm: values.lengthCm, widthCm: values.widthCm, heightCm: values.heightCm, volumesCount: values.volumesCount,
+      parcelWeightsKg: values.parcelWeightsKg.length ? values.parcelWeightsKg : undefined })
   const now = new Date().toISOString()
   const details: StoredQuotation = { id, reference: `COT-${id.replace(/-/g, "").slice(0, 12).toUpperCase()}`,
     client_id: client.id, client_name: client.short_name || client.legal_name, service_id: service.id, service_name: service.name,
     created_at: now, updated_at: now, revision: 0, status: "pending", shipment: shipmentFields(values),
-    proposed_price: null, response: "", tracking_number: "", requested_by: ctx.user.id, updated_by: ctx.user.id,
+    proposed_price: null, estimated_price: estimate?.totalPrice ?? null, response: "", tracking_number: "", requested_by: ctx.user.id, updated_by: ctx.user.id,
+    ...(requestedTransport === "air" ? { requested_transport: "air" as const } : {}),
+    ...(ctx.role !== "client" ? { requested_by_role: ctx.role === "admin" ? "admin" as const : "employee" as const,
+      requested_by_email: ctx.user.email, requested_by_collaborator_id: ctx.colaborador_id || undefined } : {}),
     ...(ctx.role !== "client" && values.internalNotes ? { internal_notes: values.internalNotes } : {}) }
   const { error } = await db.from("audit_log").insert({ id, tenant_id: ctx.tenant_id, action: QUOTATION_ACTION, details, created_at: now })
   if (!error) return publicQuote(details, ctx)
@@ -80,7 +88,8 @@ export async function listQuotations(db: SupabaseClient, ctx: AuthContext, clien
   if (error) throw new Error("Não foi possível consultar as cotações. Tente novamente.")
   const rows = (data || []).slice(0, 30)
   const last = rows[rows.length - 1]
-  return { requests: rows.map(row => publicQuote(row.details as StoredQuotation, ctx)),
+  const readIds = ctx.role === "client" ? null : await readQuotationIds(db, ctx, rows.map(row => row.id))
+  return { requests: rows.map(row => ({ ...publicQuote(row.details as StoredQuotation, ctx), ...(readIds ? { is_unread: !readIds.has(row.id) } : {}) })),
     next: data && data.length > 30 && last ? { at: last.created_at, id: last.id } : null }
 }
 
@@ -90,6 +99,7 @@ export async function updateQuotation(db: SupabaseClient, ctx: AuthContext, id: 
   const parsed = quotationUpdateSchema.safeParse(input)
   if (!parsed.success) throw new Error("Verifique o valor, a resposta e a referência de transporte.")
   const update = parsed.data
+  if (update.action === "complete" && update.trackingCarrier === "fedex" && !/^\d{10,34}$/.test(update.trackingNumber)) throw new Error("Indique o número de tracking FedEx, apenas com 10 a 34 algarismos.")
   const customerAction = update.action === "accept" || update.action === "decline"
   if (ctx.role === "client" && !customerAction && update.action !== "cancel") throw new Error("Apenas a equipa pode responder a cotações.")
   if (ctx.role !== "client" && customerAction) throw new Error("A decisão da proposta deve ser registada pelo cliente.")
@@ -105,8 +115,9 @@ export async function updateQuotation(db: SupabaseClient, ctx: AuthContext, id: 
       p_actor: ctx.user.id, p_client: ctx.role === "client" ? ctx.client_id : null, p_action: update.action,
       p_tracking: update.action === "complete" ? update.trackingNumber : null,
       p_buy_price: update.action === "complete" ? update.buyPrice : null,
-      p_response: update.action === "complete" ? update.response : null })
-    if (result.error?.code === "PGRST202") throw new Error("Falta aplicar a migração de envios por cotação no Supabase (20261105190000_quotation_shipments.sql).")
+      p_response: update.action === "complete" ? update.response : null,
+      p_tracking_carrier: update.action === "complete" ? update.trackingCarrier : null })
+    if (result.error?.code === "PGRST202") throw new Error("Falta aplicar as migrações de envios por cotação e tracking do parceiro no Supabase (20261105190000 e 20261106140000).")
     if (result.error || !result.data) {
       const message = result.error?.message || ""
       if (/^(Saldo ou crédito insuficiente|A wallet não está preparada|O limite de crédito não está preparado)/.test(message)) throw new Error(message)

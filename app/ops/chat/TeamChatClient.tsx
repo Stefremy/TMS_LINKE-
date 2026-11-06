@@ -38,9 +38,31 @@ type ActiveCallState = {
   cameraEnabled: boolean
   screenSharing: boolean
   mediaNotice: string | null
+  micPermissionBlocked: boolean
+  micRetrying: boolean
   remoteConnected: boolean
   remotePeerName: string | null
   remoteHasVideo: boolean
+}
+
+function microphoneErrorMessage(error: unknown): string {
+  const name = error instanceof DOMException ? error.name : ""
+  if (name === "NotAllowedError" || name === "SecurityError") {
+    return "O navegador bloqueou o microfone. Nas permissões do site, permita o Microfone e tente novamente. No macOS, confirme também o acesso do navegador em Definições do Sistema > Privacidade e Segurança > Microfone."
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") return "Não foi encontrado um microfone ligado a este dispositivo."
+  if (name === "NotReadableError" || name === "TrackStartError") return "O microfone está a ser usado por outra aplicação ou não pode ser iniciado. Feche essa aplicação e tente novamente."
+  return "Não foi possível iniciar o microfone. Verifique as permissões e o dispositivo de áudio."
+}
+
+function cameraErrorMessage(error: unknown): string {
+  const name = error instanceof DOMException ? error.name : ""
+  if (name === "NotAllowedError" || name === "SecurityError") {
+    return "O navegador bloqueou a câmara. Nas permissões do site, permita a Câmara e tente novamente. No macOS, confirme também o acesso do navegador em Definições do Sistema > Privacidade e Segurança > Câmara."
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") return "Não foi encontrada uma câmara ligada a este dispositivo."
+  if (name === "NotReadableError" || name === "TrackStartError") return "A câmara está a ser usada por outra aplicação ou não pode ser iniciada. Feche essa aplicação e tente novamente."
+  return "Não foi possível iniciar a câmara. Verifique as permissões e o dispositivo de vídeo."
 }
 
 function formatCallDuration(seconds: number): string {
@@ -108,6 +130,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
   const callSignalCleanupRef = useRef<(() => void) | null>(null)
   const callInstanceIdRef = useRef<string>("")
   const callStartingRef = useRef(false)
+  const micRetryingRef = useRef(false)
   const notifyCallVideoRef = useRef<(() => void) | null>(null)
   const incomingCalls = useIncomingCall(initial.viewerId, activeCall?.roomId)
   const latest = useRef(initial.messages.at(-1)?.sequence || 0)
@@ -585,6 +608,8 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       cameraEnabled: mode === "video",
       screenSharing: false,
       mediaNotice: null,
+      micPermissionBlocked: false,
+      micRetrying: false,
       remoteConnected: false,
       remotePeerName: customTitle || (recipient ? (peer?.name || "Colega") : null),
       remoteHasVideo: false,
@@ -593,6 +618,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
     let stream: MediaStream | null = null
     let cameraOk = mode === "video"
     let notice: string | null = null
+    let micPermissionBlocked = false
 
     if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
       try {
@@ -600,18 +626,20 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
           audio: true,
           video: mode === "video" ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
         })
-      } catch {
+      } catch (error) {
         if (mode === "video") {
           try {
             stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
             cameraOk = false
-            notice = "Câmara indisponível — ligado apenas com áudio."
-          } catch {
+            notice = `${cameraErrorMessage(error)} A chamada continua apenas com áudio. Use «Ligar câmara» depois de permitir o acesso.`
+          } catch (audioError) {
             cameraOk = false
-            notice = "Sem acesso ao microfone/câmara no navegador. A chamada está ativa em modo de escuta."
+            notice = `${microphoneErrorMessage(audioError)} A chamada continua em modo de escuta.`
+            micPermissionBlocked = true
           }
         } else {
-          notice = "Sem acesso ao microfone no navegador. A chamada está ativa em modo de escuta."
+          notice = `${microphoneErrorMessage(error)} A chamada continua em modo de escuta.`
+          micPermissionBlocked = true
         }
       }
     } else {
@@ -629,7 +657,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
     if (localVideoRef.current && stream) {
       localVideoRef.current.srcObject = stream
     }
-    setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, cameraEnabled: cameraOk, mediaNotice: notice } : prev)
+    setActiveCall(prev => prev && prev.roomId === roomId ? { ...prev, cameraEnabled: cameraOk, mediaNotice: notice, micPermissionBlocked } : prev)
 
     const reportError = (error: unknown) => {
       if (callInstanceIdRef.current !== instanceId) return
@@ -642,7 +670,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       callSignalCleanupRef.current = () => transport.close()
       const pc = new RTCPeerConnection({ iceServers: transport.iceServers, iceTransportPolicy: transport.iceTransportPolicy })
       peerConnectionRef.current = pc
-      if (stream) for (const track of stream.getTracks()) pc.addTrack(track, stream)
+      if (localStreamRef.current) for (const track of localStreamRef.current.getTracks()) pc.addTrack(track, localStreamRef.current)
       // Keep both media sections available when a voice call gains video later.
       if (!pc.getTransceivers().some(item => item.sender.track?.kind === "video")) pc.addTransceiver("video", { direction: "sendrecv" })
       if (!pc.getTransceivers().some(item => item.sender.track?.kind === "audio")) pc.addTransceiver("audio", { direction: "sendrecv" })
@@ -696,6 +724,33 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
     setActiveCall(prev => prev ? { ...prev, micMuted: nextMuted } : null)
   }
 
+  async function retryCallMicrophone() {
+    if (!activeCall || micRetryingRef.current) return
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setActiveCall(previous => previous ? { ...previous, mediaNotice: "O navegador não disponibiliza o microfone neste endereço. Abra o TMS em localhost ou num endereço HTTPS." } : previous)
+      return
+    }
+    micRetryingRef.current = true
+    setActiveCall(previous => previous ? { ...previous, micRetrying: true } : null)
+    try {
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      const audioTrack = audioStream.getAudioTracks()[0]
+      if (!audioTrack) throw new Error("Não foi possível iniciar o microfone.")
+      const localStream = localStreamRef.current
+      if (localStream) localStream.addTrack(audioTrack)
+      else localStreamRef.current = audioStream
+      const audioSender = peerConnectionRef.current?.getTransceivers().find(item => item.receiver.track.kind === "audio")?.sender
+      if (audioSender) await audioSender.replaceTrack(audioTrack)
+      else if (peerConnectionRef.current && localStreamRef.current) peerConnectionRef.current.addTrack(audioTrack, localStreamRef.current)
+      setActiveCall(previous => previous ? { ...previous, micMuted: false, micPermissionBlocked: false, mediaNotice: null } : null)
+    } catch (error) {
+      setActiveCall(previous => previous ? { ...previous, micPermissionBlocked: true, mediaNotice: microphoneErrorMessage(error) } : null)
+    } finally {
+      micRetryingRef.current = false
+      setActiveCall(previous => previous ? { ...previous, micRetrying: false } : null)
+    }
+  }
+
   async function toggleCallCamera() {
     if (!activeCall) return
     const stream = localStreamRef.current
@@ -731,8 +786,8 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
           notifyCallVideoRef.current?.()
           setActiveCall(prev => prev ? { ...prev, cameraEnabled: true, mode: "video", mediaNotice: null } : null)
         }
-      } catch {
-        setActiveCall(prev => prev ? { ...prev, mediaNotice: "Não foi possível ativar a câmara." } : null)
+      } catch (error) {
+        setActiveCall(prev => prev ? { ...prev, mediaNotice: cameraErrorMessage(error) } : null)
       }
     }
   }
@@ -1070,7 +1125,8 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
 
             {!activeCall.minimized && (
               <>
-                {activeCall.mediaNotice && <p className={styles.callMediaNote}>{activeCall.mediaNotice}</p>}
+                {activeCall.mediaNotice && <p className={styles.callMediaNote} role="status">{activeCall.mediaNotice}</p>}
+                {activeCall.micPermissionBlocked && <button type="button" className={styles.callControlBtn} disabled={activeCall.micRetrying} onClick={() => void retryCallMicrophone()}><Mic size={15} aria-hidden="true" /><span>{activeCall.micRetrying ? "A ativar microfone…" : "Tentar ativar microfone"}</span></button>}
                 {activeCall.remoteConnected && <button type="button" className={styles.callControlBtn} onClick={() => { void remoteAudioRef.current?.play().then(() => setActiveCall(previous => previous ? { ...previous, mediaNotice: null } : previous)).catch(() => setActiveCall(previous => previous ? { ...previous, mediaNotice: "Confirme a saída de áudio e as permissões do navegador." } : previous)) }}>Ouvir áudio</button>}
                 <div className={styles.callStageGrid}>
                   <div className={styles.callTile}>

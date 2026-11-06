@@ -3,6 +3,7 @@
 import * as React from "react"
 import { codCents } from "@/lib/services/reembolsos/client-cod"
 import { getClientServiceName } from "@/lib/services/client-service-label"
+import { partnerTrackingUrl } from "@/lib/shipments/quotations/tracking"
 import { 
   Building2, 
   MapPin, 
@@ -96,6 +97,7 @@ export function ClientShipmentDetailModal({
     (!isCorreos ? currentShipment?.ctt_object_id : null) ||
     (currentShipment?.tracking_number !== internalRef ? currentShipment?.tracking_number : null)
   const tracking = internalRef
+  const externalTrackingUrl = partnerTrackingUrl(currentShipment)
   const currentStatus = currentShipment?.status || "pendente"
 
   // Load timeline events
@@ -225,7 +227,7 @@ export function ClientShipmentDetailModal({
 
   const handleCopyTrackingLink = () => {
     if (typeof window === "undefined") return
-    const url = `${window.location.origin}/tracking?trk=${encodeURIComponent(tracking)}`
+    const url = externalTrackingUrl || `${window.location.origin}/tracking?trk=${encodeURIComponent(tracking)}`
     navigator.clipboard.writeText(url)
     setCopiedLink(true)
     setTimeout(() => setCopiedLink(false), 2500)
@@ -233,7 +235,7 @@ export function ClientShipmentDetailModal({
 
   const handleShareTrackingWhatsApp = () => {
     if (typeof window === "undefined") return
-    const url = `${window.location.origin}/tracking?trk=${encodeURIComponent(tracking)}`
+    const url = externalTrackingUrl || `${window.location.origin}/tracking?trk=${encodeURIComponent(tracking)}`
     const text = `📦 Siga o rastreio da sua encomenda (${tracking}):\n${url}`
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank")
   }
@@ -355,8 +357,8 @@ export function ClientShipmentDetailModal({
                   {internalRef}
                 </span>
                 {carrierTracking && (
-                  <span className="font-mono text-xs bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-md font-medium" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Referência CTT Expresso"}>
-                    {isCorreos ? "Correos: " : "CTT: "}{carrierTracking}
+                  <span className="font-mono text-xs bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-md font-medium" title={externalTrackingUrl ? "Tracking informativo FedEx" : isCorreos ? "Expedición / Rastreio Correos Express" : "Referência CTT Expresso"}>
+                    {externalTrackingUrl ? "FedEx: " : isCorreos ? "Correos: " : "CTT: "}{carrierTracking}
                   </span>
                 )}
               </div>
@@ -400,13 +402,15 @@ export function ClientShipmentDetailModal({
             </button>
 
             <Link
-              href={`${basePath}/tracking?search=${encodeURIComponent(carrierTracking || internalRef || currentShipment.id)}`}
+              href={externalTrackingUrl || `${basePath}/tracking?search=${encodeURIComponent(carrierTracking || internalRef || currentShipment.id)}`}
+              target={externalTrackingUrl ? "_blank" : undefined}
+              rel={externalTrackingUrl ? "noopener noreferrer" : undefined}
               onClick={onClose}
               className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              title="Abrir no Mapa Interativo Leaflet"
+              title={externalTrackingUrl ? "Consultar o tracking no site da FedEx" : "Abrir no Mapa Interativo Leaflet"}
             >
               <MapPin className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Ver no Mapa</span>
+              <span>{externalTrackingUrl ? "Tracking FedEx" : "Ver no Mapa"}</span>
             </Link>
 
 
@@ -433,12 +437,12 @@ export function ClientShipmentDetailModal({
               )
             })()}
             <span className="text-xs text-slate-400 font-normal hidden sm:inline ml-1">
-              {isCorreos ? "(Sincronizado com API Correos Express)" : "(Sincronizado com API CTT)"}
+              {externalTrackingUrl ? "Tracking informativo · consulta no site da FedEx" : isCorreos ? "(Sincronizado com API Correos Express)" : "(Sincronizado com API CTT)"}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <button
+            {!externalTrackingUrl && <button
               type="button"
               onClick={handleSyncTracking}
               disabled={isSyncing}
@@ -447,7 +451,7 @@ export function ClientShipmentDetailModal({
             >
               <RefreshIcon className={`w-4 h-4 ${isSyncing ? "animate-spin text-slate-600" : "text-slate-500"}`} />
               <span>{isSyncing ? "A Sincronizar..." : "Sincronizar"}</span>
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -484,7 +488,18 @@ export function ClientShipmentDetailModal({
         <div className="p-6 overflow-y-auto flex-1 space-y-6 bg-[var(--surface-bg)]">
           
           {/* TAB 1: RASTREIO E TIMELINE */}
-          {activeTab === "tracking" && (
+          {activeTab === "tracking" && externalTrackingUrl && (
+            <div className="space-y-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-5">
+              <h4 className="flex items-center gap-2 text-sm font-semibold"><Truck className="h-4 w-4" />Tracking FedEx</h4>
+              <p className="text-sm text-[var(--text-secondary)]">Número registado pela equipa Linke: <strong className="select-text font-mono">{carrierTracking}</strong></p>
+              <p className="text-sm text-[var(--text-secondary)]">Consulte o estado e os movimentos da entrega diretamente no site da FedEx.</p>
+              <div className="flex flex-wrap gap-2">
+                <a href={externalTrackingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"><ExternalLink className="h-4 w-4" />Acompanhar na FedEx</a>
+                <button type="button" onClick={handleCopyTrackingLink} className="rounded-lg border border-[var(--border-subtle)] px-4 py-2 text-sm">{copiedLink ? "Copiado!" : "Copiar link"}</button>
+              </div>
+            </div>
+          )}
+          {activeTab === "tracking" && !externalTrackingUrl && (
             <div className="space-y-6">
               
               {/* Stepper Visual */}
@@ -568,7 +583,7 @@ export function ClientShipmentDetailModal({
                     <span>WhatsApp</span>
                   </button>
                   <a
-                    href={`/tracking?trk=${encodeURIComponent(tracking)}`}
+                    href={externalTrackingUrl || `/tracking?trk=${encodeURIComponent(tracking)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="p-1.5 bg-[var(--surface-dim)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-md text-xs font-semibold flex items-center gap-1 transition-all"

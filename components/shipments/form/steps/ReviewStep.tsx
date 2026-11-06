@@ -27,7 +27,7 @@ export function ReviewStep({ quote, role, onEdit }: { quote: ShipmentQuote; role
       {values.saveToAgenda && <p className="mt-2 text-xs text-zinc-500">O destinatário será guardado na agenda após {quote.requiresQuotation ? "o pedido" : "a emissão"}.</p>}
     </div>
     {quote.quote && <div className="border-t border-zinc-100 pt-5">
-      <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-zinc-900">Discriminação do preço e IVA</h3><span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600">{quote.quote.vatPct > 0 ? `IVA ${quote.quote.vatPct}% (PT-CONT)` : "Isento de IVA (0%)"}</span></div>
+      <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-zinc-900">{quote.requiresQuotation ? "Estimativa da tabela — preço a confirmar" : "Discriminação do preço e IVA"}</h3><span className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600">{quote.requiresQuotation ? "Estimativa" : quote.quote.vatPct > 0 ? `IVA ${quote.quote.vatPct}% (PT-CONT)` : "Isento de IVA (0%)"}</span></div>
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50/70">
         <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 gap-y-2 p-3 text-xs">
           <span className="font-medium text-zinc-400">Parcela</span><span className="text-right font-medium text-zinc-400">Sem IVA</span><span className="text-right font-medium text-zinc-400">IVA ({quote.quote.vatPct}%)</span><span className="text-right font-medium text-zinc-400">Com IVA</span>
@@ -37,9 +37,10 @@ export function ReviewStep({ quote, role, onEdit }: { quote: ShipmentQuote; role
         </div>
         <div className="flex items-center justify-between border-t border-zinc-200 bg-white px-3 py-2.5 text-xs">
           <span className="text-zinc-600">Subtotal s/ IVA: <strong>{money(quote.quote.totalPrice)}</strong> · IVA: <strong>{money(quote.quote.vatAmount)}</strong></span>
-          <span className="text-sm font-semibold tabular-nums text-zinc-900">Total: {money(quote.quote.totalWithVat)}</span>
+          <span className="text-sm font-semibold tabular-nums text-zinc-900">Total{quote.requiresQuotation ? " estimado" : ""}: {money(quote.quote.totalWithVat)}{quote.requiresQuotation ? "*" : ""}</span>
         </div>
       </div>
+      {quote.requiresQuotation && <p className="px-3 pt-2 text-[11px] leading-relaxed text-zinc-500">* Estimativa indicativa da tabela. A equipa Linke confirma o preço final e a disponibilidade após analisar o pedido.</p>}
     </div>}
     <label className="block space-y-2 text-sm font-medium text-zinc-700">Observações para a transportadora <span className="font-normal text-zinc-400">(opcional)</span><textarea {...form.register("observations")} rows={3} maxLength={500} className={`${inputClass} resize-y`} placeholder="Indicações úteis para a entrega…" /></label>
   </FormSection>

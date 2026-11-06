@@ -77,6 +77,10 @@ export async function syncShipmentTracking(
     targetShipment.tenant_id !== options.tenantId
   )) return denied
 
+  if (targetShipment?.ops_substatus === "tracking_fedex_externo") {
+    return { success: false, carrier: "fedex", count: 0, error: "Este envio usa tracking FedEx externo. Consulte o link FedEx associado ao envio." }
+  }
+
   const effectiveTrackingNumber = isClient
     ? targetShipment.carrier_tracking_number || targetShipment.carrier_object_id ||
       targetShipment.ctt_object_id || targetShipment.tracking_number

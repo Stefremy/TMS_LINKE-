@@ -2,11 +2,11 @@
 
 import type { SelectHTMLAttributes } from "react"
 import { COUNTRY_TO_ZONE_MAP } from "@/lib/services/geo/international-zones"
+import { countryNamePt, compareCountryNames } from "@/lib/i18n/countries"
 
-const names = new Intl.DisplayNames(["pt-PT"], { type: "region" })
 const codes = [...new Set(["PT", "ES", ...Object.keys(COUNTRY_TO_ZONE_MAP).map(code => code.replace(/_ISO$/, "").replace(/^UK$/, "GB"))])].filter(code => /^[A-Z]{2}$/.test(code))
-const options = codes.map(code => ({ code, name: names.of(code) || code }))
-  .sort((a, b) => (a.code === "PT" ? -2 : a.code === "ES" ? -1 : 0) - (b.code === "PT" ? -2 : b.code === "ES" ? -1 : 0) || a.name.localeCompare(b.name, "pt-PT"))
+const options = codes.map(code => ({ code, name: countryNamePt(code) }))
+  .sort((a, b) => (a.code === "PT" ? -2 : a.code === "ES" ? -1 : 0) - (b.code === "PT" ? -2 : b.code === "ES" ? -1 : 0) || compareCountryNames(a, b))
 
 type Props = Omit<SelectHTMLAttributes<HTMLSelectElement>, "value" | "onChange"> & { value: string; onValueChange: (value: string) => void }
 export function CountrySelect({ value, onValueChange, ...props }: Props) {

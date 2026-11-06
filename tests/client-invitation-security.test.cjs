@@ -51,6 +51,7 @@ function harness(options = {}) {
     async signOut() { calls.signOut++; return { error: null } },
   }
   const load = createLoader({
+    'node:crypto': require('node:crypto'),
     'server-only': {},
     '@/lib/auth/context': {
       LINKE_TENANT_ID: TENANT,
@@ -70,7 +71,7 @@ function harness(options = {}) {
     resend: { Resend: class {
       emails = { send: async params => {
         calls.mail.push(params)
-        assert.equal(calls.auth.at(-1).method, 'assign', 'store binding must be persisted before delivery')
+        if (!options.recovery) assert.equal(calls.auth.at(-1).method, 'assign', 'store binding must be persisted before delivery')
         return { error: options.mailError ? { message: 'private-delivery-detail' } : null }
       } }
     } },
@@ -78,8 +79,46 @@ function harness(options = {}) {
     'next/navigation': { redirect() { throw new Error('REDIRECT') } },
   })
   return { load, db, tables, calls, invite: load('app/actions/client-invitations.ts').inviteClientAccessAction,
-    password: load('app/api/auth/client-password/route.ts').POST }
+    password: load('app/api/auth/client-password/route.ts').POST,
+    recovery: load('app/api/auth/client-recovery/route.ts').POST }
 }
+
+const recoveryRequest = (email = EMAIL, origin = 'https://portal.example.invalid') => new Request('https://portal.example.invalid/api/auth/client-recovery', {
+  method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
+})
+
+test('public recovery sends only to an existing bound client, without changing identity or password', async () => {
+  const h = harness({ existing: boundUser(), recovery: true })
+  const response = await h.recovery(recoveryRequest())
+  assert.equal(response.status, 200)
+  assert.equal(h.calls.mail.length, 1)
+  assert.deepEqual(h.calls.mail[0].to, [EMAIL])
+  assert.match(h.calls.mail[0].html, /\/app\/ativar#token_hash=/)
+  assert.deepEqual(h.calls.auth.map(call => call.method), ['list', 'generate'])
+  assert.equal(h.calls.password.length, 0)
+  assert.doesNotMatch(JSON.stringify(await response.json()), new RegExp(TOKEN))
+})
+
+test('recovery does not disclose or send links for unknown, staff or foreign tenant identities', async () => {
+  let expected
+  for (const existing of [undefined, { ...boundUser(), app_metadata: { role: 'admin' } }, { ...boundUser(), app_metadata: { role: 'client', client_id: STORE, tenant_id: OTHER } }]) {
+    const h = harness({ existing, recovery: true })
+    const body = await (await h.recovery(recoveryRequest())).json()
+    if (!expected) expected = body
+    assert.deepEqual(body, expected)
+    assert.equal(h.calls.mail.length, 0)
+    assert.equal(h.calls.auth.some(call => call.method === 'generate'), false)
+  }
+})
+
+test('recovery fails closed on rate claim failure and rejects cross-origin submissions before writes', async () => {
+  const h = harness({ existing: boundUser(), recovery: true, failure: q => q.write ? { code: '23505', message: 'duplicate claim' } : null })
+  assert.equal((await h.recovery(recoveryRequest())).status, 200)
+  assert.equal(h.calls.auth.length, 0)
+  const foreign = harness({ existing: boundUser(), recovery: true })
+  assert.equal((await foreign.recovery(recoveryRequest(EMAIL, 'https://attacker.invalid'))).status, 400)
+  assert.equal(foreign.db.writes.length, 0)
+})
 
 function request(overrides = {}, headers = {}) {
   return new Request('https://portal.example.invalid/api/auth/client-password', {

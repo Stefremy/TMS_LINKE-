@@ -7,6 +7,7 @@ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { resolveClientTable } from "./calculate-shipment-price"
 import { ShipmentPricingError, ShipmentPricingUnavailableError } from "./shipment-pricing-errors"
 import { isTemporarilyWithdrawnService } from "@/lib/services/service-availability"
+import { generalCorreosQuotationReference } from "@/lib/services/correos/quotation-pricing"
 export { ShipmentPricingError, ShipmentPricingUnavailableError } from "./shipment-pricing-errors"
 
 export function validateShipmentPricingInput(input: {
@@ -45,6 +46,16 @@ export async function loadShipmentPricingContext(
   clientId: string | null | undefined,
   selection: { serviceId?: string; serviceName?: string } = {}
 ): Promise<{ client: Cliente; service: ServicoLinke }> {
+  return loadPricingContext(supabase, ctx, clientId, selection, false)
+}
+
+/** Every active customer may request a quote; this does not authorize automatic carrier emission. */
+export async function loadInternationalAirQuotationContext(supabase: SupabaseClient, ctx: AuthContext, clientId: string | null | undefined) {
+  return loadPricingContext(supabase, ctx, clientId, {}, true)
+}
+
+async function loadPricingContext(supabase: SupabaseClient, ctx: AuthContext, clientId: string | null | undefined,
+  selection: { serviceId?: string; serviceName?: string }, referenceOnly: boolean): Promise<{ client: Cliente; service: ServicoLinke }> {
   if (!clientId || !ctx.tenant_id || (ctx.role === "client" && ctx.client_id !== clientId)) {
     throw new ShipmentPricingError("Cliente inválido ou inacessível.")
   }
@@ -88,6 +99,7 @@ export async function loadShipmentPricingContext(
     }
   }
   for (const log of deletedServiceResult.data || []) services.delete(log.details?.id)
+  if (referenceOnly) return { client, service: generalCorreosQuotationReference([...services.values()]) }
   const available = [...services.values()].filter(service => service.is_active !== false && !isTemporarilyWithdrawnService(service) &&
     (!service.client_id || service.client_id === clientId))
   const service = selection.serviceId ? available.find(s => s.id === selection.serviceId)

@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, FileText, Search, Plus, UserCheck, CreditCard, Inbox, MapPin, Banknote } from "lucide-react"
+import { Home, FileText, Search, Plus, UserCheck, CreditCard, Inbox, MapPin, Banknote, Plane } from "lucide-react"
 import { useClientScope } from "./ClientScope"
 import { ClientMessageBell } from "./ClientMessages"
 
@@ -14,9 +14,9 @@ export function ClientSidebarNav() {
   const navItems = [
     { href: basePath, label: "Painel Principal", icon: Home },
     { href: `${basePath}/criar-guia`, label: "Novo Envio", icon: Plus },
+    { href: `${basePath}/cotacoes`, label: "Pedido de envio internacional aéreo", icon: Plane },
     { href: `${basePath}/tracking`, label: "Rastreio & Mapa", icon: MapPin },
     { href: `${basePath}/envios`, label: "Histórico & Envios", icon: Search },
-    { href: `${basePath}/cotacoes`, label: "Cotações", icon: FileText },
     { href: `${basePath}/destinatarios`, label: "Destinatários", icon: UserCheck },
     { href: `${basePath}/reembolsos`, label: "Reembolsos", icon: Banknote },
     { href: `${basePath}/faturas`, label: "Faturas e Extratos", icon: FileText },
@@ -48,7 +48,7 @@ export function ClientSidebarNav() {
                 }`} 
                 strokeWidth={1.75}
               />
-              <span className="truncate">{item.label}</span>
+              <span className={item.href === `${basePath}/cotacoes` ? "min-w-0 leading-tight" : "truncate"}>{item.label}</span>
             </div>
 
           </Link>

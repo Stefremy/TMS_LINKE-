@@ -12,12 +12,16 @@ const flatten = node => node?.type?.name === 'ShipmentVolumetricSummary' ? flatt
 const textOf = node => Array.isArray(node) ? node.map(textOf).join('') :
   node && typeof node === 'object' ? textOf(node.props?.children) : String(node ?? '')
 
-test('client service names omit product identities, transit promises and internal pricing profiles', () => {
+test('client service names preserve Paq product names while omitting transit promises and internal pricing profiles', () => {
   const load = createLoader({})
   const { getClientServiceName, getClientServiceLabel } = load('lib/services/client-service-label.ts')
   for (const [name, expected] of [
     ['Ctt expresso # (VIP / Alto Volume)', 'Ctt expresso #'],
-    ['Linke Ibérico 24H (Correos Paq 24)', 'Linke Ibérico'],
+    ['Linke Paq 24 PT', 'Linke Paq 24 PT'],
+    ['Linke Paq 48 ES', 'Linke Paq 48 ES'],
+    ['Linke e-Paq 24 B2C (Correos Express)', 'Linke e-Paq 24 B2C (Correos Express)'],
+    ['Linke Ibérico 24H (Correos Paq 24)', 'Linke Ibérico (Correos Paq 24)'],
+    ['Linke Ibérico (Correos Paq 48)', 'Linke Ibérico (Correos Paq 48)'],
     ['CTT 24/48 horas (Premium D+1)', 'CTT'],
     ['Guia EQ · Económico 48 — Ctt expresso #', 'Ctt expresso #'],
     ['Tabela 24 (Loja Norte)', 'Tabela 24 (Loja Norte)'],

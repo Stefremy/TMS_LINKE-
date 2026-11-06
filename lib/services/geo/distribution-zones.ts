@@ -1,5 +1,6 @@
 import { COUNTRY_TO_ZONE_MAP, CTT_CE_TRUCK_ZONES, OFFICIAL_LINKE_ZONES } from "./international-zones"
 import { CTT_AIR_COUNTRY_NAMES, CTT_AIR_ZONES } from "./ctt-air-zones"
+import { countryNamePt, compareCountryNames } from "@/lib/i18n/countries"
 
 export interface DistributionCountry { code: string; name: string }
 export interface DistributionZone { code: string; name: string; countries: DistributionCountry[] }
@@ -11,11 +12,10 @@ export interface DistributionZoneGroup {
   zones: DistributionZone[]
 }
 
-const countryNames = new Intl.DisplayNames(["pt-PT"], { type: "region" })
 function countriesFromCodes(codes: readonly string[], names: Readonly<Record<string, string>> = {}): DistributionCountry[] {
   return [...new Set(codes.filter(code => /^[A-Z]{2}$/.test(code)).map(code => code === "UK" ? "GB" : code))]
-    .map(code => ({ code, name: names[code] || countryNames.of(code) || code }))
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-PT"))
+    .map(code => ({ code, name: names[code] || countryNamePt(code) }))
+    .sort(compareCountryNames)
 }
 
 /** Display each carrier's coverage using its own service's zone definitions. */

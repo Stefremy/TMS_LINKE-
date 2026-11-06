@@ -18,6 +18,7 @@ import { getCttRecipientContactError } from "@/lib/services/ctt/recipient-contac
 import { downloadCttLabel, printCttLabel } from "@/lib/label-utils"
 import { useOptionalClientScope } from "@/app/app/components/ClientScope"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
+import { isCorreosQuotationService } from "@/lib/services/correos/shipment-policy"
 import { shipmentDefaults, shipmentFormSchema, SHIPMENT_STEPS, stepForField, type ShipmentFormRole, type ShipmentFormValues } from "./schema"
 import { useShipmentQuote, getShipmentQuote } from "./useShipmentQuote"
 import { PartiesStep } from "./steps/PartiesStep"
@@ -31,13 +32,14 @@ import { primaryButton, secondaryButton } from "./fields"
 type Props = {
   role: ShipmentFormRole; client: Cliente; initialValues?: Partial<ShipmentFormValues>
   onCreated?: (result: ShipmentFormResult) => void; services?: ServicoLinke[]
+  hideQuotationServices?: boolean
 }
 type Feedback = { created: ShipmentFormResult | null; quotation: { id: string; reference: string } | null; label: string | null; labelError: string; warning: string; labelBusy: boolean }
 const SERVICE_STEP = stepForField("serviceId")
 const REVIEW_STEP = SHIPMENT_STEPS.length - 1
 const emptyFeedback: Feedback = { created: null, quotation: null, label: null, labelError: "", warning: "", labelBusy: false }
 
-export function ShipmentForm({ role: requestedRole, client, initialValues, onCreated, services: providedServices }: Props) {
+export function ShipmentForm({ role: requestedRole, client, initialValues, onCreated, services: providedServices, hideQuotationServices = false }: Props) {
   const scope = useOptionalClientScope()
   // Staff previewing /app use the same customer view, without operational controls.
   const role: ShipmentFormRole = scope ? "client" : requestedRole
@@ -54,7 +56,8 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
   const top = React.useRef<HTMLDivElement>(null)
   const summaryDialog = React.useRef<HTMLDialogElement>(null)
   const errorSummary = React.useRef<HTMLDivElement>(null)
-  const quote = useShipmentQuote({ client: effectiveClient, services: providedServices || resource.services, values, role })
+  const formServices = React.useMemo(() => (providedServices || resource.services).filter(service => !hideQuotationServices || !isCorreosQuotationService(service)), [providedServices, resource.services, hideQuotationServices])
+  const quote = useShipmentQuote({ client: effectiveClient, services: formServices, values, role })
   const busy = form.formState.isSubmitting || feedback.labelBusy
   const basePath = role === "ops" ? "/ops" : scope?.basePath || (client.portal_slug ? `/app/${client.portal_slug}` : "/app")
   const historyPath = `${basePath}/envios`
@@ -166,7 +169,7 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
     submissionLock.current = true
     form.clearErrors("root")
     try {
-      const fresh = getShipmentQuote({ client: effectiveClient, services: providedServices || resource.services, values: submitted, role })
+      const fresh = getShipmentQuote({ client: effectiveClient, services: formServices, values: submitted, role })
       if (fresh.isBlocked) { form.setError("serviceId", { message: fresh.blockedReason || "Não foi possível calcular o preço." }); setStep(SERVICE_STEP); focusField("serviceId"); return }
       if (!validateExport()) return
       const payload = { ...submitted, selectedSpecialServices: fresh.activeSpecialServices,
@@ -210,10 +213,10 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
     </header>
     {feedback.quotation ? <section role="status" className="mx-auto max-w-3xl space-y-5 rounded-xl border border-zinc-200 bg-white p-6 sm:p-8">
       <CheckCircle2 size={28} className="text-emerald-700" /><h2 className="text-2xl font-semibold text-zinc-900">Pedido de cotação enviado</h2>
-      <p className="text-sm text-zinc-600">Referência <strong className="select-text font-mono text-zinc-900">{feedback.quotation.reference}</strong>. A equipa irá tratar do pedido com o parceiro e responder na área Cotações.</p>
+      <p className="text-sm text-zinc-600">Referência <strong className="select-text font-mono text-zinc-900">{feedback.quotation.reference}</strong>. A equipa irá confirmar o preço com o parceiro. Acompanhe a resposta em Pedido de envio internacional aéreo, no menu lateral.</p>
       <p className="text-sm text-zinc-500">O pedido ficou registado, sem emissão de guia ou débito de saldo.</p>
       {feedback.warning && <p role="alert" className="text-sm text-amber-800">{feedback.warning}</p>}
-      <div className="flex flex-wrap gap-3"><Link href={role === "ops" ? "/ops/envios/cotacoes" : `${basePath}/cotacoes`} className={primaryButton}>Ver cotações<ArrowRight size={15} /></Link>
+      <div className="flex flex-wrap gap-3"><a href={role === "ops" ? "/ops/envios/cotacoes" : `${basePath}/cotacoes?pedido=${encodeURIComponent(feedback.quotation.id)}`} className={primaryButton}>Acompanhar pedido<ArrowRight size={15} /></a>
         <button type="button" className={secondaryButton} onClick={() => { form.reset(shipmentDefaults(client)); quotationKey.current = null; setFeedback(emptyFeedback); setStep(0) }}>Criar outro pedido</button></div>
     </section> : feedback.created ? <section role="status" aria-live="polite" className="mx-auto max-w-3xl overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xs">
       <div className="space-y-4 border-b border-zinc-100 bg-emerald-50/60 p-6 sm:p-8"><span className="inline-flex rounded-xl border border-emerald-100 bg-white p-3 text-emerald-700"><CheckCircle2 size={26} /></span><div><h2 className="text-2xl font-semibold tracking-tight text-zinc-900">Pronto. O seu envio foi emitido.</h2><p className="mt-2 text-sm text-zinc-500">Guia <strong className="select-text font-mono text-zinc-900">{feedback.created.guia}</strong></p></div></div>
@@ -241,9 +244,9 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
             <div className="hidden items-center justify-between gap-3 pt-1 lg:flex"><button type="button" disabled={step === 0 || busy} onClick={() => setStep(step - 1)} className={secondaryButton}><ArrowLeft size={15} />Anterior</button><button type="button" onClick={next} disabled={busy || resource.loading || step === REVIEW_STEP && quote.isBlocked} className={primaryButton}>{form.formState.isSubmitting ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : null}{form.formState.isSubmitting ? quote.requiresQuotation ? "A enviar pedido…" : "A emitir…" : nextLabel}{!form.formState.isSubmitting && <ArrowRight size={15} />}</button></div>
           </fieldset>
         </form>
-        <aside className="sticky top-6 hidden space-y-4 lg:block"><ShipmentSummary quote={quote} values={values} />{role === "client" && client.billing_type === "pay_as_you_go" && <button type="button" className={`${secondaryButton} w-full`} onClick={() => setTopUpOpen(true)}>Carregar saldo</button>}<p className="px-2 text-xs leading-relaxed text-zinc-400">{quote.requiresQuotation ? "A proposta fica disponível na área Cotações." : "A guia e a etiqueta ficam disponíveis no histórico após a emissão."}</p></aside>
+        <aside className="sticky top-6 hidden space-y-4 lg:block"><ShipmentSummary quote={quote} values={values} />{role === "client" && client.billing_type === "pay_as_you_go" && <button type="button" className={`${secondaryButton} w-full`} onClick={() => setTopUpOpen(true)}>Carregar saldo</button>}<p className="px-2 text-xs leading-relaxed text-zinc-400">{quote.requiresQuotation ? "A proposta fica disponível em Pedido de envio internacional aéreo, no menu lateral, e recebe um aviso na caixa de entrada." : "A guia e a etiqueta ficam disponíveis no histórico após a emissão."}</p></aside>
       </div>
-      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-zinc-200 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] lg:hidden"><button type="button" aria-haspopup="dialog" onClick={() => summaryDialog.current?.showModal()} className="flex min-w-0 items-center gap-2 text-left"><div><span className="block text-[10px] uppercase tracking-wider text-zinc-400">Resumo{quote.quote ? (quote.quote.vatPct > 0 ? ` (c/ IVA ${quote.quote.vatPct}%)` : " (Isento IVA)") : ""}</span><strong className="text-xl font-semibold tabular-nums">{quote.requiresQuotation ? "Sob cotação" : quote.quote ? money(quote.quote.totalWithVat) : "—"}</strong></div><ChevronUp size={17} className="text-zinc-400" /></button><div className="flex gap-2">{step > 0 && <button type="button" aria-label="Passo anterior" disabled={busy} onClick={() => setStep(step - 1)} className={`${secondaryButton} !px-3`}><ArrowLeft size={16} /></button>}<button type="button" onClick={next} disabled={busy || resource.loading || step === REVIEW_STEP && quote.isBlocked} className={primaryButton}>{busy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <>{nextLabel}<ArrowRight size={15} /></>}</button></div></div>
+      <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-zinc-200 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(0,0,0,0.04)] lg:hidden"><button type="button" aria-haspopup="dialog" onClick={() => summaryDialog.current?.showModal()} className="flex min-w-0 items-center gap-2 text-left"><div><span className="block text-[10px] uppercase tracking-wider text-zinc-400">{quote.requiresQuotation ? "Estimativa*" : "Resumo"}{!quote.requiresQuotation && quote.quote ? (quote.quote.vatPct > 0 ? ` (c/ IVA ${quote.quote.vatPct}%)` : " (Isento IVA)") : ""}</span><strong className="text-xl font-semibold tabular-nums">{quote.quote ? `${money(quote.quote.totalWithVat)}${quote.requiresQuotation ? "*" : ""}` : quote.requiresQuotation ? "Sob consulta" : "—"}</strong></div><ChevronUp size={17} className="text-zinc-400" /></button><div className="flex gap-2">{step > 0 && <button type="button" aria-label="Passo anterior" disabled={busy} onClick={() => setStep(step - 1)} className={`${secondaryButton} !px-3`}><ArrowLeft size={16} /></button>}<button type="button" onClick={next} disabled={busy || resource.loading || step === REVIEW_STEP && quote.isBlocked} className={primaryButton}>{busy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <>{nextLabel}<ArrowRight size={15} /></>}</button></div></div>
       <dialog ref={summaryDialog} aria-labelledby="shipment-mobile-summary-title" className="fixed inset-x-0 bottom-0 top-auto m-0 max-h-[85dvh] w-full max-w-none overflow-y-auto rounded-t-2xl border-0 bg-zinc-50 p-4 backdrop:bg-zinc-950/40 lg:hidden"><div className="mb-4 flex items-center justify-between"><h2 id="shipment-mobile-summary-title" className="text-base font-semibold">Resumo do envio</h2><button type="button" aria-label="Fechar resumo" onClick={() => summaryDialog.current?.close()} className="rounded-lg p-2 text-zinc-500"><X size={20} /></button></div><ShipmentSummary quote={quote} values={values} /><button type="button" disabled={busy || resource.loading || step === REVIEW_STEP && quote.isBlocked} onClick={() => { summaryDialog.current?.close(); next() }} className={`${primaryButton} mt-4 w-full`}>{nextLabel}<ArrowRight size={15} /></button>{role === "client" && client.billing_type === "pay_as_you_go" && <button type="button" onClick={() => { summaryDialog.current?.close(); setTopUpOpen(true) }} className={`${secondaryButton} mt-3 w-full`}>Carregar saldo</button>}</dialog>
     </FormProvider>}
     {role === "client" && <ClientTopUpModal isOpen={topUpOpen} onClose={() => setTopUpOpen(false)} clientId={client.id} />}

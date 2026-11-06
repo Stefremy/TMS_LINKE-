@@ -10,6 +10,25 @@ const service={id:'air',code:'LK-DD-STD',name:'CTT Expresso',carrier_group:'ctt'
 const client={id:'client',is_active:true,assigned_linke_service_ids:['air'],pricing:{standard_fuel_surcharge_pct:13.9,special_services_fees:[]}}
 const values={...shipmentDefaults(client),recipientPostal:'4000-001',weightKg:1,lengthCm:30,widthCm:20,heightCm:10,serviceId:'air'}
 const quote=(v={},c={},services=[service])=>getShipmentQuote({client:{...client,...c},services,values:{...values,...v},role:'client'})
+test('country labels and order remain identical across server and browser internationalisation data',()=>{
+ const React=require('react'),{renderToStaticMarkup}=require('react-dom/server')
+ const reference={id:'intl',code:'LK-COR-INTL',name:'Correos Internacional',carrier_group:'correos',webservice_service_code:'90',is_active:true,zones:[]}
+ function snapshot(){
+  const isolated=createLoader({'react/jsx-runtime':require('react/jsx-runtime')})
+  const countries=isolated('lib/services/shipment-service-options.ts').getAuthorizedDestinationCountries([reference])
+  const {CountrySelect}=isolated('components/country-select.tsx')
+  return {countries,html:renderToStaticMarkup(React.createElement(CountrySelect,{value:'HK',onValueChange(){}}))}
+ }
+ const server=snapshot(),original=Intl.DisplayNames
+ try {
+  Intl.DisplayNames=class {of(code){return code==='HK'?'A different browser translation':code}}
+  const browser=snapshot()
+  assert.deepEqual(browser,server)
+  assert.equal(browser.countries.find(country=>country.code==='HK').name,'Hong Kong')
+  assert.match(browser.html,/>Hong Kong<\/option>/)
+  assert.equal(browser.countries.find(country=>country.code==='FR').name,'França')
+ } finally {Intl.DisplayNames=original}
+})
 test('hook uses the existing selling-price calculation and exposes no costs or margins',()=>{
  const result=quote()
  assert.equal(result.isBlocked,false);assert.equal(result.quote.basePrice,5);assert.equal(result.quote.totalPrice,5.7)
@@ -35,7 +54,7 @@ test('international CTT and Correos services hide stale COD; server quotes rejec
   assert.ok(result.specialFees.every(f=>!['cod','correos_cod'].includes(f.special_service_code)))
   assert.deepEqual(result.activeSpecialServices,[])
   if(carrier==='ctt') assert.equal(result.quote.specialFeesAmount,0)
-  else { assert.equal(result.quote,null);assert.equal(result.requiresQuotation,true) }
+  else { assert.equal(result.quote.specialFeesAmount,0);assert.equal(result.requiresQuotation,true) }
   assert.throws(()=>calculateShipmentQuote(1,customer,table,country,postal,[code],50),/COD.*apenas/)
   if(carrier==='correos') {
    const multi=getShipmentQuote({role:'client',services:[table],client:customer,values:{...values,serviceId:table.id,
@@ -54,6 +73,27 @@ test('Correos international requests remain available without tariffs and for cu
   assert.deepEqual(result.activeSpecialServices,[]);assert.deepEqual(result.specialFees,[])
   assert.ok(result.countries.some(c=>c.code===country))
  }
+})
+test('Correos 90 shows the current client estimate but keeps a non-binding quotation, including untariffed world destinations',()=>{
+ const table={...service,code:'LK-COR-INTL',carrier_group:'correos',webservice_service_code:'90',allowed_zones:['EU 1'],zones:[{zone_code:'EU 1',tiers:[tier]}]}
+ const customer={pricing:{standard_fuel_surcharge_pct:10},custom_tier_overrides:{'air::EU 1':[3.3]}}
+ const covered=quote({recipientCountry:'FR',recipientPostal:'75001'},customer,[table])
+ assert.equal(covered.isBlocked,false);assert.equal(covered.requiresQuotation,true)
+ assert.equal(covered.quote.basePrice,3.3);assert.equal(covered.quote.totalPrice,3.63)
+ assert.equal(covered.quote.buyPrice,undefined);assert.equal(covered.quote.margin,undefined)
+ for(const [country,postal] of [['US','10001'],['BR','01310-200'],['AO','Luanda']]){
+  const result=quote({recipientCountry:country,recipientPostal:postal},customer,[table])
+  assert.equal(result.isBlocked,false,result.blockedReason);assert.equal(result.requiresQuotation,true)
+  assert.equal(result.quote,null,'no estimate outside the configured table; never invent a tariff')
+  assert.ok(result.countries.some(c=>c.code===country));assert.deepEqual(result.specialFees,[])
+ }
+ const tooHeavy=quote({recipientCountry:'FR',recipientPostal:'75001',weightKg:200},customer,[table])
+ assert.equal(tooHeavy.isBlocked,false);assert.equal(tooHeavy.quote,null)
+ for(const unavailable of [{is_active:false},{allowed_zones:[]}]){
+  assert.equal(quote({recipientCountry:'US',recipientPostal:'10001'},customer,[{...table,...unavailable}]).options.length,0)
+ }
+ assert.equal(quote({recipientCountry:'US',recipientPostal:'10001'},{assigned_linke_service_ids:[]},[table]).options.length,0)
+ assert.equal(quote({recipientCountry:'ZZ',recipientPostal:'12345'},customer,[table]).options.length,0)
 })
 test('islands require a choice when configured air and sea services coexist',()=>{
  const sea={...service,id:'sea',name:'CTT Marítimo',webservice_service_code:'EMSF057.01'}

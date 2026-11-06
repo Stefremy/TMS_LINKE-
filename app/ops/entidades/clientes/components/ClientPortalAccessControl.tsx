@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { LockKeyhole, UnlockKeyhole, Loader2, PauseCircle, PlayCircle } from 'lucide-react'
+import { LockKeyhole, UnlockKeyhole, Loader2, PauseCircle, PlayCircle, Trash2 } from 'lucide-react'
 import {
   getClientPortalAccessAction,
   setClientPortalBlockedAction,
   setClientPortalSuspendedAction,
 } from '@/app/actions/client-portal-access'
+import { deleteClienteAction } from '@/app/actions/clientes'
 
 export function ClientPortalAccessPanel({
   blocked,
@@ -15,6 +16,10 @@ export function ClientPortalAccessPanel({
   pending,
   confirmingBlock,
   confirmingSuspend,
+  confirmingDelete,
+  clientName,
+  onDelete,
+  onCancelDelete,
   onToggleBlock,
   onToggleSuspend,
   onCancel,
@@ -24,6 +29,10 @@ export function ClientPortalAccessPanel({
   pending: boolean
   confirmingBlock: boolean
   confirmingSuspend: boolean
+  confirmingDelete: boolean
+  clientName: string
+  onDelete: () => void
+  onCancelDelete: () => void
   onToggleBlock: () => void
   onToggleSuspend: () => void
   onCancel: () => void
@@ -113,17 +122,38 @@ export function ClientPortalAccessPanel({
           )}
         </div>
       )}
+
+      <div className="border-t border-[var(--border-subtle)] pt-4">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onDelete}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#b13b35] px-4 py-2.5 text-xs font-semibold text-[#b13b35] transition hover:bg-[#b13b35]/5 disabled:cursor-wait disabled:opacity-50"
+        >
+          <Trash2 className="h-4 w-4" />
+          {confirmingDelete ? `Confirmar eliminação de ${clientName}` : 'Eliminar cliente'}
+        </button>
+        {confirmingDelete && (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-900">
+            Esta ação elimina permanentemente o registo do cliente e não pode ser anulada.
+            <button type="button" disabled={pending} onClick={onCancelDelete} className="ml-2 font-semibold underline underline-offset-2 disabled:opacity-50">
+              Cancelar
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-export function ClientPortalAccessControl({ clientId, disabled = false }: { clientId: string; disabled?: boolean }) {
+export function ClientPortalAccessControl({ clientId, clientName, disabled = false, onDeleted }: { clientId: string; clientName: string; disabled?: boolean; onDeleted: () => void }) {
   const router = useRouter()
   const [blocked, setBlocked] = useState<boolean | null>(null)
   const [suspended, setSuspended] = useState<boolean>(false)
   const [pending, setPending] = useState(false)
   const [confirmingBlock, setConfirmingBlock] = useState(false)
   const [confirmingSuspend, setConfirmingSuspend] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [error, setError] = useState('')
   const [loaded, setLoaded] = useState(0)
 
@@ -186,6 +216,29 @@ export function ClientPortalAccessControl({ clientId, disabled = false }: { clie
     }
   }
 
+  async function deleteClient() {
+    if (pending || disabled) return
+    if (!confirmingDelete) {
+      setConfirmingDelete(true)
+      setConfirmingBlock(false)
+      setConfirmingSuspend(false)
+      return
+    }
+    setPending(true)
+    setError('')
+    try {
+      const result = await deleteClienteAction(clientId)
+      if (!result.success) throw new Error(result.error || 'Não foi possível eliminar o cliente.')
+      onDeleted()
+      router.refresh()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível eliminar o cliente. Tente novamente.')
+      setConfirmingDelete(false)
+    } finally {
+      setPending(false)
+    }
+  }
+
   return (
     <div className="mt-2">
       {blocked === null ? (
@@ -205,6 +258,10 @@ export function ClientPortalAccessControl({ clientId, disabled = false }: { clie
             pending={pending || disabled}
             confirmingBlock={confirmingBlock}
             confirmingSuspend={confirmingSuspend}
+            confirmingDelete={confirmingDelete}
+            clientName={clientName}
+            onDelete={deleteClient}
+            onCancelDelete={() => setConfirmingDelete(false)}
             onToggleBlock={toggleBlock}
             onToggleSuspend={toggleSuspend}
             onCancel={() => {

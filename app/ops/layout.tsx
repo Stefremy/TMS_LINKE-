@@ -39,7 +39,7 @@ export default async function OpsLayout({
   return (
     <div className="tms-shell tms-workspace bg-[var(--canvas-bg)] flex flex-col text-[var(--text-primary)]">
       {/* Interactive Collapsible Sidebar */}
-      <OpsSidebar canAccessDocuments={canAccessStaffDocuments(authContext)} canSendMessages={canSendClientMessages(authContext)} access={access} />
+      <OpsSidebar key={user.id} canAccessDocuments={canAccessStaffDocuments(authContext)} canSendMessages={canSendClientMessages(authContext)} access={access} />
       {user?.id && <OpsLiveToasts viewerId={user.id} />}
 
       {/* Main Content Area */}

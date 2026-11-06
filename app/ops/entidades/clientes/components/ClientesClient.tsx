@@ -597,6 +597,12 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
           standardFuelSurchargePct={standardFuelSurchargePct}
           onManageAccess={() => { if (editingCliente) setAuthModalCliente(editingCliente) }}
           onClose={() => setIsModalOpen(false)}
+          onDeleted={(clientId) => {
+            setClientes((prev) => prev.filter((client) => client.id !== clientId))
+            setSelectedIds((prev) => prev.filter((id) => id !== clientId))
+            setEditingCliente(null)
+            setIsModalOpen(false)
+          }}
           onSaved={handleSaved}
         />
       )}

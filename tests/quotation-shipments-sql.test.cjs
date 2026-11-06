@@ -23,6 +23,7 @@ before(async()=>{
  CREATE TABLE packages(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,shipment_id uuid REFERENCES shipments(id),weight_g integer NOT NULL,dimensions jsonb);`)
  for(const file of ['20260921100000_client_transactions.sql','20261022180000_atomic_wallet_operations.sql','20261026170000_current_account_credit_limit.sql'])await db.exec(fs.readFileSync(`supabase/migrations/${file}`,'utf8'))
  await db.exec(migration)
+ await db.exec(fs.readFileSync('supabase/migrations/20261106140000_quotation_partner_tracking.sql','utf8'))
 })
 after(async()=>db?.close())
 const initial=()=>({id:Q,reference:'COT-FIXTURE',revision:0,client_id:C,client_name:'Loja fixture',service_id:'cor-intl',service_name:'Correos Aéreo',
@@ -36,8 +37,8 @@ async function reset(profile={}){
  await db.query("INSERT INTO audit_log(tenant_id,action,details)VALUES($1,'client_data',$2)",[T,{id:C,is_active:true,billing_type:'conta_corrente',credit_limit:30,...profile}])
  await db.query("INSERT INTO audit_log(id,tenant_id,action,details)VALUES($1,$2,'shipment_quote_request',$3)",[Q,T,initial()])
 }
-const run=async(action,{revision=action==='accept'?0:1,client=action==='accept'?C:null,tenant=T,tracking='PARTNER-123',cost=12.5,response='Emitido pela Linke.'}={})=>
- (await db.query('SELECT materialize_shipment_quotation($1,$2,$3,$4,$5,$6,$7,$8,$9) result',[tenant,Q,revision,U,client,action,tracking,cost,response])).rows[0].result
+const run=async(action,{revision=action==='accept'?0:1,client=action==='accept'?C:null,tenant=T,tracking='PARTNER-123',carrier='correos',cost=12.5,response='Emitido pela Linke.'}={})=>
+ (await db.query('SELECT materialize_shipment_quotation($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) result',[tenant,Q,revision,U,client,action,tracking,cost,response,carrier])).rows[0].result
 const rows=async table=>(await db.query(`SELECT * FROM ${table}`)).rows
 const quote=async()=>(await db.query('SELECT details FROM audit_log WHERE id=$1',[Q])).rows[0].details
 const balance=async()=>(await db.query('SELECT client_wallet_snapshot($1,$2) result',[T,C])).rows[0].result
@@ -112,5 +113,21 @@ test('browser roles have no access to the quotation materialization RPC',async()
  for(const role of ['anon','authenticated','service_role']){
   const result=await db.query("SELECT has_function_privilege($1,'public.materialize_shipment_quotation(uuid,uuid,integer,uuid,uuid,text,text,numeric,text)','EXECUTE') allowed",[role])
   assert.equal(result.rows[0].allowed,role==='service_role')
+  const extended=await db.query("SELECT has_function_privilege($1,'public.materialize_shipment_quotation(uuid,uuid,integer,uuid,uuid,text,text,numeric,text,text)','EXECUTE') allowed",[role])
+  assert.equal(extended.rows[0].allowed,role==='service_role')
  }
+})
+
+test('manual FedEx booking retains Correos commercial pricing and atomically records the tracking carrier',async()=>{
+ await reset();await run('accept')
+ await assert.rejects(run('complete',{carrier:'fedex',tracking:'NOT-FEDEX'}),/guia/)
+ await assert.rejects(run('complete',{carrier:'unknown'}),/guia/)
+ const completed=await run('complete',{carrier:'fedex',tracking:'123456789012'})
+ const [shipment]=await rows('shipments')
+ assert.equal(completed.tracking_carrier,'fedex');assert.equal(completed.tracking_number,'123456789012')
+ assert.equal(shipment.carrier_code,'correos');assert.equal(shipment.ops_substatus,'tracking_fedex_externo')
+ assert.equal(shipment.sell_price,'25.5');assert.equal(canInvoiceShipment(shipment),true)
+ const snapshot=(await rows('audit_log')).find(row=>row.action==='shipment_data').details
+ assert.equal(snapshot.tracking_carrier,'fedex');assert.equal(snapshot.carrier_tracking_number,'123456789012')
+ assert.equal(snapshot.ops_substatus,'tracking_fedex_externo')
 })

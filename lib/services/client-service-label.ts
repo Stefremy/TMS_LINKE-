@@ -8,7 +8,7 @@ export function getClientServiceName(name?: string | null): string {
   const label = value
     .replace(/\(([^()]*)\)/g, (whole: string, content: string) => {
       const internalProfile = INTERNAL_PROFILES.some(profile => profileKey(profile) === profileKey(content))
-      const containsTransit = content.replace(TRANSIT_TIME, "") !== content || /\bD\s*\+\s*\d|\bPaq\s*(?:24|48)\b/i.test(content)
+      const containsTransit = content.replace(TRANSIT_TIME, "") !== content || /\bD\s*\+\s*\d/i.test(content)
       return internalProfile || containsTransit ? "" : whole
     })
     .replace(/\bGuia\s+(?:EQ|DD|DB)\s*[·:—–-]?\s*/gi, "")
@@ -16,7 +16,6 @@ export function getClientServiceName(name?: string | null): string {
     .replace(/\bpara\s+amanh[ãa](?=$|[\s),;])/gi, "")
     .replace(TRANSIT_TIME, "")
     .replace(/\bD\s*\+\s*\d+\b/gi, "")
-    .replace(/\bPaq\s*(?:24|48)\b/gi, "")
     .replace(/\(\s*\)/g, "")
     .replace(/\s+/g, " ")
     .replace(/^[\s·/—–-]+|[\s·/—–-]+$/g, "")

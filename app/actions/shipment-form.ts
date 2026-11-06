@@ -8,21 +8,36 @@ import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { shipmentFormSchema, type ShipmentFieldError } from "@/components/shipments/form/schema"
 import { shipmentOverrideError } from "@/lib/services/shipments/shipment-form-authorization"
-import { loadShipmentPricingContext } from "@/lib/pricing/shipment-pricing-context"
+import { loadShipmentPricingContext, loadInternationalAirQuotationContext } from "@/lib/pricing/shipment-pricing-context"
 import { resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
 import { getServiceIslandTransportMode, isPortugueseIslandDestination } from "@/lib/services/shipment-service-options"
 import { getCttRecipientContactError } from "@/lib/services/ctt/recipient-contact"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
 import { requiresCorreosQuotation } from "@/lib/services/correos/shipment-policy"
-import { createQuotation } from "@/lib/shipments/quotations/server"
-import { isZoneAllowedByService, resolveServiceZoneCode } from "@/lib/pricing/calculate-shipment-price"
+import { createQuotation, QUOTATION_PERMISSIONS } from "@/lib/shipments/quotations/server"
+import { canRequestCorreosQuotation, publicCorreosQuotationReference } from "@/lib/services/correos/quotation-pricing"
 import { readPortalAccess } from "@/lib/client-portal/suspension"
 
 const failure = (field: ShipmentFieldError["field"], message: string) => ({ success: false as const, error: message, fieldErrors: [{ field, message }] })
 
 /** Validation adapter only. Dispatch, pricing and wallet reservations stay in emitClientGuiaAction. */
 export async function submitShipmentFormAction(input: unknown, clientId?: string, quotationKey?: string) {
-  const ctx = await requireUser("Emissão e Controlo de Guias CTT")
+  return submitShipment(input, clientId, quotationKey, false)
+}
+
+/** Dedicated request endpoint: it cannot dispatch a carrier shipment, even with a forged service. */
+export async function requestInternationalAirShipmentAction(input: unknown, clientId?: string, quotationKey?: string) {
+  return submitShipment(input, clientId, quotationKey, true)
+}
+
+export async function getInternationalAirQuotationReferenceAction(clientId?: string) {
+  const ctx = await requireUser(QUOTATION_PERMISSIONS)
+  const { client, service } = await loadInternationalAirQuotationContext(createAdminClient(), ctx, ctx.role === "client" ? ctx.client_id : clientId)
+  return { service: publicCorreosQuotationReference(service), fuelSurchargePct: client.pricing?.standard_fuel_surcharge_pct }
+}
+
+async function submitShipment(input: unknown, clientId: string | undefined, quotationKey: string | undefined, airRequestOnly: boolean) {
+  const ctx = await requireUser(airRequestOnly ? QUOTATION_PERMISSIONS : "Emissão e Controlo de Guias CTT")
   const restricted = shipmentOverrideError(ctx.role, input)
   if (restricted) return failure("root", restricted.message)
   const parsed = shipmentFormSchema.safeParse(input)
@@ -35,22 +50,24 @@ export async function submitShipmentFormAction(input: unknown, clientId?: string
   if (!effectiveClientId) return failure("root", "Selecione o cliente do envio.")
   let service: ServicoLinke | undefined, carrier: "ctt" | "correos" | undefined, exportDetails: CttExportDetails | undefined, client: Cliente | undefined
   try {
-    const context = await loadShipmentPricingContext(createAdminClient(), ctx, effectiveClientId, { serviceId: values.serviceId })
+    const context = airRequestOnly ? await loadInternationalAirQuotationContext(createAdminClient(), ctx, effectiveClientId)
+      : await loadShipmentPricingContext(createAdminClient(), ctx, effectiveClientId, { serviceId: values.serviceId })
     service = context.service
     client = context.client
     carrier = resolveServiceCarrier(service)
-  } catch { return failure("serviceId", "O serviço não está disponível para este cliente. Volte a selecionar o serviço.") }
+  } catch { return airRequestOnly ? failure("root", "Não foi possível carregar a referência internacional. Atualize a página para tentar novamente.")
+    : failure("serviceId", "O serviço não está disponível para este cliente. Volte a selecionar o serviço.") }
   if (!service || !client || !carrier) return failure("serviceId", "O serviço não está disponível para este cliente. Volte a selecionar o serviço.")
+  if (airRequestOnly && (values.serviceId !== service.id || !requiresCorreosQuotation(carrier, values.recipientCountry, service))) return failure("serviceId", "Atualize a tabela de referência e selecione um destino fora de Portugal e Espanha para pedir cotação.")
   if (ctx.role !== "client" && values.carrierOverride && values.carrierOverride !== carrier) return failure("carrierOverride", "Escolha um serviço da transportadora selecionada.")
   if (requiresCorreosQuotation(carrier, values.recipientCountry, service)) {
-    if (ctx.role !== "client") return failure("serviceId", "Os pedidos de cotação Correos Internacional Standard são feitos pelo cliente no portal. A equipa trata-os em Envios › Cotações.")
+    if (ctx.role !== "client" && !airRequestOnly) return failure("serviceId", "Faça o pedido em nome do cliente na página Pedido de envio internacional aéreo da respetiva loja.")
     if (values.codValue || values.selectedSpecialServices.length) return failure("selectedSpecialServices", "As opções de entrega são acordadas na cotação. A cobrança COD não está disponível para este destino.")
-    const zone = resolveServiceZoneCode(service, values.recipientCountry, values.recipientPostal)
-    if (!zone || !isZoneAllowedByService(service.allowed_zones, zone)) return failure("serviceId", "O serviço não tem cobertura autorizada para este destino.")
+    if (!canRequestCorreosQuotation(service, values.recipientCountry)) return failure("serviceId", "Este serviço não está disponível para pedidos de cotação neste destino.")
     try {
       const access = await readPortalAccess(ctx.tenant_id, effectiveClientId)
       if (client.is_active === false || access.suspended || access.blocked) return failure("root", "Esta conta está suspensa para novos pedidos. Contacte o apoio Linke.")
-      const quotation = await createQuotation(createAdminClient(), ctx, quotationKey || "", client, service, values)
+      const quotation = await createQuotation(createAdminClient(), ctx, quotationKey || "", client, service, values, airRequestOnly ? "air" : undefined)
       return { success: true as const, kind: "quotation" as const, quotation: { id: quotation.id, reference: quotation.reference }, dbWarning: null }
     } catch (error) { return failure("root", error instanceof Error ? error.message : "Não foi possível guardar o pedido de cotação.") }
   }

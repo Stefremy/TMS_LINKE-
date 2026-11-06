@@ -13,6 +13,7 @@ import { getAuthorizedDestinationCountries, getDestinationServiceOptions, getSer
 import { isCttSpecialServiceAvailable } from "@/lib/services/ctt/special-service-availability"
 import type { ShipmentFormRole, ShipmentFormValues } from "./schema"
 import { requiresCorreosQuotation } from "@/lib/services/correos/shipment-policy"
+import { correosQuotationEstimate } from "@/lib/services/correos/quotation-pricing"
 
 type Preview = ReturnType<typeof calculateClientShipmentPreview>
 export type ShipmentQuoteOption = { service: ServicoLinke; carrier: "ctt" | "correos"; zone: string; quote: Preview | null; error: string | null; requiresQuotation?: boolean }
@@ -34,7 +35,11 @@ export function getShipmentQuote({ client, services, values, role }: ShipmentQuo
   const rawOptions: ShipmentQuoteOption[] = compatible.filter(service => role !== "ops" || !values.carrierOverride || values.carrierOverride === (isCorreosLinkeService(service) ? "correos" : "ctt")).map(service => {
     const carrier: ShipmentQuoteOption["carrier"] = isCorreosLinkeService(service) ? "correos" : "ctt"
     const zone = getServiceDestinationZone(service, values.recipientCountry, values.recipientPostal)
-    if (requiresCorreosQuotation(carrier, values.recipientCountry, service)) return { service, carrier, zone, quote: null, error: null, requiresQuotation: true }
+    if (requiresCorreosQuotation(carrier, values.recipientCountry, service)) return { service, carrier, zone,
+      quote: correosQuotationEstimate(client, service, values.recipientCountry, values.recipientPostal, values.weightKg,
+        { lengthCm: values.lengthCm, widthCm: values.widthCm, heightCm: values.heightCm, volumesCount: values.volumesCount,
+          parcelWeightsKg: values.parcelWeightsKg.length ? values.parcelWeightsKg : undefined }),
+      error: null, requiresQuotation: true }
     try {
       if (!service.name.trim()) throw new Error("O serviço não tem um nome configurado.")
       const selectedCodes = codesFor(service)

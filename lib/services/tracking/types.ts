@@ -35,7 +35,7 @@ export interface NormalizedTrackingEvent {
 
 export interface TrackingSyncResult {
   success: boolean
-  carrier: "correos" | "ctt"
+  carrier: "correos" | "ctt" | "fedex"
   count: number
   measurementsUpdated?: boolean
   latestStatus?: TmsDisplayStatus

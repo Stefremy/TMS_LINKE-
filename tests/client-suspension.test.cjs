@@ -92,6 +92,7 @@ test('the modal requires confirmation, disables the action while saving and then
       getClientPortalAccessAction:async()=>({blocked:false}),
       setClientPortalBlockedAction:(id,blocked)=>{calls.push({id,blocked});return new Promise(resolve=>{finish=resolve})},
     },
+    '@/app/actions/clientes':{deleteClienteAction:async()=>({success:true})},
   })
   const Control=load('app/ops/entidades/clientes/components/ClientPortalAccessControl.tsx').ClientPortalAccessControl
   function expand(node){
@@ -118,4 +119,43 @@ test('the modal requires confirmation, disables the action while saving and then
   assert.deepEqual(calls.at(-1),{id:A,blocked:false})
   assert.equal(refreshes.length,2)
   assert.match(text(button()),/Bloquear Cliente/)
+})
+
+test('client deletion sits below shipment suspension and requires an explicit second confirmation',async()=>{
+  const slots=[],effects=[],calls=[],removed=[]
+  let cursor=0
+  const jsx=(type,props)=>({type,props:props||{}})
+  const load=createLoader({
+    react:{useState(initial){const i=cursor++;if(!(i in slots))slots[i]=initial;return[slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value}]},useEffect(fn){effects.push(fn)}},
+    'next/navigation':{useRouter:()=>({refresh(){}})},
+    'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
+    'lucide-react':new Proxy({},{get:(_,name)=>name}),
+    '@/app/actions/client-portal-access':{
+      getClientPortalAccessAction:async()=>({blocked:false,suspended:false}),
+      setClientPortalBlockedAction:async()=>({blocked:false}),
+      setClientPortalSuspendedAction:async()=>({suspended:false}),
+    },
+    '@/app/actions/clientes':{deleteClienteAction:async id=>{calls.push(id);return {success:true}}},
+  })
+  const Control=load('app/ops/entidades/clientes/components/ClientPortalAccessControl.tsx').ClientPortalAccessControl
+  function expand(node){
+    if(Array.isArray(node))return node.map(expand)
+    if(!node||typeof node!=='object')return node
+    if(typeof node.type==='function')return expand(node.type(node.props))
+    return {...node,props:{...node.props,children:expand(node.props.children)}}
+  }
+  const render=()=>{cursor=0;return expand(jsx(Control,{clientId:A,clientName:'Aldara Store',onDeleted:()=>removed.push(A)}))}
+  const flat=node=>Array.isArray(node)?node.flatMap(flat):node&&typeof node==='object'?[node,...flat(node.props.children)]:[]
+  const text=node=>Array.isArray(node)?node.map(text).join(''):node&&typeof node==='object'?text(node.props.children):String(node??'')
+  render();effects.shift()();await new Promise(resolve=>setImmediate(resolve))
+  const deleteButton=()=>flat(render()).find(node=>node.type==='button'&&/Eliminar cliente|Confirmar eliminação/.test(text(node)))
+  const suspendButton=flat(render()).find(node=>node.type==='button'&&/Suspender Cliente/.test(text(node)))
+  assert.ok(suspendButton)
+  assert.match(text(deleteButton()),/Eliminar cliente/)
+  await deleteButton().props.onClick()
+  assert.deepEqual(calls,[])
+  assert.match(text(deleteButton()),/Confirmar eliminação de Aldara Store/)
+  await deleteButton().props.onClick()
+  assert.deepEqual(calls,[A])
+  assert.deepEqual(removed,[A])
 })

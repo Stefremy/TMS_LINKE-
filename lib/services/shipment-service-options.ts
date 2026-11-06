@@ -5,6 +5,8 @@ import { internationalPostalQuery } from "./geo/international-postal-code"
 import { isShipmentDestinationAvailable } from "./shipment-destination-policy"
 import { detectCarrierGroup } from "@/lib/pricing/carrier-zone-templates"
 import { requiresCorreosQuotation } from "./correos/shipment-policy"
+import { canRequestCorreosQuotation } from "./correos/quotation-pricing"
+import { compareCountryNames } from "@/lib/i18n/countries"
 
 export type IslandTransportMode = "air" | "sea" | "other"
 
@@ -48,7 +50,7 @@ export function getAuthorizedDestinationCountries(services: ServicoLinke[]) {
   const countries = new Map<string, { code: string; name: string }>()
   for (const service of services) for (const country of getServiceDestinationCountries(service)) countries.set(country.code, country)
   const priority = (iso: string) => iso === "PT" ? 0 : iso === "ES" ? 1 : 2
-  return [...countries.values()].sort((a, b) => priority(a.code) - priority(b.code) || a.name.localeCompare(b.name, "pt-PT"))
+  return [...countries.values()].sort((a, b) => priority(a.code) - priority(b.code) || compareCountryNames(a, b))
 }
 
 export function getDestinationServiceOptions(services: ServicoLinke[], country: string, postal: string,
@@ -58,11 +60,11 @@ export function getDestinationServiceOptions(services: ServicoLinke[], country: 
   return services.filter(service => {
     if (service.is_active === false) return false
     const manualQuote = requiresCorreosQuotation(detectCarrierGroup(service) || "", country, service)
+    if (manualQuote) return canRequestCorreosQuotation(service, country)
     if (!manualQuote && !isShipmentDestinationAvailable(country, postal)) return false
     if (islands && mode && getServiceIslandTransportMode(service) !== mode) return false
     const zone = resolveServiceZoneCode(service, country, postal)
     if (!zone || !isZoneAllowedByService(service.allowed_zones, zone)) return false
-    if (manualQuote) return true
     return findExactZone(service.zones, zone)?.tiers?.some(tier => tier.enabled !== false && Number.isFinite(tier.weight_max) && tier.weight_max > 0) ?? false
   })
 }
