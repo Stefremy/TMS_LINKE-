@@ -96,6 +96,7 @@ export function QuoteRequestsClient({ mode, basePath, clientId, initial, initial
 
 function QuoteDetail({ request: q, mode, basePath, canRecordBooking, busy, update, copy }: { request: ShipmentQuotation; mode: "client" | "ops"; basePath: string; canRecordBooking: boolean; busy: boolean; update: (action: unknown) => Promise<void>; copy: () => void }) {
   const [amount, setAmount] = useState(q.proposed_price != null ? String(q.proposed_price) : q.estimated_price != null ? String(q.estimated_price) : "")
+  const [hasIva, setHasIva] = useState(Boolean(q.has_iva))
   const [response, setResponse] = useState("")
   const [tracking, setTracking] = useState("")
   const [trackingCarrier, setTrackingCarrier] = useState<"fedex" | "correos">("fedex")
@@ -110,17 +111,57 @@ function QuoteDetail({ request: q, mode, basePath, canRecordBooking, busy, updat
     {mode === "ops" && q.requested_by_role && <p className="text-xs text-[var(--text-secondary)]">Pedido criado por {q.requested_by_email || "funcionário Linke"}, em nome do cliente.</p>}
     {q.requested_transport === "air" && <p className="text-xs font-semibold text-[var(--accent)]">Transporte solicitado: aéreo · sujeito a confirmação pela equipa Linke</p>}
     {q.estimated_price != null && <p className="rounded-lg bg-[var(--surface-muted)] p-3 text-xs text-[var(--text-secondary)]">Estimativa da tabela no pedido: <strong>{money(q.estimated_price)} sem IVA</strong>. Valor indicativo; o preço acordado é o da proposta aceite.</p>}
-    {q.proposed_price !== null && <div className="rounded-lg border border-[var(--border-subtle)] p-4"><p className="text-xs text-[var(--text-secondary)]">Preço acordado do envio (sem IVA)</p><strong className="mt-1 block text-2xl">{money(q.proposed_price)}</strong><p className="mt-1 text-xs text-[var(--text-secondary)]">Acresce o IVA aplicável na faturação.</p><p className="mt-2 whitespace-pre-wrap text-sm">{q.response}</p></div>}
+    {q.proposed_price !== null && <div className="rounded-lg border border-[var(--border-subtle)] p-4">
+      <p className="text-xs text-[var(--text-secondary)]">Preço acordado do envio</p>
+      <div className="mt-1 flex flex-wrap items-baseline gap-2">
+        <strong className="text-2xl">{money(q.proposed_price)}</strong>
+        {q.has_iva ? <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">+ 23% IVA ({money(Math.round(q.proposed_price * 123) / 100)} c/ IVA)</span>
+          : <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">Isento de IVA (0%)</span>}
+      </div>
+      <p className="mt-1 text-xs text-[var(--text-secondary)]">{q.has_iva ? "Acresce 23% de IVA na faturação." : "Isento de IVA (transporte internacional / exportação)."}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm">{q.response}</p>
+    </div>}
     {q.tracking_number && <p className="text-sm">Tracking {q.tracking_carrier === "fedex" ? "FedEx" : "Correos"}: <strong className="select-text font-mono">{q.tracking_number}</strong>{trackingUrl && <> · <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--accent)] underline">Acompanhar na FedEx</a></>}</p>}
     {trackingUrl && <p className="text-xs text-[var(--text-secondary)]">O estado e os movimentos da entrega podem ser consultados diretamente no site da FedEx.</p>}
     {q.shipment_id && <div className="space-y-2"><p className="text-xs text-[var(--text-secondary)]">{q.status === "accepted" ? "O envio está criado em rascunho. A Linke irá emitir a guia pela sua conta Correos." : q.billing_type === "pay_as_you_go" ? "O envio está no histórico e segue as condições de saldo pré-pago da conta." : "O envio está no histórico, com o preço acordado, disponível para faturação."}</p><Link className={button} href={mode === "ops" ? `/ops/envios?search=${encodeURIComponent(q.reference)}` : `${basePath}/envios`}>Ver envio no histórico</Link></div>}
-    {mode === "client" && q.status === "quoted" && <div className="space-y-3"><p className="text-xs text-[var(--text-secondary)]">Ao aceitar, cria um envio em rascunho no TMS. A Linke emite a guia pela sua conta Correos e regista-a neste envio. O pedido segue as condições de faturação da sua conta após a emissão.</p><div className="flex flex-wrap gap-2"><button type="button" disabled={busy} className={primary} onClick={() => void update({ action: "accept" })}>Aceitar e criar envio · {money(q.proposed_price!)}</button><button type="button" disabled={busy} className={button} onClick={() => void update({ action: "decline" })}>Recusar</button></div></div>}
+    {mode === "client" && q.status === "quoted" && <div className="space-y-3">
+      <p className="text-xs text-[var(--text-secondary)]">Ao aceitar, cria um envio em rascunho no TMS. A Linke emite a guia pela sua conta Correos e regista-a neste envio. O pedido segue as condições de faturação da sua conta após a emissão.</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy} className={primary} onClick={() => void update({ action: "accept" })}>
+          Aceitar e criar envio · {money(q.proposed_price!)} {q.has_iva ? "(+ 23% IVA)" : "(Isento de IVA)"}
+        </button>
+        <button type="button" disabled={busy} className={button} onClick={() => void update({ action: "decline" })}>Recusar</button>
+      </div>
+    </div>}
     {mode === "client" && canReply && <button type="button" disabled={busy} className={button} onClick={() => void update({ action: "cancel" })}>Cancelar pedido</button>}
     {mode === "ops" && <div className="space-y-4 border-t border-[var(--border-subtle)] pt-4">
       <div className="flex flex-wrap gap-2"><a href={CORREOS_PARTNER_PORTAL_URL} target="_blank" rel="noopener noreferrer" className={button}><ExternalLink size={14} />Emitir pela conta Correos da Linke</a><button type="button" className={button} onClick={copy}><Copy size={14} />Copiar dados do pedido</button></div>
       {q.internal_notes && <p className="whitespace-pre-wrap rounded-lg bg-[var(--surface-muted)] p-3 text-xs">Nota interna: {q.internal_notes}</p>}
       {q.status === "pending" && <button type="button" disabled={busy} className={button} onClick={() => void update({ action: "review" })}>Marcar em análise</button>}
-      {canReply && <form className="space-y-3" onSubmit={e => { e.preventDefault(); void update({ action: "reply", amount: Number(amount.replace(",", ".")), response }) }}><h3 className="text-sm font-semibold">Responder ao cliente</h3><label className="block text-xs font-medium">Preço proposto do envio (€ sem IVA)<input className={input} type="number" min="0.01" max="1000000" step="0.01" required disabled={busy} value={amount} onChange={e => setAmount(e.target.value)} /></label><label className="block text-xs font-medium">Condições e prazo<textarea className={input} rows={3} required maxLength={2000} disabled={busy} value={response} onChange={e => setResponse(e.target.value)} /></label><button className={primary} disabled={busy}>{busy && <Loader2 size={14} className="animate-spin motion-reduce:animate-none" />}Enviar proposta</button></form>}
+      {canReply && <form className="space-y-3" onSubmit={e => { e.preventDefault(); void update({ action: "reply", amount: Number(amount.replace(",", ".")), hasIva, response }) }}>
+        <h3 className="text-sm font-semibold">Responder ao cliente</h3>
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <label className="block text-xs font-medium">Preço proposto do envio (€ {hasIva ? "base s/ IVA" : "sem IVA / isento"})
+            <input className={input} type="number" min="0.01" max="1000000" step="0.01" required disabled={busy} value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" />
+          </label>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-[var(--text-secondary)]">Aplicação de IVA</span>
+            <div className="inline-flex rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-0.5">
+              <button type="button" disabled={busy} onClick={() => setHasIva(false)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${!hasIva ? "bg-[var(--surface-bg)] text-[var(--text-primary)] shadow-sm font-semibold" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>Isento de IVA (0%)</button>
+              <button type="button" disabled={busy} onClick={() => setHasIva(true)} className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${hasIva ? "bg-[var(--accent)] text-white shadow-sm font-semibold" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}>+ Adicionar IVA (23%)</button>
+            </div>
+          </div>
+        </div>
+        {Number(amount.replace(",", ".")) > 0 && <div className="rounded-lg bg-[var(--surface-muted)] px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
+          <span>Base: <strong>{money(Number(amount.replace(",", ".")))}</strong></span>
+          {hasIva ? <>
+            <span className="text-[var(--text-secondary)]">+ IVA (23%): {money(Number(amount.replace(",", ".")) * 0.23)}</span>
+            <span className="font-semibold text-[var(--accent)]">Total com IVA: {money(Number(amount.replace(",", ".")) * 1.23)}</span>
+          </> : <span className="font-semibold text-emerald-600 dark:text-emerald-400">Total final: {money(Number(amount.replace(",", ".")))} (Isento de IVA)</span>}
+        </div>}
+        <label className="block text-xs font-medium">Condições e prazo<textarea className={input} rows={3} required maxLength={2000} disabled={busy} value={response} onChange={e => setResponse(e.target.value)} /></label>
+        <button className={primary} disabled={busy}>{busy && <Loader2 size={14} className="animate-spin motion-reduce:animate-none" />}Enviar proposta</button>
+      </form>}
       {q.status === "accepted" && canRecordBooking && <form className="space-y-3" onSubmit={e => { e.preventDefault(); void update({ action: "complete", trackingNumber: tracking, trackingCarrier, buyPrice: Number(buyPrice.replace(",", ".")), response }) }}><p className="text-sm">Depois de emitir no portal Correos, registe o tracking do parceiro. O envio fica no histórico ao preço aceite, disponível para faturação. O cliente recebe um aviso na loja e um email com o tracking.</p><label className="block text-xs font-medium">Transportadora do tracking<select className={input} disabled={busy} value={trackingCarrier} onChange={e => setTrackingCarrier(e.target.value as "fedex" | "correos")}><option value="fedex">FedEx (parceiro internacional)</option><option value="correos">Correos Express</option></select></label><label className="block text-xs font-medium">Número de tracking {trackingCarrier === "fedex" ? "FedEx" : "Correos"}<input className={input} required minLength={3} maxLength={80} disabled={busy} value={tracking} onChange={e => setTracking(e.target.value)} /></label><label className="block text-xs font-medium">Custo cobrado pela Correos (€ sem IVA, apenas interno)<input className={input} type="number" required min="0" max="1000000" step="0.01" disabled={busy} value={buyPrice} onChange={e => setBuyPrice(e.target.value)} /></label><label className="block text-xs font-medium">Informação para o cliente (opcional)<textarea className={input} maxLength={2000} disabled={busy} value={response} onChange={e => setResponse(e.target.value)} /></label><button className={primary} disabled={busy}>Registar envio e notificar cliente</button></form>}
       {["pending", "reviewing", "quoted"].includes(q.status) && <button type="button" disabled={busy} className={button} onClick={() => void update({ action: "cancel" })}>Cancelar cotação</button>}
     </div>}

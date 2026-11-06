@@ -14,7 +14,7 @@ export { QUOTATION_PERMISSIONS } from "./access"
 
 const uuid = z.uuid()
 export const quotationUpdateSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("reply"), amount: z.number().finite().positive().max(1_000_000).refine(v => Number.isSafeInteger(Math.round(v * 100)) && Math.abs(v * 100 - Math.round(v * 100)) < 0.000001), response: z.string().trim().min(1).max(2000) }),
+  z.object({ action: z.literal("reply"), amount: z.number().finite().positive().max(1_000_000).refine(v => Number.isSafeInteger(Math.round(v * 100)) && Math.abs(v * 100 - Math.round(v * 100)) < 0.000001), hasIva: z.boolean().optional().default(false), response: z.string().trim().min(1).max(2000) }),
   z.object({ action: z.enum(["review", "accept", "decline", "cancel"]) }),
   z.object({ action: z.literal("complete"), trackingCarrier: z.enum(["correos", "fedex"]).default("correos"), trackingNumber: z.string().trim().min(3).max(80).regex(/^[A-Za-z0-9._/-]+$/), buyPrice: z.number().finite().nonnegative().max(1_000_000).refine(v => Math.abs(v * 100 - Math.round(v * 100)) < 0.000001), response: z.string().trim().max(2000) }),
 ])
@@ -127,7 +127,7 @@ export async function updateQuotation(db: SupabaseClient, ctx: AuthContext, id: 
   }
   const next: StoredQuotation = { ...current, revision: revision + 1, updated_at: new Date().toISOString(), updated_by: ctx.user.id }
   if (update.action === "reply" && ["pending", "reviewing"].includes(current.status)) {
-    next.status = "quoted"; next.proposed_price = update.amount; next.response = update.response
+    next.status = "quoted"; next.proposed_price = update.amount; next.has_iva = Boolean(update.hasIva); next.response = update.response
   } else if (update.action === "review" && current.status === "pending") next.status = "reviewing"
   else if (update.action === "decline" && current.status === "quoted") next.status = "declined"
   else if (update.action === "cancel" && ["pending", "reviewing", "quoted"].includes(current.status)) next.status = "cancelled"

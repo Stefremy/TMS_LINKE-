@@ -35,7 +35,7 @@ export async function updateShipmentQuotationAction(id: string, revision: number
       try {
         await sendClientMessage(createAdminClient(), ctx, { clientId: request.client_id, requestId: crypto.randomUUID(),
           title: `${request.status === "quoted" ? "Proposta disponível" : "Guia emitida no parceiro"} — ${request.reference}`,
-          body: request.status === "quoted" ? `A proposta ${request.reference} está disponível. Valor do envio (sem IVA): ${request.proposed_price?.toFixed(2)} €.\n${request.response}\nAbra Pedido de envio internacional aéreo no menu lateral e consulte Pedidos e propostas para aceitar e criar o envio, ou recusar.`
+          body: request.status === "quoted" ? `A proposta ${request.reference} está disponível. Valor do envio: ${request.proposed_price?.toFixed(2)} € ${request.has_iva ? "(acresce 23% IVA)" : "(isento de IVA)"}.\n${request.response}\nAbra Pedido de envio internacional aéreo no menu lateral e consulte Pedidos e propostas para aceitar e criar o envio, ou recusar.`
             : `A Linke registou o envio do pedido ${request.reference}, emitido pela sua conta Correos. Tracking ${request.tracking_carrier === "fedex" ? "FedEx" : "Correos"}: ${request.tracking_number}.\n${partnerTrackingUrl(request) || "O envio já está disponível no histórico da loja."}\n${request.response}` })
       } catch { warning = "A alteração foi guardada, mas o aviso na caixa de entrada não foi enviado. O cliente pode consultá-la em Pedido de envio internacional aéreo no menu lateral." }
     }

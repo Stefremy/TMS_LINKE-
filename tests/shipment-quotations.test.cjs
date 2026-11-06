@@ -142,8 +142,8 @@ test('quote workflow permits an ops proposal, a client decision and a manual par
   h.tables.audit_log[0].details=next
   return{data:next,error:null}
  }
- const proposed=await h.api.updateQuotation(h.db.client,staff,ID,0,{action:'reply',amount:25.5,response:'Total final. Prazo de 3 dias úteis.'})
- assert.equal(proposed.status,'quoted');assert.equal(proposed.proposed_price,25.5)
+ const proposed=await h.api.updateQuotation(h.db.client,staff,ID,0,{action:'reply',amount:25.5,hasIva:true,response:'Total final. Prazo de 3 dias úteis.'})
+ assert.equal(proposed.status,'quoted');assert.equal(proposed.proposed_price,25.5);assert.equal(proposed.has_iva,true)
  await assert.rejects(h.api.updateQuotation(h.db.client,staff,ID,0,{action:'cancel'}),/atualizada/)
  await assert.rejects(h.api.updateQuotation(h.db.client,ctx,ID,1,{action:'reply',amount:0.01,response:'forged'}),/Apenas a equipa/)
  await assert.rejects(h.api.updateQuotation(h.db.client,{...ctx,client_id:B},ID,1,{action:'accept'}),/sem acesso/)
@@ -207,14 +207,15 @@ test('client and ops quotation views expose the correct proposal controls and pa
   'next/link':{__esModule:true,default:({children,...props})=>React.createElement('a',props,children)},
   '@/app/actions/shipment-quotations':{},
  })('components/shipments/quotations/QuoteRequestsClient.tsx')
- const quote={...q,status:'quoted',proposed_price:25.5,response:'Condições para o cliente.'}
+ const quote={...q,status:'quoted',proposed_price:25.5,has_iva:true,response:'Condições para o cliente.'}
  const render=mode=>renderToStaticMarkup(React.createElement(QuoteRequestsClient,{mode,basePath:'/app/store',clientId:A,initial:{requests:[quote],next:null}}))
  const customer=render('client')
- assert.match(customer,/Aceitar e criar envio/);assert.match(customer,/Condições para o cliente/)
+ assert.match(customer,/Aceitar e criar envio/);assert.match(customer,/Condições para o cliente/);assert.match(customer,/23% IVA/)
  assert.doesNotMatch(customer,/my.correosexpress.pt|SECRET INTERNAL|Responder ao cliente/)
  const ops=render('ops')
  assert.match(ops,/https:\/\/my.correosexpress.pt\/account/)
  assert.match(ops,/Copiar dados do pedido|SECRET INTERNAL/)
+ assert.match(ops,/23% IVA/)
  assert.doesNotMatch(ops,/Aceitar e criar envio/)
  const accepted=renderToStaticMarkup(React.createElement(QuoteRequestsClient,{mode:'ops',basePath:'/ops',canRecordBooking:true,initial:{requests:[{...quote,status:'accepted',shipment_id:ID}],next:null}}))
  assert.match(accepted,/Transportadora do tracking/);assert.match(accepted,/FedEx \(parceiro internacional\)/)
