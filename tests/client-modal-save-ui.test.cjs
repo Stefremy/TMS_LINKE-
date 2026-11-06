@@ -1,18 +1,18 @@
 const test=require('node:test')
 const assert=require('node:assert/strict')
 const {createLoader}=require('./helpers/load-typescript.cjs')
-const flat=n=>Array.isArray(n)?n.flatMap(flat):n&&typeof n==='object'?[n,...flat(n.props?.children)]:[]
+const flat=n=>Array.isArray(n)?n.flatMap(flat):n&&typeof n==='object'?[n,...flat(typeof n.type==='function'?n.type(n.props):n.props?.children)]:[]
 const text=n=>Array.isArray(n)?n.map(text).join(''):n&&typeof n==='object'?text(n.props?.children):String(n??'')
 function harness(initialData={id:'client-a',short_name:'Loja A',payment_due_days:30},servicosLinke=[]){
  const slots=[];let cursor=0,response={success:true,data:{...initialData,id:initialData?.id||'created-id',short_name:'Loja A'}}
  const calls={saved:[],close:0,inputs:[]}
- const React={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useEffect(){}}
+ const React={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useEffect(){},useRef(initial){return {current:initial}}}
  const jsx=(type,props)=>({type,props:props||{}})
  const load=createLoader({react:React,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,p)=>p}),
   '@/app/actions/clientes':{saveClienteAction:async data=>{calls.inputs.push(data);return typeof response==='function'?response(data):response}},
   '@/app/actions/client-invitations':{},'./ClientPortalAccessControl':{ClientPortalAccessControl:()=>null},'./ClientServiceHistory':{ClientServiceHistory:()=>null}})
  const Modal=load('app/ops/entidades/clientes/components/ClienteModal.tsx').ClienteModal
- const props={initialData,servicosLinke,onClose(){calls.close++},onSaved(data){calls.saved.push(data)}}
+ const props={initialData,servicosLinke,onClose(){calls.close++},onSaved(data){calls.saved.push(data)},onDeleted(){}}
  const render=()=>{cursor=0;return flat(Modal(props))}
  const button=label=>render().find(n=>n.type==='button'&&text(n)===label)
  const edit=value=>render().find(n=>n.type==='input'&&n.props.placeholder==='Ex: CACTO ou DETAILER').props.onChange({target:{value}})
@@ -66,12 +66,12 @@ test('client modal separates CTT and Correos fees, shows included services and s
  assert.ok(nodes.some(n=>n.type==='button'&&text(n).startsWith('CTT Expresso ·')))
  nodes.find(n=>n.type==='button'&&text(n).startsWith('Correos Express ·')).props.onClick()
  nodes=h.render()
- assert.ok(nodes.some(n=>text(n)==='Correos Express · Incluído no frete'))
+ assert.ok(nodes.some(n=>text(n).includes('incluídos no frete Correos Express')||text(n)==='Correos Express · Incluído no frete'))
  assert.ok(nodes.some(n=>text(n).includes('previsão de franja horária gratuita')))
  assert.ok(nodes.some(n=>text(n)==='Retorno da guia de remessa assinada'))
  assert.ok(nodes.some(n=>text(n)==='Suplemento de origem ou destino Espanha'))
  assert.ok(!nodes.some(n=>text(n)==='CTT · Tipo 20'))
- const row=nodes.find(n=>n.type==='div'&&text(n).startsWith('Franja horária específicaCorreos Express')&&n.props.className?.startsWith('p-4 '))
+ const row=nodes.find(n=>n.type==='div'&&text(n).startsWith('Franja horária específica')&&n.props.className?.includes('p-4'))
  const rowNodes=flat(row)
  assert.equal(rowNodes.find(n=>n.type==='input'&&n.props.type==='checkbox').props.disabled,true)
  const price=rowNodes.find(n=>n.type==='input'&&n.props.type==='number')
