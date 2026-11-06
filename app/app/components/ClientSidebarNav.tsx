@@ -11,49 +11,75 @@ export function ClientSidebarNav() {
   const pathname = usePathname()
   const { basePath } = useClientScope()
 
-  const navItems = [
-    { href: basePath, label: "Painel Principal", icon: Home },
-    { href: `${basePath}/criar-guia`, label: "Novo Envio", icon: Plus },
-    { href: `${basePath}/cotacoes`, label: "Pedido de envio internacional aéreo", icon: Plane },
-    { href: `${basePath}/tracking`, label: "Rastreio & Mapa", icon: MapPin },
-    { href: `${basePath}/envios`, label: "Histórico & Envios", icon: Search },
-    { href: `${basePath}/destinatarios`, label: "Destinatários", icon: UserCheck },
-    { href: `${basePath}/reembolsos`, label: "Reembolsos", icon: Banknote },
-    { href: `${basePath}/faturas`, label: "Faturas e Extratos", icon: FileText },
-    { href: `${basePath}/carregamentos`, label: "Carregamentos", icon: CreditCard },
-    { href: `${basePath}/mensagens`, label: "Caixa de Entrada", icon: Inbox },
+  const navSections = [
+    {
+      category: "Principal",
+      items: [
+        { href: basePath, label: "Painel Principal", icon: Home },
+      ],
+    },
+    {
+      category: "Envios",
+      items: [
+        { href: `${basePath}/criar-guia`, label: "Novo Envio", icon: Plus },
+        { href: `${basePath}/cotacoes`, label: "Pedido de envio internacional aéreo", icon: Plane },
+        { href: `${basePath}/tracking`, label: "Rastreio & Mapa", icon: MapPin },
+        { href: `${basePath}/envios`, label: "Histórico & Envios", icon: Search },
+        { href: `${basePath}/destinatarios`, label: "Destinatários", icon: UserCheck },
+      ],
+    },
+    {
+      category: "Financeiro",
+      items: [
+        { href: `${basePath}/reembolsos`, label: "Reembolsos", icon: Banknote },
+        { href: `${basePath}/faturas`, label: "Faturas e Extratos", icon: FileText },
+        { href: `${basePath}/carregamentos`, label: "Carregamentos", icon: CreditCard },
+      ],
+    },
+    {
+      category: "Comunicação",
+      items: [
+        { href: `${basePath}/mensagens`, label: "Caixa de Entrada", icon: Inbox },
+      ],
+    },
   ]
 
   return (
     <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-      {navItems.map((item) => {
-        const Icon = item.icon
-        const isActive = pathname === item.href
+      {navSections.flatMap((section) => [
+        <div key={`cat-${section.category}`} className="pt-3.5 first:pt-1 pb-1 px-2.5 select-none">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+            {section.category}
+          </span>
+        </div>,
+        ...section.items.map((item) => {
+          const Icon = item.icon
+          const isActive = pathname === item.href
 
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            prefetch={false}
-            className={`flex items-center justify-between px-2.5 py-2 rounded-md text-[13px] transition-colors group ${
-              isActive
-                ? "text-[var(--accent)] bg-[var(--accent-soft)] font-semibold border border-[rgba(18,138,71,0.15)]"
-                : "text-[var(--text-secondary)] font-medium hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
-            }`}
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <Icon 
-                className={`w-[18px] h-[18px] shrink-0 ${
-                  isActive ? "text-[var(--accent)]" : "text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)]"
-                }`} 
-                strokeWidth={1.75}
-              />
-              <span className={item.href === `${basePath}/cotacoes` ? "min-w-0 leading-tight" : "truncate"}>{item.label}</span>
-            </div>
-
-          </Link>
-        )
-      })}
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              prefetch={false}
+              className={`flex items-center justify-between px-2.5 py-2 rounded-md text-[13px] transition-colors group ${
+                isActive
+                  ? "text-[var(--accent)] bg-[var(--accent-soft)] font-semibold border border-[rgba(18,138,71,0.15)]"
+                  : "text-[var(--text-secondary)] font-medium hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Icon 
+                  className={`w-[18px] h-[18px] shrink-0 ${
+                    isActive ? "text-[var(--accent)]" : "text-[var(--text-tertiary)] group-hover:text-[var(--text-secondary)]"
+                  }`} 
+                  strokeWidth={1.75}
+                />
+                <span className={item.href === `${basePath}/cotacoes` ? "min-w-0 leading-tight" : "truncate"}>{item.label}</span>
+              </div>
+            </Link>
+          )
+        }),
+      ])}
     </nav>
   )
 }
