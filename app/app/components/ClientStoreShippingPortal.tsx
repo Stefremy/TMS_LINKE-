@@ -78,12 +78,16 @@ export function ClientStoreShippingPortal() {
   const [pickupVolumes, setPickupVolumes] = React.useState("2")
   const [pickupSuccess, setPickupSuccess] = React.useState(false)
 
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], currentClient.id) || !Object.is(observedInputs1[1], currentClient.allowed_webservices)) {
+    setObservedInputs1([currentClient.id, currentClient.allowed_webservices])
+
     const allowed = (currentClient.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES).filter(w => w.is_enabled)
     const defWs = allowed.find(w => w.is_default) || allowed[0]
     if (defWs) setSelectedCarrierCode(defWs.code)
     setLoadingClient(false)
-  }, [currentClient.id, currentClient.allowed_webservices])
+  
+  }
 
   // Available client services pricing
   const servicesPricingList: ClientServicePrice[] = React.useMemo(() => {

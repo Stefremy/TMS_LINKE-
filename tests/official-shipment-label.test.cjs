@@ -45,6 +45,8 @@ function menuHarness(t, dashboard, label) {
     },
     useRef(initial) { const i = cursor++; return slots[i] ||= { current: initial } },
     useMemo: fn => fn(),
+    useCallback: fn => fn,
+    useSyncExternalStore: (sub, get) => get(),
     useEffect(fn, deps) {
       const i = cursor++
       if (!dependencies[i] || deps.some((value, n) => !Object.is(value, dependencies[i][n]))) {

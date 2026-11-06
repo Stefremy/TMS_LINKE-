@@ -1,3 +1,6 @@
+import type { ShipmentRecord } from "../shipments/types"
+
+import { errorMessage } from "@/lib/errors"
 import { createAdminClient } from "@/lib/supabase/server"
 import { isCorreosShipment } from "../shipments/shipment-utils"
 import { fetchCorreosTrackingEvents } from "./correos-tracking-sync"
@@ -18,7 +21,7 @@ export interface SyncOptions {
  * consulta o leitor adequado e grava os dados normalizados através do gravador comum.
  */
 export async function syncShipmentTracking(
-  identifier: { trackingNumber?: string; shipmentId?: string; shipment?: any },
+  identifier: { trackingNumber?: string; shipmentId?: string; shipment?: Partial<ShipmentRecord> },
   options: SyncOptions = {}
 ): Promise<TrackingSyncResult> {
   const isClient = options.userRole === "client"
@@ -34,7 +37,7 @@ export async function syncShipmentTracking(
   const { trackingNumber, shipmentId, shipment } = identifier
 
   // Client requests always reload ownership; supplied snapshots and skipAuth cannot bypass it.
-  let targetShipment: any = isClient ? null : shipment || null
+  let targetShipment: Partial<ShipmentRecord> | null = isClient ? null : shipment || null
   const lookupId = shipmentId || (isClient ? shipment?.id : undefined)
 
   const TRACKING_SELECT_COLS = "id, tenant_id, client_id, tracking_number, carrier_tracking_number, carrier_code, service_type, status, ops_substatus, recipient_phone, recipient_email, recipient_name, updated_at, created_at"
@@ -82,9 +85,9 @@ export async function syncShipmentTracking(
   }
 
   const effectiveTrackingNumber = isClient
-    ? targetShipment.carrier_tracking_number || targetShipment.carrier_object_id ||
-      targetShipment.ctt_object_id || targetShipment.tracking_number
-    : trackingNumber
+    ? targetShipment?.carrier_tracking_number || targetShipment?.carrier_object_id ||
+      targetShipment?.ctt_object_id || targetShipment?.tracking_number
+    : trackingNumber || undefined
 
   const effectiveId = targetShipment?.id || shipmentId
   if (!effectiveId && !trackingNumber) {
@@ -230,8 +233,8 @@ export async function syncAllActiveShipmentsTracking(
       } else if (res.error) {
         errors.push(`Envio ${s.tracking_number || s.id}: ${res.error}`)
       }
-    } catch (err: any) {
-      errors.push(`Envio ${s.tracking_number || s.id}: ${err?.message || "Erro desconhecido"}`)
+    } catch (err) {
+      errors.push(`Envio ${s.tracking_number || s.id}: ${errorMessage(err) || "Erro desconhecido"}`)
     }
   }
 

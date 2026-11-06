@@ -1,9 +1,18 @@
+import type { CreateEmailOptions } from "resend"
 import { Resend } from "resend";
 
 let resendClient: Resend | null = null;
 
 if (process.env.RESEND_API_KEY) {
   resendClient = new Resend(process.env.RESEND_API_KEY);
+}
+
+/** Receiving webhooks contain metadata; the body must be fetched separately. */
+export async function getReceivedEmailContent(id: string): Promise<{ text: string | null; html: string | null }> {
+  if (!resendClient) throw new Error("Receiving email is not configured")
+  const { data, error } = await resendClient.emails.receiving.get(id)
+  if (error || !data) throw new Error("Unable to retrieve received email")
+  return { text: data.text, html: data.html }
 }
 
 export async function sendEmail({
@@ -17,7 +26,7 @@ export async function sendEmail({
   to: string | string[];
   subject: string;
   html: string;
-  attachments?: any[];
+  attachments?: CreateEmailOptions["attachments"];
   idempotencyKey?: string;
   from?: string;
 }) {

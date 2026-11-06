@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import {
@@ -124,8 +126,8 @@ export function PontosPickupClient({
       } else if (res.error) {
         setErrorMsg(res.error)
       }
-    } catch (err: any) {
-      setErrorMsg(err?.message || "Falha ao sincronizar com os webservices CTT")
+    } catch (err) {
+      setErrorMsg(errorMessage(err) || "Falha ao sincronizar com os webservices CTT")
     } finally {
       setIsRefreshing(false)
     }
@@ -174,9 +176,13 @@ export function PontosPickupClient({
   }, [points, countryFilter, categoryFilter, entityFilter, cityFilter, searchQuery])
 
   // Reset page when filters change
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], searchQuery) || !Object.is(observedInputs1[1], countryFilter) || !Object.is(observedInputs1[2], categoryFilter) || !Object.is(observedInputs1[3], entityFilter) || !Object.is(observedInputs1[4], cityFilter) || !Object.is(observedInputs1[5], pageSize)) {
+    setObservedInputs1([searchQuery, countryFilter, categoryFilter, entityFilter, cityFilter, pageSize])
+
     setCurrentPage(1)
-  }, [searchQuery, countryFilter, categoryFilter, entityFilter, cityFilter, pageSize])
+  
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)

@@ -5,7 +5,7 @@ const {billingFieldsFromLegacyRow}=require('../lib/client-addresses.ts')
 const manifestFile='docs/imports/clientes-2026-10-29/manifest.json'
 async function main(){
  const manifest=JSON.parse(fs.readFileSync(manifestFile)),tenant=manifest.tenant
- const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}})
+ const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),{auth:{persistSession:false}})
  const entries=manifest.entries.filter(e=>e.status==='Importado')
  const {data,error}=await db.from('audit_log').select('details').eq('tenant_id',tenant).eq('action','client_data').in('details->>id',entries.map(e=>e.id)).order('created_at',{ascending:false})
  if(error)throw error

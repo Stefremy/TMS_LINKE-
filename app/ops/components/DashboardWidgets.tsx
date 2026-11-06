@@ -1,4 +1,6 @@
 "use client"
+import { useLocalStorage } from "@/lib/use-local-storage"
+import { useClock } from "@/lib/use-clock"
 
 import React, { useEffect, useState, useRef } from "react"
 import { Plus, X, RefreshCw, SlidersHorizontal, TrendingUp, TrendingDown } from "lucide-react"
@@ -40,11 +42,16 @@ const DEFAULT_SYMBOLS = [
 ]
 
 export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetrics = true }: DashboardWidgetsProps) {
-  const [mounted, setMounted] = useState(false)
-  const [time, setTime] = useState<Date | null>(null)
+  const time = useClock()
+  const mounted = time !== null
   const [quotes, setQuotes] = useState<StockQuote[]>([])
   const [loading, setLoading] = useState(true)
-  const [customSymbols, setCustomSymbols] = useState<string[]>([])
+  const [storedSymbols, setStoredSymbols] = useLocalStorage("tms_dashboard_stocks")
+  const customSymbols = React.useMemo<string[]>(() => {
+    try { const parsed: unknown = JSON.parse(storedSymbols || "[]"); return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [] }
+    catch { return [] }
+  }, [storedSymbols])
+  const setCustomSymbols = (symbols: string[]) => setStoredSymbols(JSON.stringify(symbols))
   const [newSymbolInput, setNewSymbolInput] = useState("")
   const [showSettings, setShowSettings] = useState(false)
   const [showClockModal, setShowClockModal] = useState(false)
@@ -52,44 +59,30 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
   const popoverRef = useRef<HTMLDivElement>(null)
 
   // Clock timer
-  useEffect(() => {
-    setMounted(true)
-    setTime(new Date())
-    const timer = setInterval(() => setTime(new Date()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  // Load custom symbols from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("tms_dashboard_stocks")
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed)) setCustomSymbols(parsed)
-      }
-    } catch {
-      // Ignore
-    }
-  }, [])
 
   // Fetch official market quotes
   const fetchQuotes = async (symbolsToFetch: string[]) => {
-    setLoading(true)
-    setErrorMsg(null)
-    try {
-      const query = symbolsToFetch.join(",")
-      const res = await fetch(`/api/market-data?symbols=${encodeURIComponent(query)}`)
-      if (!res.ok) throw new Error("Erro ao carregar cotações")
-      const data = await res.json()
-      if (data?.quotes && Array.isArray(data.quotes)) {
+    const query = symbolsToFetch.join(",")
+return fetch(`/api/market-data?symbols=${encodeURIComponent(query)}`).then(async (res) => {
+if (!res.ok) throw new Error("Erro ao carregar cotações")
+const data = await res.json()
+if (data?.quotes && Array.isArray(data.quotes)) {
+        setErrorMsg(null)
         setQuotes(data.quotes)
       }
-    } catch (err: any) {
+}).catch((err) => {
       console.warn("Error fetching stock quotes:", err)
       setErrorMsg("Falha ao atualizar mercados")
-    } finally {
+    }).finally(() => {
       setLoading(false)
-    }
+    })
+  }
+
+  const [requestedSymbols, setRequestedSymbols] = useState(customSymbols)
+  if (requestedSymbols !== customSymbols) {
+    setRequestedSymbols(customSymbols)
+    setLoading(true)
+    setErrorMsg(null)
   }
 
   useEffect(() => {
@@ -98,6 +91,8 @@ export function DashboardWidgets({ linkeMetrics, showClock = true, showLinkeMetr
 
     // Auto-refresh every 60 seconds
     const interval = setInterval(() => {
+      setLoading(true)
+      setErrorMsg(null)
       fetchQuotes(allSymbols)
     }, 60000)
     return () => clearInterval(interval)

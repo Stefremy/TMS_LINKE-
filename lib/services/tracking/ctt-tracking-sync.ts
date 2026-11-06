@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { CttProvider } from "../carriers/ctt-provider"
 import { resolveCttCredentials } from "../carriers/credentials"
 import { CTTConnectionCredentials } from "../ctt/ctt-types"
@@ -28,7 +30,8 @@ export async function fetchCttTrackingEvents(
       }
     }
 
-    const events: NormalizedTrackingEvent[] = trackResult.events.map((e: any) => {
+    const events: NormalizedTrackingEvent[] = trackResult.events.map((e) => {
+      const rawEvent = e.rawEvent as Partial<import("../ctt/ctt-tracking.service").ParsedTrackingEvent> | undefined
       const rawStatus = (e.status || "em_transito").toLowerCase()
       // Normalizar para o enum PostgreSQL
       const dbStatus: NormalizedTmsStatus =
@@ -38,25 +41,25 @@ export async function fetchCttTrackingEvents(
         rawStatus === "entrada_rede" ? "em_transito" : (rawStatus as TmsDisplayStatus)
 
       let description = e.description || "Evento CTT Expresso"
-      if (e.rawEvent?.reasonText) {
-        description += ` | Razão: ${e.rawEvent.reasonText}`
+      if (rawEvent?.reasonText) {
+        description += ` | Razão: ${rawEvent.reasonText}`
       }
-      if (e.rawEvent?.situationText) {
-        description += ` | Situação: ${e.rawEvent.situationText}`
+      if (rawEvent?.situationText) {
+        description += ` | Situação: ${rawEvent.situationText}`
       }
 
       return {
         status: dbStatus,
         displayStatus,
         eventCode: e.code || "CTT",
-        eventName: e.rawEvent?.eventName || e.description || "Evento CTT",
+        eventName: rawEvent?.eventName || e.description || "Evento CTT",
         description,
         location: e.location || "Rede CTT Expresso",
         timestamp: e.date || new Date().toISOString(),
         isTerminal: Boolean(e.isFinal),
-        isIncidencia: rawStatus === "incidencia" || Boolean(e.rawEvent?.reasonCode),
+        isIncidencia: rawStatus === "incidencia" || Boolean(rawEvent?.reasonCode),
         carrierCode: "ctt",
-        measurements: e.rawEvent?.measurements,
+        measurements: rawEvent?.measurements,
         rawEvent: e.rawEvent || e,
       }
     })
@@ -68,12 +71,12 @@ export async function fetchCttTrackingEvents(
       success: true,
       events,
     }
-  } catch (err: any) {
-    console.error("[CTT Tracking Sync] Erro:", err?.message || err)
+  } catch (err) {
+    console.error("[CTT Tracking Sync] Erro:", errorMessage(err) || err)
     return {
       success: false,
       events: [],
-      error: err?.message || "Falha na comunicação com a CTT Expresso",
+      error: errorMessage(err) || "Falha na comunicação com a CTT Expresso",
     }
   }
 }

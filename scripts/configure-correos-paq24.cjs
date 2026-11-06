@@ -6,7 +6,7 @@ const {applyPaq24Tariffs}=require('../lib/services/correos/paq24-tariffs.ts')
 const tenantId='11111111-1111-1111-1111-111111111111'
 const ids=['26179d74-c276-4500-8df6-386f76c53503','srv_linke_cor_ecom']
 async function main(){
- const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}})
+ const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),{auth:{persistSession:false}})
  const {data,error}=await db.from('audit_log').select('details').eq('tenant_id',tenantId).eq('action','servicos_linke_data').in('details->>id',ids).order('created_at',{ascending:false}).limit(100)
  if(error)throw error
  const old=ids.map(id=>data?.find(row=>row.details?.id===id)?.details)

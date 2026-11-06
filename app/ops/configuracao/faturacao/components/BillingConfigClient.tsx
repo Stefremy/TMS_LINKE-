@@ -1,4 +1,7 @@
 "use client"
+import type { getMoloniDetailsAction } from "@/app/actions/billing-config"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -29,7 +32,7 @@ import { MoloniConnectModal } from "@/app/ops/faturacao/contas-corrente/MoloniCo
 interface BillingConfigClientProps {
   automationSettings?: React.ReactNode
   initialConfig: BillingConfig
-  moloniDetails?: any
+  moloniDetails?: Awaited<ReturnType<typeof getMoloniDetailsAction>>
 }
 
 export function BillingConfigClient({ initialConfig, moloniDetails, automationSettings }: BillingConfigClientProps) {
@@ -59,8 +62,8 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
       } else {
         setFeedback({ message: res.error || "Falha ao gravar configurações.", type: "error" })
       }
-    } catch (err: any) {
-      setFeedback({ message: err?.message || "Erro inesperado ao gravar.", type: "error" })
+    } catch (err) {
+      setFeedback({ message: errorMessage(err) || "Erro inesperado ao gravar.", type: "error" })
     } finally {
       setSaving(false)
     }
@@ -86,12 +89,12 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
           type: "error" 
         })
       }
-    } catch (err: any) {
-      const isAuth = String(err?.message || "").toLowerCase().includes("refresh token") || String(err?.message || "").toLowerCase().includes("expirada")
+    } catch (err) {
+      const isAuth = String(errorMessage(err) || "").toLowerCase().includes("refresh token") || String(errorMessage(err) || "").toLowerCase().includes("expirada")
       setSyncResult({ 
         message: isAuth 
           ? "A sessão com o Moloni expirou (Token inválido). Clique em 'Gerir Conta Moloni' no topo para voltar a ligar." 
-          : (err?.message || "Erro ao comunicar com Moloni."), 
+          : (errorMessage(err) || "Erro ao comunicar com Moloni."), 
         type: "error" 
       })
     } finally {
@@ -277,7 +280,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Aparece na coluna <strong>"Ref.ª Artigo"</strong> na fatura impressa.
+                    Aparece na coluna <strong>&quot;Ref.ª Artigo&quot;</strong> na fatura impressa.
                   </p>
                 </div>
 
@@ -361,7 +364,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
                 <label className="flex items-center justify-between p-3 rounded-lg bg-slate-50/70 border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
                   <div>
                     <span className="text-xs font-bold text-slate-800">Incluir Número de Tracking</span>
-                    <p className="text-[11px] text-slate-500">Adiciona o código do envio (ex.: "Envio LTK7219297")</p>
+                    <p className="text-[11px] text-slate-500">Adiciona o código do envio (ex.: &quot;Envio LTK7219297&quot;)</p>
                   </div>
                   <input
                     type="checkbox"
@@ -374,7 +377,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
                 <label className="flex items-center justify-between p-3 rounded-lg bg-slate-50/70 border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
                   <div>
                     <span className="text-xs font-bold text-slate-800">Incluir Nome do Serviço</span>
-                    <p className="text-[11px] text-slate-500">Adiciona o tipo de serviço (ex.: "CTT Expresso 24H")</p>
+                    <p className="text-[11px] text-slate-500">Adiciona o tipo de serviço (ex.: &quot;CTT Expresso 24H&quot;)</p>
                   </div>
                   <input
                     type="checkbox"
@@ -387,7 +390,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
                 <label className="flex items-center justify-between p-3 rounded-lg bg-slate-50/70 border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
                   <div>
                     <span className="text-xs font-bold text-slate-800">Incluir Peso da Encomenda</span>
-                    <p className="text-[11px] text-slate-500">Adiciona o peso taxável do envio (ex.: "(Peso: 1kg)")</p>
+                    <p className="text-[11px] text-slate-500">Adiciona o peso taxável do envio (ex.: &quot;(Peso: 1kg)&quot;)</p>
                   </div>
                   <input
                     type="checkbox"
@@ -400,7 +403,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
                 <label className="flex items-center justify-between p-3 rounded-lg bg-slate-50/70 border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
                   <div>
                     <span className="text-xs font-bold text-slate-800">Incluir Destinatário no Resumo da Linha</span>
-                    <p className="text-[11px] text-slate-500">Mostra "Destino: Nome do Destinatário" logo abaixo da designação</p>
+                    <p className="text-[11px] text-slate-500">Mostra &quot;Destino: Nome do Destinatário&quot; logo abaixo da designação</p>
                   </div>
                   <input
                     type="checkbox"
@@ -413,7 +416,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
                 <label className="flex items-center justify-between p-3 rounded-lg bg-slate-50/70 border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
                   <div>
                     <span className="text-xs font-bold text-slate-800">Incluir Cidade do Destino</span>
-                    <p className="text-[11px] text-slate-500">Adiciona a localidade junto ao destinatário (ex.: "(Guimarães)")</p>
+                    <p className="text-[11px] text-slate-500">Adiciona a localidade junto ao destinatário (ex.: &quot;(Guimarães)&quot;)</p>
                   </div>
                   <input
                     type="checkbox"
@@ -501,7 +504,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
                     </label>
                     <select
                       value={config.defaultGrouping}
-                      onChange={(e) => updateConfig({ defaultGrouping: e.target.value as any })}
+                      onChange={(e) => updateConfig({ defaultGrouping: e.target.value as "detailed" | "grouped" })}
                       className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded text-slate-900 shadow-2xs font-medium"
                     >
                       <option value="grouped">Agrupada por serviço (Fatura compacta 1 pág.)</option>
@@ -555,7 +558,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
                       className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded text-slate-900 shadow-2xs"
                     >
                       <option value="">Automático (Série Ativa no Moloni)</option>
-                      {moloniDetails.documentSets.map((ds: any) => (
+                      {moloniDetails.documentSets.map((ds) => (
                         <option key={ds.id} value={ds.id}>
                           Série {ds.name} {ds.active ? "(Ativa)" : ""}
                         </option>

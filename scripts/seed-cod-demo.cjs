@@ -5,7 +5,7 @@ const {createLoader}=require('../tests/helpers/load-typescript.cjs')
 const TENANT='11111111-1111-1111-1111-111111111111',DAY='2026-10-30',CREATED='2026-10-30T09:00:00.000Z'
 const NAME='TESTES REEMBOLSOS — NÃO EXPEDIR',SLUG='testes-reembolsos',TAG='cod-demo-2026-10-30'
 const id=key=>{const h=crypto.createHash('sha256').update(`${TENANT}:cod-demo:${DAY}:${key}`).digest('hex').slice(0,32);return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`}
-const clientId=id('client'),csvPath=path.resolve('public/patches/reembolsos-teste-2026-10-30.csv'),out=path.resolve('docs/imports/cod-demo-2026-10-30')
+const clientId=id('client'),csvPath=path.resolve('docs/private-reference/public/patches/reembolsos-teste-2026-10-30.csv'),out=path.resolve('docs/imports/cod-demo-2026-10-30')
 const specs=[
  {n:1,cod:50,status:'entregue',file:50,note:'Correspondência válida'},
  {n:2,cod:25,status:'entregue',file:25,note:'Correspondência válida'},
@@ -23,7 +23,7 @@ function csv(){
  return rows.map(row=>row.join(';')).join('\r\n')+'\r\n'
 }
 async function main(){
- const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}})
+ const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),{auth:{persistSession:false}})
  const load=createLoader({'node:crypto':crypto,'fast-xml-parser':require('fast-xml-parser'),'@/lib/supabase/server':{createAdminClient:()=>db}})
  const content=csv(),parsed=load('lib/services/reembolsos/ctt-reembolso-parser.ts').parseCttReembolsoFile(content)
  if(parsed.items.length!==7||Math.round(parsed.totalAmount*100)!==17048)throw Error('Ficheiro de teste inválido.')

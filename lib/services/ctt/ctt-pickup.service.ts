@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { CTTSoapClient } from "./ctt-soap-client"
 import { CTTConnectionCredentials, CTTPickupRequestInput, CTTPickupRequestOutput } from "./ctt-types"
 import { DEFAULT_CTT_REQUESTER_PHONE } from "@/lib/pickup-contact"
@@ -237,8 +239,8 @@ export class CTTPickupService {
         NewPickUpDate: newDate,
         Errors: errors,
       }
-    } catch (err: any) {
-      console.warn("CTT Pickup WS Error:", err.message)
+    } catch (err) {
+      console.warn("CTT Pickup WS Error:", errorMessage(err))
       if (!creds.auth_id || creds.auth_id === "test" || creds.auth_id.includes("00000000")) {
         return {
           Success: true,
@@ -247,7 +249,7 @@ export class CTTPickupService {
       }
       return {
         Success: false,
-        Errors: [err.message],
+        Errors: [errorMessage(err) || "Erro de comunicação com CTT"],
       }
     }
   }
@@ -270,13 +272,13 @@ export class CTTPickupService {
       const items = Array.isArray(list) ? list : [list]
       return items
         .filter(Boolean)
-        .map((p: any) => ({
+        .map((p) => ({
           code: p._CodigoProduto || p.CodigoProduto || "",
           description: p._DescricaoProduto || p.DescricaoProduto || "",
         }))
-        .filter((p: any) => Boolean(p.code))
-    } catch (err: any) {
-      console.warn("CTT GetProdutosRecolha error:", err.message)
+        .filter((p) => Boolean(p.code))
+    } catch (err) {
+      console.warn("CTT GetProdutosRecolha error:", errorMessage(err))
       return []
     }
   }
@@ -325,8 +327,8 @@ export class CTTPickupService {
         valido,
         descricao: res?.Descricao || "",
       }
-    } catch (err: any) {
-      console.warn("CTT GetAreaInfluencia error:", err.message)
+    } catch (err) {
+      console.warn("CTT GetAreaInfluencia error:", errorMessage(err))
       return { valido: true }
     }
   }

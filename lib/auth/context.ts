@@ -5,6 +5,7 @@ import { cache } from "react"
 import { redirect } from "next/navigation"
 
 import { createAdminClient } from "@/lib/supabase/server"
+import { supabasePublicKey } from "@/lib/supabase/public-key"
 import { loadStaffDirectory, staffEmail } from "./staff-directory"
 import { hasPermission } from "./permissions"
 import { enforcePortalSuspension } from '@/lib/client-portal/suspension'
@@ -32,7 +33,7 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabasePublicKey(),
     {
       cookies: {
         getAll() {

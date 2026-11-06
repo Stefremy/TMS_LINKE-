@@ -1,4 +1,5 @@
 "use client"
+import { useClock } from "@/lib/use-clock"
 
 import React, { useEffect, useState } from "react"
 import { Clock as ClockIcon, X, Maximize2, Minimize2 } from "lucide-react"
@@ -10,16 +11,9 @@ interface ClockStefProps {
 }
 
 export function ClockStef({ size = "full", onClose, showCloseButton = false }: ClockStefProps) {
-  const [time, setTime] = useState<Date | null>(null)
+  const time = useClock()
   const [use24Hour, setUse24Hour] = useState(false)
 
-  useEffect(() => {
-    setTime(new Date())
-    const interval = setInterval(() => {
-      setTime(new Date())
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [])
 
   // Use null-safe values: render static hands on server (time is null until useEffect)
   const seconds = time ? time.getSeconds() : 0

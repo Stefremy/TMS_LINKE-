@@ -3,8 +3,18 @@
 /correos api/
 /docs/
 /output/
+/outputs/
 /scratch/
 /tests/
+/scripts/
+/public/patches/
+/public/Listagem de Clientes*.xls
+/lib/services/ctt/correos api docs/
+/app/ops/envios/components/*Etiqueta*.pdf
+/.temp*
+/check_*
+/delete_statement.js
+/patch_statement.js
 /*.txt
 /*.pdf
 /*.xlsx

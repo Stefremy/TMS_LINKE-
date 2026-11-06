@@ -15,7 +15,7 @@ async function run() {
     companyId: mLogs[0].details.company_id,
   }
 
-  const moloni = new MoloniClient(moloniConfig) as any
+  const moloni = new MoloniClient(moloniConfig)
 
   // Pega o ultimo billing_statement
   const { data: stmts } = await supabase.from('audit_log').select('details').eq('action', 'billing_statement').order('created_at', { ascending: false })

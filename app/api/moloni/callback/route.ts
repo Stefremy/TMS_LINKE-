@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { NextRequest, NextResponse } from "next/server"
 import { MoloniClient } from "@/lib/moloni/moloni-client"
 import { createAdminClient } from "@/lib/supabase/server"
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest) {
     const tokenData = await MoloniClient.exchangeAuthCode(code, redirectUri)
 
     const { refreshToken, companies } = tokenData
-    const selectedCompany = (companies || []).find((c: any) => !c.name?.toLowerCase().includes("demonstração")) || companies?.[0] || { company_id: 393993, name: "Linke" }
+    const selectedCompany = (companies || []).find((c) => !c.name?.toLowerCase().includes("demonstração")) || companies?.[0] || { company_id: 393993, name: "Linke" }
     const companyId = String(selectedCompany.company_id || 393993)
 
     // 1. Guardar no audit_log da Supabase
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
       details: {
         company_id: companyId,
         company_name: selectedCompany.name,
-        company_vat: (selectedCompany as any).vat,
+        company_vat: (selectedCompany).vat,
         refresh_token: refreshToken,
         connected_at: new Date().toISOString(),
       },
@@ -66,17 +68,17 @@ export async function GET(request: NextRequest) {
 
         fs.writeFileSync(envPath, envContent, "utf8")
       }
-    } catch (e: any) {
-      console.warn("Could not write to .env.local:", e?.message)
+    } catch (e) {
+      console.warn("Could not write to .env.local:", errorMessage(e))
     }
 
     return NextResponse.redirect(
       new URL(`/ops/faturacao/contas-corrente?moloni_connected=true&company=${encodeURIComponent(selectedCompany.name)}`, request.url)
     )
-  } catch (err: any) {
+  } catch (err) {
     console.error("Moloni OAuth Callback error:", err)
     return NextResponse.redirect(
-      new URL(`/ops/faturacao/contas-corrente?moloni_error=${encodeURIComponent(err.message || "Falha ao trocar código Moloni")}`, request.url)
+      new URL(`/ops/faturacao/contas-corrente?moloni_error=${encodeURIComponent(errorMessage(err) || "Falha ao trocar código Moloni")}`, request.url)
     )
   }
 }

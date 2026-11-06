@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { CTT_TRACKING_EVENTS, CTT_NON_DELIVERY_REASONS, CTT_SITUATIONS, CTTTrackingEvent } from "./ctt-types"
 import { CTTSoapClient } from "./ctt-soap-client"
 import { parseCttMeasurements, type CarrierMeasurements } from "../tracking/carrier-measurements"
@@ -159,13 +161,13 @@ export class CTTTrackingService {
       if (!objectsData) return []
 
       const objList = Array.isArray(objectsData) ? objectsData : [objectsData]
-      const objInfo = objList.find((o: any) => o._NObjecto === trackingNumber || o._NRelable === trackingNumber)
+      const objInfo = objList.find((o) => o._NObjecto === trackingNumber || o._NRelable === trackingNumber)
       if (!objInfo || !objInfo._Eventos?.DadosEventos_V3BE) return []
 
       const evtData = objInfo._Eventos.DadosEventos_V3BE
       const evts = Array.isArray(evtData) ? evtData : [evtData]
 
-      return evts.map((evt: any) => {
+      return evts.map((evt) => {
          const code = evt._CodigoEvento || ""
          const reason = evt._CodigoMotivo || undefined
          const sit = evt._CodigoSituacao || undefined
@@ -186,9 +188,9 @@ export class CTTTrackingService {
          return { ...this.parseEvent(code, reason, sit, loc, date), measurements: parseCttMeasurements(evt) }
       })
 
-    } catch (error: any) {
-      console.warn("Erro ao ler API EventosWS:", error.message)
-      throw new Error(`Erro ao contactar EventosWS CTT: ${error.message}`)
+    } catch (error) {
+      console.warn("Erro ao ler API EventosWS:", errorMessage(error))
+      throw new Error(`Erro ao contactar EventosWS CTT: ${errorMessage(error)}`)
     }
   }
 }

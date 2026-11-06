@@ -1,4 +1,6 @@
 "use server"
+import { errorMessage } from "@/lib/errors"
+
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { requireUser } from "@/lib/auth/context"
@@ -6,9 +8,9 @@ import { checkoutReturnOrigin } from "@/lib/config/public-origins"
 
 async function getStripe() {
   const StripeModule = await import("stripe")
-  const StripeClass = (StripeModule as any).default || StripeModule
+  const StripeClass = (StripeModule).default || StripeModule
   return new StripeClass(process.env.STRIPE_SECRET_KEY || "sk_test_dummy", {
-    apiVersion: "2026-08-26.dahlia" as any,
+    apiVersion: "2026-08-26.dahlia",
   })
 }
 
@@ -116,9 +118,9 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
     }
 
     return { success: true, url: session.url }
-  } catch (error: any) {
+  } catch (error) {
     console.error("createTopUpCheckoutSession Error:", error)
-    return { success: false, error: error.message }
+    return { success: false, error: errorMessage(error) }
   }
 }
 
@@ -144,7 +146,7 @@ export async function getClientTransactionsAction(clientId?: string) {
       return []
     }
     return data || []
-  } catch (error: any) {
+  } catch (error) {
     console.error("getClientTransactionsAction Error:", error)
     return []
   }

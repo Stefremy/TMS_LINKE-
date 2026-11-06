@@ -4,10 +4,10 @@ const crypto = require('node:crypto')
 const { createClient } = require('@supabase/supabase-js')
 const { parseLegacyServiceCounts, normalizeLegacyClientName } = require('../lib/clients/service-history.ts')
 const folder = 'docs/imports/client-services-2026-10-30'
-const source = 'public/patches/lojas_servicos.csv'
+const source = 'docs/private-reference/public/patches/lojas_servicos.csv'
 const manifest = JSON.parse(fs.readFileSync('docs/imports/clientes-2026-10-29/manifest.json'))
 const tenant = manifest.tenant
-const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {auth:{persistSession:false}})
+const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY), {auth:{persistSession:false}})
 async function readAll(table, action) {
   const rows=[]
   for (let offset=0;;offset+=1000) {

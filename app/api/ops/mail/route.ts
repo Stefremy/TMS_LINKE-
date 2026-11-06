@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       if (!allowedAccounts.includes(account)) {
         throw new MailError("Não tem permissão para aceder ou sincronizar esta caixa de correio.", 403)
       }
-      const folder = typeof body.folder === "string" ? (body.folder as any) : undefined
+      const folder = typeof body.folder === "string" ? body.folder as NonNullable<Parameters<typeof syncGmailImap>[1]>["folder"] : undefined
       const offset = typeof body.offset === "number" ? body.offset : 0
       const limit = typeof body.limit === "number" ? Math.min(50, Math.max(5, body.limit)) : 25
       const searchQuery = typeof body.searchQuery === "string" ? body.searchQuery : undefined

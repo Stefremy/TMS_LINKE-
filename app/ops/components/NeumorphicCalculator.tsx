@@ -1,4 +1,5 @@
 "use client"
+import { useViewport } from "@/lib/use-viewport"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Copy, Check, X, RotateCcw, Box, Calculator as CalcIcon, Move } from "lucide-react"
@@ -26,22 +27,17 @@ export function NeumorphicCalculator({ isOpen, onClose }: NeumorphicCalculatorPr
   const [divisor, setDivisor] = useState<4000 | 5000>(4000)
 
   // Floating draggable state
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
+  const [manualPosition, setPosition] = useState<{ x: number; y: number } | null>(null)
   const isDragging = useRef(false)
   const dragOffset = useRef({ x: 0, y: 0 })
   const cardRef = useRef<HTMLDivElement>(null)
 
-  // Set default position on mount (bottom-right floating or centered on mobile)
-  useEffect(() => {
-    if (typeof window !== "undefined" && !position) {
-      const isMobile = window.innerWidth < 768
-      if (isMobile) {
-        setPosition({ x: Math.max(10, (window.innerWidth - 320) / 2), y: 80 })
-      } else {
-        setPosition({ x: window.innerWidth - 360, y: window.innerHeight - 560 })
-      }
-    }
-  }, [position])
+  const viewport = useViewport()
+  const position = manualPosition || (viewport
+    ? viewport[0] < 768
+      ? { x: Math.max(10, (viewport[0] - 320) / 2), y: 80 }
+      : { x: viewport[0] - 360, y: viewport[1] - 560 }
+    : null)
 
   const triggerKeyFeedback = (key: string) => {
     setPressedKey(key)

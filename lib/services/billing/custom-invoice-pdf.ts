@@ -1,3 +1,4 @@
+import type { PDFImage } from "pdf-lib"
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 import * as fs from 'fs'
 import * as path from 'path'
@@ -37,7 +38,7 @@ export async function generateCustomInvoicePdfBuffer(data: CustomInvoicePdfData)
   const fontNormal = await doc.embedFont(StandardFonts.Helvetica)
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
 
-  let logoImage: any = null
+  let logoImage: PDFImage | null = null
   try {
     const logoBytes = fs.readFileSync(path.join(process.cwd(), 'public/Linke-logo.png'))
     logoImage = await doc.embedPng(logoBytes)

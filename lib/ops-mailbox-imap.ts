@@ -151,7 +151,7 @@ export async function syncGmailImap(
     },
     logger: false,
     tls: {
-      rejectUnauthorized: false,
+      rejectUnauthorized: true,
     },
   })
 

@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import {
@@ -62,9 +64,13 @@ export function DestinatariosClient({
   const [copiedTracking, setCopiedTracking] = React.useState<string | null>(null)
 
   // Sync with prop updates
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], initialDestinatarios)) {
+    setObservedInputs1([initialDestinatarios])
+
     setDestinatarios(initialDestinatarios || [])
-  }, [initialDestinatarios])
+  
+  }
 
   // Stats
   const stats = React.useMemo(() => {
@@ -153,8 +159,8 @@ export function DestinatariosClient({
       } else {
         alert(res.error || "Não foi possível remover o destinatário.")
       }
-    } catch (err: any) {
-      alert("Erro ao remover: " + (err?.message || err))
+    } catch (err) {
+      alert("Erro ao remover: " + (errorMessage(err) || err))
     }
   }
 
@@ -212,9 +218,13 @@ export function DestinatariosClient({
   }, [destinatarios, clientFilter, cityFilter, originFilter, searchQuery])
 
   // Reset page when filter changes
-  React.useEffect(() => {
+  const [observedInputs2, setObservedInputs2] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs2 === null || !Object.is(observedInputs2[0], searchQuery) || !Object.is(observedInputs2[1], clientFilter) || !Object.is(observedInputs2[2], cityFilter) || !Object.is(observedInputs2[3], originFilter) || !Object.is(observedInputs2[4], pageSize)) {
+    setObservedInputs2([searchQuery, clientFilter, cityFilter, originFilter, pageSize])
+
     setCurrentPage(1)
-  }, [searchQuery, clientFilter, cityFilter, originFilter, pageSize])
+  
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
@@ -420,7 +430,7 @@ export function DestinatariosClient({
           <div className="flex items-center gap-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-md px-2.5 py-1.5 shadow-2xs">
             <select
               value={originFilter}
-              onChange={(e) => setOriginFilter(e.target.value as any)}
+              onChange={(e) => setOriginFilter(e.target.value as typeof originFilter)}
               className="text-[11px] font-medium text-[var(--text-primary)] bg-transparent focus:outline-none cursor-pointer"
             >
               <option value="todos">Todos os Registos</option>

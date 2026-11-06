@@ -132,6 +132,7 @@ test('PDF failure after issuance preserves the real invoice ID and warns rather 
   assert.equal(h.db.writes.find(w=>w.kind==='insert').value.details.moloni_document_id,123)
 })
 function tokenHarness(rows,handler) {
+  process.env.MOLONI_CLIENT_SECRET ||= 'test-fixture-secret'
   const db=fakeSupabase({audit_log:rows})
   const load=createLoader({
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},

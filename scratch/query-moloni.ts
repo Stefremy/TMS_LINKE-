@@ -25,7 +25,7 @@ async function main() {
   
   try {
     const docTypes = await client.request("documentTypes/getAll", {});
-    console.log(JSON.stringify(docTypes.map((dt: any) => ({
+    console.log(JSON.stringify(docTypes.map((dt) => ({
       document_type_id: dt.document_type_id,
       name: dt.name,
       saft_code: dt.saft_code

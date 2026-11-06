@@ -1,4 +1,5 @@
 "use client"
+import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 
 import * as React from "react"
 import { 
@@ -37,7 +38,7 @@ export function ClientAccountDetailsModal({
 }: ClientAccountDetailsModalProps) {
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [copiedField, setCopiedField] = React.useState<string | null>(null)
-  const [servicosLinke, setServicosLinke] = React.useState<any[]>([])
+  const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>([])
   const dialogRef = React.useRef<HTMLDialogElement>(null)
 
   React.useEffect(() => {
@@ -393,7 +394,7 @@ export function ClientAccountDetailsModal({
                   <div className="pt-2">
                     <span className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">Notas / Observações Operacionais</span>
                     <div className="p-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg text-xs text-[var(--text-secondary)] leading-relaxed italic">
-                      "{client.observations}"
+                      &quot;{client.observations}&quot;
                     </div>
                   </div>
                 )}

@@ -1,3 +1,4 @@
+import type { ShipmentRecord } from "@/lib/services/shipments/types"
 import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getClientesAction } from "@/app/actions/clientes"
@@ -19,17 +20,17 @@ export default async function IncidenciasPage() {
     supabase.from("shipments").select(SHIPMENT_LIST_COLUMNS).eq("status", "incidencia").order("created_at", { ascending: false }),
     getClientesAction()
   ])
-  const shipments = dbShipments || []
+  const shipments: ShipmentRecord[] = dbShipments || []
 
   // Filter ONLY real incidents from database
   const realIncidents: IncidentShipment[] = (shipments || [])
-    .filter((s: any) => s.status === "incidencia" || (s.ops_substatus && s.ops_substatus.toLowerCase().includes("incid")))
-    .map((s: any) => {
+    .filter((s) => s.status === "incidencia" || (s.ops_substatus && s.ops_substatus.toLowerCase().includes("incid")))
+    .map((s) => {
       const isCorreos = s.carrier_code === "correos" || 
                         (typeof s.service_type === "string" && s.service_type.toLowerCase().includes("correos")) ||
                         /^\d{16}$/.test(s.carrier_tracking_number || "")
       const carrierTracking = s.carrier_tracking_number || (!isCorreos ? s.ctt_object_id : null) || s.tracking_number || "N/A"
-      const clientObj = clients.find((c: any) => c.id === s.client_id)
+      const clientObj = clients.find((c) => c.id === s.client_id)
       const clientName = clientObj?.short_name || clientObj?.legal_name || s.sender_name || "Cliente Linke"
       
       const incidentDate = s.updated_at 
@@ -37,7 +38,7 @@ export default async function IncidenciasPage() {
         : new Date(s.created_at).toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" })
 
       // Calculate SLA hours
-      const diffMs = Date.now() - new Date(s.updated_at || s.created_at).getTime()
+      const diffMs = incidentAge(s.updated_at || s.created_at)
       const slaHours = Math.max(1, Math.round(diffMs / (1000 * 60 * 60)))
 
       const codeMatch = s.ops_substatus?.match(/^(\d{2})/)?.[1] || "11"
@@ -74,10 +75,12 @@ export default async function IncidenciasPage() {
   return (
     <IncidenciasClient
       initialIncidents={realIncidents}
-      clients={clients.map((c: any) => ({
+      clients={clients.map((c) => ({
         id: c.id,
         name: c.short_name || c.legal_name || "Cliente"
       }))}
     />
   )
 }
+
+function incidentAge(updatedAt: string) { return Date.now() - new Date(updatedAt).getTime() }

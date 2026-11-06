@@ -69,7 +69,7 @@ export type SpecialServiceType =
 
 export interface CTTSpecialService {
   SpecialServiceType: SpecialServiceType
-  Value?: number
+  Value?: number | string
   DeliveryPoint?: {
     Name: string
     Code: string
@@ -95,7 +95,7 @@ export interface CTTShipmentData {
   Weight: number // Peso total declarado em gramas
   Quantity: number // Nº de volumes
   ClientReference: string // Referência interna única (max 21 chars)
-  DeclaredValue?: number
+  DeclaredValue?: number | string
   ExportType?: import("./export-details").CttExportType
   UPUCode?: import("./export-details").CttContentType
   CustomsData?: import("./customs-declaration").CttCustomsDeclaration & {

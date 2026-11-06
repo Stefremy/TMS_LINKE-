@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { CorreosRestClient } from "./correos-rest-client"
 import { CorreosCredentials } from "./types"
 
@@ -28,7 +30,7 @@ export interface CorreosPickupOutput {
   success: boolean
   pickupNumber?: string
   error?: string
-  rawResponse?: any
+  rawResponse?: unknown
 }
 
 export class CorreosPickupService {
@@ -66,7 +68,7 @@ export class CorreosPickupService {
     const cleanZip = rawZip.replace(/\D/g, "")
     const formattedPTZip = cleanZip.length === 7 ? `${cleanZip.slice(0, 4)}-${cleanZip.slice(4)}` : rawZip
 
-    const payload: Record<string, any> = {
+    const payload: Record<string, unknown> = {
       solicitante: creds.solicitante,
       codRte: creds.codRte,
       fecha,
@@ -92,7 +94,7 @@ export class CorreosPickupService {
     }
 
     try {
-      const response = await this.client.request<any>(endpoint, creds, payload)
+      const response = await this.client.request<{ codigoRetorno?: number; numRecogida?: string | number; datosResultado?: string | number; mensajeRetorno?: string }>(endpoint, creds, payload)
       if (response && (response.codigoRetorno === 0 || response.numRecogida || response.datosResultado)) {
         const pickupNum = response.datosResultado || response.numRecogida || `CEX-${Date.now().toString().slice(-8)}`
         return {
@@ -107,11 +109,11 @@ export class CorreosPickupService {
         error: response?.mensajeRetorno || "Falha ao registar recolha na Correos Express",
         rawResponse: response,
       }
-    } catch (err: any) {
-      console.warn("Correos Express Pickup API call:", err.message)
+    } catch (err) {
+      console.warn("Correos Express Pickup API call:", errorMessage(err))
 
       // Se for ambiente de teste ou QA e a rota do microserviço da Correos Express não estiver exposta
-      if (creds.environment === "test" || creds.solicitante === "1" || err.message?.includes("404")) {
+      if (creds.environment === "test" || creds.solicitante === "1" || errorMessage(err)?.includes("404")) {
         const fallbackPickup = `CEX-REC-${Math.floor(100000 + Math.random() * 900000)}`
         return {
           success: true,
@@ -121,7 +123,7 @@ export class CorreosPickupService {
 
       return {
         success: false,
-        error: `Erro Correos Express: ${err.message}`,
+        error: `Erro Correos Express: ${errorMessage(err)}`,
       }
     }
   }

@@ -7,7 +7,7 @@ import type { TrackingSyncResult } from "./types"
 type BatchShipment = {
   id: string
   status?: string
-  ops_substatus?: string | null
+  ops_substatus?: string
   [key: string]: unknown
 }
 

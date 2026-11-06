@@ -98,48 +98,7 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
   ]
 
   // Custom high-end tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload || !payload.length) return null
-
-    return (
-      <div className="bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-lg shadow-md p-3 text-xs min-w-[210px]">
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border-subtle)]">
-          <span className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5 text-xs">
-            <Calendar className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
-            Dia {label} de {getMonthName(0)}
-          </span>
-          <span className="text-[10px] text-[var(--text-tertiary)] font-medium">
-            Acumulado
-          </span>
-        </div>
-
-        <div className="space-y-1.5">
-          {payload.map((item: any, idx: number) => {
-            const series = seriesMeta.find(s => s.name === item.name)
-            const color = series?.color || item.color || "#00865f"
-            const val = item.value !== null && item.value !== undefined ? Number(item.value) : null
-
-            return (
-              <div key={idx} className="flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0 shadow-xs"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span className="text-[var(--text-secondary)] font-medium">
-                    {item.name}:
-                  </span>
-                </div>
-                <span className="font-bold text-[var(--text-primary)] font-mono tabular-nums">
-                  {val !== null ? `${val.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€` : "—"}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
+  
 
   const isPositiveGrowth = (stats?.percentDiff ?? 0) >= 0
 
@@ -252,7 +211,7 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
               tickFormatter={(val) => val >= 1000 ? `${(val / 1000).toFixed(1)}k€` : `${val}€`} 
             />
 
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip seriesMeta={seriesMeta} monthName={getMonthName(0)} />} />
 
             {visibleSeries.actual && (
               <Area
@@ -360,3 +319,46 @@ export function ProfitComparisonChart({ data, targetMonth }: { data: ChartData[]
     </div>
   )
 }
+
+function CustomTooltip({ active, payload, label, seriesMeta, monthName }: { active?: boolean; payload?: { name?: string; color?: string; value?: number | string | null }[]; label?: string | number; seriesMeta: { name: string; color: string }[]; monthName: string }) {
+    if (!active || !payload || !payload.length) return null
+
+    return (
+      <div className="bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-lg shadow-md p-3 text-xs min-w-[210px]">
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border-subtle)]">
+          <span className="font-semibold text-[var(--text-primary)] flex items-center gap-1.5 text-xs">
+            <Calendar className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+            Dia {label} de {monthName}
+          </span>
+          <span className="text-[10px] text-[var(--text-tertiary)] font-medium">
+            Acumulado
+          </span>
+        </div>
+
+        <div className="space-y-1.5">
+          {payload.map((item, idx: number) => {
+            const series = seriesMeta.find(s => s.name === item.name)
+            const color = series?.color || item.color || "#00865f"
+            const val = item.value !== null && item.value !== undefined ? Number(item.value) : null
+
+            return (
+              <div key={idx} className="flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0 shadow-xs"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className="text-[var(--text-secondary)] font-medium">
+                    {item.name}:
+                  </span>
+                </div>
+                <span className="font-bold text-[var(--text-primary)] font-mono tabular-nums">
+                  {val !== null ? `${val.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€` : "—"}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }

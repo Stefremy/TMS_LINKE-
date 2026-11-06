@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
 /**
  * Client balance rules.
  *
@@ -107,7 +108,7 @@ export function currentAccountOutstanding(shipments: BalanceShipment[], statemen
 
 // ───────────────────────── Loaders (fail closed) ─────────────────────────
 
-type Db = { from: (table: string) => any }
+type Db = Pick<SupabaseClient, "from">
 
 /** Live shipments of one client. Select only balance-relevant columns to eliminate base64 egress. */
 export async function loadClientShipmentsForBalance(db: Db, tenantId: string, clientId: string): Promise<BalanceShipment[]> {

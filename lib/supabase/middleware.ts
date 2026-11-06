@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { PORTAL_SECTIONS } from '@/lib/client-portal/paths'
 import { clientLoginPath } from '@/lib/client-portal/login-paths'
+import { supabasePublicKey } from './public-key'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -10,7 +11,7 @@ export async function updateSession(request: NextRequest) {
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabasePublicKey(),
     {
       cookieOptions: {
         maxAge: 60 * 60 * 24 * 7, // 7 days

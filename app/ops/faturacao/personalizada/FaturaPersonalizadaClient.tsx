@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import { CountrySelect } from "@/components/country-select"
 import { getClientBillingAddress } from "@/lib/client-addresses"
@@ -57,7 +59,7 @@ interface CustomInvoiceHistoryItem {
   payment_terms?: string
   total_value: number
   items_count: number
-  items: any[]
+  items: CustomInvoiceItemInput[]
   moloni_document_id?: number | null
   moloni_document_pdf?: string | null
   moloni_receipt_id?: number | string | null
@@ -189,7 +191,7 @@ export default function FaturaPersonalizadaClient({
   }
 
   // Atualizar campo de uma linha
-  const handleItemChange = (index: number, field: keyof CustomInvoiceItemInput, value: any) => {
+  const handleItemChange = <K extends keyof CustomInvoiceItemInput>(index: number, field: K, value: CustomInvoiceItemInput[K]) => {
     setItems(prev => {
       const next = [...prev]
       next[index] = { ...next[index], [field]: value }
@@ -315,8 +317,8 @@ export default function FaturaPersonalizadaClient({
         },
         ...prev
       ])
-    } catch (err: any) {
-      setErrorMsg(err.message || "Ocorreu um erro ao emitir a fatura.")
+    } catch (err) {
+      setErrorMsg(errorMessage(err) || "Ocorreu um erro ao emitir a fatura.")
     } finally {
       setIsSubmitting(false)
     }

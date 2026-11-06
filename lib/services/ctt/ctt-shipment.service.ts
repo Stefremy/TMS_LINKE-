@@ -15,6 +15,24 @@ import {
 const CTT_QA_SHIPMENT_ENDPOINT = "http://cttexpressows.qa.ctt.pt/CTTEWSPool/CTTShipmentProviderWS.svc"
 const CTT_PROD_SHIPMENT_ENDPOINT = "http://cttexpressows.ctt.pt/CTTEWSPool/CTTShipmentProviderWS.svc"
 
+type XmlText = string | number | boolean | { "#text"?: string | number | boolean }
+interface RawLabelList { LabelData?: RawLabel | RawLabel[] }
+interface RawLabel { FileName?: XmlText; Label?: XmlText; BestEncoding?: XmlText }
+interface RawDocumentList { DocumentData?: RawDocument | RawDocument[] }
+interface RawDocument { FileName?: XmlText; File?: XmlText }
+interface RawShipmentResult {
+  Status?: XmlText
+  DeliveryNoteId?: XmlText
+  ErrorsList?: { ErrorData?: RawError | RawError[] }
+  DocumentsList?: RawDocumentList
+  ShipmentData?: { ShipmentDataOutput?: RawShipmentOutput | RawShipmentOutput[] }
+}
+interface RawError { Code?: number; ErrorCode?: XmlText; Message?: XmlText }
+interface RawShipmentOutput {
+  ClientReference?: XmlText; FirstObject?: XmlText; LastObject?: XmlText; OriginalObjectID?: XmlText
+  LabelList?: RawLabelList; DocumentsList?: RawDocumentList
+}
+
 export class CTTShipmentService {
   private client: CTTSoapClient
 
@@ -332,17 +350,17 @@ export class CTTShipmentService {
    * - objecto fast-xml-parser com #text: { "#text": "EW0052", "@_..." }
    * - null / undefined
    */
-  private getText(val: any): string {
+  private getText(val: unknown): string {
     if (val === null || val === undefined) return ""
     if (typeof val === "string") return val
     if (typeof val === "number" || typeof val === "boolean") return String(val)
-    if (typeof val === "object" && val["#text"] !== undefined) return String(val["#text"])
+    if (typeof val === "object" && "#text" in val && val["#text"] !== undefined) return String(val["#text"])
     return ""
   }
 
-  private parseCloseShipmentResult(res: any): CTTCloseShipmentOutput {
+  private parseCloseShipmentResult(res: RawShipmentResult | undefined): CTTCloseShipmentOutput {
     const status = this.getText(res?.Status) === "Success" || res?.Status === 1 || res?.Status === "1" ? 1 : 0
-    const errorsList: any[] = []
+    const errorsList: NonNullable<CTTCompleteShipmentOutput["ErrorsList"]> = []
     if (res?.ErrorsList?.ErrorData) {
       const errors = Array.isArray(res.ErrorsList.ErrorData) ? res.ErrorsList.ErrorData : [res.ErrorsList.ErrorData]
       for (const e of errors) {
@@ -357,13 +375,13 @@ export class CTTShipmentService {
     }
   }
 
-  private parseCompleteShipmentResult(res: any): CTTCompleteShipmentOutput {
+  private parseCompleteShipmentResult(res: RawShipmentResult | undefined): CTTCompleteShipmentOutput {
     const isSuccess = this.getText(res?.Status) === "Success" || res?.Status === 1 || res?.Status === "1"
     const status = isSuccess ? 1 : 0
     const deliveryNoteId = this.getText(res?.DeliveryNoteId)
     
     // Processar erros se houver
-    const errorsList: any[] = []
+    const errorsList: NonNullable<CTTCompleteShipmentOutput["ErrorsList"]> = []
     if (res?.ErrorsList?.ErrorData) {
       const errors = Array.isArray(res.ErrorsList.ErrorData) ? res.ErrorsList.ErrorData : [res.ErrorsList.ErrorData]
       for (const e of errors) {
@@ -376,7 +394,7 @@ export class CTTShipmentService {
     }
 
     // Processar outputs de envios
-    const shipmentData: any[] = []
+    const shipmentData: NonNullable<CTTCompleteShipmentOutput["ShipmentData"]> = []
     if (res?.ShipmentData?.ShipmentDataOutput) {
       const shipments = Array.isArray(res.ShipmentData.ShipmentDataOutput) 
         ? res.ShipmentData.ShipmentDataOutput 
@@ -402,20 +420,20 @@ export class CTTShipmentService {
     }
   }
 
-  private extractLabels(labelNode: any) {
+  private extractLabels(labelNode: RawLabelList | undefined) {
     if (!labelNode?.LabelData) return []
     const list = Array.isArray(labelNode.LabelData) ? labelNode.LabelData : [labelNode.LabelData]
-    return list.map((l: any) => ({
+    return list.map((l) => ({
       FileName: this.getText(l.FileName),
       Label: this.getText(l.Label),
       BestEncoding: this.getText(l.BestEncoding),
     }))
   }
 
-  private extractDocuments(docNode: any) {
+  private extractDocuments(docNode: RawDocumentList | undefined) {
     if (!docNode?.DocumentData) return []
     const list = Array.isArray(docNode.DocumentData) ? docNode.DocumentData : [docNode.DocumentData]
-    return list.map((d: any) => ({
+    return list.map((d) => ({
       FileName: this.getText(d.FileName),
       File: this.getText(d.File),
     }))

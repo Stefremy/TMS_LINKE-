@@ -2,6 +2,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { requireUser } from '@/lib/auth/context'
+import { supabasePublicKey } from '@/lib/supabase/public-key'
 
 export async function changeClientPasswordAction(input: {
   currentPassword: string; password: string; confirmation: string
@@ -19,7 +20,7 @@ export async function changeClientPasswordAction(input: {
 
   // Verify the password in an isolated, unprivileged session. Never replace the
   // browser's cookies or use admin.updateUserById to bypass reauthentication.
-  const auth = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  const auth = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, supabasePublicKey(), {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   }).auth
   let signedIn = false

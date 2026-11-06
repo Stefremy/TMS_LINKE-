@@ -1,4 +1,5 @@
 "use client"
+import type { BillingStatement } from "@/lib/billing/types"
 
 import * as React from "react"
 import type {CreditNoteDto} from "@/lib/billing/credit-notes/service"
@@ -8,7 +9,7 @@ import { ClientCarregamentosHistory, type ClientTransactionItem } from "@/app/ap
 
 interface FaturasClientProps {
   creditNotes?: CreditNoteDto[]
-  statements: any[]
+  statements: BillingStatement[]
   transactions?: ClientTransactionItem[]
   initialTab?: "faturas" | "carregamentos"
   availableCredit?: number
@@ -247,7 +248,7 @@ export default function FaturasClient({
                               <div className="col-span-4">Destinatário</div>
                               <div className="col-span-2 text-right">Valor</div>
                             </div>
-                            {stmt.shipments.map((s: any) => (
+                            {stmt.shipments.map((s) => (
                               <div key={s.id} className="px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-slate-50 text-xs">
                                 <div className="col-span-3 text-slate-500">
                                   {new Date(s.created_at).toLocaleDateString("pt-PT")}

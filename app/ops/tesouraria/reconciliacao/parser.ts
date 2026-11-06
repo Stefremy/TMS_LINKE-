@@ -10,7 +10,7 @@ export interface CttParsedItem {
   serviceType?: string
 }
 
-export function normalizeParcelId(v: any): string {
+export function normalizeParcelId(v: unknown): string {
   return String(v || "")
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
     .replace(/\s+/g, "")
@@ -18,7 +18,7 @@ export function normalizeParcelId(v: any): string {
     .toUpperCase()
 }
 
-export function parsePrice(v: any): number {
+export function parsePrice(v: unknown): number {
   if (typeof v === "number") return v
   if (!v) return 0
   const cleaned = String(v)
@@ -35,7 +35,7 @@ export function isValidParcelCode(id: string): boolean {
   return true
 }
 
-export function findCol(sampleRow: Record<string, any>, candidates: string[]): string | undefined {
+export function findCol(sampleRow: Record<string, unknown>, candidates: string[]): string | undefined {
   const keys = Object.keys(sampleRow)
   // 1. Procurar correspondência exata primeiro
   for (const c of candidates) {
@@ -86,7 +86,7 @@ export function parseCttItemsFromWorkbook(wb: XLSX.WorkBook): CttParsedItem[] {
     }
   }
 
-  const json: any[] = XLSX.utils.sheet_to_json(ws, { range: headerRowIndex, defval: "" })
+  const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { range: headerRowIndex, defval: "" })
   if (!json.length) return []
 
   const sample = json[0] || {}
@@ -139,17 +139,17 @@ export function parseCttItemsFromWorkbook(wb: XLSX.WorkBook): CttParsedItem[] {
       grouped[id] = {
         id,
         cttPrice: linePrice,
-        cttDate: row["Data do Objeto"] || row["Data"] || "",
+        cttDate: String(row["Data do Objeto"] || row["Data"] || ""),
         refCliente: normalizeParcelId(row["Referência de Cliente"] || row["Referencia"] || row["Ref Cliente"] || ""),
-        senderName: row["Remetente"] || row["Nome do Remetente"] || "",
-        recipientName: row["Destinatário"] || row["Nome do Destinatário"] || "",
-        serviceType: row["Produto"] || ""
+        senderName: String(row["Remetente"] || row["Nome do Remetente"] || ""),
+        recipientName: String(row["Destinatário"] || row["Nome do Destinatário"] || ""),
+        serviceType: String(row["Produto"] || "")
       }
     } else {
       current.cttPrice = +(current.cttPrice + linePrice).toFixed(4)
       const dest = row["Destinatário"] || row["Nome do Destinatário"]
       if (dest && !current.recipientName) {
-        current.recipientName = dest
+        current.recipientName = String(dest)
       }
       const ref = row["Referência de Cliente"] || row["Referencia"] || row["Ref Cliente"]
       if (ref && !current.refCliente) {

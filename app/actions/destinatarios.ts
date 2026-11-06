@@ -84,7 +84,7 @@ export async function getDestinatariosAction(targetClientId?: string): Promise<D
 
     // A. Adicionar primeiro os destinatários explicitamente guardados
     if (savedLogs) {
-      savedLogs.forEach((log: any) => {
+      savedLogs.forEach((log) => {
         const d = log.details as Partial<Destinatario>
         if (!d || !d.name) return
 
@@ -122,7 +122,7 @@ export async function getDestinatariosAction(targetClientId?: string): Promise<D
     }
 
     // B. Cruzar com o histórico real de envios
-    shipments.forEach((s: any) => {
+    shipments.forEach((s) => {
       const rawName = (s.recipient_name || "").trim()
       if (!rawName) return
 

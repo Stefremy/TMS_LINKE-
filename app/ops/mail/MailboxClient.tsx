@@ -1,4 +1,5 @@
 "use client"
+import { useLocalStorage } from "@/lib/use-local-storage"
 
 import * as React from "react"
 import {
@@ -163,7 +164,7 @@ export function MailboxClient({
   const [sendingReply, setSendingReply] = React.useState(false)
 
   // Sync / status
-  const [refreshing, setRefreshing] = React.useState(false)
+  const [refreshing, setRefreshing] = React.useState(true)
   const [loadingOlder, setLoadingOlder] = React.useState(false)
   const [searchingHistory, setSearchingHistory] = React.useState(false)
   const [toastMessage, setToastMessage] = React.useState<string | null>(null)
@@ -177,30 +178,12 @@ export function MailboxClient({
   const [viewPlainText, setViewPlainText] = React.useState(false)
   const [iframeHeight, setIframeHeight] = React.useState(420)
   const [previewAttachment, setPreviewAttachment] = React.useState<ChatAttachmentItem | null>(null)
-  const [isLeftPaneCollapsed, setIsLeftPaneCollapsed] = React.useState(false)
-
-  React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem("linke_mail_left_collapsed")
-      if (saved !== null) {
-        setIsLeftPaneCollapsed(saved === "true")
-      }
-    } catch {
-      // ignore
-    }
-  }, [])
+  const [storedLeftPane, setStoredLeftPane] = useLocalStorage("linke_mail_left_collapsed")
+  const isLeftPaneCollapsed = storedLeftPane === "true"
 
   const toggleLeftPane = React.useCallback(() => {
-    setIsLeftPaneCollapsed((prev) => {
-      const next = !prev
-      try {
-        localStorage.setItem("linke_mail_left_collapsed", String(next))
-      } catch {
-        // ignore
-      }
-      return next
-    })
-  }, [])
+    setStoredLeftPane(String(!isLeftPaneCollapsed))
+  }, [isLeftPaneCollapsed, setStoredLeftPane])
 
   // Compose Modal state
   const [showComposeModal, setShowComposeModal] = React.useState(false)
@@ -325,67 +308,54 @@ export function MailboxClient({
     [accountMessages, filteredMessages, selectedId]
   )
 
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], selectedMessage)) {
+    setObservedInputs1([selectedMessage])
+
     if (selectedMessage) {
       setMuteThread(Boolean(selectedMessage.muted))
       setPreviewAttachment(null)
       setIframeHeight(420)
     }
-  }, [selectedMessage])
+  
+  }
 
   const isImapAccount = account === "geral@linke.pt" || account === "clientes@linke.pt"
 
   const refreshMailbox = React.useCallback(
-    async (silent = false) => {
-      setRefreshing(true)
-      if (!silent) setErrorMessage(null)
-      try {
+    (silent = false) => {
+      async function readMailbox() {
         if (isImapAccount) {
           try {
-            const syncRes = await fetch("/api/ops/mail", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
+            const response = await fetch("/api/ops/mail", {
+              method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ kind: "sync_imap", account }),
             })
-            const syncData = await syncRes.json()
-            if (syncRes.ok && syncData.ok) {
-              setMessages(syncData.messages || [])
-              const syncInfo = syncData.sync
-              if (syncInfo?.connected) {
-                if (syncInfo.synced > 0) {
-                  showToast(`Sincronizados ${syncInfo.synced} novos emails do Gmail (${account})`)
-                } else if (!silent) {
-                  showToast(`Caixa ${account} sincronizada com o Gmail (sem novos emails)`)
-                }
-              } else if (syncInfo?.errors?.length && !silent) {
-                showToast(`Aviso de sincronização: ${syncInfo.errors[0]}`)
-              } else if (!silent) {
-                showToast(`Caixa ${account} sincronizada`)
-              }
-              return
-            }
-          } catch {
-            // Fallback to GET if sync fails
-          }
+            const data = await response.json()
+            if (response.ok && data.ok) return data
+          } catch { /* Use the saved mailbox if the IMAP sync fails. */ }
         }
-
-        const response = await fetch(`/api/ops/mail?account=${encodeURIComponent(account)}`, {
-          cache: "no-store",
-        })
+        const response = await fetch(`/api/ops/mail?account=${encodeURIComponent(account)}`, { cache: "no-store" })
         const data = await response.json()
         if (!response.ok) throw new Error(data.error || "Não foi possível sincronizar a caixa de correio.")
-        setMessages(data.messages || [])
-        if (!silent) showToast(`Caixa ${account} sincronizada`)
-      } catch (err) {
-        if (!silent) {
-          setErrorMessage(err instanceof Error ? err.message : "Erro ao sincronizar emails.")
-        }
-      } finally {
-        setRefreshing(false)
+        return data
       }
+      return readMailbox().then(data => {
+        setMessages(data.messages || [])
+        const sync = data.sync
+        if (sync?.connected && sync.synced > 0) showToast(`Sincronizados ${sync.synced} novos emails do Gmail (${account})`)
+        else if (!silent && sync?.connected) showToast(`Caixa ${account} sincronizada com o Gmail (sem novos emails)`)
+        else if (!silent && sync?.errors?.length) showToast(`Aviso de sincronização: ${sync.errors[0]}`)
+        else if (!silent) showToast(`Caixa ${account} sincronizada`)
+      }).catch(err => {
+        if (!silent) setErrorMessage(err instanceof Error ? err.message : "Erro ao sincronizar emails.")
+      }).finally(() => setRefreshing(false))
     },
     [account, isImapAccount, showToast]
   )
+
+  const [refreshAccount, setRefreshAccount] = React.useState(account)
+  if (refreshAccount !== account) { setRefreshAccount(account); setRefreshing(true) }
 
   // Auto-sync with Gmail on initial mount & when switching accounts
   React.useEffect(() => {
@@ -742,7 +712,7 @@ export function MailboxClient({
 
           <button
             type="button"
-            onClick={() => void refreshMailbox()}
+            onClick={() => { setRefreshing(true); setErrorMessage(null); void refreshMailbox() }}
             disabled={refreshing}
             className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
           >
@@ -1793,6 +1763,7 @@ export function MailboxClient({
                         ) : (
                           <iframe
                             src={previewAttachment.url}
+                            sandbox=""
                             title={previewAttachment.name}
                             className="h-[520px] w-full border-0"
                           />

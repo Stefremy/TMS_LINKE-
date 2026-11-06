@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import {
@@ -86,7 +88,10 @@ export function SalarioModal({
   }, [isOpen])
 
   // Populate formData on open or when salario prop changes
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], salario) || !Object.is(observedInputs1[1], isOpen) || !Object.is(observedInputs1[2], currentMonth) || !Object.is(observedInputs1[3], currentYear)) {
+    setObservedInputs1([salario, isOpen, currentMonth, currentYear])
+
     if (salario) {
       setFormData(salario)
     } else {
@@ -112,7 +117,8 @@ export function SalarioModal({
       })
     }
     setError("")
-  }, [salario, isOpen, currentMonth, currentYear])
+  
+  }
 
   // Select employee helper
   const handleSelectColaborador = (colId: string) => {
@@ -181,8 +187,8 @@ export function SalarioModal({
       } else {
         setError(res.message || "Erro ao gravar vencimento.")
       }
-    } catch (err: any) {
-      setError(err?.message || "Ocorreu um erro ao gravar.")
+    } catch (err) {
+      setError(errorMessage(err) || "Ocorreu um erro ao gravar.")
     } finally {
       setIsSaving(false)
     }
@@ -543,7 +549,7 @@ export function SalarioModal({
               </label>
               <select
                 value={formData.payment_status || "Agendado"}
-                onChange={(e) => setFormData({ ...formData, payment_status: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, payment_status: e.target.value as SalarioRecord["payment_status"] })}
                 className="w-full px-3 py-2 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl text-xs font-bold text-[var(--text-primary)] focus:outline-none"
               >
                 <option value="Agendado">Agendado</option>
@@ -559,7 +565,7 @@ export function SalarioModal({
               </label>
               <select
                 value={formData.payment_method || "Transferência Bancária (SEPA)"}
-                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as SalarioRecord["payment_method"] })}
                 className="w-full px-3 py-2 bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl text-xs font-bold text-[var(--text-primary)] focus:outline-none"
               >
                 <option value="Transferência Bancária (SEPA)">Transferência Bancária (SEPA)</option>

@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { MissingTrackingWarning } from "./MissingTrackingWarning"
@@ -90,8 +92,8 @@ export default function ReembolsosClient({ initialBatches, managePayments = true
       } else {
         setUploadError(res.error || "Erro ao processar ficheiro de extrato.")
       }
-    } catch (err: any) {
-      setUploadError(err.message || "Erro ao ler ficheiro.")
+    } catch (err) {
+      setUploadError(errorMessage(err) || "Erro ao ler ficheiro.")
     } finally {
       setIsUploading(false)
     }
@@ -110,8 +112,8 @@ export default function ReembolsosClient({ initialBatches, managePayments = true
       } else {
         setUploadError(res.error || "Erro ao carregar ficheiro de exemplo.")
       }
-    } catch (err: any) {
-      setUploadError(err.message || "Erro desconhecido.")
+    } catch (err) {
+      setUploadError(errorMessage(err) || "Erro desconhecido.")
     } finally {
       setIsUploading(false)
     }

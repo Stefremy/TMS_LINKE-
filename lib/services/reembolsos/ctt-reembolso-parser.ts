@@ -11,14 +11,14 @@ export interface CttParseResult {
   items: ReembolsoRawItem[]
 }
 
-function cleanCell(cell: any): string {
+function cleanCell(cell: unknown): string {
   if (cell === null || cell === undefined) return ""
   if (typeof cell === "object") {
-    if (cell.Data !== undefined) {
-      if (typeof cell.Data === "object") return String(cell.Data["#text"] ?? "").trim()
+    if ("Data" in cell && cell.Data !== undefined) {
+      if (cell.Data && typeof cell.Data === "object" && "#text" in cell.Data) return String(cell.Data["#text"] ?? "").trim()
       return String(cell.Data).trim()
     }
-    if (cell["#text"] !== undefined) return String(cell["#text"]).trim()
+    if ("#text" in cell && cell["#text"] !== undefined) return String(cell["#text"]).trim()
   }
   return String(cell).trim()
 }

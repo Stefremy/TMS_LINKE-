@@ -35,7 +35,7 @@ export async function resolveCttCredentials(connectionId?: string): Promise<CTTC
     try {
       const base = () => supabase.from("audit_log").select("details").eq("tenant_id", tenantId)
         .eq("action", "carrier_connection_config").in("details->>carrier_code", ["ctt_expresso", "ctt"])
-      let data: { details?: any } | null = null
+      let data: { details?: Partial<CTTConnectionCredentials> & { client_id?: string; is_active?: boolean } } | null = null
       if (connectionId) {
         const exact = await base().eq("id", connectionId).order("created_at", { ascending: false }).limit(1).maybeSingle()
         if (!exact.error) data = exact.data
@@ -128,7 +128,7 @@ export async function resolveCorreosCredentials(connectionId?: string): Promise<
         .order("created_at", { ascending: false })
         .limit(5)
 
-      const connLog = logs?.find((l: any) => l.details?.carrier_code === "correos_express")
+      const connLog = logs?.find((l) => l.details?.carrier_code === "correos_express")
       if (connLog?.details) {
         const d = connLog.details
         result = {

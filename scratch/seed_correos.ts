@@ -45,7 +45,7 @@ async function main() {
 
   for (const s of correosBaseServices) {
     try {
-      await saveServicoLinkeAction(s as any);
+      await saveServicoLinkeAction(s);
       console.log("Inserted", s.name);
     } catch(err) {
       console.error("Error inserting", s.name, err);

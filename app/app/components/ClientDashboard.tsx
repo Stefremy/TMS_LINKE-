@@ -1,4 +1,8 @@
 "use client"
+import { useLocalStorage } from "@/lib/use-local-storage"
+import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
+import { errorMessage } from "@/lib/errors"
+
 import { ShipmentParcelWeight } from '@/components/shipments/ShipmentParcelWeight'
 import { getClientServiceName } from '@/lib/services/client-service-label'
 
@@ -69,8 +73,8 @@ export function ClientDashboard() {
     weeklyVolume: Array<{ day: string; count: number; height: string }>
     serviceBreakdown: Array<{ name: string; count: string; rawCount: number; share: number; color: string }>
     destinationRegions: Array<{ region: string; count: string; pct: number }>
-    recentShipments: any[]
-    allShipments?: any[]
+    recentShipments: ShipmentRecord[]
+    allShipments?: ShipmentRecord[]
     latestInvoice?: {
       id: string
       statement_number?: string
@@ -103,21 +107,14 @@ export function ClientDashboard() {
     pendingInvoicesCount: 0,
   })
 
-  const [dismissedInvoiceId, setDismissedInvoiceId] = React.useState<string | null>(null)
+  const [dismissedInvoiceId, setDismissedInvoiceId] = useLocalStorage(`dismissed_inv_${currentClient.id}`)
 
-  React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`dismissed_inv_${currentClient.id}`)
-      if (saved) setDismissedInvoiceId(saved)
-    } catch {}
-  }, [currentClient.id])
-
-  const [shipments, setShipments] = React.useState<any[]>([])
+  const [shipments, setShipments] = React.useState<ShipmentRecord[]>([])
   const [searchTerm, setSearchTerm] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("todos")
   const [currentPage, setCurrentPage] = React.useState(1)
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
-  const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
+  const [selectedShipment, setSelectedShipment] = React.useState<ShipmentRecord | null>(null)
   const [closingBatch, setClosingBatch] = React.useState(false)
   const [manifestData, setManifestData] = React.useState<{ fileName: string; base64: string; documents?: CTTDocumentData[] } | null>(null)
   const [isTopUpOpen, setIsTopUpOpen] = React.useState(false)
@@ -139,10 +136,15 @@ export function ClientDashboard() {
     }
   }, [])
 
-  React.useEffect(() => {
-    let active = true
+  const [statsClientKey, setStatsClientKey] = React.useState([currentClient.id, currentClient.short_name])
+  if (statsClientKey[0] !== currentClient.id || statsClientKey[1] !== currentClient.short_name) {
+    setStatsClientKey([currentClient.id, currentClient.short_name])
     setLoadingStats(true)
     setStatsError(false)
+  }
+
+  React.useEffect(() => {
+    let active = true
     getClientPortalStatsAction(currentClient.id, currentClient.short_name).then(res => {
       if (!active) return
       if (res) {
@@ -223,9 +225,13 @@ export function ClientDashboard() {
   }, [shipments, searchTerm, statusFilter])
 
   // Reset page when search or filter changes
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], searchTerm) || !Object.is(observedInputs1[1], statusFilter)) {
+    setObservedInputs1([searchTerm, statusFilter])
+
     setCurrentPage(1)
-  }, [searchTerm, statusFilter])
+  
+  }
 
   // Paginated slice (15 per page)
   const totalPages = Math.ceil(filteredShipments.length / pageSize) || 1
@@ -235,7 +241,7 @@ export function ClientDashboard() {
   }, [filteredShipments, currentPage, pageSize])
 
   const pendingShipments = React.useMemo(() => {
-    return shipments.filter(s => s.status === "pendente" && ["ctt", "ctt_expresso"].includes(s.carrier_code) && !s.ctt_manifest_pdf && !["manifesto_fechado", "expedido"].includes(s.ops_substatus))
+    return shipments.filter(s => s.status === "pendente" && ["ctt", "ctt_expresso"].includes(s.carrier_code || "") && !s.ctt_manifest_pdf && !["manifesto_fechado", "expedido"].includes(s.ops_substatus || ""))
   }, [shipments])
 
   const handleCloseBatch = async () => {
@@ -254,7 +260,7 @@ export function ClientDashboard() {
         })
         if (res.warning) alert(res.warning)
         setShipments(prev => prev.map(s => {
-          if (idsToClose.includes(s.tracking_number) || idsToClose.includes(s.id)) {
+          if (idsToClose.includes(s.tracking_number || "") || idsToClose.includes(s.id)) {
             return { ...s, ops_substatus: "manifesto_fechado" }
           }
           return s
@@ -262,8 +268,8 @@ export function ClientDashboard() {
       } else {
         alert(res.error || "Não foi possível confirmar o fecho do manifesto CTT.")
       }
-    } catch (e: any) {
-      alert("Erro ao fechar lote: " + e.message)
+    } catch (e) {
+      alert("Erro ao fechar lote: " + errorMessage(e))
     } finally {
       setClosingBatch(false)
     }
@@ -280,12 +286,12 @@ export function ClientDashboard() {
     return rawLabel
   }
 
-  const fetchLabelForShipment = async (item: any, fallbackRef?: string): Promise<string | null> => {
+  const fetchLabelForShipment = async (item: ShipmentRecord, fallbackRef?: string): Promise<string | null> => {
     const rawLabel = await fetchOfficialShipmentLabel(item, getShipmentLabelAction, [fallbackRef])
     return resolveLabel(rawLabel)
   }
 
-  const printLabel = async (shipmentItem: any) => {
+  const printLabel = async (shipmentItem: ShipmentRecord) => {
     const label = await fetchLabelForShipment(shipmentItem)
     if (label) {
       printCttLabel(label)
@@ -294,7 +300,7 @@ export function ClientDashboard() {
     }
   }
 
-  const downloadLabel = async (shipmentItem: any, ref: string) => {
+  const downloadLabel = async (shipmentItem: ShipmentRecord, ref: string) => {
     const label = await fetchLabelForShipment(shipmentItem, ref)
     if (label) {
       const carrier = (shipmentItem?.transportadora || shipmentItem?.servico || "").toLowerCase().includes("correos") ? "Correos" : "CTT"

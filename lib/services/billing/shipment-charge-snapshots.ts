@@ -26,7 +26,7 @@ export async function hydrateShipmentCharges<T extends InvoiceShipment>(db: Supa
     // A price edited after creation must not inherit an obsolete split.
     if (row && row.sell_price != null && chargeCents(row.sell_price) === chargeCents(s.sell_price)) {
       for (const key of ['base_price', 'fuel_tax_amount', 'fuel_rate_pct', 'special_fees_amount', 'special_fees_description', 'recipient_country', 'recipient_zip4', 'recipient_zip3', 'island_transport_mode', 'vat_pct'] as const) {
-        if (merged[key] == null && (row as any)[key] != null) Object.assign(merged, { [key]: (row as any)[key] })
+        if (merged[key] == null && (row)[key] != null) Object.assign(merged, { [key]: (row)[key] })
       }
     }
     shipmentChargeBreakdown(merged)

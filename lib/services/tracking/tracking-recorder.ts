@@ -1,3 +1,7 @@
+import type { ShipmentRecord } from "../shipments/types"
+import type { SupabaseClient } from "@supabase/supabase-js"
+
+import { errorMessage } from "@/lib/errors"
 import { NormalizedTrackingEvent, TrackingSyncResult } from "./types"
 import { getTenantId } from "@/lib/auth/context"
 import { saveCarrierMeasurements } from './carrier-measurements-store'
@@ -10,9 +14,9 @@ import { saveCarrierMeasurements } from './carrier-measurements-store'
  * 3. Atualização do espelho em 'audit_log'.
  */
 export async function recordTrackingEvents(
-  supabase: any,
+  supabase: SupabaseClient,
   shipmentId: string,
-  targetShipment: any,
+  targetShipment: Partial<ShipmentRecord> | null,
   events: NormalizedTrackingEvent[]
 ): Promise<TrackingSyncResult> {
   if (!events || events.length === 0) {
@@ -20,7 +24,7 @@ export async function recordTrackingEvents(
       success: true,
       carrier: targetShipment?.carrier_code === "correos" ? "correos" : "ctt",
       count: 0,
-      latestStatus: targetShipment?.status === "entrada_rede" ? "em_transito" : targetShipment?.status,
+      latestStatus: targetShipment?.status === "entrada_rede" ? "em_transito" : targetShipment?.status as TrackingSyncResult["latestStatus"],
     }
   }
 
@@ -49,8 +53,8 @@ export async function recordTrackingEvents(
       if (updateErr) {
         console.warn("[Tracking Recorder] Aviso ao atualizar estado em shipments:", updateErr.message)
       }
-    } catch (err: any) {
-      console.warn("[Tracking Recorder] Falha no update shipments:", err?.message)
+    } catch (err) {
+      console.warn("[Tracking Recorder] Falha no update shipments:", errorMessage(err))
     }
   }
 
@@ -85,7 +89,7 @@ export async function recordTrackingEvents(
     for (const evt of sortedEvents) {
       const tEvt = new Date(evt.timestamp).getTime()
 
-      const isDuplicate = existingEvents?.some((ex: any) => {
+      const isDuplicate = existingEvents?.some((ex) => {
         if (ex.event_code !== evt.eventCode) return false
         const tEx = new Date(ex.timestamp).getTime()
         if (!isNaN(tEvt) && !isNaN(tEx)) {
@@ -113,8 +117,8 @@ export async function recordTrackingEvents(
       }
     }
     }
-  } catch (err: any) {
-    console.warn("[Tracking Recorder] Falha ao gravar tracking_events:", err?.message)
+  } catch (err) {
+    console.warn("[Tracking Recorder] Falha ao gravar tracking_events:", errorMessage(err))
   }
 
   // 3. Atualizar espelho em audit_log foi removido para melhorar performance.
@@ -146,8 +150,8 @@ export async function recordTrackingEvents(
         }).catch(err => console.warn("[Tracking Recorder] Falha ao enviar email de trânsito:", err?.message))
       })
     }
-  } catch (err: any) {
-    console.warn("[Tracking Recorder] Erro ao disparar notificação por email:", err?.message)
+  } catch (err) {
+    console.warn("[Tracking Recorder] Erro ao disparar notificação por email:", errorMessage(err))
   }
 
   return {

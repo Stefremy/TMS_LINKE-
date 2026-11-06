@@ -1,4 +1,5 @@
 "use client"
+import type { ShipmentRecord } from "@/lib/services/shipments/types"
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -16,7 +17,7 @@ export interface IncidentShipment {
   rawId: string
   tracking_number: string
   ctt_object_id?: string
-  reference?: string
+  reference?: string | null
   carrier_name: string
   service_type: string
   created_at: string
@@ -35,7 +36,7 @@ export interface IncidentShipment {
   sla_hours: number
   status_tratamento: "pendente" | "reagendado" | "morada_atualizada" | "em_resolucao"
   attempts_count: number
-  rawShipment: Record<string, unknown>
+  rawShipment: ShipmentRecord
 }
 
 interface IncidenciasClientProps {
@@ -51,7 +52,7 @@ export function IncidenciasClient({ initialIncidents, clients }: IncidenciasClie
   const [selectedClientId, setSelectedClientId] = React.useState<string>("all")
   
   // Modals state
-  const [modalShipment, setModalShipment] = React.useState<IncidentShipment["rawShipment"] | IncidentShipment | null>(null)
+  const [modalShipment, setModalShipment] = React.useState<ShipmentRecord | null>(null)
   const [isSyncing, setIsSyncing] = React.useState(false)
   const [copiedId, setCopiedId] = React.useState<string | null>(null)
 

@@ -13,6 +13,7 @@ const STAFF_USER = {
 function createMailHarness({ sentCalls = [], rows = [] } = {}) {
   const db = fakeSupabase({ audit_log: rows }, null, { persistInserts: true })
   const load = createLoader({
+    'node:crypto': require('node:crypto'),
     'server-only': {},
     '@/lib/auth/context': {
       getAuthContext: async () => ({
@@ -113,6 +114,7 @@ test('mutateMailMessages updates read state, star, folder and labels persistentl
 
   // First create two messages to mutate
   const inbound1 = await server.recordInboundEmailWebhook({
+    type: 'email.received',
     data: {
       email_id: 'test-mutate-1',
       from: 'fornecedor@exemplo.pt',
@@ -124,6 +126,7 @@ test('mutateMailMessages updates read state, star, folder and labels persistentl
   })
 
   const inbound2 = await server.recordInboundEmailWebhook({
+    type: 'email.received',
     data: {
       email_id: 'test-mutate-2',
       from: 'contato@cliente.pt',
@@ -156,6 +159,7 @@ test('mutateMailMessages updates read state, star, folder and labels persistentl
 test('recordInboundEmailWebhook parses incoming email for geral@linke.pt into Inbox', async () => {
   const { server } = createMailHarness()
   const recorded = await server.recordInboundEmailWebhook({
+    type: 'email.received',
     data: {
       email_id: 'in-777',
       from: 'Fornecedor Expresso <avisos@fornecedor.pt>',

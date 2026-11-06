@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { timingSafeEqual } from "node:crypto"
@@ -25,7 +27,7 @@ export async function POST(req: Request) {
   try {
     const secret = process.env.CTT_WEBHOOK_SECRET
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const serviceKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!secret || !supabaseUrl || !serviceKey) {
       return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
     }
@@ -135,8 +137,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true, results }, { status: 200 })
-  } catch (error: any) {
+  } catch (error) {
     console.error("CTT Webhook Error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 })
   }
 }

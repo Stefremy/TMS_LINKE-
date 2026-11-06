@@ -1,4 +1,8 @@
 "use server"
+import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
+import type { Cliente } from "@/app/ops/entidades/clientes/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import { findShipmentAuditRecords } from "@/lib/services/shipments/audit-records"
 
@@ -35,7 +39,7 @@ import type { CTTShipment2Close, CTTCompleteShipmentOutput, CTTDocumentData } fr
 import { getCttShipmentLabels } from "@/lib/services/ctt/shipment-label"
 import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
 
-export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
+export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<ShipmentRecord[]> {
   return fetchShipments(options)
 }
 
@@ -89,14 +93,14 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   const currentPeriodName = now.toLocaleDateString("pt-PT", { month: "long", year: "numeric" }) // "outubro de 2026"
 
   // Envios do mês/período atual
-  const monthShipments = clientShipments.filter((s: any) => s.created_at && s.created_at.startsWith(currentMonthPrefix))
+  const monthShipments = clientShipments.filter((s) => s.created_at && s.created_at.startsWith(currentMonthPrefix))
   const monthCount = monthShipments.length
-  const monthDeliveredCount = monthShipments.filter((s: any) => s.status === "entregue").length
+  const monthDeliveredCount = monthShipments.filter((s) => s.status === "entregue").length
   const monthRevenue = monthShipments
-    .filter((s: any) => s.status !== "anulado")
-    .reduce((acc: number, s: any) => acc + Number(s.sell_price || 0), 0)
+    .filter((s) => s.status !== "anulado")
+    .reduce((acc: number, s) => acc + Number(s.sell_price || 0), 0)
 
-  const clientStatementsForBalance = allStatements.filter((stmt: any) => !effectiveClientId || stmt.client_id === effectiveClientId)
+  const clientStatementsForBalance = allStatements.filter((stmt) => !effectiveClientId || stmt.client_id === effectiveClientId)
 
   let wallet = null
   if (clientBillingType === "pay_as_you_go" && effectiveClientId) {
@@ -122,14 +126,14 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   const totalCount = clientShipments.length
   // Change totalRevenue to reflect the real Debt (Used Balance)
   const totalRevenue = totalDebt
-  const deliveredCount = clientShipments.filter((s: any) => s.status === "entregue").length
+  const deliveredCount = clientShipments.filter((s) => s.status === "entregue").length
   const deliveryRate = totalCount > 0 ? Math.round((deliveredCount / totalCount) * 100) : 0
 
   // Real weekly distribution
   const daysOfWeek = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
   const dayCounts: Record<string, number> = { Seg: 0, Ter: 0, Qua: 0, Qui: 0, Sex: 0, Sáb: 0, Dom: 0 }
   
-  clientShipments.forEach((s: any) => {
+  clientShipments.forEach((s) => {
     if (s.created_at) {
       const d = new Date(s.created_at)
       const dayName = daysOfWeek[d.getDay()]
@@ -152,7 +156,7 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
 
   // Real service breakdown
   const serviceCounts: Record<string, number> = {}
-  clientShipments.forEach((s: any) => {
+  clientShipments.forEach((s) => {
     const srv = s.service_type || "CTT 24H"
     serviceCounts[srv] = (serviceCounts[srv] || 0) + 1
   })
@@ -168,7 +172,7 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
 
   // Real destination breakdown
   const destCounts: Record<string, number> = {}
-  clientShipments.forEach((s: any) => {
+  clientShipments.forEach((s) => {
     const city = s.recipient_address?.split(",").pop()?.trim() || "Portugal"
     destCounts[city] = (destCounts[city] || 0) + 1
   })
@@ -180,10 +184,10 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   }))
 
   const clientStatements = allStatements
-    .filter((stmt: any) => !effectiveClientId || stmt.client_id === effectiveClientId)
-    .sort((a: any, b: any) => new Date(b.created_at || b.period_end || 0).getTime() - new Date(a.created_at || a.period_end || 0).getTime())
+    .filter((stmt) => !effectiveClientId || stmt.client_id === effectiveClientId)
+    .sort((a, b) => new Date(b.created_at || b.period_end || 0).getTime() - new Date(a.created_at || a.period_end || 0).getTime())
 
-  const latestInvoice = clientStatements.find((stmt: any) => stmt.moloni_document_number || stmt.moloni_document_id || stmt.statement_number)
+  const latestInvoice = clientStatements.find((stmt) => stmt.moloni_document_number || stmt.moloni_document_id || stmt.statement_number)
 
   const visibleShipments = clientShipments.slice(0, 500)
   const parcelSummaries = await loadShipmentParcelSummaries(createAdminClient(), ctx.tenant_id, visibleShipments)
@@ -219,7 +223,7 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
       created_at: latestInvoice.created_at,
       hasReceipt: !!latestInvoice.moloni_receipt_pdf,
     } : null,
-    pendingInvoicesCount: clientStatements.filter((s: any) => !s.moloni_receipt_pdf && s.status !== "paid").length,
+    pendingInvoicesCount: clientStatements.filter((s) => !s.moloni_receipt_pdf && s.status !== "paid").length,
   }
 }
 
@@ -297,7 +301,7 @@ export async function emitClientGuiaAction(data: {
     let computedBasePrice: number
     let computedSpecialDesc: string | null = null
     let weightPricingBasis: WeightPricingBasis
-    let matchedClient: any = {}
+    let matchedClient: Partial<Cliente> = {}
     let carrierCode: "ctt" | "correos"
     let cttExportDetails: CttExportDetails | undefined
     let pricingWeight: ReturnType<typeof calculateChargeableWeight>
@@ -418,7 +422,7 @@ export async function emitClientGuiaAction(data: {
       updated_at: now,
     }
 
-    reservation = await reserveWallet(supabase, ctx.tenant_id, matchedClient.id, shipmentId, computedSellPrice, trackingNumber)
+    reservation = await reserveWallet(supabase, ctx.tenant_id, matchedClient.id!, shipmentId, computedSellPrice, trackingNumber)
     shipmentData.billing_type = reservation.reserved && reservation.kind !== 'credit_limit' ? 'pay_as_you_go' : 'conta_corrente'
 
     // ─── STEP 1: Call carrier API — only write to DB if carrier accepts ──────────
@@ -515,8 +519,8 @@ export async function emitClientGuiaAction(data: {
           const message = correosShipmentError(result, data.subProductId || "", data.recipientCountry || "")
           throw new Error(diagnosticId ? `${message} Referência técnica: ${diagnosticId}` : message)
         }
-      } catch (e: any) {
-        throw new Error("Erro Correos Express: " + (e?.message || "Tente novamente."))
+      } catch (e) {
+        throw new Error("Erro Correos Express: " + (errorMessage(e) || "Tente novamente."))
       }
 
     } else if (carrierCode === "ctt") {
@@ -591,11 +595,11 @@ export async function emitClientGuiaAction(data: {
           const rawLabel = cttResult.labelBase64 || (await combineCarrierLabels(carrierLabels))?.data
           labelBase64 = rawLabel ? await applyLinkeLogoToCttLabel(await convertZplToPdfBase64(rawLabel), cttResult.trackingNumber) : null
         } catch { console.warn("CTT: envio emitido; não foi possível preparar o PDF das etiquetas oficiais.") }
-      } catch (e: any) {
-        if (confirmedRejection || e.message?.includes("rejeitaram") || e.message?.includes("inválido") || e.message?.includes("suportado")) {
+      } catch (e) {
+        if (confirmedRejection || errorMessage(e)?.includes("rejeitaram") || errorMessage(e)?.includes("inválido") || errorMessage(e)?.includes("suportado")) {
           throw e
         }
-        throw new Error("Erro de ligação aos CTT: " + (e?.message || "Tente novamente."))
+        throw new Error("Erro de ligação aos CTT: " + (errorMessage(e) || "Tente novamente."))
       }
     }
 
@@ -667,9 +671,9 @@ export async function emitClientGuiaAction(data: {
         },
         created_at: now
       })
-    } catch (err: any) {
-      console.warn("Error inserting into DB:", err?.message)
-      if (!dbErrorMessage) dbErrorMessage = err?.message || "Unknown DB Error"
+    } catch (err) {
+      console.warn("Error inserting into DB:", errorMessage(err))
+      if (!dbErrorMessage) dbErrorMessage = errorMessage(err) || "Unknown DB Error"
     }
 
     // Insert package record
@@ -691,7 +695,7 @@ export async function emitClientGuiaAction(data: {
     // Wallet consumption is represented by the shipment and its reservation, never a second decrement.
     if (reservation.reserved && reservation.kind !== 'credit_limit' && (reservation.balanceBefore ?? 0) >= 15 && matchedClient.email) {
       try {
-        const after = await walletSnapshot(supabase, ctx.tenant_id, matchedClient.id)
+        const after = await walletSnapshot(supabase, ctx.tenant_id, matchedClient.id!)
         if (after && after.balance < 15) {
           const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
           const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
@@ -740,18 +744,18 @@ export async function emitClientGuiaAction(data: {
       sellPrice: computedSellPrice,
       dbWarning: dbErrorMessage
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error("emitClientGuiaAction error:", err)
     if (reservation?.reserved && (!submitted || confirmedRejection)) {
       try { await transitionWallet(createAdminClient(), reservation, submitted ? 'submitted' : 'reserved', 'released') }
       catch { return { success: false, error: `O pedido ${reservation.shipment} ficou por confirmar. Não repita antes de verificar o saldo e a transportadora.` } }
     }
     if (reservation?.reserved && submitted && !confirmedRejection) {
-      return { success: false, error: `O resultado do pedido ${reservation.shipment} ficou por confirmar. O saldo permanece reservado; confirme na transportadora antes de repetir. ${err.message || ''}` }
+      return { success: false, error: `O resultado do pedido ${reservation.shipment} ficou por confirmar. O saldo permanece reservado; confirme na transportadora antes de repetir. ${errorMessage(err) || ''}` }
     }
     return {
       success: false,
-      error: err.message || "Erro interno ao criar envio.",
+      error: errorMessage(err) || "Erro interno ao criar envio.",
     }
   }
 }
@@ -791,8 +795,8 @@ export async function updateShipmentStatusAction(
         updated_at: now,
       })
       .eq("id", shipmentId)
-  } catch (err: any) {
-    console.warn("Could not update status in shipments table:", err?.message)
+  } catch (err) {
+    console.warn("Could not update status in shipments table:", errorMessage(err))
   }
 
   // 2. Dual-write in audit_log
@@ -817,8 +821,8 @@ export async function updateShipmentStatusAction(
         }
       }
     }
-  } catch (err: any) {
-    console.warn("Could not update status in audit_log:", err?.message)
+  } catch (err) {
+    console.warn("Could not update status in audit_log:", errorMessage(err))
   }
 
   // 3. Insert tracking event in tracking_events table
@@ -873,11 +877,11 @@ type PrivateTimelineScope = {
 
 async function loadShipmentTrackingTimeline(
   shipmentId: string,
-  trackingNumber?: string,
+  trackingNumber?: string | null,
   scope?: PrivateTimelineScope
 ) {
   const supabase = createAdminClient()
-  const events: any[] = []
+  const events: ShipmentTimelineEvent[] = []
 
   // Private callers reuse the authorized record instead of repeating its lookup.
   let eventsQuery = supabase.from("tracking_events").select("*").eq("shipment_id", shipmentId)
@@ -904,7 +908,7 @@ async function loadShipmentTrackingTimeline(
     const error = dbEventsResult.error
 
     if (!error && dbEvents && dbEvents.length > 0) {
-      dbEvents.forEach((ev: any) => {
+      dbEvents.forEach((ev) => {
         const evDesc = ev.description || ""
         const evIsCorreos = isCorreos || evDesc.includes("Correos") || /^\d+$/.test(ev.event_code || "")
 
@@ -946,8 +950,8 @@ async function loadShipmentTrackingTimeline(
         }
       })
     }
-  } catch (err: any) {
-    console.warn("Could not load tracking_events from table:", err?.message)
+  } catch (err) {
+    console.warn("Could not load tracking_events from table:", errorMessage(err))
   }
 
   // 1b. Se não encontrou eventos pelo shipment_id, tenta pelo carrier_tracking_number (EQ... ou 16 dígitos)
@@ -980,7 +984,7 @@ async function loadShipmentTrackingTimeline(
         const { data: linkedEvents, error: evtErr } = await linkedEventsQuery.order("created_at", { ascending: true })
 
         if (!evtErr && linkedEvents && linkedEvents.length > 0) {
-          linkedEvents.forEach((ev: any) => {
+          linkedEvents.forEach((ev) => {
             const evDesc = ev.description || ""
             const evIsCorreos = linkedIsCorreos || evDesc.includes("Correos") || /^\d+$/.test(ev.event_code || "")
 
@@ -1023,8 +1027,8 @@ async function loadShipmentTrackingTimeline(
           })
         }
       }
-    } catch (err: any) {
-      console.warn("Could not load tracking_events by carrier_tracking_number:", err?.message)
+    } catch (err) {
+      console.warn("Could not load tracking_events by carrier_tracking_number:", errorMessage(err))
     }
   }
 
@@ -1039,7 +1043,7 @@ async function loadShipmentTrackingTimeline(
       const { data: auditEvents } = await auditQuery.order("created_at", { ascending: true })
 
       if (auditEvents && auditEvents.length > 0) {
-        auditEvents.forEach((log: any) => {
+        auditEvents.forEach((log) => {
           const d = log.details || {}
           if (d.eventCode || d.status) {
             const evIsCorreos = isCorreos || (d.carrierCode === "correos") || (d.carrier === "correos")
@@ -1075,15 +1079,15 @@ async function loadShipmentTrackingTimeline(
           }
         })
       }
-    } catch (auditErr: any) {
-      console.warn("Could not load audit_log fallback:", auditErr?.message)
+    } catch (auditErr) {
+      console.warn("Could not load audit_log fallback:", errorMessage(auditErr))
     }
   }
 
   return events
 }
 
-export async function getShipmentTrackingTimelineAction(shipmentId: string, trackingNumber?: string) {
+export async function getShipmentTrackingTimelineAction(shipmentId: string, trackingNumber?: string | null) {
   const ctx = await requireUser()
   const denied = () => new Error("Acesso negado ao rastreio deste envio.")
   if (!ctx.tenant_id || !["client", "employee", "admin"].includes(ctx.role || "") ||
@@ -1159,7 +1163,7 @@ export async function syncAllActiveShipmentsTrackingAction() {
     return { success: true, count: 0, errors: [] }
   }
 
-  const allIds = activeShipments.map((s: any) => s.id)
+  const allIds = activeShipments.map((s) => s.id)
   
   // Use existing batch logic for every chunk of 50
   let totalUpdated = 0
@@ -1281,9 +1285,9 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
       newTrackingNumber, 
       returnShipment: returnShipmentData 
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error("Erro ao criar devolução:", err)
-    return { success: false, error: err?.message || "Erro desconhecido ao criar devolução" }
+    return { success: false, error: errorMessage(err) || "Erro desconhecido ao criar devolução" }
   }
 }
 
@@ -1308,8 +1312,10 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
   ]
   if (isValidUuid(query)) dbFilters.push(`id.eq.${query.toLowerCase()}`)
 
-  let { data: dbRow, error: dbError } = await supabase.from("shipment_metadata")
+  const metadataResult = await supabase.from("shipment_metadata")
     .select("details").or(dbFilters.join(",")).limit(1).maybeSingle()
+  let dbRow: (Partial<ShipmentRecord> & { details?: ShipmentRecord }) | null = metadataResult.data
+  let dbError = metadataResult.error
   if (dbError) {
     const fallback = await supabase.from("shipments")
       .select("id,client_id,tracking_number,carrier_tracking_number,carrier_code,ctt_object_id,status,service_type,recipient_name,recipient_address,sender_name,sender_address,created_at,updated_at,weight_kg")
@@ -1317,7 +1323,7 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
     dbRow = fallback.data
     dbError = fallback.error
   }
-  let shipment: any = dbError ? null : (dbRow?.details || dbRow)
+  const shipment = (dbError ? null : (dbRow?.details || dbRow)) as ShipmentRecord | null
 
 
 
@@ -1433,7 +1439,7 @@ export async function resolveShipmentIncidentAction(params: {
     }
 
     // 1. Atualizar na tabela shipments
-    const updatePayload: any = {
+    const updatePayload: Partial<ShipmentRecord> = {
       status: newStatus,
       ops_substatus: `Resolvido: ${actionType.toUpperCase()}`,
       updated_at: now
@@ -1485,8 +1491,8 @@ export async function resolveShipmentIncidentAction(params: {
     revalidatePath("/app", "layout")
 
     return { success: true, message: "Incidência tratada com sucesso" }
-  } catch (err: any) {
+  } catch (err) {
     console.error("Erro ao resolver incidência:", err)
-    return { success: false, error: err?.message || "Erro ao processar resolução" }
+    return { success: false, error: errorMessage(err) || "Erro ao processar resolução" }
   }
 }

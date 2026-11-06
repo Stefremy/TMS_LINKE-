@@ -1,15 +1,17 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { X, Calendar, MapPin, Package, Loader2, CheckCircle2 } from "lucide-react"
 import { scheduleCttPickupAction } from "@/app/actions/ctt"
 
-export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => void, clients?: any[] }) {
+export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => void, clients?: { id: string; name: string; email?: string; address?: string; postal_code?: string; zip_code?: string; city?: string; phone?: string }[] }) {
   const [loading, setLoading] = React.useState(false)
-  const [result, setResult] = React.useState<any>(null)
+  const [result, setResult] = React.useState<{ Success?: boolean; success?: boolean; PickUpID?: string; message?: string; error?: string } | null>(null)
 
   // Form state
-  const [date, setDate] = React.useState(new Date(Date.now() + 86400000).toISOString().split('T')[0])
+  const [date, setDate] = React.useState(() => new Date(Date.now() + 86400000).toISOString().split('T')[0])
   const startHour = "09:00"
   const endHour = "19:00"
   const [volumes, setVolumes] = React.useState(1)
@@ -65,8 +67,8 @@ export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => voi
         }
       })
       setResult(res)
-    } catch (err: any) {
-      setResult({ Success: false, message: err.message })
+    } catch (err) {
+      setResult({ Success: false, message: errorMessage(err) })
     } finally {
       setLoading(false)
     }

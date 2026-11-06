@@ -57,7 +57,7 @@ export async function GET(request: Request) {
       secure: creds.port === 993,
       auth: { user: creds.user, pass: creds.pass },
       logger: false,
-      tls: { rejectUnauthorized: false },
+      tls: { rejectUnauthorized: true },
     })
 
     let rawSource: Buffer | null = null
@@ -103,7 +103,8 @@ export async function GET(request: Request) {
 
     const filename = (target.filename || `anexo-${uid}`).replace(/["\r\n]/g, "")
     const contentType = target.contentType || "application/octet-stream"
-    const disposition = download ? "attachment" : "inline"
+    const inlineTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/gif", "image/webp", "text/plain"])
+    const disposition = !download && inlineTypes.has(contentType.toLowerCase()) ? "inline" : "attachment"
 
     return new NextResponse(new Uint8Array(target.content), {
       status: 200,
@@ -111,7 +112,9 @@ export async function GET(request: Request) {
         "Content-Type": contentType,
         "Content-Length": String(target.content.length),
         "Content-Disposition": `${disposition}; filename="${encodeURIComponent(filename)}"`,
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox; default-src 'none'; frame-ancestors 'self'",
       },
     })
   } catch (err) {

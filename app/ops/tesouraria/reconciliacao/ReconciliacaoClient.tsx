@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import Link from "next/link"
@@ -103,9 +105,9 @@ export default function ReconciliacaoClient({ initialHistory }: ReconciliacaoCli
       } else {
         setErrorMsg(res.error || "Erro ao processar ficheiro CTT.")
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Erro na leitura/reconciliação do ficheiro CTT:", err)
-      setErrorMsg(err.message || "Erro inesperado ao processar o ficheiro CTT.")
+      setErrorMsg(errorMessage(err) || "Erro inesperado ao processar o ficheiro CTT.")
     } finally {
       setIsProcessing(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -130,8 +132,8 @@ export default function ReconciliacaoClient({ initialHistory }: ReconciliacaoCli
       } else {
         setErrorMsg(res.error || "Erro ao processar ficheiro de exemplo.")
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "Erro ao carregar ficheiro de exemplo.")
+    } catch (err) {
+      setErrorMsg(errorMessage(err) || "Erro ao carregar ficheiro de exemplo.")
     } finally {
       setIsProcessing(false)
     }
@@ -157,8 +159,8 @@ export default function ReconciliacaoClient({ initialHistory }: ReconciliacaoCli
         return true
       })
       .sort((a, b) => {
-        let valA: any = a.diff
-        let valB: any = b.diff
+        let valA: string | number = a.diff
+        let valB: string | number = b.diff
 
         if (sortBy === "diff") {
           valA = a.diff
@@ -272,7 +274,7 @@ export default function ReconciliacaoClient({ initialHistory }: ReconciliacaoCli
 
     const { headers, rows } = buildExportData(itemsToExport)
 
-    const formatCell = (val: any) => {
+    const formatCell = (val: unknown) => {
       if (val === null || val === undefined) return '""'
       const str = String(val).replace(/"/g, '""')
       return `"${str}"`
@@ -370,7 +372,7 @@ export default function ReconciliacaoClient({ initialHistory }: ReconciliacaoCli
             </span>
             <select
               value={comparisonMode}
-              onChange={(e) => setComparisonMode(e.target.value as any)}
+              onChange={(e) => setComparisonMode(e.target.value as typeof comparisonMode)}
               className="px-2.5 py-1 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded text-xs font-semibold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] cursor-pointer"
             >
               <option value="buy_price">Custo de Compra Previsto (buy_price)</option>

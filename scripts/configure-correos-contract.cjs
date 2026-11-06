@@ -41,7 +41,7 @@ function plan(existing, now = new Date().toISOString()) {
   return records
 }
 async function main() {
-  const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}})
+  const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),{auth:{persistSession:false}})
   const {data:native,error:nativeError}=await db.from('servicos_linke').select('*').eq('tenant_id',tenantId)
   if (!nativeError && native?.length) throw Error('Native catalogue exists: migrate through the native schema before applying.')
   if (nativeError && nativeError.code !== 'PGRST205') throw nativeError

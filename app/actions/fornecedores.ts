@@ -1,4 +1,6 @@
 "use server"
+import { errorMessage } from "@/lib/errors"
+
 
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
@@ -241,7 +243,7 @@ async function loadFornecedores(tenantId: string): Promise<Fornecedor[]> {
       .eq("action", "deleted_fornecedor")
 
     if (deletedLogs) {
-      deletedLogs.forEach((log: any) => {
+      deletedLogs.forEach((log) => {
         if (log.details?.id) {
           deletedIds.add(log.details.id)
         }
@@ -258,7 +260,7 @@ async function loadFornecedores(tenantId: string): Promise<Fornecedor[]> {
       .order("created_at", { ascending: false })
 
     if (!error && data && data.length > 0) {
-      return data.filter((f: any) => !deletedIds.has(f.id))
+      return data.filter((f) => !deletedIds.has(f.id))
     }
   } catch {}
 
@@ -273,7 +275,7 @@ async function loadFornecedores(tenantId: string): Promise<Fornecedor[]> {
 
     if (logs && logs.length > 0) {
       const parsed = logs
-        .map((l: any) => l.details)
+        .map((l) => l.details)
         .filter(Boolean) as Fornecedor[]
 
       if (parsed.length > 0) {
@@ -367,8 +369,8 @@ export async function saveFornecedorAction(fornecedor: Partial<Fornecedor>): Pro
       action: "fornecedor_data",
       details: fullRecord,
     })
-  } catch (err: any) {
-    console.warn("Audit log save error:", err?.message)
+  } catch (err) {
+    console.warn("Audit log save error:", errorMessage(err))
   }
 
   revalidatePath("/ops/entidades/fornecedores")

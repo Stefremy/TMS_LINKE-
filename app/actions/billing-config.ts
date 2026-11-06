@@ -1,4 +1,7 @@
 "use server"
+import type { MoloniConnection } from "@/lib/billing/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { MoloniClient } from "@/lib/moloni/moloni-client"
@@ -63,9 +66,9 @@ export async function saveBillingConfigAction(config: Partial<BillingConfig>): P
     revalidatePath("/ops/configuracao/faturacao")
     revalidatePath("/ops/faturacao/contas-corrente")
     return { success: true }
-  } catch (err: any) {
+  } catch (err) {
     console.error("Erro ao guardar configurações de faturação:", err)
-    return { success: false, error: err?.message || "Falha ao gravar configurações." }
+    return { success: false, error: errorMessage(err) || "Falha ao gravar configurações." }
   }
 }
 
@@ -82,7 +85,7 @@ export async function syncMoloniArticleAction(articleData: {
 
   try {
     // 1. Obter credenciais do Moloni
-    let moloniConfig: any = null
+    let moloniConfig: MoloniConnection | null = null
     if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
       moloniConfig = {
         refreshToken: process.env.MOLONI_REFRESH_TOKEN,
@@ -116,7 +119,7 @@ export async function syncMoloniArticleAction(articleData: {
 
     // Procurar artigo existente
     const products = await moloni.request("products/getAll", { qty: 50, offset: 0 })
-    const existing = Array.isArray(products) ? products.find((p: any) => p.reference === ref) : null
+    const existing = Array.isArray(products) ? products.find((p) => p.reference === ref) : null
 
     if (existing) {
       // Artigo já existe no Moloni: atualizar designação se necessário
@@ -138,7 +141,7 @@ export async function syncMoloniArticleAction(articleData: {
           message: `Artigo "${ref}" atualizado no Moloni com sucesso! (ID: ${existing.product_id})`,
           productId: existing.product_id
         }
-      } catch (upErr: any) {
+      } catch (upErr) {
         return { 
           success: true, 
           message: `Artigo "${ref}" já existe no catálogo do Moloni (ID: ${existing.product_id}).`,
@@ -154,9 +157,9 @@ export async function syncMoloniArticleAction(articleData: {
       message: `Novo artigo "${ref} - ${name}" criado e verificado no catálogo Moloni com sucesso! (ID: ${productId})`,
       productId,
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error("Erro na sincronização de artigo Moloni:", err)
-    return { success: false, message: err?.message || "Erro de comunicação com o Moloni." }
+    return { success: false, message: errorMessage(err) || "Erro de comunicação com o Moloni." }
   }
 }
 
@@ -168,7 +171,7 @@ export async function getMoloniDetailsAction() {
   const supabase = createAdminClient()
 
   try {
-    let moloniConfig: any = null
+    let moloniConfig: MoloniConnection | null = null
     let companyName = "Empresa Moloni"
     let companyVat = ""
 
@@ -202,12 +205,12 @@ export async function getMoloniDetailsAction() {
     const moloni = new MoloniClient(moloniConfig)
     
     // Obter Séries Documentais e Impostos
-    let documentSets: any[] = []
-    let taxes: any[] = []
+    let documentSets: {id:number; name:string; active:boolean}[] = []
+    let taxes: {id:number; name:string; value:number}[] = []
     try {
       const sets = await moloni.request("documentSets/getAll", {})
       if (Array.isArray(sets)) {
-        documentSets = sets.map((s: any) => ({
+        documentSets = sets.map((s) => ({
           id: s.document_set_id,
           name: s.name,
           active: s.active === 1
@@ -218,7 +221,7 @@ export async function getMoloniDetailsAction() {
     try {
       const tList = await moloni.request("taxes/getAll", {})
       if (Array.isArray(tList)) {
-        taxes = tList.map((t: any) => ({
+        taxes = tList.map((t) => ({
           id: t.tax_id,
           name: t.name,
           value: parseFloat(t.value)
@@ -234,7 +237,7 @@ export async function getMoloniDetailsAction() {
       documentSets,
       taxes,
     }
-  } catch (err: any) {
-    return { isConnected: false, error: err?.message }
+  } catch (err) {
+    return { isConnected: false, error: errorMessage(err) }
   }
 }

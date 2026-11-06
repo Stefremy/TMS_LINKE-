@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { ManifestDocuments } from "@/components/manifest-documents"
@@ -27,7 +29,7 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
   const [isOpen, setIsOpen] = React.useState(false)
   const [activeModal, setActiveModal] = React.useState<"none" | "emit_ctt" | "close_cert" | "sync_tracking">("none")
   const [loading, setLoading] = React.useState(false)
-  const [modalResult, setModalResult] = React.useState<any>(null)
+  const [modalResult, setModalResult] = React.useState<{ success: boolean; trackingNumber?: string; deliveryNoteId?: string; fileName?: string; errors?: { Message?: string }[]; latestStatus?: string; error?: string; events?: { eventCode?: string; eventName?: string; description: string; location?: string; timestamp: string }[]; count?: number; total?: number; message?: string; warning?: string; manifestPdfBase64?: string; manifestReference?: string; documents?: {FileName: string; File: string}[]; results?: { success: boolean; error?: string; trackingNumber?: string }[] } | null>(null)
   const menuRef = React.useRef<HTMLDivElement>(null)
 
   // Close when clicking outside
@@ -72,8 +74,8 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
       })
 
       setModalResult(res)
-    } catch (err: any) {
-      setModalResult({ success: false, errors: [{ Message: err.message }] })
+    } catch (err) {
+      setModalResult({ success: false, errors: [{ Message: errorMessage(err) }] })
     } finally {
       setLoading(false)
     }
@@ -90,8 +92,8 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
       const res = await closeCttShipmentsAction(selectedShipmentIds)
       setModalResult(res)
       if (res.success) onManifestClosed()
-    } catch (err: any) {
-      setModalResult({ success: false, errors: [{ Message: err.message }] })
+    } catch (err) {
+      setModalResult({ success: false, errors: [{ Message: errorMessage(err) }] })
     } finally {
       setLoading(false)
     }
@@ -112,8 +114,8 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
         latestStatus: "Sincronizado",
         message: `${res.count} envio(s) ativo(s) sincronizado(s) com as pickagens da CTT API.`
       })
-    } catch (err: any) {
-      setModalResult({ success: false, errors: [{ Message: err.message }] })
+    } catch (err) {
+      setModalResult({ success: false, errors: [{ Message: errorMessage(err) }] })
     } finally {
       setLoading(false)
     }
@@ -310,8 +312,8 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
                     <div className="font-bold">Aviso no processamento do envio:</div>
                     <div className="mt-1">
-                      {modalResult?.errors?.map((e: any, idx: number) => (
-                        <div key={idx}>• {e.Message || e}</div>
+                      {modalResult?.errors?.map((e, idx: number) => (
+                        <div key={idx}>• {typeof e === "string" ? e : e.Message}</div>
                       )) || "Falha desconhecida"}
                     </div>
                   </div>
@@ -440,7 +442,7 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
 
                   <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-2">
                     <div className="text-xs font-bold text-slate-700">Últimos Eventos Recebidos:</div>
-                    {modalResult?.events?.map((ev: any, idx: number) => (
+                    {modalResult?.events?.map((ev, idx: number) => (
                       <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-slate-100 last:border-0">
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200">{ev.eventCode}</span>

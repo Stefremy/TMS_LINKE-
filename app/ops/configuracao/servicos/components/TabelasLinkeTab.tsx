@@ -129,11 +129,15 @@ export function TabelasLinkeTab({
   const isCurrentLocked = isCurrentBase ? !canManageBaseTables : !canManageCreatedTables
   const [quickMarkupInput, setQuickMarkupInput] = React.useState<number>(currentServico?.global_markup_pct ?? 22)
 
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], currentServico?.id) || !Object.is(observedInputs1[1], currentServico?.global_markup_pct)) {
+    setObservedInputs1([currentServico?.id, currentServico?.global_markup_pct])
+
     if (currentServico) {
       setQuickMarkupInput(currentServico.global_markup_pct ?? 22)
     }
-  }, [currentServico?.id, currentServico?.global_markup_pct])
+  
+  }
 
   const renderServiceCard = (servico: ServicoLinke) => {
     const isSelected = servico.id === currentServico?.id
@@ -582,12 +586,12 @@ export function TabelasLinkeTab({
                     : 0
 
                   return (
-                    <div key={zone.zone_code || (zone as any).id || idx} className="space-y-2.5">
+                    <div key={zone.zone_code || (zone).id || idx} className="space-y-2.5">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                           <h3 className="font-semibold text-xs text-slate-800">
-                            {zone.zone_name || (zone as any).name}
+                            {zone.zone_name || (zone).name}
                           </h3>
                           <span className="text-[11px] font-mono text-slate-400">
                             ({zone.zone_code || "N/A"})
@@ -619,7 +623,7 @@ export function TabelasLinkeTab({
                       <div
                         tabIndex={0}
                         role="region"
-                        aria-label={`Tabela de preços ${zone.zone_name || (zone as any).name || zone.zone_code || ""}`}
+                        aria-label={`Tabela de preços ${zone.zone_name || (zone).name || zone.zone_code || ""}`}
                         className="overflow-x-auto rounded-lg border border-slate-200 shadow-2xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#128A47]"
                       >
                         <table className="w-full text-left text-xs">

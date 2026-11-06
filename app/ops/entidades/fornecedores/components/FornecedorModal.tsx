@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { 
@@ -196,7 +198,10 @@ export function FornecedorModal({
   }))
 
   // Sync state if initialData changes
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], initialData)) {
+    setObservedInputs1([initialData])
+
     if (initialData) {
       setFormData({
         id: initialData.id,
@@ -267,7 +272,8 @@ export function FornecedorModal({
         documents: initialData.documents || [],
       })
     }
-  }, [initialData])
+  
+  }
 
   // Prev / Next supplier navigation
   const currentIndex = React.useMemo(() => {
@@ -319,8 +325,8 @@ export function FornecedorModal({
         onDelete(initialData.id)
       }
       onClose()
-    } catch (err: any) {
-      alert("Erro ao eliminar transportadora: " + (err.message || "Tente novamente."))
+    } catch (err) {
+      alert("Erro ao eliminar transportadora: " + (errorMessage(err) || "Tente novamente."))
       setIsDeleting(false)
     }
   }
@@ -344,17 +350,18 @@ export function FornecedorModal({
           setSaveSuccessMsg(false)
         }, 2000)
       }
-    } catch (err: any) {
-      alert("Erro ao gravar transportadora: " + (err.message || "Tente novamente."))
+    } catch (err) {
+      alert("Erro ao gravar transportadora: " + (errorMessage(err) || "Tente novamente."))
     } finally {
       setIsSaving(false)
     }
   }
 
   // Format date helper
+  const [openedAt] = React.useState(() => Date.now())
   const formattedRegistrationDate = React.useMemo(() => {
     try {
-      const d = new Date(formData.created_at || Date.now())
+      const d = new Date(formData.created_at || openedAt)
       return d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit", year: "numeric" })
     } catch {
       return "01/09/2026"
@@ -2495,7 +2502,7 @@ export function FornecedorModal({
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Tipo de Taxa</label>
                   <select
                     value={feeFormData.fee_type || "fixed"}
-                    onChange={(e) => setFeeFormData({ ...feeFormData, fee_type: e.target.value as any })}
+                    onChange={(e) => setFeeFormData({ ...feeFormData, fee_type: e.target.value as "fixed" | "percentage" })}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   >
                     <option value="fixed">Valor Fixo (€)</option>
@@ -2741,7 +2748,7 @@ export function FornecedorModal({
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Estado</label>
                   <select
                     value={vehicleFormData.status || "Ativo"}
-                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, status: e.target.value as any })}
+                    onChange={(e) => setVehicleFormData({ ...vehicleFormData, status: e.target.value as "Ativo" | "Inativo" })}
                     className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   >
                     <option value="Ativo">Ativo</option>
@@ -2884,7 +2891,7 @@ export function FornecedorModal({
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Estado</label>
                   <select
                     value={driverFormData.status || "Ativo"}
-                    onChange={(e) => setDriverFormData({ ...driverFormData, status: e.target.value as any })}
+                    onChange={(e) => setDriverFormData({ ...driverFormData, status: e.target.value as "Ativo" | "Inativo" })}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                   >
                     <option value="Ativo">Ativo</option>

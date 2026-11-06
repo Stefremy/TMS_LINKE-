@@ -23,18 +23,18 @@ function normalizeInternationalPostalCode(paisISO: unknown, rawPostal: unknown):
     .slice(0, 7)
 }
 
-function normalizeGrabacionEnvioWireBody(endpoint: string, body: Record<string, any>): Record<string, any> {
+function normalizeGrabacionEnvioWireBody(endpoint: string, body: Record<string, unknown>): Record<string, unknown> {
   if (!endpoint.includes("grabacionEnvio") || !body || typeof body !== "object") {
     return body
   }
-  const wireBody: Record<string, any> = {
+  const wireBody: Record<string, unknown> = {
     ...body,
     codPosIntDest: normalizeInternationalPostalCode(body.paisISODest, body.codPosIntDest),
     telefRte: String(body.telefRte || "").replace(/\D/g, "").slice(0, 15) || "910000000",
     telefDest: String(body.telefDest || "").replace(/\D/g, "").slice(0, 15) || "920000000",
   }
   if (Array.isArray(body.listaBultos)) {
-    wireBody.listaBultos = body.listaBultos.map((bulto: Record<string, any>) => ({
+    wireBody.listaBultos = body.listaBultos.map((bulto: Record<string, unknown>) => ({
       ...bulto,
       volumen: bulto?.volumen ? String(bulto.volumen) : "0",
       alto: formatCmToMetersString(bulto?.alto),
@@ -53,7 +53,7 @@ export class CorreosRestClient {
   async request<T>(
     endpoint: string,
     credentials: Omit<CorreosCredentials, "environment" | "solicitante" | "codRte">,
-    body: Record<string, any>,
+    body: Record<string, unknown>,
     timeoutMs?: number
   ): Promise<T> {
     const authString = `${credentials.user}:${credentials.pass}`

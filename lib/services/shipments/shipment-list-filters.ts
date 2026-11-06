@@ -16,8 +16,8 @@ export const EMPTY_SHIPMENT_FILTERS: ShipmentListFilters = {
 }
 export type FilterableShipment = {
   id?: string; created_at?: string; updated_at?: string; picked_up_at?: string | null
-  service_type?: string; carrier_code?: string; carrier_name?: string; carrier_tracking_number?: string
-  tracking_number?: string; reference?: string; sender_name?: string; recipient_name?: string
+  service_type?: string; carrier_code?: string; carrier_name?: string; carrier_tracking_number?: string | null | null
+  tracking_number?: string | null; reference?: string | null; sender_name?: string; recipient_name?: string
   recipient_address?: string; recipient_country?: string; recipient_postal?: string
   recipient_zip4?: string; recipient_zip3?: string; status?: string; sell_price?: number | string
   is_return?: boolean | string; isReturn?: boolean | string; driver_id?: string; driver_name?: string

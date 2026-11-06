@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -60,8 +62,8 @@ export function CarrierLogosClient({ initialSettings, availableLogos }: CarrierL
       } else {
         setFeedback({ message: res.error || "Falha ao gravar configurações.", type: "error" })
       }
-    } catch (err: any) {
-      setFeedback({ message: err?.message || "Erro inesperado ao gravar.", type: "error" })
+    } catch (err) {
+      setFeedback({ message: errorMessage(err) || "Erro inesperado ao gravar.", type: "error" })
     } finally {
       setSaving(false)
     }
@@ -87,8 +89,8 @@ export function CarrierLogosClient({ initialSettings, availableLogos }: CarrierL
       } else {
         setFeedback({ message: res.error || "Falha no upload.", type: "error" })
       }
-    } catch (err: any) {
-      setFeedback({ message: err?.message || "Erro ao fazer upload.", type: "error" })
+    } catch (err) {
+      setFeedback({ message: errorMessage(err) || "Erro ao fazer upload.", type: "error" })
     } finally {
       setUploadingForId(null)
     }

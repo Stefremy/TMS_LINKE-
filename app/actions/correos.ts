@@ -1,4 +1,6 @@
 "use server"
+import { errorMessage } from "@/lib/errors"
+
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -49,8 +51,8 @@ export async function saveCorreosConnectionAction(creds: {
     if (err1) {
       console.warn("carrier_connections upsert error:", err1.message)
     }
-  } catch (err: any) {
-    console.warn("Could not save to carrier_connections:", err.message)
+  } catch (err) {
+    console.warn("Could not save to carrier_connections:", errorMessage(err))
   }
 
 
@@ -108,10 +110,10 @@ export async function testCorreosConnectionAction(creds: CorreosCredentials) {
       success: false,
       message: `Resposta Correos Express: ${result.mensajeRetorno || "Erro desconhecido"} (Código ${result.codigoRetorno})`,
     }
-  } catch (err: any) {
+  } catch (err) {
     return {
       success: false,
-      message: `Erro na comunicação Correos Express: ${err.message}`,
+      message: `Erro na comunicação Correos Express: ${errorMessage(err)}`,
     }
   }
 }
@@ -200,10 +202,10 @@ export async function emitCorreosShipmentAction(shipmentInput: {
       success: false,
       error: `Correos Express: ${result.mensajeRetorno || "Erro desconhecido"} (Código ${result.codigoRetorno})`
     }
-  } catch (err: any) {
+  } catch (err) {
     return {
       success: false,
-      error: `Erro Correos Express: ${err.message}`
+      error: `Erro Correos Express: ${errorMessage(err)}`
     }
   }
 }

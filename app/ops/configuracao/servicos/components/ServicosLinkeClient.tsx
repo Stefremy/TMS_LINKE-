@@ -1,4 +1,5 @@
 "use client"
+import type { CarrierConnection } from "@/lib/services/carriers/types"
 
 import * as React from "react"
 import { 
@@ -29,7 +30,7 @@ import { DuplicateServicoModal } from "./DuplicateServicoModal"
 interface ServicosLinkeClientProps {
   initialServicos: ServicoLinke[]
   initialFornecedores: FornecedorPricing[]
-  initialWebservices?: any[]
+  initialWebservices?: CarrierConnection[]
   canManageBaseTables?: boolean
   canManageCreatedTables?: boolean
 }
@@ -45,7 +46,7 @@ export function ServicosLinkeClient({
 }: ServicosLinkeClientProps) {
   const [servicos, setServicos] = React.useState<ServicoLinke[]>(initialServicos)
   const [fornecedores] = React.useState<FornecedorPricing[]>(initialFornecedores)
-  const [webservices] = React.useState<any[]>(initialWebservices)
+  const [webservices] = React.useState<CarrierConnection[]>(initialWebservices)
   const [activeTab, setActiveTab] = React.useState<TabType>("servicos_linke")
   
   // Modals state

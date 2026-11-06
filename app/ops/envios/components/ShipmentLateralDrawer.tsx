@@ -1,4 +1,7 @@
 "use client"
+import type { ShipmentDrawerRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { 
@@ -34,12 +37,12 @@ import { Button } from "@/components/ui/button"
 import { CarrierMeasurementsPanel } from '@/components/shipments/CarrierMeasurementsPanel'
 
 interface ShipmentLateralDrawerProps {
-  shipment: any | null
+  shipment: ShipmentDrawerRecord | null
   isOpen: boolean
   onClose: () => void
-  onOpenFullModal: (shipment: any) => void
-  onOpenIncidencia?: (shipment: any) => void
-  onUpdateShipment?: (updated: any) => void
+  onOpenFullModal: (shipment: ShipmentDrawerRecord) => void
+  onOpenIncidencia?: (shipment: ShipmentDrawerRecord) => void
+  onUpdateShipment?: (updated: ShipmentDrawerRecord) => void
 }
 
 export function ShipmentLateralDrawer({
@@ -51,10 +54,13 @@ export function ShipmentLateralDrawer({
   onUpdateShipment
 }: ShipmentLateralDrawerProps) {
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null)
-  const [timelineEvents, setTimelineEvents] = React.useState<any[]>([])
-  const [isLoadingTimeline, setIsLoadingTimeline] = React.useState(false)
+  const [timelineEvents, setTimelineEvents] = React.useState<ShipmentTimelineEvent[]>([])
+  const [isLoadingTimeline, setIsLoadingTimeline] = React.useState(Boolean(shipment))
   const [isSyncing, setIsSyncing] = React.useState(false)
   const [isPrinting, setIsPrinting] = React.useState(false)
+
+  const [timelineShipment, setTimelineShipment] = React.useState(shipment)
+  if (timelineShipment !== shipment) { setTimelineShipment(shipment); setIsLoadingTimeline(true) }
 
   // Fetch real timeline when shipment changes
   React.useEffect(() => {
@@ -64,13 +70,11 @@ export function ShipmentLateralDrawer({
     const shipmentId = shipment.rawId || shipment.id
 
     if (shipmentId) {
-      setIsLoadingTimeline(true)
       getShipmentTrackingTimelineAction(shipmentId)
-        .then((res: any) => {
+        .then((res) => {
           if (isMounted && Array.isArray(res)) {
             setTimelineEvents(res)
-          } else if (isMounted && res?.timeline) {
-            setTimelineEvents(res.timeline)
+
           }
         })
         .catch((err) => {
@@ -105,7 +109,7 @@ export function ShipmentLateralDrawer({
                     (typeof shipment.serviceName === "string" && shipment.serviceName.toLowerCase().includes("correos")) ||
                     /^\d{16}$/.test(shipment.carrier_tracking_number || "")
 
-  const isRealCarrierTracking = (val?: string) => val && (
+  const isRealCarrierTracking = (val?: string | null) => val && (
     /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim()) ||
     /^\d{16}$/.test(val.trim())
   )
@@ -197,8 +201,8 @@ export function ShipmentLateralDrawer({
       }
 
       await downloadCttLabel(labelToDownload, `etiqueta_${carrierCode}.pdf`)
-    } catch (err: any) {
-      alert("Erro ao descarregar etiqueta: " + err.message)
+    } catch (err) {
+      alert("Erro ao descarregar etiqueta: " + errorMessage(err))
     } finally {
       setIsPrinting(false)
     }
@@ -211,15 +215,14 @@ export function ShipmentLateralDrawer({
       const res = await syncCttTrackingAction("", idToSync)
       if (res?.success) {
         // Refresh timeline
-        const refreshed: any = await getShipmentTrackingTimelineAction(idToSync)
+        const refreshed = await getShipmentTrackingTimelineAction(idToSync)
         if (Array.isArray(refreshed)) {
           setTimelineEvents(refreshed)
-        } else if (refreshed?.timeline) {
-          setTimelineEvents(refreshed.timeline)
+
         }
-        if (onUpdateShipment) onUpdateShipment((res as any)?.shipment || shipment)
+        if (onUpdateShipment) onUpdateShipment(shipment)
       }
-    } catch (err: any) {
+    } catch (err) {
       console.warn("Sync error:", err)
     } finally {
       setIsSyncing(false)
@@ -227,7 +230,7 @@ export function ShipmentLateralDrawer({
   }
 
   // Eventos de timeline padrão se a BD não tiver eventos gravados ainda
-  const effectiveTimeline = timelineEvents.length > 0 ? timelineEvents : [
+  const effectiveTimeline: (Partial<ShipmentTimelineEvent> & { description: string; timestamp: string; isCompleted?: boolean })[] = timelineEvents.length > 0 ? timelineEvents : [
     {
       title: "Informação Recebida",
       description: `O envio foi registado. A aguardar atualização da transportadora. (Ref ${internalRef})`,
@@ -305,7 +308,7 @@ export function ShipmentLateralDrawer({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => handleCopy(carrierCode, "awb")}
+          onClick={() => handleCopy(carrierCode || "N/A", "awb")}
           className="h-7 px-2.5 text-xs font-semibold bg-[var(--surface-bg)] text-[var(--text-primary)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)] shadow-2xs shrink-0"
         >
           {copiedKey === "awb" ? <Check className="w-3 h-3 text-[var(--status-success)] mr-1" /> : <Copy className="w-3 h-3 mr-1" />}
@@ -389,7 +392,7 @@ export function ShipmentLateralDrawer({
                 <span>A carregar eventos de rastreio...</span>
               </div>
             ) : (
-              effectiveTimeline.map((evt: any, i: number) => {
+              effectiveTimeline.map((evt, i: number) => {
                 const isFirst = i === 0
                 return (
                   <div key={i} className="relative group">

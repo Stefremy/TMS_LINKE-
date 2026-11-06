@@ -1,4 +1,7 @@
 "use client"
+import type { CarrierConnection } from "@/lib/services/carriers/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -10,8 +13,8 @@ import type { Fornecedor } from "@/app/ops/entidades/fornecedores/types"
 
 interface WizardProps {
   onClose: () => void
-  onSaved?: (newConnection: any) => void
-  initialData?: any
+  onSaved?: (newConnection: CarrierConnection) => void
+  initialData?: CarrierConnection | null
 }
 
 const CONNECTORS = [
@@ -63,7 +66,10 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
     description: initialData?.description || "Integração CTT Expresso",
   })
 
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], selectedConnector) || !Object.is(observedInputs1[1], initialData)) {
+    setObservedInputs1([selectedConnector, initialData])
+
     if (!initialData) {
       if (selectedConnector === "correos_express") {
         setCredentials(prev => prev.description === "Integração CTT Expresso" ? { ...prev, description: "Integração Correos Express" } : prev)
@@ -71,7 +77,8 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
         setCredentials(prev => prev.description === "Integração Correos Express" ? { ...prev, description: "Integração CTT Expresso" } : prev)
       }
     }
-  }, [selectedConnector, initialData])
+  
+  }
 
   // Test Connection State
   const [testState, setTestState] = React.useState<{
@@ -119,8 +126,8 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
       } else {
         setTestState({ loading: false, status: "error", message: "Conector não suportado ainda." })
       }
-    } catch (err: any) {
-      setTestState({ loading: false, status: "error", message: err.message || "Falha ao testar ligação." })
+    } catch (err) {
+      setTestState({ loading: false, status: "error", message: errorMessage(err) || "Falha ao testar ligação." })
     }
   }
 
@@ -175,8 +182,8 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
       } else if (options?.closeAfter) {
         onClose()
       }
-    } catch (err: any) {
-      alert("Erro ao gravar ligação: " + err.message)
+    } catch (err) {
+      alert("Erro ao gravar ligação: " + errorMessage(err))
     } finally {
       setIsSaving(false)
     }
@@ -268,7 +275,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
                     <label className="text-[13px] font-semibold text-slate-700">Ambiente de Operação</label>
                     <select 
                       value={credentials.environment}
-                      onChange={(e) => setCredentials({ ...credentials, environment: e.target.value as any })}
+                      onChange={(e) => setCredentials({ ...credentials, environment: e.target.value as "qa" | "test" | "production" })}
                       className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-green-500 focus:outline-none"
                     >
                       <option value="qa">Ambiente Testes / QA</option>

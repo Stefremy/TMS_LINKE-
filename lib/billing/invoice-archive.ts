@@ -26,14 +26,14 @@ export type ArchiveStatement = {
   period_end?: string
 }
 
-export type InvoiceArchiveGroup = {
+export type InvoiceArchiveGroup<T extends ArchiveStatement = ArchiveStatement> = {
   key: string
   name: string
   nif?: string | null
   logo_url?: string | null
   color?: string | null
   associationMissing: boolean
-  statements: ArchiveStatement[]
+  statements: T[]
   paidCount: number
   awaitingReceiptCount: number
   periodCount: number
@@ -53,9 +53,9 @@ function timestamp(value?: string | null) {
 }
 
 /** Group existing documents for display; never changes ownership or billing status. */
-export function groupInvoiceArchive(clients: ArchiveClient[], statements: ArchiveStatement[], search = ""): InvoiceArchiveGroup[] {
+export function groupInvoiceArchive<T extends ArchiveStatement>(clients: ArchiveClient[], statements: T[], search = ""): InvoiceArchiveGroup<T>[] {
   const byId = new Map(clients.map(client => [client.id, client]))
-  const groups = new Map<string, InvoiceArchiveGroup>()
+  const groups = new Map<string, InvoiceArchiveGroup<T>>()
   const query = normalize(search)
 
   for (const statement of statements) {

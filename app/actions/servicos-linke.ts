@@ -1,4 +1,6 @@
 "use server"
+import { errorMessage } from "@/lib/errors"
+
 
 import { supportsDatabaseFeature } from "@/lib/supabase/schema-capabilities"
 
@@ -13,7 +15,7 @@ import { getServiceParcelLimitProduct } from "@/lib/pricing/oversize-surcharge"
 import { revalidatePath } from "next/cache"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getFornecedoresPricingAction } from "@/app/actions/fornecedores"
-import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
+import type { ServicoLinke, ZonePriceMatrix } from "@/app/ops/configuracao/servicos/types"
 import { getServiceVolumetricRule } from "@/lib/pricing/chargeable-weight"
 import {
   PRIMORDIAL_SERVICE_CODES,
@@ -673,7 +675,7 @@ for (let i = 0; i < DEFAULT_SERVICOS_LINKE.length; i++) {
 
 /** Resolve the stored base-table marker and whether a catalogue entry exists. */
 async function readStoredServiceProtection(supabase: ReturnType<typeof createAdminClient>, id: string, tenantId: string) {
-  if (isPrimordialServico({ id })) return { found: true, isProtected: true }
+  const builtinProtected = isPrimordialServico({ id })
   const { data: native, error: nativeError } = await supportsDatabaseFeature(supabase, "servicos_linke")
     ? await supabase.from("servicos_linke").select("*").eq("id", id).maybeSingle()
     : { data: null, error: null }
@@ -681,7 +683,8 @@ async function readStoredServiceProtection(supabase: ReturnType<typeof createAdm
   if (nativeError && !["42P01", "PGRST205", "22P02"].includes(nativeError.code)) {
     throw new Error("Não foi possível verificar a proteção da tabela. Tente novamente.")
   }
-  if (isPrimordialServico(native)) return { found: true, isProtected: true }
+  if (native?.tenant_id && native.tenant_id !== tenantId) throw new Error("Tabela de outra empresa.")
+  if (builtinProtected || isPrimordialServico(native)) return { found: true, isProtected: true }
   const { data: logs, error: auditError } = await supabase.from("audit_log").select("id, details")
     .eq("tenant_id", tenantId).eq("action", "servicos_linke_data").eq("details->>id", id)
   if (auditError) throw new Error("Não foi possível verificar a proteção da tabela. Tente novamente.")
@@ -702,21 +705,21 @@ function getCarrierRank(s: Partial<ServicoLinke>): number {
  * Normalizes legacy zone codes (`PT-ACORES` -> `PT-ILHAS`, missing single-zone domestic `zone_code` -> `PT-CONT`)
  * and attaches `is_primordial` + safe `carrier_group` before client cost redaction.
  */
-function normalizeLoadedServico(s: any): any {
+function normalizeLoadedServico<T extends ServicoLinke>(s: T) {
   const rawZones = Array.isArray(s.zones) ? s.zones : []
-  const normalizedZones = rawZones.map((z: any) => {
+  const normalizedZones = rawZones.map((z) => {
     const rawCode = typeof z?.zone_code === "string" ? z.zone_code.trim() : ""
     const canonicalCode = rawCode
       ? normalizeServiceZoneCode(rawCode)
       : rawZones.length === 1
       ? "PT-CONT"
       : ""
-    const nextZone: any = {
+    const nextZone: ZonePriceMatrix & { name?: string } = {
       ...z,
       ...(canonicalCode ? { zone_code: canonicalCode } : {}),
     }
-    if (!z?.zone_name && ((z as any)?.name || !rawCode)) {
-      nextZone.zone_name = (z as any)?.name || ZONE_DISPLAY_NAMES[canonicalCode] || canonicalCode
+    if (!z?.zone_name && ((z)?.name || !rawCode)) {
+      nextZone.zone_name = (z)?.name || ZONE_DISPLAY_NAMES[canonicalCode] || canonicalCode
     } else if (
       (rawCode.toUpperCase() === "PT-ACORES" || rawCode.toUpperCase() === "PT-MADEIRA") &&
       canonicalCode === "PT-ILHAS"
@@ -763,10 +766,11 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
     const { data: deletedLogs } = await supabase
       .from("audit_log")
       .select("details")
+      .eq("tenant_id", ctx.tenant_id)
       .eq("action", "deleted_servico_linke")
 
     if (deletedLogs) {
-      deletedLogs.forEach((log: any) => {
+      deletedLogs.forEach((log) => {
         if (log.details?.id) {
           deletedIds.add(log.details.id)
         }
@@ -780,18 +784,19 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
       const { data, error } = await supabase
         .from("servicos_linke")
         .select("*")
+        .eq("tenant_id", ctx.tenant_id)
         .order("created_at", { ascending: true })
 
       if (!error && data && data.length > 0) {
         return data
-          .filter((s: any) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
-          .sort((a: any, b: any) => getCarrierRank(a) - getCarrierRank(b))
-          .map((s: any) => normalizeLoadedServico(s))
-          .filter((s: any) => {
+          .filter((s) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
+          .sort((a, b) => getCarrierRank(a) - getCarrierRank(b))
+          .map((s) => normalizeLoadedServico(s))
+          .filter((s) => {
             if (isClient && s.client_id && s.client_id !== ctx.client_id) return false;
             return true;
           })
-          .map((s: any) => {
+          .map((s) => {
             if (isClient) {
               return {
                 ...s,
@@ -800,15 +805,15 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
                 preferred_carrier_name: undefined,
                 webservice_connection_id: undefined,
                 webservice_service_code: undefined,
-                zones: s.zones?.map((z: any) => ({
+                zones: s.zones?.map((z: ZonePriceMatrix) => ({
                   ...z,
-                  tiers: z.tiers?.map((t: any) => ({
+                  tiers: z.tiers?.map((t: ZonePriceMatrix["tiers"][number]) => ({
                     ...t,
                     cost_price: undefined,
                     margin_pct: undefined
                   }))
                 }))
-              }
+              } as unknown as ServicoLinke
             }
             return s;
           })
@@ -826,11 +831,12 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
     const { data: logs } = await supabase
       .from("audit_log")
       .select("*")
+      .eq("tenant_id", ctx.tenant_id)
       .eq("action", "servicos_linke_data")
       .order("created_at", { ascending: true })
 
     if (logs && logs.length > 0) {
-      logs.forEach((l: any) => {
+      logs.forEach((l) => {
         if (l.details && l.details.id) {
           servicosMap.set(l.details.id, l.details as ServicoLinke)
         }
@@ -844,11 +850,11 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
     .filter((s) => !deletedIds.has(s.id) && !isTemporarilyWithdrawnService(s))
     .sort((a, b) => getCarrierRank(a) - getCarrierRank(b))
     .map((s) => normalizeLoadedServico(s))
-    .filter((s: any) => {
+    .filter((s) => {
       if (isClient && s.client_id && s.client_id !== ctx.client_id) return false;
       return true;
     })
-    .map((s: any) => {
+    .map((s) => {
       if (isClient) {
         return {
           ...s,
@@ -857,15 +863,15 @@ export async function getServicosLinkeAction(): Promise<ServicoLinke[]> {
           preferred_carrier_name: undefined,
           webservice_connection_id: undefined,
           webservice_service_code: undefined,
-          zones: s.zones?.map((z: any) => ({
+          zones: s.zones?.map((z: ZonePriceMatrix) => ({
             ...z,
-            tiers: z.tiers?.map((t: any) => ({
+            tiers: z.tiers?.map((t: ZonePriceMatrix["tiers"][number]) => ({
               ...t,
               cost_price: undefined,
               margin_pct: undefined
             }))
           }))
-        } as ServicoLinke
+        } as unknown as ServicoLinke
       }
       return s as ServicoLinke
     })
@@ -919,7 +925,7 @@ export async function saveServicoLinkeAction(
     const canonicalName =
       (rawCode.toUpperCase() === "PT-ACORES" || rawCode.toUpperCase() === "PT-MADEIRA") && canonicalCode === "PT-ILHAS"
         ? "PT — Ilhas Açores & Madeira"
-        : zone.zone_name || (zone as any).name || ZONE_DISPLAY_NAMES[canonicalCode] || canonicalCode
+        : zone.zone_name || (zone).name || ZONE_DISPLAY_NAMES[canonicalCode] || canonicalCode
 
     return {
       ...zone,
@@ -994,12 +1000,13 @@ export async function saveServicoLinkeAction(
     const { data: delLogs } = await supabase
       .from("audit_log")
       .select("id, details")
+      .eq("tenant_id", ctx.tenant_id)
       .eq("action", "deleted_servico_linke")
 
     if (delLogs) {
       for (const d of delLogs) {
         if (d.id && d.details?.id === id) {
-          await supabase.from("audit_log").delete().eq("id", d.id)
+          await supabase.from("audit_log").delete().eq("tenant_id", ctx.tenant_id).eq("id", d.id)
         }
         }
     }
@@ -1007,12 +1014,12 @@ export async function saveServicoLinkeAction(
 
   // 1. Tentar gravar na tabela
   try {
-    const { error } = await supabase.from("servicos_linke").upsert(fullRecord)
+    const { error } = await supabase.from("servicos_linke").upsert({ ...fullRecord, tenant_id: ctx.tenant_id })
     if (error && ["PGRST204", "42703"].includes(error.code) && error.message.includes("is_primordial")) {
       // Older native schemas keep this marker in the full audit snapshot instead.
       const nativeRecord = { ...fullRecord }
       delete nativeRecord.is_primordial
-      await supabase.from("servicos_linke").upsert(nativeRecord)
+      await supabase.from("servicos_linke").upsert({ ...nativeRecord, tenant_id: ctx.tenant_id })
     }
   } catch {}
 
@@ -1021,12 +1028,13 @@ export async function saveServicoLinkeAction(
     const { data: existing } = await supabase
       .from("audit_log")
       .select("id, details")
+      .eq("tenant_id", ctx.tenant_id)
       .eq("action", "servicos_linke_data")
 
     if (existing) {
       for (const item of existing) {
         if (item.id && item.details?.id === id) {
-          await supabase.from("audit_log").delete().eq("id", item.id)
+          await supabase.from("audit_log").delete().eq("tenant_id", ctx.tenant_id).eq("id", item.id)
         }
       }
     }
@@ -1036,8 +1044,8 @@ export async function saveServicoLinkeAction(
       action: "servicos_linke_data",
       details: fullRecord,
     })
-  } catch (err: any) {
-    console.warn("Audit log save servico error:", err?.message)
+  } catch (err) {
+    console.warn("Audit log save servico error:", errorMessage(err))
   }
 
   revalidatePath("/ops/configuracao/servicos")
@@ -1187,7 +1195,7 @@ export async function deleteServicoLinkeAction(id: string): Promise<{ success: b
 
   // Best-effort cleanup: the tombstone also covers legacy schemas and referenced rows.
   try {
-    await supabase.from("servicos_linke").delete().eq("id", id)
+    await supabase.from("servicos_linke").delete().eq("tenant_id", ctx.tenant_id).eq("id", id)
   } catch {}
 
   try {

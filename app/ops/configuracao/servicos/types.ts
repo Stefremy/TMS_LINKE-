@@ -15,12 +15,15 @@ export interface PriceTierLinke {
 }
 
 export interface ZonePriceMatrix {
+  id?: string
+  name?: string // Older saved matrices used name instead of zone_name.
   zone_code: string
   zone_name: string
   tiers: PriceTierLinke[]
 }
 
 export interface ServicoLinke {
+  client_id?: string
   /** Public carrier capability; product 90 is always single-parcel. */
   single_parcel_only?: boolean
   id: string

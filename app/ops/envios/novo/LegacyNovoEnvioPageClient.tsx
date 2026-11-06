@@ -1,4 +1,7 @@
 "use client"
+import type { Destinatario } from "@/app/ops/entidades/destinatarios/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import { isCttSpecialServiceAvailable } from "@/lib/services/ctt/special-service-availability"
 import { ShipmentOversizeSummary } from "@/components/shipments/ShipmentOversizeSummary"
@@ -25,6 +28,10 @@ import { CttExportFields } from "@/components/shipments/CttExportFields"
 import { getServiceDisplayLabel } from "@/lib/services/ctt/service-identity"
 import { downloadCttLabel, printCttLabel } from "@/lib/label-utils"
 
+function generateFallbackAtCode() {
+  return `AT.2026.${Math.floor(1000000 + Math.random() * 9000000)}`
+}
+
 export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: Cliente[], servicosLinke?: ServicoLinke[] }) {
   // Lock to "GO Linke" for operation purposes
   const displayClients = React.useMemo(() => {
@@ -42,7 +49,7 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
   const [shipmentResult, setShipmentResult] = React.useState<{
     guia?: string;
     id?: string;
-    labelBase64?: string;
+    labelBase64?: string | null;
     clientName?: string;
     recipientName?: string;
     recipientCity?: string;
@@ -103,7 +110,7 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
     })
   }, [success, shipmentResult?.id])
 
-  const handleSelectRecipient = (r: any) => {
+  const handleSelectRecipient = (r: Destinatario) => {
     const country = (r.country || "PT").trim().toUpperCase()
     if (!destinationCountries.some(option => option.code === country)) {
       setErrorMsg("O país deste destinatário não está disponível no serviço selecionado. Escolha outro serviço antes de carregar o destinatário.")
@@ -123,14 +130,18 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
   const currentClient = clients.find(c => c.id === selectedClientId)
 
   // Auto-fill sender when client is selected
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], currentClient)) {
+    setObservedInputs1([currentClient])
+
     if (currentClient) {
       if (!senderName) setSenderName(currentClient.short_name || currentClient.legal_name || "")
       if (!senderAddress) setSenderAddress(currentClient.address || "")
       if (!senderZip) setSenderZip(currentClient.postal_code || "")
       if (!senderCity) setSenderCity(currentClient.city || "")
     }
-  }, [currentClient])
+  
+  }
 
   // Postal code lookup hooks
   const senderPostalLookup = usePostalCodeLookup({
@@ -176,11 +187,15 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
     if (!Number.isSafeInteger(count) || count <= 1 || count > 1000 || weightKg <= limit || !parcelWeights.some(Boolean)) return undefined
     return Array.from({ length: count }, (_, i) => Number(parcelWeights[i] ?? ""))
   }, [activeLinkeService, recipientCountry, weightKg, parcelVolumes, parcelWeights])
-  const destinationCountries = React.useMemo(() => getServiceDestinationCountries(activeLinkeService), [activeLinkeService])
+  const destinationCountries = getServiceDestinationCountries(activeLinkeService)
   const resolvedDestinationZone = activeLinkeService ? getServiceDestinationZone(activeLinkeService, recipientCountry, recipientZip) : ""
   const resetRecipientPostal = recipientPostalLookup.reset
 
-  React.useEffect(() => {
+  const [observedInputs2, setObservedInputs2] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs2 === null || !Object.is(observedInputs2[0], activeLinkeService) || !Object.is(observedInputs2[1], JSON.stringify(destinationCountries)) || !Object.is(observedInputs2[2], recipientCountry) || !Object.is(observedInputs2[3], resetRecipientPostal)) {
+    setObservedInputs2([activeLinkeService, JSON.stringify(destinationCountries), recipientCountry, resetRecipientPostal])
+    ;(() => {
+
     if (!activeLinkeService || destinationCountries.some(country => country.code === recipientCountry)) return
     const nextCountry = destinationCountries.length === 1 ? destinationCountries[0].code : ""
     if (recipientCountry === nextCountry) return
@@ -188,7 +203,10 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
     setRecipientZip("")
     setRecipientCity("")
     resetRecipientPostal()
-  }, [activeLinkeService, destinationCountries, recipientCountry, resetRecipientPostal])
+  
+  
+    })()
+  }
   const isCorreos = (activeLinkeService?.preferred_carrier_name || activeLinkeService?.name || "").toLowerCase().includes("correos")
   const carrierDisplayName = activeLinkeService ? (isCorreos ? "Correos Express" : "CTT Expresso") : "Transportadora"
 
@@ -202,7 +220,7 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
   const activeSpecialServices = React.useMemo(() => selectedSpecialServices.filter(code =>
     specialServicesAvailable.some(f => f.special_service_code === code)), [selectedSpecialServices, specialServicesAvailable])
 
-  const estimatedTier = React.useMemo(() => {
+  const estimatedTier = (() => {
     try {
       if (!currentClient || !activeLinkeService) throw new Error("Selecione um cliente e um serviço disponível.")
       if (!destinationCountries.length) throw new Error("Este serviço não tem países de destino com tarifas configuradas.")
@@ -216,7 +234,7 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
       return { label: "Preço indisponível", sell: 0, buy: 0, billableWeightKg: null, volumetricWeightKg: null, volumetricDivisor: null,
         error: error instanceof Error ? error.message : "Não foi possível calcular a tarifa." }
     }
-  }, [weightKg, currentClient, activeLinkeService, destinationCountries, recipientCountry, recipientZip, activeSpecialServices, codValue, parcelLengthCm, parcelWidthCm, parcelHeightCm, parcelVolumes, parcelWeightsKg])
+  })()
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -270,13 +288,13 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
       })
       
       if (!res.success) {
-        throw new Error((res as any).error || `Erro ao comunicar com a transportadora (${carrierDisplayName})`)
+        throw new Error((res).error || `Erro ao comunicar com a transportadora (${carrierDisplayName})`)
       }
       
-      const newResult: any = {
-        guia: (res as any).guia,
-        id: (res as any).id,
-        labelBase64: (res as any).labelBase64,
+      const newResult: NonNullable<typeof shipmentResult> = {
+        guia: (res).guia,
+        id: (res).id,
+        labelBase64: (res).labelBase64,
         dbWarning: res.dbWarning,
         clientName: currentClient?.short_name || currentClient?.legal_name || "Operador",
         recipientName: formData.get("recipient_name") as string,
@@ -286,14 +304,14 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
         weightKg: Number(formData.get("weight_kg")) || 1,
         volumes: Number(formData.get("volumes")) || 1,
         sellPrice: res.sellPrice,
-        atCode: `AT.2026.${Math.floor(1000000 + Math.random() * 9000000)}`
+        atCode: generateFallbackAtCode(),
       }
 
       // Se a opção Moloni estiver ativa, emite a Guia de Transporte oficial no Moloni
-      if (emitMoloniGt && (res as any).id) {
+      if (emitMoloniGt && (res).id) {
         try {
           const { emitMoloniWaybillForShipmentAction } = await import("@/app/actions/moloni")
-          const mRes = await emitMoloniWaybillForShipmentAction((res as any).id)
+          const mRes = await emitMoloniWaybillForShipmentAction((res).id)
           if (mRes.success) {
             newResult.moloniDoc = {
               id: mRes.documentId,
@@ -303,8 +321,8 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
           } else {
             console.warn("Aviso ao emitir Guia no Moloni:", mRes.error)
           }
-        } catch (mErr: any) {
-          console.warn("Erro ao contactar Moloni:", mErr?.message)
+        } catch (mErr) {
+          console.warn("Erro ao contactar Moloni:", errorMessage(mErr))
         }
       }
 
@@ -329,9 +347,9 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
       }
       
       // Auto-download da etiqueta assim que o envio é criado
-      if ((res as any).labelBase64) {
+      if ((res).labelBase64) {
         setTimeout(() => {
-          downloadCttLabel((res as any).labelBase64, `etiqueta_${(res as any).guia || "envio"}.pdf`)
+          downloadCttLabel((res).labelBase64, `etiqueta_${(res).guia || "envio"}.pdf`)
         }, 150);
       }
 
@@ -340,9 +358,9 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
       setWeightKg(1)
       setParcelLengthCm(""); setParcelWidthCm(""); setParcelHeightCm(""); setParcelVolumes("1"); setParcelWeights([])
       
-    } catch (err: any) {
-      setErrorMsg(err.message || "Erro ao criar envio.")
-      focusCttCustomsFields(submittedForm, err.message || "")
+    } catch (err) {
+      setErrorMsg(errorMessage(err) || "Erro ao criar envio.")
+      focusCttCustomsFields(submittedForm, errorMessage(err) || "")
     } finally {
       submissionRef.current = false
       setLoading(false)
@@ -367,8 +385,8 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
       } else {
         alert(res.error || "Não foi possível emitir no Moloni. Verifique se a conta está conectada em Faturação.")
       }
-    } catch (e: any) {
-      alert("Erro ao comunicar com o Moloni: " + (e?.message || "Tente novamente."))
+    } catch (e) {
+      alert("Erro ao comunicar com o Moloni: " + (errorMessage(e) || "Tente novamente."))
     } finally {
       setEmittingMoloni(false)
     }
@@ -422,9 +440,9 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
                       </p>
                     </div>
                   </div>
-                  {(shipmentResult as any).dbWarning && (
+                  {(shipmentResult).dbWarning && (
                     <div className="mt-2 p-3 bg-amber-50 text-amber-700 text-xs font-medium rounded-md border border-amber-200">
-                      <strong>Envio aceite — gravação a verificar:</strong> {(shipmentResult as any).dbWarning} Não volte a criar este envio. Confirme o registo no histórico ou contacte o suporte.
+                      <strong>Envio aceite — gravação a verificar:</strong> {(shipmentResult).dbWarning} Não volte a criar este envio. Confirme o registo no histórico ou contacte o suporte.
                     </div>
                   )}
                 </div>

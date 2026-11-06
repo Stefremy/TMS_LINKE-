@@ -1,4 +1,6 @@
 "use server"
+import { errorMessage } from "@/lib/errors"
+
 
 import fs from "fs"
 import path from "path"
@@ -118,8 +120,8 @@ async function executeReconciliationCore(
     const clientNames = await loadClientNames(supabase, tenantId, clientIds)
 
     // 3. Indexar envios internos por carrier_tracking_number e tracking_number
-    const shipmentMap = new Map<string, any>()
-    ;(dbShipments || []).forEach((s: any) => {
+    const shipmentMap = new Map<string, NonNullable<typeof dbShipments>[number]>()
+    ;(dbShipments || []).forEach((s) => {
       if (s.carrier_tracking_number) {
         shipmentMap.set(normalizeParcelId(s.carrier_tracking_number), s)
       }
@@ -297,9 +299,9 @@ export async function reconcileCttSampleAction(payload?: {
       payload?.dateFrom,
       payload?.dateTo
     )
-  } catch (err: any) {
+  } catch (err) {
     console.error("[reconcileCttSampleAction] Erro:", err)
-    return { success: false, error: err.message || "Erro ao carregar ficheiro de exemplo." }
+    return { success: false, error: errorMessage(err) || "Erro ao carregar ficheiro de exemplo." }
   }
 }
 
@@ -327,8 +329,8 @@ export async function reconcileCttInvoiceAction(
         const items: CttParsedItem[] = JSON.parse(parsedItemsJson)
         const filename = (formData.get("filename") as string) || "Fatura CTT"
         return executeReconciliationCore(items, filename, comparisonMode, dateFrom, dateTo)
-      } catch (e: any) {
-        return { success: false, error: `Erro ao deserializar itens do CTT: ${e.message}` }
+      } catch (e) {
+        return { success: false, error: `Erro ao deserializar itens do CTT: ${errorMessage(e)}` }
       }
     }
 
@@ -344,9 +346,9 @@ export async function reconcileCttInvoiceAction(
     const items = parseCttItemsFromWorkbook(wb)
 
     return executeReconciliationCore(items, file.name, comparisonMode, dateFrom, dateTo)
-  } catch (err: any) {
+  } catch (err) {
     console.error("[reconcileCttInvoiceAction] Erro:", err)
-    return { success: false, error: err.message || "Erro inesperado ao processar reconciliação." }
+    return { success: false, error: errorMessage(err) || "Erro inesperado ao processar reconciliação." }
   }
 }
 
@@ -368,7 +370,7 @@ export async function getReconciliacaoHistoryAction(): Promise<AuditHistoryEntry
 
     if (error || !data) return []
 
-    return data.map((d: any) => {
+    return data.map((d) => {
       const details = d.details || {}
       return {
         id: d.id,

@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { moloniMaturityDateId } from "@/lib/billing/payment-terms"
 
 export class MoloniClient {
@@ -21,7 +23,7 @@ export class MoloniClient {
     this.companyId = config?.companyId || process.env.MOLONI_COMPANY_ID || "";
     this.developerId = process.env.MOLONI_DEVELOPER_ID || process.env.MOLONI_CLIENT_ID || "518600300";
     this.clientId = process.env.MOLONI_CLIENT_ID || "518600300";
-    this.clientSecret = process.env.MOLONI_CLIENT_SECRET || "0b78b0aef4abfc92960a0c9d97dbe9b7abd8b325";
+    this.clientSecret = process.env.MOLONI_CLIENT_SECRET || "";
     this.refreshTokenVal = config?.refreshToken || process.env.MOLONI_REFRESH_TOKEN || "";
   }
 
@@ -35,8 +37,9 @@ export class MoloniClient {
     companies: Array<{ company_id: number; name: string; vat: string }>;
   }> {
     const clientId = process.env.MOLONI_CLIENT_ID || "518600300";
-    const clientSecret = process.env.MOLONI_CLIENT_SECRET || "0b78b0aef4abfc92960a0c9d97dbe9b7abd8b325";
+    const clientSecret = process.env.MOLONI_CLIENT_SECRET || "";
     
+    if (!clientSecret) throw new Error("Credenciais do Moloni não configuradas.");
     const params = new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
@@ -72,8 +75,9 @@ export class MoloniClient {
     companies: Array<{ company_id: number; name: string; vat: string }>;
   }> {
     const clientId = process.env.MOLONI_CLIENT_ID || "518600300";
-    const clientSecret = process.env.MOLONI_CLIENT_SECRET || "0b78b0aef4abfc92960a0c9d97dbe9b7abd8b325";
+    const clientSecret = process.env.MOLONI_CLIENT_SECRET || "";
     
+    if (!clientSecret) throw new Error("Credenciais do Moloni não configuradas.");
     const params = new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
@@ -174,7 +178,7 @@ export class MoloniClient {
   /**
    * Realiza um pedido genérico à API do Moloni usando JSON
    */
-  public async request(endpoint: string, payload: any = {}): Promise<any> {
+  public async request(endpoint: string, payload: object = {}) {
     const token = await this.getAccessToken();
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
     const finalEndpoint = cleanEndpoint.endsWith('/') ? cleanEndpoint : `${cleanEndpoint}/`;
@@ -207,7 +211,7 @@ export class MoloniClient {
         throw new Error(`Moloni API Error [${endpoint}]: ${json[0].error_description || json[0].error}`);
       }
       if (json[0]?.msg || json[0]?.description) {
-        const errorMsg = json.map((e: any) => `${e.field || ''}: ${e.msg || e.description || JSON.stringify(e)}`).join(', ');
+        const errorMsg = json.map((e) => `${e.field || ''}: ${e.msg || e.description || JSON.stringify(e)}`).join(', ');
         throw new Error(`Moloni API Error [${endpoint}]: ${errorMsg}`);
       }
     }
@@ -231,7 +235,7 @@ export class MoloniClient {
     if (!Array.isArray(sets) || sets.length === 0) {
       throw new Error("Nenhuma série documental encontrada na empresa Moloni.");
     }
-    const activeSet = sets.find((s: any) => s.active === 1);
+    const activeSet = sets.find((s) => s.active === 1);
     return activeSet ? activeSet.document_set_id : sets[0]?.document_set_id;
   }
 
@@ -241,19 +245,19 @@ export class MoloniClient {
       throw new Error("Nenhuma série documental encontrada na empresa Moloni.");
     }
     // Find a document set that is active and configured for AT WebServices
-    const transportSet = sets.find((s: any) => s.active === 1 && (s.e_fatura_ws_at === 1 || s.document_set_wsat_id));
+    const transportSet = sets.find((s) => s.active === 1 && (s.e_fatura_ws_at === 1 || s.document_set_wsat_id));
     if (transportSet) {
       return transportSet.document_set_id;
     }
     // Fallback to active set if we couldn't specifically identify a WS AT one
-    const activeSet = sets.find((s: any) => s.active === 1);
+    const activeSet = sets.find((s) => s.active === 1);
     return activeSet ? activeSet.document_set_id : sets[0]?.document_set_id;
   }
 
   async getTaxId(taxRate: number) {
     const taxes = await this.request('taxes/getAll', {});
     if (Array.isArray(taxes)) {
-      const tax = taxes.find((t: any) => Math.round(parseFloat(t.value)) === taxRate);
+      const tax = taxes.find((t) => Math.round(parseFloat(t.value)) === taxRate);
       if (tax) return tax.tax_id;
       if (taxes[0]?.tax_id) return taxes[0].tax_id;
     }
@@ -279,16 +283,16 @@ export class MoloniClient {
     const products = await this.request('products/getAll', { qty: 50, offset: 0 });
     if (Array.isArray(products) && products.length > 0) {
       // 1. Procurar exatamente pela referência configurada
-      const exactMatch = products.find((p: any) => p.reference?.toUpperCase() === preferredRef.toUpperCase());
+      const exactMatch = products.find((p) => p.reference?.toUpperCase() === preferredRef.toUpperCase());
       if (exactMatch) return exactMatch.product_id;
 
       // 2. Se procurávamos outro e existir LINKE-TMS, reutilizar LINKE-TMS
-      const tmsMatch = products.find((p: any) => p.reference?.toUpperCase() === 'LINKE-TMS');
+      const tmsMatch = products.find((p) => p.reference?.toUpperCase() === 'LINKE-TMS');
       if (tmsMatch) return tmsMatch.product_id;
 
       // 3. Fallback estrito apenas se for serviço de transporte/logística real (excluindo LINKE-ONLINE e referências de exemplo EXE.*)
       const transportService = products.find(
-        (p: any) =>
+        (p) =>
           p.reference !== 'LINKE-ONLINE' &&
           !p.reference?.toUpperCase().startsWith('EXE.') &&
           !p.name?.toLowerCase().includes('exemplo') &&
@@ -499,7 +503,7 @@ export class MoloniClient {
       })),
     }));
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       date: data.date,
       expiration_date: data.expirationDate,
       ...(data.paymentDays !== undefined
@@ -549,7 +553,7 @@ export class MoloniClient {
       })),
     }));
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       date: data.date,
       expiration_date: data.expirationDate,
       document_set_id: data.documentSetId,
@@ -561,8 +565,8 @@ export class MoloniClient {
     let result;
     try {
       result = await this.request("invoiceReceipts/insert", payload);
-    } catch (err1: any) {
-      console.warn("Could not insert status 1 invoice, falling back to status 0:", err1?.message);
+    } catch (err1) {
+      console.warn("Could not insert status 1 invoice, falling back to status 0:", errorMessage(err1));
       payload.status = 0;
       result = await this.request("invoices/insert", payload);
     }
@@ -609,7 +613,7 @@ export class MoloniClient {
       })),
     }));
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       date: data.date,
       document_set_id: Number(data.documentSetId) > 0 ? Number(data.documentSetId) : 1, // Fallback safe id if not provided
       customer_id: data.customerId,
@@ -637,13 +641,13 @@ export class MoloniClient {
     let result;
     try {
       result = await this.request("billsOfLading/insert", payload);
-    } catch (err1: any) {
-      console.warn("Could not insert status 1 bill of lading, falling back to status 0:", err1?.message);
+    } catch (err1) {
+      console.warn("Could not insert status 1 bill of lading, falling back to status 0:", errorMessage(err1));
       payload.status = 0;
       try {
         result = await this.request("billsOfLading/insert", payload);
-      } catch (err2: any) {
-        console.warn("Could not insert billsOfLading, trying deliveryNotes:", err2?.message);
+      } catch (err2) {
+        console.warn("Could not insert billsOfLading, trying deliveryNotes:", errorMessage(err2));
         result = await this.request("deliveryNotes/insert", payload);
       }
     }
@@ -687,7 +691,7 @@ export class MoloniClient {
       })),
     }));
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       date: data.date,
       expiration_date: data.expirationDate,
       ...(data.paymentDays !== undefined
@@ -702,12 +706,12 @@ export class MoloniClient {
     let result;
     try {
       result = await this.request("proFormaInvoices/insert", payload);
-    } catch (err1: any) {
-      if (err1?.message?.includes("Invalid endpoint")) {
+    } catch (err1) {
+      if (errorMessage(err1)?.includes("Invalid endpoint")) {
          // Fallback to estimates (Orçamentos) if proFormaInvoices fails
          result = await this.request("estimates/insert", payload);
       } else {
-         console.warn("Could not insert status 1 proforma:", err1?.message);
+         console.warn("Could not insert status 1 proforma:", errorMessage(err1));
          payload.status = 0;
          result = await this.request("proFormaInvoices/insert", payload);
       }
@@ -723,7 +727,7 @@ export class MoloniClient {
     try {
       const result = await this.request("paymentMethods/getAll", {});
       if (Array.isArray(result)) {
-        return result.map((m: any) => ({
+        return result.map((m) => ({
           payment_method_id: Number(m.payment_method_id),
           name: String(m.name || "")
         }));
@@ -782,7 +786,7 @@ export class MoloniClient {
       }
     }
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       date: data.date,
       document_set_id: data.documentSetId,
       customer_id: data.customerId,

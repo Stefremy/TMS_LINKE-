@@ -3,6 +3,7 @@ import { getAuthContext, type AuthContext } from "@/lib/auth/context"
 import { getChatStaffAvatars, getChatStaffMembers } from "@/lib/team-chat-avatars"
 import { getMyProfile } from "@/lib/auth/profile"
 import { createAdminClient } from "@/lib/supabase/server"
+import { validateChatAttachmentReferences } from "@/lib/team-chat-attachments"
 import { CHAT_PAGE_SIZE, ChatError, DEFAULT_CHANNELS, normalizeChannelSlug, type ChatChannel, type ChatInboxItem, type ChatMember, type ChatNotification, type ChatMessage, type ChatPage } from "@/lib/team-chat"
 
 const MESSAGE_FIELDS = "id, sequence, sender_id, recipient_id, sender_name, sender_avatar_url, body, created_at"
@@ -255,6 +256,7 @@ export async function sendTeamChat(
   body: string,
   clientMessageId: string
 ): Promise<ChatMessage> {
+  await validateChatAttachmentReferences(context, body)
   const admin = createAdminClient()
   const sender = await registerChatMember(context)
   if (recipient) {

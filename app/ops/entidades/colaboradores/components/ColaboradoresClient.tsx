@@ -64,9 +64,13 @@ export function ColaboradoresClient({
   const [pageSize, setPageSize] = React.useState(12)
 
   // Sync with prop updates
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], initialColaboradores)) {
+    setObservedInputs1([initialColaboradores])
+
     setColaboradores(initialColaboradores || [])
-  }, [initialColaboradores])
+  
+  }
 
   // Stats
   const stats = React.useMemo(() => {
@@ -139,9 +143,13 @@ export function ColaboradoresClient({
   }, [colaboradores, departmentFilter, statusFilter, accessFilter, searchQuery])
 
   // Reset page when filter changes
-  React.useEffect(() => {
+  const [observedInputs2, setObservedInputs2] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs2 === null || !Object.is(observedInputs2[0], searchQuery) || !Object.is(observedInputs2[1], departmentFilter) || !Object.is(observedInputs2[2], statusFilter) || !Object.is(observedInputs2[3], accessFilter) || !Object.is(observedInputs2[4], pageSize)) {
+    setObservedInputs2([searchQuery, departmentFilter, statusFilter, accessFilter, pageSize])
+
     setCurrentPage(1)
-  }, [searchQuery, departmentFilter, statusFilter, accessFilter, pageSize])
+  
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)

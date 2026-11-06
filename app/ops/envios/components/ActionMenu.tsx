@@ -1,4 +1,7 @@
 "use client"
+import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { 
@@ -27,12 +30,12 @@ import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 
 interface ActionMenuProps {
-  shipment?: any
+  shipment?: ShipmentRecord
   shipmentId?: string
   trackingRef?: string
   isCtt?: boolean
   onOpenDetails?: () => void
-  onUpdateShipment?: (updated: any) => void
+  onUpdateShipment?: (updated: Partial<ShipmentRecord>) => void
   onDeleteShipment?: (id: string) => void
 }
 
@@ -131,8 +134,8 @@ export function ActionMenu({
       if (!result.success) throw new Error(result.error || "Os CTT não aceitaram o envio.")
       onUpdateShipment?.({ ...shipment, status: "pendente", carrier_tracking_number: result.trackingNumber })
       alert(result.dbWarning || "Envio CTT emitido com sucesso!")
-    } catch (err: any) {
-      alert("Erro ao emitir CTT: " + err.message)
+    } catch (err) {
+      alert("Erro ao emitir CTT: " + errorMessage(err))
     } finally {
       setIsEmitting(false)
       setIsOpen(false)
@@ -149,8 +152,8 @@ export function ActionMenu({
           onUpdateShipment({ ...shipment, status: res.latestStatus || shipment?.status })
         }
       }
-    } catch (e: any) {
-      alert("Erro ao sincronizar tracking: " + e.message)
+    } catch (e) {
+      alert("Erro ao sincronizar tracking: " + errorMessage(e))
     } finally {
       setIsProcessing(false)
       setIsOpen(false)
@@ -174,8 +177,8 @@ export function ActionMenu({
       } else {
         alert("Erro ao criar devolução: " + (res.error || "Erro desconhecido"))
       }
-    } catch (e: any) {
-      alert("Erro ao criar devolução: " + e.message)
+    } catch (e) {
+      alert("Erro ao criar devolução: " + errorMessage(e))
     } finally {
       setIsCreatingReturn(false)
       setIsOpen(false)
@@ -207,8 +210,8 @@ export function ActionMenu({
       } else {
         alert("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"))
       }
-    } catch (e: any) {
-      alert("Erro ao eliminar envio: " + e.message)
+    } catch (e) {
+      alert("Erro ao eliminar envio: " + errorMessage(e))
     } finally {
       setIsDeleting(false)
       setIsOpen(false)

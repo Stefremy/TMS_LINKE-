@@ -7,7 +7,7 @@ const crypto=require('node:crypto')
 const XLSX=require('xlsx')
 const {createClient}=require('@supabase/supabase-js')
 const TENANT='11111111-1111-1111-1111-111111111111'
-const SOURCE='public/patches/Listagem de Clientes (3).xls'
+const SOURCE='docs/private-reference/public/patches/Listagem de Clientes (3).xls'
 const OUT='docs/imports/clientes-2026-10-29'
 const str=v=>String(v??'').replace(/\u00a0/g,' ').trim()
 const norm=v=>str(v).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
@@ -82,7 +82,7 @@ function writeManifest(plan){fs.mkdirSync(OUT,{recursive:true});const file=path.
 async function main(){
  const workbook=XLSX.readFile(SOURCE,{cellDates:true})
  const source=XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]],{defval:'',raw:false}).map(row=>({...row,__sourceRow:row.__rowNum__+1}))
- const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}})
+ const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),{auth:{persistSession:false}})
  const current=await loadCurrent(db),plan=planImport(source,current)
  fs.mkdirSync(OUT,{recursive:true});fs.copyFileSync(SOURCE,path.join(OUT,path.basename(SOURCE)));writeManifest(plan)
  const todo=plan.filter(e=>e.status==='A importar')

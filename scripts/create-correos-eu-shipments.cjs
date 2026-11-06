@@ -147,7 +147,7 @@ async function main() {
   if (!isDryRun) {
     supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
+      (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)
     )
     creds = await resolveCorreosCredsFromDb(supabase)
     if (!creds.solicitante || !creds.codRte || !creds.user || !creds.pass) {

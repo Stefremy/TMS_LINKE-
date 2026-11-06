@@ -54,7 +54,7 @@ export default async function ClientesPage() {
                   </td>
                 </tr>
               ) : (
-                clientes.map((cliente: any) => (
+                clientes.map((cliente) => (
                   <tr key={cliente.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">

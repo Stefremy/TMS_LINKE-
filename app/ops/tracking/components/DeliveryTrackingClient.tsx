@@ -67,11 +67,15 @@ export function DeliveryTrackingClient({
   const [statusFilter, setStatusFilter] = useState<"all" | ShipmentStatus>("all")
 
   // Keep selected shipment ID in sync when shipments change
-  useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], allShipments) || !Object.is(observedInputs1[1], selectedShipmentId)) {
+    setObservedInputs1([allShipments, selectedShipmentId])
+
     if (allShipments.length > 0 && (!selectedShipmentId || !allShipments.some(s => s.id === selectedShipmentId))) {
       setSelectedShipmentId(allShipments[0].id)
     }
-  }, [allShipments, selectedShipmentId])
+  
+  }
 
   // Sync search input to URL after typing
   useEffect(() => {

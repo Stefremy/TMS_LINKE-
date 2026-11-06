@@ -259,7 +259,7 @@ export function formatFileSize(bytes: number): string {
 
 export function formatAttachmentMessage(attachments: ChatAttachmentItem[], text?: string): string {
   const tags = attachments
-    .filter(a => a && /^https?:\/\//i.test(a.url))
+    .filter(a => a && /^(https?:\/\/|\/api\/ops\/chat\/attachments\?)[^|\s\]]+$/i.test(a.url))
     .map(a => {
       const safeName = (a.name || "ficheiro").replace(/[|\][\r\n]+/g, "_").trim().slice(0, 140) || "ficheiro"
       const safeType = (a.type || "application/octet-stream").replace(/[|\][\r\n]+/g, "").trim().slice(0, 80) || "application/octet-stream"
@@ -278,7 +278,7 @@ export function parseAttachmentMessage(body: string): {
 } {
   let remaining = body.trim()
   const attachments: ChatAttachmentItem[] = []
-  const fileTagRegex = /^\[file:(https?:\/\/[^|\s\]]+)\|([^|\]]+)\|([^|\]]+)\|(\d+)\]\s*/i
+  const fileTagRegex = /^\[file:((?:https?:\/\/|\/api\/ops\/chat\/attachments\?)[^|\s\]]+)\|([^|\]]+)\|([^|\]]+)\|(\d+)\]\s*/i
 
   let index = 0
   while (remaining.startsWith("[file:")) {
@@ -286,7 +286,7 @@ export function parseAttachmentMessage(body: string): {
     if (!match) break
     attachments.push({
       id: `att-${index++}-${match[4]}`,
-      url: match[1],
+      url: privateAttachmentUrl(match[1]),
       name: match[2].trim(),
       type: match[3].trim(),
       size: Number(match[4]) || 0,
@@ -299,5 +299,17 @@ export function parseAttachmentMessage(body: string): {
     attachments,
     text: remaining.trim(),
   }
+}
+
+/** Old stored messages keep working after the bucket becomes private. */
+function privateAttachmentUrl(reference: string): string {
+  try {
+    const url = new URL(reference)
+    const prefix = "/storage/v1/object/public/team-chat-attachments/"
+    if (url.origin === new URL(process.env.NEXT_PUBLIC_SUPABASE_URL!).origin && url.pathname.startsWith(prefix)) {
+      return `/api/ops/chat/attachments?path=${encodeURIComponent(decodeURIComponent(url.pathname.slice(prefix.length)))}`
+    }
+  } catch { /* Protected relative URLs and unrelated external attachments stay unchanged. */ }
+  return reference
 }
 

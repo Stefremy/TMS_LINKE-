@@ -1,25 +1,21 @@
 "use client"
+type EmailTemplate = { id: string; name: string; subject: string; html_content: string; description?: string; trigger_event?: string }
 
 import * as React from "react"
 import { Mail, X, Save, Edit3, Loader2 } from "lucide-react"
 import { getEmailTemplates, updateEmailTemplate } from "@/app/actions/templates"
 
 export function TemplatesClient() {
-  const [templates, setTemplates] = React.useState<any[]>([])
+  const [templates, setTemplates] = React.useState<EmailTemplate[]>([])
   const [loading, setLoading] = React.useState(true)
   
-  const [previewTemplate, setPreviewTemplate] = React.useState<any | null>(null)
-  const [editTemplate, setEditTemplate] = React.useState<any | null>(null)
+  const [previewTemplate, setPreviewTemplate] = React.useState<EmailTemplate | null>(null)
+  const [editTemplate, setEditTemplate] = React.useState<EmailTemplate | null>(null)
   
   const [editContent, setEditContent] = React.useState("")
   const [isSaving, setIsSaving] = React.useState(false)
 
-  React.useEffect(() => {
-    loadTemplates()
-  }, [])
-
-  async function loadTemplates() {
-    setLoading(true)
+async function loadTemplates() {
     try {
       const data = await getEmailTemplates()
       setTemplates(data || [])
@@ -27,6 +23,12 @@ export function TemplatesClient() {
       setLoading(false)
     }
   }
+
+  React.useEffect(() => {
+    loadTemplates()
+  }, [])
+
+  
 
   async function handleSave() {
     if (!editTemplate) return
@@ -163,7 +165,7 @@ export function TemplatesClient() {
   )
 }
 
-function TemplateRow({ template, onPreview, onEdit }: { template: any, onPreview: () => void, onEdit: () => void }) {
+function TemplateRow({ template, onPreview, onEdit }: { template: EmailTemplate, onPreview: () => void, onEdit: () => void }) {
   const isError = template.id === "incident"
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md hover:border-[var(--border-strong)] transition-colors group">

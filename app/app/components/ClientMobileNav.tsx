@@ -32,9 +32,13 @@ export function ClientMobileNav() {
   const { client, basePath, isEmployee } = useClientScope()
 
   // Close drawer on route change
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], pathname)) {
+    setObservedInputs1([pathname])
+
     setIsOpen(false)
-  }, [pathname])
+  
+  }
 
   const closeMobileMenu = React.useCallback(() => setIsOpen(false), [])
 

@@ -29,7 +29,7 @@ export function MessagesComposer({
   const [error, setError] = useState('')
   const [sent, setSent] = useState('')
   const [history, setHistory] = useState<ClientMessage[]>([])
-  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(Boolean(client))
   const request = useRef<string | null>(null)
 
   function edited() {
@@ -40,26 +40,31 @@ export function MessagesComposer({
 
   const loadHistory = useCallback(async (targetClientId: string, signal?: AbortSignal) => {
     if (!targetClientId) {
-      setHistory([])
       return
     }
-    setLoadingHistory(true)
-    try {
-      const response = await fetch(`/api/client-messages?clientId=${encodeURIComponent(targetClientId)}`, {
+    
+return fetch(`/api/client-messages?clientId=${encodeURIComponent(targetClientId)}`, {
         cache: 'no-store',
         signal,
-      })
-      if (!response.ok) return
-      const data: MessagePage = await response.json()
-      if (!signal?.aborted) {
+      }).then(async (response) => {
+if (!response.ok) return
+const data: MessagePage = await response.json()
+if (!signal?.aborted) {
         setHistory(data.messages || [])
       }
-    } catch {
+}).catch((error) => {
       // Keep composer usable even if history fetch is interrupted.
-    } finally {
+    }).finally(() => {
       if (!signal?.aborted) setLoadingHistory(false)
-    }
+    })
   }, [])
+
+  const [historyClient, setHistoryClient] = useState(client)
+  if (historyClient !== client) {
+    setHistoryClient(client)
+    setLoadingHistory(Boolean(client))
+    if (!client) setHistory([])
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -93,6 +98,7 @@ export function MessagesComposer({
       setTitle('')
       setBody('')
       request.current = null
+      setLoadingHistory(true)
       await loadHistory(client)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível enviar o aviso.')

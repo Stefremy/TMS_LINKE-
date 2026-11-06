@@ -1,4 +1,10 @@
 "use client"
+import type { Cliente } from "@/app/ops/entidades/clientes/types"
+import type { ShipmentRecord } from "@/lib/services/shipments/types"
+import type { BillingStatement } from "@/lib/billing/types"
+import type { getMoloniConfigAction } from "@/app/actions/moloni"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import {CreditNoteButton} from "../notas-credito/components/CreditNoteButton"
@@ -24,13 +30,13 @@ export default function ContasCorrenteClient({
   planningPanel,
   moloniConfig
 }: { 
-  clients: any[]
-  shipments: any[]
-  statements?: any[]
+  clients: Cliente[]
+  shipments: ShipmentRecord[]
+  statements?: BillingStatement[]
   periodStatements?: PeriodStatement[]
   initialSelection?: BillingViewSelection
   planningPanel?: React.ReactNode
-  moloniConfig?: any
+  moloniConfig?: Awaited<ReturnType<typeof getMoloniConfigAction>>
 }) {
   const router = useRouter()
 
@@ -65,13 +71,13 @@ export default function ContasCorrenteClient({
   const [startDate, setStartDate] = React.useState<string>(initialSelection?.startDate || "")
   const [endDate, setEndDate] = React.useState<string>(initialSelection?.endDate || "")
   const [periodClientFilter, setPeriodClientFilter] = React.useState<string | null>(null)
-  const [periodShipments, setPeriodShipments] = React.useState<any[] | null>(null)
+  const [periodShipments, setPeriodShipments] = React.useState<ShipmentRecord[] | null>(null)
   const [isLoading, setIsLoading] = React.useState<boolean>(false)
   const [isIssuingInvoice, setIsIssuingInvoice] = React.useState(false)
   const invoiceInFlight = React.useRef(false)
 
   // Modal emissão de recibo
-  const [receiptModalStmt, setReceiptModalStmt] = React.useState<any | null>(null)
+  const [receiptModalStmt, setReceiptModalStmt] = React.useState<BillingStatement | null>(null)
   const [receiptDate, setReceiptDate] = React.useState<string>(new Date().toISOString().split('T')[0])
   const [receiptPaymentMethod, setReceiptPaymentMethod] = React.useState<number>(3320318)
   const [receiptNotes, setReceiptNotes] = React.useState<string>("")
@@ -89,7 +95,7 @@ export default function ContasCorrenteClient({
   const groupInvoicesByService = initialSelection?.grouping !== "detailed"
 
   // Modal de envio de fatura por email
-  const [emailModalStmt, setEmailModalStmt] = React.useState<any | null>(null)
+  const [emailModalStmt, setEmailModalStmt] = React.useState<Pick<BillingStatement, "statement_number" | "total_value"> & Partial<BillingStatement> | null>(null)
   const [emailRecipient, setEmailRecipient] = React.useState<string>("")
   const [emailIncludeMoloni, setEmailIncludeMoloni] = React.useState<boolean>(true)
   const [emailIncludeStatement, setEmailIncludeStatement] = React.useState<boolean>(true)
@@ -97,10 +103,10 @@ export default function ContasCorrenteClient({
   const [isSendingEmail, setIsSendingEmail] = React.useState<boolean>(false)
   const [emailFeedback, setEmailFeedback] = React.useState<{ type: "success" | "error"; message: string } | null>(null)
 
-  const handleOpenEmailModal = (stmt: any) => {
+  const handleOpenEmailModal = (stmt: Pick<BillingStatement, "statement_number" | "total_value"> & Partial<BillingStatement>) => {
     setOpenActionMenuId(null)
     setEmailModalStmt(stmt)
-    const client = clients.find((c: any) => c.id === stmt.client_id || (c.legal_name || c.short_name) === stmt.client_name)
+    const client = clients.find((c) => c.id === stmt.client_id || (c.legal_name || c.short_name) === stmt.client_name)
     setEmailRecipient(client?.billing_email || client?.email || "")
     setEmailIncludeMoloni(Boolean(stmt.moloni_document_pdf || stmt.moloni_document_id))
     setEmailIncludeStatement(true)
@@ -133,7 +139,7 @@ export default function ContasCorrenteClient({
     try {
       const { sendStatementInvoiceEmailAction } = await import("@/app/actions/moloni")
       const res = await sendStatementInvoiceEmailAction({
-        statementIdOrNumber: emailModalStmt.statement_number || emailModalStmt.id,
+        statementIdOrNumber: emailModalStmt.statement_number || emailModalStmt.id || "",
         recipientEmail: emailRecipient,
         includeMoloniPdf: emailIncludeMoloni,
         includeStatementPdf: emailIncludeStatement,
@@ -148,8 +154,8 @@ export default function ContasCorrenteClient({
       } else {
         setEmailFeedback({ type: "error", message: res.error || "Não foi possível enviar o email." })
       }
-    } catch (err: any) {
-      setEmailFeedback({ type: "error", message: err.message || "Erro inesperado ao enviar email." })
+    } catch (err) {
+      setEmailFeedback({ type: "error", message: errorMessage(err) || "Erro inesperado ao enviar email." })
     } finally {
       invoiceEmailInFlight.current = false
       setIsSendingEmail(false)
@@ -171,9 +177,9 @@ export default function ContasCorrenteClient({
   const invoicedIds = React.useMemo(() => new Set<string>(statements.filter(s => (s.moloni_document_id || s.moloni_document_pdf) && !s.is_pro_forma).flatMap(s => s.shipment_ids || [])), [statements])
   const archiveDocumentCount = archiveGroups.reduce((count, group) => count + group.statements.length, 0)
   const hasArchiveDocuments = periodStatements.length > 0 || statements.some(stmt => !stmt.is_pro_forma && (stmt.moloni_document_id || stmt.moloni_document_pdf || isInvoicePaid(stmt)))
-  const unpaidStatements = React.useMemo(() => statements?.filter((s: any) => Number(s.outstanding_value ?? s.total_value ?? 0) > 0 && s.status !== 'paid' && !s.moloni_receipt_pdf && !s.moloni_receipt_id && !s.is_pro_forma && Boolean(s.moloni_document_id)) || [], [statements])
+  const unpaidStatements = React.useMemo(() => statements?.filter((s) => Number(s.outstanding_value ?? s.total_value ?? 0) > 0 && s.status !== 'paid' && !s.moloni_receipt_pdf && !s.moloni_receipt_id && !s.is_pro_forma && Boolean(s.moloni_document_id)) || [], [statements])
 
-  const handleEmitReceipt = async (stmt: any) => {
+  const handleEmitReceipt = async (stmt: BillingStatement) => {
     if (Number(stmt.credited_total || 0) > 0) {
       try {
         const {previewCreditAdjustedReceiptAction} = await import('@/app/actions/credit-notes')
@@ -201,7 +207,7 @@ export default function ContasCorrenteClient({
       getMoloniPaymentMethodsAction().then(res => {
         if (res.success && res.methods && res.methods.length > 0) {
           setAvailablePaymentMethods(res.methods)
-          const m = res.methods.find((x: any) => /transfer[eê]ncia/i.test(x.name))
+          const m = res.methods.find((x) => /transfer[eê]ncia/i.test(x.name))
           if (m) {
             setReceiptPaymentMethod(m.payment_method_id)
           }
@@ -240,8 +246,8 @@ export default function ContasCorrenteClient({
       } else {
         alert(`Erro ao emitir recibo: ${res.error}`)
       }
-    } catch (err: any) {
-      alert(`Erro ao emitir recibo: ${err?.message || err}`)
+    } catch (err) {
+      alert(`Erro ao emitir recibo: ${errorMessage(err) || err}`)
     } finally {
       setIsLoading(false)
     }
@@ -250,11 +256,11 @@ export default function ContasCorrenteClient({
   // Filtrar e agrupar
   const clientDataMap = React.useMemo(() => {
     const map = new Map<string, {
-      client: any
-      shipments: any[]
+      client: Cliente
+      shipments: ShipmentRecord[]
       activeCount: number
       totalValue: number
-      clientUnpaid: any[]
+      clientUnpaid: BillingStatement[]
       unpaidTotal: number
     }>()
     
@@ -262,7 +268,7 @@ export default function ContasCorrenteClient({
     clients.forEach(c => {
       if (periodClientFilter && c.id !== periodClientFilter) return
       const clientUnpaid = unpaidByStore.get(`store:${c.id}`) || []
-      const unpaidTotal = clientUnpaid.reduce((acc: number, s: any) => acc + Number(s.outstanding_value ?? s.total_value ?? 0), 0)
+      const unpaidTotal = clientUnpaid.reduce((acc: number, s) => acc + Number(s.outstanding_value ?? s.total_value ?? 0), 0)
 
       map.set(c.id, { 
         client: c, 
@@ -569,7 +575,7 @@ export default function ContasCorrenteClient({
                           </p>
                         </div>
                         <div className="divide-y divide-[var(--border-subtle)] max-h-80 overflow-y-auto">
-                          {shipments.map((s: any) => {
+                          {shipments.map((s) => {
                             const isExcluded = excludedShipmentIds.has(s.id)
                             return (
                               <div 
@@ -777,11 +783,11 @@ export default function ContasCorrenteClient({
                           <span className="text-[10px] text-[var(--text-tertiary)]">Mais recentes primeiro</span>
                         </div>
                         <div className="divide-y divide-[var(--border-subtle)]">
-                        {group.statements.map((stmt: any) => stmt.document_type === 'period_statement' ? (
+                        {group.statements.map((stmt) => stmt.document_type === 'period_statement' ? (
                           <PeriodStatementCard key={stmt.id} statement={stmt} invoicedIds={invoicedIds} onSelect={async period => {
                             const { getPeriodShipmentsForBillingAction } = await import('@/app/actions/recurring-statements')
                             const selected = await getPeriodShipmentsForBillingAction(period.id)
-                            setPeriodShipments(selected); setPeriodClientFilter(period.client_id)
+                            setPeriodShipments(selected as unknown as ShipmentRecord[]); setPeriodClientFilter(period.client_id)
                             setStartDate(period.period_start); setEndDate(addCalendarDays(period.period_end, -1))
                             setExcludedShipmentIds(new Set())
                             document.getElementById('billing-pending')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -893,7 +899,7 @@ export default function ContasCorrenteClient({
                                                 setIssuedStatement({
                                                   statementNumber: stmt.statement_number,
                                                   url: `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/pdf`,
-                                                  clientName: stmt.client_name,
+                                                  clientName: stmt.client_name || "",
                                                   totalValue: Number(stmt.total_value || 0),
                                                   moloniPdf: dlUrl
                                                 })
@@ -1084,13 +1090,13 @@ export default function ContasCorrenteClient({
                 <button
                   type="button"
                   onClick={() => {
-                    const stmt = statements.find((s: any) => s.statement_number === issuedStatement.statementNumber || s.id === issuedStatement.statementNumber) || {
+                    const stmt = statements.find((s) => s.statement_number === issuedStatement.statementNumber || s.id === issuedStatement.statementNumber) || {
                       statement_number: issuedStatement.statementNumber,
                       client_name: issuedStatement.clientName,
                       total_value: issuedStatement.totalValue,
                       moloni_document_number: issuedStatement.moloniDocumentNumber,
                       moloni_document_pdf: issuedStatement.moloniPdf,
-                      client_id: clients.find((c: any) => (c.legal_name || c.short_name) === issuedStatement.clientName)?.id
+                      client_id: clients.find((c) => (c.legal_name || c.short_name) === issuedStatement.clientName)?.id
                     }
                     setIssuedStatement(null)
                     handleOpenEmailModal(stmt)

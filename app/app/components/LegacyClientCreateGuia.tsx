@@ -1,4 +1,7 @@
 "use client"
+import type { Destinatario } from "@/app/ops/entidades/destinatarios/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import { isCttSpecialServiceAvailable } from "@/lib/services/ctt/special-service-availability"
 import { ShipmentOversizeSummary } from "@/components/shipments/ShipmentOversizeSummary"
@@ -75,7 +78,7 @@ export function LegacyClientCreateGuia() {
   const { recipients: savedRecipients, loading: loadingAgenda, error: agendaError } =
     useRecipientAgenda(currentClient.id, showAgendaDropdown)
 
-  const handleSelectRecipient = (r: any) => {
+  const handleSelectRecipient = (r: Destinatario) => {
     const country = (r.country || "PT").trim().toUpperCase()
     if (!destinationCountries.some(option => option.code === country)) {
       setSubmitError("O país deste destinatário não tem serviços autorizados disponíveis para este cliente.")
@@ -191,14 +194,21 @@ export function LegacyClientCreateGuia() {
     return active
   }, [servicosLinke, currentClient])
 
-  const destinationCountries = React.useMemo(() => getAuthorizedDestinationCountries(availableServicos), [availableServicos])
-  React.useEffect(() => {
+  const destinationCountries = getAuthorizedDestinationCountries(availableServicos)
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], loadingClient) || !Object.is(observedInputs1[1], recipientCountry) || !Object.is(observedInputs1[2], JSON.stringify(destinationCountries)) || !Object.is(observedInputs1[3], postalLookup.reset)) {
+    setObservedInputs1([loadingClient, recipientCountry, JSON.stringify(destinationCountries), postalLookup.reset])
+    ;(() => {
+
     if (loadingClient || !recipientCountry || destinationCountries.some(country => country.code === recipientCountry)) return
     setRecipientCountry("")
     setRecipientPostal("")
     setRecipientCity("")
     postalLookup.reset()
-  }, [loadingClient, recipientCountry, destinationCountries, postalLookup.reset])
+  
+  
+    })()
+  }
   const destinationReady = isDestinationPostalReady(recipientCountry, recipientPostal)
   const isIslandDestination = isPortugueseIslandDestination(recipientCountry, recipientPostal)
   const destinationServices = React.useMemo(() => getDestinationServiceOptions(availableServicos, recipientCountry, recipientPostal), [availableServicos, recipientCountry, recipientPostal])
@@ -214,14 +224,25 @@ export function LegacyClientCreateGuia() {
   const activeLinkeService = compatibleServices.find(service => service.id === selectedServiceId)
     || (compatibleServices.length === 1 ? compatibleServices[0] : undefined)
 
-  React.useEffect(() => {
+  const [observedInputs2, setObservedInputs2] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs2 === null || !Object.is(observedInputs2[0], isIslandDestination) || !Object.is(observedInputs2[1], islandTransportChoice) || !Object.is(observedInputs2[2], islandModes)) {
+    setObservedInputs2([isIslandDestination, islandTransportChoice, islandModes])
+
     if (!isIslandDestination) setIslandTransportChoice("")
     else if (islandTransportChoice && !islandModes.includes(islandTransportChoice)) setIslandTransportChoice("")
-  }, [isIslandDestination, islandTransportChoice, islandModes])
-  React.useEffect(() => {
+  
+  }
+  const [observedInputs3, setObservedInputs3] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs3 === null || !Object.is(observedInputs3[0], compatibleServices) || !Object.is(observedInputs3[1], selectedServiceId)) {
+    setObservedInputs3([compatibleServices, selectedServiceId])
+    ;(() => {
+
     if (compatibleServices.some(service => service.id === selectedServiceId)) return
     setSelectedServiceId(compatibleServices.length === 1 ? compatibleServices[0].id : "")
-  }, [compatibleServices, selectedServiceId])
+  
+  
+    })()
+  }
   const parcelWeightsKg = React.useMemo(() => {
     const count = Number(volumesCount)
     const limit = getParcelLimits(activeLinkeService ?? {}, recipientCountry)?.maxWeightKg ?? Infinity
@@ -247,7 +268,7 @@ export function LegacyClientCreateGuia() {
       code.startsWith("correos_") === isCorreosService && isCttSpecialServiceAvailable(code, recipientCountry, recipientPostal))), [selectedSpecialServices, specialFeesList, isCorreosService, recipientCountry, recipientPostal])
 
   // Compute live simulated price using exact Linke Table tiers & client special services
-  const calculatedPrice = React.useMemo(() => {
+  const calculatedPrice = (() => {
     const destinationZone = activeLinkeService ? getServiceDestinationZone(activeLinkeService, recipientCountry, recipientPostal) : ""
     try {
       if (!destinationCountries.length) throw new Error("Este cliente não tem países de destino com tarifas configuradas.")
@@ -275,7 +296,7 @@ export function LegacyClientCreateGuia() {
         blockedReason: error instanceof Error ? error.message : "Não foi possível calcular a tarifa.",
       }
     }
-  }, [currentClient, activeLinkeService, destinationCountries, weight, recipientCountry, recipientPostal, activeSpecialServices, codAmount, lengthCm, widthCm, heightCm, volumesCount, parcelWeightsKg, destinationReady, isIslandDestination, islandModes, selectedIslandMode, destinationServices])
+  })()
 
   const handleCreateShipment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -361,7 +382,7 @@ export function LegacyClientCreateGuia() {
       setSessionShipments((prev) => [newShipment, ...prev])
       setGeneratedGuia(newCode)
       setGeneratedLabelBase64(res.labelBase64 || null)
-      setDbWarning((res as any).dbWarning || null)
+      setDbWarning((res).dbWarning || null)
 
       // Auto-download da etiqueta assim que o envio é criado
       if (res.labelBase64) {
@@ -406,8 +427,8 @@ export function LegacyClientCreateGuia() {
       setRecipientEmail("")
       setVolumesCount("1")
       setParcelWeights([])
-    } catch (err: any) {
-      const msg: string = err?.message || "Erro desconhecido."
+    } catch (err) {
+      const msg: string = errorMessage(err) || "Erro desconhecido."
       setSubmitError(msg)
       focusCttCustomsFields(submittedForm, msg)
       // Highlight the likely offending field

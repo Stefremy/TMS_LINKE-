@@ -1,4 +1,5 @@
 "use client"
+import type * as Leaflet from "leaflet"
 
 import React, { useEffect, useRef } from "react"
 import { DestinationItem } from "./InteractiveEuropeHeatmap"
@@ -19,8 +20,8 @@ export function InteractiveLeafletHeatmap({
   setHoveredCode
 }: InteractiveLeafletHeatmapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const layerGroupRef = useRef<any>(null)
+  const mapInstanceRef = useRef<Leaflet.Map | null>(null)
+  const layerGroupRef = useRef<Leaflet.LayerGroup | null>(null)
 
   useEffect(() => {
     if (!mapContainerRef.current) return
@@ -48,7 +49,7 @@ export function InteractiveLeafletHeatmap({
       }
 
       const map = mapInstanceRef.current
-      const layerGroup = layerGroupRef.current
+      const layerGroup = layerGroupRef.current!
       layerGroup.clearLayers()
 
       const portoCoords: [number, number] = [41.1579, -8.6291]

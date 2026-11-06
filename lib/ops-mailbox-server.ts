@@ -1,8 +1,9 @@
 import "server-only"
+import { createHash } from "node:crypto"
 import { getAuthContext, type AuthContext } from "@/lib/auth/context"
 import { getAllowedMailAccounts } from "@/lib/auth/permissions"
 import { createAdminClient } from "@/lib/supabase/server"
-import { sendEmail } from "@/lib/email/resend"
+import { sendEmail, getReceivedEmailContent } from "@/lib/email/resend"
 import {
   buildMailSnippet,
   formatEmailHtmlTemplate,
@@ -421,7 +422,10 @@ export async function mutateMailMessages(
 }
 
 export async function recordInboundEmailWebhook(payload: Record<string, unknown>): Promise<MailMessage | null> {
+  if (payload.type !== "email.received") return null
   const data = (payload.data && typeof payload.data === "object" ? payload.data : payload) as Record<string, unknown>
+  const emailId = typeof data.email_id === "string" ? data.email_id.trim() : ""
+  if (!emailId || !/^[a-zA-Z0-9_-]{1,200}$/.test(emailId)) throw new MailError("Identificador de email inválido.", 400)
   const fromRaw = typeof data.from === "string" ? data.from : ""
   if (!fromRaw) return null
 
@@ -429,20 +433,38 @@ export async function recordInboundEmailWebhook(payload: Record<string, unknown>
   const fromName = matchAngle ? matchAngle[1].replace(/^["']|["']$/g, "").trim() || matchAngle[2] : fromRaw.split("@")[0]
   const fromEmail = matchAngle ? matchAngle[2].trim() : fromRaw.trim()
 
-  const toList = Array.isArray(data.to) ? data.to.map(String) : typeof data.to === "string" ? [data.to] : ["geral@linke.pt"]
-  const primaryTo = toList[0] || "geral@linke.pt"
+  const toList = Array.isArray(data.to) ? data.to.map(String) : typeof data.to === "string" ? [data.to] : []
+  const primaryTo = toList.map(value => value.match(/<([^>]+)>/)?.[1] || value)
+    .find(value => MAIL_ACCOUNTS.some(account => account.id === value.trim().toLowerCase()))
+  if (!primaryTo) return null
   const account = normalizeMailAccount(primaryTo)
+
+  const tenantId = process.env.RESEND_INBOUND_TENANT_ID || "11111111-1111-1111-1111-111111111111"
+  const id = `inbound-${emailId}`
+  const admin = createAdminClient()
+  const findExisting = async () => {
+    const { data: existing, error } = await admin.from("audit_log").select("details")
+      .eq("tenant_id", tenantId).eq("action", ACTION_MESSAGE).eq("details->>id", id)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle()
+    if (error) throw new MailError("Não foi possível verificar o email recebido.", 503)
+    return existing?.details as MailMessage | undefined
+  }
+  const existing = await findExisting()
+  if (existing) return existing
+
+  // Do not acknowledge the delivery until its content and database write succeed.
+  const content = (typeof data.text === "string" || typeof data.html === "string")
+    ? { text: data.text, html: data.html } : await getReceivedEmailContent(emailId)
 
   const subject = typeof data.subject === "string" && data.subject.trim() ? data.subject.trim() : "(Sem assunto)"
   const bodyText =
-    typeof data.text === "string" && data.text.trim()
-      ? data.text.trim()
-      : typeof data.html === "string"
-      ? data.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+    typeof content.text === "string" && content.text.trim()
+      ? content.text.trim()
+      : typeof content.html === "string"
+      ? content.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
       : ""
 
-  const now = typeof data.created_at === "string" ? data.created_at : new Date().toISOString()
-  const id = typeof data.email_id === "string" ? `inbound-${data.email_id}` : `inbound-${crypto.randomUUID()}`
+  const now = typeof payload.created_at === "string" ? payload.created_at : typeof data.created_at === "string" ? data.created_at : new Date().toISOString()
 
   const message: MailMessage = {
     id,
@@ -456,7 +478,7 @@ export async function recordInboundEmailWebhook(payload: Record<string, unknown>
     subject,
     snippet: buildMailSnippet(bodyText || subject),
     bodyText: bodyText || subject,
-    bodyHtml: typeof data.html === "string" ? data.html : undefined,
+    bodyHtml: typeof content.html === "string" ? content.html : undefined,
     read: false,
     starred: false,
     labels: ["clientes"],
@@ -466,13 +488,21 @@ export async function recordInboundEmailWebhook(payload: Record<string, unknown>
     deliveryStatus: "received",
   }
 
-  const admin = createAdminClient()
-  await admin.from("audit_log").insert({
-    tenant_id: "11111111-1111-1111-1111-111111111111",
+  // The primary key makes concurrent retries atomic without a new migration.
+  const hash = createHash("sha256").update(`resend-inbound:${tenantId}:${emailId}`).digest("hex")
+  const rowId = `${hash.slice(0,8)}-${hash.slice(8,12)}-5${hash.slice(13,16)}-a${hash.slice(17,20)}-${hash.slice(20,32)}`
+  const { error } = await admin.from("audit_log").insert({
+    id: rowId,
+    tenant_id: tenantId,
     user_id: null,
     action: ACTION_MESSAGE,
     details: message,
   })
+  if (error?.code === "23505") {
+    const saved = await findExisting()
+    if (saved) return saved
+  }
+  if (error) throw new MailError("Não foi possível guardar o email recebido.", 503)
 
   return message
 }

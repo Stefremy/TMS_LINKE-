@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { requireEmployee, getTenantId } from "@/lib/auth/context"
@@ -50,9 +52,9 @@ export async function deleteShipment(shipmentId: string) {
     revalidatePath("/app", "layout")
 
     return { success: true }
-  } catch (err: any) {
+  } catch (err) {
     console.error("Erro ao eliminar envio:", err)
-    return { success: false, error: err?.message || "Erro desconhecido ao eliminar envio" }
+    return { success: false, error: errorMessage(err) || "Erro desconhecido ao eliminar envio" }
   }
 }
 
@@ -71,7 +73,7 @@ export async function deleteShipmentsBulk(shipmentIds: string[]) {
 
     if (!shipments) return { success: false, error: "Envios não encontrados" }
 
-    const billedShipments = shipments.filter((s: any) => Boolean(s.billing_statement_id))
+    const billedShipments = shipments.filter((s) => Boolean(s.billing_statement_id))
     if (billedShipments.length > 0) {
       return { 
         success: false, 
@@ -80,8 +82,8 @@ export async function deleteShipmentsBulk(shipmentIds: string[]) {
     }
     
     const validIds = shipments
-      .filter((s: any) => (s.status === "pendente" || s.status === "cancelado") && !s.billing_statement_id)
-      .map((s: any) => s.id)
+      .filter((s) => (s.status === "pendente" || s.status === "cancelado") && !s.billing_statement_id)
+      .map((s) => s.id)
 
     if (validIds.length === 0) {
       return { success: false, error: "Nenhum dos envios selecionados pode ser eliminado (apenas pendentes e não faturados)." }
@@ -112,8 +114,8 @@ export async function deleteShipmentsBulk(shipmentIds: string[]) {
     revalidatePath("/app", "layout")
 
     return { success: true, count: validIds.length }
-  } catch (err: any) {
+  } catch (err) {
     console.error("Erro ao eliminar envios em massa:", err)
-    return { success: false, error: err?.message || "Erro desconhecido ao eliminar envios" }
+    return { success: false, error: errorMessage(err) || "Erro desconhecido ao eliminar envios" }
   }
 }

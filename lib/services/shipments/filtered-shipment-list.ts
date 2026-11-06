@@ -1,3 +1,4 @@
+import type { ShipmentRecord } from "./types"
 import { createAdminClient } from "@/lib/supabase/server"
 import { requireUser } from "@/lib/auth/context"
 import { SHIPMENT_LIST_COLUMNS } from "./shipment-fetcher"
@@ -6,7 +7,7 @@ import { loadShipmentPickupDates } from "./shipment-pickup-dates"
 import { loadShipmentParcelSummaries } from "./shipment-parcel-summaries"
 import { buildShipmentFilterFacets, EMPTY_SHIPMENT_FILTERS, matchesShipmentListFilters, shipmentFiltersError, type FilterableShipment, type ShipmentListFilters } from "./shipment-list-filters"
 
-type ListRow = FilterableShipment & { id: string; tenant_id: string; client_id?: string; carrier_object_id?: string }
+type ListRow = ShipmentRecord & { tenant_id: string }
 type Metadata = Pick<FilterableShipment, "recipient_country" | "recipient_postal" | "is_return" | "isReturn" | "driver_id" | "driver_name">
 type MetadataRow = Metadata & { shipment_id?: string; details?: Metadata & { id?: string } }
 const METADATA_COLUMNS = "shipment_id:details->>id,recipient_country:details->>recipient_country,recipient_postal:details->>recipient_postal,is_return:details->is_return,isReturn:details->isReturn,driver_id:details->>driver_id,driver_name:details->>driver_name"

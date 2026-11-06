@@ -36,7 +36,7 @@ export interface ShipmentResult {
   labelBase64?: string
   labelFormat?: 'pdf' | 'zpl' | 'png'
   error?: string
-  rawResponse?: any
+  rawResponse?: unknown
 }
 
 export interface TrackingEvent {
@@ -46,7 +46,7 @@ export interface TrackingEvent {
   location?: string
   isFinal?: boolean
   code?: string
-  rawEvent?: any
+  rawEvent?: unknown
 }
 
 export interface TrackingResult {
@@ -79,7 +79,7 @@ export interface CarrierProvider {
   /**
    * Initializes the provider with tenant-specific configuration
    */
-  initialize(config: any): Promise<void>
+  initialize(config: unknown): Promise<void>
 
   /**
    * Creates a new shipment with the carrier
@@ -110,4 +110,21 @@ export interface CarrierProvider {
    * Validates if a shipment is possible (e.g. routing check)
    */
   validateShipment?(input: ShipmentInput): Promise<{ isValid: boolean; error?: string }>
+}
+
+/** Stored carrier connection fields used by configuration screens. */
+export interface CarrierConnection {
+  id: string
+  carrier_code: string
+  description: string
+  client_id: string
+  client_number?: string
+  contract_number: string
+  auth_id: string
+  user_id?: string | null
+  environment: "qa" | "test" | "production"
+  default_subproduct?: string
+  supplier_id?: string
+  is_active: boolean
+  created_at?: string
 }

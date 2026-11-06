@@ -30,7 +30,7 @@ export interface NormalizedTrackingEvent {
   isIncidencia: boolean
   carrierCode: "correos" | "ctt"
   measurements?: CarrierMeasurements
-  rawEvent?: any
+  rawEvent?: unknown
 }
 
 export interface TrackingSyncResult {

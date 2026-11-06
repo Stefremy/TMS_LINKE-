@@ -1,4 +1,6 @@
 "use server"
+import { errorMessage } from "@/lib/errors"
+
 
 import { validateClientTierOrder } from "@/lib/pricing/tier-display-order"
 import { validateClientWeightTiers } from "@/lib/pricing/client-weight-tiers"
@@ -429,7 +431,7 @@ export async function toggleClienteStatusAction(id: string, is_active: boolean) 
       .select("details")
       .eq("action", "client_data")
     
-    const target = logs?.find((l: any) => l.details?.id === id)
+    const target = logs?.find((l) => l.details?.id === id)
     if (target?.details?.code === "CL001") {
       return { success: false, error: "A conta CL001 (Conta GO Linke) é protegida e não pode ser desativada." }
     }
@@ -481,7 +483,7 @@ export async function deleteClienteAction(id: string) {
       .select("details")
       .eq("action", "client_data")
     
-    const target = logs?.find((l: any) => l.details?.id === id)
+    const target = logs?.find((l) => l.details?.id === id)
     if (target?.details?.code === "CL001") {
       return { success: false, error: "A conta CL001 (Conta GO Linke) é protegida e não pode ser eliminada." }
     }
@@ -490,8 +492,8 @@ export async function deleteClienteAction(id: string) {
   // 1. Apagar da tabela clients
   try {
     await supabase.from("clients").delete().eq("id", id)
-  } catch (err: any) {
-    console.warn("Error deleting client from clients table:", err?.message)
+  } catch (err) {
+    console.warn("Error deleting client from clients table:", errorMessage(err))
   }
 
   // 2. Apagar dados do audit_log
@@ -508,8 +510,8 @@ export async function deleteClienteAction(id: string) {
         }
       }
     }
-  } catch (err: any) {
-    console.warn("Error deleting client_data from audit_log:", err?.message)
+  } catch (err) {
+    console.warn("Error deleting client_data from audit_log:", errorMessage(err))
   }
 
   // 3. Registar tombstone para nunca ressurgir de defaults
@@ -519,8 +521,8 @@ export async function deleteClienteAction(id: string) {
       action: "deleted_client",
       details: { id, deleted_at: new Date().toISOString() },
     })
-  } catch (err: any) {
-    console.warn("Error saving deleted_client tombstone:", err?.message)
+  } catch (err) {
+    console.warn("Error saving deleted_client tombstone:", errorMessage(err))
   }
 
   try {

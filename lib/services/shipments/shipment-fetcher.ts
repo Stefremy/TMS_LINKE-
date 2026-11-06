@@ -1,3 +1,6 @@
+import type { ShipmentRecord } from "./types"
+
+import { errorMessage } from "@/lib/errors"
 import { createAdminClient } from "@/lib/supabase/server"
 import { requireUser } from "@/lib/auth/context"
 import { isValidUuid, isCorreosShipment, formatOrGenerateCttObjectId } from "./shipment-utils"
@@ -14,7 +17,7 @@ export const SHIPMENT_LIST_COLUMNS = "id, tenant_id, client_id, tracking_number,
 /**
  * Fetches shipments from the DB shipments table without downloading heavy base64 label blobs unless requested.
  */
-export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<any[]> {
+export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<ShipmentRecord[]> {
   const ctx = await requireUser()
   if (!ctx.tenant_id) throw new Error("Conta sem empresa associada.")
   const supabase = createAdminClient()
@@ -23,7 +26,7 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
     const selectCols = options.includeLabels ? "*" : SHIPMENT_LIST_COLUMNS
     let shipmentsQuery = supabase
       .from("shipments")
-      .select(selectCols)
+      .select(selectCols as typeof SHIPMENT_LIST_COLUMNS)
       .eq("tenant_id", ctx.tenant_id)
       .order("created_at", { ascending: false })
       
@@ -48,8 +51,8 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
       return []
     }
 
-    return dbShipments.map((rawShipment: any) => {
-      const s: any = { ...rawShipment }
+    return dbShipments.map((rawShipment) => {
+      const s: ShipmentRecord = { ...rawShipment }
       if (!options.includeLabels) {
         delete s.ctt_label_base64
         delete s.carrier_label_base64
@@ -71,8 +74,8 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
         has_label: Boolean(s.carrier_tracking_number || s.ctt_object_id || s.carrier_object_id),
       }
     })
-  } catch (err: any) {
-    console.warn("Exception in fetchShipments:", err?.message)
+  } catch (err) {
+    console.warn("Exception in fetchShipments:", errorMessage(err))
     return []
   }
 }
@@ -95,7 +98,7 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
     query = isValidUuid(cleanId) ? query.eq("id", cleanId)
       : query.or(`tracking_number.eq.${cleanId},carrier_tracking_number.eq.${cleanId}`)
     const { data: shipment } = await query.limit(1).maybeSingle()
-    let snapshot: any = null
+    let snapshot: ShipmentRecord | null = null
     const fields = shipment || isValidUuid(cleanId) ? ["id"] : ["carrier_tracking_number", "ctt_object_id", "tracking_number"]
     for (const field of fields) {
       let logs = supabase.from("audit_log").select("details").eq("tenant_id", ctx.tenant_id)
@@ -126,8 +129,8 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
     if (isCorreosShipment(saved) && await isCorreosPdfLabel(label)) label = await applyLinkeLogoToCorreosLabel(label)
     else if (!isCorreosShipment(saved)) label = await applyLinkeLogoToCttLabel(label, saved.carrier_tracking_number || saved.ctt_object_id || shipment?.carrier_tracking_number || saved.tracking_number)
     return label
-  } catch (err: any) {
-    console.warn("fetchShipmentLabel: label lookup failed:", err?.message)
+  } catch (err) {
+    console.warn("fetchShipmentLabel: label lookup failed:", errorMessage(err))
     return null
   }
 }
@@ -153,7 +156,7 @@ export async function fetchPaginatedShipments(options: {
     const selectCols = options.includeLabels ? "*" : SHIPMENT_LIST_COLUMNS
     let q = supabase
       .from("shipments")
-      .select(selectCols, { count: 'estimated' })
+      .select(selectCols as typeof SHIPMENT_LIST_COLUMNS, { count: 'estimated' })
       .eq("tenant_id", ctx.tenant_id)
       .order("created_at", { ascending: false })
       .order("id")
@@ -198,8 +201,8 @@ export async function fetchPaginatedShipments(options: {
   if (parcelResult.status === 'fulfilled') parcelSummaries = parcelResult.value
   else console.warn('Os pesos dos volumes não estão disponíveis nesta consulta.')
 
-  const mapped = (data || []).map((row: any) => {
-    const s = row.details || row
+  const mapped = (data || []).map((row) => {
+    const s: ShipmentRecord = (row as ShipmentRecord & { details?: ShipmentRecord }).details || row
     const isCorreos = isCorreosShipment(s)
     const cttCode = isCorreos ? null : formatOrGenerateCttObjectId(s)
     const linkeRef = s.tracking_number?.startsWith("LTK") ? s.tracking_number : s.reference || null

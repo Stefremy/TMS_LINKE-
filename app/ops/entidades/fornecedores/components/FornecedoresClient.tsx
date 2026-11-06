@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { 
@@ -48,9 +50,13 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
   const [currentPage, setCurrentPage] = React.useState(1)
 
   // Sync with prop updates
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], initialFornecedores)) {
+    setObservedInputs1([initialFornecedores])
+
     setFornecedores(initialFornecedores || [])
-  }, [initialFornecedores])
+  
+  }
 
   // Filtered suppliers
   const filtered = React.useMemo(() => {
@@ -125,8 +131,8 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
 
     try {
       await deleteFornecedorAction(forn.id)
-    } catch (err: any) {
-      alert("Erro ao eliminar: " + err.message)
+    } catch (err) {
+      alert("Erro ao eliminar: " + errorMessage(err))
     }
   }
 

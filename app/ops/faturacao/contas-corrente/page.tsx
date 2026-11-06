@@ -21,7 +21,7 @@ export default async function ContasCorrentePage({ searchParams }: { searchParam
   const selection = billingViewSelection(await searchParams || {})
   const [clients, shipments, statements, moloniConfig, recurring, periodStatements] = await Promise.all([
     getClientesAction(),
-    getShipmentsAction({ includeLabels: false, createdAfter: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() }),
+    getShipmentsAction({ includeLabels: false, createdAfter: recentShipmentCutoff() }),
     getBillingStatementsAction(),
     getMoloniConfigAction(),
     recurringPlanningPreview(ctx.tenant_id),
@@ -34,7 +34,7 @@ export default async function ContasCorrentePage({ searchParams }: { searchParam
 
   // Filtrar envios já faturados em faturas oficiais Moloni
   const invoicedShipmentIds = new Set<string>()
-  statements.forEach((stmt: any) => {
+  statements.forEach((stmt) => {
     if (stmt.moloni_document_id && Array.isArray(stmt.shipment_ids)) {
       stmt.shipment_ids.forEach((id: string) => invoicedShipmentIds.add(id))
     }
@@ -60,3 +60,5 @@ export default async function ContasCorrentePage({ searchParams }: { searchParam
     </div>
   )
 }
+
+function recentShipmentCutoff() { return new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() }

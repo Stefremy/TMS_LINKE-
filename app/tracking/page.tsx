@@ -48,18 +48,16 @@ function PublicTrackingContent() {
 
   const [trackingInput, setTrackingInput] = React.useState(initialTrk)
   const [activeTracking, setActiveTracking] = React.useState(initialTrk)
-  const [data, setData] = React.useState<any | null>(null)
-  const [loading, setLoading] = React.useState(false)
+  const [data, setData] = React.useState<Awaited<ReturnType<typeof getPublicShipmentTrackingAction>> | null>(null)
+  const [loading, setLoading] = React.useState(Boolean(initialTrk))
   const [error, setError] = React.useState<string | null>(null)
   const [copied, setCopied] = React.useState(false)
 
   const performSearch = React.useCallback(async (query: string) => {
     if (!query.trim()) return
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await getPublicShipmentTrackingAction(query.trim())
-      if (res.success && res.shipment) {
+    
+return getPublicShipmentTrackingAction(query.trim()).then(async (res) => {
+if (res.success && res.shipment) {
         setData(res)
         setActiveTracking(res.shipment.trackingNumber)
         // Update URL cleanly without reloading
@@ -70,11 +68,11 @@ function PublicTrackingContent() {
         setData(null)
         setError(res.error || "Não foi possível encontrar este envio.")
       }
-    } catch (err: any) {
+}).catch((err) => {
       setError("Erro ao consultar o rastreio. Tente novamente.")
-    } finally {
+    }).finally(() => {
       setLoading(false)
-    }
+    })
   }, [])
 
   React.useEffect(() => {
@@ -85,6 +83,9 @@ function PublicTrackingContent() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!trackingInput.trim()) return
+    setLoading(true)
+    setError(null)
     performSearch(trackingInput)
   }
 
@@ -315,7 +316,7 @@ function PublicTrackingContent() {
               </div>
 
               {/* Incidência Banner (Se houver tentativa não conseguida) */}
-              {(shipment.status === "incidencia" || timeline.some((e: any) => e.isIncidencia || e.eventCode === "EMH")) && (
+              {(shipment.status === "incidencia" || timeline.some((e) => e.isIncidencia || e.eventCode === "EMH")) && (
                 <div className="bg-rose-50 border-2 border-rose-200 rounded-3xl p-5 sm:p-6 text-rose-900 shadow-xs flex items-start gap-4 animate-in fade-in">
                   <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 mt-0.5">
                     <AlertTriangle className="w-5 h-5" />
@@ -330,7 +331,7 @@ function PublicTrackingContent() {
                       </span>
                     </div>
                     <p className="text-xs text-rose-700 leading-relaxed">
-                      {timeline.find((e: any) => e.isIncidencia || e.eventCode === "EMH")?.description || 
+                      {timeline.find((e) => e.isIncidencia || e.eventCode === "EMH")?.description || 
                        "O estafeta esteve no local mas não foi possível concluir a entrega. O envio encontra-se sob gestão da equipa de distribuição CTT."}
                     </p>
                     <div className="pt-2 flex flex-wrap items-center gap-3 text-xs text-rose-800 font-semibold">
@@ -413,7 +414,7 @@ function PublicTrackingContent() {
                 </div>
               ) : (
                 <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200 pt-2">
-                  {timeline.map((ev: any, idx: number) => {
+                  {timeline.map((ev, idx: number) => {
                     const isLatest = idx === timeline.length - 1
                     const isIncidencia = ev.isIncidencia || ev.eventCode === "EMH"
                     const isEntregue = ev.eventCode === "EMI"

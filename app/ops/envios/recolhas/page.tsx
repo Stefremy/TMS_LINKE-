@@ -17,7 +17,7 @@ export default async function RecolhasPage() {
   if (!recolhasResult.success) console.error("Error fetching recolhas:", recolhasResult.error)
   const mappedRecolhas = recolhasResult.success ? recolhasResult.pickups : []
 
-  const mappedClients = (clients || []).map((c: any) => ({
+  const mappedClients = (clients || []).map((c) => ({
     id: c.id,
     code: c.code || "",
     name: c.short_name || c.legal_name || "Cliente",
@@ -29,7 +29,7 @@ export default async function RecolhasPage() {
     mobile_phone: c.mobile_phone || "",
   }))
 
-  const mappedConnections = (carrierConnections || []).map((c: any) => {
+  const mappedConnections = (carrierConnections || []).map((c) => {
     let friendlyName = c.carrier_code || "Operadora"
     if (friendlyName === "ctt_expresso") friendlyName = "CTT Expresso"
     else if (friendlyName === "correos_express") friendlyName = "Correos Express"

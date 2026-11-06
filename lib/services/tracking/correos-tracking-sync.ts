@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { CorreosTrackingService } from "../correos/correos-tracking.service"
 import { resolveCorreosCredentials } from "../carriers/credentials"
 import { CorreosCredentials, CorreosTrackingOutput } from "../correos/types"
@@ -333,12 +335,12 @@ export async function fetchCorreosTrackingEvents(
       events,
       rawResponse: result,
     }
-  } catch (err: any) {
-    console.error("[Correos Tracking Sync] Erro:", err?.message || err)
+  } catch (err) {
+    console.error("[Correos Tracking Sync] Erro:", errorMessage(err) || err)
     return {
       success: false,
       events: [],
-      error: err?.message || "Falha na comunicação com a Correos Express",
+      error: errorMessage(err) || "Falha na comunicação com a Correos Express",
     }
   }
 }

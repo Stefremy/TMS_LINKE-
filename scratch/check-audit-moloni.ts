@@ -32,7 +32,7 @@ async function check() {
     total_value: d.details.total_value,
     moloni_document_id: d.details.moloni_document_id,
     shipments_count: d.details.shipments?.length,
-    shipments: d.details.shipments?.map((s:any) => ({ id: s.id, price: s.sell_price, service: s.service_type }))
+    shipments: d.details.shipments?.map((s) => ({ id: s.id, price: s.sell_price, service: s.service_type }))
   })), null, 2))
 }
 check()

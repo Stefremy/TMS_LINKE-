@@ -1,4 +1,6 @@
 "use server"
+import { errorMessage } from "@/lib/errors"
+
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
@@ -39,7 +41,7 @@ export async function getIntegrations(): Promise<IntegrationConfig[]> {
       .eq("tenant_id", tenantId)
 
     if (!error && data && data.length > 0) {
-      data.forEach((item: any) => {
+      data.forEach((item) => {
         integrationsMap.set(item.provider.toUpperCase(), {
           id: item.id,
           tenant_id: item.tenant_id,
@@ -62,7 +64,7 @@ export async function getIntegrations(): Promise<IntegrationConfig[]> {
       .eq("tenant_id", tenantId)
 
     if (!connErr && conns && conns.length > 0) {
-      conns.forEach((c: any) => {
+      conns.forEach((c) => {
         if (c.carrier_code === "ctt_expresso" || c.carrier_code === "ctt") {
           integrationsMap.set("CTT", {
             id: c.id,
@@ -231,8 +233,8 @@ export async function saveIntegrationAction(payload: {
         updated_at: now,
       }
     })
-  } catch (err: any) {
-    console.warn("Could not save integration to audit_log:", err?.message)
+  } catch (err) {
+    console.warn("Could not save integration to audit_log:", errorMessage(err))
   }
 
   // 2. Tentar tabela carrier_connections se existir
@@ -313,10 +315,10 @@ export async function testCarrierConnectionAction(provider: string) {
         status: "online",
         message: "Conexão com CTT WebServices validada com sucesso."
       }
-    } catch (err: any) {
+    } catch (err) {
       return {
         success: false,
-        error: err?.message || "Falha na comunicação com o servidor CTT."
+        error: errorMessage(err) || "Falha na comunicação com o servidor CTT."
       }
     }
   }

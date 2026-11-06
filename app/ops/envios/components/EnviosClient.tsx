@@ -1,4 +1,7 @@
 "use client"
+import type { ShipmentListRow, ShipmentRecord, ShipmentDrawerRecord } from "@/lib/services/shipments/types"
+import { errorMessage } from "@/lib/errors"
+
 import { ShipmentParcelWeight } from '@/components/shipments/ShipmentParcelWeight'
 
 import * as React from "react"
@@ -41,9 +44,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
 interface EnviosClientProps {
-  envios: any[]
-  recolhas: any[]
-  clients: any[]
+  envios: ShipmentListRow[]
+  recolhas: ShipmentListRow[]
+  clients: {id:string; name:string}[]
   pagination?: {
     page: number
     totalPages: number
@@ -76,15 +79,18 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
   }, [isExpanded])
   const [viewMode, setViewMode] = React.useState<"envios" | "recolhas">("envios")
   const [showRecolhaModal, setShowRecolhaModal] = React.useState(false)
-  const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
-  const [drawerShipment, setDrawerShipment] = React.useState<any | null>(null)
+  const [selectedShipment, setSelectedShipment] = React.useState<ShipmentRecord | null>(null)
+  const [drawerShipment, setDrawerShipment] = React.useState<ShipmentDrawerRecord | null>(null)
   const [selectedIds, setSelectedIds] = React.useState<string[]>([])
-  const [manifestData, setManifestData] = React.useState<any | null>(null)
+  const [manifestData, setManifestData] = React.useState<Awaited<ReturnType<typeof closeCttShipmentsAction>> | null>(null)
   const [isClosingManifest, setIsClosingManifest] = React.useState(false)
   const [isSyncingSelected, setIsSyncingSelected] = React.useState(false)
   const [isDeletingSelected, setIsDeletingSelected] = React.useState(false)
   const appliedFilterSignature = JSON.stringify(initialFilters)
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], appliedFilterSignature) || !Object.is(observedInputs1[1], initialSearch) || !Object.is(observedInputs1[2], initialStatus) || !Object.is(observedInputs1[3], pagination?.page)) {
+    setObservedInputs1([appliedFilterSignature, initialSearch, initialStatus, pagination?.page])
+
     setFilters(initialFilters)
     setSearchQuery(current => current !== requestedSearch ? current : initialSearch || "")
     setRequestedSearch(initialSearch || "")
@@ -92,8 +98,9 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
     setSearchAutoEnabled(true)
     setSelectedIds([])
   // Compare serialized query values, not the object recreated on each refresh.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliedFilterSignature, initialSearch, initialStatus, pagination?.page])
+
+  
+  }
   const navigateFilters = (nextFilters = filters, search = searchQuery, status = statusFilter) => {
     if (shipmentFiltersError(nextFilters)) return
     setSelectedIds([])
@@ -145,8 +152,8 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
       } else {
         alert(res.error || "Erro ao fechar expedição.")
       }
-    } catch (err: any) {
-      alert("Erro ao fechar expedição: " + err.message)
+    } catch (err) {
+      alert("Erro ao fechar expedição: " + errorMessage(err))
     } finally {
       setIsClosingManifest(false)
     }
@@ -162,8 +169,8 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
       alert(`Sincronização concluída com sucesso para ${selectedIds.length} envio(s).`)
       setSelectedIds([])
       router.refresh()
-    } catch (err: any) {
-      alert("Erro na sincronização: " + err.message)
+    } catch (err) {
+      alert("Erro na sincronização: " + errorMessage(err))
     } finally {
       setIsSyncingSelected(false)
     }
@@ -182,8 +189,8 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
       } else {
         alert(res.error || "Erro ao eliminar envios.")
       }
-    } catch (err: any) {
-      alert("Erro ao eliminar envios: " + err.message)
+    } catch (err) {
+      alert("Erro ao eliminar envios: " + errorMessage(err))
     } finally {
       setIsDeletingSelected(false)
     }
@@ -467,7 +474,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                         <button 
                           type="button"
                           onClick={() => {
-                            const target = envio.rawShipment ? { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id } : envio;
+                            const target = { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id };
                             setDrawerShipment(target)
                           }}
                           className="font-mono font-bold text-[#1D4ED8] text-xs truncate text-left"
@@ -532,7 +539,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                         <button
                           type="button"
                           onClick={() => {
-                            const target = envio.rawShipment ? { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id } : envio;
+                            const target = { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id };
                             setDrawerShipment(target)
                           }}
                           className="px-2.5 py-1 text-[11px] font-semibold bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-md transition-colors"
@@ -599,7 +606,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                 }`}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('input')) return;
-                  const target = envio.rawShipment ? { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id } : envio;
+                  const target = { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id };
                   setDrawerShipment(target)
                 }}
               >
@@ -619,7 +626,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        const target = envio.rawShipment ? { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id } : envio;
+                        const target = { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id };
                         setDrawerShipment(target)
                       }}
                       className="font-mono font-semibold text-[#1D4ED8] hover:text-[#1E40AF] hover:underline flex items-center gap-1 text-xs text-left cursor-pointer transition-colors"
@@ -837,7 +844,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
         isOpen={Boolean(drawerShipment)} 
         onClose={() => setDrawerShipment(null)}
         onOpenFullModal={(s) => {
-          setSelectedShipment(s)
+          setSelectedShipment({ ...s, status: typeof s.status === "string" ? s.status : s.status.raw || "pendente" })
         }}
         onUpdateShipment={() => {
           router.refresh()
@@ -859,7 +866,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
         <ManifestModal 
           isOpen={Boolean(manifestData)} 
           onClose={() => setManifestData(null)}
-          manifestReference={manifestData.manifestReference}
+          manifestReference={manifestData.manifestReference || ""}
           documents={manifestData.documents}
           shipmentsCount={manifestData.count}
           manifestPdfBase64={manifestData.manifestPdfBase64}

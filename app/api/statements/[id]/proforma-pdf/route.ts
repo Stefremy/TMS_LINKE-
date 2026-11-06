@@ -34,7 +34,7 @@ export async function GET(
         
       if (dbShipments && dbShipments.length > 0) {
         enrichedShipments = enrichedShipments.map(s => {
-          const dbS = dbShipments.find((d: BillingStatementPdfShipment) => d.id === s.id)
+          const dbS: BillingStatementPdfShipment | undefined = dbShipments.find((d: BillingStatementPdfShipment) => d.id === s.id)
           let base = s.base_price ?? dbS?.base_price ?? null
           let fuel = s.fuel_tax_amount ?? dbS?.fuel_tax_amount ?? null
           const special = s.special_fees_amount ?? dbS?.special_fees_amount ?? 0

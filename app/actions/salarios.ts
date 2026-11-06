@@ -1,4 +1,6 @@
 "use server"
+import { errorMessage } from "@/lib/errors"
+
 
 import { revalidatePath } from "next/cache"
 import { SalarioRecord, DEFAULT_SALARIOS, calculateSalarioTotals } from "@/app/ops/tesouraria/salarios/types"
@@ -125,8 +127,8 @@ export async function saveSalarioAction(
 
     revalidatePath("/ops/tesouraria/salarios")
     return { success: true, salario: completeRecord, message: "Registo salarial gravado com sucesso." }
-  } catch (err: any) {
-    return { success: false, message: err?.message || "Erro ao gravar vencimento." }
+  } catch (err) {
+    return { success: false, message: errorMessage(err) || "Erro ao gravar vencimento." }
   }
 }
 
@@ -154,7 +156,7 @@ export async function markSalarioStatusAction(
   id: string,
   status: "Pago" | "Pendente" | "Agendado" | "Em Processamento",
   paymentDate?: string,
-  paymentMethod?: string
+  paymentMethod?: SalarioRecord["payment_method"]
 ): Promise<{ success: boolean; salario?: SalarioRecord }> {
   await requireSalariosAccess()
   const existing = memorySalarios.find((s) => s.id === id)
@@ -164,7 +166,7 @@ export async function markSalarioStatusAction(
     ...existing,
     payment_status: status,
     payment_date: status === "Pago" ? (paymentDate || new Date().toISOString().slice(0, 10)) : existing.payment_date,
-    payment_method: (paymentMethod as any) || existing.payment_method,
+    payment_method: (paymentMethod) || existing.payment_method,
     updated_at: new Date().toISOString(),
   }
 
@@ -186,7 +188,7 @@ export async function markSalarioStatusAction(
 export async function batchMarkSalariosPaidAction(
   ids: string[],
   paymentDate?: string,
-  paymentMethod?: string
+  paymentMethod?: SalarioRecord["payment_method"]
 ): Promise<{ success: boolean; updatedCount: number }> {
   await requireSalariosAccess()
   const today = paymentDate || new Date().toISOString().slice(0, 10)
@@ -197,7 +199,7 @@ export async function batchMarkSalariosPaidAction(
         ...s,
         payment_status: "Pago",
         payment_date: today,
-        payment_method: (paymentMethod as any) || s.payment_method,
+        payment_method: (paymentMethod) || s.payment_method,
         updated_at: new Date().toISOString(),
       }
     }
@@ -327,11 +329,11 @@ export async function batchGenerateMonthPayrollAction(
       createdCount,
       message: `${createdCount} folha(s) salarial(is) gerada(s) com sucesso para o período.`,
     }
-  } catch (err: any) {
+  } catch (err) {
     return {
       success: false,
       createdCount: 0,
-      message: err?.message || "Erro ao processar folha de salários.",
+      message: errorMessage(err) || "Erro ao processar folha de salários.",
     }
   }
 }

@@ -71,7 +71,7 @@ export async function closeCttManifest(tenantId: string, shipmentIds?: string[],
     .in('details->>id', ids).order('created_at', { ascending: false }).limit(100)
   if (metadataError) return fail('Não foi possível consultar os dados de emissão CTT. Nenhum fecho foi enviado.')
   const metadata = new Map<string, CloseMetadata>()
-  for (const row of (metadataRows || []) as { ctt_close_data?: CloseMetadata }[]) {
+  for (const row of (metadataRows || []) as unknown as { ctt_close_data?: CloseMetadata }[]) {
     if (row.ctt_close_data && !metadata.has(row.ctt_close_data.shipmentId)) metadata.set(row.ctt_close_data.shipmentId, row.ctt_close_data)
   }
   const connectionIds = [...new Set([...metadata.values()].map(m => m.connectionId).filter(Boolean))]

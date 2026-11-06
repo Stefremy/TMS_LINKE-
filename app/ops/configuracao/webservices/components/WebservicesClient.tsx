@@ -1,4 +1,7 @@
 "use client"
+import type { CarrierConnection } from "@/lib/services/carriers/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -29,7 +32,7 @@ const tabs = [
 ]
 
 interface WebservicesClientProps {
-  connections: any[]
+  connections: CarrierConnection[]
   fornecedores?: Fornecedor[]
 }
 
@@ -38,16 +41,20 @@ export function WebservicesClient({ connections: initialConnections, fornecedore
   const [activeTab, setActiveTab] = React.useState("transportadoras")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [isWizardOpen, setIsWizardOpen] = React.useState(false)
-  const [editingConnection, setEditingConnection] = React.useState<any | null>(null)
+  const [editingConnection, setEditingConnection] = React.useState<CarrierConnection | null>(null)
   const [connections, setConnections] = React.useState(initialConnections || [])
   const [selectedIds, setSelectedIds] = React.useState<string[]>([])
   const [togglingId, setTogglingId] = React.useState<string | null>(null)
   const [deletingId, setDeletingId] = React.useState<string | null>(null)
   const [feedback, setFeedback] = React.useState<{ message: string; type: "success" | "error" } | null>(null)
 
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], initialConnections)) {
+    setObservedInputs1([initialConnections])
+
     setConnections(initialConnections || [])
-  }, [initialConnections])
+  
+  }
 
   // Clear feedback after 4 seconds
   React.useEffect(() => {
@@ -62,12 +69,12 @@ export function WebservicesClient({ connections: initialConnections, fornecedore
     setIsWizardOpen(true)
   }
 
-  const handleOpenEditWizard = (conn: any) => {
+  const handleOpenEditWizard = (conn: CarrierConnection) => {
     setEditingConnection(conn)
     setIsWizardOpen(true)
   }
 
-  const handleConnectionSaved = (newConn: any) => {
+  const handleConnectionSaved = (newConn: CarrierConnection) => {
     setConnections(prev => {
       const filtered = prev.filter(c => c.id !== newConn.id && c.carrier_code !== newConn.carrier_code)
       return [newConn, ...filtered]
@@ -78,7 +85,7 @@ export function WebservicesClient({ connections: initialConnections, fornecedore
     })
   }
 
-  const handleToggleActive = async (conn: any, e?: React.MouseEvent) => {
+  const handleToggleActive = async (conn: CarrierConnection, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
     const nextState = !conn.is_active
     setTogglingId(conn.id)
@@ -95,13 +102,13 @@ export function WebservicesClient({ connections: initialConnections, fornecedore
         message: `Ligação ${nextState ? "ativada" : "desativada"} com sucesso.`,
         type: "success"
       })
-    } catch (err: any) {
+    } catch (err) {
       // Revert optimistic update
       setConnections(prev =>
         prev.map(c => (c.id === conn.id ? { ...c, is_active: !nextState } : c))
       )
       setFeedback({
-        message: `Erro ao alterar estado: ${err.message}`,
+        message: `Erro ao alterar estado: ${errorMessage(err)}`,
         type: "error"
       })
     } finally {
@@ -109,7 +116,7 @@ export function WebservicesClient({ connections: initialConnections, fornecedore
     }
   }
 
-  const handleDeleteConnection = async (conn: any, e?: React.MouseEvent) => {
+  const handleDeleteConnection = async (conn: CarrierConnection, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
     const confirmed = window.confirm(
       `Tem a certeza de que deseja eliminar a ligação "${conn.description}" (${conn.carrier_code})?\nEsta ação não pode ser revertida.`
@@ -126,9 +133,9 @@ export function WebservicesClient({ connections: initialConnections, fornecedore
         message: `Ligação "${conn.description}" eliminada com sucesso.`,
         type: "success"
       })
-    } catch (err: any) {
+    } catch (err) {
       setFeedback({
-        message: `Erro ao eliminar ligação: ${err.message}`,
+        message: `Erro ao eliminar ligação: ${errorMessage(err)}`,
         type: "error"
       })
     } finally {
@@ -429,7 +436,7 @@ export function WebservicesClient({ connections: initialConnections, fornecedore
                     </button>
                   </td>
                   <td className="px-3 py-3 text-[var(--text-tertiary)] text-[11px]">
-                    {new Date(conn.created_at).toLocaleDateString('pt-PT')}
+                    {new Date(conn.created_at || "").toLocaleDateString('pt-PT')}
                   </td>
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1.5">

@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { XMLParser } from "fast-xml-parser"
 import http from "http"
 import https from "https"
@@ -32,7 +34,7 @@ export class CTTSoapClient {
   /**
    * Executa um pedido SOAP POST com envelope XML e SOAPAction
    */
-  async callSoap(options: SOAPRequestOptions): Promise<any> {
+  async callSoap(options: SOAPRequestOptions) {
     const { endpoint, action, soapBodyXml, timeoutMs = 20000 } = options
 
     const envelope = `<?xml version="1.0" encoding="utf-8"?>
@@ -43,7 +45,7 @@ export class CTTSoapClient {
   </soapenv:Body>
 </soapenv:Envelope>`
 
-    return new Promise((resolve, reject) => {
+    return new Promise<ReturnType<XMLParser["parse"]>>((resolve, reject) => {
       let url: URL
       try {
         url = new URL(endpoint)
@@ -69,7 +71,7 @@ export class CTTSoapClient {
       }
 
       if (isHttps) {
-        (reqOptions as https.RequestOptions).rejectUnauthorized = false
+        (reqOptions as https.RequestOptions).rejectUnauthorized = true
       }
 
       const req = client.request(reqOptions, (res) => {
@@ -89,11 +91,11 @@ export class CTTSoapClient {
             }
 
             resolve(parsed?.Envelope?.Body || parsed)
-          } catch (parseErr: any) {
+          } catch (parseErr) {
             if (res.statusCode && res.statusCode >= 400) {
               return reject(new Error(`Erro HTTP ${res.statusCode} do servidor CTT: ${rawData.slice(0, 300)}`))
             }
-            reject(new Error(`Falha ao processar resposta XML da CTT: ${parseErr.message}`))
+            reject(new Error(`Falha ao processar resposta XML da CTT: ${errorMessage(parseErr)}`))
           }
         })
       })

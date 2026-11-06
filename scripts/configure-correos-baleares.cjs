@@ -4,7 +4,7 @@ const {createClient}=require('@supabase/supabase-js')
 const {plan}=require('./configure-correos-contract.cjs')
 const tenantId='11111111-1111-1111-1111-111111111111'
 async function main(){
- const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}})
+ const db=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),{auth:{persistSession:false}})
  const {data,error}=await db.from('audit_log').select('details').eq('tenant_id',tenantId).eq('action','servicos_linke_data').eq('details->>id','srv_linke_cor_islas_express').order('created_at',{ascending:false}).limit(1)
  if(error)throw error
  const old=data?.[0]?.details

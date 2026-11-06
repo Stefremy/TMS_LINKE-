@@ -1,4 +1,7 @@
 "use client"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { createClient } from "@/lib/supabase/client"
@@ -19,7 +22,7 @@ import { useRouter } from "next/navigation"
 import { saveMyProfileAction } from "@/app/actions/profile"
 import type { UserProfile } from "@/lib/auth/profile"
 
-export function PerfilClient({ user, profile }: { user: any; profile: UserProfile | null }) {
+export function PerfilClient({ user, profile }: { user: SupabaseUser; profile: UserProfile | null }) {
   const router = useRouter()
   const supabase = createClient()
   const [isSaving, setIsSaving] = React.useState(false)
@@ -135,8 +138,8 @@ export function PerfilClient({ user, profile }: { user: any; profile: UserProfil
       setShowSuccess(true)
       router.refresh()
       setTimeout(() => setShowSuccess(false), 3000)
-    } catch (err: any) {
-      alert("Erro ao guardar perfil: " + err.message)
+    } catch (err) {
+      alert("Erro ao guardar perfil: " + errorMessage(err))
     } finally {
       setIsSaving(false)
     }

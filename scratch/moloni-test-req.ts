@@ -44,7 +44,7 @@ async function main() {
   console.log("With document_id:", text);
 
   // Try with associated_id
-  payload.associated_documents = [ { associated_id: 9999999, value: 10 } as any ];
+  payload.associated_documents = [ { associated_id: 9999999, value: 10 } ];
   const res2 = await fetch(`https://api.moloni.pt/v1/receipts/insert/?access_token=${tokenData.access_token}&json=true&human_errors=true`, {
     method: "POST",
     headers: {

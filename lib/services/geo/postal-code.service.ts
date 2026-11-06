@@ -1,3 +1,6 @@
+interface DatabaseSync { prepare(sql: string): { get(...params: string[]): Record<string, unknown> | undefined; all(...params: string[]): Record<string, unknown>[] } }
+
+import { errorMessage } from "@/lib/errors"
 import path from "node:path"
 import fs from "node:fs"
 
@@ -13,13 +16,13 @@ export interface PostalCodeLookupResult {
   district?: string
 }
 
-let dbInstance: any = null
+let dbInstance: DatabaseSync | null = null
 
 function getDatabase() {
   if (dbInstance) return dbInstance
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+     
     const req = typeof eval === "function" ? eval("require") : require
     const { DatabaseSync } = req("node:sqlite")
     const dbPath = path.join(process.cwd(), "data", "postal-codes.db")
@@ -31,8 +34,8 @@ function getDatabase() {
 
     dbInstance = new DatabaseSync(dbPath, { readOnly: true })
     return dbInstance
-  } catch (err: any) {
-    console.error("[PostalCodeService] Erro ao inicializar node:sqlite:", err?.message)
+  } catch (err) {
+    console.error("[PostalCodeService] Erro ao inicializar node:sqlite:", errorMessage(err))
     return null
   }
 }
@@ -75,8 +78,8 @@ export function lookupPostalCode(
           district: row.provincia,
         }
       }
-    } catch (e: any) {
-      console.warn("[PostalCodeService] Erro na consulta ES:", e?.message)
+    } catch (e) {
+      console.warn("[PostalCodeService] Erro na consulta ES:", errorMessage(e))
     }
 
     return null
@@ -161,8 +164,8 @@ export function lookupPostalCode(
         district: rowCp4.distrito || "",
       }
     }
-  } catch (e: any) {
-    console.warn("[PostalCodeService] Erro na consulta PT:", e?.message)
+  } catch (e) {
+    console.warn("[PostalCodeService] Erro na consulta PT:", errorMessage(e))
   }
 
   return null

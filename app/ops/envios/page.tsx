@@ -45,17 +45,17 @@ export default async function EnviosPage(props: { searchParams?: Promise<Record<
   const recolhas = recolhasResult.data || []
 
   // Map to the shape expected by EnviosClient (formerly mock data)
-  const mappedEnvios = paginatedResult.data.map((s: any) => {
+  const mappedEnvios = paginatedResult.data.map((s) => {
     const statusCfg = getShipmentStatusConfig(s.status)
     const isCorreos = s.carrier_code === "correos" || 
                       s.carrier_code === "correos_express" ||
                       (typeof s.service_type === "string" && s.service_type.toLowerCase().includes("correos")) ||
                       /^\d{16}$/.test(s.carrier_tracking_number || "")
 
-    const isRealCarrierTracking = (val?: string) => val && (
+    const isRealCarrierTracking = (val?: string | null): val is string => Boolean(val && (
       /^(EQ|DD|DB|DA|EG|EA)/i.test(val.trim()) ||
       /^\d{16}$/.test(val.trim())
-    )
+    ))
 
     const carrierCode = isCorreos
       ? (s.carrier_tracking_number || s.carrier_object_id || s.tracking_number || "N/A")
@@ -134,7 +134,7 @@ export default async function EnviosPage(props: { searchParams?: Promise<Record<
   }
 })
 
-const mappedRecolhas = recolhas.map((r: any) => ({
+const mappedRecolhas = recolhas.map((r) => ({
   rawId: r.id,
   rawShipment: { ...r, service_type: "Recolha", carrier_code: r.carrier_code || "ctt", picked_up_at: r.scheduled_date },
   trk: { 

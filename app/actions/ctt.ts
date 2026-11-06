@@ -1,4 +1,7 @@
 "use server"
+import type { CarrierConnection } from "@/lib/services/carriers/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import { findShipmentAuditRecords } from "@/lib/services/shipments/audit-records"
 
@@ -85,8 +88,8 @@ export async function saveCttConnectionAction(creds: {
     if (err1) {
       console.warn("carrier_connections upsert error:", err1.message)
     }
-  } catch (err: any) {
-    console.warn("Could not save to carrier_connections:", err.message)
+  } catch (err) {
+    console.warn("Could not save to carrier_connections:", errorMessage(err))
   }
 
 
@@ -130,7 +133,7 @@ export async function getCarrierConnectionsAction() {
 
     if (logs && logs.length > 0) {
       const seen = new Set<string>()
-      const list: any[] = []
+      const list: CarrierConnection[] = []
       for (const item of logs) {
         const d = item.details
         if (d && !seen.has(d.carrier_code || d.client_id)) {
@@ -155,8 +158,8 @@ export async function getCarrierConnectionsAction() {
         return list
         }
     }
-  } catch (err: any) {
-    console.warn("Fallback audit_log read error:", err?.message)
+  } catch (err) {
+    console.warn("Fallback audit_log read error:", errorMessage(err))
   }
 
   return []
@@ -179,8 +182,8 @@ export async function toggleCarrierConnectionAction(
       .from("carrier_connections")
       .update({ is_active, updated_at: new Date().toISOString() })
       .or(`id.eq.${id},carrier_code.eq.${carrier_code}`)
-  } catch (err: any) {
-    console.warn("carrier_connections toggle error:", err?.message)
+  } catch (err) {
+    console.warn("carrier_connections toggle error:", errorMessage(err))
   }
 
   // 2. Atualizar em audit_log (fallback storage)
@@ -210,8 +213,8 @@ export async function toggleCarrierConnectionAction(
         }
         }
     }
-  } catch (err: any) {
-    console.warn("audit_log toggle error:", err?.message)
+  } catch (err) {
+    console.warn("audit_log toggle error:", errorMessage(err))
   }
 
   revalidatePath("/ops/configuracao/webservices")
@@ -234,8 +237,8 @@ export async function deleteCarrierConnectionAction(
       .from("carrier_connections")
       .delete()
       .or(`id.eq.${id},carrier_code.eq.${carrier_code}`)
-  } catch (err: any) {
-    console.warn("carrier_connections delete error:", err?.message)
+  } catch (err) {
+    console.warn("carrier_connections delete error:", errorMessage(err))
   }
 
   // 2. Eliminar em audit_log
@@ -256,8 +259,8 @@ export async function deleteCarrierConnectionAction(
         }
         }
     }
-  } catch (err: any) {
-    console.warn("audit_log delete error:", err?.message)
+  } catch (err) {
+    console.warn("audit_log delete error:", errorMessage(err))
   }
 
   revalidatePath("/ops/configuracao/webservices")
@@ -287,10 +290,10 @@ export async function testCttConnectionAction(creds: CTTConnectionCredentials) {
         message: "Resposta inesperada da API (Autenticação falhou ou conta inativa)." 
         }
     }
-  } catch (err: any) {
+  } catch (err) {
     return {
       success: false,
-      message: `Erro na comunicação CTT: ${err.message}`,
+      message: `Erro na comunicação CTT: ${errorMessage(err)}`,
     }
   }
 }
@@ -368,15 +371,15 @@ export async function emitCttShipmentAction(shipmentInput: {
             updated_at: new Date().toISOString(),
           })
           .eq("id", shipmentInput.id)
-      } catch (e: any) {
-        console.warn("Could not update shipments table:", e?.message)
+      } catch (e) {
+        console.warn("Could not update shipments table:", errorMessage(e))
       }
 
       // Atualizar audit_log com metadados ricos CTT
       try {
         const existingLogs = await findShipmentAuditRecords(supabase, await getTenantId(), shipmentInput.id)
         
-        const targetLog = existingLogs?.find((l: any) => l.details?.id === shipmentInput.id)
+        const targetLog = existingLogs?.find((l) => l.details?.id === shipmentInput.id)
         if (targetLog) {
           await supabase.from("audit_log").update({
             details: {
@@ -390,8 +393,8 @@ export async function emitCttShipmentAction(shipmentInput: {
             }
           }).eq("id", targetLog.id)
         }
-      } catch (e: any) {
-        console.warn("Could not update audit_log with CTT details:", e?.message)
+      } catch (e) {
+        console.warn("Could not update audit_log with CTT details:", errorMessage(e))
       }
 
       // Registar evento de tracking inicial
@@ -516,7 +519,7 @@ export async function scheduleCttPickupAction(input: {
 
   let result: { success: boolean; pickupNumber?: string; error?: string } = { success: false }
   let metadataSaved = true
-  let carrierName = carrierCode === "correos_express" ? "Correos Express" : "CTT Expresso"
+  const carrierName = carrierCode === "correos_express" ? "Correos Express" : "CTT Expresso"
 
   // 2. Chamar o webservice da transportadora correta
   if (carrierCode === "correos_express") {
@@ -536,8 +539,8 @@ export async function scheduleCttPickupAction(input: {
         sender: input.sender,
         observations: input.observations,
       })
-    } catch (cexErr: any) {
-      return { success: false, error: cexErr.message || "Erro na comunicação com a Correos Express" }
+    } catch (cexErr) {
+      return { success: false, error: errorMessage(cexErr) || "Erro na comunicação com a Correos Express" }
     }
   } else {
     try {
@@ -571,8 +574,8 @@ export async function scheduleCttPickupAction(input: {
         },
         observations: input.observations,
       })
-    } catch (cttErr: any) {
-      return { success: false, error: cttErr.message || "Erro na comunicação com os CTT Expresso" }
+    } catch (cttErr) {
+      return { success: false, error: errorMessage(cttErr) || "Erro na comunicação com os CTT Expresso" }
     }
   }
 
@@ -586,8 +589,8 @@ export async function scheduleCttPickupAction(input: {
         ctt_pickup_id: result.pickupNumber,
       }).select("id").single()
       recolhaId = ins?.id || ""
-    } catch (dbErr: any) {
-      console.warn("Could not insert into recolhas table:", dbErr?.message)
+    } catch (dbErr) {
+      console.warn("Could not insert into recolhas table:", errorMessage(dbErr))
     }
 
     // Guardar metadados enriquecidos no audit_log para permitir histórico detalhado unificado
@@ -628,9 +631,9 @@ export async function scheduleCttPickupAction(input: {
         metadataSaved = false
         console.error("CTT pickup was accepted, but its detailed metadata was not saved:", metadataError.message)
       }
-    } catch (auditErr: any) {
+    } catch (auditErr) {
       metadataSaved = false
-      console.warn("Could not save recolha metadata to audit_log:", auditErr?.message)
+      console.warn("Could not save recolha metadata to audit_log:", errorMessage(auditErr))
     }
 
     // Disparar email de confirmação se fornecido
@@ -684,8 +687,8 @@ export async function fetchCttAvailableProductsAction() {
     const pickupService = new CTTPickupService()
     const products = await pickupService.getProdutosRecolha(creds)
     return { success: true, products }
-  } catch (err: any) {
-    return { success: false, error: err?.message, products: [] }
+  } catch (err) {
+    return { success: false, error: errorMessage(err), products: [] }
   }
 }
 
@@ -705,8 +708,8 @@ export async function validateCttRouteAction(options: {
     const pickupService = new CTTPickupService()
     const result = await pickupService.getAreaInfluencia(creds, options)
     return { success: true, ...result }
-  } catch (err: any) {
-    return { success: false, error: err?.message, valido: false }
+  } catch (err) {
+    return { success: false, error: errorMessage(err), valido: false }
   }
 }
 
@@ -723,7 +726,7 @@ export async function convertZplToPdfAction(
   }
 
   // Decodificar entidades XML se ainda existirem
-  let zpl = label.trim()
+  const zpl = label.trim()
     .replace(/&#xD;/gi, "\r")
     .replace(/&#xA;/gi, "\n")
     .replace(/&#x9;/gi, "\t")
@@ -766,14 +769,14 @@ export async function convertZplToPdfAction(
     console.log(`[Labelary] Conversão OK — PDF Base64 com ${base64.length} chars`)
     return { success: true, base64 }
 
-  } catch (err: any) {
+  } catch (err) {
     clearTimeout(timeout)
-    if (err.name === "AbortError") {
+    if (err instanceof Error && err.name === "AbortError") {
       console.error("[Labelary] Timeout (15s) — Labelary não respondeu")
       return { success: false, error: "Timeout ao contactar Labelary (15s). Verifique a ligação à internet do servidor." }
     }
-    console.error("[Labelary] Erro:", err.message)
-    return { success: false, error: `Erro ao converter ZPL: ${err.message}` }
+    console.error("[Labelary] Erro:", errorMessage(err))
+    return { success: false, error: `Erro ao converter ZPL: ${errorMessage(err)}` }
   }
 }
 
@@ -817,7 +820,7 @@ export async function getPontosPickupCttAction(forceRefresh = false): Promise<{
       cachedAt: new Date(now).toISOString(),
       total: points.length,
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error("[getPontosPickupCttAction] Erro ao carregar pontos CTT:", error)
     if (cachedDeliveryPoints) {
       return {
@@ -825,14 +828,14 @@ export async function getPontosPickupCttAction(forceRefresh = false): Promise<{
         points: cachedDeliveryPoints.data,
         cachedAt: new Date(cachedDeliveryPoints.timestamp).toISOString(),
         total: cachedDeliveryPoints.data.length,
-        error: `Aviso: Atualização em tempo real falhou (${error.message}). A apresentar dados em cache.`,
+        error: `Aviso: Atualização em tempo real falhou (${errorMessage(error)}). A apresentar dados em cache.`,
       }
     }
     return {
       success: false,
       points: [],
       total: 0,
-      error: error?.message || "Erro ao contactar o webservice da CTT Expresso",
+      error: errorMessage(error) || "Erro ao contactar o webservice da CTT Expresso",
     }
   }
 }

@@ -35,14 +35,14 @@ export default async function EntidadesClientesPage() {
     let unpaidStatementsTotal = 0
 
     // 1. Envios pendentes de faturação (billing_statement_id === null)
-    shipments.forEach((s: any) => {
+    shipments.forEach((s) => {
       if (s.client_id === c.id && !s.billing_statement_id) {
         unbilledShipmentsTotal += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
       }
     })
 
     // 2. Extratos faturados mas não pagos (sem recibo)
-    statements.forEach((stmt: any) => {
+    statements.forEach((stmt) => {
       if (stmt.client_id === c.id) {
         // Se tem fatura Moloni mas não tem recibo
         if (stmt.moloni_document_id && !stmt.moloni_receipt_pdf) {

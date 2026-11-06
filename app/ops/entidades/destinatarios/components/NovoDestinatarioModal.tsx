@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import {
@@ -61,7 +63,10 @@ export function NovoDestinatarioModal({
   })
 
   // Sync state when modal opens or initialData changes
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], initialData) || !Object.is(observedInputs1[1], isOpen) || !Object.is(observedInputs1[2], lockedClientId) || !Object.is(observedInputs1[3], clients)) {
+    setObservedInputs1([initialData, isOpen, lockedClientId, clients])
+
     if (initialData) {
       setName(initialData.name || "")
       setClientId(initialData.client_id || lockedClientId || (clients[0]?.id || ""))
@@ -86,7 +91,8 @@ export function NovoDestinatarioModal({
       setObservations("")
     }
     setErrorMsg("")
-  }, [initialData, isOpen, lockedClientId, clients])
+  
+  }
 
   if (!isOpen) return null
 
@@ -129,8 +135,8 @@ export function NovoDestinatarioModal({
       } else {
         setErrorMsg(res.error || "Erro ao gravar destinatário.")
       }
-    } catch (err: any) {
-      setErrorMsg(err?.message || "Ocorreu um erro inesperado.")
+    } catch (err) {
+      setErrorMsg(errorMessage(err) || "Ocorreu um erro inesperado.")
     } finally {
       setIsSaving(false)
     }

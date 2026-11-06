@@ -1,10 +1,12 @@
+
+import { errorMessage } from "@/lib/errors"
 import { NextRequest, NextResponse } from "next/server"
 import YahooFinance from "yahoo-finance2"
 
 export const runtime = "nodejs"
 
 // In-memory cache for 60 seconds to avoid spamming Yahoo Finance
-const cache = new Map<string, { data: any; timestamp: number }>()
+const cache = new Map<string, { data: { quotes: ({ symbol: string; label: string; price: number; changePercent: number; currency: string } | null)[]; updatedAt: string }; timestamp: number }>()
 const CACHE_TTL_MS = 60 * 1000
 
 const DEFAULT_SYMBOLS = [
@@ -53,7 +55,7 @@ export async function GET(req: NextRequest) {
     const quotes = await Promise.all(
       requestedSymbols.map(async (symbol) => {
         try {
-          const q: any = await yf.quote(symbol)
+          const q = await yf.quote(symbol)
           if (!q || (!q.regularMarketPrice && q.regularMarketPrice !== 0)) return null
 
           const label = SYMBOL_LABELS[symbol] || q.shortName || symbol
@@ -68,8 +70,8 @@ export async function GET(req: NextRequest) {
             changePercent,
             currency: q.currency || "USD",
           }
-        } catch (err: any) {
-          console.warn(`[market-data] Failed to quote ${symbol}:`, err?.message || err)
+        } catch (err) {
+          console.warn(`[market-data] Failed to quote ${symbol}:`, errorMessage(err) || err)
           return null
         }
       })
@@ -87,7 +89,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(responseData, {
       headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" }
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error("[market-data] API error:", error)
     return NextResponse.json(
       { error: "Failed to fetch stock market data", quotes: [] },

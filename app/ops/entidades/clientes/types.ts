@@ -87,6 +87,9 @@ export interface CustomTierOverride {
 }
 
 export interface Cliente {
+  tenant_id?: string
+  name?: string
+  plan_type?: string
   id: string
   portal_slug?: string
   code: string

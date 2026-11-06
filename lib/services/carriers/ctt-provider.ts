@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { CarrierProvider, ShipmentInput, ShipmentResult, PickupInput, PickupResult, TrackingResult, type Address } from './types'
 import { CTTShipmentService, CTTPickupService, CTTTrackingService, CTTConnectionCredentials, CTTAddressData, CTTShipmentData } from '../ctt'
 import { validateCttExportDetails } from '../ctt/export-details'
@@ -120,7 +122,7 @@ export class CttProvider implements CarrierProvider {
 
       // CTT SOAP usually accepts SpecialServices like AgainstReimbursement, Fragil, etc.
       // But some subproducts might reject them. We'll map the critical ones like COD.
-      const specialServices: any[] = []
+      const specialServices: { SpecialServiceType: "AgainstReimbursement"; Value: string }[] = []
       
       // If COD / AgainstReimbursement is requested
       if (input.codValue && input.codValue > 0) {
@@ -166,8 +168,8 @@ export class CttProvider implements CarrierProvider {
         confirmedRejection: Boolean(result.ErrorsList?.length),
         error: result.ErrorsList?.map(e => e.Message).join(', ') || "Failed to create shipment"
       }
-    } catch (err: any) {
-      return { success: false, error: err.message }
+    } catch (err) {
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -179,8 +181,8 @@ export class CttProvider implements CarrierProvider {
       // Assuming we need a way to build the CTTReferenceData, we'll need to fetch it from the TMS DB or pass it.
       // For now, returning not implemented or failing gracefully.
       return { success: false, error: "CancelShipment requires carrier internal shipment ID for CTT." }
-    } catch (err: any) {
-      return { success: false, error: err.message }
+    } catch (err) {
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -223,8 +225,8 @@ export class CttProvider implements CarrierProvider {
         return { success: true, pickupNumber: result.PickUpID }
       }
       return { success: false, error: result.Errors?.join(', ') || "Failed to schedule pickup" }
-    } catch (err: any) {
-      return { success: false, error: err.message }
+    } catch (err) {
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -233,7 +235,7 @@ export class CttProvider implements CarrierProvider {
       const events = await CTTTrackingService.fetchRealTrackingEvents(trackingNumber, this.creds)
       return {
         success: true,
-        events: events.map((e: any) => ({
+        events: events.map((e) => ({
           status: e.tmsStatus || "pendente",
           description: e.eventName || "Evento CTT",
           date: e.timestamp,
@@ -243,8 +245,8 @@ export class CttProvider implements CarrierProvider {
           rawEvent: e
         }))
       }
-    } catch (err: any) {
-      return { success: false, error: err.message }
+    } catch (err) {
+      return { success: false, error: errorMessage(err) }
     }
   }
 
@@ -263,12 +265,12 @@ export class CttProvider implements CarrierProvider {
         subproduto: input.subProduct || "EMSF056.01"
       })
 
-      if ((result as any).success && (result as any).valido) {
+      if (("success" in result && result.success) && result.valido) {
         return { isValid: true }
       }
-      return { isValid: false, error: (result as any).error || "Route not covered by CTT for this product" }
-    } catch (err: any) {
-      return { isValid: false, error: err.message }
+      return { isValid: false, error: ("error" in result && typeof result.error === "string" ? result.error : undefined) || "Route not covered by CTT for this product" }
+    } catch (err) {
+      return { isValid: false, error: errorMessage(err) }
     }
   }
 }

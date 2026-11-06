@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { NextResponse } from "next/server"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
 import { CorreosShipmentService } from "@/lib/services/correos/correos-shipment.service"
@@ -17,7 +19,7 @@ export async function POST() {
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
   }
-  const results: any = { ctt: {}, correos: {} }
+  const results: Record<string, { credentialsFound?: boolean; status?: string; tracking?: string; hasLabel?: boolean; error?: string }> = { ctt: {}, correos: {} }
 
   // 1. CTT EXPRESSO
   try {
@@ -59,9 +61,9 @@ export async function POST() {
       results.ctt.status = "ERROR"
       results.ctt.error = cttResult.error
     }
-  } catch (err: any) {
+  } catch (err) {
     results.ctt.status = "FATAL"
-    results.ctt.error = err.message
+    results.ctt.error = errorMessage(err)
   }
 
   // 2. CORREOS EXPRESS
@@ -107,9 +109,9 @@ export async function POST() {
       results.correos.status = "ERROR"
       results.correos.error = correosResult.mensajeRetorno
     }
-  } catch (err: any) {
+  } catch (err) {
     results.correos.status = "FATAL"
-    results.correos.error = err.message
+    results.correos.error = errorMessage(err)
   }
 
   return NextResponse.json(results)

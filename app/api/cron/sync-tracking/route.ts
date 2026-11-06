@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { NextResponse } from "next/server"
 import { syncAllActiveShipmentsTracking } from "@/lib/services/tracking"
 
@@ -32,10 +34,10 @@ export async function GET(request: Request) {
       errors: result.errors?.length > 0 ? result.errors : undefined,
       message: `Sincronização de tracking concluída com sucesso para ${result.count} envio(s) ativo(s).`,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error("Erro no cron sync-tracking:", error)
     return NextResponse.json(
-      { success: false, error: error?.message || "Falha na sincronização de tracking" },
+      { success: false, error: errorMessage(error) || "Falha na sincronização de tracking" },
       { status: 500 }
     )
   }

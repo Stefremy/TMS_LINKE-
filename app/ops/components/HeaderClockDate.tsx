@@ -1,20 +1,15 @@
 "use client"
+import { useClock } from "@/lib/use-clock"
 
 import React, { useEffect, useState } from "react"
 import { ClockStef } from "./ClockStef"
 import styles from "./HeaderClockDate.module.css"
 
 export function HeaderClockDate() {
-  const [mounted, setMounted] = useState(false)
-  const [now, setNow] = useState<Date | null>(null)
+  const now = useClock()
+  const mounted = now !== null
   const [showModal, setShowModal] = useState(false)
 
-  useEffect(() => {
-    setMounted(true)
-    setNow(new Date())
-    const interval = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(interval)
-  }, [])
 
   useEffect(() => {
     if (!showModal) return

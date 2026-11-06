@@ -91,7 +91,9 @@ interface ClienteModalProps {
 type TabType = "geral" | "faturacao" | "contactos" | "comercial" | "precario" | "acesso"
 type PrecarioSubTab = "servicos_linke" | "suplementares" | "geral"
 
-export function ClienteModal({ initialData, servicosLinke = [], sourceClients = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, standardSpecialFees = DEFAULT_STANDARD_SPECIAL_FEES, standardFuelSurchargePct, onManageAccess, onClose, onDeleted, onSaved }: ClienteModalProps) {
+const EMPTY_SERVICES: ServicoLinke[] = []
+
+export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sourceClients = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, standardSpecialFees = DEFAULT_STANDARD_SPECIAL_FEES, standardFuelSurchargePct, onManageAccess, onClose, onDeleted, onSaved }: ClienteModalProps) {
   const [isSaving, setIsSaving] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
@@ -104,7 +106,7 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
   const [saveError, setSaveError] = React.useState("")
 
   // Initialize form data with rich pricing and webservices
-  const [formData, setFormData] = React.useState<Partial<Cliente>>({
+  const [formData, setFormData] = React.useState<Partial<Cliente>>(() => ({
     code: initialData?.code || `CL${Math.floor(100 + Math.random() * 900)}`,
     short_name: initialData?.short_name || "",
     portal_slug: initialData?.portal_slug || "",
@@ -145,7 +147,7 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
       special_services_fees: resolveClientSpecialFees(initialData?.pricing?.special_services_fees, standardSpecialFees),
     },
     custom_tier_overrides: initialData?.custom_tier_overrides || {},
-  })
+  }))
 
   const saveSuccessMsg = savedFormSnapshot === JSON.stringify(formData) && !sendInvitation
 
@@ -159,7 +161,10 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
   const [draggedClientTier, setDraggedClientTier] = React.useState<string | null>(null)
   const [tierOrderAnnouncement, setTierOrderAnnouncement] = React.useState("")
 
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], initialData) || !Object.is(observedInputs1[1], servicosLinke) || !Object.is(observedInputs1[2], defaultPaymentDays) || !Object.is(observedInputs1[3], standardSpecialFees)) {
+    setObservedInputs1([initialData, servicosLinke, defaultPaymentDays, standardSpecialFees])
+
     if (initialData) {
       setFormData({
         id: initialData.id,
@@ -206,15 +211,20 @@ export function ClienteModal({ initialData, servicosLinke = [], sourceClients = 
         },
       })
     }
-  }, [initialData, servicosLinke, defaultPaymentDays, standardSpecialFees])
+  
+  }
 
-  React.useEffect(() => {
+  const [observedInputs2, setObservedInputs2] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs2 === null || !Object.is(observedInputs2[0], formData.billing_type) || !Object.is(observedInputs2[1], formData.payment_terms)) {
+    setObservedInputs2([formData.billing_type, formData.payment_terms])
+
     if (formData.billing_type === "pay_as_you_go" && formData.payment_terms !== "Pronto Pagamento") {
       setFormData(prev => ({ ...prev, payment_terms: "Pronto Pagamento" }))
     }
-  }, [formData.billing_type, formData.payment_terms])
+  
+  }
 
-  const handlePricingConfigChange = (field: keyof ClientPricingConfig, value: any) => {
+  const handlePricingConfigChange = <K extends keyof ClientPricingConfig>(field: K, value: ClientPricingConfig[K]) => {
     setFormData((prev) => {
       const currentPricing = prev.pricing || DEFAULT_CLIENT_PRICING
       return {

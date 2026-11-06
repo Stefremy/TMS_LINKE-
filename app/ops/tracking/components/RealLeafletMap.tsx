@@ -1,4 +1,5 @@
 "use client"
+import type * as Leaflet from "leaflet"
 
 import React, { useEffect, useRef, useState } from "react"
 import { TrackingShipment, ShipmentPickagem } from "../types"
@@ -23,103 +24,17 @@ interface RealLeafletMapProps {
 
 export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const layerGroupRef = useRef<any>(null)
-  const tileLayerRef = useRef<any>(null)
+  const mapInstanceRef = useRef<Leaflet.Map | null>(null)
+  const layerGroupRef = useRef<Leaflet.LayerGroup | null>(null)
+  const tileLayerRef = useRef<Leaflet.TileLayer | null>(null)
 
   const [mapStyle, setMapStyle] = useState<"streets" | "satellite">("streets")
   const [selectedPickagem, setSelectedPickagem] = useState<ShipmentPickagem | null>(null)
 
-  // Initialize map once
-  useEffect(() => {
-    if (!mapContainerRef.current) return
-
-    let isMounted = true
-
-    // Dynamically import Leaflet so it only runs on the client
-    import("leaflet").then((L) => {
-      if (!isMounted || !mapContainerRef.current) return
-
-      // If map already exists, just remove it first to avoid duplicate init
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove()
-        mapInstanceRef.current = null
-      }
-
-      // Default center: Central Portugal (Leiria / Coimbra)
-      const map = L.map(mapContainerRef.current, {
-        zoomControl: false,
-        attributionControl: false,
-      }).setView([39.6, -8.6], 7)
-
-      // Add attribution in compact corner
-      L.control.attribution({ position: "bottomright", prefix: "© OpenStreetMap contributors" }).addTo(map)
-
-      // Tile layer
-      const streetTiles = L.tileLayer(
-        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        { maxZoom: 19 }
-      )
-      streetTiles.addTo(map)
-      tileLayerRef.current = streetTiles
-
-      // Layer group for route polylines and pickagem markers
-      const layerGroup = L.layerGroup().addTo(map)
-      layerGroupRef.current = layerGroup
-      mapInstanceRef.current = map
-
-      // Render the current shipment markers & route
-      renderShipmentRoute(L, map, layerGroup, shipment)
-    })
-
-    return () => {
-      isMounted = false
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove()
-        mapInstanceRef.current = null
-      }
-    }
-  }, [])
-
-  // Update map style (Streets vs Satellite)
-  useEffect(() => {
-    if (!mapInstanceRef.current || !tileLayerRef.current) return
-
-    import("leaflet").then((L) => {
-      if (tileLayerRef.current) {
-        mapInstanceRef.current.removeLayer(tileLayerRef.current)
-      }
-
-      let newTileLayer
-      if (mapStyle === "satellite") {
-        newTileLayer = L.tileLayer(
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          { maxZoom: 18 }
-        )
-      } else {
-        newTileLayer = L.tileLayer(
-          "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-          { maxZoom: 19 }
-        )
-      }
-      newTileLayer.addTo(mapInstanceRef.current)
-      tileLayerRef.current = newTileLayer
-    })
-  }, [mapStyle])
-
-  // Re-render route whenever the selected shipment changes
-  useEffect(() => {
-    if (!mapInstanceRef.current || !layerGroupRef.current) return
-
-    import("leaflet").then((L) => {
-      renderShipmentRoute(L, mapInstanceRef.current, layerGroupRef.current, shipment)
-    })
-  }, [shipment])
-
-  const renderShipmentRoute = (
-    L: any,
-    map: any,
-    layerGroup: any,
+const renderShipmentRoute = (
+    L: typeof import("leaflet"),
+    map: Leaflet.Map,
+    layerGroup: Leaflet.LayerGroup,
     targetShipment: TrackingShipment
   ) => {
     layerGroup.clearLayers()
@@ -128,7 +43,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
     const lastMappedCheckpoint = pickagens.at(-1)
     
     // Combine origin, pickagens, and destination into one continuous path
-    const pathNodes: any[] = []
+    const pathNodes: {lat: number; lng: number; isOrigin?: boolean; isPickagem?: boolean; isDestination?: boolean; status: string; pickagemData?: ShipmentPickagem}[] = []
     
     // 1. Origin
     pathNodes.push({
@@ -157,7 +72,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
       status: targetShipment.status === "delivered" ? "completed" : "pending"
     })
 
-    const latLngs = pathNodes.map((n) => [n.lat, n.lng])
+    const latLngs: Leaflet.LatLngExpression[] = pathNodes.map((n) => [n.lat, n.lng])
 
     // Draw full dashed path (Background)
     L.polyline(latLngs, {
@@ -173,7 +88,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
     if (completedNodes.length >= 1) {
       // If we only have 1 completed node (e.g. Origin), it doesn't draw a line, which is fine.
       if (completedNodes.length >= 2) {
-        const completedLatLngs = completedNodes.map((n) => [n.lat, n.lng])
+        const completedLatLngs: Leaflet.LatLngExpression[] = completedNodes.map((n) => [n.lat, n.lng])
         // Solid completed route, kept distinct without a glowing halo.
         L.polyline(completedLatLngs, {
           color: "#477D68",
@@ -287,6 +202,95 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
     }
   }
 
+  // Initialize map once
+  useEffect(() => {
+    if (!mapContainerRef.current) return
+
+    let isMounted = true
+
+    // Dynamically import Leaflet so it only runs on the client
+    import("leaflet").then((L) => {
+      if (!isMounted || !mapContainerRef.current) return
+
+      // If map already exists, just remove it first to avoid duplicate init
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+      }
+
+      // Default center: Central Portugal (Leiria / Coimbra)
+      const map = L.map(mapContainerRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+      }).setView([39.6, -8.6], 7)
+
+      // Add attribution in compact corner
+      L.control.attribution({ position: "bottomright", prefix: "© OpenStreetMap contributors" }).addTo(map)
+
+      // Tile layer
+      const streetTiles = L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        { maxZoom: 19 }
+      )
+      streetTiles.addTo(map)
+      tileLayerRef.current = streetTiles
+
+      // Layer group for route polylines and pickagem markers
+      const layerGroup = L.layerGroup().addTo(map)
+      layerGroupRef.current = layerGroup
+      mapInstanceRef.current = map
+
+      // Render the current shipment markers & route
+      renderShipmentRoute(L, map, layerGroup, shipment)
+    })
+
+    return () => {
+      isMounted = false
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+      }
+    }
+  }, [])
+
+  // Update map style (Streets vs Satellite)
+  useEffect(() => {
+    if (!mapInstanceRef.current || !tileLayerRef.current) return
+
+    import("leaflet").then((L) => {
+      if (!mapInstanceRef.current) return
+      if (tileLayerRef.current) {
+        mapInstanceRef.current.removeLayer(tileLayerRef.current)
+      }
+
+      let newTileLayer
+      if (mapStyle === "satellite") {
+        newTileLayer = L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          { maxZoom: 18 }
+        )
+      } else {
+        newTileLayer = L.tileLayer(
+          "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          { maxZoom: 19 }
+        )
+      }
+      newTileLayer.addTo(mapInstanceRef.current)
+      tileLayerRef.current = newTileLayer
+    })
+  }, [mapStyle])
+
+  // Re-render route whenever the selected shipment changes
+  useEffect(() => {
+    if (!mapInstanceRef.current || !layerGroupRef.current) return
+
+    import("leaflet").then((L) => {
+      if (mapInstanceRef.current && layerGroupRef.current) renderShipmentRoute(L, mapInstanceRef.current, layerGroupRef.current, shipment)
+    })
+  }, [shipment])
+
+  
+
   const handleCenterOnLastPickagem = () => {
     if (!mapInstanceRef.current) return
     const current = getMappedCheckpoints(shipment.pickagens).at(-1)
@@ -303,7 +307,7 @@ export function RealLeafletMap({ shipment, onOpenDocumentation }: RealLeafletMap
         ...getMappedCheckpoints(shipment.pickagens).map((p) => [p.lat, p.lng]),
         [shipment.destination.lat, shipment.destination.lng],
       ] as [number, number][])
-      mapInstanceRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 13, animate: true })
+      mapInstanceRef.current?.fitBounds(bounds, { padding: [60, 60], maxZoom: 13, animate: true })
     })
   }
 

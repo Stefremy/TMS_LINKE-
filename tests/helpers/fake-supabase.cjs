@@ -32,6 +32,15 @@ function fakeSupabase(tables, failure, options = {}) {
       gte(field, value) { state.filters.push({ field, value, kind: 'gte' }); return query },
       lte(field, value) { state.filters.push({ field, value, kind: 'lte' }); return query },
       ilike(field, value) { state.filters.push({ field, value, kind: 'ilike' }); return query },
+      like(field, value) { state.filters.push({ field, value, kind: 'like' }); return query },
+      or(expression) {
+        state.anyFilters = expression.split(',').map(term => {
+          const match = /^(sender_id|recipient_id)\.(eq|is)\.([a-zA-Z0-9-]+)$/.exec(term)
+          if (!match) throw new Error('Unmocked OR expression: ' + term)
+          return { field: match[1], value: match[2] === 'is' && match[3] === 'null' ? null : match[3] }
+        })
+        return query
+      },
       in(field, value) { state.filters.push({ field, value, kind: 'in' }); return query },
       is(field, value) { state.filters.push({ field, value, kind: 'is' }); return query },
       contains(field, value) { state.filters.push({ field, value, kind: 'contains' }); return query },
@@ -51,13 +60,13 @@ function fakeSupabase(tables, failure, options = {}) {
           if (error) return { data: null, error }
           let rows = (tables[table] || []).filter(row => state.filters.every(filter => {
             const value = readField(row, filter.field)
-            return filter.kind === 'contains' ? jsonContains(value, filter.value) : filter.kind === 'ilike' ? matchesLike(value, filter.value)
+            return filter.kind === 'contains' ? jsonContains(value, filter.value) : ['ilike', 'like'].includes(filter.kind) ? matchesLike(value, filter.value)
               : filter.kind === 'gte' ? value >= filter.value
               : filter.kind === 'lte' ? value <= filter.value
               : filter.kind === 'in' ? filter.value.includes(value)
               : filter.kind === 'is' ? (filter.value === null ? value == null : value === filter.value)
               : value === filter.value
-          }))
+          }) && (!state.anyFilters || state.anyFilters.some(filter => (row[filter.field] ?? null) === filter.value)))
           if (state.write) {
             if (state.write.kind === 'insert' && options.persistInserts) {
               const entries = (Array.isArray(state.write.value) ? state.write.value : [state.write.value])

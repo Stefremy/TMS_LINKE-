@@ -73,7 +73,7 @@ async function listClientMessagesFromAuditLog(
   const seenSourceKeys = new Set<string>()
   const allMessages: ClientMessage[] = []
 
-  const rawRows = [...(msgRes.data || [])].sort((a: any, b: any) => {
+  const rawRows = [...(msgRes.data || [])].sort((a, b) => {
     const ca = String(a.details?.created_at || a.created_at || '')
     const cb = String(b.details?.created_at || b.created_at || '')
     return ca.localeCompare(cb)
@@ -234,7 +234,7 @@ export async function markClientMessagesRead(
 
   const validIds = new Set(
     (msgRes.data || [])
-      .map((r: any) => (messageUuid(r.details?.id) ? r.details.id : messageUuid(r.id) ? r.id : null))
+      .map((r) => (messageUuid(r.details?.id) ? r.details.id : messageUuid(r.id) ? r.id : null))
       .filter(Boolean)
   )
   if (uniqueIds.some((id) => !validIds.has(id))) {
@@ -242,7 +242,7 @@ export async function markClientMessagesRead(
   }
 
   const alreadyRead = new Set(
-    (readRes.data || []).map((r: any) => r.details?.message_id).filter((v: unknown): v is string => typeof v === 'string')
+    (readRes.data || []).map((r) => r.details?.message_id).filter((v: unknown): v is string => typeof v === 'string')
   )
   const readAt = new Date().toISOString()
   const rowsToInsert = uniqueIds

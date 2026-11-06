@@ -1,3 +1,6 @@
+import type { ShipmentRecord } from "@/lib/services/shipments/types"
+
+import { errorMessage } from "@/lib/errors"
 import { createAdminClient } from "@/lib/supabase/server"
 import { sendEmail, compileTemplate } from "@/lib/email/resend"
 import { publicUrl } from "@/lib/config/public-origins"
@@ -5,7 +8,7 @@ import { publicUrl } from "@/lib/config/public-origins"
 export interface TrackingNotificationExtra {
   reason?: string
   eventCode?: string
-  shipment?: any
+  shipment?: Partial<Pick<ShipmentRecord, "id" | "tracking_number" | "carrier_tracking_number" | "carrier" | "carrier_code" | "service_type" | "recipient_email" | "recipient_contact_email" | "recipient_name" | "sender_name" | "tenant_id">> | null
 }
 
 export async function sendTrackingEmailNotification(
@@ -37,7 +40,7 @@ export async function sendTrackingEmailNotification(
           .eq("action", "shipment_data")
           .order("created_at", { ascending: false })
 
-        const found = logs?.find((l: any) => l.details?.id === shipmentId || l.details?.tracking_number === shipmentId)
+        const found = logs?.find((l) => l.details?.id === shipmentId || l.details?.tracking_number === shipmentId)
         if (found?.details) {
           shipment = found.details
         }
@@ -45,7 +48,7 @@ export async function sendTrackingEmailNotification(
     }
 
     const recipientEmail = (shipment?.recipient_email || shipment?.recipient_contact_email || "").trim()
-    if (!recipientEmail || !recipientEmail.includes("@")) {
+    if (!shipment || !recipientEmail || !recipientEmail.includes("@")) {
       return { success: false, reason: "No valid recipient email configured" }
     }
 
@@ -61,19 +64,19 @@ export async function sendTrackingEmailNotification(
 
       if (sentLogs && sentLogs.length > 0) {
         if (type === "in_transit") {
-          const alreadySentTransit = sentLogs.some((l: any) => l.details?.type === "in_transit")
+          const alreadySentTransit = sentLogs.some((l) => l.details?.type === "in_transit")
           if (alreadySentTransit) {
             return { success: true, skipped: true, reason: "in_transit notification already sent" }
           }
         } else if (type === "incident") {
           const alreadySentIncident = sentLogs.some(
-            (l: any) => l.details?.type === "incident" && l.details?.event_code === extra?.eventCode
+            (l) => l.details?.type === "incident" && l.details?.event_code === extra?.eventCode
           )
           if (alreadySentIncident) {
             return { success: true, skipped: true, reason: "incident notification already sent for this event" }
           }
         } else if (type === "tracking") {
-          const alreadySentTracking = sentLogs.some((l: any) => l.details?.type === "tracking")
+          const alreadySentTracking = sentLogs.some((l) => l.details?.type === "tracking")
           if (alreadySentTracking) {
             return { success: true, skipped: true, reason: "tracking created notification already sent" }
           }
@@ -167,8 +170,8 @@ export async function sendTrackingEmailNotification(
     }
 
     return { success: false, reason: "No template generated" }
-  } catch (err: any) {
+  } catch (err) {
     console.error("Failed to compile tracking notification:", err)
-    return { success: false, error: err?.message || err }
+    return { success: false, error: errorMessage(err) || err }
   }
 }

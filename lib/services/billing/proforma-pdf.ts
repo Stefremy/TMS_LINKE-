@@ -12,8 +12,8 @@ export interface BillingStatementPdfShipment {
   sell_price?: number
   service_type?: string
   weight_kg?: number
-  base_price?: number
-  fuel_tax_amount?: number
+  base_price?: number | null
+  fuel_tax_amount?: number | null
   special_fees_amount?: number
   special_fees_description?: string
 }
@@ -116,7 +116,7 @@ export async function generateProFormaPdfBuffer(data: BillingStatementPdfData): 
         try {
           const feesArray = JSON.parse(s.special_fees_description);
           if (Array.isArray(feesArray) && feesArray.length > 0) {
-            feesArray.forEach((fee: any) => {
+            feesArray.forEach((fee) => {
               const name = fee.name || 'Taxa Especial'
               if (!groupedSpecial[name]) groupedSpecial[name] = { count: 0, amount: 0 }
               groupedSpecial[name].count += 1

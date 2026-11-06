@@ -1,5 +1,6 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { createAdminClient } from "@/lib/supabase/server"
+import { supabasePublicKey } from "@/lib/supabase/public-key"
 import { LINKE_TENANT_ID } from "@/lib/auth/context"
 import { assertBoundClient, assertClientEmail, loadInvitationStore, normalizeInvitationEmail, validPasswordSetup } from "@/lib/client-portal/invitations"
 
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
   let auth: ReturnType<typeof createSupabaseClient>["auth"] | undefined
   let verified = false
   try {
-    auth = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    auth = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, supabasePublicKey(), {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     }).auth
     const { data, error } = await auth.verifyOtp({ token_hash: input.token_hash, type: input.type })

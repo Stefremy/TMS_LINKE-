@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import Link from "next/link"
@@ -74,9 +76,13 @@ export function SalariosClient({ initialSalarios, isSuperAdmin = false }: Salari
   const [feedbackMsg, setFeedbackMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
 
   // Sync prop updates
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], initialSalarios)) {
+    setObservedInputs1([initialSalarios])
+
     setSalarios(initialSalarios || [])
-  }, [initialSalarios])
+  
+  }
 
   const showFeedback = (type: "success" | "error", text: string) => {
     setFeedbackMsg({ type, text })
@@ -300,8 +306,8 @@ export function SalariosClient({ initialSalarios, isSuperAdmin = false }: Salari
       } else {
         showFeedback("error", res.message)
       }
-    } catch (err: any) {
-      showFeedback("error", err?.message || "Erro ao gerar folha salarial.")
+    } catch (err) {
+      showFeedback("error", errorMessage(err) || "Erro ao gerar folha salarial.")
     }
   }
 

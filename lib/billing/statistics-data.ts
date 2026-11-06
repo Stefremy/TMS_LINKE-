@@ -1,10 +1,11 @@
+import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import "server-only"
 import { requireEmployee } from "@/lib/auth/context"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getClientesAction } from "@/app/actions/clientes"
 import { normalizeBillingStatistics, type BillingLog, type BillingStatsCycle } from "./statistics"
 
-export async function loadBillingStatistics(preloadedClients?: any[]) {
+export async function loadBillingStatistics(preloadedClients?: Cliente[]) {
   const ctx = await requireEmployee()
   if (!ctx.tenant_id) throw new Error("Conta sem empresa associada.")
   const db = createAdminClient()

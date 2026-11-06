@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import { NextRequest, NextResponse } from "next/server"
 import { MoloniClient } from "@/lib/moloni/moloni-client"
 import { createAdminClient } from "@/lib/supabase/server"
@@ -35,7 +37,7 @@ export async function GET(request: NextRequest) {
       details: {
         company_id: companyId,
         company_name: selectedCompany.name,
-        company_vat: (selectedCompany as any).vat,
+        company_vat: (selectedCompany).vat,
         refresh_token: refreshToken,
         connected_at: new Date().toISOString(),
       },
@@ -61,17 +63,17 @@ export async function GET(request: NextRequest) {
 
         fs.writeFileSync(envPath, envContent, "utf8")
       }
-    } catch (e: any) {
-      console.warn("Could not write to .env.local:", e?.message)
+    } catch (e) {
+      console.warn("Could not write to .env.local:", errorMessage(e))
     }
 
     return NextResponse.redirect(
       new URL(`/ops/faturacao/contas-corrente?moloni_connected=true&company=${encodeURIComponent(selectedCompany.name)}`, request.url)
     )
-  } catch (err: any) {
+  } catch (err) {
     console.error("Moloni callback error:", err)
     return NextResponse.redirect(
-      new URL(`/ops/faturacao/contas-corrente?moloni_error=${encodeURIComponent(err.message || "Erro de autorizacao")}`, request.url)
+      new URL(`/ops/faturacao/contas-corrente?moloni_error=${encodeURIComponent(errorMessage(err) || "Erro de autorizacao")}`, request.url)
     )
   }
 }

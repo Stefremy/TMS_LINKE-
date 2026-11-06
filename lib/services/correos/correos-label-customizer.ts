@@ -1,3 +1,5 @@
+
+import { errorMessage } from "@/lib/errors"
 import fs from "fs"
 import path from "path"
 import { PDFDocument, rgb } from "pdf-lib"
@@ -121,8 +123,8 @@ export async function applyLinkeLogoToCorreosLabel(base64Pdf: string): Promise<s
 
     const modifiedPdfBytes = await doc.save()
     return Buffer.from(modifiedPdfBytes).toString("base64")
-  } catch (err: any) {
-    console.error("applyLinkeLogoToCorreosLabel: Error customizing label:", err?.message || err)
+  } catch (err) {
+    console.error("applyLinkeLogoToCorreosLabel: Error customizing label:", errorMessage(err) || err)
     return base64Pdf
   }
 }

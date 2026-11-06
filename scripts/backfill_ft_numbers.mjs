@@ -1,14 +1,16 @@
+import dotenv from 'dotenv'
+dotenv.config({ path: '.env.local', quiet: true })
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
-  'https://rcifuhiwemwlatgserva.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjaWZ1aGl3ZW13bGF0Z3NlcnZhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODc5NTk4MiwiZXhwIjoyMTA0MzcxOTgyfQ.Io7GrzqBKqn6w9Y7JgT7XKP-7ugL5yD4L01n8NMreu0'
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)
 )
 
-const REFRESH_TOKEN = '6b8587e38fdbf0039866c755dbfd64cfc2431582'
-const CLIENT_ID = '518600300'
-const CLIENT_SECRET = '0b78b0aef4abfc92960a0c9d97dbe9b7abd8b325'
-const COMPANY_ID = '393993'
+const REFRESH_TOKEN = process.env.MOLONI_REFRESH_TOKEN
+const CLIENT_ID = process.env.MOLONI_CLIENT_ID
+const CLIENT_SECRET = process.env.MOLONI_CLIENT_SECRET
+const COMPANY_ID = process.env.MOLONI_COMPANY_ID
 
 async function getMoloniToken() {
   const params = new URLSearchParams({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, refresh_token: REFRESH_TOKEN })

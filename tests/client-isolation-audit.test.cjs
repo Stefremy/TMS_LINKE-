@@ -70,7 +70,7 @@ function harness({ ctx = ctxA, fallback = false, eventsOnA = false, failure } = 
     'next/headers': { headers: async () => new Headers() },
     '@/lib/config/public-origins': { checkoutReturnOrigin: () => 'https://fixture.invalid', publicUrl: path => 'https://fixture.invalid' + path },
     '@/lib/client-portal/access': { getPortalDestination: async () => '/app/fixture-store' },
-    '@/lib/pricing/calculate-shipment-price': {},
+    '@/lib/pricing/calculate-shipment-price': { isMainlandOnlyService: () => false },
     '@/lib/pricing/calculate-shipment-quote': {},
     '@/lib/pricing/shipment-pricing-context': {},
     '@/lib/services/ctt/ctt-types': { CTT_TRACKING_EVENTS: { EMI: { description: 'Delivered', tms_status: 'entregue', is_terminal: true } }, CTT_INCIDENT_CODES: new Set() },
@@ -169,6 +169,21 @@ test('CONTROL: an own timeline returns only own events', async () => {
   assert.deepEqual(events.map(event => event.description), ['OWN-A-EVENT'])
 })
 for (const fallback of [false, true]) {
+  test('catalog excludes another company general services and deletion markers (' + (fallback ? 'audit fallback' : 'table') + ')', async () => {
+    for (const role of ['client', 'employee']) {
+      const h = harness({ ctx: { ...ctxA, role }, fallback })
+      const foreign = { ...fixtureService('foreign-general', null), tenant_id: FOREIGN }
+      if (fallback) h.db.tables.audit_log.push({ tenant_id: FOREIGN, action: 'servicos_linke_data', details: foreign })
+      else h.db.tables.servicos_linke.push(foreign)
+      h.db.tables.audit_log.push({ tenant_id: FOREIGN, action: 'deleted_servico_linke', details: { id: 'service-a' } })
+      const result = await h.load('app/actions/servicos-linke.ts').getServicosLinkeAction()
+      assert.ok(result.some(service => service.id === 'service-a'))
+      assert.ok(!result.some(service => service.id === 'foreign-general'))
+      for (const query of h.db.queries.filter(q => ['servicos_linke', 'audit_log'].includes(q.table))) {
+        assert.ok(query.filters.some(f => f.name === 'tenant_id' && f.value === TENANT))
+      }
+    }
+  })
   test('CONTROL: normal catalog hides B-specific services and cost fields (' + (fallback ? 'audit fallback' : 'table') + ')', async () => {
     const h = harness({ fallback })
     const result = await h.load('app/actions/servicos-linke.ts').getServicosLinkeAction()

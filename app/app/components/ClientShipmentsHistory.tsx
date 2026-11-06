@@ -1,4 +1,7 @@
 "use client"
+import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
+import { errorMessage } from "@/lib/errors"
+
 import { ShipmentParcelWeight } from '@/components/shipments/ShipmentParcelWeight'
 import { getClientServiceName } from '@/lib/services/client-service-label'
 
@@ -20,7 +23,7 @@ import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
 
 export function ClientShipmentsHistory() {
   const { client: currentClient, basePath } = useClientScope()
-  const [shipments, setShipments] = React.useState<any[]>([])
+  const [shipments, setShipments] = React.useState<ShipmentRecord[]>([])
   const [searchTerm, setSearchTerm] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("todos")
   const [loading, setLoading] = React.useState(true)
@@ -28,7 +31,7 @@ export function ClientShipmentsHistory() {
   const [closingBatch, setClosingBatch] = React.useState(false)
   const [manifestData, setManifestData] = React.useState<{ fileName: string, base64: string, documents?: CTTDocumentData[] } | null>(null)
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
-  const [selectedShipment, setSelectedShipment] = React.useState<any | null>(null)
+  const [selectedShipment, setSelectedShipment] = React.useState<ShipmentRecord | null>(null)
 
   const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
     if (!rawLabel) return null
@@ -41,12 +44,12 @@ export function ClientShipmentsHistory() {
     return rawLabel
   }
 
-  const fetchLabelForShipment = async (item: any, fallbackRef?: string): Promise<string | null> => {
+  const fetchLabelForShipment = async (item: ShipmentRecord, fallbackRef?: string): Promise<string | null> => {
     const rawLabel = await fetchOfficialShipmentLabel(item, getShipmentLabelAction, [fallbackRef])
     return resolveLabel(rawLabel)
   }
 
-  const printLabel = async (envioItem: any) => {
+  const printLabel = async (envioItem: ShipmentRecord) => {
     const label = await fetchLabelForShipment(envioItem)
     if (label) {
       printCttLabel(label)
@@ -55,7 +58,7 @@ export function ClientShipmentsHistory() {
     }
   }
 
-  const downloadLabel = async (envioItem: any, ref: string) => {
+  const downloadLabel = async (envioItem: ShipmentRecord, ref: string) => {
     const label = await fetchLabelForShipment(envioItem, ref)
     if (label) {
       const carrier = (envioItem?.transportadora || envioItem?.servico || "").toLowerCase().includes("correos") ? "Correos" : "CTT"
@@ -65,10 +68,15 @@ export function ClientShipmentsHistory() {
     }
   }
 
-  React.useEffect(() => {
-    let active = true
+  const [statsClientKey, setStatsClientKey] = React.useState([currentClient.id, currentClient.short_name])
+  if (statsClientKey[0] !== currentClient.id || statsClientKey[1] !== currentClient.short_name) {
+    setStatsClientKey([currentClient.id, currentClient.short_name])
     setLoading(true)
     setLoadError(false)
+  }
+
+  React.useEffect(() => {
+    let active = true
     getClientPortalStatsAction(currentClient.id, currentClient.short_name).then(res => {
       if (!active) return
       
@@ -111,9 +119,13 @@ export function ClientShipmentsHistory() {
   const [currentPage, setCurrentPage] = React.useState(1)
 
   // Reiniciar página quando os filtros ou pesquisa mudam
-  React.useEffect(() => {
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], searchTerm) || !Object.is(observedInputs1[1], statusFilter)) {
+    setObservedInputs1([searchTerm, statusFilter])
+
     setCurrentPage(1)
-  }, [searchTerm, statusFilter])
+  
+  }
 
   const totalPages = Math.ceil(filteredShipments.length / pageSize) || 1
   const paginatedShipments = React.useMemo(() => {
@@ -122,7 +134,7 @@ export function ClientShipmentsHistory() {
   }, [filteredShipments, currentPage, pageSize])
 
   const pendingShipments = React.useMemo(() => {
-    return shipments.filter(s => s.status === "pendente" && ["ctt", "ctt_expresso"].includes(s.carrier_code) && !s.ctt_manifest_pdf && !["manifesto_fechado", "expedido"].includes(s.ops_substatus))
+    return shipments.filter(s => s.status === "pendente" && ["ctt", "ctt_expresso"].includes(s.carrier_code || "") && !s.ctt_manifest_pdf && !["manifesto_fechado", "expedido"].includes(s.ops_substatus || ""))
   }, [shipments])
 
   const handleCloseBatch = async () => {
@@ -142,7 +154,7 @@ export function ClientShipmentsHistory() {
         if (res.warning) alert(res.warning)
         // update local state
         setShipments(prev => prev.map(s => {
-          if (idsToClose.includes(s.tracking_number) || idsToClose.includes(s.id)) {
+          if (idsToClose.includes(s.tracking_number || "") || idsToClose.includes(s.id)) {
             return { ...s, ops_substatus: "manifesto_fechado" }
           }
           return s
@@ -150,8 +162,8 @@ export function ClientShipmentsHistory() {
       } else {
         alert(res.error || "Não foi possível confirmar o fecho do manifesto CTT.")
       }
-    } catch (e: any) {
-      alert("Erro ao fechar lote: " + e.message)
+    } catch (e) {
+      alert("Erro ao fechar lote: " + errorMessage(e))
     } finally {
       setClosingBatch(false)
     }

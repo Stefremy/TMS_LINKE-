@@ -1,4 +1,6 @@
 "use client"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
@@ -69,13 +71,21 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
   const [currentPage, setCurrentPage] = React.useState(1)
 
   // Sync with prop updates
-  React.useEffect(() => {
-    setClientes(initialClientes || [])
-  }, [initialClientes])
+  const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], initialClientes)) {
+    setObservedInputs1([initialClientes])
 
-  React.useEffect(() => {
+    setClientes(initialClientes || [])
+  
+  }
+
+  const [observedInputs2, setObservedInputs2] = React.useState<readonly unknown[] | null>(null)
+  if (observedInputs2 === null || !Object.is(observedInputs2[0], initialServicosLinke)) {
+    setObservedInputs2([initialServicosLinke])
+
     setServicosLinke(initialServicosLinke || [])
-  }, [initialServicosLinke])
+  
+  }
 
   // Filtered clients
   const filtered = React.useMemo(() => {
@@ -140,8 +150,8 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
 
     try {
       await toggleClienteStatusAction(client.id, newStatus)
-    } catch (err: any) {
-      alert("Erro ao atualizar estado: " + err.message)
+    } catch (err) {
+      alert("Erro ao atualizar estado: " + errorMessage(err))
     }
   }
 
@@ -162,8 +172,8 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
 
     try {
       await deleteClienteAction(client.id)
-    } catch (err: any) {
-      alert("Erro ao eliminar: " + err.message)
+    } catch (err) {
+      alert("Erro ao eliminar: " + errorMessage(err))
     }
   }
 

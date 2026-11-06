@@ -69,7 +69,7 @@ export class CTTReferencesService {
       const dataset = backing?.diffgram?.DSPontosEntrega?.TBLPontosEntrega
 
       if (dataset && Array.isArray(dataset)) {
-        return dataset.map((p: any) => this.mapRawPointToPontoEntrega(p, "PT"))
+        return dataset.map((p) => this.mapRawPointToPontoEntrega(p, "PT"))
       }
       
       if (dataset && typeof dataset === "object") {
@@ -109,7 +109,7 @@ export class CTTReferencesService {
       const dataset = backing?.diffgram?.DSPontosEntrega?.TBLPontosEntrega
 
       if (dataset && Array.isArray(dataset)) {
-        return dataset.map((p: any) => this.mapRawPointToPontoEntrega(p, "ES"))
+        return dataset.map((p) => this.mapRawPointToPontoEntrega(p, "ES"))
       }
       
       if (dataset && typeof dataset === "object") {
@@ -176,7 +176,7 @@ export class CTTReferencesService {
 
       const pontosRaw = response?.ObterDadosPontosEntregaResponse?.ObterDadosPontosEntregaResult?.PontosDeEntrega
       if (pontosRaw && Array.isArray(pontosRaw)) {
-        return pontosRaw.map((p: any) => ({
+        return pontosRaw.map((p) => ({
           codigo: p.Codigo || p.ID || p.PuP_x0020_ID || "",
           nome: p.Nome || p.Display_x0020_Name || "",
           morada: p.Morada || p.street_x0020_name || "",
@@ -196,7 +196,7 @@ export class CTTReferencesService {
     }
   }
 
-  private mapRawPointToPontoEntrega(p: any, defaultCountry: "PT" | "ES" = "PT"): CTTPontoEntrega {
+  private mapRawPointToPontoEntrega(p: Record<string, string | undefined>, defaultCountry: "PT" | "ES" = "PT"): CTTPontoEntrega {
     const nome = String(p.Display_x0020_Name || "").trim()
     const morada = String(p.street_x0020_name || "").trim()
     const tipo = this.detectPointType(nome, morada)
@@ -229,8 +229,8 @@ export class CTTReferencesService {
       horarioFormatado += ` | Sáb: ${sab}`
     }
 
-    let lat = p.Latitude ? String(p.Latitude).trim().replace(",", ".") : undefined
-    let lng = p.Longitude ? String(p.Longitude).trim().replace(",", ".") : undefined
+    const lat = p.Latitude ? String(p.Latitude).trim().replace(",", ".") : undefined
+    const lng = p.Longitude ? String(p.Longitude).trim().replace(",", ".") : undefined
 
     let entidadeNome = "Rede CTT Expresso"
     if (pais === "ES") {

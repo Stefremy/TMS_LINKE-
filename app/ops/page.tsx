@@ -78,8 +78,8 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
 
   // Create client map
   const clientMap = new Map<string, string>()
-  clients.forEach((c: any) => {
-    clientMap.set(c.id, c.short_name || c.legal_name || c.name)
+  clients.forEach((c) => {
+    clientMap.set(c.id, c.short_name || c.legal_name || c.name || "")
     if (c.code) clientMap.set(c.code, c.short_name || c.legal_name)
   })
 
@@ -112,35 +112,35 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
   const targetDate = new Date(targetYear, targetMonth, 1)
   
   // Filter shipments for KPIs to ONLY the target month/range
-  const currentMonthShipments = shipments.filter((s: any) => {
+  const currentMonthShipments = shipments.filter((s) => {
     const d = new Date(s.created_at)
     return d >= currentMonthStart && d <= currentMonthEnd
   })
   
-  const motherAccountId = clients.find((c: any) => c.code === "CL001")?.id
+  const motherAccountId = clients.find((c) => c.code === "CL001")?.id
   const clientShipments = motherAccountId 
-    ? shipments.filter((s: any) => s.client_id !== motherAccountId)
+    ? shipments.filter((s) => s.client_id !== motherAccountId)
     : shipments
     
-  const currentMonthClientShipments = clientShipments.filter((s: any) => {
+  const currentMonthClientShipments = clientShipments.filter((s) => {
     const d = new Date(s.created_at)
     return d >= currentMonthStart && d <= currentMonthEnd
   })
 
   const totalShipments = currentMonthShipments.length
-  const pendingRecolhas = recolhas.filter((r: any) => r.status === "pendente" || r.status === "rascunho").length
+  const pendingRecolhas = recolhas.filter((r) => r.status === "pendente" || r.status === "rascunho").length
   
-  const clientRevenue = currentMonthClientShipments.reduce((acc: number, s: any) => acc + (Number(s.sell_price) || 0), 0)
-  const clientCost = currentMonthClientShipments.reduce((acc: number, s: any) => acc + (Number(s.buy_price) || 0), 0)
+  const clientRevenue = currentMonthClientShipments.reduce((acc: number, s) => acc + (Number(s.sell_price) || 0), 0)
+  const clientCost = currentMonthClientShipments.reduce((acc: number, s) => acc + (Number(s.buy_price) || 0), 0)
   const clientMargin = clientRevenue - clientCost
 
-  const deliveredShipments = currentMonthShipments.filter((s: any) => s.status === "entregue")
+  const deliveredShipments = currentMonthShipments.filter((s) => s.status === "entregue")
   const deliveredCount = deliveredShipments.length
   const deliveryRate = totalShipments > 0 ? Math.round((deliveredCount / totalShipments) * 100) : 0
 
   // Calculate Avg Transit Time (days)
   let totalTransitDays = 0
-  deliveredShipments.forEach((s: any) => {
+  deliveredShipments.forEach((s) => {
     const created = new Date(s.created_at)
     const updated = new Date(s.updated_at || s.created_at)
     const diffTime = Math.abs(updated.getTime() - created.getTime())
@@ -150,7 +150,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
   const avgTransitTime = deliveredCount > 0 ? (totalTransitDays / deliveredCount).toFixed(1) : "0"
 
   // Check for incidents in delivered shipments to calculate 1st attempt rate
-  const deliveredIds = deliveredShipments.map((s: any) => s.id)
+  const deliveredIds = deliveredShipments.map((s) => s.id)
   let deliveredWithIncidents = 0
   if (deliveredIds.length > 0) {
     // Chunk the IN() list: thousands of ids in one request exceed the PostgREST URL limit
@@ -167,7 +167,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
           .in("event_code", ["EMH", "EMN", "EDF"])
       )
     )
-    results.forEach(({ data }) => (data || []).forEach((e: any) => incidentShipmentIds.add(e.shipment_id)))
+    results.forEach(({ data }) => (data || []).forEach((e) => incidentShipmentIds.add(e.shipment_id)))
     deliveredWithIncidents = incidentShipmentIds.size
   }
   const firstAttemptCount = deliveredCount - deliveredWithIncidents
@@ -182,7 +182,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
     entregue: deliveredCount,
     devolvido: 0
   }
-  currentMonthShipments.forEach((s: any) => {
+  currentMonthShipments.forEach((s) => {
     if (s.status === "pendente" || s.status === "rascunho") statusCounts.pendente++
     else if (s.status === "em transito" || s.status === "em_transito") statusCounts.em_transito++
     else if (s.status === "em_distribuicao") statusCounts.em_distribuicao++
@@ -191,7 +191,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
   })
 
   // Profit Chart Data (Accumulated by Day for 4 months)
-  const chartData: any[] = []
+  const chartData: React.ComponentProps<typeof ProfitComparisonChart>["data"] = []
   const monthData: Record<number, number[]> = {}
   
   for (let i = 0; i < 4; i++) {
@@ -200,12 +200,12 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
     const mEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() - i + 1, 0)
     
     // Group client shipments by day for this month
-    const mShipments = clientShipments.filter((s: any) => {
+    const mShipments = clientShipments.filter((s) => {
       const d = new Date(s.created_at)
       return d >= mStart && d <= mEnd
     })
     
-    mShipments.forEach((s: any) => {
+    mShipments.forEach((s) => {
       const day = new Date(s.created_at).getDate()
       const profit = (Number(s.sell_price) || 0) - (Number(s.buy_price) || 0)
       monthData[i][day - 1] += profit
@@ -273,11 +273,11 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
   ]
 
   const recentShipments = shipments.slice(0, 5)
-  const latestActiveShipment = shipments.find((s: any) => s.status !== "entregue" && s.status !== "devolvido") || shipments[0] || null
+  const latestActiveShipment = shipments.find((s) => s.status !== "entregue" && s.status !== "devolvido") || shipments[0] || null
 
   const activeIds = shipments
-    .filter((s: any) => s.status !== "entregue" && s.status !== "devolvido" && s.status !== "cancelado")
-    .map((s: any) => s.id)
+    .filter((s) => s.status !== "entregue" && s.status !== "devolvido" && s.status !== "cancelado")
+    .map((s) => s.id)
 
   const primaryStats = [
     { ...stats[4], color: "#155EEF" },
@@ -464,9 +464,9 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
             <div>
               {/* Mobile Cards View */}
               <div className="md:hidden divide-y divide-[var(--border-subtle)]">
-                {recentShipments.map((envio: any) => {
+                {recentShipments.map((envio) => {
                   const clientName = envio.sender_name || (envio.client_id && clientMap.get(envio.client_id)) || "Cliente Direto"
-                  const isRealCtt = (val?: string) => val && /^(DA|DB|DD|EA|EQ|EG)/i.test(val.trim())
+                  const isRealCtt = (val?: string | null) => val && /^(DA|DB|DD|EA|EQ|EG)/i.test(val.trim())
                   
                   const cttCode = isRealCtt(envio.ctt_object_id) 
                     ? envio.ctt_object_id 
@@ -552,9 +552,9 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)] text-xs">
-                  {recentShipments.map((envio: any) => {
+                  {recentShipments.map((envio) => {
                     const clientName = envio.sender_name || (envio.client_id && clientMap.get(envio.client_id)) || "Cliente Direto"
-                    const isRealCtt = (val?: string) => val && /^(DA|DB|DD|EA|EQ|EG)/i.test(val.trim())
+                    const isRealCtt = (val?: string | null) => val && /^(DA|DB|DD|EA|EQ|EG)/i.test(val.trim())
                     
                     const cttCode = isRealCtt(envio.ctt_object_id) 
                       ? envio.ctt_object_id 
@@ -652,7 +652,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
                   || latestActiveShipment.tracking_number
                   || latestActiveShipment.id
 
-                const isRealCtt = (val?: string) => val && /^(DA|DB|DD|EA|EQ|EG)/i.test(val.trim())
+                const isRealCtt = (val?: string | null) => val && /^(DA|DB|DD|EA|EQ|EG)/i.test(val.trim())
                 const cttCandidate = isRealCtt(latestActiveShipment.ctt_object_id) 
                   ? latestActiveShipment.ctt_object_id 
                   : isRealCtt(latestActiveShipment.tracking_number) 

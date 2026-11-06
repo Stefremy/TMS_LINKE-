@@ -1,4 +1,6 @@
 "use server"
+import { errorMessage } from "@/lib/errors"
+
 
 import fs from "fs"
 import path from "path"
@@ -60,9 +62,9 @@ export async function saveCarrierLogosSettingsAction(settings: CarrierLogosSetti
     revalidatePath("/ops")
     revalidatePath("/ops/envios")
     return { success: true }
-  } catch (err: any) {
+  } catch (err) {
     console.error("Erro ao gravar configurações de logótipos:", err)
-    return { success: false, error: err?.message || "Falha ao gravar configurações." }
+    return { success: false, error: errorMessage(err) || "Falha ao gravar configurações." }
   }
 }
 
@@ -94,9 +96,9 @@ export async function uploadCarrierLogoAction(formData: FormData): Promise<{ suc
 
     const publicUrl = `/logo_transportadoras/${filename}`
     return { success: true, url: publicUrl }
-  } catch (err: any) {
+  } catch (err) {
     console.error("Erro ao fazer upload do logo:", err)
-    return { success: false, error: err?.message || "Falha ao processar ficheiro." }
+    return { success: false, error: errorMessage(err) || "Falha ao processar ficheiro." }
   }
 }
 

@@ -601,7 +601,7 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
       mode,
       title: targetTitle,
       // This function runs only from call/answer buttons, never during rendering.
-      // eslint-disable-next-line react-hooks/purity
+       
       startedAt: Date.now(),
       minimized: false,
       micMuted: false,

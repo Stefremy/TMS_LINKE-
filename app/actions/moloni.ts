@@ -1,4 +1,9 @@
 "use server"
+import type { ShipmentRecord } from "@/lib/services/shipments/types"
+import type { BillingStatement, MoloniConnection } from "@/lib/billing/types"
+import type { Cliente } from "@/app/ops/entidades/clientes/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import { invoiceBillingAddress, getClientBillingAddress, usesPrincipalBillingAddress } from "@/lib/client-addresses"
 
@@ -34,15 +39,15 @@ async function claimManualInvoiceShipments(clientId: string, shipmentIds: string
 /**
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
-export async function internalEmitInvoice(client: any, shipments: any[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false) {
+export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Cliente, "id">, shipments: ShipmentRecord[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false) {
   const ctx = await requireEmployee("Faturação & Contas Correntes")
   const supabase = createAdminClient()
   if (!client?.id || !shipments?.length) throw new Error("Cliente ou envios não encontrados.")
-  const persistedClient = (await getClientesAction(client.id)).find((c: any) => c.id === client.id)
+  const persistedClient = (await getClientesAction(client.id)).find((c) => c.id === client.id)
   if (!persistedClient) throw new Error("Cliente não encontrado nesta empresa.")
   client = { ...persistedClient, tenant_id: ctx.tenant_id }
   const billingAddress = invoiceBillingAddress(client)
-  const selectedIds = [...new Set(shipments.map((s: any) => s.id))]
+  const selectedIds = [...new Set(shipments.map((s) => s.id))]
   const { data: authoritativeShipments, error: shipmentError } = await supabase.from('shipments').select(SHIPMENT_LIST_COLUMNS)
     .eq('tenant_id', ctx.tenant_id).eq('client_id', client.id).in('id', selectedIds)
   if (shipmentError || authoritativeShipments?.length !== selectedIds.length) throw new Error("Envios não encontrados neste cliente.")
@@ -61,7 +66,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
     }
 
     // Calcular Totais
-    const totalValue = shipments.reduce((acc: number, s: any) => acc + Number(s.sell_price || 0), 0)
+    const totalValue = shipments.reduce((acc: number, s) => acc + Number(s.sell_price || 0), 0)
 
     let moloniDocumentId = null
     let moloniDocumentUrl = null
@@ -70,7 +75,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
     let invoiceDueDate: string | null = null
     
     // Verificar credenciais Moloni (no ambiente ou em audit_log)
-    let moloniConfig: any = null
+    let moloniConfig: MoloniConnection | null = null
     if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
       moloniConfig = {
         refreshToken: process.env.MOLONI_REFRESH_TOKEN,
@@ -150,7 +155,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
           grouped: typeof groupShipments === "boolean" ? groupShipments : billingConfig.defaultGrouping === "grouped",
         })
 
-        const validProducts = products.filter((p: any) => p.price > 0)
+        const validProducts = products.filter((p) => p.price > 0)
         
         if (validProducts.length === 0) {
            throw new Error("Todos os envios selecionados têm valor nulo (0€).")
@@ -162,7 +167,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
         invoiceDate = dateNow
         invoiceDueDate = expirationDate
 
-        if (!isProForma) await claimManualInvoiceShipments(client.id, shipments.map((s: any) => s.id), shipments)
+        if (!isProForma) await claimManualInvoiceShipments(client.id, shipments.map((s) => s.id), shipments)
 
         // D. Emitir Fatura ou Fatura Pró-Forma
         let invoiceRes;
@@ -198,8 +203,8 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
         if (moloniDocumentId) {
           try { moloniDocumentNumber = await moloni.getDocumentNumber(moloniDocumentId) } catch {}
         }
-      } catch (moloniErr: any) {
-        moloniEmissionError = moloniErr?.message || "Erro desconhecido ao comunicar com Moloni"
+      } catch (moloniErr) {
+        moloniEmissionError = errorMessage(moloniErr) || "Erro desconhecido ao comunicar com Moloni"
         console.warn("Moloni Invoice Emission Warning (continuing with TMS statement):", moloniEmissionError)
       }
     } else {
@@ -214,8 +219,8 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
     // 3. Criar Registo de Extrato no audit_log (sem necessidade de tabela separada)
     const statementNumber = `EXT-${new Date().getFullYear()}/${String(new Date().getMonth()+1).padStart(2,'0')}-${Math.floor(Math.random() * 9000 + 1000)}`
     const statementId = crypto.randomUUID()
-    const tenantId = isValidUuid((client as any).tenant_id) ? (client as any).tenant_id : "11111111-1111-1111-1111-111111111111"
-    const shipmentIds = shipments.map((s: any) => s.id)
+    const tenantId = isValidUuid((client).tenant_id) ? (client).tenant_id : "11111111-1111-1111-1111-111111111111"
+    const shipmentIds = shipments.map((s) => s.id)
 
     const { error: statementErr } = await supabase.from('audit_log').insert({
       tenant_id: tenantId,
@@ -235,7 +240,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
         total_value: totalValue,
         shipments_count: shipments.length,
         shipment_ids: shipmentIds,
-        shipments: shipments.map((s: any) => ({
+        shipments: shipments.map((s) => ({
           id: s.id,
           tracking_number: s.tracking_number,
           reference: s.reference,
@@ -280,7 +285,7 @@ export async function internalEmitInvoice(client: any, shipments: any[], skipMol
 
         await supabase
           .from('shipments')
-          .update({ billing_statement_id: statementId } as any)
+          .update({ billing_statement_id: statementId })
           .in('id', shipmentIds)
       } catch (e) {
         console.warn("billing_statement_id update error:", e)
@@ -329,7 +334,7 @@ export async function getBillingStatementsAction(clientId?: string) {
 
     if (error || !data) return []
 
-    let statements = data.map((d: any) => ({
+    let statements = data.map((d) => ({
       id: d.details?.id,
       ...d.details,
       audit_id: d.id,
@@ -337,11 +342,11 @@ export async function getBillingStatementsAction(clientId?: string) {
     }))
 
     if (targetClientId) {
-      statements = statements.filter((s: any) => s.client_id === targetClientId)
+      statements = statements.filter((s) => s.client_id === targetClientId)
     }
 
     const notes = await loadInvoiceCredits(supabase, ctx.tenant_id, targetClientId)
-    return statements.map((stmt: {id?:string; audit_id?:string; client_id?:string; total_value?:unknown}) => ({...stmt,...invoiceCreditSummary(stmt, 'billing_statement', notes)}))
+    return statements.map((stmt: BillingStatement) => ({...stmt,...invoiceCreditSummary(stmt, 'billing_statement', notes)}))
   } catch (err) {
     console.error("getBillingStatementsAction error:", err)
     return []
@@ -411,7 +416,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
       return { success: false, error: "Nenhuma empresa associada encontrada nesta conta Moloni." }
     }
 
-    const selectedCompany = (companies || []).find((c: any) => !c.name?.toLowerCase().includes("demonstração")) || companies[0]
+    const selectedCompany = (companies || []).find((c) => !c.name?.toLowerCase().includes("demonstração")) || companies[0]
     const companyId = String(selectedCompany.company_id)
 
     // 1. Guardar em audit_log
@@ -422,7 +427,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
       details: {
         company_id: companyId,
         company_name: selectedCompany.name,
-        company_vat: (selectedCompany as any).vat,
+        company_vat: (selectedCompany).vat,
         refresh_token: refreshToken,
         connected_at: new Date().toISOString(),
       },
@@ -454,8 +459,8 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
         process.env.MOLONI_REFRESH_TOKEN = refreshToken
         process.env.MOLONI_COMPANY_ID = companyId
       }
-    } catch (e: any) {
-      console.warn("Could not write to .env.local:", e?.message)
+    } catch (e) {
+      console.warn("Could not write to .env.local:", errorMessage(e))
     }
 
     revalidatePath("/ops/configuracao/faturacao")
@@ -466,9 +471,9 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
       companyName: selectedCompany.name,
       companyId: companyId,
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error("connectMoloniWithPasswordAction error:", err)
-    return { success: false, error: err.message || "Erro ao ligar ao Moloni." }
+    return { success: false, error: errorMessage(err) || "Erro ao ligar ao Moloni." }
   }
 }
 
@@ -490,7 +495,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
 
     if (error || !logs) throw new Error("Extrato não encontrado.")
 
-    const match = logs.find((l: any) => 
+    const match = logs.find((l) => 
       l.id === statementIdOrNumber || 
       l.details?.id === statementIdOrNumber ||
       l.details?.statement_number === statementIdOrNumber
@@ -515,7 +520,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     stmt.shipments = await hydrateShipmentCharges(supabase, ctx.tenant_id, stmt.client_id, stmt.shipments || [])
 
     // 2. Verificar se o Moloni está configurado
-    let moloniConfig: any = null
+    let moloniConfig: MoloniConnection | null = null
     if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
       moloniConfig = {
         refreshToken: process.env.MOLONI_REFRESH_TOKEN,
@@ -544,7 +549,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
 
     // 3. Obter dados do cliente
     const allClients = await getClientesAction()
-    const client: any = allClients.find((c: any) => c.id === stmt.client_id) || {
+    const client: Partial<Cliente> = allClients.find((c) => c.id === stmt.client_id) || {
       legal_name: stmt.client_name,
       short_name: stmt.client_name,
       nif: "999999990",
@@ -570,7 +575,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
           zipCode: billingAddress.postal_code || "0000-000",
           city: billingAddress.city || "Desconhecida",
           countryCode: billingAddress.country_code,
-          email: client.email || (client as any).billing_email || "",
+          email: client.email || (client).billing_email || "",
           phone: client.phone || ""
         })
       }
@@ -585,7 +590,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
         zipCode: billingAddress.postal_code || "0000-000",
         city: billingAddress.city || "Desconhecida",
         countryCode: billingAddress.country_code,
-        email: client.email || (client as any).billing_email || "",
+        email: client.email || (client).billing_email || "",
         phone: client.phone || ""
       })
     }
@@ -611,7 +616,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       throw new Error("A discriminação não corresponde ao total do extrato. Confirme os valores antes de faturar.")
     }
 
-    const validProducts = products.filter((p: any) => p.price > 0)
+    const validProducts = products.filter((p) => p.price > 0)
     if (validProducts.length === 0) {
       validProducts.push({
         productId: productId,
@@ -627,7 +632,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     const paymentDays = paymentDueDays(client.payment_due_days, billingConfig.defaultPaymentDays === undefined ? 30 : billingConfig.defaultPaymentDays)
     const expirationDate = addCalendarDays(dateNow, paymentDays)
 
-    if (!isProForma) await claimManualInvoiceShipments(stmt.client_id, stmt.shipment_ids || stmt.shipments?.map((s: any) => s.id) || [])
+    if (!isProForma) await claimManualInvoiceShipments(stmt.client_id, stmt.shipment_ids || stmt.shipments?.map((s: ShipmentRecord) => s.id) || [])
 
     // 7. Criar fatura/pro-forma no Moloni
     let invoiceRes
@@ -660,8 +665,8 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     let moloniDocPdf = null
     try {
       moloniDocPdf = await moloni.getDocumentPDFLink(moloniDocId)
-    } catch (e: any) {
-      if (e.message.includes('{"valid":0}')) {
+    } catch (e) {
+      if (errorMessage(e)?.includes('{"valid":0}')) {
         throw new Error(`Documento emitido (ID: ${moloniDocId}), mas o Moloni recusou gerar o PDF. Verifique se a Pró-Forma ficou em Rascunho.`)
       }
       throw e
@@ -709,7 +714,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
 
         await supabase
           .from('shipments')
-          .update({ billing_statement_id: stmtId } as any)
+          .update({ billing_statement_id: stmtId })
           .in('id', stmt.shipment_ids)
       } catch (e) {
         console.warn("Could not update shipments billing_statement_id", e)
@@ -724,9 +729,9 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       moloniDocumentId: moloniDocId,
       moloniDocumentPdf: `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error("emitMoloniInvoiceForStatementAction error:", err)
-    return { success: false, error: err.message || "Erro ao emitir fatura no Moloni" }
+    return { success: false, error: errorMessage(err) || "Erro ao emitir fatura no Moloni" }
   }
 }
 
@@ -843,7 +848,7 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
     let moloniEmissionError: string | null = null
 
     // Verificar se Moloni está conectado
-    let moloniClientConfig: any = null
+    let moloniClientConfig: MoloniConnection | null = null
     if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
       moloniClientConfig = {
         refreshToken: process.env.MOLONI_REFRESH_TOKEN,
@@ -943,8 +948,8 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
         if (moloniDocumentId) {
           moloniDocumentPdf = await moloni.getDocumentPDFLink(moloniDocumentId)
         }
-      } catch (mErr: any) {
-        moloniEmissionError = mErr?.message || "Erro de comunicação com Moloni"
+      } catch (mErr) {
+        moloniEmissionError = errorMessage(mErr) || "Erro de comunicação com Moloni"
         console.warn("Moloni Custom Invoice Emission Warning:", moloniEmissionError)
       }
     } else {
@@ -1005,11 +1010,11 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
       pdfUrl: `/api/custom-invoices/${encodeURIComponent(invoiceNumber)}/pdf`,
       moloniError: moloniEmissionError
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error("emitCustomInvoiceAction error:", err)
     return {
       success: false,
-      error: err.message || "Erro ao emitir fatura personalizada"
+      error: errorMessage(err) || "Erro ao emitir fatura personalizada"
     }
   }
 }
@@ -1033,7 +1038,7 @@ export async function getCustomInvoicesAction() {
     }
 
     const creditNotes = await loadInvoiceCredits(supabase, ctx.tenant_id)
-    const mapInvoice = (log: any) => ({
+    const mapInvoice = (log: {id:string; created_at:string; details: BillingStatement}) => ({
       audit_id: log.id,
       client_id: log.details?.client_id,
       id: log.details?.id || log.id,
@@ -1050,12 +1055,12 @@ export async function getCustomInvoicesAction() {
       moloni_document_pdf: log.details?.moloni_document_pdf || null,
       moloni_receipt_id: log.details?.moloni_receipt_id || null,
       moloni_receipt_pdf: log.details?.moloni_receipt_pdf || null,
-      status: log.details?.status || null,
+      status: log.details?.status || undefined,
       pdf_url: `/api/custom-invoices/${encodeURIComponent(log.details?.invoice_number || log.details?.id || log.id)}/pdf`,
       created_at: log.created_at
     })
     return logs.map(mapInvoice).map((invoice: ReturnType<typeof mapInvoice>) => ({...invoice,...invoiceCreditSummary(invoice, "custom_invoice", creditNotes)}))
-  } catch (err: any) {
+  } catch (err) {
     console.warn("getCustomInvoicesAction error:", err)
     return []
   }
@@ -1082,7 +1087,7 @@ export async function getMoloniPaymentMethodsAction() {
   await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
-    let moloniConfig: any = null
+    let moloniConfig: MoloniConnection | null = null
     if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
       moloniConfig = {
         refreshToken: process.env.MOLONI_REFRESH_TOKEN,
@@ -1106,7 +1111,7 @@ export async function getMoloniPaymentMethodsAction() {
     const moloni = new MoloniClient(moloniConfig)
     const methods = await moloni.getPaymentMethods()
     return { success: true, methods }
-  } catch (err: any) {
+  } catch (err) {
     console.error("getMoloniPaymentMethodsAction error:", err)
     return { success: false, methods: [] }
   }
@@ -1149,14 +1154,14 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
     }
 
     // 2. Obter Cliente do TMS
-    let client: any = null
+    let client: Partial<Cliente> & Pick<Cliente, "id"> | null = null
     if (shipment.client_id) {
       const allClients = await getClientesAction(shipment.client_id)
       client = allClients[0]
     }
 
     // 3. Obter Configuração Moloni
-    let moloniConfig: any = null
+    let moloniConfig: MoloniConnection | null = null
     if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
       moloniConfig = {
         refreshToken: process.env.MOLONI_REFRESH_TOKEN,
@@ -1213,7 +1218,7 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
     const taxId = await moloni.getTaxId(billingConfig.defaultVatRate || 23)
     // Séries para Faturas e Guias de Transporte podem ser diferentes (AT requirements)
     // Usamos sempre uma série certificada para transporte
-    let documentSetId = await moloni.getTransportDocumentSet();
+    const documentSetId = await moloni.getTransportDocumentSet();
     const productId = await moloni.getGenericProductId(
       taxId,
       "CONSUMIVEIS",
@@ -1287,11 +1292,11 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
       documentNumber: moloniDocNum || `GT ${new Date().getFullYear()}/${moloniDocId}`,
       pdfUrl: moloniPdfUrl,
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error("emitMoloniWaybillForShipmentAction error:", err)
     return {
       success: false,
-      error: err.message || "Erro ao emitir Guia de Transporte no Moloni"
+      error: errorMessage(err) || "Erro ao emitir Guia de Transporte no Moloni"
     }
   }
 }
@@ -1327,15 +1332,15 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
       .select("details").eq("tenant_id", ctx.tenant_id).eq("action", "billing_statement")
       .eq("details->>client_id", clientId)
     if (existingError) throw new Error("Não foi possível verificar as faturas existentes. Tente novamente mais tarde.")
-    if (existing?.some(({details: stmt}: {details: any}) => stmt.moloni_document_id && !stmt.is_pro_forma &&
+    if (existing?.some(({details: stmt}: {details: BillingStatement}) => stmt.moloni_document_id && !stmt.is_pro_forma &&
       stmt.shipment_ids?.some((id: string) => ids.includes(id)))) {
       throw new Error("Um dos envios já tem fatura Moloni. Atualize a página antes de continuar.")
     }
 
     return await internalEmitInvoice(client, shipments, skipMoloni, groupShipments, isProForma)
-  } catch (err: any) {
+  } catch (err) {
     console.error("Emit Invoice Error:", err)
-    return { success: false as const, error: err?.message || "Failed to emit invoice" }
+    return { success: false as const, error: errorMessage(err) || "Failed to emit invoice" }
   }
 }
 
@@ -1364,7 +1369,7 @@ export async function sendStatementInvoiceEmailAction(params: {
       throw new Error("Extrato não encontrado.")
     }
 
-    const match = logs.find((l: any) => 
+    const match = logs.find((l) => 
       l.id === statementIdOrNumber || 
       l.details?.id === statementIdOrNumber ||
       l.details?.statement_number === statementIdOrNumber
@@ -1378,7 +1383,7 @@ export async function sendStatementInvoiceEmailAction(params: {
 
     // 2. Procurar cliente para obter nome e email padrão
     const allClients = await getClientesAction()
-    const client: any = allClients.find((c: any) => c.id === stmt.client_id)
+    const client = allClients.find((c) => c.id === stmt.client_id)
 
     const targetEmail = (recipientEmail || client?.billing_email || client?.email || "").trim()
 
@@ -1404,7 +1409,7 @@ export async function sendStatementInvoiceEmailAction(params: {
         pdfUrl = pdfUrl.replace("/downloads/?h=", "/downloads/index.php?action=getDownload&h=") + `&d=${stmt.moloni_document_id}&e=&i=1`
       }
       if (!pdfUrl && stmt.moloni_document_id) {
-        let moloniConfig: any = null
+        let moloniConfig: MoloniConnection | null = null
         if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
           moloniConfig = {
             refreshToken: process.env.MOLONI_REFRESH_TOKEN,
@@ -1441,7 +1446,7 @@ export async function sendStatementInvoiceEmailAction(params: {
         const { generateStatementPdfBuffer } = await import("@/lib/services/billing/statement-pdf")
         
         let enrichedShipments = stmt.shipments || []
-        const shipmentIds = (stmt.shipment_ids || enrichedShipments.map((s: any) => s.id)).filter(Boolean)
+        const shipmentIds = (stmt.shipment_ids || enrichedShipments.map((s: ShipmentRecord) => s.id)).filter(Boolean)
         if (shipmentIds.length > 0) {
           const { data: dbShipments } = await supabase
             .from("shipments")
@@ -1449,8 +1454,8 @@ export async function sendStatementInvoiceEmailAction(params: {
             .in("id", shipmentIds)
           
           if (dbShipments && dbShipments.length > 0) {
-            enrichedShipments = enrichedShipments.map((s: any) => {
-              const dbS = dbShipments.find((d: any) => d.id === s.id)
+            enrichedShipments = enrichedShipments.map((s: ShipmentRecord) => {
+              const dbS = dbShipments.find((d) => d.id === s.id)
               return {
                 ...s,
                 tracking_number: s.tracking_number || dbS?.tracking_number,
@@ -1590,9 +1595,9 @@ export async function sendStatementInvoiceEmailAction(params: {
       attachmentsCount: attachments.length,
       message: `Fatura enviada com sucesso para ${targetEmail}` 
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error("sendStatementInvoiceEmailAction error:", err)
-    return { success: false, error: err?.message || "Erro desconhecido ao enviar fatura por email" }
+    return { success: false, error: errorMessage(err) || "Erro desconhecido ao enviar fatura por email" }
   }
 }
 

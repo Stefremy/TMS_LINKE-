@@ -36,9 +36,9 @@ export default async function ClientTrackingPage({
   try {
     // Strictly fetch ONLY this client's own shipments
     const allFetched = await getShipmentsAction({ includeLabels: false, clientId: client.id })
-    const clientOnlyShipments = (allFetched || []).filter((s: any) => s.client_id === client.id)
+    const clientOnlyShipments = (allFetched || []).filter((s) => s.client_id === client.id)
 
-    const activeShipments = clientOnlyShipments.filter((s: any) => {
+    const activeShipments = clientOnlyShipments.filter((s) => {
       if (searchQ) {
         const match =
           s.tracking_number?.toLowerCase().includes(searchQ.toLowerCase()) ||
@@ -57,8 +57,8 @@ export default async function ClientTrackingPage({
       )
     }).slice(0, searchQ ? 50 : 25)
 
-    const shipmentIds = activeShipments.map((s: any) => s.id)
-    const eventsByShipment: Record<string, any[]> = {}
+    const shipmentIds = activeShipments.map((s) => s.id)
+    const eventsByShipment: Record<string, { event_code: string; description: string; timestamp: string }[]> = {}
 
     if (shipmentIds.length > 0) {
       const { data: dbEvents } = await supabase
@@ -68,7 +68,7 @@ export default async function ClientTrackingPage({
         .order("timestamp", { ascending: true })
 
       if (dbEvents) {
-        dbEvents.forEach((e: any) => {
+        dbEvents.forEach((e) => {
           if (!eventsByShipment[e.shipment_id]) eventsByShipment[e.shipment_id] = []
           eventsByShipment[e.shipment_id].push(e)
         })
@@ -76,7 +76,7 @@ export default async function ClientTrackingPage({
     }
 
     realShipmentsMapped = await Promise.all(
-      activeShipments.map(async (s: any) => {
+      activeShipments.map(async (s) => {
         const isArriving = s.status === "em_distribuicao"
 
         const senderZip = s.sender_zip4 && s.sender_zip3 ? `${s.sender_zip4}-${s.sender_zip3}` : s.sender_postal_code

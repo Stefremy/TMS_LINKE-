@@ -1,4 +1,7 @@
 "use client"
+import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
+import { errorMessage } from "@/lib/errors"
+
 
 import * as React from "react"
 import { codCents } from "@/lib/services/reembolsos/client-cod"
@@ -53,9 +56,9 @@ import { CTT_TRACKING_EVENTS, CTT_NON_DELIVERY_REASONS, CTT_SITUATIONS } from "@
 import { CarrierMeasurementsPanel } from '@/components/shipments/CarrierMeasurementsPanel'
 
 interface ClientShipmentDetailModalProps {
-  shipment: any
+  shipment: ShipmentRecord | null
   onClose: () => void
-  onUpdateShipment?: (updated: any) => void
+  onUpdateShipment?: (updated: ShipmentRecord) => void
 }
 
 export function ClientShipmentDetailModal({ 
@@ -72,7 +75,7 @@ export function ClientShipmentDetailModal({
   const [isSyncing, setIsSyncing] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [isCreatingReturn, setIsCreatingReturn] = React.useState(false)
-  const [timelineEvents, setTimelineEvents] = React.useState<any[]>([])
+  const [timelineEvents, setTimelineEvents] = React.useState<ShipmentTimelineEvent[]>([])
   const [loadingTimeline, setLoadingTimeline] = React.useState(true)
   const [isInjectingEvent, setIsInjectingEvent] = React.useState(false)
   const [selectedEvent, setSelectedEvent] = React.useState("EMH")
@@ -101,23 +104,27 @@ export function ClientShipmentDetailModal({
   const currentStatus = currentShipment?.status || "pendente"
 
   // Load timeline events
-  const loadTimeline = React.useCallback(async (shipmentId: string, trkNumber?: string) => {
-    try {
-      console.log("Loading timeline for:", shipmentId, trkNumber)
-      setLoadingTimeline(true)
-      const data = await getShipmentTrackingTimelineAction(shipmentId, trkNumber)
-      console.log("Timeline data loaded:", data?.length, "events")
-      setTimelineEvents(data || [])
-    } catch (e) {
+  const loadTimeline = React.useCallback(async (shipmentId: string, trkNumber?: string | null) => {
+    console.log("Loading timeline for:", shipmentId, trkNumber)
+return getShipmentTrackingTimelineAction(shipmentId, trkNumber).then(async (data) => {
+console.log("Timeline data loaded:", data?.length, "events")
+setTimelineEvents(data || [])
+}).catch((e) => {
       console.error("Error loading tracking timeline:", e)
-    } finally {
+    }).finally(() => {
       setLoadingTimeline(false)
-    }
+    })
   }, [])
+
+  const [timelineShipment, setTimelineShipment] = React.useState(shipment)
+  if (timelineShipment !== shipment) {
+    setTimelineShipment(shipment)
+    setCurrentShipment(shipment)
+    setLoadingTimeline(true)
+  }
 
   React.useEffect(() => {
     if (shipment) {
-      setCurrentShipment(shipment)
       const carrierTrk = shipment.carrier_tracking_number || shipment.ctt_object_id || (!shipment.tracking_number?.startsWith("LTK") ? shipment.tracking_number : null)
       loadTimeline(shipment.id, carrierTrk || shipment.tracking_number)
 
@@ -190,12 +197,13 @@ export function ClientShipmentDetailModal({
         const updated = { ...currentShipment, status: res.latestStatus || currentShipment.status }
         setCurrentShipment(updated)
         if (onUpdateShipment) onUpdateShipment(updated)
+        setLoadingTimeline(true)
         await loadTimeline(currentShipment.id, tracking)
       } else {
         alert("Atenção: " + (res.error || "Não foi possível obter pickagens para este envio."))
       }
-    } catch (e: any) {
-      alert("Erro ao sincronizar com CTT: " + e.message)
+    } catch (e) {
+      alert("Erro ao sincronizar com CTT: " + errorMessage(e))
     } finally {
       setIsSyncing(false)
     }
@@ -208,6 +216,7 @@ export function ClientShipmentDetailModal({
       if (res.success) {
         alert(`🎉 Evento ${selectedEvent} injetado com sucesso!`)
         // Re-sincroniza
+        setLoadingTimeline(true)
         await loadTimeline(currentShipment.id, tracking)
         // Obtém estado atualizado
         const newStatus = CTT_TRACKING_EVENTS[selectedEvent]?.tms_status || currentShipment.status
@@ -217,8 +226,8 @@ export function ClientShipmentDetailModal({
       } else {
         alert("Erro ao injetar evento: " + res.error)
       }
-    } catch (e: any) {
-      alert("Erro ao injetar evento: " + e.message)
+    } catch (e) {
+      alert("Erro ao injetar evento: " + errorMessage(e))
     } finally {
       setIsInjectingEvent(false)
     }
@@ -257,8 +266,8 @@ export function ClientShipmentDetailModal({
       } else {
         alert("Erro ao criar devolução: " + (res.error || "Erro desconhecido"))
       }
-    } catch (e: any) {
-      alert("Erro ao criar devolução: " + e.message)
+    } catch (e) {
+      alert("Erro ao criar devolução: " + errorMessage(e))
     } finally {
       setIsCreatingReturn(false)
     }
@@ -279,8 +288,8 @@ export function ClientShipmentDetailModal({
       } else {
         alert("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"))
       }
-    } catch (e: any) {
-      alert("Erro ao eliminar envio: " + e.message)
+    } catch (e) {
+      alert("Erro ao eliminar envio: " + errorMessage(e))
     } finally {
       setIsDeleting(false)
     }
@@ -595,7 +604,7 @@ export function ClientShipmentDetailModal({
               </div>
 
               {/* Incidência Banner (Se aplicável) */}
-              {(currentStatus === "incidencia" || timelineEvents.some((e: any) => e.eventCode === "EMH" || e.eventCode === "EMN" || e.eventCode === "EDF")) && (
+              {(currentStatus === "incidencia" || timelineEvents.some((e) => e.eventCode === "EMH" || e.eventCode === "EMN" || e.eventCode === "EDF")) && (
                 <div className="bg-[var(--status-critical-soft)] border border-[rgba(220,38,38,0.2)] rounded-xl p-4 text-xs text-[var(--status-critical)] flex items-start gap-3 shadow-2xs">
                   <AlertTriangle className="w-5 h-5 text-[var(--status-critical)] shrink-0 mt-0.5" />
                   <div className="space-y-1 flex-1">
@@ -606,7 +615,7 @@ export function ClientShipmentDetailModal({
                       </span>
                     </div>
                     <p className="text-xs text-[var(--status-critical)] opacity-90">
-                      {timelineEvents.slice().reverse().find((e: any) => e.isIncidencia || e.eventCode === "EMH")?.description ||
+                      {timelineEvents.slice().reverse().find((e) => e.isIncidencia || e.eventCode === "EMH")?.description ||
                        "O estafeta registou uma tentativa de entrega não conseguida na morada do destinatário."}
                     </p>
                     <div className="pt-1.5 flex items-center gap-2">

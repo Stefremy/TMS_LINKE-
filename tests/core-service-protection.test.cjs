@@ -69,7 +69,7 @@ function harness({
   permissions = [P.clients, P.editCreatedTables, ...(email === 'geral@linke.pt' ? [P.editBaseTables] : [])],
 } = {}) {
   const tables = {
-    servicos_linke: auditOnly ? [] : [service],
+    servicos_linke: auditOnly ? [] : [{ tenant_id: T, ...service }],
     audit_log: [
       {
         id: 'profile',
@@ -120,6 +120,25 @@ test('all 12 contracted base tables and built-in core IDs/codes remain protected
     assert.equal(types.isPrimordialServico({ id: 'other', code: ` ${code.toLowerCase()} `, is_primordial: false }), true)
   }
   assert.equal(types.isPrimordialServico(fixture), false)
+})
+
+test('service mutations cannot overwrite or delete a native table owned by another company', async () => {
+  const h = harness({ service: { ...fixture, tenant_id: '99999999-9999-4999-8999-999999999999' } })
+  assert.equal((await h.actions.saveServicoLinkeAction({ ...fixture, name: 'Forged change' })).success, false)
+  assert.equal((await h.actions.deleteServicoLinkeAction(fixture.id)).success, false)
+  assert.equal(h.db.writes.length, 0)
+})
+
+test('saving service prices preserves another company profile and deletion marker with the same legacy identifier', async () => {
+  const h = harness(), foreign = '99999999-9999-4999-8999-999999999999'
+  const rows = [
+    { id: 'foreign-profile', tenant_id: foreign, action: 'servicos_linke_data', details: { ...fixture } },
+    { id: 'foreign-deletion', tenant_id: foreign, action: 'deleted_servico_linke', details: { id: fixture.id } },
+  ]
+  h.tables.audit_log.push(...structuredClone(rows))
+  assert.equal((await h.actions.saveServicoLinkeAction({ ...fixture, name: 'Owned change' })).success, true)
+  for (const row of rows) assert.deepEqual(h.tables.audit_log.find(r => r.id === row.id), row)
+  assert.equal(h.db.writes.find(w => w.table === 'servicos_linke' && w.kind === 'upsert').value.tenant_id, T)
 })
 
 test('base table editing is granted by trusted staff permissions rather than an email allowlist', () => {

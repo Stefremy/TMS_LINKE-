@@ -8,7 +8,7 @@ export default async function IntegracoesPage() {
   await requireOpsPageAccess("/ops/integracoes")
 
   const integrations = await getIntegrations()
-  const cttConfig = integrations.find((i: any) => i.provider === 'CTT')
+  const cttConfig = integrations.find((i) => i.provider === 'CTT')
   const isCttConnected = !!cttConfig?.credentials?.client_id
 
   return (

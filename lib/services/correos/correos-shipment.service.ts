@@ -79,7 +79,7 @@ export class CorreosShipmentService {
         }))
 
     // Construct the payload mapping to Correos Express spec
-    const payload: Record<string, any> = {
+    const payload: Record<string, unknown> = {
       solicitante: creds.solicitante,
       codRte: creds.codRte,
       
