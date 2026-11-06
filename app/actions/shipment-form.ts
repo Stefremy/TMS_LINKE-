@@ -62,6 +62,7 @@ async function submitShipment(input: unknown, clientId: string | undefined, quot
   if (ctx.role !== "client" && values.carrierOverride && values.carrierOverride !== carrier) return failure("carrierOverride", "Escolha um serviço da transportadora selecionada.")
   if (requiresCorreosQuotation(carrier, values.recipientCountry, service)) {
     if (ctx.role !== "client" && !airRequestOnly) return failure("serviceId", "Faça o pedido em nome do cliente na página Pedido de envio internacional aéreo da respetiva loja.")
+    if (values.volumesCount !== 1) return failure("volumesCount", "O pedido de cotação internacional está limitado a 1 volume por envio.")
     if (values.codValue || values.selectedSpecialServices.length) return failure("selectedSpecialServices", "As opções de entrega são acordadas na cotação. A cobrança COD não está disponível para este destino.")
     if (!canRequestCorreosQuotation(service, values.recipientCountry)) return failure("serviceId", "Este serviço não está disponível para pedidos de cotação neste destino.")
     try {

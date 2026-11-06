@@ -13,7 +13,7 @@ const baseLoad=createLoader({zod})
 const {shipmentDefaults}=baseLoad('components/shipments/form/schema.ts')
 const values={...shipmentDefaults(client),senderName:'Origem',senderAddress:'Rua A',senderCity:'Porto',senderPostal:'4000-001',senderPhone:'910000001',
  recipientName:'Destino',recipientAddress:'Rue B',recipientCity:'Paris',recipientCountry:'FR',recipientPostal:'75001',recipientPhone:'910000002',
- weightKg:1,volumesCount:3,lengthCm:20,widthCm:15,heightCm:10,serviceId:'cor-intl',parcelWeightsKg:[],observations:'Entregar à tarde'}
+ weightKg:1,volumesCount:1,lengthCm:20,widthCm:15,heightCm:10,serviceId:'cor-intl',parcelWeightsKg:[],observations:'Entregar à tarde'}
 const setup=(failure)=>{
  const tables={audit_log:[],clients:[{id:A,tenant_id:T},{id:B,tenant_id:T}]}
  const db=fakeSupabase(tables,failure,{persistInserts:true})
@@ -88,7 +88,8 @@ test('quote creation stores shipment data once, without carrier, wallet or shipm
  h.tables.audit_log[0].details.shipment=Object.fromEntries(Object.entries(h.tables.audit_log[0].details.shipment).reverse())
  const retry=await h.api.createQuotation(h.db.client,ctx,ID,client,service,values)
  assert.equal(first.id,retry.id);assert.equal(first.status,'pending');assert.equal(first.proposed_price,null)
- assert.equal(first.shipment.volumesCount,3,'a request can ask the partner for multiple parcels without calling the monovolume API')
+ assert.equal(first.shipment.volumesCount,1,'quotation requests are strictly 1 volume')
+ await assert.rejects(h.api.createQuotation(h.db.client,ctx,ID,client,service,{...values,volumesCount:2}),/limitado a 1 volume/)
  assert.equal(h.tables.audit_log.length,1)
  assert.ok(h.db.writes.every(w=>w.table==='audit_log'&&w.value.action==='shipment_quote_request'))
  assert.equal(first.requested_by,undefined);assert.equal(first.internal_notes,undefined)

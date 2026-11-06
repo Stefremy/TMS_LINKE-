@@ -30,7 +30,7 @@ const initial=()=>({id:Q,reference:'COT-FIXTURE',revision:0,client_id:C,client_n
  status:'quoted',proposed_price:25.5,response:'Prazo acordado.',requested_by:U,updated_by:U,created_at:'2026-10-01T12:00:00Z',
  shipment:{senderName:'Loja fixture',senderAddress:'Rua A',senderCity:'Porto',senderPostal:'4000-001',senderPhone:'910000001',
  recipientName:'Destino',recipientAddress:'Rue B',recipientCity:'Paris',recipientCountry:'FR',recipientPostal:'75001',recipientPhone:'910000002',recipientEmail:'fixture@example.invalid',
- weightKg:3,volumesCount:3,lengthCm:20,widthCm:15,heightCm:10,parcelWeightsKg:[1,1,1],observations:'Dados do pedido.'}})
+ weightKg:3,volumesCount:1,lengthCm:20,widthCm:15,heightCm:10,parcelWeightsKg:[],observations:'Dados do pedido.'}})
 async function reset(profile={}){
  await db.exec('TRUNCATE packages,shipments,audit_log,clients,credit_limit_reservations,wallet_reservations,client_transactions CASCADE')
  await db.query('INSERT INTO clients VALUES($1,$2),($3,$2)',[C,T,X])
@@ -52,8 +52,8 @@ test('client acceptance creates one non-billable zero-charge draft, with full ad
  assert.equal(shipment.status,'rascunho');assert.equal(canInvoiceShipment(shipment),false);assert.equal(shipment.carrier_tracking_number,null)
  const snapshot=(await rows('audit_log')).find(r=>r.action==='shipment_data').details
  assert.equal(snapshot.quotation_id,Q);assert.equal(snapshot.agreed_price,25.5);assert.equal(snapshot.sell_price,0)
- assert.equal(snapshot.package_count,3);assert.equal(snapshot.recipient_country,'FR');assert.deepEqual(snapshot.parcel_weights_kg,[1,1,1])
- assert.equal((await rows('packages')).length,3);assert.deepEqual((await rows('packages')).map(p=>p.weight_g),[1000,1000,1000])
+ assert.equal(snapshot.package_count,1);assert.equal(snapshot.recipient_country,'FR');assert.deepEqual(snapshot.parcel_weights_kg,[])
+ assert.equal((await rows('packages')).length,1);assert.deepEqual((await rows('packages')).map(p=>p.weight_g),[3000])
  assert.equal((await rows('wallet_reservations')).length,0)
  await assert.rejects(run('accept'),/atualizada/);assert.equal((await rows('shipments')).length,1)
 })
@@ -69,7 +69,7 @@ test('Linke booking makes the same shipment billable at the approved net price, 
  const snapshot=(await rows('audit_log')).find(r=>r.action==='shipment_data').details
  assert.equal(snapshot.billing_type,'conta_corrente');assert.equal(snapshot.booking_source,'linke_partner_account');assert.equal(snapshot.base_price,25.5)
  assert.equal(shipmentChargeBreakdown(snapshot).total,2550);assert.equal(snapshot.fuel_tax_amount,0);assert.equal(snapshot.special_fees_amount,0)
- assert.equal((await rows('packages')).length,3)
+ assert.equal((await rows('packages')).length,1)
  await assert.rejects(run('complete'),/atualizada/);assert.equal((await rows('shipments')).length,1)
 })
 test('bindings, state and partner cost fail closed; a customer cannot record a carrier booking',async()=>{

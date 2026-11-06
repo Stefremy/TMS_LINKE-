@@ -15,8 +15,9 @@ export function ParcelStep({ quote }: { quote: ShipmentQuote }) {
   return <FormSection compact title="Volumes e medidas" icon={<Package size={18} />}>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
       <FormField compact name="weightKg" label="Peso total (kg)" type="number" min={0.001} step="0.001" />
-      <FormField compact name="volumesCount" label="N.º de volumes" type="number" min={1} step="1"
-        hint={values.volumesCount > 1 && quote.selected?.carrier === "ctt" ? "No CTT, mais de 1 volume exige o serviço Múltiplo." : undefined} />
+      <FormField compact name="volumesCount" label="N.º de volumes" type="number" min={1} max={quote.requiresQuotation ? 1 : undefined} step="1"
+        disabled={quote.requiresQuotation}
+        hint={quote.requiresQuotation ? "Cotação internacional limitada a 1 volume." : (values.volumesCount > 1 && quote.selected?.carrier === "ctt" ? "No CTT, mais de 1 volume exige o serviço Múltiplo." : undefined)} />
       <fieldset className="col-span-2 grid grid-cols-3 gap-3 sm:col-span-3"><legend className="sr-only">Dimensões por volume em centímetros</legend>
         <FormField compact name="lengthCm" label="Comprimento (cm)" type="number" min={0.1} step="0.1" />
         <FormField compact name="widthCm" label="Largura (cm)" type="number" min={0.1} step="0.1" />

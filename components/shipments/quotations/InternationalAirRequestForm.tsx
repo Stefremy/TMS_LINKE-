@@ -133,7 +133,17 @@ export function InternationalAirRequestForm({ client, isEmployee = false, servic
         {lookup.loading && <p role="status" className="text-xs text-zinc-500">A procurar localidade…</p>}
         <div className="grid gap-3 sm:grid-cols-2"><FormField compact name="recipientName" label="Nome / empresa do destinatário" /><FormField compact name="recipientAddress" label="Morada e número da porta" /><FormField compact name="recipientPhone" label="Telefone do destinatário" type="tel" /><FormField compact name="recipientEmail" label="Email do destinatário" type="email" /></div>
         <label className="flex min-h-9 items-center gap-2 text-xs"><input {...form.register("saveToAgenda")} type="checkbox" className="size-4 accent-emerald-700" />Guardar destinatário na agenda desta loja</label>
-        <div className="border-t border-zinc-100 pt-3"><h3 className="mb-3 text-xs font-semibold">Volumes e medidas</h3><div className="grid grid-cols-2 gap-3 sm:grid-cols-5"><FormField compact name="volumesCount" label="N.º de volumes" type="number" step="1" min={1} onValueChange={() => { form.setValue("parcelWeightsKg", []) }} /><FormField compact name="weightKg" label="Peso total (kg)" type="number" step="0.001" min={0.001} /><FormField compact name="lengthCm" label="Comprimento (cm)" type="number" step="0.1" min={0.1} /><FormField compact name="widthCm" label="Largura (cm)" type="number" step="0.1" min={0.1} /><FormField compact name="heightCm" label="Altura (cm)" type="number" step="0.1" min={0.1} /></div><p className="mt-2 text-[11px] text-zinc-500">Peso total com embalagem e dimensões por volume. Indique nas observações se os volumes tiverem medidas diferentes.</p></div>
+        <div className="border-t border-zinc-100 pt-3">
+          <h3 className="mb-3 text-xs font-semibold">Volume e medidas (1 volume)</h3>
+          <input type="hidden" {...form.register("volumesCount", { value: 1 })} />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <FormField compact name="weightKg" label="Peso com embalagem (kg)" type="number" step="0.001" min={0.001} />
+            <FormField compact name="lengthCm" label="Comprimento (cm)" type="number" step="0.1" min={0.1} />
+            <FormField compact name="widthCm" label="Largura (cm)" type="number" step="0.1" min={0.1} />
+            <FormField compact name="heightCm" label="Altura (cm)" type="number" step="0.1" min={0.1} />
+          </div>
+          <p className="mt-2 text-[11px] text-zinc-500">O pedido de cotação internacional está limitado a 1 volume por envio.</p>
+        </div>
         <input type="hidden" {...form.register("serviceId")} />
         <FieldError name="serviceId" />
         <label className="block space-y-1.5 text-xs font-medium">Conteúdo e observações (opcional)<textarea {...form.register("observations")} rows={2} maxLength={500} className={`${inputClass} resize-y`} placeholder="Descreva o conteúdo ou outras informações úteis para a cotação…" /><FieldError name="observations" /></label>

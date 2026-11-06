@@ -51,6 +51,7 @@ export async function createQuotation(db: SupabaseClient, ctx: AuthContext, id: 
   checkScope(ctx)
   if (!service || !client || !uuid.safeParse(id).success || ctx.role === "client" && client.id !== ctx.client_id) throw new Error("Pedido de cotação inválido.")
   if (!canRequestCorreosQuotation(service, values.recipientCountry) || values.codValue || values.selectedSpecialServices.length || client.is_active === false) throw new Error("Este pedido não está disponível para cotação internacional.")
+  if (values.volumesCount !== 1 || (values.parcelWeightsKg && values.parcelWeightsKg.length > 1)) throw new Error("O pedido de cotação internacional está limitado a 1 volume.")
   if (values.weightKg > 2000 || values.lengthCm > 500 || values.widthCm > 300 || values.heightCm > 300 || values.parcelWeightsKg.some(w => w > 1000)) throw new Error("O envio excede as dimensões ou o peso físico máximo suportado.")
   if (ctx.role === "client") {
     const { count } = await db.from("audit_log").select("id", { count: "exact", head: true })

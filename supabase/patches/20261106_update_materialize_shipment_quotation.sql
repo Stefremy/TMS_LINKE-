@@ -162,3 +162,4 @@ GRANT EXECUTE ON FUNCTION public.materialize_shipment_quotation(uuid,uuid,intege
 NOTIFY pgrst,'reload schema';
 
 COMMIT;
+
