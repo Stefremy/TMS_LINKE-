@@ -493,7 +493,7 @@ export class MoloniClient {
       exemption_reason: p.exemptionReason || "",
       taxes: (p.taxes || []).map((t, tIdx) => ({
         tax_id: t.tax_id,
-        value: Number(t.value || 23),
+        value: Number(t.value !== undefined && t.value !== null ? t.value : 23),
         order: tIdx + 1,
         cumulative: 0,
       })),
@@ -543,7 +543,7 @@ export class MoloniClient {
       exemption_reason: p.exemptionReason || "",
       taxes: (p.taxes || []).map((t, tIdx) => ({
         tax_id: t.tax_id,
-        value: Number(t.value || 23),
+        value: Number(t.value !== undefined && t.value !== null ? t.value : 23),
         order: tIdx + 1,
         cumulative: 0,
       })),
@@ -603,7 +603,7 @@ export class MoloniClient {
       exemption_reason: p.exemptionReason || "M00",
       taxes: (p.taxes || []).map((t, tIdx) => ({
         tax_id: t.tax_id,
-        value: Number(t.value || 23),
+        value: Number(t.value !== undefined && t.value !== null ? t.value : 23),
         order: tIdx + 1,
         cumulative: 0,
       })),
@@ -681,7 +681,7 @@ export class MoloniClient {
       exemption_reason: p.exemptionReason || "",
       taxes: (p.taxes || []).map((t, tIdx) => ({
         tax_id: t.tax_id,
-        value: Number(t.value || 23),
+        value: Number(t.value !== undefined && t.value !== null ? t.value : 23),
         order: tIdx + 1,
         cumulative: 0,
       })),

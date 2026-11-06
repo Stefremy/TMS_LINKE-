@@ -48,6 +48,7 @@ export async function buildRecurringInvoice(moloni: MoloniClient, client: Recurr
     your_reference: `TMS-PERIOD-${statement.id}`, notes: `Período de envios: ${periodLabel(statement.period_start, statement.period_end)}`,
     products: products.map(line => ({ product_id: line.productId, name: line.name,
       summary: line.summary, qty: line.qty, price: line.price, discount: 0,
+      exemption_reason: line.exemptionReason || '',
       taxes: line.taxes.map(tax => ({ ...tax, order: 1, cumulative: 0 })) })) }
 
 }

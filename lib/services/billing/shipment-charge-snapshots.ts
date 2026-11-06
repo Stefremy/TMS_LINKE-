@@ -12,7 +12,7 @@ export async function hydrateShipmentCharges<T extends InvoiceShipment>(db: Supa
     const ids = missing.slice(start, start + 100).map(s => s.id)
     for (let offset = 0; ; offset += 1000) {
       const { data, error } = await db.from('audit_log')
-        .select('id:details->>id,client_id:details->>client_id,sell_price:details->sell_price,base_price:details->base_price,fuel_tax_amount:details->fuel_tax_amount,fuel_rate_pct:details->fuel_rate_pct,special_fees_amount:details->special_fees_amount,special_fees_description:details->>special_fees_description')
+        .select('id:details->>id,client_id:details->>client_id,sell_price:details->sell_price,base_price:details->base_price,fuel_tax_amount:details->fuel_tax_amount,fuel_rate_pct:details->fuel_rate_pct,special_fees_amount:details->special_fees_amount,special_fees_description:details->>special_fees_description,recipient_country:details->>recipient_country,recipient_zip4:details->>recipient_zip4,recipient_zip3:details->>recipient_zip3,island_transport_mode:details->>island_transport_mode,vat_pct:details->pricing_snapshot->vatPct')
         .eq('tenant_id', tenantId).eq('action', 'shipment_data').eq('details->>client_id', clientId)
         .in('details->>id', ids).order('created_at', { ascending: false }).order('id').range(offset, offset + 999)
       if (error) throw new Error('Não foi possível confirmar a discriminação histórica dos envios.')
@@ -25,8 +25,8 @@ export async function hydrateShipmentCharges<T extends InvoiceShipment>(db: Supa
     const merged = { ...s }
     // A price edited after creation must not inherit an obsolete split.
     if (row && row.sell_price != null && chargeCents(row.sell_price) === chargeCents(s.sell_price)) {
-      for (const key of ['base_price', 'fuel_tax_amount', 'fuel_rate_pct', 'special_fees_amount', 'special_fees_description'] as const) {
-        if (merged[key] == null && row[key] != null) Object.assign(merged, { [key]: row[key] })
+      for (const key of ['base_price', 'fuel_tax_amount', 'fuel_rate_pct', 'special_fees_amount', 'special_fees_description', 'recipient_country', 'recipient_zip4', 'recipient_zip3', 'island_transport_mode', 'vat_pct'] as const) {
+        if (merged[key] == null && (row as any)[key] != null) Object.assign(merged, { [key]: (row as any)[key] })
       }
     }
     shipmentChargeBreakdown(merged)

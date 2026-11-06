@@ -76,3 +76,55 @@ test('complete authoritative fields take precedence over missing-field historica
  const r = await hydrate(db.client, 'tenant-a', 'store-a', [own])
  assert.equal(r[0].fuel_tax_amount, 0.5); assert.equal(db.queries.length, 0)
 })
+
+test('island shipments to Madeira/Azores (Art. 14 CIVA) are exempt with 0% VAT and M05 exemption reason', () => {
+ const islandShipment = {
+  id: 'island-1',
+  client_id: 'store-a',
+  tenant_id: 'tenant-a',
+  service_type: 'Linke Marítimo Ilhas PT',
+  recipient_country: 'PT',
+  recipient_zip4: '9004',
+  recipient_zip3: '542',
+  sell_price: 8.67,
+  base_price: 7.61,
+  fuel_tax_amount: 1.06,
+ }
+ const result = lines([islandShipment], options)
+ assert.equal(sum(result), 867)
+ assert.ok(result.every(l => l.taxes.length === 0 && l.exemptionReason === 'M05'))
+ assert.ok(result.some(l => l.name.includes('Isento IVA')))
+})
+
+test('mixed invoice with mainland (23%) and island (0% M05) shipments keeps lines and tax buckets separate', () => {
+ const mainlandShipment = {
+  id: 'cont-1',
+  client_id: 'store-a',
+  tenant_id: 'tenant-a',
+  service_type: 'Linke 24h',
+  recipient_country: 'PT',
+  recipient_zip4: '4800',
+  recipient_zip3: '019',
+  sell_price: 6.0,
+  base_price: 5.0,
+  fuel_tax_amount: 1.0,
+ }
+ const islandShipment = {
+  id: 'island-1',
+  client_id: 'store-a',
+  tenant_id: 'tenant-a',
+  service_type: 'Linke Marítimo Ilhas PT',
+  recipient_country: 'PT',
+  recipient_zip4: '9004',
+  recipient_zip3: '542',
+  sell_price: 8.67,
+  base_price: 7.61,
+  fuel_tax_amount: 1.06,
+ }
+ const result = lines([mainlandShipment, islandShipment], options)
+ assert.equal(sum(result), 1467)
+ const taxed = result.filter(l => l.taxes.length > 0 && l.taxes[0].value === 23)
+ const exempt = result.filter(l => l.taxes.length === 0 && l.exemptionReason === 'M05')
+ assert.equal(sum(taxed), 600)
+ assert.equal(sum(exempt), 867)
+})
