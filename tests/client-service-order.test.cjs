@@ -31,6 +31,7 @@ test('the client list sorts the complete result before pagination and combines t
  clients[34].portal_access_status='suspended'
  clients.push({id:'unknown',short_name:'Unknown',is_active:true})
  const load=createLoader({react:React,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,p)=>p}),
+  'next/navigation':{useRouter:()=>({refresh(){}})},
   '@/app/actions/clientes':{},'./ClienteModal':{ClienteModal:()=>null},'./ClientAuthModal':{ClientAuthModal:()=>null},'@/components/ui/button':{Button:'button'}})
  const Client=load('app/ops/entidades/clientes/components/ClientesClient.tsx').ClientesClient
  const render=()=>{cursor=0;return flat(Client({initialClientes:clients}))}

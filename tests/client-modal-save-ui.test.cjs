@@ -120,3 +120,89 @@ test('the color control can switch from automatic activity colors to a saved man
  assert.equal(h.calls.inputs[0].color_mode,'manual')
  assert.equal(h.calls.inputs[0].color,'#315D82')
 })
+
+test('saving price table in client modal updates client in parent list and re-opening modal shows updated values without full page reload',async()=>{
+ const client={id:'client-x',short_name:'Loja X',code:'CL999',is_active:true,pricing:{table_name:'Tabela Antiga'}}
+ const table={id:'srv-1',name:'Expresso 24',preferred_carrier_name:'CTT',is_active:true,zones:[{zone_code:'PT-CONT',tiers:[{id:'t1',label:'Até 2kg',weight_max:2,sell_price:3.5,enabled:true}]}]}
+ let refreshed=0
+ const React={
+   useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},
+   useEffect(){},
+   useMemo:fn=>fn(),
+   useCallback:fn=>fn,
+   cache:fn=>fn,
+   useRef(initial){return {current:initial}}
+ }
+ let cursor=0;const slots=[]
+ const jsx=(type,props,key)=>({type,props:props||{},key})
+ const load=createLoader({
+   react:React,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,p)=>p}),
+   'next/navigation':{useRouter:()=>({refresh(){refreshed++}})},
+   'next/headers':{cookies:()=>({get:()=>undefined,getAll:()=>[]})},
+   '@supabase/ssr':{},
+   '@supabase/supabase-js':{},
+   '@/app/actions/clientes':{saveClienteAction:async data=>({success:true,data:{...client,...data}}),toggleClienteStatusAction:async()=>{},deleteClienteAction:async()=>{}},
+   '@/app/actions/client-invitations':{},
+   './ClientPortalAccessControl':{ClientPortalAccessControl:()=>null},
+   './ClientServiceHistory':{ClientServiceHistory:()=>null},
+   '@/components/ui/button':{Button:'button'}
+ })
+ const ClientesClient=load('app/ops/entidades/clientes/components/ClientesClient.tsx').ClientesClient
+ const render=()=>{cursor=0;return flat(ClientesClient({initialClientes:[client],initialServicosLinke:[table]}))}
+
+ // Open modal for client
+ let nodes=render()
+ const row=nodes.find(n=>n.type==='tr'&&n.key==='client-x')
+ assert.ok(row)
+ row.props.onClick()
+
+ // Verify modal opened
+ nodes=render()
+ const precarioBtn=nodes.find(n=>n.type==='button'&&text(n).includes('Preços & Serviços'))
+ assert.ok(precarioBtn)
+ precarioBtn.props.onClick()
+ nodes=render()
+
+ // Go to general subtab under precario and edit table name
+ const geralBtn=nodes.find(n=>n.type==='button'&&text(n).includes('Ajustes gerais'))
+ assert.ok(geralBtn)
+ geralBtn.props.onClick()
+ nodes=render()
+
+ const tableNameInput=nodes.find(n=>n.type==='input'&&n.props.placeholder==='Ex: Tabela Especial Têxtil 2026')
+ assert.ok(tableNameInput)
+ assert.equal(tableNameInput.props.value,'Tabela Antiga')
+ tableNameInput.props.onChange({target:{value:'Tabela Nova 2026'}})
+
+ // Save client
+ const saveBtn=nodes.find(n=>n.type==='button'&&text(n).includes('Gravar Cliente'))
+ assert.ok(saveBtn)
+ await saveBtn.props.onClick()
+ assert.equal(refreshed,1)
+
+ // Close modal
+ nodes=render()
+ const closeBtn=nodes.find(n=>n.type==='button'&&text(n)==='Fechar')
+ assert.ok(closeBtn)
+ closeBtn.props.onClick()
+
+ // Re-open modal from client list without page reload
+ nodes=render()
+ const reRow=nodes.find(n=>n.type==='tr'&&n.key==='client-x')
+ assert.ok(reRow)
+ reRow.props.onClick()
+
+ // Modal should now immediately display the updated values
+ nodes=render()
+ const rePrecario=nodes.find(n=>n.type==='button'&&text(n).includes('Preços & Serviços'))
+ assert.ok(rePrecario)
+ rePrecario.props.onClick()
+ nodes=render()
+ const reGeral=nodes.find(n=>n.type==='button'&&text(n).includes('Ajustes gerais'))
+ assert.ok(reGeral)
+ reGeral.props.onClick()
+ nodes=render()
+ const reTableNameInput=nodes.find(n=>n.type==='input'&&n.props.placeholder==='Ex: Tabela Especial Têxtil 2026')
+ assert.ok(reTableNameInput)
+ assert.equal(reTableNameInput.props.value,'Tabela Nova 2026')
+})

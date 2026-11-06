@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { 
   Plus, 
   ArrowUpDown, 
@@ -43,6 +44,7 @@ interface ClientesClientProps {
 }
 
 export function ClientesClient({ initialClientes, initialServicosLinke = [], canManageAccess = false, canSendAccessEmail = canManageAccess, defaultPaymentDays = 30, standardSpecialFees, standardFuelSurchargePct }: ClientesClientProps) {
+  const router = useRouter()
   const [clientes, setClientes] = React.useState<Cliente[]>(initialClientes || [])
   const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>(initialServicosLinke || [])
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -70,6 +72,10 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
   React.useEffect(() => {
     setClientes(initialClientes || [])
   }, [initialClientes])
+
+  React.useEffect(() => {
+    setServicosLinke(initialServicosLinke || [])
+  }, [initialServicosLinke])
 
   // Filtered clients
   const filtered = React.useMemo(() => {
@@ -102,7 +108,8 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
   }
 
   const handleOpenEditModal = (client: Cliente) => {
-    setEditingCliente(client)
+    const current = clientes.find((c) => c.id === client.id) || client
+    setEditingCliente(current)
     setIsModalOpen(true)
     setOpenActionId(null)
   }
@@ -111,10 +118,12 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
     setClientes((prev) => {
       const exists = prev.some((c) => c.id === saved.id)
       if (exists) {
-        return prev.map((c) => (c.id === saved.id ? { ...saved, portal_access_status: c.portal_access_status, legacy_service_count: c.legacy_service_count } : c))
+        return prev.map((c) => (c.id === saved.id ? { ...c, ...saved, portal_access_status: c.portal_access_status, legacy_service_count: c.legacy_service_count } : c))
       }
       return [saved, ...prev]
     })
+    setEditingCliente((prev) => (prev && prev.id === saved.id ? { ...prev, ...saved } : saved))
+    router.refresh()
   }
 
   const handleToggleStatus = async (client: Cliente, e: React.MouseEvent) => {
@@ -587,6 +596,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
       {/* Modal Dialog */}
       {isModalOpen && (
         <ClienteModal
+          key={editingCliente?.id || "new-client"}
           initialData={editingCliente}
           servicosLinke={servicosLinke}
           sourceClients={clientes}
@@ -596,12 +606,16 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
           standardSpecialFees={standardSpecialFees}
           standardFuelSurchargePct={standardFuelSurchargePct}
           onManageAccess={() => { if (editingCliente) setAuthModalCliente(editingCliente) }}
-          onClose={() => setIsModalOpen(false)}
+          onClose={() => {
+            setIsModalOpen(false)
+            setEditingCliente(null)
+          }}
           onDeleted={(clientId) => {
             setClientes((prev) => prev.filter((client) => client.id !== clientId))
             setSelectedIds((prev) => prev.filter((id) => id !== clientId))
             setEditingCliente(null)
             setIsModalOpen(false)
+            router.refresh()
           }}
           onSaved={handleSaved}
         />
