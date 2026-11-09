@@ -22,10 +22,10 @@ export function ClientSidebarNav() {
       category: "Envios",
       items: [
         { href: `${basePath}/criar-guia`, label: "Novo Envio", icon: Plus },
-        { href: `${basePath}/cotacoes`, label: "Pedido de envio internacional aéreo", icon: Plane },
         { href: `${basePath}/tracking`, label: "Rastreio & Mapa", icon: MapPin },
         { href: `${basePath}/envios`, label: "Histórico & Envios", icon: Search },
         { href: `${basePath}/destinatarios`, label: "Destinatários", icon: UserCheck },
+        { href: `${basePath}/cotacoes`, label: "Pedido de envio internacional aéreo", icon: Plane },
       ],
     },
     {

@@ -77,6 +77,29 @@ function cleanShopifyDomain(url: string): string {
   return cleaned
 }
 
+function sanitizeWooCredentials(ck?: string, cs?: string): { ck: string; cs: string } {
+  let cleanedCk = (ck || "").trim()
+  let cleanedCs = (cs || "").trim()
+
+  // Se o utilizador colou acidentalmente a chave e o segredo juntos no primeiro campo (ex: ck_...cs_...)
+  if (cleanedCk.includes("cs_")) {
+    const parts = cleanedCk.split("cs_")
+    cleanedCk = parts[0].trim()
+    if (!cleanedCs || cleanedCs.includes("••••")) {
+      cleanedCs = "cs_" + parts[1].trim()
+    }
+  }
+
+  // Se o utilizador trocou os campos acidentalmente
+  if (cleanedCk.startsWith("cs_") && cleanedCs.startsWith("ck_")) {
+    const temp = cleanedCk
+    cleanedCk = cleanedCs
+    cleanedCs = temp
+  }
+
+  return { ck: cleanedCk, cs: cleanedCs }
+}
+
 /**
  * Obtém as lojas configuradas para o cliente especificado
  */
@@ -187,6 +210,12 @@ export async function saveClientStoreAction(
     }
   }
 
+  if (storePayload.platform === "woocommerce" || storePayload.platform === "linke_store") {
+    const sanitized = sanitizeWooCredentials(finalCredentials.consumer_key, finalCredentials.consumer_secret)
+    finalCredentials.consumer_key = sanitized.ck
+    finalCredentials.consumer_secret = sanitized.cs
+  }
+
   const record: ClientEcommerceStore = {
     id: storeId,
     client_id: clientId,
@@ -293,8 +322,9 @@ export async function testStoreConnectionAction(
   try {
     if (platform === "woocommerce" || platform === "linke_store") {
       const base = cleanUrl(store_url)
-      const ck = credentials.consumer_key?.trim() || ""
-      const cs = credentials.consumer_secret?.trim() || ""
+      const sanitized = sanitizeWooCredentials(credentials.consumer_key, credentials.consumer_secret)
+      const ck = sanitized.ck
+      const cs = sanitized.cs
 
       if (!ck || !cs) {
         return { success: false, error: "Consumer Key e Consumer Secret são obrigatórios." }
@@ -471,8 +501,9 @@ export async function syncStoreOrdersAction(
 
     if (platform === "woocommerce" || platform === "linke_store") {
       const base = cleanUrl(store_url)
-      const ck = credentials.consumer_key?.trim() || ""
-      const cs = credentials.consumer_secret?.trim() || ""
+      const sanitized = sanitizeWooCredentials(credentials.consumer_key, credentials.consumer_secret)
+      const ck = sanitized.ck
+      const cs = sanitized.cs
 
       const basicAuth = Buffer.from(`${ck}:${cs}`).toString("base64")
       const endpoint = `${base}/wp-json/wc/v3/orders?status=processing,pending&per_page=50`
@@ -739,8 +770,9 @@ export async function updateStoreOrderTrackingAction(
 
     if (platform === "woocommerce" || platform === "linke_store") {
       const base = cleanUrl(store_url)
-      const ck = credentials.consumer_key?.trim() || ""
-      const cs = credentials.consumer_secret?.trim() || ""
+      const sanitized = sanitizeWooCredentials(credentials.consumer_key, credentials.consumer_secret)
+      const ck = sanitized.ck
+      const cs = sanitized.cs
       const basicAuth = Buffer.from(`${ck}:${cs}`).toString("base64")
 
       const updatePayload = {

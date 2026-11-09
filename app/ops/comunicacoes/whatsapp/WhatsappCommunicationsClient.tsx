@@ -346,7 +346,6 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
     combinedDeduped: number
   }>({ tms_linke: 0, legacy_tms: 0, combinedDeduped: 0 })
   const [shipmentsWarnings, setShipmentsWarnings] = React.useState<string[]>([])
-  const [sendingRowKey, setSendingRowKey] = React.useState<string | null>(null)
   const [shipmentsBanner, setShipmentsBanner] = React.useState<{ ok: boolean; text: string } | null>(null)
 
   const fetchShipmentsByCategory = React.useCallback(
@@ -391,58 +390,6 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
     },
     [shipmentCategory, sourceMode, shipmentsSearch, shipmentsDateFrom, shipmentsDateTo, onlyOverdue24h]
   )
-
-  async function handleOneClickSend(row: InteractiveShipmentRow) {
-    const rowKey = row.providerTrackingCode || row.parcelId
-    setSendingRowKey(rowKey)
-    setShipmentsBanner(null)
-    try {
-      const res = await fetch("/api/ops/communications/shipments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "send_one_click",
-          category: shipmentCategory,
-          row,
-        }),
-      })
-      const data = await res.json()
-      if (res.ok && data?.ok) {
-        setShipmentRows((prev) =>
-          prev.map((r) =>
-            (r.providerTrackingCode || r.parcelId) === rowKey
-              ? {
-                  ...r,
-                  alreadyNotified: true,
-                  notifiedAt: new Date().toISOString(),
-                  notifiedTemplate: data.templateName || r.notifiedTemplate,
-                }
-              : r
-          )
-        )
-        setShipmentsBanner({
-          ok: true,
-          text:
-            data.channel === "sms_fallback"
-              ? `Guia ${rowKey}: ${data.warning}`
-              : `Guia ${rowKey}: Template "${data.templateName}" enviado com sucesso para ${data.to}!`,
-        })
-        void refreshRecentActivityLogs()
-      } else {
-        setShipmentsBanner({
-          ok: false,
-          text: `Guia ${rowKey}: ${data?.error || "Falha ao enviar notificação 1-clique."}`,
-        })
-      }
-    } catch (err) {
-      setShipmentsBanner({
-        ok: false,
-        text: err instanceof Error ? err.message : "Erro ao enviar 1-clique.",
-      })
-    } finally {
-      setSendingRowKey(null)
-    }
-  }
 
   async function handleTogglePudoNotified(row: InteractiveShipmentRow) {
     const rowKey = row.providerTrackingCode || row.parcelId
@@ -991,7 +938,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
         {[
           { id: "auto", label: "Auto-Notificações", icon: Play },
-          { id: "shipments", label: "Envios & PUDO (1-Clique)", icon: Package },
+          { id: "shipments", label: "Envios & PUDO", icon: Package },
           { id: "templates", label: "Preencher Templates", icon: Send },
           { id: "sms", label: "SMS (ClickSend)", icon: Smartphone },
           { id: "history", label: "Histórico de Mensagens", icon: History },
@@ -1255,7 +1202,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
             >
               <table className="min-w-full border-separate border-spacing-0 text-left text-xs">
                 <caption id="shipments-oneclick-caption" className="sr-only">
-                  Lista interativa de envios por estado para notificação WhatsApp e SMS em 1 clique
+                  Lista interativa de envios por estado para verificação e notificação WhatsApp e SMS
                 </caption>
                 <thead className="sticky top-0 z-10 bg-slate-100 font-semibold text-slate-700 shadow-xs">
                   <tr>
@@ -1281,7 +1228,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                       Estado Notificação
                     </th>
                     <th scope="col" className="border-b border-slate-200 px-3 py-2.5 text-right">
-                      Ações 1-Clique
+                      Ações
                     </th>
                   </tr>
                 </thead>
@@ -1297,7 +1244,6 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                   ) : (
                     paginatedShipmentRows.map((row, idx) => {
                       const rowKey = row.providerTrackingCode || row.parcelId || `row-${idx}`
-                      const isSendingThis = sendingRowKey === rowKey
                       return (
                         <tr key={`${rowKey}-${idx}`} className="hover:bg-slate-50/80">
                           <th
@@ -1372,42 +1318,21 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                             <div className="inline-flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
-                                disabled={isSendingThis || !row.finalClientPhone}
-                                onClick={() => void handleOneClickSend(row)}
-                                title={
-                                  shipmentCategory === "entregue"
-                                    ? "Enviar pedido de feedback por WhatsApp em 1 clique"
-                                    : shipmentCategory === "pudo"
-                                    ? `Enviar aviso Ponto Pickup (${row.overdue24h ? "order_pick_no_ctt >24h" : "order_pick_up_1"})`
-                                    : "Enviar template WhatsApp em 1 clique"
-                                }
-                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-40"
-                              >
-                                <Zap className="h-3 w-3" />
-                                {isSendingThis
-                                  ? "A enviar..."
-                                  : shipmentCategory === "entregue"
-                                  ? "1-Clique Feedback"
-                                  : shipmentCategory === "pudo"
-                                  ? "1-Clique PUDO"
-                                  : "1-Clique WA"}
-                              </button>
-
-                              <button
-                                type="button"
+                                disabled={!row.finalClientPhone}
                                 onClick={() => handlePrefillTemplateFromRow(row)}
-                                title="Abrir no editor de Templates com os dados preenchidos"
-                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                                title="Abrir no editor para verificar os dados e enviar por WhatsApp"
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-40 shadow-2xs cursor-pointer"
                               >
-                                <Edit3 className="h-3 w-3" />
-                                Editor
+                                <Send className="h-3 w-3" />
+                                Verificar &amp; Enviar
                               </button>
 
                               <button
                                 type="button"
+                                disabled={!row.finalClientPhone}
                                 onClick={() => handlePrefillSmsFromRow(row)}
-                                title="Preparar SMS ClickSend para este envio"
-                                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                                title="Abrir no editor para verificar e enviar SMS"
+                                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-40 cursor-pointer"
                               >
                                 <Smartphone className="h-3 w-3" />
                                 SMS
@@ -1418,7 +1343,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                                   type="button"
                                   onClick={() => void handleTogglePudoNotified(row)}
                                   title="Marcar / desmarcar manualmente como avisado no Ponto Pickup"
-                                  className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100"
+                                  className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100 cursor-pointer"
                                 >
                                   {row.alreadyNotified ? "Desmarcar" : "Marcar ✓"}
                                 </button>

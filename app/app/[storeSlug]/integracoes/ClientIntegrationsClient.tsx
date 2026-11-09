@@ -1069,7 +1069,16 @@ export function ClientIntegrationsClient() {
                       required={!editingStore}
                       placeholder="ck_xxxxxxxxxxxxxxxx"
                       value={consumerKey}
-                      onChange={e => setConsumerKey(e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value
+                        if (val.includes("cs_")) {
+                          const parts = val.split("cs_")
+                          setConsumerKey(parts[0].trim())
+                          setConsumerSecret("cs_" + parts[1].trim())
+                        } else {
+                          setConsumerKey(val)
+                        }
+                      }}
                       className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
