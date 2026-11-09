@@ -1,0 +1,1407 @@
+"use client"
+
+import * as React from "react"
+import {
+  MessageSquare,
+  Send,
+  Smartphone,
+  History,
+  Settings2,
+  RefreshCw,
+  Play,
+  Eye,
+  Search,
+  CheckCircle2,
+  AlertTriangle,
+  Database,
+  Globe,
+  Layers,
+} from "lucide-react"
+import type { AutoNotificationType } from "@/lib/services/communications/shipment-sources"
+import type { NotificationSourceMode } from "@/lib/services/communications/config"
+import type { MetaWhatsappTemplate } from "@/lib/services/communications/whatsapp-cloud"
+
+type TabId = "auto" | "templates" | "sms" | "history" | "settings"
+
+interface AutoRunResult {
+  ok: boolean
+  type: AutoNotificationType
+  dryRun: boolean
+  sourceMode: NotificationSourceMode
+  sourcesUsed: string[]
+  countsBySource: {
+    tms_linke: number
+    legacy_tms: number
+    combinedDeduped: number
+  }
+  warnings: string[]
+  templateName: string
+  languageCode: string
+  fetchedRows: number
+  eligibleToSend: number
+  processed: number
+  sent: number
+  failed: number
+  skippedAlreadySent: number
+  skippedMissingPhone: number
+  skippedIlhas: number
+  previewItems: Array<{
+    parcelId: string
+    providerTrackingCode: string
+    recipient: string
+    sender: string
+    phone: string
+    service: string
+    incidentReason?: string
+    sourceSystem: "legacy_tms" | "tms_linke"
+    bodyVariables: string[]
+  }>
+  errors: string[]
+  at: string
+}
+
+interface LogRow {
+  id: number | string
+  created_at: string
+  direction: string
+  channel: string
+  to_number: string
+  contact_name: string | null
+  message_text: string | null
+  template_name: string | null
+  status: string | null
+  api_message_id: string | null
+  tracking_number: string | null
+  source_system: string | null
+}
+
+interface ConfigState {
+  sourceMode: NotificationSourceMode
+  whatsappApiVersion: string
+  whatsappPhoneNumberId: string
+  whatsappBusinessAccountId: string
+  whatsappAccessToken: string
+  whatsappWebhookVerifyToken: string
+  incidenciaUseSeparateNumber: boolean
+  incWhatsappPhoneNumberId: string
+  incWhatsappAccessToken: string
+  smsSendingEnabled: boolean
+  autoSmsFallbackEnabled: boolean
+  autoSmsFallbackIncidenciaEnabled: boolean
+  clicksendUsername: string
+  clicksendApiKey: string
+  clicksendFrom: string
+  legacyTmsEnabled: boolean
+  legacyTmsBaseUrl: string
+  legacyTmsAdminEmail: string
+  legacyTmsAdminPassword: string
+  autoEnvioEnabled: boolean
+  autoEnvioTemplate: string
+  autoEnvioLanguage: string
+  autoEnvioHour: number
+  autoEnvioMinute: number
+  autoEnvioMaxSendsPerRun: number
+  autoTransporteEnabled: boolean
+  autoTransporteTemplate: string
+  autoTransporteFallbackTemplate: string
+  autoTransporteLanguage: string
+  autoTransporteHour: number
+  autoTransporteMinute: number
+  autoTransporteIncludeIlhas: boolean
+  autoTransporteMaxSendsPerRun: number
+  autoIncidenciaEnabled: boolean
+  autoIncidenciaTemplate: string
+  autoIncidenciaLanguage: string
+  autoIncidenciaMaxSendsPerRun: number
+  statusSummary?: {
+    whatsappConfigured: boolean
+    clicksendConfigured: boolean
+    legacyTmsConfigured: boolean
+  }
+}
+
+function extractTemplateBodyText(tpl: MetaWhatsappTemplate | undefined): string {
+  if (!tpl || !Array.isArray(tpl.components)) return ""
+  const bodyComp = tpl.components.find((c) => String(c.type || "").toUpperCase() === "BODY")
+  return String(bodyComp?.text || "").trim()
+}
+
+function countTemplateVariables(bodyText: string): number {
+  const matches = bodyText.match(/{{\s*(\d+)\s*}}/g) || []
+  let maxIdx = 0
+  for (const m of matches) {
+    const n = Number(m.replace(/\D/g, ""))
+    if (Number.isFinite(n) && n > maxIdx) maxIdx = n
+  }
+  return maxIdx
+}
+
+function hasUrlButtonComponent(tpl: MetaWhatsappTemplate | undefined): boolean {
+  if (!tpl || !Array.isArray(tpl.components)) return false
+  return tpl.components.some(
+    (c) =>
+      String(c.type || "").toUpperCase() === "BUTTONS" &&
+      Array.isArray(c.buttons) &&
+      c.buttons.some((b) => String(b.type || "").toUpperCase() === "URL" && String(b.url || "").includes("{{"))
+  )
+}
+
+export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?: ConfigState | null }) {
+  const [activeTab, setActiveTab] = React.useState<TabId>("auto")
+  const [config, setConfig] = React.useState<ConfigState | null>(initialConfig || null)
+  const [savingConfig, setSavingConfig] = React.useState(false)
+  const [configBanner, setConfigBanner] = React.useState<{ type: "ok" | "err"; text: string } | null>(null)
+
+  // Auto-notification state
+  const [sourceMode, setSourceMode] = React.useState<NotificationSourceMode>(
+    initialConfig?.sourceMode || "both"
+  )
+  const [runningAutoType, setRunningAutoType] = React.useState<string | null>(null)
+  const [autoResult, setAutoResult] = React.useState<AutoRunResult | null>(null)
+  const [autoError, setAutoError] = React.useState<string | null>(null)
+
+  // Templates state
+  const [templates, setTemplates] = React.useState<MetaWhatsappTemplate[]>([])
+  const [loadingTemplates, setLoadingTemplates] = React.useState(false)
+  const [templatesError, setTemplatesError] = React.useState<string | null>(null)
+  const [selectedTemplateKey, setSelectedTemplateKey] = React.useState<string>("")
+  const [customTemplateName, setCustomTemplateName] = React.useState<string>("notificacao_de_envio")
+  const [customTemplateLang, setCustomTemplateLang] = React.useState<string>("pt_PT")
+  const [templateToPhone, setTemplateToPhone] = React.useState<string>("")
+  const [templateContactName, setTemplateContactName] = React.useState<string>("")
+  const [templateVars, setTemplateVars] = React.useState<string[]>(["", "", ""])
+  const [templateButtonUrlVar, setTemplateButtonUrlVar] = React.useState<string>("")
+  const [lookupTrackingQuery, setLookupTrackingQuery] = React.useState<string>("")
+  const [lookingUpShipment, setLookingUpShipment] = React.useState(false)
+  const [sendingTemplate, setSendingTemplate] = React.useState(false)
+  const [templateSendFeedback, setTemplateSendFeedback] = React.useState<{
+    ok: boolean
+    text: string
+  } | null>(null)
+
+  // SMS state
+  const [smsPhone, setSmsPhone] = React.useState<string>("")
+  const [smsContactName, setSmsContactName] = React.useState<string>("")
+  const [smsTracking, setSmsTracking] = React.useState<string>("")
+  const [smsMessage, setSmsMessage] = React.useState<string>("")
+  const [sendingSms, setSendingSms] = React.useState(false)
+  const [smsFeedback, setSmsFeedback] = React.useState<{ ok: boolean; text: string } | null>(null)
+
+  // History logs state
+  const [logs, setLogs] = React.useState<LogRow[]>([])
+  const [loadingLogs, setLoadingLogs] = React.useState(false)
+  const [logsSearch, setLogsSearch] = React.useState<string>("")
+  const [logsChannel, setLogsChannel] = React.useState<string>("all")
+  const [logsWarning, setLogsWarning] = React.useState<string | null>(null)
+
+  const fetchTemplates = React.useCallback(async () => {
+    setLoadingTemplates(true)
+    setTemplatesError(null)
+    try {
+      const res = await fetch("/api/ops/communications/templates")
+      const data = await res.json()
+      if (!res.ok || !data?.ok) {
+        setTemplatesError(data?.error || "Não foi possível carregar os templates da Meta.")
+        setTemplates([])
+      } else {
+        const list = Array.isArray(data.data) ? (data.data as MetaWhatsappTemplate[]) : []
+        setTemplates(list)
+        if (list.length > 0 && !selectedTemplateKey) {
+          const first = list[0]
+          setSelectedTemplateKey(`${first.name}::${first.language}`)
+          setCustomTemplateName(first.name)
+          setCustomTemplateLang(first.language || "pt_PT")
+        }
+      }
+    } catch (err) {
+      setTemplatesError(err instanceof Error ? err.message : "Erro ao carregar templates.")
+    } finally {
+      setLoadingTemplates(false)
+    }
+  }, [selectedTemplateKey])
+
+  const fetchLogs = React.useCallback(async () => {
+    setLoadingLogs(true)
+    setLogsWarning(null)
+    try {
+      const params = new URLSearchParams()
+      if (logsSearch.trim()) params.set("q", logsSearch.trim())
+      if (logsChannel !== "all") params.set("channel", logsChannel)
+      params.set("limit", "150")
+      const res = await fetch(`/api/ops/communications/logs?${params.toString()}`)
+      const data = await res.json()
+      if (data?.warning) {
+        setLogsWarning(data.warning)
+      }
+      setLogs(Array.isArray(data?.data) ? data.data : [])
+    } catch {
+      setLogs([])
+    } finally {
+      setLoadingLogs(false)
+    }
+  }, [logsSearch, logsChannel])
+
+  const selectedTemplateObj = React.useMemo(() => {
+    if (!selectedTemplateKey) return undefined
+    const [name, lang] = selectedTemplateKey.split("::")
+    return templates.find((t) => t.name === name && t.language === lang)
+  }, [templates, selectedTemplateKey])
+
+  const selectedBodyText = extractTemplateBodyText(selectedTemplateObj)
+  const detectedVarCount = Math.max(3, countTemplateVariables(selectedBodyText))
+  const showButtonUrlInput = hasUrlButtonComponent(selectedTemplateObj) || !selectedTemplateObj
+
+  async function handleRunAutoNotification(type: AutoNotificationType, dryRun: boolean) {
+    setRunningAutoType(`${type}:${dryRun ? "dry" : "live"}`)
+    setAutoError(null)
+    try {
+      const res = await fetch("/api/ops/communications/auto-notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          dryRun,
+          sourceMode,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data?.ok) {
+        setAutoError(data?.error || "Falha ao executar auto-notificação.")
+      } else {
+        setAutoResult(data as AutoRunResult)
+      }
+    } catch (err) {
+      setAutoError(err instanceof Error ? err.message : "Erro de rede.")
+    } finally {
+      setRunningAutoType(null)
+    }
+  }
+
+  async function handleLookupShipmentForTemplate() {
+    if (!lookupTrackingQuery.trim()) return
+    setLookingUpShipment(true)
+    setTemplateSendFeedback(null)
+    try {
+      const res = await fetch(
+        `/api/ops/communications/templates?lookupTracking=${encodeURIComponent(lookupTrackingQuery.trim())}`
+      )
+      const data = await res.json()
+      if (!res.ok || !data?.shipment) {
+        setTemplateSendFeedback({
+          ok: false,
+          text: data?.error || "Guia não encontrada no TMS Linke.",
+        })
+        return
+      }
+      const s = data.shipment
+      setTemplateToPhone(s.finalClientPhone || "")
+      setTemplateContactName(s.recipient || "")
+      const trk = s.providerTrackingCode || s.parcelId || ""
+      const isIncTemplate = customTemplateName.toLowerCase().includes("incid")
+      if (isIncTemplate) {
+        setTemplateVars([s.recipient || "", s.parcelId || trk, s.sender || "Linke"])
+      } else {
+        setTemplateVars([s.recipient || "", s.sender || "Linke", trk])
+      }
+      setTemplateSendFeedback({
+        ok: true,
+        text: `Guia ${trk} carregada: destinatário "${s.recipient}" (${s.finalClientPhone || "sem telefone"}).`,
+      })
+    } catch {
+      setTemplateSendFeedback({ ok: false, text: "Erro ao pesquisar guia." })
+    } finally {
+      setLookingUpShipment(false)
+    }
+  }
+
+  async function handleSendTemplate(e: React.FormEvent) {
+    e.preventDefault()
+    setSendingTemplate(true)
+    setTemplateSendFeedback(null)
+    try {
+      const cleanVars = templateVars.slice(0, detectedVarCount).map((v) => v.trim()).filter(Boolean)
+      const res = await fetch("/api/ops/communications/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: templateToPhone,
+          templateName: customTemplateName,
+          languageCode: customTemplateLang,
+          bodyVariables: cleanVars,
+          buttonUrlVariable: templateButtonUrlVar.trim() || undefined,
+          trackerContext: {
+            clientName: templateContactName || cleanVars[0] || "",
+            parcelId: lookupTrackingQuery.trim() || cleanVars[2] || cleanVars[1] || "",
+            messageType: "Manual Template",
+          },
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setTemplateSendFeedback({
+          ok: true,
+          text: `Template "${customTemplateName}" enviado com sucesso para ${templateToPhone}!`,
+        })
+      } else {
+        const fallbackInfo = data?._smsFallback?.status === "sent"
+          ? " (Fallback SMS ClickSend enviado automaticamente!)"
+          : ""
+        setTemplateSendFeedback({
+          ok: false,
+          text: `${data?.error?.message || data?.error || "Falha ao enviar template WhatsApp."}${fallbackInfo}`,
+        })
+      }
+    } catch (err) {
+      setTemplateSendFeedback({
+        ok: false,
+        text: err instanceof Error ? err.message : "Erro ao enviar template.",
+      })
+    } finally {
+      setSendingTemplate(false)
+    }
+  }
+
+  async function handleSendSms(e: React.FormEvent) {
+    e.preventDefault()
+    setSendingSms(true)
+    setSmsFeedback(null)
+    try {
+      const res = await fetch("/api/ops/communications/sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: smsPhone,
+          message: smsMessage,
+          contactName: smsContactName,
+          trackingNumber: smsTracking,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data?.ok) {
+        setSmsFeedback({
+          ok: true,
+          text: `SMS enviado via ClickSend para ${data.to}!`,
+        })
+        setSmsMessage("")
+      } else {
+        setSmsFeedback({
+          ok: false,
+          text: data?.details || data?.error || "Falha ao enviar SMS via ClickSend.",
+        })
+      }
+    } catch (err) {
+      setSmsFeedback({
+        ok: false,
+        text: err instanceof Error ? err.message : "Erro ao enviar SMS.",
+      })
+    } finally {
+      setSendingSms(false)
+    }
+  }
+
+  async function handleSaveConfig(e: React.FormEvent) {
+    e.preventDefault()
+    if (!config) return
+    setSavingConfig(true)
+    setConfigBanner(null)
+    try {
+      const res = await fetch("/api/ops/communications/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...config, sourceMode }),
+      })
+      const data = await res.json()
+      if (res.ok && data?.config) {
+        setConfig(data.config)
+        setConfigBanner({ type: "ok", text: "Configurações guardadas com sucesso!" })
+      } else {
+        setConfigBanner({ type: "err", text: data?.error || "Erro ao guardar configurações." })
+      }
+    } catch (err) {
+      setConfigBanner({
+        type: "err",
+        text: err instanceof Error ? err.message : "Erro ao guardar configurações.",
+      })
+    } finally {
+      setSavingConfig(false)
+    }
+  }
+
+  const previewRenderedText = React.useMemo(() => {
+    if (!selectedBodyText) return ""
+    return selectedBodyText.replace(/{{\s*(\d+)\s*}}/g, (_m, idxStr) => {
+      const idx = Number(idxStr) - 1
+      return templateVars[idx]?.trim() ? `[${templateVars[idx].trim()}]` : `{{${idxStr}}}`
+    })
+  }, [selectedBodyText, templateVars])
+
+  return (
+    <div className="space-y-6 p-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
+              <MessageSquare className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+                Comunicações — WhatsApp &amp; SMS
+              </h1>
+              <p className="text-sm text-slate-500">
+                Auto-notificações de envios (Scraping HTML Legacy TMS + TMS Linke Nativo), preenchimento de templates Meta, SMS ClickSend e histórico.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Status pills */}
+        <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 ${
+              config?.statusSummary?.whatsappConfigured
+                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20"
+                : "bg-amber-50 text-amber-700 ring-1 ring-amber-600/20"
+            }`}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${
+                config?.statusSummary?.whatsappConfigured ? "bg-emerald-500" : "bg-amber-500"
+              }`}
+            />
+            WhatsApp Cloud API
+          </span>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 ${
+              config?.statusSummary?.clicksendConfigured
+                ? "bg-blue-50 text-blue-700 ring-1 ring-blue-600/20"
+                : "bg-amber-50 text-amber-700 ring-1 ring-amber-600/20"
+            }`}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${
+                config?.statusSummary?.clicksendConfigured ? "bg-blue-500" : "bg-amber-500"
+              }`}
+            />
+            ClickSend SMS
+          </span>
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 ${
+              config?.statusSummary?.legacyTmsConfigured
+                ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20"
+                : "bg-slate-100 text-slate-600 ring-1 ring-slate-300"
+            }`}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${
+                config?.statusSummary?.legacyTmsConfigured ? "bg-indigo-500" : "bg-slate-400"
+              }`}
+            />
+            Scraping Legacy TMS
+          </span>
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+        {[
+          { id: "auto", label: "Auto-Notificações", icon: Play },
+          { id: "templates", label: "Preencher Templates", icon: Send },
+          { id: "sms", label: "SMS (ClickSend)", icon: Smartphone },
+          { id: "history", label: "Histórico de Mensagens", icon: History },
+          { id: "settings", label: "Fontes & Credenciais", icon: Settings2 },
+        ].map((tab) => {
+          const Icon = tab.icon
+          const active = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                const nextTab = tab.id as TabId
+                setActiveTab(nextTab)
+                if (nextTab === "templates" && templates.length === 0 && !loadingTemplates) {
+                  void fetchTemplates()
+                }
+                if (nextTab === "history" && logs.length === 0 && !loadingLogs) {
+                  void fetchLogs()
+                }
+              }}
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? "bg-slate-900 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* TAB 1: AUTO-NOTIFICATIONS */}
+      {activeTab === "auto" && (
+        <div className="space-y-6">
+          {/* Dual-Source Selector Bar */}
+          <div className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Fonte de Dados das Auto-Notificações (Modo Híbrido)
+              </h2>
+              <p className="text-xs text-slate-500">
+                Lê em simultâneo o scraping HTML do TMS antigo e a tabela nativa <code>shipments</code> do TMS Linke, com desduplicação automática por guia/dia.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: "both", label: "Ambos (Scraping HTML + TMS Linke)", icon: Layers },
+                { id: "legacy_tms", label: "Apenas Scraping HTML (TMS Antigo)", icon: Globe },
+                { id: "tms_linke", label: "Apenas TMS Linke Nativo", icon: Database },
+              ].map((opt) => {
+                const Icon = opt.icon
+                const active = sourceMode === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setSourceMode(opt.id as NotificationSourceMode)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                      active
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 3 Auto-Notification Cards */}
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              {
+                type: "em_distribuicao" as AutoNotificationType,
+                title: "1. Envios em Distribuição",
+                subtitle: "Status 4 (Legacy TMS) + em_distribuicao (TMS Linke)",
+                template: config?.autoEnvioTemplate || "notificacao_de_envio",
+                varsDesc: "{{1}} Destinatário · {{2}} Remetente · {{3}} Tracking",
+                schedule: `Seg–Sex às ${String(config?.autoEnvioHour ?? 9).padStart(2, "0")}:${String(
+                  config?.autoEnvioMinute ?? 30
+                ).padStart(2, "0")}`,
+              },
+              {
+                type: "em_transporte" as AutoNotificationType,
+                title: "2. Envios em Transporte",
+                subtitle: "Status 3 (Legacy TMS) + entrada_rede (TMS Linke)",
+                template: config?.autoTransporteTemplate || "notificacao_de_envio_em_transporte",
+                varsDesc: "{{1}} Destinatário · {{2}} Remetente · {{3}} Tracking (ignora Ilhas por defeito)",
+                schedule: `Seg–Sex às ${String(config?.autoTransporteHour ?? 10).padStart(2, "0")}:${String(
+                  config?.autoTransporteMinute ?? 0
+                ).padStart(2, "0")}`,
+              },
+              {
+                type: "incidencia" as AutoNotificationType,
+                title: "3. Envios em Incidência",
+                subtitle: "Status 9 (Legacy TMS) + incidencia (TMS Linke)",
+                template: config?.autoIncidenciaTemplate || "notificacao_auto_incidencia",
+                varsDesc: "{{1}} Destinatário · {{2}} Nº Guia · {{3}} Loja/Remetente + Fallback SMS",
+                schedule: "Seg–Sex (14:30 – 19:00)",
+              },
+            ].map((card) => {
+              const isSimulating = runningAutoType === `${card.type}:dry`
+              const isExecuting = runningAutoType === `${card.type}:live`
+              return (
+                <div
+                  key={card.type}
+                  className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                        {card.schedule}
+                      </span>
+                      <span className="font-mono text-xs text-emerald-700">{card.template}</span>
+                    </div>
+                    <h3 className="text-base font-bold text-slate-900">{card.title}</h3>
+                    <p className="text-xs text-slate-500">{card.subtitle}</p>
+                    <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-600">{card.varsDesc}</p>
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      disabled={Boolean(runningAutoType)}
+                      onClick={() => handleRunAutoNotification(card.type, true)}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      {isSimulating ? "A simular..." : "Simular (Dry-Run)"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(runningAutoType)}
+                      onClick={() => handleRunAutoNotification(card.type, false)}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                      {isExecuting ? "A enviar..." : "Disparar Agora"}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {autoError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {autoError}
+            </div>
+          )}
+
+          {/* Simulation / Execution Result Panel */}
+          {autoResult && (
+            <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full px-3 py-0.5 text-xs font-semibold ${
+                      autoResult.dryRun
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {autoResult.dryRun ? "SIMULAÇÃO (DRY-RUN — NADA ENVIADO)" : "EXECUÇÃO REAL CONCLUÍDA"}
+                  </span>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Resultado: {autoResult.type} ({autoResult.templateName})
+                  </h3>
+                </div>
+                <div className="text-xs text-slate-500">
+                  TMS Linke Nativo: <strong>{autoResult.countsBySource.tms_linke}</strong> · Legacy TMS Scraping:{" "}
+                  <strong>{autoResult.countsBySource.legacy_tms}</strong> · Total Desduplicado:{" "}
+                  <strong>{autoResult.countsBySource.combinedDeduped}</strong>
+                </div>
+              </div>
+
+              {autoResult.warnings.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 space-y-1">
+                  {autoResult.warnings.map((w, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{w}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500">Guias Lidas</div>
+                  <div className="text-lg font-bold text-slate-900">{autoResult.fetchedRows}</div>
+                </div>
+                <div className="rounded-lg bg-emerald-50 p-3">
+                  <div className="text-xs text-emerald-700">
+                    {autoResult.dryRun ? "Elegíveis p/ Enviar" : "Enviadas (OK)"}
+                  </div>
+                  <div className="text-lg font-bold text-emerald-900">
+                    {autoResult.dryRun ? autoResult.eligibleToSend : autoResult.sent}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500">Já Enviadas Hoje</div>
+                  <div className="text-lg font-bold text-slate-900">{autoResult.skippedAlreadySent}</div>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500">Sem Telefone</div>
+                  <div className="text-lg font-bold text-slate-900">{autoResult.skippedMissingPhone}</div>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="text-xs text-slate-500">Ignoradas Ilhas</div>
+                  <div className="text-lg font-bold text-slate-900">{autoResult.skippedIlhas}</div>
+                </div>
+                <div className="rounded-lg bg-red-50 p-3">
+                  <div className="text-xs text-red-700">Falhas</div>
+                  <div className="text-lg font-bold text-red-900">{autoResult.failed}</div>
+                </div>
+              </div>
+
+              {autoResult.previewItems.length > 0 && (
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+                    <thead className="bg-slate-50 font-semibold text-slate-700">
+                      <tr>
+                        <th className="px-3 py-2">Origem</th>
+                        <th className="px-3 py-2">Guia / Tracking</th>
+                        <th className="px-3 py-2">Destinatário</th>
+                        <th className="px-3 py-2">Telefone (E.164)</th>
+                        <th className="px-3 py-2">Remetente</th>
+                        <th className="px-3 py-2">Variáveis do Template</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {autoResult.previewItems.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50">
+                          <td className="px-3 py-2">
+                            <span
+                              className={`inline-block rounded px-2 py-0.5 text-[10px] font-semibold ${
+                                item.sourceSystem === "tms_linke"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-indigo-100 text-indigo-800"
+                              }`}
+                            >
+                              {item.sourceSystem === "tms_linke" ? "TMS Linke" : "Legacy TMS"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 font-mono font-medium text-slate-900">
+                            {item.providerTrackingCode || item.parcelId}
+                          </td>
+                          <td className="px-3 py-2 text-slate-700">{item.recipient}</td>
+                          <td className="px-3 py-2 font-mono text-slate-700">{item.phone}</td>
+                          <td className="px-3 py-2 text-slate-600">{item.sender}</td>
+                          <td className="px-3 py-2 text-slate-600">
+                            {item.bodyVariables.map((v, i) => `{{${i + 1}}}=${v}`).join(" | ")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: FILL & SEND TEMPLATES */}
+      {activeTab === "templates" && (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">
+                  Preencher &amp; Enviar Template WhatsApp
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Pesquise uma guia para preencher automaticamente ou selecione qualquer template aprovado na Meta.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={fetchTemplates}
+                disabled={loadingTemplates}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loadingTemplates ? "animate-spin" : ""}`} />
+                Recarregar da Meta ({templates.length})
+              </button>
+            </div>
+
+            {/* Auto-fill from Shipment Tracking */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Auto-Preencher a partir de Nº de Guia / Tracking (TMS Linke)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={lookupTrackingQuery}
+                  onChange={(e) => setLookupTrackingQuery(e.target.value)}
+                  placeholder="Ex.: LTK1044182 ou DA123456789PT..."
+                  className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={handleLookupShipmentForTemplate}
+                  disabled={lookingUpShipment || !lookupTrackingQuery.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <Search className="h-3.5 w-3.5" />
+                  {lookingUpShipment ? "A procurar..." : "Preencher Dados"}
+                </button>
+              </div>
+            </div>
+
+            {templatesError && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                {templatesError} — Pode ainda escrever o nome do template manualmente abaixo.
+              </div>
+            )}
+
+            <form onSubmit={handleSendTemplate} className="space-y-4">
+              {templates.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Selecionar Template Aprovado na Meta ({templates.length})
+                  </label>
+                  <select
+                    value={selectedTemplateKey}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setSelectedTemplateKey(val)
+                      const [name, lang] = val.split("::")
+                      if (name) setCustomTemplateName(name)
+                      if (lang) setCustomTemplateLang(lang)
+                    }}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  >
+                    {templates.map((tpl) => (
+                      <option key={`${tpl.name}::${tpl.language}`} value={`${tpl.name}::${tpl.language}`}>
+                        {tpl.name} ({tpl.language}) — {tpl.status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Nome do Template (Meta)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={customTemplateName}
+                    onChange={(e) => setCustomTemplateName(e.target.value)}
+                    placeholder="notificacao_de_envio"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Idioma</label>
+                  <input
+                    type="text"
+                    required
+                    value={customTemplateLang}
+                    onChange={(e) => setCustomTemplateLang(e.target.value)}
+                    placeholder="pt_PT"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Telefone do Destinatário *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={templateToPhone}
+                    onChange={(e) => setTemplateToPhone(e.target.value)}
+                    placeholder="Ex.: 912345678 ou 351912345678"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Nome do Contacto (Registo Histórico)
+                  </label>
+                  <input
+                    type="text"
+                    value={templateContactName}
+                    onChange={(e) => setTemplateContactName(e.target.value)}
+                    placeholder="Nome do cliente / destinatário"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Variáveis do Corpo da Mensagem (Body Parameters)
+                </label>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {Array.from({ length: detectedVarCount }).map((_, idx) => (
+                    <div key={idx}>
+                      <label className="block text-[11px] font-medium text-slate-500 mb-1">
+                        Variável {`{{${idx + 1}}}`}
+                      </label>
+                      <input
+                        type="text"
+                        value={templateVars[idx] || ""}
+                        onChange={(e) => {
+                          const next = [...templateVars]
+                          next[idx] = e.target.value
+                          setTemplateVars(next)
+                        }}
+                        placeholder={
+                          idx === 0 ? "Ex.: Nome Destinatário" : idx === 1 ? "Ex.: Loja / Guia" : "Ex.: Tracking"
+                        }
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {showButtonUrlInput && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Variável de Botão URL (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={templateButtonUrlVar}
+                    onChange={(e) => setTemplateButtonUrlVar(e.target.value)}
+                    placeholder="Sufixo dinâmico do botão URL (se o template tiver botão dinâmico)"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+
+              {templateSendFeedback && (
+                <div
+                  className={`rounded-lg p-3 text-xs font-medium ${
+                    templateSendFeedback.ok
+                      ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border border-red-200 bg-red-50 text-red-800"
+                  }`}
+                >
+                  {templateSendFeedback.text}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={sendingTemplate}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+                {sendingTemplate ? "A enviar WhatsApp..." : "Enviar Template WhatsApp"}
+              </button>
+            </form>
+          </div>
+
+          {/* Live Preview Card */}
+          <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-900">Pré-visualização da Mensagem</h3>
+            <div className="rounded-xl bg-[#e5ddd5] p-4 shadow-inner">
+              <div className="rounded-lg bg-white p-3.5 text-xs leading-relaxed text-slate-800 shadow-sm whitespace-pre-wrap">
+                {previewRenderedText ||
+                  `Template: ${customTemplateName}\n` +
+                    templateVars
+                      .map((v, i) => (v.trim() ? `{{${i + 1}}}: ${v.trim()}` : null))
+                      .filter(Boolean)
+                      .join("\n")}
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600 space-y-1">
+              <div className="font-semibold text-slate-800">Atalhos de Templates Usados:</div>
+              <div>
+                • <code>notificacao_de_envio</code> (Em Distribuição)
+              </div>
+              <div>
+                • <code>notificacao_de_envio_em_transporte</code> (Em Transporte)
+              </div>
+              <div>
+                • <code>notificacao_auto_incidencia</code> (Incidência)
+              </div>
+              <div>
+                • <code>order_pick_up_1</code> (Ponto Pickup)
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: SMS CLICKSEND */}
+      {activeTab === "sms" && (
+        <div className="max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Enviar SMS via ClickSend</h2>
+            <p className="text-xs text-slate-500">
+              Envio direto de SMS e serviço de fallback automático quando um template WhatsApp falha.
+            </p>
+          </div>
+
+          <form onSubmit={handleSendSms} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Telemóvel Destinatário *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={smsPhone}
+                  onChange={(e) => setSmsPhone(e.target.value)}
+                  placeholder="912345678 ou 351912345678"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nome do Destinatário
+                </label>
+                <input
+                  type="text"
+                  value={smsContactName}
+                  onChange={(e) => setSmsContactName(e.target.value)}
+                  placeholder="Opcional"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nº de Guia / Tracking
+                </label>
+                <input
+                  type="text"
+                  value={smsTracking}
+                  onChange={(e) => setSmsTracking(e.target.value)}
+                  placeholder="Opcional"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700">Mensagem SMS *</label>
+                <span className="text-[11px] text-slate-400">{smsMessage.length} caracteres</span>
+              </div>
+              <textarea
+                required
+                rows={4}
+                value={smsMessage}
+                onChange={(e) => setSmsMessage(e.target.value)}
+                placeholder="Escreva a mensagem SMS a enviar ao destinatário..."
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+
+            {smsFeedback && (
+              <div
+                className={`rounded-lg p-3 text-xs font-medium ${
+                  smsFeedback.ok
+                    ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border border-red-200 bg-red-50 text-red-800"
+                }`}
+              >
+                {smsFeedback.text}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={sendingSms}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              <Smartphone className="h-4 w-4" />
+              {sendingSms ? "A enviar SMS..." : "Enviar SMS ClickSend"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* TAB 4: HISTORY OF MESSAGES SENT */}
+      {activeTab === "history" && (
+        <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-1 items-center gap-2">
+              <div className="relative flex-1 max-w-md">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={logsSearch}
+                  onChange={(e) => setLogsSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && fetchLogs()}
+                  placeholder="Pesquisar por telemóvel, destinatário, template ou guia..."
+                  className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm"
+                />
+              </div>
+              <select
+                value={logsChannel}
+                onChange={(e) => setLogsChannel(e.target.value)}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="all">Todos os Canais</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="sms">SMS (ClickSend)</option>
+              </select>
+              <button
+                type="button"
+                onClick={fetchLogs}
+                disabled={loadingLogs}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loadingLogs ? "animate-spin" : ""}`} />
+                Pesquisar
+              </button>
+            </div>
+            <div className="text-xs text-slate-500">{logs.length} registos apresentados</div>
+          </div>
+
+          {logsWarning && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              {logsWarning}
+            </div>
+          )}
+
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+              <thead className="bg-slate-50 font-semibold text-slate-700">
+                <tr>
+                  <th className="px-3 py-2.5">Data / Hora</th>
+                  <th className="px-3 py-2.5">Canal</th>
+                  <th className="px-3 py-2.5">Origem</th>
+                  <th className="px-3 py-2.5">Telefone</th>
+                  <th className="px-3 py-2.5">Destinatário</th>
+                  <th className="px-3 py-2.5">Guia</th>
+                  <th className="px-3 py-2.5">Template / Mensagem</th>
+                  <th className="px-3 py-2.5">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {logs.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                      {loadingLogs ? "A carregar histórico..." : "Nenhuma mensagem registada para este filtro."}
+                    </td>
+                  </tr>
+                ) : (
+                  logs.map((row) => {
+                    const isSms = row.channel === "sms"
+                    const st = String(row.status || "").toLowerCase()
+                    const isOk = ["accepted", "sent", "delivered", "read"].includes(st)
+                    return (
+                      <tr key={row.id} className="hover:bg-slate-50">
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-500">
+                          {new Date(row.created_at).toLocaleString("pt-PT")}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-block rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                              isSms ? "bg-blue-100 text-blue-800" : "bg-emerald-100 text-emerald-800"
+                            }`}
+                          >
+                            {isSms ? "SMS" : "WhatsApp"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-slate-600">{row.source_system || "manual"}</td>
+                        <td className="px-3 py-2 font-mono font-medium text-slate-900">{row.to_number}</td>
+                        <td className="px-3 py-2 text-slate-700">{row.contact_name || "—"}</td>
+                        <td className="px-3 py-2 font-mono text-slate-700">{row.tracking_number || "—"}</td>
+                        <td className="max-w-md truncate px-3 py-2 text-slate-600" title={row.message_text || ""}>
+                          {row.template_name ? (
+                            <span className="font-mono font-semibold text-slate-800">{row.template_name}: </span>
+                          ) : null}
+                          {row.message_text || "—"}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                              isOk ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                            }`}
+                          >
+                            {isOk ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                            {row.status || "unknown"}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: SETTINGS & CREDENTIALS */}
+      {activeTab === "settings" && config && (
+        <form onSubmit={handleSaveConfig} className="space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-base font-bold text-slate-900">
+              Configuração de Fontes (Legacy TMS + TMS Linke), Meta WhatsApp &amp; ClickSend
+            </h2>
+            <p className="text-xs text-slate-500">
+              Pode definir estas variáveis no <code>.env.local</code> / Vercel ou guardá-las diretamente aqui na base de dados do TMS Linke.
+            </p>
+          </div>
+
+          {configBanner && (
+            <div
+              className={`rounded-lg p-3 text-xs font-medium ${
+                configBanner.type === "ok"
+                  ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border border-red-200 bg-red-50 text-red-800"
+              }`}
+            >
+              {configBanner.text}
+            </div>
+          )}
+
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Meta WhatsApp Cloud API */}
+            <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-bold text-slate-900">1. Meta WhatsApp Cloud API</h3>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Phone Number ID (WHATSAPP_PHONE_NUMBER_ID)
+                </label>
+                <input
+                  type="text"
+                  value={config.whatsappPhoneNumberId}
+                  onChange={(e) => setConfig({ ...config, whatsappPhoneNumberId: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  WABA Business Account ID (WHATSAPP_BUSINESS_ACCOUNT_ID)
+                </label>
+                <input
+                  type="text"
+                  value={config.whatsappBusinessAccountId}
+                  onChange={(e) => setConfig({ ...config, whatsappBusinessAccountId: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Permanent Access Token (WHATSAPP_ACCESS_TOKEN)
+                </label>
+                <input
+                  type="password"
+                  value={config.whatsappAccessToken}
+                  onChange={(e) => setConfig({ ...config, whatsappAccessToken: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Legacy TMS Scraping */}
+            <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-bold text-slate-900">
+                2. Scraping HTML Legacy TMS (Em paralelo com TMS Linke)
+              </h3>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  URL Base do TMS Antigo (TMS_BASE_URL)
+                </label>
+                <input
+                  type="text"
+                  value={config.legacyTmsBaseUrl}
+                  onChange={(e) => setConfig({ ...config, legacyTmsBaseUrl: e.target.value })}
+                  placeholder="https://..."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Email Admin TMS Antigo (TMS_ADMIN_EMAIL)
+                </label>
+                <input
+                  type="text"
+                  value={config.legacyTmsAdminEmail}
+                  onChange={(e) => setConfig({ ...config, legacyTmsAdminEmail: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Password Admin TMS Antigo (TMS_ADMIN_PASSWORD)
+                </label>
+                <input
+                  type="password"
+                  value={config.legacyTmsAdminPassword}
+                  onChange={(e) => setConfig({ ...config, legacyTmsAdminPassword: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                />
+              </div>
+            </div>
+
+            {/* ClickSend SMS */}
+            <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-bold text-slate-900">3. ClickSend SMS &amp; Fallback</h3>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  ClickSend Username (CLICKSEND_USERNAME)
+                </label>
+                <input
+                  type="text"
+                  value={config.clicksendUsername}
+                  onChange={(e) => setConfig({ ...config, clicksendUsername: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  ClickSend API Key (CLICKSEND_API_KEY)
+                </label>
+                <input
+                  type="password"
+                  value={config.clicksendApiKey}
+                  onChange={(e) => setConfig({ ...config, clicksendApiKey: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-xs text-slate-700 pt-1">
+                <input
+                  type="checkbox"
+                  checked={config.autoSmsFallbackEnabled}
+                  onChange={(e) => setConfig({ ...config, autoSmsFallbackEnabled: e.target.checked })}
+                />
+                Ativar Fallback Automático de SMS quando o template WhatsApp falhar
+              </label>
+            </div>
+
+            {/* Default Template Names */}
+            <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+              <h3 className="text-sm font-bold text-slate-900">4. Templates das Auto-Notificações</h3>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Template Em Distribuição
+                </label>
+                <input
+                  type="text"
+                  value={config.autoEnvioTemplate}
+                  onChange={(e) => setConfig({ ...config, autoEnvioTemplate: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Template Em Transporte
+                </label>
+                <input
+                  type="text"
+                  value={config.autoTransporteTemplate}
+                  onChange={(e) => setConfig({ ...config, autoTransporteTemplate: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Template Incidência
+                </label>
+                <input
+                  type="text"
+                  value={config.autoIncidenciaTemplate}
+                  onChange={(e) => setConfig({ ...config, autoIncidenciaTemplate: e.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={savingConfig}
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          >
+            {savingConfig ? "A guardar..." : "Guardar Configurações"}
+          </button>
+        </form>
+      )}
+    </div>
+  )
+}
+
