@@ -6,7 +6,7 @@ const text=n=>Array.isArray(n)?n.map(text).join(''):n&&typeof n==='object'?text(
 function harness(initialData={id:'client-a',short_name:'Loja A',payment_due_days:30},servicosLinke=[]){
  const slots=[];let cursor=0,response={success:true,data:{...initialData,id:initialData?.id||'created-id',short_name:'Loja A'}}
  const calls={saved:[],close:0,inputs:[]}
- const React={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useEffect(){},useRef(initial){return {current:initial}}}
+ const React={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useEffect(){},useRef(initial){const i=cursor++;return slots[i]??={current:initial}}}
  const jsx=(type,props)=>({type,props:props||{}})
  const load=createLoader({react:React,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,p)=>p}),
   '@/app/actions/clientes':{saveClienteAction:async data=>{calls.inputs.push(data);return typeof response==='function'?response(data):response}},
@@ -16,31 +16,31 @@ function harness(initialData={id:'client-a',short_name:'Loja A',payment_due_days
  const render=()=>{cursor=0;return flat(Modal(props))}
  const button=label=>render().find(n=>n.type==='button'&&text(n)===label)
  const edit=value=>render().find(n=>n.type==='input'&&n.props.placeholder==='Ex: CACTO ou DETAILER').props.onChange({target:{value}})
- return{calls,render,button,edit,response:value=>{response=value}}
+ return{calls,render,button,edit,response:value=>{response=value},receive:value=>{props.initialData=value}}
 }
 test('saving keeps the client modal open and marks it saved until the next edit; Close is explicit',async()=>{
  const h=harness()
  assert.ok(h.button('Fechar'))
  await h.button('Gravar Cliente').props.onClick()
  assert.equal(h.calls.saved.length,1)
- assert.equal(h.button('Gravado').props.disabled,true)
+ assert.equal(h.button('Guardado').props.disabled,true)
  await new Promise(resolve=>setTimeout(resolve,350))
  assert.equal(h.calls.close,0)
  h.edit('Loja Alterada')
- assert.equal(h.button('Gravado'),undefined)
+ assert.equal(h.button('Guardado'),undefined)
  assert.equal(h.button('Gravar Cliente').props.disabled,false)
  await h.button('Gravar Cliente').props.onClick()
  assert.equal(h.calls.inputs[1].short_name,'Loja Alterada')
- assert.ok(h.button('Gravado'))
+ assert.ok(h.button('Guardado'))
  h.button('Fechar').props.onClick()
  assert.equal(h.calls.close,1)
 })
-test('failed saves keep the modal editable without showing Gravado',async()=>{
+test('failed saves keep the modal editable without showing Guardado',async()=>{
  const h=harness();h.response({success:false,error:'Falha de teste'})
  await h.button('Gravar Cliente').props.onClick()
  assert.equal(h.calls.close,0)
  assert.equal(h.calls.saved.length,0)
- assert.equal(h.button('Gravado'),undefined)
+ assert.equal(h.button('Guardado'),undefined)
  assert.equal(h.button('Gravar Cliente').props.disabled,false)
  assert.ok(h.render().some(n=>text(n).includes('Falha de teste')))
 })
@@ -51,7 +51,7 @@ test('edits made during saving are not incorrectly marked as already saved',asyn
  h.edit('Alterado durante gravação')
  resolve({success:true,data:{id:'client-a',short_name:'Loja A'}})
  await saving
- assert.equal(h.button('Gravado'),undefined)
+ assert.equal(h.button('Guardado'),undefined)
  assert.ok(h.button('Gravar Cliente'))
  assert.equal(h.calls.close,0)
 })
@@ -131,7 +131,7 @@ test('saving price table in client modal updates client in parent list and re-op
    useMemo:fn=>fn(),
    useCallback:fn=>fn,
    cache:fn=>fn,
-   useRef(initial){return {current:initial}}
+   useRef(initial){const i=cursor++;return slots[i]??={current:initial}}
  }
  let cursor=0;const slots=[]
  const jsx=(type,props,key)=>({type,props:props||{},key})
@@ -148,7 +148,9 @@ test('saving price table in client modal updates client in parent list and re-op
    '@/components/ui/button':{Button:'button'}
  })
  const ClientesClient=load('app/ops/entidades/clientes/components/ClientesClient.tsx').ClientesClient
- const render=()=>{cursor=0;return flat(ClientesClient({initialClientes:[client],initialServicosLinke:[table]}))}
+ // Local state renders keep the same server props until router.refresh resolves.
+ const initialClientes=[client],initialServicosLinke=[table]
+ const render=()=>{cursor=0;return flat(ClientesClient({initialClientes,initialServicosLinke}))}
 
  // Open modal for client
  let nodes=render()
@@ -175,6 +177,7 @@ test('saving price table in client modal updates client in parent list and re-op
  tableNameInput.props.onChange({target:{value:'Tabela Nova 2026'}})
 
  // Save client
+ nodes=render()
  const saveBtn=nodes.find(n=>n.type==='button'&&text(n).includes('Gravar Cliente'))
  assert.ok(saveBtn)
  await saveBtn.props.onClick()
@@ -205,4 +208,88 @@ test('saving price table in client modal updates client in parent list and re-op
  const reTableNameInput=nodes.find(n=>n.type==='input'&&n.props.placeholder==='Ex: Tabela Especial Têxtil 2026')
  assert.ok(reTableNameInput)
  assert.equal(reTableNameInput.props.value,'Tabela Nova 2026')
+})
+
+test('legacy null Back fee does not block saving the customer service table',async()=>{
+ const table={id:'table-new',name:'Tabela nova',is_active:true,zones:[{zone_code:'PT-CONT',tiers:[{id:'tier-1',label:'Até 2 kg',weight_max:2,sell_price:4.2,enabled:true}]}]}
+ const client={id:'client-a',short_name:'Loja de teste',assigned_linke_service_ids:[table.id],default_linke_table_id:table.id,
+  pricing:{service_weight_tiers:{'table-new::PT-CONT':[{id:'client-tier',label:'Até 2 kg',weight_max:2,sell_price:3.9}]},special_services_fees:[{special_service_code:'back',fee_type:'fixed',fixed_value:null,is_enabled:false}]}}
+ const h=harness(client,[table])
+ h.render() // Settle the initial profile reset before submitting the mounted form.
+ await h.button('Gravar Cliente').props.onClick()
+ assert.equal(h.calls.inputs.length,1)
+ assert.equal(h.calls.inputs[0].pricing.special_services_fees.find(f=>f.special_service_code==='back').fixed_value,0)
+ assert.deepEqual(h.calls.inputs[0].pricing.service_weight_tiers,client.pricing.service_weight_tiers)
+ assert.deepEqual(h.calls.inputs[0].assigned_linke_service_ids,[table.id])
+ assert.ok(h.button('Guardado'))
+})
+
+test('invalid supplement is identified in the modal before the server save and keeps the draft editable',async()=>{
+ const h=harness({id:'client-a',short_name:'Loja de teste',pricing:{special_services_fees:[{special_service_code:'back',fee_type:'fixed',fixed_value:-1,is_enabled:false}]}})
+ await h.button('Gravar Cliente').props.onClick()
+ assert.equal(h.calls.inputs.length,0)
+ assert.equal(h.calls.saved.length,0)
+ assert.ok(h.render().some(n=>text(n).includes('Back')&&text(n).includes('suplementos')))
+ assert.equal(h.button('Gravar Cliente').props.disabled,false)
+})
+
+test('Guardado survives canonical server data and parent refresh, then clears on a new edit or another client',async()=>{
+ const h=harness({id:'client-a',short_name:'Loja A',pricing:{table_name:'Tabela especial'}})
+ h.render()
+ h.response(data=>({success:true,data:{...data,portal_slug:'loja-a',pricing:JSON.parse(JSON.stringify(data.pricing)),code:'CL123'}}))
+ await h.button('Gravar Cliente').props.onClick()
+ assert.equal(h.button('Guardado').props.disabled,true)
+ h.receive(h.calls.saved[0])
+ h.render()
+ assert.equal(h.button('Guardado').props.disabled,true)
+ // JSON object key order can change when the saved profile comes back from PostgreSQL.
+ h.receive(Object.fromEntries(Object.entries(h.calls.saved[0]).reverse()))
+ h.render()
+ assert.equal(h.button('Guardado').props.disabled,true)
+ h.edit('Novo nome')
+ assert.equal(h.button('Guardado'),undefined)
+ assert.equal(h.button('Gravar Cliente').props.disabled,false)
+ await h.button('Gravar Cliente').props.onClick()
+ assert.ok(h.button('Guardado'))
+ h.receive({id:'client-b',short_name:'Outra loja'})
+ h.render()
+ assert.equal(h.button('Guardado'),undefined)
+})
+
+test('a newly created client keeps Guardado when the parent supplies its saved identifier',async()=>{
+ const h=harness(null)
+ h.response(data=>({success:true,data:{...data,portal_slug:'nova-loja'}}))
+ h.render()
+ h.edit('Nova loja')
+ await h.button('Gravar Cliente').props.onClick()
+ assert.equal(h.calls.saved.length,1)
+ h.receive(h.calls.saved[0]);h.render()
+ assert.equal(h.button('Guardado').props.disabled,true)
+})
+
+test('the client list keeps the new editor mounted after the first save and resets its key when another client opens',()=>{
+ let cursor=0;const slots=[]
+ const jsx=(type,props,key)=>({type,props:props||{},key})
+ function Modal(){}
+ const React={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return[slots[i],v=>slots[i]=typeof v==='function'?v(slots[i]):v]},useMemo:fn=>fn(),useRef:initial=>({current:initial})}
+ const load=createLoader({react:React,'react/jsx-runtime':{jsx,jsxs:jsx},'lucide-react':new Proxy({},{get:(_,p)=>p}),
+  'next/navigation':{useRouter:()=>({refresh(){}})},'@/components/ui/button':{Button:'button'},
+  '@/app/actions/clientes':{},'./ClienteModal':{ClienteModal:Modal},'./ClientAuthModal':{ClientAuthModal:()=>null}})
+ const Component=load('app/ops/entidades/clientes/components/ClientesClient.tsx').ClientesClient
+ const clients=[{id:'other',short_name:'Outra loja',code:'CL1',is_active:true}],services=[]
+ const flatten=n=>Array.isArray(n)?n.flatMap(flatten):n&&typeof n==='object'?[n,...flatten(n.props?.children)]:[]
+ const render=()=>{cursor=0;return flatten(Component({initialClientes:clients,initialServicosLinke:services}))}
+ let nodes=render()
+ nodes.find(n=>n.type==='button'&&text(n).trim()==='Novo').props.onClick()
+ let editor=render().find(n=>n.type===Modal)
+ const newKey=editor.key
+ editor.props.onSaved({id:'created',short_name:'Nova loja',code:'CL2',is_active:true})
+ editor=render().find(n=>n.type===Modal)
+ assert.equal(editor.key,newKey)
+ assert.equal(editor.props.initialData.id,'created')
+ editor.props.onClose()
+ nodes=render()
+ nodes.find(n=>n.type==='tr'&&n.key==='other').props.onClick()
+ editor=render().find(n=>n.type===Modal)
+ assert.equal(editor.key,'other')
 })

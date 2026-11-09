@@ -4,7 +4,7 @@ import { useState } from "react"
 import type { ClientSpecialServiceFee } from "@/app/ops/entidades/clientes/types"
 import { CORREOS_INCLUDED_SERVICES, isCorreosConfigurationOnly } from "@/lib/services/correos/complementary-services"
 import { inheritStandardSpecialFees } from "@/lib/pricing/special-fees"
-import { COD_DESTINATIONS, isCodFee, codRateForZone, type CodRate, type CodDestination } from "@/lib/pricing/cod-destination-rates"
+import { codDestinationsForFee, isCodFee, codRateForZone, type CodRate, type CodDestination } from "@/lib/pricing/cod-destination-rates"
 
 type Props = {
   fees: ClientSpecialServiceFee[]
@@ -70,11 +70,12 @@ export function SpecialFeesEditor({ fees, onChange, standards = [], mode, disabl
         {visible.map(fee => {
           const configurationOnly = isCorreosConfigurationOnly(fee.special_service_code)
           const standard = standards.find(row => row.special_service_code === fee.special_service_code)
-          const rates = Object.fromEntries(COD_DESTINATIONS.map(({ code }) => {
+          const destinations = codDestinationsForFee(fee.special_service_code)
+          const rates = Object.fromEntries(destinations.map(({ code }) => {
             const rate = codRateForZone(fee, code)
             return [code, { ...rate, use_standard: rate.use_standard ?? fee.use_standard === true }]
           })) as Record<CodDestination, CodRate>
-          const followsStandard = fee.use_standard === true && (!isCodFee(fee.special_service_code) || COD_DESTINATIONS.every(({ code }) => rates[code].use_standard === true))
+          const followsStandard = fee.use_standard === true && (!isCodFee(fee.special_service_code) || destinations.every(({ code }) => rates[code].use_standard === true))
           return <div key={fee.special_service_code} className="flex flex-wrap items-start justify-between gap-4 p-4">
             <div className="flex min-w-0 flex-1 items-start gap-3 basis-64">
               <input type="checkbox" aria-label={`Ativar ${fee.special_service_name}`} checked={fee.is_enabled} disabled={disabled || configurationOnly}
@@ -96,7 +97,7 @@ export function SpecialFeesEditor({ fees, onChange, standards = [], mode, disabl
             {!isCodFee(fee.special_service_code) ? rateInputs(fee, fee.special_service_name, patch => change(fee.special_service_code, patch)) : (
               <div className="w-full space-y-3">
                 <p className="text-xs text-[var(--text-secondary)]">Cobrança calculada pelo país e código postal do destinatário. A percentagem incide sobre o valor a cobrar.</p>
-                <div className="grid gap-3 xl:grid-cols-2">{COD_DESTINATIONS.map(({ code, label }) => <div key={code} className="space-y-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
+                <div className="grid gap-3 xl:grid-cols-2">{destinations.map(({ code, label }) => <div key={code} className="space-y-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-semibold">{label}</p>
                     {mode === "client" && <span className="text-[10px] font-semibold text-[var(--text-secondary)]">{rates[code].use_standard ? "Standard" : "Personalizado"}</span>}
                   </div>

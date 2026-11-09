@@ -10,8 +10,13 @@ export type CodDestination = typeof COD_DESTINATIONS[number]["code"]
 export type CodRate = NonNullable<NonNullable<ClientSpecialServiceFee["cod_destination_rates"]>[CodDestination]>
 export const isCodFee = (code: string) => code === "cod" || code === "correos_cod"
 
-export function isCodDestinationAvailable(country: string, postal: string): boolean {
-  return codDestination(country, postal) !== undefined
+export function codDestinationsForFee(code: string) {
+  return COD_DESTINATIONS.filter(destination => code === "correos_cod" || code === "cod" && destination.code !== "ES-BALEARES")
+}
+
+export function isCodDestinationAvailable(country: string, postal: string, feeCode: string): boolean {
+  const zone = codDestination(country, postal)
+  return codDestinationsForFee(feeCode).some(destination => destination.code === zone)
 }
 
 export function baseCodRate(fee: ClientSpecialServiceFee): CodRate {
@@ -42,6 +47,8 @@ export function validateCodRates(input: unknown, code: string, client = false): 
   if (!isCodFee(code) || !input || typeof input !== "object" || Array.isArray(input)) throw new Error("Configuração de cobrança por destino inválida.")
   const rates: NonNullable<ClientSpecialServiceFee["cod_destination_rates"]> = {}
   for (const [zone, value] of Object.entries(input)) {
+    // Discard the unsupported CTT region from older saved configurations.
+    if (code === "cod" && zone === "ES-BALEARES") continue
     if (!COD_DESTINATIONS.some(item => item.code === zone) || !value || typeof value !== "object" || Array.isArray(value)) throw new Error("Zona de cobrança inválida.")
     const rate = value as CodRate
     if (!["fixed", "percentage"].includes(rate.fee_type) || rate.use_standard !== undefined && typeof rate.use_standard !== "boolean"

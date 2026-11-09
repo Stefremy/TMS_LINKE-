@@ -55,7 +55,7 @@ export class CttProvider implements CarrierProvider {
 
   async createShipment(input: ShipmentInput): Promise<ShipmentResult> {
     try {
-      if (input.codValue && !isCodDestinationAvailable(input.recipient.country || "PT", input.recipient.zip)) {
+      if (input.codValue && !isCodDestinationAvailable(input.recipient.country || "PT", input.recipient.zip, "cod")) {
         return { success: false, confirmedRejection: true, error: "A cobrança COD não está disponível para este destino." }
       }
       const senderData = this.shipmentAddress(input.sender, 1)

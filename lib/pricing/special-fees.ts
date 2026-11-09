@@ -1,7 +1,7 @@
 import type { Cliente, ClientSpecialServiceFee } from "@/app/ops/entidades/clientes/types"
 import { DEFAULT_STANDARD_SPECIAL_FEES } from "./special-fee-catalogue"
 import { isCorreosConfigurationOnly } from "@/lib/services/correos/complementary-services"
-import { COD_DESTINATIONS, isCodFee, codRateForZone, baseCodRate, validateCodRates } from "./cod-destination-rates"
+import { codDestinationsForFee, isCodFee, codRateForZone, baseCodRate, validateCodRates } from "./cod-destination-rates"
 
 export function inheritStandardSpecialFees(standards: ClientSpecialServiceFee[] = DEFAULT_STANDARD_SPECIAL_FEES) {
   return standards.map(fee => ({ ...fee, use_standard: true }))
@@ -13,13 +13,22 @@ export function resolveClientSpecialFees(configured?: ClientSpecialServiceFee[],
   const result = standards.map(standard => {
     const custom = byCode.get(standard.special_service_code)
     byCode.delete(standard.special_service_code)
-    const resolved = custom && custom.use_standard !== true ? { ...standard, ...custom, use_standard: false }
+    const override = custom && { ...custom }
+    // Older persisted profiles used null for an unset amount. Only fill that
+    // legacy gap from a valid standard value; negotiated zero remains explicit.
+    for (const field of ["fixed_value", "percentage_value", "min_value"] as const) {
+      const fallback = standard[field]
+      if (override?.[field] === null && typeof fallback === "number" && Number.isFinite(fallback) && fallback >= 0) {
+        override[field] = fallback
+      }
+    }
+    const resolved = override && override.use_standard !== true ? { ...standard, ...override, use_standard: false }
       : { ...standard, use_standard: true }
     if (isCodFee(standard.special_service_code)) {
-      resolved.cod_destination_rates = Object.fromEntries(COD_DESTINATIONS.map(({ code }) => {
-        const rate = custom?.cod_destination_rates?.[code]
+      resolved.cod_destination_rates = Object.fromEntries(codDestinationsForFee(standard.special_service_code).map(({ code }) => {
+        const rate = override?.cod_destination_rates?.[code]
         const negotiated = rate && rate.use_standard !== true ? rate
-          : !rate && custom && custom.use_standard !== true ? baseCodRate(custom) : undefined
+          : !rate && override && override.use_standard !== true ? baseCodRate(override) : undefined
         return [code, negotiated ? { ...negotiated, use_standard: false } : { ...codRateForZone(standard, code), use_standard: true }]
       }))
     }
@@ -66,7 +75,10 @@ export function validateClientSpecialFees(input: unknown): ClientSpecialServiceF
     if (!fee || typeof fee.special_service_code !== "string" || !fee.special_service_code || seen.has(fee.special_service_code)) throw new Error("Existem taxas do cliente inválidas ou repetidas.")
     seen.add(fee.special_service_code)
     if (!["fixed", "percentage"].includes(fee.fee_type) || typeof fee.is_enabled !== "boolean" || fee.use_standard !== undefined && typeof fee.use_standard !== "boolean") throw new Error("Configuração de taxa inválida.")
-    if ([fee.fixed_value, fee.percentage_value, fee.min_value].some(value => value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))))) throw new Error("As taxas do cliente devem ter valores numéricos iguais ou superiores a zero.")
+    if ([fee.fixed_value, fee.percentage_value, fee.min_value].some(value => value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))))) {
+      const name = DEFAULT_STANDARD_SPECIAL_FEES.find(row => row.special_service_code === fee.special_service_code)?.special_service_name || fee.special_service_code
+      throw new Error(`A taxa "${name}" deve ter valores numéricos iguais ou superiores a zero. Reveja os suplementos do cliente.`)
+    }
     return { ...fee, ...(fee.cod_destination_rates !== undefined ? { cod_destination_rates: validateCodRates(fee.cod_destination_rates, fee.special_service_code, true) } : {}),
       ...(isCorreosConfigurationOnly(fee.special_service_code) ? { is_enabled: false } : {}) }
   })

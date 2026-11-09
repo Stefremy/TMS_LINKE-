@@ -58,6 +58,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = React.useState(false)
+  const [modalKey, setModalKey] = React.useState("new-client")
   const [editingCliente, setEditingCliente] = React.useState<Cliente | null>(null)
   
   // Auth Modal state
@@ -113,12 +114,14 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
   const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   const handleOpenNewModal = () => {
+    setModalKey("new-client")
     setEditingCliente(null)
     setIsModalOpen(true)
   }
 
   const handleOpenEditModal = (client: Cliente) => {
     const current = clientes.find((c) => c.id === client.id) || client
+    setModalKey(current.id)
     setEditingCliente(current)
     setIsModalOpen(true)
     setOpenActionId(null)
@@ -606,7 +609,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
       {/* Modal Dialog */}
       {isModalOpen && (
         <ClienteModal
-          key={editingCliente?.id || "new-client"}
+          key={modalKey}
           initialData={editingCliente}
           servicosLinke={servicosLinke}
           sourceClients={clientes}

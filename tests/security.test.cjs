@@ -1065,3 +1065,17 @@ test('direct shipment emission rejects client-supplied ops overrides before pric
   assert.equal(h.providerCalls.length,0);assert.deepEqual(h.db.writes,[])
  }
 })
+
+test('CTT COD for Baleares is rejected before carrier calls and financial writes for client and Ops submissions',async()=>{
+ for(const role of ['client','employee']) for(const postal of ['07001','07701','07800','07860']) {
+  const h=shipmentHarness({ctx:{...clientContext,role},adjust:t=>{
+   const s=t.servicos_linke[0];s.allowed_zones=['ES-ILHAS'];s.zones[0].zone_code='ES-ILHAS'
+  }})
+  const result=await emit(h,{clientId:CLIENT,recipientCountry:'ES',recipientPostal:postal,recipientPhone:'+34612345678',selectedSpecialServices:['cod'],codValue:50})
+  assert.equal(result.success,false)
+  assert.match(result.error,/cobrança CTT.*Baleares/)
+  assert.equal(h.providerCalls.length,0)
+  assert.equal(h.credentials.length,0)
+  assert.equal(h.db.writes.length,0)
+ }
+})

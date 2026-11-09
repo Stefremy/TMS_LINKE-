@@ -5,7 +5,7 @@ const load=createLoader({})
 const {DEFAULT_STANDARD_SPECIAL_FEES:defaults}=load('lib/pricing/special-fee-catalogue.ts')
 const {resolveClientSpecialFees,inheritStandardSpecialFees,withStandardSpecialFees,validateStandardSpecialFees,validateClientSpecialFees}=load('lib/pricing/special-fees.ts')
 const {calculateShipmentSpecialFees}=load('lib/pricing/calculate-shipment-quote.ts')
-const {codDestination,COD_DESTINATIONS}=load('lib/pricing/cod-destination-rates.ts')
+const {codDestination,codDestinationsForFee}=load('lib/pricing/cod-destination-rates.ts')
 const tenant='11111111-1111-1111-1111-111111111111',clientId='22222222-2222-2222-2222-222222222222'
 const code='fragil'
 const amount=rows=>rows.find(f=>f.special_service_code===code).fixed_value
@@ -284,18 +284,22 @@ test('both carriers charge COD by destination on the collection value, respectin
   assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],1000,{country:'PT',postal:'9500-001'}).amount,30)
   assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],1,{country:'PT',postal:'4800-019'}).amount,1.8)
   for(const postal of ['07001','07701','07800','07860']) {
-   assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],100,{country:'ES',postal}).amount,6)
-   assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],200,{country:'ES',postal}).amount,8)
+   if(carrier==='ctt') assert.throws(()=>calculateShipmentSpecialFees(10,client,carrier,[code],100,{country:'ES',postal}),/CTT.*Baleares/)
+   else {
+    assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],100,{country:'ES',postal}).amount,6)
+    assert.equal(calculateShipmentSpecialFees(10,client,carrier,[code],200,{country:'ES',postal}).amount,8)
+   }
   }
   const legacy=withStandardSpecialFees({},defaults)
-  assert.equal(calculateShipmentSpecialFees(10,legacy,carrier,[code],100,{country:'ES',postal:'07001'}).amount,2,'unspecified Baleares rates retain the existing general commission')
+  if(carrier==='ctt')assert.throws(()=>calculateShipmentSpecialFees(10,legacy,carrier,[code],100,{country:'ES',postal:'07001'}),/CTT.*Baleares/)
+  else assert.equal(calculateShipmentSpecialFees(10,legacy,carrier,[code],100,{country:'ES',postal:'07001'}).amount,2,'Correos keeps its general commission when Baleares has no negotiated rate')
  }
 })
 
 test('legacy negotiated COD remains unchanged in every new zone while inherited client zones track future standards',()=>{
  const standards=regionalStandards(),legacy={...defaults[0],percentage_value:1,min_value:.5}
  const old=resolveClientSpecialFees([legacy],standards).find(f=>f.special_service_code==='cod')
- for(const {code} of COD_DESTINATIONS){assert.equal(old.cod_destination_rates[code].percentage_value,1);assert.equal(old.cod_destination_rates[code].use_standard,false)}
+ for(const {code} of codDestinationsForFee('cod')){assert.equal(old.cod_destination_rates[code].percentage_value,1);assert.equal(old.cod_destination_rates[code].use_standard,false)}
  const custom=resolveClientSpecialFees(undefined,standards)
  const fee=custom.find(f=>f.special_service_code==='cod')
  fee.use_standard=false
@@ -305,7 +309,7 @@ test('legacy negotiated COD remains unchanged in every new zone while inherited 
  assert.equal(next.cod_destination_rates['PT-ILHAS'].fixed_value,0)
  assert.equal(next.cod_destination_rates['PT-CONT'].percentage_value,9)
  assert.equal(next.cod_destination_rates['ES-PENIN'].fixed_value,5)
- assert.equal(next.cod_destination_rates['ES-BALEARES'].min_value,6)
+ assert.equal(next.cod_destination_rates['ES-BALEARES'],undefined)
  assert.equal(next.cod_destination_rates['PT-CONT'].use_standard,true)
 })
 
@@ -412,5 +416,99 @@ for(const [carrier,code,label,zone,initialRate] of [
  assert.ok(reset);reset.props.onClick()
  fee=changed.find(f=>f.special_service_code===code)
  assert.equal(fee.cod_destination_rates[zone].percentage_value,initialRate)
- assert.ok(COD_DESTINATIONS.every(({code})=>fee.cod_destination_rates[code].use_standard))
+ assert.ok(codDestinationsForFee(fee.special_service_code).every(({code})=>fee.cod_destination_rates[code].use_standard))
+})
+
+test('legacy null amounts use the current company standard without overwriting negotiated zero or other fees',()=>{
+ const standards=defaults.map(f=>f.special_service_code==='back'?{...f,fixed_value:3.5}:f)
+ const legacy=[{...standards.find(f=>f.special_service_code==='back'),fixed_value:null},
+  {...standards.find(f=>f.special_service_code==='fragil'),fixed_value:0}]
+ const before=structuredClone(legacy)
+ const resolved=resolveClientSpecialFees(legacy,standards)
+ assert.equal(resolved.find(f=>f.special_service_code==='back').fixed_value,3.5)
+ assert.equal(resolved.find(f=>f.special_service_code==='fragil').fixed_value,0)
+ assert.equal(resolved.find(f=>f.special_service_code==='fragil').use_standard,false)
+ assert.doesNotThrow(()=>validateClientSpecialFees(resolved))
+ assert.deepEqual(legacy,before)
+ const cod=standards.find(f=>f.special_service_code==='cod')
+ const resolvedCod=resolveClientSpecialFees([{...cod,min_value:null,percentage_value:0}],standards).find(f=>f.special_service_code==='cod')
+ assert.equal(resolvedCod.min_value,cod.min_value)
+ for(const {code} of codDestinationsForFee('cod')) {
+  assert.equal(resolvedCod.cod_destination_rates[code].min_value,cod.min_value)
+  assert.equal(resolvedCod.cod_destination_rates[code].percentage_value,0)
+ }
+ // A missing standard price cannot be guessed, and invalid submissions remain invalid.
+ assert.throws(()=>validateClientSpecialFees(resolveClientSpecialFees(legacy,standards.map(f=>f.special_service_code==='back'?{...f,fixed_value:undefined}:f))),/Back/)
+ assert.throws(()=>validateClientSpecialFees(legacy),/Back/)
+})
+
+test('editing service tables on a legacy profile with a null Back fee saves the tables and preserves the rest of its pricing',async()=>{
+ const standards=defaults.map(f=>f.special_service_code==='back'?{...f,fixed_value:3.5}:f)
+ const h=setup({events:[settings(standards)]})
+ h.tables.audit_log[0].details.pricing={fuel_surcharge_pct:8,special_services_fees:[
+  {...standards.find(f=>f.special_service_code==='back'),fixed_value:null},
+  {...standards.find(f=>f.special_service_code==='fragil'),fixed_value:0}]}
+ const clients=h.load('app/actions/clientes.ts')
+ const draft=(await clients.getClientesAction(clientId))[0]
+ draft.assigned_linke_service_ids=['service','new-table']
+ draft.default_linke_table_id='new-table'
+ draft.pricing.service_weight_tiers={'new-table::PT-CONT':[{id:'tier-1',label:'Até 2 kg',weight_max:2,sell_price:4.2}]}
+ const result=await clients.saveClienteAction(draft)
+ assert.equal(result.success,true)
+ assert.deepEqual(result.data.assigned_linke_service_ids,['service','new-table'])
+ assert.equal(result.data.default_linke_table_id,'new-table')
+ assert.deepEqual(result.data.pricing.service_weight_tiers,draft.pricing.service_weight_tiers)
+ assert.equal(result.data.pricing.fuel_surcharge_pct,8)
+ assert.equal(result.data.pricing.special_services_fees.find(f=>f.special_service_code==='back').fixed_value,3.5)
+ assert.equal(result.data.pricing.special_services_fees.find(f=>f.special_service_code==='fragil').fixed_value,0)
+ assert.ok(h.db.writes.every(write=>['clients','audit_log'].includes(write.table)))
+})
+
+test('partial client edits resolve persisted legacy null fees without requiring a replacement price table',async()=>{
+ const standards=defaults.map(f=>f.special_service_code==='back'?{...f,fixed_value:3.5}:f)
+ const h=setup({events:[settings(standards)]})
+ h.tables.audit_log[0].details.pricing={special_services_fees:[{...standards.find(f=>f.special_service_code==='back'),fixed_value:null}]}
+ const result=await h.load('app/actions/clientes.ts').saveClienteAction({id:clientId,short_name:'Updated'})
+ assert.equal(result.success,true)
+ assert.equal(result.data.pricing.special_services_fees.find(f=>f.special_service_code==='back').fixed_value,3.5)
+})
+
+test('invalid submitted client fees return an actionable result before writes instead of a masked server exception',async()=>{
+ for(const value of [null,-1,Infinity,'3.5']){
+  const h=setup()
+  const fees=[{...defaults.find(f=>f.special_service_code==='back'),fixed_value:value}]
+  const result=await h.load('app/actions/clientes.ts').saveClienteAction({id:clientId,short_name:'Fixture',pricing:{special_services_fees:fees}})
+  assert.equal(result.success,false)
+  assert.match(result.error,/Back/)
+  assert.match(result.error,/suplementos/)
+  assert.equal(h.db.writes.length,0)
+ }
+})
+
+test('CTT omits legacy Baleares COD rates on read and save; Correos keeps its configured rates',async()=>{
+ const h=setup({events:[settings(regionalStandards())]})
+ const standards=(await h.actions.getStandardSpecialFeesAction()).fees
+ assert.equal(standards.find(f=>f.special_service_code==='cod').cod_destination_rates['ES-BALEARES'],undefined)
+ assert.equal(standards.find(f=>f.special_service_code==='correos_cod').cod_destination_rates['ES-BALEARES'].min_value,6)
+ assert.equal((await h.actions.saveStandardSpecialFeesAction(regionalStandards())).success,true)
+ const written=h.db.writes.find(w=>w.table==='audit_log').value.details.fees
+ assert.equal(written.find(f=>f.special_service_code==='cod').cod_destination_rates['ES-BALEARES'],undefined)
+ assert.equal(written.find(f=>f.special_service_code==='correos_cod').cod_destination_rates['ES-BALEARES'].min_value,6)
+ const validated=validateClientSpecialFees([{...defaults[0],cod_destination_rates:codRates}])
+ assert.equal(validated[0].cod_destination_rates['ES-BALEARES'],undefined)
+ assert.equal(validated[0].cod_destination_rates['PT-ILHAS'].min_value,4)
+})
+
+for(const mode of ['client','standard']) test(`${mode} supplement editor has three CTT COD regions and keeps Baleares only for Correos`,()=>{
+ let slots=[],cursor=0
+ const jsx=(type,props)=>({type,props:props||{}})
+ const editor=createLoader({react:{useState:initial=>{const i=cursor++;if(slots[i]===undefined)slots[i]=initial;return[slots[i],value=>slots[i]=value]}},'react/jsx-runtime':{jsx,jsxs:jsx}})('components/shipments/SpecialFeesEditor.tsx').SpecialFeesEditor
+ const flat=node=>Array.isArray(node)?node.flatMap(flat):node&&typeof node==='object'?[node,...flat(node.props?.children)]:[]
+ const render=()=>{cursor=0;return flat(editor({fees:regionalStandards(),standards:regionalStandards(),mode,onChange(){}}))}
+ let nodes=render()
+ assert.equal(nodes.filter(n=>n.type==='input'&&String(n.props['aria-label']).includes('· Portugal Continental')).length,2)
+ assert.equal(nodes.filter(n=>n.type==='input'&&String(n.props['aria-label']).includes('· Espanha — Ilhas Baleares')).length,0)
+ nodes.find(n=>n.type==='button'&&String(n.props.children).includes('Correos Express')).props.onClick()
+ nodes=render()
+ assert.equal(nodes.filter(n=>n.type==='input'&&String(n.props['aria-label']).includes('· Espanha — Ilhas Baleares')).length,2)
 })

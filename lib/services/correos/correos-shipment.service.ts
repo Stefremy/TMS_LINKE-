@@ -25,7 +25,7 @@ export class CorreosShipmentService {
       throw new Error("O produto Correos 90 (Internacional Standard) permite apenas um volume por envio.")
     }
     if (input.reembolso && Number(input.reembolso) !== 0 && !isCodDestinationAvailable(input.destinatario.paisISO,
-      input.destinatario.cpNacional || input.destinatario.cpInternacional || "")) {
+      input.destinatario.cpNacional || input.destinatario.cpInternacional || "", "correos_cod")) {
       throw new Error("A cobrança COD não está disponível para este destino.")
     }
     const endpoint = this.getEndpoint(creds.environment)

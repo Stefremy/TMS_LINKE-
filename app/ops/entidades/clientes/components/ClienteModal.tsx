@@ -2,7 +2,7 @@
 
 import { SpecialFeesEditor } from "@/components/shipments/SpecialFeesEditor"
 import { DEFAULT_STANDARD_SPECIAL_FEES } from "@/lib/pricing/special-fee-catalogue"
-import { resolveClientSpecialFees } from "@/lib/pricing/special-fees"
+import { resolveClientSpecialFees, validateClientSpecialFees } from "@/lib/pricing/special-fees"
 
 import { importClientServices, importableClientServiceIds, type ClientServiceImportSource } from "@/lib/clients/import-service-pricing"
 import { CLIENT_ACTIVITY_COLORS, clientActivityColor } from "@/lib/clients/activity-color"
@@ -98,7 +98,8 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
   const [activeTab, setActiveTab] = React.useState<TabType>("geral")
   const [precarioSubTab, setPrecarioSubTab] = React.useState<PrecarioSubTab>("servicos_linke")
   const [serviceTableFilter, setServiceTableFilter] = React.useState<"all" | "base" | "custom">("all")
-  const [savedFormSnapshot, setSavedFormSnapshot] = React.useState<string | null>(null)
+  const [isSaved, setIsSaved] = React.useState(false)
+  const draftRevision = React.useRef(0)
   const [draftId] = React.useState(() => initialData?.id || crypto.randomUUID())
   const [sendInvitation, setSendInvitation] = React.useState(false)
   const [invitationEmail, setInvitationEmail] = React.useState("")
@@ -106,7 +107,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
   const [saveError, setSaveError] = React.useState("")
 
   // Initialize form data with rich pricing and webservices
-  const [formData, setFormData] = React.useState<Partial<Cliente>>(() => ({
+  const [formData, setFormDataState] = React.useState<Partial<Cliente>>(() => ({
     code: initialData?.code || `CL${Math.floor(100 + Math.random() * 900)}`,
     short_name: initialData?.short_name || "",
     portal_slug: initialData?.portal_slug || "",
@@ -149,7 +150,13 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
     custom_tier_overrides: initialData?.custom_tier_overrides || {},
   }))
 
-  const saveSuccessMsg = savedFormSnapshot === JSON.stringify(formData) && !sendInvitation
+  // User edits clear success; a server refresh after saving does not.
+  const setFormData: React.Dispatch<React.SetStateAction<Partial<Cliente>>> = update => {
+    draftRevision.current += 1
+    setIsSaved(false)
+    setFormDataState(update)
+  }
+  const saveSuccessMsg = isSaved && !sendInvitation
 
   const [expandedPriceServico, setExpandedPriceServico] = React.useState<string | null>(null)
   const [activeZoneByServico, setActiveZoneByServico] = React.useState<Record<string, number>>({})
@@ -163,10 +170,12 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
 
   const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
   if (observedInputs1 === null || !Object.is(observedInputs1[0], initialData) || !Object.is(observedInputs1[1], servicosLinke) || !Object.is(observedInputs1[2], defaultPaymentDays) || !Object.is(observedInputs1[3], standardSpecialFees)) {
+    const previousClient = observedInputs1?.[0] as Cliente | null | undefined
+    if ((previousClient?.id || draftId) !== (initialData?.id || draftId)) setIsSaved(false)
     setObservedInputs1([initialData, servicosLinke, defaultPaymentDays, standardSpecialFees])
 
     if (initialData) {
-      setFormData({
+      setFormDataState({
         id: initialData.id,
         code: initialData.code || "",
         short_name: initialData.short_name || "",
@@ -219,7 +228,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
     setObservedInputs2([formData.billing_type, formData.payment_terms])
 
     if (formData.billing_type === "pay_as_you_go" && formData.payment_terms !== "Pronto Pagamento") {
-      setFormData(prev => ({ ...prev, payment_terms: "Pronto Pagamento" }))
+      setFormDataState(prev => ({ ...prev, payment_terms: "Pronto Pagamento" }))
     }
   
   }
@@ -362,11 +371,12 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
     setInvitationMessage("")
     setIsSaving(true)
     let persisted = false
-    const submittedSnapshot = JSON.stringify(formData)
+    const submittedRevision = draftRevision.current
     try {
       validateClientTierOrder(formData.pricing?.service_tier_order)
       validateClientWeightTiers(formData.pricing?.service_weight_tiers)
       paymentDueDays(formData.payment_due_days, NaN)
+      validateClientSpecialFees(formData.pricing?.special_services_fees ?? DEFAULT_CLIENT_PRICING.special_services_fees)
       const res = await saveClienteAction({
         ...formData,
         id: initialData?.id || draftId,
@@ -374,7 +384,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
 
       if (res.success && res.data) {
         persisted = true
-        setSavedFormSnapshot(submittedSnapshot)
+        setIsSaved(draftRevision.current === submittedRevision)
         onSaved(res.data)
         if (sendInvitation) {
           const invitation = await inviteClientAccessAction(res.data.id, invitationEmail)
@@ -1930,7 +1940,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
             {saveSuccessMsg && (
               <span className="text-[var(--accent)] font-bold flex items-center gap-1 animate-in fade-in">
                 <CheckCircle2 className="w-4 h-4" />
-                Gravado com sucesso!
+                Guardado com sucesso!
               </span>
             )}
           </div>
@@ -1959,7 +1969,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
               ) : (
                 <>
                   {saveSuccessMsg ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                  <span>{saveSuccessMsg ? "Gravado" : sendInvitation ? "Gravar e enviar convite" : "Gravar Cliente"}</span>
+                  <span>{saveSuccessMsg ? "Guardado" : sendInvitation ? "Gravar e enviar convite" : "Gravar Cliente"}</span>
                 </>
               )}
             </button>

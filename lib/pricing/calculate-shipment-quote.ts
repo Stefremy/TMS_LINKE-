@@ -76,7 +76,9 @@ export function calculateShipmentSpecialFees(
   const fees = getClientSpecialFees(client)
   const items = codes.map(code => {
     if (!isCttSpecialServiceAvailable(code, destination?.country ?? "", destination?.postal ?? "")) {
-      if (isCodFee(code)) throw new ShipmentPricingError("A cobrança COD está disponível apenas para Portugal Continental, Açores, Madeira, Espanha Peninsular e Baleares.")
+      if (isCodFee(code)) throw new ShipmentPricingError(code === "cod"
+        ? "A cobrança CTT está disponível apenas para Portugal Continental, Açores, Madeira e Espanha Peninsular. Não está disponível para as Baleares."
+        : "A cobrança Correos está disponível apenas para Portugal Continental, Açores, Madeira, Espanha Peninsular e Baleares.")
       throw new ShipmentPricingError("AuthorizeReturn / Back (Logística Inversa) está disponível apenas para Portugal Continental.")
     }
     if (code.startsWith("correos_") !== (carrier === "correos")) {

@@ -440,3 +440,16 @@ test('explicit contacts equal to the party name are omitted despite case, spaces
  })
  assert.equal(sender.ContactName,undefined);assert.equal(receiver.ContactName,undefined)
 })
+
+test('CTT provider rejects Baleares COD before sending any SOAP request',async()=>{
+ for(const postal of ['07001','07701','07800','07860']) {
+  const h=harness()
+  const result=await h.provider.createShipment({reference:'NO-REAL-SHIPMENT',weightKg:1,volumes:1,codValue:50,
+   sender:{name:'Fixture',address:'Test',zip:'4800-019',city:'Guimarães',country:'PT',phone:'+351910000001'},
+   recipient:{name:'Fixture',address:'Test',zip:postal,city:'Baleares',country:'ES',phone:'+34612345678'}})
+  assert.equal(result.success,false)
+  assert.equal(result.confirmedRejection,true)
+  assert.match(result.error,/cobrança/)
+  assert.equal(h.calls.length,0)
+ }
+})

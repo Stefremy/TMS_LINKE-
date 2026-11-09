@@ -6,7 +6,7 @@ import { validateClientTierOrder } from "@/lib/pricing/tier-display-order"
 import { validateClientWeightTiers } from "@/lib/pricing/client-weight-tiers"
 
 import { loadStandardSpecialFees } from "@/lib/pricing/standard-special-fees"
-import { withStandardSpecialFees, validateClientSpecialFees } from "@/lib/pricing/special-fees"
+import { withStandardSpecialFees, resolveClientSpecialFees, validateClientSpecialFees } from "@/lib/pricing/special-fees"
 
 import { applyClientActivityColor } from "@/lib/clients/activity-color"
 import { readLegacyServiceHistory } from "@/lib/clients/service-history"
@@ -319,6 +319,20 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
   if (cliente.color_mode !== undefined && cliente.color_mode !== 'services' && cliente.color_mode !== 'manual') {
     throw new Error('Modo de cor inválido.')
   }
+  let specialFees
+  try {
+    let fees: unknown = cliente.pricing?.special_services_fees ?? previous?.details?.pricing?.special_services_fees ?? DEFAULT_CLIENT_PRICING.special_services_fees
+    if (cliente.pricing?.special_services_fees === undefined && Array.isArray(fees) && fees.some(fee =>
+      fee && [fee.fixed_value, fee.percentage_value, fee.min_value].includes(null))) {
+      const standard = await loadStandardSpecialFees(supabase, ctx.tenant_id)
+      fees = resolveClientSpecialFees(fees, standard.fees)
+    }
+    specialFees = validateClientSpecialFees(fees)
+  } catch (error) {
+    // Expected form errors must cross the Server Action boundary as data;
+    // React masks thrown server errors in production builds.
+    return { success: false, error: errorMessage(error) || "Configuração de taxas do cliente inválida." }
+  }
   const fullRecord: Cliente = {
     id,
     portal_slug: normalizeStoreSlug(slugName),
@@ -366,7 +380,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     pricing: { ...DEFAULT_CLIENT_PRICING, ...previous?.details?.pricing, ...cliente.pricing,
       service_tier_order: validateClientTierOrder(cliente.pricing?.service_tier_order ?? previous?.details?.pricing?.service_tier_order),
       service_weight_tiers: validateClientWeightTiers(cliente.pricing?.service_weight_tiers ?? previous?.details?.pricing?.service_weight_tiers),
-      special_services_fees: validateClientSpecialFees(cliente.pricing?.special_services_fees ?? previous?.details?.pricing?.special_services_fees ?? DEFAULT_CLIENT_PRICING.special_services_fees) },
+      special_services_fees: specialFees },
     allowed_webservices: cliente.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.slice(0, 3),
     custom_tier_overrides: cliente.custom_tier_overrides || {},
   }
