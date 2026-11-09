@@ -22,6 +22,7 @@ import {
   Navigation,
   Tags,
   MessageSquare,
+  MessageCircle,
   Mail
 } from "lucide-react"
 
@@ -63,6 +64,7 @@ const navConfig: NavSection[] = [
     label: "Comunicações",
     items: [
       { title: "WhatsApp & SMS", href: "/ops/comunicacoes/whatsapp", icon: MessageSquare },
+      { title: "Chat Console WhatsApp", href: "/ops/comunicacoes/chat", icon: MessageCircle },
     ]
   },
   {
@@ -125,6 +127,7 @@ const navConfig: NavSection[] = [
           { title: "Zonas de Preço", href: "/ops/configuracao/zonas" },
           { title: "Comunicações", isSeparator: true },
           { title: "WhatsApp & SMS", href: "/ops/comunicacoes/whatsapp" },
+          { title: "Chat Console WhatsApp", href: "/ops/comunicacoes/chat" },
           { title: "Email Templates", href: "/ops/configuracao/notificacoes" },
         ]
       },

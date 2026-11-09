@@ -637,3 +637,346 @@ export async function listWhatsappTemplates(options: { config?: CommunicationsCo
   }
 }
 
+export interface SendWhatsappTextMessageInput {
+  to: string
+  text: string
+  contactName?: string | null
+  useIncNumber?: boolean
+  config?: CommunicationsConfig
+}
+
+export async function sendWhatsappTextMessage(input: SendWhatsappTextMessageInput) {
+  const cfg = input.config || (await loadCommunicationsConfig())
+
+  try {
+    const normalizedTo = normalizeRecipient(input.to || "")
+    const cleanText = String(input.text || "").trim()
+
+    if (!normalizedTo || !cleanText) {
+      return {
+        ok: false,
+        status: 400,
+        finalBody: {
+          error: "Número de destino e mensagem de texto são obrigatórios.",
+        },
+      }
+    }
+
+    const apiVersion = cfg.whatsappApiVersion || "v23.0"
+    const useInc = Boolean(input.useIncNumber)
+    const phoneNumberId = useInc ? cfg.incWhatsappPhoneNumberId : cfg.whatsappPhoneNumberId
+    const token = useInc ? cfg.incWhatsappAccessToken : cfg.whatsappAccessToken
+
+    if (!phoneNumberId || !token) {
+      return {
+        ok: false,
+        status: 400,
+        finalBody: {
+          error: useInc
+            ? "Credenciais do número de Incidências (INC_WHATSAPP_PHONE_NUMBER_ID / INC_WHATSAPP_ACCESS_TOKEN) não configuradas."
+            : "Credenciais WhatsApp Cloud API (WHATSAPP_PHONE_NUMBER_ID / WHATSAPP_ACCESS_TOKEN) não configuradas.",
+        },
+      }
+    }
+
+    const endpoint = `https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`
+    const payload = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: normalizedTo,
+      type: "text",
+      text: { body: cleanText },
+    }
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const responseBody = (await response.json().catch(() => ({}))) as Record<string, unknown>
+    const messagesArr = Array.isArray(responseBody.messages) ? responseBody.messages : []
+    const firstMsg = (messagesArr[0] && typeof messagesArr[0] === "object" ? messagesArr[0] : {}) as Record<
+      string,
+      unknown
+    >
+    const messageId = String(firstMsg.id || "").trim()
+
+    const logWarning = await createCommunicationLogRow({
+      direction: "out",
+      channel: useInc ? "chat_incidencias" : "text",
+      to: normalizedTo,
+      contactName: input.contactName || null,
+      messageText: cleanText,
+      status: response.ok ? "accepted" : `failed_${response.status}`,
+      apiMessageId: messageId,
+      sourceSystem: "manual",
+      payload: responseBody,
+    })
+
+    let smsFallback: unknown = null
+    if (!response.ok && !useInc && cfg.autoSmsFallbackEnabled) {
+      smsFallback = await sendClickSendSms({
+        to: normalizedTo,
+        message: cleanText,
+        contactName: input.contactName || undefined,
+        source: "wa_text_failure",
+        waStatus: `failed_${response.status}`,
+        waResponse: responseBody,
+        config: cfg,
+      })
+    }
+
+    return {
+      ok: response.ok,
+      status: response.ok ? 200 : response.status,
+      messageId,
+      to: normalizedTo,
+      finalBody: {
+        ...responseBody,
+        ...(logWarning ? { _supabaseWarning: logWarning } : {}),
+        ...(smsFallback ? { _smsFallback: smsFallback } : {}),
+      },
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      status: 500,
+      finalBody: {
+        error: "Falha ao enviar mensagem WhatsApp",
+        details: error instanceof Error ? error.message : "Erro desconhecido",
+      },
+    }
+  }
+}
+
+export interface SendWhatsappMediaMessageInput {
+  to: string
+  fileBuffer: Buffer
+  fileName: string
+  mimeType: string
+  caption?: string
+  contactName?: string | null
+  useIncNumber?: boolean
+  config?: CommunicationsConfig
+}
+
+export async function sendWhatsappMediaMessage(input: SendWhatsappMediaMessageInput) {
+  const cfg = input.config || (await loadCommunicationsConfig())
+
+  try {
+    const normalizedTo = normalizeRecipient(input.to || "")
+    if (!normalizedTo || !input.fileBuffer || input.fileBuffer.length === 0) {
+      return {
+        ok: false,
+        status: 400,
+        finalBody: {
+          error: "Ficheiro e número de destino são obrigatórios.",
+        },
+      }
+    }
+
+    const apiVersion = cfg.whatsappApiVersion || "v23.0"
+    const useInc = Boolean(input.useIncNumber)
+    const phoneNumberId = useInc ? cfg.incWhatsappPhoneNumberId : cfg.whatsappPhoneNumberId
+    const token = useInc ? cfg.incWhatsappAccessToken : cfg.whatsappAccessToken
+
+    if (!phoneNumberId || !token) {
+      return {
+        ok: false,
+        status: 400,
+        finalBody: {
+          error: useInc
+            ? "Credenciais do número de Incidências não configuradas."
+            : "Credenciais WhatsApp Cloud API não configuradas.",
+        },
+      }
+    }
+
+    const uploadMultipart = new FormData()
+    const blob = new Blob([new Uint8Array(input.fileBuffer)], {
+      type: input.mimeType || "application/octet-stream",
+    })
+    uploadMultipart.append("messaging_product", "whatsapp")
+    uploadMultipart.append("file", blob, input.fileName || "upload.bin")
+
+    const uploadRes = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneNumberId}/media`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: uploadMultipart,
+    })
+
+    const uploadBody = (await uploadRes.json().catch(() => ({}))) as Record<string, unknown>
+    if (!uploadRes.ok) {
+      return {
+        ok: false,
+        status: uploadRes.status,
+        finalBody: {
+          error: "Falha no upload de media para a Meta",
+          details: uploadBody,
+        },
+      }
+    }
+
+    const mediaId = String(uploadBody.id || "").trim()
+    if (!mediaId) {
+      return {
+        ok: false,
+        status: 500,
+        finalBody: {
+          error: "Upload de media não devolveu ID.",
+        },
+      }
+    }
+
+    const mime = String(input.mimeType || "").toLowerCase()
+    let mediaType: "image" | "video" | "audio" | "document" = "document"
+    if (mime.startsWith("image/")) mediaType = "image"
+    else if (mime.startsWith("video/")) mediaType = "video"
+    else if (mime.startsWith("audio/")) mediaType = "audio"
+
+    const cleanCaption = String(input.caption || "").trim()
+    const mediaObject: Record<string, unknown> = { id: mediaId }
+    if (mediaType === "document") {
+      mediaObject.filename = input.fileName || "documento"
+    }
+    if (cleanCaption && (mediaType === "image" || mediaType === "video" || mediaType === "document")) {
+      mediaObject.caption = cleanCaption
+    }
+
+    const sendPayload = {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: normalizedTo,
+      type: mediaType,
+      [mediaType]: mediaObject,
+    }
+
+    const sendRes = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(sendPayload),
+    })
+
+    const sendBody = (await sendRes.json().catch(() => ({}))) as Record<string, unknown>
+    const messagesArr = Array.isArray(sendBody.messages) ? sendBody.messages : []
+    const firstMsg = (messagesArr[0] && typeof messagesArr[0] === "object" ? messagesArr[0] : {}) as Record<
+      string,
+      unknown
+    >
+    const messageId = String(firstMsg.id || "").trim()
+    const displayLabel = cleanCaption
+      ? `[📎 ${input.fileName}] ${cleanCaption}`
+      : `[📎 ${input.fileName || "media"}]`
+
+    const logWarning = await createCommunicationLogRow({
+      direction: "out",
+      channel: useInc ? "chat_incidencias" : "media",
+      to: normalizedTo,
+      contactName: input.contactName || null,
+      messageText: displayLabel,
+      status: sendRes.ok ? "accepted" : `failed_${sendRes.status}`,
+      apiMessageId: messageId,
+      sourceSystem: "manual",
+      payload: {
+        ...sendBody,
+        uploadedMediaId: mediaId,
+        mediaType,
+        fileName: input.fileName,
+      },
+    })
+
+    return {
+      ok: sendRes.ok,
+      status: sendRes.ok ? 200 : sendRes.status,
+      messageId,
+      mediaId,
+      mediaType,
+      to: normalizedTo,
+      finalBody: {
+        ...sendBody,
+        ...(logWarning ? { _supabaseWarning: logWarning } : {}),
+      },
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      status: 500,
+      finalBody: {
+        error: "Falha ao enviar ficheiro WhatsApp",
+        details: error instanceof Error ? error.message : "Erro desconhecido",
+      },
+    }
+  }
+}
+
+export async function fetchWhatsappMediaBinary(options: {
+  mediaId: string
+  useIncNumber?: boolean
+  config?: CommunicationsConfig
+}) {
+  const cfg = options.config || (await loadCommunicationsConfig())
+  const normalizedMediaId = String(options.mediaId || "").trim()
+  if (!normalizedMediaId) {
+    throw new Error("Media ID em falta")
+  }
+
+  const apiVersion = cfg.whatsappApiVersion || "v23.0"
+  const tokensToTry = options.useIncNumber
+    ? [cfg.incWhatsappAccessToken, cfg.whatsappAccessToken].filter(Boolean)
+    : [cfg.whatsappAccessToken, cfg.incWhatsappAccessToken].filter(Boolean)
+
+  if (tokensToTry.length === 0) {
+    throw new Error("Token WhatsApp não configurado")
+  }
+
+  let lastError = "Não foi possível resolver URL do media"
+  for (const token of tokensToTry) {
+    const metaResponse = await fetch(
+      `https://graph.facebook.com/${apiVersion}/${encodeURIComponent(normalizedMediaId)}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(12000),
+      }
+    )
+
+    const metaBody = (await metaResponse.json().catch(() => ({}))) as Record<string, unknown>
+    if (!metaResponse.ok || !metaBody.url) {
+      lastError = `Meta media lookup (${metaResponse.status})`
+      continue
+    }
+
+    const binaryResponse = await fetch(String(metaBody.url), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15000),
+    })
+
+    if (!binaryResponse.ok) {
+      lastError = `Meta media download (${binaryResponse.status})`
+      continue
+    }
+
+    const arrayBuffer = await binaryResponse.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    const mimeType = String(
+      binaryResponse.headers.get("content-type") || metaBody.mime_type || "application/octet-stream"
+    )
+
+    return {
+      buffer,
+      mimeType,
+    }
+  }
+
+  throw new Error(lastError)
+}
+
+

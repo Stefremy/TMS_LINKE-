@@ -107,11 +107,17 @@ async function main() {
     console.log(`Importados ${totalImported} registos (último ID: ${lastId})...`)
   }
 
-  // 2. Import deduplication state from workspace_state
+  // 2. Import deduplication and chat state from workspace_state
   const { data: stateRows } = await oldSb
     .from("workspace_state")
     .select("key, value, updated_at")
-    .in("key", ["auto_notificacao_envio_state", "auto_notificacao_incidencia_state"])
+    .in("key", [
+      "auto_notificacao_envio_state",
+      "auto_notificacao_incidencia_state",
+      "contacts",
+      "contact_notes",
+      "team_reminders",
+    ])
 
   if (Array.isArray(stateRows) && stateRows.length > 0) {
     for (const st of stateRows) {
