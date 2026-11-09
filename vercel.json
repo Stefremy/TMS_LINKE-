@@ -7,6 +7,18 @@
     {
       "path": "/api/cron/billing",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/auto-notificacao-envio",
+      "schedule": "30 8,9 * * 1-5"
+    },
+    {
+      "path": "/api/cron/auto-notificacao-envio-em-transporte",
+      "schedule": "0 9,10 * * 1-5"
+    },
+    {
+      "path": "/api/cron/auto-notificacao-incidencia",
+      "schedule": "30 13-18 * * 1-5"
     }
   ]
 }

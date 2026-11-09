@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { runAutoNotificationByType } from "@/lib/services/communications/auto-notifier"
 import { loadCommunicationsConfig } from "@/lib/services/communications/config"
+import { isCronAuthorized } from "@/lib/services/communications/cron-auth"
 import type { AutoNotificationType } from "@/lib/services/communications/shipment-sources"
 
 export const runtime = "nodejs"
@@ -8,14 +9,8 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  const cronSecret = process.env.CRON_SECRET
-
-  if (!cronSecret) {
-    return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 503 })
-  }
-
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  const authorized = await isCronAuthorized(request)
+  if (!authorized) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
   }
 
@@ -55,4 +50,3 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return GET(request)
 }
-

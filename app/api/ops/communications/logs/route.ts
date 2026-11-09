@@ -72,13 +72,15 @@ export async function GET(request: Request) {
       .select(
         "id, created_at, direction, channel, to_number, contact_name, message_text, template_name, status, api_message_id, shipment_id, tracking_number, source_system, payload"
       )
-      .eq("direction", "out")
+      .in("direction", ["out", "outbound"])
       .order("id", { ascending: false })
       .limit(limit)
 
     if (channel && channel !== "all") {
       if (channel === "whatsapp") {
-        query = query.in("channel", ["template", "template_incidencias", "chat", "chat_incidencias", "media"])
+        query = query.not("channel", "in", "(sms,clicksend,sms_fallback)")
+      } else if (channel === "sms") {
+        query = query.in("channel", ["sms", "clicksend", "sms_fallback"])
       } else {
         query = query.eq("channel", channel)
       }

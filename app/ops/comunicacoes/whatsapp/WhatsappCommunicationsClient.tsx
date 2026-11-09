@@ -200,6 +200,37 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
   const [logsChannel, setLogsChannel] = React.useState<string>("all")
   const [logsWarning, setLogsWarning] = React.useState<string | null>(null)
 
+  // Live recent messages state (shown below WhatsApp & SMS workspaces to prevent duplicates)
+  const [recentWaLogs, setRecentWaLogs] = React.useState<LogRow[]>([])
+  const [recentSmsLogs, setRecentSmsLogs] = React.useState<LogRow[]>([])
+  const [loadingRecentLogs, setLoadingRecentLogs] = React.useState(false)
+  const [recentWaSearch, setRecentWaSearch] = React.useState<string>("")
+  const [recentSmsSearch, setRecentSmsSearch] = React.useState<string>("")
+
+  const refreshRecentActivityLogs = React.useCallback(async () => {
+    setLoadingRecentLogs(true)
+    try {
+      const [waRes, smsRes] = await Promise.all([
+        fetch("/api/ops/communications/logs?channel=whatsapp&limit=50"),
+        fetch("/api/ops/communications/logs?channel=sms&limit=50"),
+      ])
+      const [waData, smsData] = await Promise.all([
+        waRes.json().catch(() => ({})),
+        smsRes.json().catch(() => ({})),
+      ])
+      if (Array.isArray(waData?.data)) {
+        setRecentWaLogs(waData.data)
+      }
+      if (Array.isArray(smsData?.data)) {
+        setRecentSmsLogs(smsData.data)
+      }
+    } catch {
+      // ignore network error
+    } finally {
+      setLoadingRecentLogs(false)
+    }
+  }, [])
+
   // Interactive 1-Click Shipments & PUDO state
   const [shipmentCategory, setShipmentCategory] = React.useState<ShipmentListCategory>("em_distribuicao")
   const [shipmentRows, setShipmentRows] = React.useState<InteractiveShipmentRow[]>([])
@@ -295,6 +326,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
               ? `Guia ${rowKey}: ${data.warning}`
               : `Guia ${rowKey}: Template "${data.templateName}" enviado com sucesso para ${data.to}!`,
         })
+        void refreshRecentActivityLogs()
       } else {
         setShipmentsBanner({
           ok: false,
@@ -516,6 +548,9 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
         setAutoError(data?.error || "Falha ao executar auto-notificação.")
       } else {
         setAutoResult(data as AutoRunResult)
+        if (!dryRun) {
+          void refreshRecentActivityLogs()
+        }
       }
     } catch (err) {
       setAutoError(err instanceof Error ? err.message : "Erro de rede.")
@@ -589,6 +624,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
           ok: true,
           text: `Template "${customTemplateName}" enviado com sucesso para ${templateToPhone}!`,
         })
+        void refreshRecentActivityLogs()
       } else {
         const fallbackInfo = data?._smsFallback?.status === "sent"
           ? " (Fallback SMS ClickSend enviado automaticamente!)"
@@ -597,6 +633,9 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
           ok: false,
           text: `${data?.error?.message || data?.error || "Falha ao enviar template WhatsApp."}${fallbackInfo}`,
         })
+        if (data?._smsFallback?.status === "sent") {
+          void refreshRecentActivityLogs()
+        }
       }
     } catch (err) {
       setTemplateSendFeedback({
@@ -630,6 +669,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
           text: `SMS enviado via ClickSend para ${data.to}!`,
         })
         setSmsMessage("")
+        void refreshRecentActivityLogs()
       } else {
         setSmsFeedback({
           ok: false,
@@ -645,6 +685,75 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
       setSendingSms(false)
     }
   }
+
+  const filteredRecentWaLogs = React.useMemo(() => {
+    const q = recentWaSearch.trim().toLowerCase()
+    if (!q) return recentWaLogs.slice(0, 25)
+    return recentWaLogs
+      .filter((r) =>
+        [r.to_number, r.contact_name, r.tracking_number, r.template_name, r.message_text]
+          .join(" ")
+          .toLowerCase()
+          .includes(q)
+      )
+      .slice(0, 25)
+  }, [recentWaLogs, recentWaSearch])
+
+  const filteredRecentSmsLogs = React.useMemo(() => {
+    const q = recentSmsSearch.trim().toLowerCase()
+    if (!q) return recentSmsLogs.slice(0, 25)
+    return recentSmsLogs
+      .filter((r) =>
+        [r.to_number, r.contact_name, r.tracking_number, r.message_text]
+          .join(" ")
+          .toLowerCase()
+          .includes(q)
+      )
+      .slice(0, 25)
+  }, [recentSmsLogs, recentSmsSearch])
+
+  const duplicateWaMatch = React.useMemo(() => {
+    const phoneDigits = templateToPhone.replace(/\D/g, "").slice(-9)
+    const trkCandidate = (
+      lookupTrackingQuery.trim() ||
+      templateVars[2]?.trim() ||
+      templateVars[1]?.trim() ||
+      ""
+    ).toUpperCase()
+    if (phoneDigits.length < 9 && trkCandidate.length < 5) return null
+
+    return (
+      recentWaLogs.find((r) => {
+        const logDigits = String(r.to_number || "").replace(/\D/g, "").slice(-9)
+        const logTrk = String(r.tracking_number || "").trim().toUpperCase()
+        const matchPhone = phoneDigits.length === 9 && logDigits === phoneDigits
+        const matchTrk =
+          trkCandidate.length >= 5 &&
+          (logTrk === trkCandidate ||
+            String(r.message_text || "").toUpperCase().includes(trkCandidate))
+        return matchPhone || matchTrk
+      }) || null
+    )
+  }, [recentWaLogs, templateToPhone, lookupTrackingQuery, templateVars])
+
+  const duplicateSmsMatch = React.useMemo(() => {
+    const phoneDigits = smsPhone.replace(/\D/g, "").slice(-9)
+    const trkCandidate = smsTracking.trim().toUpperCase()
+    if (phoneDigits.length < 9 && trkCandidate.length < 5) return null
+
+    return (
+      recentSmsLogs.find((r) => {
+        const logDigits = String(r.to_number || "").replace(/\D/g, "").slice(-9)
+        const logTrk = String(r.tracking_number || "").trim().toUpperCase()
+        const matchPhone = phoneDigits.length === 9 && logDigits === phoneDigits
+        const matchTrk =
+          trkCandidate.length >= 5 &&
+          (logTrk === trkCandidate ||
+            String(r.message_text || "").toUpperCase().includes(trkCandidate))
+        return matchPhone || matchTrk
+      }) || null
+    )
+  }, [recentSmsLogs, smsPhone, smsTracking])
 
   async function handleSaveConfig(e: React.FormEvent) {
     e.preventDefault()
@@ -771,8 +880,18 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                 if (nextTab === "shipments" && shipmentRows.length === 0 && !loadingShipments) {
                   void fetchShipmentsByCategory()
                 }
-                if (nextTab === "templates" && templates.length === 0 && !loadingTemplates) {
-                  void fetchTemplates()
+                if (nextTab === "templates") {
+                  if (templates.length === 0 && !loadingTemplates) {
+                    void fetchTemplates()
+                  }
+                  if (recentWaLogs.length === 0 && !loadingRecentLogs) {
+                    void refreshRecentActivityLogs()
+                  }
+                }
+                if (nextTab === "sms") {
+                  if (recentSmsLogs.length === 0 && !loadingRecentLogs) {
+                    void refreshRecentActivityLogs()
+                  }
                 }
                 if (nextTab === "history" && logs.length === 0 && !loadingLogs) {
                   void fetchLogs()
@@ -1479,6 +1598,23 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
               </div>
             )}
 
+            {duplicateWaMatch && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-950 shadow-xs">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <div className="font-bold text-amber-900">
+                    Aviso de Prevenção de Duplicados (WhatsApp):
+                  </div>
+                  <div>
+                    Já foi enviada uma mensagem para este telemóvel/guia em{" "}
+                    <strong>{new Date(duplicateWaMatch.created_at).toLocaleString("pt-PT")}</strong>
+                    {duplicateWaMatch.template_name ? ` (Template: ${duplicateWaMatch.template_name})` : ""}
+                    {duplicateWaMatch.status ? ` — Estado: ${duplicateWaMatch.status}` : ""}.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSendTemplate} className="space-y-4">
               {templates.length > 0 && (
                 <div>
@@ -1655,96 +1791,337 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
               </div>
             </div>
           </div>
+
+          {/* Recent WhatsApp Messages Table (Duplication Prevention) */}
+          <div className="lg:col-span-3 space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-emerald-600" />
+                  Últimas Mensagens WhatsApp Enviadas (Controlo de Duplicados)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Consulta rápida em tempo real para verificar se um cliente ou guia já foi contactado antes de disparar.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={recentWaSearch}
+                    onChange={(e) => setRecentWaSearch(e.target.value)}
+                    placeholder="Filtrar telefone, guia..."
+                    className="w-48 rounded-lg border border-slate-300 pl-8 pr-2.5 py-1 text-xs"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={refreshRecentActivityLogs}
+                  disabled={loadingRecentLogs}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  <RefreshCw className={`h-3 w-3 ${loadingRecentLogs ? "animate-spin" : ""}`} />
+                  Atualizar
+                </button>
+              </div>
+            </div>
+
+            <div
+              tabIndex={0}
+              role="region"
+              aria-labelledby="recent-wa-logs-caption"
+              className="max-h-64 overflow-auto rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+            >
+              <table className="min-w-full border-separate border-spacing-0 text-left text-xs">
+                <caption id="recent-wa-logs-caption" className="sr-only">
+                  Últimas mensagens WhatsApp enviadas para controlo de duplicação
+                </caption>
+                <thead className="sticky top-0 z-1 bg-slate-100 font-semibold text-slate-700 shadow-xs">
+                  <tr>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Data / Hora</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Telefone</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Destinatário</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Nº Guia</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Template / Mensagem</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Estado</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {filteredRecentWaLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
+                        {loadingRecentLogs ? "A carregar registos..." : "Nenhuma mensagem WhatsApp encontrada."}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRecentWaLogs.map((row) => {
+                      const st = String(row.status || "").toLowerCase()
+                      const isOk = ["accepted", "sent", "delivered", "read"].includes(st)
+                      return (
+                        <tr key={row.id} className="hover:bg-slate-50">
+                          <td className="whitespace-nowrap px-3 py-2 text-slate-500">
+                            {new Date(row.created_at).toLocaleString("pt-PT")}
+                          </td>
+                          <td className="px-3 py-2 font-mono font-medium text-slate-900">{row.to_number}</td>
+                          <td className="px-3 py-2 text-slate-700">{row.contact_name || "—"}</td>
+                          <td className="px-3 py-2 font-mono text-slate-700">{row.tracking_number || "—"}</td>
+                          <td className="max-w-xs truncate px-3 py-2 text-slate-600" title={row.message_text || ""}>
+                            {row.template_name ? (
+                              <span className="font-mono font-semibold text-slate-800">{row.template_name}: </span>
+                            ) : null}
+                            {row.message_text || "—"}
+                          </td>
+                          <td className="px-3 py-2">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                isOk ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                              }`}
+                            >
+                              {isOk ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
+                              {row.status || "desconhecido"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTemplateToPhone(row.to_number || "")
+                                if (row.contact_name) setTemplateContactName(row.contact_name)
+                                if (row.tracking_number) setLookupTrackingQuery(row.tracking_number)
+                              }}
+                              className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                            >
+                              Carregar
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
       {/* TAB 3: SMS CLICKSEND */}
       {activeTab === "sms" && (
-        <div className="max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">Enviar SMS via ClickSend</h2>
-            <p className="text-xs text-slate-500">
-              Envio direto de SMS e serviço de fallback automático quando um template WhatsApp falha.
-            </p>
-          </div>
-
-          <form onSubmit={handleSendSms} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Telemóvel Destinatário *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={smsPhone}
-                  onChange={(e) => setSmsPhone(e.target.value)}
-                  placeholder="912345678 ou 351912345678"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Nome do Destinatário
-                </label>
-                <input
-                  type="text"
-                  value={smsContactName}
-                  onChange={(e) => setSmsContactName(e.target.value)}
-                  placeholder="Opcional"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Nº de Guia / Tracking
-                </label>
-                <input
-                  type="text"
-                  value={smsTracking}
-                  onChange={(e) => setSmsTracking(e.target.value)}
-                  placeholder="Opcional"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-
+        <div className="space-y-6">
+          <div className="max-w-3xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-700">Mensagem SMS *</label>
-                <span className="text-[11px] text-slate-400">{smsMessage.length} caracteres</span>
-              </div>
-              <textarea
-                required
-                rows={4}
-                value={smsMessage}
-                onChange={(e) => setSmsMessage(e.target.value)}
-                placeholder="Escreva a mensagem SMS a enviar ao destinatário..."
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              />
+              <h2 className="text-base font-bold text-slate-900">Enviar SMS via ClickSend</h2>
+              <p className="text-xs text-slate-500">
+                Envio direto de SMS e serviço de fallback automático quando um template WhatsApp falha.
+              </p>
             </div>
 
-            {smsFeedback && (
-              <div
-                className={`rounded-lg p-3 text-xs font-medium ${
-                  smsFeedback.ok
-                    ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
-                    : "border border-red-200 bg-red-50 text-red-800"
-                }`}
-              >
-                {smsFeedback.text}
+            {duplicateSmsMatch && (
+              <div className="flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-950 shadow-xs">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <div className="font-bold text-amber-900">
+                    Aviso de Prevenção de Duplicados (SMS):
+                  </div>
+                  <div>
+                    Já foi enviado um SMS para este contacto/guia em{" "}
+                    <strong>{new Date(duplicateSmsMatch.created_at).toLocaleString("pt-PT")}</strong>
+                    {duplicateSmsMatch.status ? ` — Estado: ${duplicateSmsMatch.status}` : ""}.
+                  </div>
+                </div>
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={sendingSms}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            <form onSubmit={handleSendSms} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Telemóvel Destinatário *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={smsPhone}
+                    onChange={(e) => setSmsPhone(e.target.value)}
+                    placeholder="912345678 ou 351912345678"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Nome do Destinatário
+                  </label>
+                  <input
+                    type="text"
+                    value={smsContactName}
+                    onChange={(e) => setSmsContactName(e.target.value)}
+                    placeholder="Opcional"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Nº de Guia / Tracking
+                  </label>
+                  <input
+                    type="text"
+                    value={smsTracking}
+                    onChange={(e) => setSmsTracking(e.target.value)}
+                    placeholder="Opcional"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">Mensagem SMS *</label>
+                  <span className="text-[11px] text-slate-400">{smsMessage.length} caracteres</span>
+                </div>
+                <textarea
+                  required
+                  rows={4}
+                  value={smsMessage}
+                  onChange={(e) => setSmsMessage(e.target.value)}
+                  placeholder="Escreva a mensagem SMS a enviar ao destinatário..."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+
+              {smsFeedback && (
+                <div
+                  className={`rounded-lg p-3 text-xs font-medium ${
+                    smsFeedback.ok
+                      ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : "border border-red-200 bg-red-50 text-red-800"
+                  }`}
+                >
+                  {smsFeedback.text}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={sendingSms}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Smartphone className="h-4 w-4" />
+                {sendingSms ? "A enviar SMS..." : "Enviar SMS ClickSend"}
+              </button>
+            </form>
+          </div>
+
+          {/* Recent SMS Messages Table (Duplication Prevention) */}
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-blue-600" />
+                  Últimos SMS Enviados via ClickSend (Controlo de Duplicados)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Histórico recente de SMS enviados diretamente ou por fallback automático.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={recentSmsSearch}
+                    onChange={(e) => setRecentSmsSearch(e.target.value)}
+                    placeholder="Filtrar telemóvel, guia..."
+                    className="w-48 rounded-lg border border-slate-300 pl-8 pr-2.5 py-1 text-xs"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={refreshRecentActivityLogs}
+                  disabled={loadingRecentLogs}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  <RefreshCw className={`h-3 w-3 ${loadingRecentLogs ? "animate-spin" : ""}`} />
+                  Atualizar
+                </button>
+              </div>
+            </div>
+
+            <div
+              tabIndex={0}
+              role="region"
+              aria-labelledby="recent-sms-logs-caption"
+              className="max-h-64 overflow-auto rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-600"
             >
-              <Smartphone className="h-4 w-4" />
-              {sendingSms ? "A enviar SMS..." : "Enviar SMS ClickSend"}
-            </button>
-          </form>
+              <table className="min-w-full border-separate border-spacing-0 text-left text-xs">
+                <caption id="recent-sms-logs-caption" className="sr-only">
+                  Últimos SMS enviados para controlo de duplicação
+                </caption>
+                <thead className="sticky top-0 z-1 bg-slate-100 font-semibold text-slate-700 shadow-xs">
+                  <tr>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Data / Hora</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Telemóvel</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Destinatário</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Nº Guia</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Mensagem SMS</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2">Estado</th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {filteredRecentSmsLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
+                        {loadingRecentLogs ? "A carregar registos..." : "Nenhum SMS recente encontrado."}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRecentSmsLogs.map((row) => {
+                      const st = String(row.status || "").toLowerCase()
+                      const isOk = ["accepted", "sent", "delivered", "read"].includes(st)
+                      return (
+                        <tr key={row.id} className="hover:bg-slate-50">
+                          <td className="whitespace-nowrap px-3 py-2 text-slate-500">
+                            {new Date(row.created_at).toLocaleString("pt-PT")}
+                          </td>
+                          <td className="px-3 py-2 font-mono font-medium text-slate-900">{row.to_number}</td>
+                          <td className="px-3 py-2 text-slate-700">{row.contact_name || "—"}</td>
+                          <td className="px-3 py-2 font-mono text-slate-700">{row.tracking_number || "—"}</td>
+                          <td className="max-w-md truncate px-3 py-2 text-slate-600" title={row.message_text || ""}>
+                            {row.message_text || "—"}
+                          </td>
+                          <td className="px-3 py-2">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                isOk ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-700"
+                              }`}
+                            >
+                              {isOk ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
+                              {row.status || "desconhecido"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSmsPhone(row.to_number || "")
+                                if (row.contact_name) setSmsContactName(row.contact_name)
+                                if (row.tracking_number) setSmsTracking(row.tracking_number)
+                              }}
+                              className="rounded px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                            >
+                              Carregar
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
