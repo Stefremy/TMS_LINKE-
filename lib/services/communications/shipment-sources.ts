@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { loadCommunicationsConfig, type CommunicationsConfig, type NotificationSourceMode } from "./config"
 
 export type AutoNotificationType = "em_distribuicao" | "em_transporte" | "incidencia"
+export type ShipmentListCategory = AutoNotificationType | "entregue" | "pudo"
 
 export interface UnifiedNotificationShipmentRow {
   parcelId: string
@@ -19,6 +20,13 @@ export interface UnifiedNotificationShipmentRow {
   chargeAmount: string
   shipmentId?: string | null
   sourceSystem: "legacy_tms" | "tms_linke"
+}
+
+export interface InteractiveShipmentRow extends UnifiedNotificationShipmentRow {
+  alreadyNotified: boolean
+  notifiedAt: string | null
+  notifiedTemplate: string | null
+  overdue24h: boolean
 }
 
 function decodeHtmlEntities(input: unknown): string {
@@ -271,17 +279,62 @@ function parseLegacyTmsShipmentsDatatable(payload: unknown): UnifiedNotification
   })
 }
 
-const LEGACY_STATUS_CODE_BY_TYPE: Record<AutoNotificationType, string> = {
+const LEGACY_STATUS_CODE_BY_TYPE: Record<Exclude<ShipmentListCategory, "pudo">, string> = {
   em_transporte: "3",
   em_distribuicao: "4",
+  entregue: "5",
   incidencia: "9",
+}
+
+function parseShipmentTimestampMs(rawInput: string): number {
+  const raw = String(rawInput || "").trim()
+  if (!raw) return NaN
+
+  const directIso = raw.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}(?::\d{2})?))?/)
+  if (directIso) {
+    const datePart = directIso[1]
+    const timePart = directIso[2] || "00:00:00"
+    const normalizedTime = timePart.length === 5 ? `${timePart}:00` : timePart
+    const ms = Date.parse(`${datePart}T${normalizedTime}`)
+    if (!Number.isNaN(ms)) return ms
+  }
+
+  const slashDate = raw.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?/)
+  if (slashDate) {
+    const [, dd, mm, yyyy, hhmmss] = slashDate
+    const timePart = hhmmss ? (hhmmss.length === 5 ? `${hhmmss}:00` : hhmmss) : "00:00:00"
+    const ms = Date.parse(`${yyyy}-${mm}-${dd}T${timePart}`)
+    if (!Number.isNaN(ms)) return ms
+  }
+
+  const fallback = Date.parse(raw)
+  return Number.isNaN(fallback) ? NaN : fallback
+}
+
+export function normalizeShipmentDateIso(rawInput: string): string {
+  const raw = String(rawInput || "").trim()
+  if (!raw) return ""
+  const isoMatch = raw.match(/(\d{4}-\d{2}-\d{2})/)
+  if (isoMatch?.[1]) return isoMatch[1]
+  const ptMatch = raw.match(/(\d{2})\/(\d{2})\/(\d{4})/)
+  if (ptMatch) return `${ptMatch[3]}-${ptMatch[2]}-${ptMatch[1]}`
+  return ""
+}
+
+export function isShipmentOverdue24h(row: UnifiedNotificationShipmentRow): boolean {
+  const candidate = String(row.deliveryDate || row.pickupDate || "").trim()
+  if (!candidate) return false
+  const parsedMs = parseShipmentTimestampMs(candidate)
+  if (!Number.isFinite(parsedMs)) return false
+  return Date.now() - parsedMs >= 24 * 60 * 60 * 1000
 }
 
 /**
  * 1. SCRAPER HTML / DATATABLE DO TMS ANTIGO (idêntico ao WhatsappNathalia)
+ * Suporta: em_distribuicao (4), em_transporte (3), incidencia (9), entregue (5) e pudo (stats-link-pickup).
  */
 export async function fetchLegacyTmsShipmentsByType(
-  type: AutoNotificationType,
+  type: ShipmentListCategory,
   options: { limit?: number; maxPages?: number; config?: CommunicationsConfig } = {}
 ): Promise<{ rows: UnifiedNotificationShipmentRow[]; error?: string }> {
   const cfg = options.config || (await loadCommunicationsConfig())
@@ -303,7 +356,6 @@ export async function fetchLegacyTmsShipmentsByType(
 
   const safeLimit = Math.max(10, Math.min(250, Math.trunc(Number(options.limit || 150))))
   const safeMaxPages = Math.max(1, Math.min(20, Math.trunc(Number(options.maxPages || 4))))
-  const statusCode = LEGACY_STATUS_CODE_BY_TYPE[type]
 
   try {
     const cookieJar = new Map<string, string>()
@@ -340,6 +392,33 @@ export async function fetchLegacyTmsShipmentsByType(
     })
     updateCookieJar(cookieJar, getSetCookieHeaders(loginSubmitRes))
 
+    let statusCode = type === "pudo" ? "" : LEGACY_STATUS_CODE_BY_TYPE[type]
+    let useFilterParam = type !== "pudo"
+
+    if (type === "pudo") {
+      const adminPageRes = await fetch(`${baseUrl}/admin`, {
+        headers: {
+          Referer: `${baseUrl}/admin`,
+          Cookie: cookieJarHeader(cookieJar),
+        },
+        signal: AbortSignal.timeout(12000),
+      })
+      updateCookieJar(cookieJar, getSetCookieHeaders(adminPageRes))
+      const adminHtml = await adminPageRes.text()
+      const pickupLinkMatch =
+        adminHtml.match(
+          /<a[^>]*class="[^"]*stats-link-pickup[^"]*"[^>]*href="[^"]*status=([^"&]+)[^"]*"/i
+        ) ||
+        adminHtml.match(
+          /<a[^>]*href="[^"]*status=([^"&]+)[^"]*"[^>]*class="[^"]*stats-link-pickup[^"]*"/i
+        )
+      statusCode = decodeURIComponent(pickupLinkMatch?.[1] || "").trim()
+      if (!statusCode) {
+        statusCode = "36"
+      }
+      useFilterParam = false
+    }
+
     const shipmentsEndpoint = `${baseUrl}/admin/shipments/datatable`
 
     async function fetchDatatablePage(draw: number, start: number, length: number) {
@@ -348,15 +427,21 @@ export async function fetchLegacyTmsShipmentsByType(
       requestBody.set("draw", String(draw))
       requestBody.set("start", String(Math.max(0, Math.trunc(start))))
       requestBody.set("length", String(Math.max(1, Math.trunc(length))))
-      requestBody.set("filter", "1")
+      if (useFilterParam) {
+        requestBody.set("filter", "1")
+      }
       requestBody.set("status", statusCode)
+
+      const refererQuery = useFilterParam
+        ? `filter=1&status=${encodeURIComponent(statusCode)}`
+        : `status=${encodeURIComponent(statusCode)}`
 
       const shipmentsRes = await fetch(shipmentsEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
           "X-Requested-With": "XMLHttpRequest",
-          Referer: `${baseUrl}/admin/shipments?filter=1&status=${encodeURIComponent(statusCode)}`,
+          Referer: `${baseUrl}/admin/shipments?${refererQuery}`,
           Cookie: cookieJarHeader(cookieJar),
         },
         body: requestBody.toString(),
@@ -403,27 +488,37 @@ export async function fetchLegacyTmsShipmentsByType(
 /**
  * 2. LEITOR NATIVO DO TMS LINKE (public.shipments no Supabase)
  */
-const NATIVE_STATUS_BY_TYPE: Record<AutoNotificationType, string> = {
+const NATIVE_STATUS_BY_TYPE: Record<Exclude<ShipmentListCategory, "pudo">, string> = {
   em_transporte: "entrada_rede",
   em_distribuicao: "em_distribuicao",
+  entregue: "entregue",
   incidencia: "incidencia",
 }
 
 export async function fetchNativeTmsShipmentsByType(
-  type: AutoNotificationType,
+  type: ShipmentListCategory,
   options: { limit?: number } = {}
 ): Promise<{ rows: UnifiedNotificationShipmentRow[]; error?: string }> {
   try {
     const supabase = createAdminClient()
-    const targetStatus = NATIVE_STATUS_BY_TYPE[type]
     const safeLimit = Math.max(10, Math.min(1000, Math.trunc(Number(options.limit || 300))))
 
-    const { data, error } = await supabase
+    let queryBuilder = supabase
       .from("shipments")
       .select(
         "id, tracking_number, carrier_tracking_number, service_type, sender_name, recipient_name, recipient_phone, status, ops_substatus, created_at, updated_at"
       )
-      .eq("status", targetStatus)
+
+    if (type === "pudo") {
+      queryBuilder = queryBuilder.or(
+        "status.eq.ponto_pickup,ops_substatus.ilike.%pickup%,ops_substatus.ilike.%pudo%,ops_substatus.ilike.%ponto%"
+      )
+    } else {
+      const targetStatus = NATIVE_STATUS_BY_TYPE[type]
+      queryBuilder = queryBuilder.eq("status", targetStatus)
+    }
+
+    const { data, error } = await queryBuilder
       .order("updated_at", { ascending: false })
       .limit(safeLimit)
 
@@ -441,8 +536,14 @@ export async function fetchNativeTmsShipmentsByType(
       pickupDate: String(row.created_at || "").slice(0, 10),
       deliveryDate: String(row.updated_at || "").slice(0, 10),
       status: String(row.status || "").trim(),
-      incidence: type === "incidencia" ? String(row.ops_substatus || "Incidência em curso").trim() : "",
-      incidentReason: type === "incidencia" ? String(row.ops_substatus || "Atraso / incidência na entrega").trim() : "",
+      incidence:
+        type === "incidencia" || type === "pudo"
+          ? String(row.ops_substatus || (type === "pudo" ? "Ponto Pickup" : "Incidência em curso")).trim()
+          : "",
+      incidentReason:
+        type === "incidencia"
+          ? String(row.ops_substatus || "Atraso / incidência na entrega").trim()
+          : String(row.ops_substatus || "").trim(),
       hasCharge: false,
       chargeAmount: "",
       shipmentId: row.id,
@@ -458,12 +559,60 @@ export async function fetchNativeTmsShipmentsByType(
   }
 }
 
+export async function loadPudoNotifiedMap(): Promise<Record<string, { notified: boolean; updatedAt: string }>> {
+  try {
+    const supabase = createAdminClient()
+    const { data } = await supabase
+      .from("whatsapp_communications_config")
+      .select("config")
+      .eq("id", "pudo_notifications")
+      .maybeSingle()
+
+    if (data?.config && typeof data.config === "object") {
+      return data.config as Record<string, { notified: boolean; updatedAt: string }>
+    }
+  } catch {
+    // ignore
+  }
+  return {}
+}
+
+export async function setPudoShipmentNotified(
+  parcelKey: string,
+  notified: boolean
+): Promise<Record<string, { notified: boolean; updatedAt: string }>> {
+  const cleanKey = String(parcelKey || "").trim().toUpperCase()
+  const current = await loadPudoNotifiedMap()
+  if (!cleanKey) return current
+
+  if (notified) {
+    current[cleanKey] = { notified: true, updatedAt: new Date().toISOString() }
+  } else {
+    delete current[cleanKey]
+  }
+
+  try {
+    const supabase = createAdminClient()
+    await supabase.from("whatsapp_communications_config").upsert(
+      {
+        id: "pudo_notifications",
+        config: current,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    )
+  } catch {
+    // ignore
+  }
+  return current
+}
+
 /**
  * 3. MOTOR UNIFICADO (DUAL-SOURCE: LEGACY SCRAPING + NATIVO TMS LINKE)
  * Combina as duas fontes (ou usa a escolhida) e desduplica por código de envio/tracking.
  */
 export async function fetchUnifiedShipmentsForAutoNotification(
-  type: AutoNotificationType,
+  type: ShipmentListCategory,
   options: {
     sourceMode?: NotificationSourceMode
     limit?: number
@@ -528,6 +677,138 @@ export async function fetchUnifiedShipmentsForAutoNotification(
       combinedDeduped: combined.length,
     },
     warnings,
+  }
+}
+
+/**
+ * 3B. TABELAS INTERATIVAS DE ENVIO 1-CLIQUE (Em Distribuição, Em Transporte, Incidências, Entregues/Feedback e PUDO)
+ * Anota cada envio com `alreadyNotified`, `notifiedAt`, `notifiedTemplate` e `overdue24h`.
+ */
+export async function fetchUnifiedShipmentsByCategory(
+  category: ShipmentListCategory,
+  options: {
+    sourceMode?: NotificationSourceMode
+    limit?: number
+    maxPages?: number
+    search?: string
+    dateFrom?: string
+    dateTo?: string
+    onlyOverdue24h?: boolean
+  } = {}
+): Promise<{
+  category: ShipmentListCategory
+  rows: InteractiveShipmentRow[]
+  sourcesUsed: string[]
+  countsBySource: { tms_linke: number; legacy_tms: number; combinedDeduped: number }
+  warnings: string[]
+}> {
+  const unified = await fetchUnifiedShipmentsForAutoNotification(category, {
+    sourceMode: options.sourceMode,
+    limit: options.limit || 200,
+    maxPages: options.maxPages || 3,
+  })
+
+  const supabase = createAdminClient()
+  const pudoMap = category === "pudo" ? await loadPudoNotifiedMap() : {}
+
+  // Cross-check recent logs & dispatch locks for these tracking codes
+  const trackingKeys = new Set<string>()
+  for (const r of unified.rows) {
+    if (r.parcelId) trackingKeys.add(r.parcelId.trim().toUpperCase())
+    if (r.providerTrackingCode) trackingKeys.add(r.providerTrackingCode.trim().toUpperCase())
+  }
+
+  const notifiedLookup = new Map<string, { at: string; template: string | null }>()
+
+  try {
+    const { data: recentLogs } = await supabase
+      .from("whatsapp_logs")
+      .select("tracking_number, template_name, created_at, status")
+      .eq("direction", "outbound")
+      .not("tracking_number", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1500)
+
+    for (const log of recentLogs || []) {
+      const trk = String(log.tracking_number || "").trim().toUpperCase()
+      if (!trk || !trackingKeys.has(trk)) continue
+      const st = String(log.status || "").toLowerCase()
+      if (st === "failed") continue
+      if (!notifiedLookup.has(trk)) {
+        notifiedLookup.set(trk, {
+          at: String(log.created_at || ""),
+          template: log.template_name ? String(log.template_name) : null,
+        })
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  const searchLower = String(options.search || "").trim().toLowerCase()
+  const dateFrom = String(options.dateFrom || "").trim()
+  const dateTo = String(options.dateTo || "").trim()
+
+  const interactiveRows: InteractiveShipmentRow[] = []
+
+  for (const row of unified.rows) {
+    const pKey = String(row.parcelId || "").trim().toUpperCase()
+    const tKey = String(row.providerTrackingCode || "").trim().toUpperCase()
+
+    const logHit = (pKey && notifiedLookup.get(pKey)) || (tKey && notifiedLookup.get(tKey)) || null
+    const pudoHit =
+      category === "pudo"
+        ? (pKey && pudoMap[pKey]?.notified ? pudoMap[pKey] : null) ||
+          (tKey && pudoMap[tKey]?.notified ? pudoMap[tKey] : null)
+        : null
+
+    const alreadyNotified = Boolean(logHit || pudoHit)
+    const notifiedAt = logHit?.at || pudoHit?.updatedAt || null
+    const notifiedTemplate = logHit?.template || (pudoHit ? "order_pick_up_1" : null)
+    const overdue24h = isShipmentOverdue24h(row)
+
+    if (options.onlyOverdue24h && !overdue24h) {
+      continue
+    }
+
+    if (dateFrom || dateTo) {
+      const rowDateIso = normalizeShipmentDateIso(row.deliveryDate || row.pickupDate)
+      if (!rowDateIso) continue
+      if (dateFrom && rowDateIso < dateFrom) continue
+      if (dateTo && rowDateIso > dateTo) continue
+    }
+
+    if (searchLower) {
+      const haystack = [
+        row.parcelId,
+        row.providerTrackingCode,
+        row.recipient,
+        row.sender,
+        row.finalClientPhone,
+        row.service,
+        row.incidence,
+        row.incidentReason,
+      ]
+        .join(" ")
+        .toLowerCase()
+      if (!haystack.includes(searchLower)) continue
+    }
+
+    interactiveRows.push({
+      ...row,
+      alreadyNotified,
+      notifiedAt,
+      notifiedTemplate,
+      overdue24h,
+    })
+  }
+
+  return {
+    category,
+    rows: interactiveRows,
+    sourcesUsed: unified.sourcesUsed,
+    countsBySource: unified.countsBySource,
+    warnings: unified.warnings,
   }
 }
 

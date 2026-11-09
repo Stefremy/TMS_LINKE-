@@ -16,12 +16,22 @@ import {
   Database,
   Globe,
   Layers,
+  Package,
+  Truck,
+  MapPin,
+  Clock,
+  Zap,
+  Edit3,
 } from "lucide-react"
-import type { AutoNotificationType } from "@/lib/services/communications/shipment-sources"
+import type {
+  AutoNotificationType,
+  InteractiveShipmentRow,
+  ShipmentListCategory,
+} from "@/lib/services/communications/shipment-sources"
 import type { NotificationSourceMode } from "@/lib/services/communications/config"
 import type { MetaWhatsappTemplate } from "@/lib/services/communications/whatsapp-cloud"
 
-type TabId = "auto" | "templates" | "sms" | "history" | "settings"
+type TabId = "auto" | "shipments" | "templates" | "sms" | "history" | "settings"
 
 interface AutoRunResult {
   ok: boolean
@@ -193,6 +203,247 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
   const [logsSearch, setLogsSearch] = React.useState<string>("")
   const [logsChannel, setLogsChannel] = React.useState<string>("all")
   const [logsWarning, setLogsWarning] = React.useState<string | null>(null)
+
+  // Interactive 1-Click Shipments & PUDO state
+  const [shipmentCategory, setShipmentCategory] = React.useState<ShipmentListCategory>("em_distribuicao")
+  const [shipmentRows, setShipmentRows] = React.useState<InteractiveShipmentRow[]>([])
+  const [loadingShipments, setLoadingShipments] = React.useState(false)
+  const [shipmentsSearch, setShipmentsSearch] = React.useState<string>("")
+  const [shipmentsDateFrom, setShipmentsDateFrom] = React.useState<string>("")
+  const [shipmentsDateTo, setShipmentsDateTo] = React.useState<string>("")
+  const [onlyOverdue24h, setOnlyOverdue24h] = React.useState(false)
+  const [hideAlreadyNotified, setHideAlreadyNotified] = React.useState(false)
+  const [shipmentsCounts, setShipmentsCounts] = React.useState<{
+    tms_linke: number
+    legacy_tms: number
+    combinedDeduped: number
+  }>({ tms_linke: 0, legacy_tms: 0, combinedDeduped: 0 })
+  const [shipmentsWarnings, setShipmentsWarnings] = React.useState<string[]>([])
+  const [sendingRowKey, setSendingRowKey] = React.useState<string | null>(null)
+  const [shipmentsBanner, setShipmentsBanner] = React.useState<{ ok: boolean; text: string } | null>(null)
+
+  const fetchShipmentsByCategory = React.useCallback(
+    async (overrideCategory?: ShipmentListCategory) => {
+      const targetCat = overrideCategory || shipmentCategory
+      setLoadingShipments(true)
+      setShipmentsBanner(null)
+      try {
+        const params = new URLSearchParams()
+        params.set("category", targetCat)
+        params.set("sourceMode", sourceMode)
+        if (shipmentsSearch.trim()) params.set("search", shipmentsSearch.trim())
+        if (shipmentsDateFrom) params.set("dateFrom", shipmentsDateFrom)
+        if (shipmentsDateTo) params.set("dateTo", shipmentsDateTo)
+        if (onlyOverdue24h) params.set("onlyOverdue24h", "1")
+        params.set("limit", "250")
+
+        const res = await fetch(`/api/ops/communications/shipments?${params.toString()}`)
+        const data = await res.json()
+        if (!res.ok || !data?.ok) {
+          setShipmentsBanner({
+            ok: false,
+            text: data?.error || "Não foi possível carregar a lista de envios.",
+          })
+          setShipmentRows([])
+        } else {
+          setShipmentRows(Array.isArray(data.rows) ? data.rows : [])
+          setShipmentsCounts(
+            data.countsBySource || { tms_linke: 0, legacy_tms: 0, combinedDeduped: 0 }
+          )
+          setShipmentsWarnings(Array.isArray(data.warnings) ? data.warnings : [])
+        }
+      } catch (err) {
+        setShipmentsBanner({
+          ok: false,
+          text: err instanceof Error ? err.message : "Erro ao carregar envios.",
+        })
+      } finally {
+        setLoadingShipments(false)
+      }
+    },
+    [shipmentCategory, sourceMode, shipmentsSearch, shipmentsDateFrom, shipmentsDateTo, onlyOverdue24h]
+  )
+
+  async function handleOneClickSend(row: InteractiveShipmentRow) {
+    const rowKey = row.providerTrackingCode || row.parcelId
+    setSendingRowKey(rowKey)
+    setShipmentsBanner(null)
+    try {
+      const res = await fetch("/api/ops/communications/shipments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send_one_click",
+          category: shipmentCategory,
+          row,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data?.ok) {
+        setShipmentRows((prev) =>
+          prev.map((r) =>
+            (r.providerTrackingCode || r.parcelId) === rowKey
+              ? {
+                  ...r,
+                  alreadyNotified: true,
+                  notifiedAt: new Date().toISOString(),
+                  notifiedTemplate: data.templateName || r.notifiedTemplate,
+                }
+              : r
+          )
+        )
+        setShipmentsBanner({
+          ok: true,
+          text:
+            data.channel === "sms_fallback"
+              ? `Guia ${rowKey}: ${data.warning}`
+              : `Guia ${rowKey}: Template "${data.templateName}" enviado com sucesso para ${data.to}!`,
+        })
+      } else {
+        setShipmentsBanner({
+          ok: false,
+          text: `Guia ${rowKey}: ${data?.error || "Falha ao enviar notificação 1-clique."}`,
+        })
+      }
+    } catch (err) {
+      setShipmentsBanner({
+        ok: false,
+        text: err instanceof Error ? err.message : "Erro ao enviar 1-clique.",
+      })
+    } finally {
+      setSendingRowKey(null)
+    }
+  }
+
+  async function handleTogglePudoNotified(row: InteractiveShipmentRow) {
+    const rowKey = row.providerTrackingCode || row.parcelId
+    const nextNotified = !row.alreadyNotified
+    try {
+      const res = await fetch("/api/ops/communications/shipments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggle_pudo_notified",
+          parcelKey: rowKey,
+          notified: nextNotified,
+        }),
+      })
+      if (res.ok) {
+        setShipmentRows((prev) =>
+          prev.map((r) =>
+            (r.providerTrackingCode || r.parcelId) === rowKey
+              ? {
+                  ...r,
+                  alreadyNotified: nextNotified,
+                  notifiedAt: nextNotified ? new Date().toISOString() : null,
+                }
+              : r
+          )
+        )
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  function handlePrefillTemplateFromRow(row: InteractiveShipmentRow) {
+    const trk = row.providerTrackingCode || row.parcelId || ""
+    const recipient = row.recipient || "Cliente"
+    const sender = row.sender || "Linke"
+    setTemplateToPhone(row.finalClientPhone || "")
+    setTemplateContactName(recipient)
+    setLookupTrackingQuery(trk)
+
+    if (shipmentCategory === "em_distribuicao") {
+      const tpl = config?.autoEnvioTemplate || "notificacao_de_envio"
+      setCustomTemplateName(tpl)
+      setCustomTemplateLang(config?.autoEnvioLanguage || "pt_PT")
+      setTemplateVars([recipient, sender, trk])
+    } else if (shipmentCategory === "em_transporte") {
+      const tpl = config?.autoTransporteTemplate || "notificacao_de_envio_em_transporte"
+      setCustomTemplateName(tpl)
+      setCustomTemplateLang(config?.autoTransporteLanguage || "pt_PT")
+      setTemplateVars([recipient, sender, trk])
+    } else if (shipmentCategory === "incidencia") {
+      const tpl = config?.autoIncidenciaTemplate || "notificaoc_de_incidencia"
+      setCustomTemplateName(tpl)
+      setCustomTemplateLang(config?.autoIncidenciaLanguage || "pt_PT")
+      setTemplateVars([recipient, row.parcelId || trk, sender])
+    } else if (shipmentCategory === "entregue") {
+      const feedbackMatch = templates.find((t) =>
+        /feedback|survey|satisfa|inquerito|avalia/i.test(t.name)
+      )
+      const tpl = feedbackMatch?.name || "feedback_entrega"
+      const lang = feedbackMatch?.language || "pt_PT"
+      setCustomTemplateName(tpl)
+      setCustomTemplateLang(lang)
+      setTemplateVars([recipient, sender, trk])
+    } else if (shipmentCategory === "pudo") {
+      const tpl = row.overdue24h ? "order_pick_no_ctt" : "order_pick_up_1"
+      const lang = row.overdue24h ? "en_US" : "pt_PT"
+      setCustomTemplateName(tpl)
+      setCustomTemplateLang(lang)
+      setTemplateVars([recipient, trk, sender])
+    }
+
+    setTemplateSendFeedback({
+      ok: true,
+      text: `Guia ${trk} preenchida a partir da tabela "${shipmentCategory}". Verifique os campos e clique em Enviar.`,
+    })
+    setActiveTab("templates")
+    if (templates.length === 0 && !loadingTemplates) {
+      void fetchTemplates()
+    }
+  }
+
+  function handlePrefillSmsFromRow(row: InteractiveShipmentRow) {
+    const trk = row.providerTrackingCode || row.parcelId || ""
+    const recipient = row.recipient || "Cliente"
+    const sender = row.sender || "Linke"
+    setSmsPhone(row.finalClientPhone || "")
+    setSmsContactName(recipient)
+    setSmsTracking(trk)
+
+    if (shipmentCategory === "pudo") {
+      setSmsMessage(
+        `Olá ${recipient}, a sua encomenda ${trk} (${sender}) encontra-se disponível para levantamento no Ponto Pickup CTT. Por favor proceda ao levantamento.`
+      )
+    } else if (shipmentCategory === "incidencia") {
+      setSmsMessage(
+        `Olá ${recipient}, registámos uma incidência na entrega da sua encomenda ${trk} (${sender}). Por favor contacte-nos para reagendar.`
+      )
+    } else if (shipmentCategory === "entregue") {
+      setSmsMessage(
+        `Olá ${recipient}, a sua encomenda ${trk} (${sender}) foi entregue! Gostaríamos de saber a sua opinião sobre o nosso serviço.`
+      )
+    } else {
+      setSmsMessage(
+        `Olá ${recipient}, a sua encomenda ${trk} (${sender}) encontra-se ${
+          shipmentCategory === "em_distribuicao" ? "em distribuição para entrega hoje" : "em transporte na nossa rede"
+        }.`
+      )
+    }
+
+    setSmsFeedback(null)
+    setActiveTab("sms")
+  }
+
+  const displayedShipmentRows = React.useMemo(() => {
+    if (!hideAlreadyNotified) return shipmentRows
+    return shipmentRows.filter((r) => !r.alreadyNotified)
+  }, [shipmentRows, hideAlreadyNotified])
+
+  const shipmentsSummaryStats = React.useMemo(() => {
+    let notified = 0
+    let pending = 0
+    let overdue = 0
+    for (const r of shipmentRows) {
+      if (r.alreadyNotified) notified += 1
+      else pending += 1
+      if (r.overdue24h) overdue += 1
+    }
+    return { total: shipmentRows.length, notified, pending, overdue }
+  }, [shipmentRows])
 
   const fetchTemplates = React.useCallback(async () => {
     setLoadingTemplates(true)
@@ -506,6 +757,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
         {[
           { id: "auto", label: "Auto-Notificações", icon: Play },
+          { id: "shipments", label: "Envios & PUDO (1-Clique)", icon: Package },
           { id: "templates", label: "Preencher Templates", icon: Send },
           { id: "sms", label: "SMS (ClickSend)", icon: Smartphone },
           { id: "history", label: "Histórico de Mensagens", icon: History },
@@ -520,6 +772,9 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
               onClick={() => {
                 const nextTab = tab.id as TabId
                 setActiveTab(nextTab)
+                if (nextTab === "shipments" && shipmentRows.length === 0 && !loadingShipments) {
+                  void fetchShipmentsByCategory()
+                }
                 if (nextTab === "templates" && templates.length === 0 && !loadingTemplates) {
                   void fetchTemplates()
                 }
@@ -539,6 +794,403 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
           )
         })}
       </div>
+
+      {/* TAB 1B: INTERACTIVE SHIPMENTS & PUDO 1-CLICK TABLES */}
+      {activeTab === "shipments" && (
+        <div className="space-y-5">
+          {/* Category Sub-Tabs */}
+          <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {[
+                {
+                  id: "em_distribuicao" as ShipmentListCategory,
+                  label: "Em Distribuição",
+                  icon: Truck,
+                  badge: "notificacao_de_envio",
+                },
+                {
+                  id: "em_transporte" as ShipmentListCategory,
+                  label: "Em Transporte",
+                  icon: Package,
+                  badge: "em_transporte",
+                },
+                {
+                  id: "incidencia" as ShipmentListCategory,
+                  label: "Incidências",
+                  icon: AlertTriangle,
+                  badge: "incidencia",
+                },
+                {
+                  id: "entregue" as ShipmentListCategory,
+                  label: "Entregues (Feedback)",
+                  icon: CheckCircle2,
+                  badge: "feedback",
+                },
+                {
+                  id: "pudo" as ShipmentListCategory,
+                  label: "Ponto Pickup (PUDO)",
+                  icon: MapPin,
+                  badge: "order_pick_up_1",
+                },
+              ].map((cat) => {
+                const Icon = cat.icon
+                const isSelected = shipmentCategory === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setShipmentCategory(cat.id)
+                      void fetchShipmentsByCategory(cat.id)
+                    }}
+                    className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold transition ${
+                      isSelected
+                        ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                        : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    <span>{cat.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Source Mode Switcher */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { id: "both", label: "Ambos", icon: Layers },
+                { id: "legacy_tms", label: "Scraping Legacy", icon: Globe },
+                { id: "tms_linke", label: "TMS Linke Nativo", icon: Database },
+              ].map((opt) => {
+                const Icon = opt.icon
+                const active = sourceMode === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setSourceMode(opt.id as NotificationSourceMode)}
+                    className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition ${
+                      active
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Filters & KPI Bar */}
+          <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="grid gap-3 md:grid-cols-12">
+              <div className="relative md:col-span-4">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={shipmentsSearch}
+                  onChange={(e) => setShipmentsSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void fetchShipmentsByCategory()}
+                  placeholder="Filtrar por guia, destinatário, telefone, loja ou motivo..."
+                  className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-xs"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 md:col-span-4">
+                <div className="flex-1">
+                  <input
+                    type="date"
+                    aria-label="Data inicial"
+                    value={shipmentsDateFrom}
+                    onChange={(e) => setShipmentsDateFrom(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+                <span className="text-xs text-slate-400">até</span>
+                <div className="flex-1">
+                  <input
+                    type="date"
+                    aria-label="Data final"
+                    value={shipmentsDateTo}
+                    onChange={(e) => setShipmentsDateTo(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2 md:col-span-4">
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={onlyOverdue24h}
+                    onChange={(e) => setOnlyOverdue24h(e.target.checked)}
+                  />
+                  <Clock className="h-3.5 w-3.5 text-amber-600" />
+                  Apenas &gt; 24h
+                </label>
+
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={hideAlreadyNotified}
+                    onChange={(e) => setHideAlreadyNotified(e.target.checked)}
+                  />
+                  Ocultar já notificados
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => void fetchShipmentsByCategory()}
+                  disabled={loadingShipments}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingShipments ? "animate-spin" : ""}`} />
+                  {loadingShipments ? "A carregar..." : "Atualizar Lista"}
+                </button>
+              </div>
+            </div>
+
+            {/* Summary KPIs */}
+            <div className="grid grid-cols-2 gap-3 pt-1 sm:grid-cols-5">
+              <div className="rounded-lg bg-slate-50 p-2.5">
+                <div className="text-[11px] text-slate-500">Total Carregados</div>
+                <div className="text-base font-bold text-slate-900">{shipmentsSummaryStats.total}</div>
+              </div>
+              <div className="rounded-lg bg-amber-50 p-2.5">
+                <div className="text-[11px] text-amber-800">Por Notificar (Pendentes)</div>
+                <div className="text-base font-bold text-amber-900">{shipmentsSummaryStats.pending}</div>
+              </div>
+              <div className="rounded-lg bg-emerald-50 p-2.5">
+                <div className="text-[11px] text-emerald-700">Já Notificados ✓</div>
+                <div className="text-base font-bold text-emerald-900">{shipmentsSummaryStats.notified}</div>
+              </div>
+              <div className="rounded-lg bg-rose-50 p-2.5">
+                <div className="text-[11px] text-rose-700">Em Espera &gt; 24h</div>
+                <div className="text-base font-bold text-rose-900">{shipmentsSummaryStats.overdue}</div>
+              </div>
+              <div className="rounded-lg bg-indigo-50 p-2.5">
+                <div className="text-[11px] text-indigo-700">Fontes (Linke / Legacy)</div>
+                <div className="text-sm font-bold text-indigo-900">
+                  {shipmentsCounts.tms_linke} Nativo · {shipmentsCounts.legacy_tms} Legacy
+                </div>
+              </div>
+            </div>
+
+            {shipmentsWarnings.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 space-y-1">
+                {shipmentsWarnings.map((w, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {shipmentsBanner && (
+              <div
+                className={`rounded-lg p-3 text-xs font-medium ${
+                  shipmentsBanner.ok
+                    ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border border-red-200 bg-red-50 text-red-800"
+                }`}
+              >
+                {shipmentsBanner.text}
+              </div>
+            )}
+
+            {/* Responsive Sticky Data Table */}
+            <div
+              tabIndex={0}
+              role="region"
+              aria-labelledby="shipments-oneclick-caption"
+              className="max-h-[560px] max-w-full overflow-auto rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+            >
+              <table className="min-w-full border-separate border-spacing-0 text-left text-xs">
+                <caption id="shipments-oneclick-caption" className="sr-only">
+                  Lista interativa de envios por estado para notificação WhatsApp e SMS em 1 clique
+                </caption>
+                <thead className="sticky top-0 z-10 bg-slate-100 font-semibold text-slate-700 shadow-xs">
+                  <tr>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2.5">
+                      Guia / Tracking
+                    </th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2.5">
+                      Origem
+                    </th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2.5">
+                      Destinatário &amp; Telefone
+                    </th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2.5">
+                      Remetente / Loja
+                    </th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2.5">
+                      Datas
+                    </th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2.5">
+                      Detalhe / Motivo
+                    </th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2.5">
+                      Estado Notificação
+                    </th>
+                    <th scope="col" className="border-b border-slate-200 px-3 py-2.5 text-right">
+                      Ações 1-Clique
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {displayedShipmentRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                        {loadingShipments
+                          ? "A sincronizar envios do TMS Linke e Legacy TMS..."
+                          : "Nenhum envio encontrado para este estado/filtro."}
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedShipmentRows.map((row, idx) => {
+                      const rowKey = row.providerTrackingCode || row.parcelId || `row-${idx}`
+                      const isSendingThis = sendingRowKey === rowKey
+                      return (
+                        <tr key={`${rowKey}-${idx}`} className="hover:bg-slate-50/80">
+                          <th
+                            scope="row"
+                            className="sticky left-0 z-1 border-b border-slate-100 bg-white px-3 py-2.5 font-mono font-semibold text-slate-900"
+                          >
+                            <div>{row.providerTrackingCode || row.parcelId}</div>
+                            {row.parcelId && row.providerTrackingCode && row.parcelId !== row.providerTrackingCode && (
+                              <div className="text-[10px] font-normal text-slate-400">
+                                ID: {row.parcelId}
+                              </div>
+                            )}
+                          </th>
+                          <td className="border-b border-slate-100 px-3 py-2.5">
+                            <span
+                              className={`inline-block rounded px-2 py-0.5 text-[10px] font-semibold ${
+                                row.sourceSystem === "tms_linke"
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-indigo-100 text-indigo-800"
+                              }`}
+                            >
+                              {row.sourceSystem === "tms_linke" ? "TMS Linke" : "Legacy TMS"}
+                            </span>
+                            {row.service ? (
+                              <div className="mt-0.5 text-[10px] text-slate-500">{row.service}</div>
+                            ) : null}
+                          </td>
+                          <td className="border-b border-slate-100 px-3 py-2.5">
+                            <div className="font-medium text-slate-900">{row.recipient || "—"}</div>
+                            <div className="font-mono text-[11px] text-slate-500">
+                              {row.finalClientPhone || "Sem telefone"}
+                            </div>
+                          </td>
+                          <td className="border-b border-slate-100 px-3 py-2.5 text-slate-700">
+                            {row.sender || "Linke"}
+                          </td>
+                          <td className="border-b border-slate-100 px-3 py-2.5 whitespace-nowrap text-slate-600">
+                            <div>Rec: {row.pickupDate || "—"}</div>
+                            <div className="text-[11px] text-slate-400">Atu: {row.deliveryDate || "—"}</div>
+                          </td>
+                          <td className="border-b border-slate-100 px-3 py-2.5 max-w-xs">
+                            <div className="truncate text-slate-700" title={row.incidentReason || row.incidence || row.status}>
+                              {row.incidentReason || row.incidence || row.status || "—"}
+                            </div>
+                            {row.overdue24h && (
+                              <span className="mt-1 inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">
+                                <Clock className="h-2.5 w-2.5" />
+                                &gt; 24h
+                              </span>
+                            )}
+                          </td>
+                          <td className="border-b border-slate-100 px-3 py-2.5">
+                            {row.alreadyNotified ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-600/20">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Notificado ✓
+                                </span>
+                                {row.notifiedTemplate && (
+                                  <div className="font-mono text-[10px] text-slate-400">
+                                    {row.notifiedTemplate}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-600/20">
+                                Pendente
+                              </span>
+                            )}
+                          </td>
+                          <td className="border-b border-slate-100 px-3 py-2.5 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                disabled={isSendingThis || !row.finalClientPhone}
+                                onClick={() => void handleOneClickSend(row)}
+                                title={
+                                  shipmentCategory === "entregue"
+                                    ? "Enviar pedido de feedback por WhatsApp em 1 clique"
+                                    : shipmentCategory === "pudo"
+                                    ? `Enviar aviso Ponto Pickup (${row.overdue24h ? "order_pick_no_ctt >24h" : "order_pick_up_1"})`
+                                    : "Enviar template WhatsApp em 1 clique"
+                                }
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-40"
+                              >
+                                <Zap className="h-3 w-3" />
+                                {isSendingThis
+                                  ? "A enviar..."
+                                  : shipmentCategory === "entregue"
+                                  ? "1-Clique Feedback"
+                                  : shipmentCategory === "pudo"
+                                  ? "1-Clique PUDO"
+                                  : "1-Clique WA"}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handlePrefillTemplateFromRow(row)}
+                                title="Abrir no editor de Templates com os dados preenchidos"
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                              >
+                                <Edit3 className="h-3 w-3" />
+                                Editor
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handlePrefillSmsFromRow(row)}
+                                title="Preparar SMS ClickSend para este envio"
+                                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                              >
+                                <Smartphone className="h-3 w-3" />
+                                SMS
+                              </button>
+
+                              {shipmentCategory === "pudo" && (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleTogglePudoNotified(row)}
+                                  title="Marcar / desmarcar manualmente como avisado no Ponto Pickup"
+                                  className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100"
+                                >
+                                  {row.alreadyNotified ? "Desmarcar" : "Marcar ✓"}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: AUTO-NOTIFICATIONS */}
       {activeTab === "auto" && (
