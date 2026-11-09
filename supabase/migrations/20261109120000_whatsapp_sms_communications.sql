@@ -74,11 +74,7 @@ create policy "Staff can read whatsapp_logs"
   for select
   to authenticated
   using (
-    exists (
-      select 1 from public.users u
-      where u.id = auth.uid()
-        and u.role in ('admin', 'employee')
-    )
+    coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin', 'employee')
   );
 
 drop policy if exists "Staff can read whatsapp_dispatch_locks" on public.whatsapp_dispatch_locks;
@@ -87,10 +83,21 @@ create policy "Staff can read whatsapp_dispatch_locks"
   for select
   to authenticated
   using (
-    exists (
-      select 1 from public.users u
-      where u.id = auth.uid()
-        and u.role in ('admin', 'employee')
-    )
+    coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') in ('admin', 'employee')
   );
 
+create or replace function public.sync_whatsapp_logs_sequence()
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  perform setval(
+    pg_get_serial_sequence('public.whatsapp_logs', 'id'),
+    coalesce((select max(id) from public.whatsapp_logs), 1),
+    true
+  );
+end;
+$$;
+
+notify pgrst, 'reload schema';
