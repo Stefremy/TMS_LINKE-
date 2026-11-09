@@ -20,8 +20,6 @@ import {
   Truck,
   MapPin,
   Clock,
-  Zap,
-  Edit3,
   ChevronLeft,
   ChevronRight,
   Lock,
@@ -160,9 +158,7 @@ function hasUrlButtonComponent(tpl: MetaWhatsappTemplate | undefined): boolean {
 
 export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?: ConfigState | null }) {
   const [activeTab, setActiveTab] = React.useState<TabId>("auto")
-  const [config, setConfig] = React.useState<ConfigState | null>(initialConfig || null)
-  const [savingConfig, setSavingConfig] = React.useState(false)
-  const [configBanner, setConfigBanner] = React.useState<{ type: "ok" | "err"; text: string } | null>(null)
+  const [config] = React.useState<ConfigState | null>(initialConfig || null)
 
   // Auto-notification state
   const [sourceMode, setSourceMode] = React.useState<NotificationSourceMode>(
@@ -178,8 +174,12 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
   const [loadingTemplates, setLoadingTemplates] = React.useState(false)
   const [templatesError, setTemplatesError] = React.useState<string | null>(null)
   const [selectedTemplateKey, setSelectedTemplateKey] = React.useState<string>("")
-  const [customTemplateName, setCustomTemplateName] = React.useState<string>("notificacao_de_envio")
-  const [customTemplateLang, setCustomTemplateLang] = React.useState<string>("pt_PT")
+  const [customTemplateName, setCustomTemplateName] = React.useState<string>("order_pick_no_ctt")
+  const [customTemplateLang, setCustomTemplateLang] = React.useState<string>("en_US")
+  const selectedTemplateKeyRef = React.useRef(selectedTemplateKey)
+  selectedTemplateKeyRef.current = selectedTemplateKey
+  const customTemplateNameRef = React.useRef(customTemplateName)
+  customTemplateNameRef.current = customTemplateName
   const [templateToPhone, setTemplateToPhone] = React.useState<string>("")
   const [templateContactName, setTemplateContactName] = React.useState<string>("")
   const [templateVars, setTemplateVars] = React.useState<string[]>(["", "", ""])
@@ -463,6 +463,8 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
     setCustomTemplateName(tpl)
     setCustomTemplateLang(lang)
     setSelectedTemplateKey(`${tpl}::${lang}`)
+    customTemplateNameRef.current = tpl
+    selectedTemplateKeyRef.current = `${tpl}::${lang}`
 
     setTemplateSendFeedback({
       ok: true,
@@ -554,13 +556,58 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
         setTemplatesError(data?.error || "Não foi possível carregar os templates da Meta.")
         setTemplates([])
       } else {
-        const list = Array.isArray(data.data) ? (data.data as MetaWhatsappTemplate[]) : []
+        const rawList = Array.isArray(data.data) ? (data.data as MetaWhatsappTemplate[]) : []
+        // Priorizar templates de envios operacionais (order_pick_no_ctt, notificacao_de_envio) e colocar autogo no fim
+        const list = [...rawList].sort((a, b) => {
+          const priority = (name: string) => {
+            if (name === "order_pick_no_ctt") return 1
+            if (name === "notificacao_de_envio") return 2
+            if (name === "order_pick_up_1") return 3
+            if (name === "notificacao_auto_incidencia" || name === "order_incidencia_1") return 4
+            if (name === "feedback_survey_1" || name.includes("feedback")) return 5
+            if (name.includes("autogo")) return 99
+            return 10
+          }
+          return priority(a.name) - priority(b.name)
+        })
         setTemplates(list)
-        if (list.length > 0 && !selectedTemplateKey) {
-          const first = list[0]
-          setSelectedTemplateKey(`${first.name}::${first.language}`)
-          setCustomTemplateName(first.name)
-          setCustomTemplateLang(first.language || "pt_PT")
+
+        if (list.length > 0) {
+          const currentKey = selectedTemplateKeyRef.current
+          const currentName = customTemplateNameRef.current
+
+          // 1. Se já está selecionado um template válido (ex: order_pick_no_ctt::en_US)
+          if (currentKey && list.some((t) => `${t.name}::${t.language}` === currentKey)) {
+            return
+          }
+
+          // 2. Se temos customTemplateName definido
+          if (currentName) {
+            const match = list.find((t) => t.name === currentName)
+            if (match) {
+              const key = `${match.name}::${match.language}`
+              setSelectedTemplateKey(key)
+              selectedTemplateKeyRef.current = key
+              setCustomTemplateName(match.name)
+              customTemplateNameRef.current = match.name
+              setCustomTemplateLang(match.language || "pt_PT")
+              return
+            }
+          }
+
+          // 3. Fallback: NUNCA autogo! Escolher order_pick_no_ctt ou notificacao_de_envio
+          const preferred =
+            list.find((t) => t.name === "order_pick_no_ctt") ||
+            list.find((t) => t.name === "notificacao_de_envio") ||
+            list.find((t) => !t.name.toLowerCase().includes("autogo")) ||
+            list[0]
+
+          const prefKey = `${preferred.name}::${preferred.language}`
+          setSelectedTemplateKey(prefKey)
+          selectedTemplateKeyRef.current = prefKey
+          setCustomTemplateName(preferred.name)
+          customTemplateNameRef.current = preferred.name
+          setCustomTemplateLang(preferred.language || "pt_PT")
         }
       }
     } catch (err) {
@@ -568,7 +615,11 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
     } finally {
       setLoadingTemplates(false)
     }
-  }, [selectedTemplateKey])
+  }, [])
+
+  React.useEffect(() => {
+    void fetchTemplates()
+  }, [fetchTemplates])
 
   const fetchLogs = React.useCallback(
     async (targetPage = 1) => {
@@ -858,34 +909,6 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
       }) || null
     )
   }, [recentSmsLogs, smsPhone, smsTracking])
-
-  async function handleSaveConfig(e: React.FormEvent) {
-    e.preventDefault()
-    if (!config) return
-    setSavingConfig(true)
-    setConfigBanner(null)
-    try {
-      const res = await fetch("/api/ops/communications/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...config, sourceMode }),
-      })
-      const data = await res.json()
-      if (res.ok && data?.config) {
-        setConfig(data.config)
-        setConfigBanner({ type: "ok", text: "Configurações guardadas com sucesso!" })
-      } else {
-        setConfigBanner({ type: "err", text: data?.error || "Erro ao guardar configurações." })
-      }
-    } catch (err) {
-      setConfigBanner({
-        type: "err",
-        text: err instanceof Error ? err.message : "Erro ao guardar configurações.",
-      })
-    } finally {
-      setSavingConfig(false)
-    }
-  }
 
   const previewRenderedText = React.useMemo(() => {
     if (!selectedBodyText) return ""
@@ -1769,12 +1792,22 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                     Selecionar Template Aprovado na Meta ({templates.length})
                   </label>
                   <select
-                    value={selectedTemplateKey}
+                    value={
+                      templates.some((t) => `${t.name}::${t.language}` === selectedTemplateKey)
+                        ? selectedTemplateKey
+                        : templates.some((t) => t.name === customTemplateName)
+                        ? `${customTemplateName}::${templates.find((t) => t.name === customTemplateName)?.language}`
+                        : selectedTemplateKey
+                    }
                     onChange={(e) => {
                       const val = e.target.value
                       setSelectedTemplateKey(val)
+                      selectedTemplateKeyRef.current = val
                       const [name, lang] = val.split("::")
-                      if (name) setCustomTemplateName(name)
+                      if (name) {
+                        setCustomTemplateName(name)
+                        customTemplateNameRef.current = name
+                      }
                       if (lang) setCustomTemplateLang(lang)
                       if (name === "order_pick_no_ctt") {
                         setTemplateVars((prev) => {
