@@ -23,11 +23,7 @@ import {
   Zap,
   Edit3,
 } from "lucide-react"
-import type {
-  AutoNotificationType,
-  InteractiveShipmentRow,
-  ShipmentListCategory,
-} from "@/lib/services/communications/shipment-sources"
+import type { AutoNotificationType, InteractiveShipmentRow, ShipmentListCategory } from "@/lib/services/communications/shipment-sources"
 import type { NotificationSourceMode } from "@/lib/services/communications/config"
 import type { MetaWhatsappTemplate } from "@/lib/services/communications/whatsapp-cloud"
 

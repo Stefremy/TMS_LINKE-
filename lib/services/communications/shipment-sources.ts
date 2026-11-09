@@ -724,7 +724,7 @@ export async function fetchUnifiedShipmentsByCategory(
     const { data: recentLogs } = await supabase
       .from("whatsapp_logs")
       .select("tracking_number, template_name, created_at, status")
-      .eq("direction", "outbound")
+      .in("direction", ["out", "outbound"])
       .not("tracking_number", "is", null)
       .order("created_at", { ascending: false })
       .limit(1500)
