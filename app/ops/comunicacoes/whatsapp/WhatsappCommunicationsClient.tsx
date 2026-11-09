@@ -430,41 +430,46 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
     setTemplateContactName(recipient)
     setLookupTrackingQuery(trk)
 
+    let tpl = "notificacao_de_envio"
+    let lang = "pt_PT"
+
     if (shipmentCategory === "em_distribuicao") {
-      const tpl = config?.autoEnvioTemplate || "notificacao_de_envio"
-      setCustomTemplateName(tpl)
-      setCustomTemplateLang(config?.autoEnvioLanguage || "pt_PT")
+      tpl = config?.autoEnvioTemplate || "notificacao_de_envio"
+      lang = config?.autoEnvioLanguage || "pt_PT"
       setTemplateVars([recipient, sender, trk])
     } else if (shipmentCategory === "em_transporte") {
-      const tpl = config?.autoTransporteTemplate || "notificacao_de_envio_em_transporte"
-      setCustomTemplateName(tpl)
-      setCustomTemplateLang(config?.autoTransporteLanguage || "pt_PT")
+      tpl = config?.autoTransporteTemplate || "notificacao_de_envio_em_transporte"
+      lang = config?.autoTransporteLanguage || "pt_PT"
       setTemplateVars([recipient, sender, trk])
     } else if (shipmentCategory === "incidencia") {
-      const tpl = config?.autoIncidenciaTemplate || "notificaoc_de_incidencia"
-      setCustomTemplateName(tpl)
-      setCustomTemplateLang(config?.autoIncidenciaLanguage || "pt_PT")
+      tpl = config?.autoIncidenciaTemplate || "notificaoc_de_incidencia"
+      lang = config?.autoIncidenciaLanguage || "pt_PT"
       setTemplateVars([recipient, row.parcelId || trk, sender])
     } else if (shipmentCategory === "entregue") {
       const feedbackMatch = templates.find((t) =>
         /feedback|survey|satisfa|inquerito|avalia/i.test(t.name)
       )
-      const tpl = feedbackMatch?.name || "feedback_entrega"
-      const lang = feedbackMatch?.language || "pt_PT"
-      setCustomTemplateName(tpl)
-      setCustomTemplateLang(lang)
+      tpl = feedbackMatch?.name || "feedback_entrega"
+      lang = feedbackMatch?.language || "pt_PT"
       setTemplateVars([recipient, sender, trk])
     } else if (shipmentCategory === "pudo") {
-      const tpl = row.overdue24h ? "order_pick_no_ctt" : "order_pick_up_1"
-      const lang = row.overdue24h ? "en_US" : "pt_PT"
-      setCustomTemplateName(tpl)
-      setCustomTemplateLang(lang)
-      setTemplateVars([recipient, trk, sender])
+      tpl = "order_pick_no_ctt"
+      const pudoMatch = templates.find((t) => t.name === "order_pick_no_ctt")
+      lang = pudoMatch?.language || "en_US"
+      // PUDO: Variável 1 = destinatário, Variável 2 = tracking, Variável 3 = input manual, Variável 4 = "."
+      setTemplateVars([recipient, trk, "", "."])
     }
+
+    setCustomTemplateName(tpl)
+    setCustomTemplateLang(lang)
+    setSelectedTemplateKey(`${tpl}::${lang}`)
 
     setTemplateSendFeedback({
       ok: true,
-      text: `Guia ${trk} preenchida a partir da tabela "${shipmentCategory}". Verifique os campos e clique em Enviar.`,
+      text:
+        shipmentCategory === "pudo"
+          ? `Guia ${trk} preenchida para PUDO (order_pick_no_ctt). Introduza o local de levantamento na Variável {{3}} e clique em Enviar.`
+          : `Guia ${trk} preenchida a partir da tabela "${shipmentCategory}". Verifique os campos e clique em Enviar.`,
     })
     setActiveTab("templates")
     if (templates.length === 0 && !loadingTemplates) {
@@ -677,7 +682,30 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
     setSendingTemplate(true)
     setTemplateSendFeedback(null)
     try {
-      const cleanVars = templateVars.slice(0, detectedVarCount).map((v) => v.trim()).filter(Boolean)
+      const varsToSend = [...templateVars]
+      if (customTemplateName === "order_pick_no_ctt") {
+        if (!varsToSend[2]?.trim()) {
+          setTemplateSendFeedback({
+            ok: false,
+            text: "A Variável {{3}} (Local de Levantamento) é obrigatória. Por favor preencha o local antes de enviar.",
+          })
+          setSendingTemplate(false)
+          return
+        }
+        if (!varsToSend[3]?.trim()) {
+          varsToSend[3] = "."
+        }
+      }
+
+      const cleanVars = varsToSend.slice(0, detectedVarCount).map((v) => (v || "").trim())
+      if (cleanVars.some((v) => !v)) {
+        setTemplateSendFeedback({
+          ok: false,
+          text: "Por favor preencha todas as variáveis do template antes de enviar.",
+        })
+        setSendingTemplate(false)
+        return
+      }
       const res = await fetch("/api/ops/communications/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1748,6 +1776,14 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                       const [name, lang] = val.split("::")
                       if (name) setCustomTemplateName(name)
                       if (lang) setCustomTemplateLang(lang)
+                      if (name === "order_pick_no_ctt") {
+                        setTemplateVars((prev) => {
+                          const v1 = prev[0] || templateContactName || ""
+                          const trkVal = lookupTrackingQuery || (prev[1] && !prev[1].toLowerCase().includes("linke") ? prev[1] : prev[2]) || ""
+                          const manualInput = prev[2] && prev[2] !== trkVal ? prev[2] : ""
+                          return [v1, trkVal, manualInput, "."]
+                        })
+                      }
                     }}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                   >
@@ -1829,24 +1865,53 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                 <label className="block text-xs font-semibold text-slate-700">
                   Variáveis do Corpo da Mensagem (Body Parameters)
                 </label>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className={`grid gap-3 ${detectedVarCount >= 4 ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"}`}>
                   {Array.from({ length: detectedVarCount }).map((_, idx) => (
                     <div key={idx}>
-                      <label className="block text-[11px] font-medium text-slate-500 mb-1">
-                        Variável {`{{${idx + 1}}}`}
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-medium text-slate-600">
+                          Variável {`{{${idx + 1}}}`}
+                        </label>
+                        {customTemplateName === "order_pick_no_ctt" && (
+                          <span className="text-[10px] font-semibold text-emerald-700">
+                            {idx === 0
+                              ? "Nome"
+                              : idx === 1
+                              ? "Tracking"
+                              : idx === 2
+                              ? "Local (Manual)"
+                              : "Ponto Final"}
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
-                        value={templateVars[idx] || ""}
+                        value={templateVars[idx] ?? (customTemplateName === "order_pick_no_ctt" && idx === 3 ? "." : "")}
                         onChange={(e) => {
                           const next = [...templateVars]
                           next[idx] = e.target.value
                           setTemplateVars(next)
                         }}
                         placeholder={
-                          idx === 0 ? "Ex.: Nome Destinatário" : idx === 1 ? "Ex.: Loja / Guia" : "Ex.: Tracking"
+                          customTemplateName === "order_pick_no_ctt"
+                            ? idx === 0
+                              ? "Nome Destinatário"
+                              : idx === 1
+                              ? "Ex.: Tracking"
+                              : idx === 2
+                              ? "Ex.: Ponto CTT / Morada..."
+                              : "."
+                            : idx === 0
+                            ? "Ex.: Nome Destinatário"
+                            : idx === 1
+                            ? "Ex.: Loja / Guia"
+                            : "Ex.: Tracking"
                         }
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                          customTemplateName === "order_pick_no_ctt" && idx === 2 && !templateVars[2]
+                            ? "border-amber-400 bg-amber-50/40 focus:border-emerald-500 focus:bg-white"
+                            : "border-slate-300"
+                        }`}
                       />
                     </div>
                   ))}
