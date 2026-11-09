@@ -176,15 +176,25 @@ export function WhatsappChatConsoleClient({
   const [teamReminders, setTeamReminders] = React.useState<TeamReminder[]>(initialTeamReminders)
 
   // Read timestamps per phone (stored in localStorage for per-operator read tracking)
-  const [readTimestamps, setReadTimestamps] = React.useState<Record<string, number>>(() => {
-    if (typeof window === "undefined") return {}
-    try {
-      const raw = localStorage.getItem("tms_wa_read_ts")
-      return raw ? (JSON.parse(raw) as Record<string, number>) : {}
-    } catch {
-      return {}
+  // Initialized to {} so that SSR and initial client hydration match identically.
+  const [readTimestamps, setReadTimestamps] = React.useState<Record<string, number>>({})
+
+  React.useEffect(() => {
+    let rafId: number | null = null
+    rafId = window.requestAnimationFrame(() => {
+      try {
+        const raw = localStorage.getItem("tms_wa_read_ts")
+        if (raw) {
+          setReadTimestamps(JSON.parse(raw) as Record<string, number>)
+        }
+      } catch {
+        // Ignore
+      }
+    })
+    return () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId)
     }
-  })
+  }, [])
 
   // Filters & search
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -1112,6 +1122,7 @@ export function WhatsappChatConsoleClient({
                           ) : null}
                         </span>
                         <span
+                          suppressHydrationWarning
                           className={`text-[10px] shrink-0 ${
                             conv.unreadCount > 0 ? "text-emerald-400 font-semibold" : "text-slate-400"
                           }`}
@@ -1358,7 +1369,10 @@ export function WhatsappChatConsoleClient({
                   <React.Fragment key={msg.id}>
                     {showDayDivider ? (
                       <div className="flex justify-center my-3">
-                        <span className="px-3 py-1 rounded-lg bg-[#182229] text-[11px] font-medium text-slate-300 border border-slate-800/80 shadow-sm">
+                        <span
+                          suppressHydrationWarning
+                          className="px-3 py-1 rounded-lg bg-[#182229] text-[11px] font-medium text-slate-300 border border-slate-800/80 shadow-sm"
+                        >
                           {currentDayLabel}
                         </span>
                       </div>
@@ -1450,7 +1464,7 @@ export function WhatsappChatConsoleClient({
 
                         {/* Timestamp & Delivery Status Ticks */}
                         <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-slate-300/75 select-none">
-                          <span>{timeStr}</span>
+                          <span suppressHydrationWarning>{timeStr}</span>
                           {!isInbound ? (
                             msg.status === "read" ? (
                               <span title="Lida pelo destinatário" className="text-sky-300 font-bold">
@@ -1660,7 +1674,7 @@ export function WhatsappChatConsoleClient({
                             <span className="font-semibold text-emerald-300 truncate">
                               {item.template_name || item.channel}
                             </span>
-                            <span className="text-[10px] text-slate-500 shrink-0">
+                            <span suppressHydrationWarning className="text-[10px] text-slate-500 shrink-0">
                               {new Date(item.created_at).toLocaleDateString("pt-PT")}
                             </span>
                           </div>
@@ -1762,7 +1776,7 @@ export function WhatsappChatConsoleClient({
                         >
                           <div className="min-w-0">
                             <div className="font-medium text-slate-200 truncate">{rem.note}</div>
-                            <div className="text-[10px] text-amber-300">
+                            <div suppressHydrationWarning className="text-[10px] text-amber-300">
                               {new Date(rem.dueAt).toLocaleString("pt-PT")}
                             </div>
                           </div>
