@@ -60,21 +60,26 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const q = (searchParams.get("q") || "").trim()
   const channel = (searchParams.get("channel") || "all").trim()
-  const rawLimit = Number(searchParams.get("limit") || 100)
-  const limit = Number.isFinite(rawLimit) ? Math.max(10, Math.min(300, Math.trunc(rawLimit))) : 100
+  const rawLimit = Number(searchParams.get("limit") || 75)
+  const limit = Number.isFinite(rawLimit) ? Math.max(10, Math.min(300, Math.trunc(rawLimit))) : 75
+  const rawPage = Number(searchParams.get("page") || 1)
+  const page = Number.isFinite(rawPage) ? Math.max(1, Math.trunc(rawPage)) : 1
+  const offset = (page - 1) * limit
 
   const combined: NormalizedLogRow[] = []
+  let totalCount = 0
 
   try {
     const supabase = createAdminClient()
     let query = supabase
       .from("whatsapp_logs")
       .select(
-        "id, created_at, direction, channel, to_number, contact_name, message_text, template_name, status, api_message_id, shipment_id, tracking_number, source_system, payload"
+        "id, created_at, direction, channel, to_number, contact_name, message_text, template_name, status, api_message_id, shipment_id, tracking_number, source_system, payload",
+        { count: "exact" }
       )
       .in("direction", ["out", "outbound"])
       .order("id", { ascending: false })
-      .limit(limit)
+      .range(offset, offset + limit - 1)
 
     if (channel && channel !== "all") {
       if (channel === "whatsapp") {
@@ -95,7 +100,10 @@ export async function GET(request: Request) {
       }
     }
 
-    const { data, error } = await query
+    const { data, error, count } = await query
+    if (typeof count === "number") {
+      totalCount = count
+    }
     if (!error && Array.isArray(data)) {
       for (const r of data) {
         combined.push(normalizeLegacyRow(r as Record<string, unknown>))
@@ -105,16 +113,16 @@ export async function GET(request: Request) {
     // Primary table might not be migrated yet; fallback to legacy below
   }
 
-  // Also fetch historical logs from Legacy Nathalia Supabase if configured
+  // Also fetch historical logs from Legacy Nathalia Supabase if primary returned nothing on page 1
   const legacySb = getLegacyWhatsappSupabaseClient()
-  if (legacySb && combined.length < limit) {
+  if (legacySb && combined.length === 0 && page === 1) {
     try {
       let lQuery = legacySb
         .from("whatsapp_logs")
         .select("id, created_at, direction, channel, to_number, contact_name, message_text, template_name, status, api_message_id, payload")
         .eq("direction", "out")
         .order("id", { ascending: false })
-        .limit(limit - combined.length)
+        .range(offset, offset + limit - 1)
 
       if (channel && channel !== "all") {
         if (channel === "whatsapp") {
@@ -146,10 +154,13 @@ export async function GET(request: Request) {
     }
   }
 
-  combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-
   return NextResponse.json({
     ok: true,
-    data: combined.slice(0, limit),
+    data: combined,
+    page,
+    limit,
+    total: totalCount || combined.length,
+    totalPages: Math.max(1, Math.ceil((totalCount || combined.length) / limit)),
+    hasMore: totalCount ? offset + combined.length < totalCount : combined.length === limit,
   })
 }

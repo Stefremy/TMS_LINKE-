@@ -22,10 +22,14 @@ import {
   Clock,
   Zap,
   Edit3,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import type { AutoNotificationType, InteractiveShipmentRow, ShipmentListCategory } from "@/lib/services/communications/shipment-sources"
 import type { NotificationSourceMode } from "@/lib/services/communications/config"
 import type { MetaWhatsappTemplate } from "@/lib/services/communications/whatsapp-cloud"
+
+const PAGE_SIZE = 75
 
 type TabId = "auto" | "shipments" | "templates" | "sms" | "history" | "settings"
 
@@ -165,6 +169,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
   const [runningAutoType, setRunningAutoType] = React.useState<string | null>(null)
   const [autoResult, setAutoResult] = React.useState<AutoRunResult | null>(null)
   const [autoError, setAutoError] = React.useState<string | null>(null)
+  const [autoPreviewPage, setAutoPreviewPage] = React.useState<number>(1)
 
   // Templates state
   const [templates, setTemplates] = React.useState<MetaWhatsappTemplate[]>([])
@@ -193,26 +198,110 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
   const [sendingSms, setSendingSms] = React.useState(false)
   const [smsFeedback, setSmsFeedback] = React.useState<{ ok: boolean; text: string } | null>(null)
 
-  // History logs state
+  // History logs state (75 per page)
   const [logs, setLogs] = React.useState<LogRow[]>([])
   const [loadingLogs, setLoadingLogs] = React.useState(false)
   const [logsSearch, setLogsSearch] = React.useState<string>("")
   const [logsChannel, setLogsChannel] = React.useState<string>("all")
   const [logsWarning, setLogsWarning] = React.useState<string | null>(null)
+  const [logsPage, setLogsPage] = React.useState<number>(1)
+  const [logsTotal, setLogsTotal] = React.useState<number>(0)
+  const [logsTotalPages, setLogsTotalPages] = React.useState<number>(1)
+  const [logsHasMore, setLogsHasMore] = React.useState<boolean>(false)
 
-  // Live recent messages state (shown below WhatsApp & SMS workspaces to prevent duplicates)
+  // Live recent messages state (75 per page, shown below WhatsApp & SMS workspaces to prevent duplicates)
   const [recentWaLogs, setRecentWaLogs] = React.useState<LogRow[]>([])
+  const [recentWaPage, setRecentWaPage] = React.useState<number>(1)
+  const [recentWaTotal, setRecentWaTotal] = React.useState<number>(0)
+  const [recentWaTotalPages, setRecentWaTotalPages] = React.useState<number>(1)
+  const [recentWaHasMore, setRecentWaHasMore] = React.useState<boolean>(false)
+
   const [recentSmsLogs, setRecentSmsLogs] = React.useState<LogRow[]>([])
+  const [recentSmsPage, setRecentSmsPage] = React.useState<number>(1)
+  const [recentSmsTotal, setRecentSmsTotal] = React.useState<number>(0)
+  const [recentSmsTotalPages, setRecentSmsTotalPages] = React.useState<number>(1)
+  const [recentSmsHasMore, setRecentSmsHasMore] = React.useState<boolean>(false)
+
   const [loadingRecentLogs, setLoadingRecentLogs] = React.useState(false)
   const [recentWaSearch, setRecentWaSearch] = React.useState<string>("")
   const [recentSmsSearch, setRecentSmsSearch] = React.useState<string>("")
 
+  const fetchRecentWaLogs = React.useCallback(
+    async (targetPage = 1, searchOverride?: string) => {
+      setLoadingRecentLogs(true)
+      try {
+        const params = new URLSearchParams()
+        params.set("channel", "whatsapp")
+        params.set("limit", String(PAGE_SIZE))
+        params.set("page", String(targetPage))
+        const q = (searchOverride !== undefined ? searchOverride : recentWaSearch).trim()
+        if (q) params.set("q", q)
+        const res = await fetch(`/api/ops/communications/logs?${params.toString()}`)
+        const data = await res.json().catch(() => ({}))
+        if (Array.isArray(data?.data)) {
+          setRecentWaLogs(data.data)
+          setRecentWaPage(data.page || targetPage)
+          setRecentWaTotal(typeof data.total === "number" ? data.total : data.data.length)
+          setRecentWaTotalPages(data.totalPages || 1)
+          setRecentWaHasMore(Boolean(data.hasMore))
+        }
+      } catch {
+        // ignore network error
+      } finally {
+        setLoadingRecentLogs(false)
+      }
+    },
+    [recentWaSearch]
+  )
+
+  const fetchRecentSmsLogs = React.useCallback(
+    async (targetPage = 1, searchOverride?: string) => {
+      setLoadingRecentLogs(true)
+      try {
+        const params = new URLSearchParams()
+        params.set("channel", "sms")
+        params.set("limit", String(PAGE_SIZE))
+        params.set("page", String(targetPage))
+        const q = (searchOverride !== undefined ? searchOverride : recentSmsSearch).trim()
+        if (q) params.set("q", q)
+        const res = await fetch(`/api/ops/communications/logs?${params.toString()}`)
+        const data = await res.json().catch(() => ({}))
+        if (Array.isArray(data?.data)) {
+          setRecentSmsLogs(data.data)
+          setRecentSmsPage(data.page || targetPage)
+          setRecentSmsTotal(typeof data.total === "number" ? data.total : data.data.length)
+          setRecentSmsTotalPages(data.totalPages || 1)
+          setRecentSmsHasMore(Boolean(data.hasMore))
+        }
+      } catch {
+        // ignore network error
+      } finally {
+        setLoadingRecentLogs(false)
+      }
+    },
+    [recentSmsSearch]
+  )
+
   const refreshRecentActivityLogs = React.useCallback(async () => {
     setLoadingRecentLogs(true)
     try {
+      const waParams = new URLSearchParams({
+        channel: "whatsapp",
+        limit: String(PAGE_SIZE),
+        page: String(recentWaPage),
+      })
+      if (recentWaSearch.trim()) waParams.set("q", recentWaSearch.trim())
+
+      const smsParams = new URLSearchParams({
+        channel: "sms",
+        limit: String(PAGE_SIZE),
+        page: String(recentSmsPage),
+      })
+      if (recentSmsSearch.trim()) smsParams.set("q", recentSmsSearch.trim())
+
       const [waRes, smsRes] = await Promise.all([
-        fetch("/api/ops/communications/logs?channel=whatsapp&limit=50"),
-        fetch("/api/ops/communications/logs?channel=sms&limit=50"),
+        fetch(`/api/ops/communications/logs?${waParams.toString()}`),
+        fetch(`/api/ops/communications/logs?${smsParams.toString()}`),
       ])
       const [waData, smsData] = await Promise.all([
         waRes.json().catch(() => ({})),
@@ -220,20 +309,29 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
       ])
       if (Array.isArray(waData?.data)) {
         setRecentWaLogs(waData.data)
+        setRecentWaPage(waData.page || recentWaPage)
+        setRecentWaTotal(typeof waData.total === "number" ? waData.total : waData.data.length)
+        setRecentWaTotalPages(waData.totalPages || 1)
+        setRecentWaHasMore(Boolean(waData.hasMore))
       }
       if (Array.isArray(smsData?.data)) {
         setRecentSmsLogs(smsData.data)
+        setRecentSmsPage(smsData.page || recentSmsPage)
+        setRecentSmsTotal(typeof smsData.total === "number" ? smsData.total : smsData.data.length)
+        setRecentSmsTotalPages(smsData.totalPages || 1)
+        setRecentSmsHasMore(Boolean(smsData.hasMore))
       }
     } catch {
       // ignore network error
     } finally {
       setLoadingRecentLogs(false)
     }
-  }, [])
+  }, [recentWaPage, recentWaSearch, recentSmsPage, recentSmsSearch])
 
   // Interactive 1-Click Shipments & PUDO state
   const [shipmentCategory, setShipmentCategory] = React.useState<ShipmentListCategory>("em_distribuicao")
   const [shipmentRows, setShipmentRows] = React.useState<InteractiveShipmentRow[]>([])
+  const [shipmentsPage, setShipmentsPage] = React.useState<number>(1)
   const [loadingShipments, setLoadingShipments] = React.useState(false)
   const [shipmentsSearch, setShipmentsSearch] = React.useState<string>("")
   const [shipmentsDateFrom, setShipmentsDateFrom] = React.useState<string>("")
@@ -254,6 +352,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
       const targetCat = overrideCategory || shipmentCategory
       setLoadingShipments(true)
       setShipmentsBanner(null)
+      setShipmentsPage(1)
       try {
         const params = new URLSearchParams()
         params.set("category", targetCat)
@@ -262,7 +361,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
         if (shipmentsDateFrom) params.set("dateFrom", shipmentsDateFrom)
         if (shipmentsDateTo) params.set("dateTo", shipmentsDateTo)
         if (onlyOverdue24h) params.set("onlyOverdue24h", "1")
-        params.set("limit", "250")
+        params.set("limit", "450")
 
         const res = await fetch(`/api/ops/communications/shipments?${params.toString()}`)
         const data = await res.json()
@@ -461,6 +560,24 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
     return shipmentRows.filter((r) => !r.alreadyNotified)
   }, [shipmentRows, hideAlreadyNotified])
 
+  const shipmentsTotalPages = Math.max(1, Math.ceil(displayedShipmentRows.length / PAGE_SIZE))
+  const paginatedShipmentRows = React.useMemo(() => {
+    const safePage = Math.min(shipmentsPage, shipmentsTotalPages)
+    const start = (safePage - 1) * PAGE_SIZE
+    return displayedShipmentRows.slice(start, start + PAGE_SIZE)
+  }, [displayedShipmentRows, shipmentsPage, shipmentsTotalPages])
+
+  const autoPreviewTotalPages = Math.max(
+    1,
+    Math.ceil((autoResult?.previewItems?.length || 0) / PAGE_SIZE)
+  )
+  const paginatedAutoPreviewItems = React.useMemo(() => {
+    const list = autoResult?.previewItems || []
+    const safePage = Math.min(autoPreviewPage, autoPreviewTotalPages)
+    const start = (safePage - 1) * PAGE_SIZE
+    return list.slice(start, start + PAGE_SIZE)
+  }, [autoResult, autoPreviewPage, autoPreviewTotalPages])
+
   const shipmentsSummaryStats = React.useMemo(() => {
     let notified = 0
     let pending = 0
@@ -499,26 +616,35 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
     }
   }, [selectedTemplateKey])
 
-  const fetchLogs = React.useCallback(async () => {
-    setLoadingLogs(true)
-    setLogsWarning(null)
-    try {
-      const params = new URLSearchParams()
-      if (logsSearch.trim()) params.set("q", logsSearch.trim())
-      if (logsChannel !== "all") params.set("channel", logsChannel)
-      params.set("limit", "150")
-      const res = await fetch(`/api/ops/communications/logs?${params.toString()}`)
-      const data = await res.json()
-      if (data?.warning) {
-        setLogsWarning(data.warning)
+  const fetchLogs = React.useCallback(
+    async (targetPage = 1) => {
+      setLoadingLogs(true)
+      setLogsWarning(null)
+      try {
+        const params = new URLSearchParams()
+        if (logsSearch.trim()) params.set("q", logsSearch.trim())
+        if (logsChannel !== "all") params.set("channel", logsChannel)
+        params.set("limit", String(PAGE_SIZE))
+        params.set("page", String(targetPage))
+        const res = await fetch(`/api/ops/communications/logs?${params.toString()}`)
+        const data = await res.json()
+        if (data?.warning) {
+          setLogsWarning(data.warning)
+        }
+        const rows = Array.isArray(data?.data) ? data.data : []
+        setLogs(rows)
+        setLogsPage(data?.page || targetPage)
+        setLogsTotal(typeof data?.total === "number" ? data.total : rows.length)
+        setLogsTotalPages(data?.totalPages || 1)
+        setLogsHasMore(Boolean(data?.hasMore))
+      } catch {
+        setLogs([])
+      } finally {
+        setLoadingLogs(false)
       }
-      setLogs(Array.isArray(data?.data) ? data.data : [])
-    } catch {
-      setLogs([])
-    } finally {
-      setLoadingLogs(false)
-    }
-  }, [logsSearch, logsChannel])
+    },
+    [logsSearch, logsChannel]
+  )
 
   const selectedTemplateObj = React.useMemo(() => {
     if (!selectedTemplateKey) return undefined
@@ -533,6 +659,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
   async function handleRunAutoNotification(type: AutoNotificationType, dryRun: boolean) {
     setRunningAutoType(`${type}:${dryRun ? "dry" : "live"}`)
     setAutoError(null)
+    setAutoPreviewPage(1)
     try {
       const res = await fetch("/api/ops/communications/auto-notify", {
         method: "POST",
@@ -688,7 +815,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
 
   const filteredRecentWaLogs = React.useMemo(() => {
     const q = recentWaSearch.trim().toLowerCase()
-    if (!q) return recentWaLogs.slice(0, 25)
+    if (!q) return recentWaLogs.slice(0, PAGE_SIZE)
     return recentWaLogs
       .filter((r) =>
         [r.to_number, r.contact_name, r.tracking_number, r.template_name, r.message_text]
@@ -696,12 +823,12 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
           .toLowerCase()
           .includes(q)
       )
-      .slice(0, 25)
+      .slice(0, PAGE_SIZE)
   }, [recentWaLogs, recentWaSearch])
 
   const filteredRecentSmsLogs = React.useMemo(() => {
     const q = recentSmsSearch.trim().toLowerCase()
-    if (!q) return recentSmsLogs.slice(0, 25)
+    if (!q) return recentSmsLogs.slice(0, PAGE_SIZE)
     return recentSmsLogs
       .filter((r) =>
         [r.to_number, r.contact_name, r.tracking_number, r.message_text]
@@ -709,7 +836,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
           .toLowerCase()
           .includes(q)
       )
-      .slice(0, 25)
+      .slice(0, PAGE_SIZE)
   }, [recentSmsLogs, recentSmsSearch])
 
   const duplicateWaMatch = React.useMemo(() => {
@@ -1157,7 +1284,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {displayedShipmentRows.length === 0 ? (
+                  {paginatedShipmentRows.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                         {loadingShipments
@@ -1166,7 +1293,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                       </td>
                     </tr>
                   ) : (
-                    displayedShipmentRows.map((row, idx) => {
+                    paginatedShipmentRows.map((row, idx) => {
                       const rowKey = row.providerTrackingCode || row.parcelId || `row-${idx}`
                       const isSendingThis = sendingRowKey === rowKey
                       return (
@@ -1302,6 +1429,36 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Shipments Pagination Footer (75 per page) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-slate-600">
+              <div>
+                Página <strong>{Math.min(shipmentsPage, shipmentsTotalPages)}</strong> de{" "}
+                <strong>{shipmentsTotalPages}</strong> · A mostrar{" "}
+                <strong>{paginatedShipmentRows.length}</strong> de{" "}
+                <strong>{displayedShipmentRows.length}</strong> envios (máx. {PAGE_SIZE} por página)
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={shipmentsPage <= 1}
+                  onClick={() => setShipmentsPage((p) => Math.max(1, p - 1))}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  Página Anterior
+                </button>
+                <button
+                  type="button"
+                  disabled={shipmentsPage >= shipmentsTotalPages}
+                  onClick={() => setShipmentsPage((p) => Math.min(shipmentsTotalPages, p + 1))}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  Página Seguinte
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1497,45 +1654,80 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
               </div>
 
               {autoResult.previewItems.length > 0 && (
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
-                    <thead className="bg-slate-50 font-semibold text-slate-700">
-                      <tr>
-                        <th className="px-3 py-2">Origem</th>
-                        <th className="px-3 py-2">Guia / Tracking</th>
-                        <th className="px-3 py-2">Destinatário</th>
-                        <th className="px-3 py-2">Telefone (E.164)</th>
-                        <th className="px-3 py-2">Remetente</th>
-                        <th className="px-3 py-2">Variáveis do Template</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {autoResult.previewItems.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50">
-                          <td className="px-3 py-2">
-                            <span
-                              className={`inline-block rounded px-2 py-0.5 text-[10px] font-semibold ${
-                                item.sourceSystem === "tms_linke"
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-indigo-100 text-indigo-800"
-                              }`}
-                            >
-                              {item.sourceSystem === "tms_linke" ? "TMS Linke" : "Legacy TMS"}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 font-mono font-medium text-slate-900">
-                            {item.providerTrackingCode || item.parcelId}
-                          </td>
-                          <td className="px-3 py-2 text-slate-700">{item.recipient}</td>
-                          <td className="px-3 py-2 font-mono text-slate-700">{item.phone}</td>
-                          <td className="px-3 py-2 text-slate-600">{item.sender}</td>
-                          <td className="px-3 py-2 text-slate-600">
-                            {item.bodyVariables.map((v, i) => `{{${i + 1}}}=${v}`).join(" | ")}
-                          </td>
+                <div className="space-y-3">
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+                      <thead className="bg-slate-50 font-semibold text-slate-700">
+                        <tr>
+                          <th className="px-3 py-2">Origem</th>
+                          <th className="px-3 py-2">Guia / Tracking</th>
+                          <th className="px-3 py-2">Destinatário</th>
+                          <th className="px-3 py-2">Telefone (E.164)</th>
+                          <th className="px-3 py-2">Remetente</th>
+                          <th className="px-3 py-2">Variáveis do Template</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {paginatedAutoPreviewItems.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50">
+                            <td className="px-3 py-2">
+                              <span
+                                className={`inline-block rounded px-2 py-0.5 text-[10px] font-semibold ${
+                                  item.sourceSystem === "tms_linke"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-indigo-100 text-indigo-800"
+                                }`}
+                              >
+                                {item.sourceSystem === "tms_linke" ? "TMS Linke" : "Legacy TMS"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 font-mono font-medium text-slate-900">
+                              {item.providerTrackingCode || item.parcelId}
+                            </td>
+                            <td className="px-3 py-2 text-slate-700">{item.recipient}</td>
+                            <td className="px-3 py-2 font-mono text-slate-700">{item.phone}</td>
+                            <td className="px-3 py-2 text-slate-600">{item.sender}</td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {item.bodyVariables.map((v, i) => `{{${i + 1}}}=${v}`).join(" | ")}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Auto-Notification Preview Pagination Footer (75 per page) */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-slate-600">
+                    <div>
+                      Página <strong>{Math.min(autoPreviewPage, autoPreviewTotalPages)}</strong> de{" "}
+                      <strong>{autoPreviewTotalPages}</strong> · A mostrar{" "}
+                      <strong>{paginatedAutoPreviewItems.length}</strong> de{" "}
+                      <strong>{autoResult.previewItems.length}</strong> envios pré-visualizados (máx.{" "}
+                      {PAGE_SIZE} por página)
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={autoPreviewPage <= 1}
+                        onClick={() => setAutoPreviewPage((p) => Math.max(1, p - 1))}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        Página Anterior
+                      </button>
+                      <button
+                        type="button"
+                        disabled={autoPreviewPage >= autoPreviewTotalPages}
+                        onClick={() =>
+                          setAutoPreviewPage((p) => Math.min(autoPreviewTotalPages, p + 1))
+                        }
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                      >
+                        Página Seguinte
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1811,13 +2003,14 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                     type="text"
                     value={recentWaSearch}
                     onChange={(e) => setRecentWaSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void fetchRecentWaLogs(1)}
                     placeholder="Filtrar telefone, guia..."
                     className="w-48 rounded-lg border border-slate-300 pl-8 pr-2.5 py-1 text-xs"
                   />
                 </div>
                 <button
                   type="button"
-                  onClick={refreshRecentActivityLogs}
+                  onClick={() => void fetchRecentWaLogs(1)}
                   disabled={loadingRecentLogs}
                   className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                 >
@@ -1831,7 +2024,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
               tabIndex={0}
               role="region"
               aria-labelledby="recent-wa-logs-caption"
-              className="max-h-64 overflow-auto rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+              className="max-h-96 overflow-auto rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-600"
             >
               <table className="min-w-full border-separate border-spacing-0 text-left text-xs">
                 <caption id="recent-wa-logs-caption" className="sr-only">
@@ -1902,6 +2095,35 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Recent WhatsApp Pagination Footer (75 per page) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-slate-600">
+              <div>
+                Página <strong>{recentWaPage}</strong> de <strong>{recentWaTotalPages}</strong> · A mostrar{" "}
+                <strong>{filteredRecentWaLogs.length}</strong> de <strong>{recentWaTotal}</strong> mensagens WhatsApp
+                (máx. {PAGE_SIZE} por página)
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={loadingRecentLogs || recentWaPage <= 1}
+                  onClick={() => void fetchRecentWaLogs(recentWaPage - 1)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  Página Anterior
+                </button>
+                <button
+                  type="button"
+                  disabled={loadingRecentLogs || (!recentWaHasMore && recentWaPage >= recentWaTotalPages)}
+                  onClick={() => void fetchRecentWaLogs(recentWaPage + 1)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  Página Seguinte
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2032,13 +2254,14 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                     type="text"
                     value={recentSmsSearch}
                     onChange={(e) => setRecentSmsSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void fetchRecentSmsLogs(1)}
                     placeholder="Filtrar telemóvel, guia..."
                     className="w-48 rounded-lg border border-slate-300 pl-8 pr-2.5 py-1 text-xs"
                   />
                 </div>
                 <button
                   type="button"
-                  onClick={refreshRecentActivityLogs}
+                  onClick={() => void fetchRecentSmsLogs(1)}
                   disabled={loadingRecentLogs}
                   className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
                 >
@@ -2052,7 +2275,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
               tabIndex={0}
               role="region"
               aria-labelledby="recent-sms-logs-caption"
-              className="max-h-64 overflow-auto rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-600"
+              className="max-h-96 overflow-auto rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-600"
             >
               <table className="min-w-full border-separate border-spacing-0 text-left text-xs">
                 <caption id="recent-sms-logs-caption" className="sr-only">
@@ -2121,6 +2344,35 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                 </tbody>
               </table>
             </div>
+
+            {/* Recent SMS Pagination Footer (75 per page) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-slate-600">
+              <div>
+                Página <strong>{recentSmsPage}</strong> de <strong>{recentSmsTotalPages}</strong> · A mostrar{" "}
+                <strong>{filteredRecentSmsLogs.length}</strong> de <strong>{recentSmsTotal}</strong> SMS (máx.{" "}
+                {PAGE_SIZE} por página)
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={loadingRecentLogs || recentSmsPage <= 1}
+                  onClick={() => void fetchRecentSmsLogs(recentSmsPage - 1)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  Página Anterior
+                </button>
+                <button
+                  type="button"
+                  disabled={loadingRecentLogs || (!recentSmsHasMore && recentSmsPage >= recentSmsTotalPages)}
+                  onClick={() => void fetchRecentSmsLogs(recentSmsPage + 1)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  Página Seguinte
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2136,7 +2388,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                   type="text"
                   value={logsSearch}
                   onChange={(e) => setLogsSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && fetchLogs()}
+                  onKeyDown={(e) => e.key === "Enter" && void fetchLogs(1)}
                   placeholder="Pesquisar por telemóvel, destinatário, template ou guia..."
                   className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm"
                 />
@@ -2152,7 +2404,7 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
               </select>
               <button
                 type="button"
-                onClick={fetchLogs}
+                onClick={() => void fetchLogs(1)}
                 disabled={loadingLogs}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
               >
@@ -2160,7 +2412,10 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                 Pesquisar
               </button>
             </div>
-            <div className="text-xs text-slate-500">{logs.length} registos apresentados</div>
+            <div className="text-xs text-slate-500">
+              Página <strong>{logsPage}</strong> de <strong>{logsTotalPages}</strong> ·{" "}
+              <strong>{logs.length}</strong> de <strong>{logsTotal}</strong> registos (máx. {PAGE_SIZE} por página)
+            </div>
           </div>
 
           {logsWarning && (
@@ -2235,6 +2490,34 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* History Pagination Footer (75 per page) */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-slate-600">
+            <div>
+              Página <strong>{logsPage}</strong> de <strong>{logsTotalPages}</strong> · A mostrar{" "}
+              <strong>{logs.length}</strong> de <strong>{logsTotal}</strong> registos (máx. {PAGE_SIZE} por página)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={loadingLogs || logsPage <= 1}
+                onClick={() => void fetchLogs(logsPage - 1)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Página Anterior
+              </button>
+              <button
+                type="button"
+                disabled={loadingLogs || (!logsHasMore && logsPage >= logsTotalPages)}
+                onClick={() => void fetchLogs(logsPage + 1)}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              >
+                Página Seguinte
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       )}

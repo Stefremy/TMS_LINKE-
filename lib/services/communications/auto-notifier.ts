@@ -241,7 +241,7 @@ export async function runAutoNotificationByType(options: AutoNotificationRunOpti
         ? [recipientName, row.parcelId || trackingCode, senderName]
         : [recipientName, senderName, trackingCode]
 
-    if (previewItems.length < 30) {
+    if (previewItems.length < 300) {
       previewItems.push({
         parcelId: row.parcelId,
         providerTrackingCode: row.providerTrackingCode,
