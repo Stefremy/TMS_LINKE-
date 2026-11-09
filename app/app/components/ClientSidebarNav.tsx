@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, FileText, Search, Plus, UserCheck, CreditCard, Inbox, MapPin, Banknote, Plane } from "lucide-react"
+import { Home, FileText, Search, Plus, UserCheck, CreditCard, Inbox, MapPin, Banknote, Plane, ShoppingBag } from "lucide-react"
 import { useClientScope } from "./ClientScope"
 import { ClientMessageBell } from "./ClientMessages"
 
@@ -40,6 +40,12 @@ export function ClientSidebarNav() {
       category: "Comunicação",
       items: [
         { href: `${basePath}/mensagens`, label: "Caixa de Entrada", icon: Inbox },
+      ],
+    },
+    {
+      category: "E-Commerce",
+      items: [
+        { href: `${basePath}/integracoes`, label: "Lojas & Webservices", icon: ShoppingBag },
       ],
     },
   ]

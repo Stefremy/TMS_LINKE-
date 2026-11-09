@@ -93,6 +93,29 @@ async function submitShipment(input: unknown, clientId: string | undefined, quot
     selectedSpecialServices: values.selectedSpecialServices, codValue: values.codValue, observations: values.observations, cttExportDetails: exportDetails,
   })
   if (!result.success) return failure("root", result.error || "Não foi possível emitir o envio.")
+
+  // Auto-fulfill order in connected ecommerce store if reference is provided
+  if (result.success && result.guia && values.observations && effectiveClientId) {
+    const match = values.observations.match(/(?:encomenda\s*#?|#)(\w+)/i)
+    if (match && match[1]) {
+      const orderRef = match[1]
+      import("@/app/actions/client-ecommerce")
+        .then(async ({ updateStoreOrderTrackingAction, getClientSyncedOrdersAction }) => {
+          try {
+            const orders = await getClientSyncedOrdersAction(effectiveClientId)
+            const matched = orders.find(
+              (o) => o.order_number.replace(/^#/, "") === orderRef || o.id === orderRef
+            )
+            if (matched && matched.store_id) {
+              await updateStoreOrderTrackingAction(effectiveClientId, matched.store_id, matched.id, result.guia)
+            }
+          } catch (err) {
+            console.warn("Could not sync tracking back to store:", err)
+          }
+        })
+        .catch(() => {})
+    }
+  }
   let notesWarning: string | null = null
   if (ctx.role !== "client" && values.internalNotes) {
     try {

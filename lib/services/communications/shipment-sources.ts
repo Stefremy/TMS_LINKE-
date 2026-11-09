@@ -279,11 +279,12 @@ function parseLegacyTmsShipmentsDatatable(payload: unknown): UnifiedNotification
   })
 }
 
-const LEGACY_STATUS_CODE_BY_TYPE: Record<Exclude<ShipmentListCategory, "pudo">, string> = {
+const LEGACY_STATUS_CODE_BY_TYPE: Record<ShipmentListCategory, string> = {
   em_transporte: "3",
   em_distribuicao: "4",
   entregue: "5",
   incidencia: "9",
+  pudo: "26",
 }
 
 function parseShipmentTimestampMs(rawInput: string): number {
@@ -330,6 +331,100 @@ export function isShipmentOverdue24h(row: UnifiedNotificationShipmentRow): boole
 }
 
 /**
+ * In-memory session cache for Legacy TMS scraping to avoid hitting Laravel's
+ * login rate limit (throttle:4,1) on every request.
+ */
+interface CachedLegacySession {
+  baseUrl: string
+  email: string
+  cookieJar: Map<string, string>
+  csrfToken: string
+  expiresAt: number
+}
+
+let cachedLegacySession: CachedLegacySession | null = null
+
+async function getOrRefreshLegacySession(
+  baseUrl: string,
+  email: string,
+  password: string,
+  forceRefresh = false
+): Promise<{ cookieJar: Map<string, string>; csrfToken: string }> {
+  const now = Date.now()
+  if (
+    !forceRefresh &&
+    cachedLegacySession &&
+    cachedLegacySession.baseUrl === baseUrl &&
+    cachedLegacySession.email === email &&
+    cachedLegacySession.expiresAt > now
+  ) {
+    return {
+      cookieJar: new Map(cachedLegacySession.cookieJar),
+      csrfToken: cachedLegacySession.csrfToken,
+    }
+  }
+
+  const cookieJar = new Map<string, string>()
+  const loginUrl = `${baseUrl}/admin/login`
+
+  const loginPageRes = await fetch(loginUrl, {
+    redirect: "manual",
+    signal: AbortSignal.timeout(12000),
+  })
+  updateCookieJar(cookieJar, getSetCookieHeaders(loginPageRes))
+  const loginHtml = await loginPageRes.text()
+  const tokenMatch = loginHtml.match(/name="_token"\s+type="hidden"\s+value="([^"]+)"/i)
+  const csrfToken = tokenMatch?.[1] || ""
+  if (!csrfToken) {
+    throw new Error("Não foi possível extrair o CSRF _token do login do Legacy TMS.")
+  }
+
+  const loginBody = new URLSearchParams()
+  loginBody.set("_token", csrfToken)
+  loginBody.set("email", email)
+  loginBody.set("password", password)
+  loginBody.set("remember", "on")
+
+  const loginSubmitRes = await fetch(loginUrl, {
+    method: "POST",
+    redirect: "manual",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Referer: loginUrl,
+      Cookie: cookieJarHeader(cookieJar),
+    },
+    body: loginBody.toString(),
+    signal: AbortSignal.timeout(12000),
+  })
+
+  if (loginSubmitRes.status === 429) {
+    const retryAfter = loginSubmitRes.headers.get("retry-after") || "60"
+    throw new Error(
+      `O Legacy TMS está temporariamente sobrecarregado (Rate Limit 429). Aguarde cerca de ${retryAfter}s antes de atualizar.`
+    )
+  }
+
+  if (loginSubmitRes.status !== 302 && loginSubmitRes.status !== 200) {
+    throw new Error(
+      `Falha no login do Legacy TMS (HTTP ${loginSubmitRes.status}). Verifique as credenciais no .env.local.`
+    )
+  }
+
+  updateCookieJar(cookieJar, getSetCookieHeaders(loginSubmitRes))
+
+  // Cache for 60 minutes
+  cachedLegacySession = {
+    baseUrl,
+    email,
+    cookieJar: new Map(cookieJar),
+    csrfToken,
+    expiresAt: now + 60 * 60 * 1000,
+  }
+
+  return { cookieJar, csrfToken }
+}
+
+/**
  * 1. SCRAPER HTML / DATATABLE DO TMS ANTIGO (idêntico ao WhatsappNathalia)
  * Suporta: em_distribuicao (4), em_transporte (3), incidencia (9), entregue (5) e pudo (stats-link-pickup).
  */
@@ -358,72 +453,16 @@ export async function fetchLegacyTmsShipmentsByType(
   const safeMaxPages = Math.max(1, Math.min(20, Math.trunc(Number(options.maxPages || 4))))
 
   try {
-    const cookieJar = new Map<string, string>()
-    const loginUrl = `${baseUrl}/admin/login`
+    let session = await getOrRefreshLegacySession(baseUrl, email, password)
 
-    const loginPageRes = await fetch(loginUrl, {
-      redirect: "manual",
-      signal: AbortSignal.timeout(12000),
-    })
-    updateCookieJar(cookieJar, getSetCookieHeaders(loginPageRes))
-    const loginHtml = await loginPageRes.text()
-    const tokenMatch = loginHtml.match(/name="_token"\s+type="hidden"\s+value="([^"]+)"/i)
-    const csrfToken = tokenMatch?.[1] || ""
-    if (!csrfToken) {
-      return { rows: [], error: "Não foi possível extrair o CSRF _token do login do Legacy TMS." }
-    }
-
-    const loginBody = new URLSearchParams()
-    loginBody.set("_token", csrfToken)
-    loginBody.set("email", email)
-    loginBody.set("password", password)
-    loginBody.set("remember", "on")
-
-    const loginSubmitRes = await fetch(loginUrl, {
-      method: "POST",
-      redirect: "manual",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Referer: loginUrl,
-        Cookie: cookieJarHeader(cookieJar),
-      },
-      body: loginBody.toString(),
-      signal: AbortSignal.timeout(12000),
-    })
-    updateCookieJar(cookieJar, getSetCookieHeaders(loginSubmitRes))
-
-    let statusCode = type === "pudo" ? "" : LEGACY_STATUS_CODE_BY_TYPE[type]
-    let useFilterParam = type !== "pudo"
-
-    if (type === "pudo") {
-      const adminPageRes = await fetch(`${baseUrl}/admin`, {
-        headers: {
-          Referer: `${baseUrl}/admin`,
-          Cookie: cookieJarHeader(cookieJar),
-        },
-        signal: AbortSignal.timeout(12000),
-      })
-      updateCookieJar(cookieJar, getSetCookieHeaders(adminPageRes))
-      const adminHtml = await adminPageRes.text()
-      const pickupLinkMatch =
-        adminHtml.match(
-          /<a[^>]*class="[^"]*stats-link-pickup[^"]*"[^>]*href="[^"]*status=([^"&]+)[^"]*"/i
-        ) ||
-        adminHtml.match(
-          /<a[^>]*href="[^"]*status=([^"&]+)[^"]*"[^>]*class="[^"]*stats-link-pickup[^"]*"/i
-        )
-      statusCode = decodeURIComponent(pickupLinkMatch?.[1] || "").trim()
-      if (!statusCode) {
-        statusCode = "36"
-      }
-      useFilterParam = false
-    }
+    const statusCode = LEGACY_STATUS_CODE_BY_TYPE[type] || "26"
+    const useFilterParam = type !== "pudo"
 
     const shipmentsEndpoint = `${baseUrl}/admin/shipments/datatable`
 
-    async function fetchDatatablePage(draw: number, start: number, length: number) {
+    async function fetchDatatablePage(draw: number, start: number, length: number, isRetry = false): Promise<any> {
       const requestBody = new URLSearchParams()
-      requestBody.set("_token", csrfToken)
+      requestBody.set("_token", session.csrfToken)
       requestBody.set("draw", String(draw))
       requestBody.set("start", String(Math.max(0, Math.trunc(start))))
       requestBody.set("length", String(Math.max(1, Math.trunc(length))))
@@ -442,12 +481,18 @@ export async function fetchLegacyTmsShipmentsByType(
           "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
           "X-Requested-With": "XMLHttpRequest",
           Referer: `${baseUrl}/admin/shipments?${refererQuery}`,
-          Cookie: cookieJarHeader(cookieJar),
+          Cookie: cookieJarHeader(session.cookieJar),
         },
         body: requestBody.toString(),
         redirect: "manual",
         signal: AbortSignal.timeout(15000),
       })
+
+      if (shipmentsRes.status === 401 && !isRetry) {
+        // Session expired, force refresh once
+        session = await getOrRefreshLegacySession(baseUrl, email, password, true)
+        return fetchDatatablePage(draw, start, length, true)
+      }
 
       if (!shipmentsRes.ok) {
         throw new Error(`Legacy TMS datatable respondeu com HTTP ${shipmentsRes.status}`)
@@ -511,7 +556,7 @@ export async function fetchNativeTmsShipmentsByType(
 
     if (type === "pudo") {
       queryBuilder = queryBuilder.or(
-        "status.eq.ponto_pickup,ops_substatus.ilike.%pickup%,ops_substatus.ilike.%pudo%,ops_substatus.ilike.%ponto%"
+        "ops_substatus.ilike.%pickup%,ops_substatus.ilike.%pudo%,ops_substatus.ilike.%ponto%,ops_substatus.ilike.%levantamento%,service_type.ilike.%pickup%,service_type.ilike.%pudo%"
       )
     } else {
       const targetStatus = NATIVE_STATUS_BY_TYPE[type]
