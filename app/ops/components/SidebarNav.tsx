@@ -23,7 +23,8 @@ import {
   Tags,
   MessageSquare,
   MessageCircle,
-  Mail
+  Mail,
+  Gamepad2
 } from "lucide-react"
 
 type NavItem = {
@@ -58,6 +59,7 @@ const navConfig: NavSection[] = [
       { title: "Caixa de Correio", href: "/ops/mail", icon: Mail },
       { title: "Chat da Equipa", href: "/ops/chat", icon: MessageSquare },
       { title: "Calendário", href: "/ops/calendario", icon: CalendarDays },
+      { title: "Jogos & Ranking", href: "/ops/jogos", icon: Gamepad2 },
     ]
   },
   {

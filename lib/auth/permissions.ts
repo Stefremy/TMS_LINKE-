@@ -153,7 +153,7 @@ export const OPS_ACCESS_RULES: { path: string; permissions?: readonly string[]; 
   { path: "/ops/relatorios", permissions: [PERMISSIONS.reports] },
   { path: "/ops/documentos", special: "documents" },
   { path: "/ops/mensagens", special: "messages" },
-  ...["/ops/perfil", "/ops/chat", "/ops/mail", "/ops/calendario", "/ops/sem-acesso"].map(path => ({ path })),
+  ...["/ops/perfil", "/ops/chat", "/ops/mail", "/ops/calendario", "/ops/jogos", "/ops/sem-acesso"].map(path => ({ path })),
 ]
 
 export function canAccessOpsRoute(ctx: PermissionContext | null | undefined, path: string): boolean {
