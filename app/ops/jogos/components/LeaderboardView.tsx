@@ -143,7 +143,7 @@ export function LeaderboardView({ data, onSelectGame }: LeaderboardViewProps) {
               : "bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] border border-[var(--border-subtle)]"
           }`}
         >
-          🏆 Geral (Todos os Jogos)
+          🏆 Geral (Todos os Exercícios)
         </button>
         {OPS_GAMES.map(g => (
           <button
@@ -235,7 +235,7 @@ export function LeaderboardView({ data, onSelectGame }: LeaderboardViewProps) {
                           {player.total_xp} <span className="text-xs text-[var(--text-tertiary)]">XP</span>
                         </span>
                         <span className="text-[10px] text-[var(--text-tertiary)]">
-                          {player.games_played} jogos disputados
+                          {player.games_played} exercícios concluídos
                         </span>
                       </div>
                     ) : (
@@ -265,7 +265,7 @@ export function LeaderboardView({ data, onSelectGame }: LeaderboardViewProps) {
           <div className="space-y-2.5 overflow-y-auto max-h-[460px] pr-1">
             {recentScores.length === 0 ? (
               <p className="text-xs text-[var(--text-tertiary)] text-center py-8">
-                Nenhum recorde registado ainda. Seja o primeiro a jogar e inaugurar a tabela!
+                Nenhum recorde registado ainda. Seja o primeiro a exercitar e inaugurar a tabela!
               </p>
             ) : (
               recentScores.slice(0, 15).map(item => {

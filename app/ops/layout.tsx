@@ -17,7 +17,7 @@ import {
   User,
   MessageSquare,
   Mail,
-  Gamepad2,
+  Brain,
   LogOut
 } from "lucide-react"
 
@@ -58,7 +58,7 @@ export default async function OpsLayout({
             </Link>)}
             
             <div className="flex items-center gap-4 border-r border-[var(--border-subtle)] pr-5">
-              <Link href="/ops/jogos" aria-label="Jogos Mentais & Ranking da Equipa" title="Jogos Mentais & Ranking da Equipa" className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"><Gamepad2 className="w-5 h-5" /></Link>
+              <Link href="/ops/jogos" aria-label="Brain Exercises & Ranking da Equipa" title="Brain Exercises & Ranking da Equipa" className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"><Brain className="w-5 h-5" /></Link>
               <Link href="/ops/mail" aria-label="Caixa de Correio (geral@linke.pt)" title="Caixa de Correio (geral@linke.pt)" className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"><Mail className="w-5 h-5" /></Link>
               <Link href="/ops/chat" aria-label="Chat da equipa" title="Chat da equipa" className="text-[var(--text-secondary)] hover:text-[var(--accent)] transition-colors"><MessageSquare className="w-5 h-5" /></Link>
               <NotificationBell />

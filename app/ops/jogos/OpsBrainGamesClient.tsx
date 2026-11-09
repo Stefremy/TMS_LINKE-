@@ -4,6 +4,7 @@ import React, { useState, useTransition } from "react"
 import { 
   Trophy, 
   Gamepad2, 
+  Brain,
   Volume2, 
   VolumeX, 
   Sparkles, 
@@ -99,13 +100,13 @@ export function OpsBrainGamesClient({
             <span className="px-2.5 py-0.5 rounded-full bg-[var(--accent)] text-white text-[10px] font-extrabold uppercase tracking-wide">
               OPS Arena
             </span>
-            <span className="text-xs font-semibold text-[var(--text-tertiary)]">TMS Linke Brain Games</span>
+            <span className="text-xs font-semibold text-[var(--text-tertiary)]">TMS Linke Brain Exercises</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-[var(--text-primary)] tracking-tight">
-            Jogos Mentais & Classificação da Equipa
+            Brain Exercises & Classificação da Equipa
           </h1>
           <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5">
-            Puzzles de lógica espacial, conexões de linhas e desafios rápidos para a equipa de operações.
+            Puzzles de lógica espacial, conexões de linhas e exercícios mentais para a equipa de operações.
           </p>
         </div>
 
@@ -156,8 +157,8 @@ export function OpsBrainGamesClient({
                 : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"
             }`}
           >
-            <Gamepad2 className="w-4 h-4" />
-            Arena de Jogos
+            <Brain className="w-4 h-4" />
+            Brain Exercises
           </button>
 
           <button
