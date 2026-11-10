@@ -3,6 +3,7 @@ import React from "react"
 import { Metadata } from "next"
 import { DeliveryTrackingClient } from "./components/DeliveryTrackingClient"
 import { getShipmentsAction } from "@/app/actions/shipments"
+import { getClientesAction } from "@/app/actions/clientes"
 import { createAdminClient } from "@/lib/supabase/server"
 import { resolveCoordinates } from "@/lib/services/geo/geocoder"
 import { TrackingShipment } from "./types"
@@ -14,6 +15,21 @@ export const metadata: Metadata = {
   description: "Rastreio e itinerários geolocalizados por pickagens e checkpoints de rede.",
 }
 import Link from "next/link"
+
+/**
+ * shipments has no country column; the postal code format identifies it:
+ * PT = 4+3 digits (zip4/zip3), ES = 5 digits (stored in zip4, zip3 empty).
+ * Anything else is international and is not forced onto Portugal.
+ */
+function postalAndCountry(zip4?: string | null, zip3?: string | null, fallback?: string | null) {
+  const a = (zip4 || "").trim()
+  const b = (zip3 || "").trim()
+  if (/^\d{4}$/.test(a) && /^\d{3}$/.test(b)) return { postalCode: `${a}-${b}`, country: "PT" }
+  if (/^\d{5}$/.test(a) && !b) return { postalCode: a, country: "ES" }
+  if (/^\d{4}-\d{3}$/.test(a)) return { postalCode: a, country: "PT" }
+  const raw = a || fallback || ""
+  return { postalCode: raw || undefined, country: "" }
+}
 
 export default async function OpsTrackingPage(props: {
   searchParams?: Promise<{ tab?: string; search?: string }>
@@ -56,12 +72,19 @@ export default async function OpsTrackingPage(props: {
       }
     }
 
+    // Real fiscal numbers for the guia: the sender is the client account (NIF on file).
+    const clientNif = new Map<string, string>()
+    if (activeShipments.some((s) => s.client_id)) {
+      const clientes = await getClientesAction().catch(() => [])
+      for (const c of clientes) if (c.id && c.nif) clientNif.set(c.id, String(c.nif))
+    }
+
     realShipmentsMapped = await Promise.all(
       activeShipments.map(async (s) => {
         const isArriving = s.status === "em_distribuicao"
 
-        const senderZip = s.sender_zip4 && s.sender_zip3 ? `${s.sender_zip4}-${s.sender_zip3}` : s.sender_postal_code
-        const recipientZip = s.recipient_zip4 && s.recipient_zip3 ? `${s.recipient_zip4}-${s.recipient_zip3}` : s.recipient_postal_code
+        const senderLoc = postalAndCountry(s.sender_zip4, s.sender_zip3, s.sender_postal_code)
+        const recipientLoc = postalAndCountry(s.recipient_zip4, s.recipient_zip3, s.recipient_postal_code)
 
         // Resolve origin + destination in parallel using the smart geocoder
         // (postal code SQLite DB + known CTT hubs/cities)
@@ -69,15 +92,15 @@ export default async function OpsTrackingPage(props: {
           resolveCoordinates({
             address: s.sender_address,
             city: s.sender_city,
-            postalCode: senderZip,
-            country: "PT",
+            postalCode: senderLoc.postalCode,
+            country: senderLoc.country,
             useApi: false,
           }),
           resolveCoordinates({
             address: s.recipient_address,
             city: s.recipient_city,
-            postalCode: recipientZip,
-            country: "PT",
+            postalCode: recipientLoc.postalCode,
+            country: recipientLoc.country,
             useApi: false,
           }),
         ])
@@ -150,8 +173,8 @@ export default async function OpsTrackingPage(props: {
           origin: {
             hubName: s.sender_name || `Origem: ${originCoord.name}`,
             city: s.sender_city || originCoord.name || "Local Desconhecido",
-            postalCode: senderZip || "1000-001",
-            address: s.sender_address || `${originCoord.name}, Portugal`,
+            postalCode: senderLoc.postalCode || "—",
+            address: s.sender_address || originCoord.name || "—",
             departureTime: s.created_at ? new Date(s.created_at).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) : "09:00",
             lat: originCoord.lat,
             lng: originCoord.lng
@@ -159,8 +182,8 @@ export default async function OpsTrackingPage(props: {
           destination: {
             hubName: s.recipient_name || `Destino: ${destCoord.name}`,
             city: s.recipient_city || destCoord.district || "Local Desconhecido",
-            postalCode: recipientZip || "4000-001",
-            address: s.recipient_address || `${destCoord.name}, Portugal`,
+            postalCode: recipientLoc.postalCode || "—",
+            address: s.recipient_address || destCoord.name || "—",
             eta: dynamicEta,
             etaDate: "Previsto",
             lat: destCoord.lat,
@@ -189,10 +212,10 @@ export default async function OpsTrackingPage(props: {
             atDocCode: `AT-${s.id.slice(0, 10).toUpperCase()}`,
             issueDate: new Date().toLocaleDateString("pt-PT"),
             senderName: s.sender_name || "Remetente",
-            senderVat: "PT 999 999 990",
+            senderVat: (s.client_id && clientNif.get(s.client_id)) || "Não indicado",
             senderAddress: s.sender_address || s.sender_city || "Portugal",
             recipientName: s.recipient_name || "Destinatário",
-            recipientVat: "PT 999 999 991",
+            recipientVat: "Consumidor Final",
             recipientAddress: s.recipient_address || s.recipient_city || "Portugal",
             goodsDescription: s.goods_description || "Volumes de carga geral",
             cargoWeightKg: Number(s.weight) || 5,
