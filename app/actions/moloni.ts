@@ -85,6 +85,7 @@ export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Client
       const { data: mLogs } = await supabase
         .from("audit_log")
         .select("details")
+        .eq("tenant_id", ctx.tenant_id)
         .eq("action", "moloni_connection_config")
         .order("created_at", { ascending: false })
         .limit(1)
@@ -357,7 +358,7 @@ export async function getBillingStatementsAction(clientId?: string) {
  * Obtém o estado da ligação ao Moloni
  */
 export async function getMoloniConfigAction() {
-  await requireEmployee("Faturação & Contas Correntes")
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   const redirectUri = moloniRedirectUri()
   const supabase = createAdminClient()
   try {
@@ -373,6 +374,7 @@ export async function getMoloniConfigAction() {
     const { data: logs } = await supabase
       .from("audit_log")
       .select("details")
+      .eq("tenant_id", ctx.tenant_id)
       .eq("action", "moloni_connection_config")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -530,6 +532,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       const { data: mLogs } = await supabase
         .from("audit_log")
         .select("details")
+        .eq("tenant_id", ctx.tenant_id)
         .eq("action", "moloni_connection_config")
         .order("created_at", { ascending: false })
         .limit(1)

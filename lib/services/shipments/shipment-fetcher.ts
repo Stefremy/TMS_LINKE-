@@ -17,7 +17,7 @@ export const SHIPMENT_LIST_COLUMNS = "id, tenant_id, client_id, tracking_number,
 /**
  * Fetches shipments from the DB shipments table without downloading heavy base64 label blobs unless requested.
  */
-export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<ShipmentRecord[]> {
+export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string; search?: string } = {}): Promise<ShipmentRecord[]> {
   const ctx = await requireUser()
   if (!ctx.tenant_id) throw new Error("Conta sem empresa associada.")
   const supabase = createAdminClient()
@@ -37,6 +37,14 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
     }
     if (options.createdAfter) {
       shipmentsQuery = shipmentsQuery.gte("created_at", options.createdAfter)
+    }
+    // Search in the database (not over the latest N rows) across Linke and carrier references.
+    // PostgREST filter syntax characters are stripped so user input cannot alter the filter.
+    const search = (options.search || "").replace(/[,()*%\\:"'.]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80)
+    if (search) {
+      shipmentsQuery = shipmentsQuery.or(
+        ["tracking_number", "carrier_tracking_number", "recipient_name"].map((col) => `${col}.ilike.*${search}*`).join(",")
+      )
     }
     if (options.limit) {
       shipmentsQuery = shipmentsQuery.limit(Math.min(options.limit, 10000))

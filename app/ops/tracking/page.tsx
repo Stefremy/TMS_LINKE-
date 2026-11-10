@@ -28,13 +28,11 @@ export default async function OpsTrackingPage(props: {
   let realShipmentsMapped: TrackingShipment[] = []
 
   try {
-    const shipments = await getShipmentsAction({ includeLabels: false, limit: searchQ ? 200 : 100 })
+    const shipments = await getShipmentsAction({ includeLabels: false, limit: searchQ ? 50 : 100, search: searchQ || undefined })
     const activeShipments = (shipments || []).filter(
       (s) => {
-        if (searchQ) {
-          const match = s.tracking_number?.toLowerCase().includes(searchQ.toLowerCase()) || s.reference?.toLowerCase().includes(searchQ.toLowerCase())
-          return match
-        }
+        // Search is applied in the database (Linke ref, carrier code, recipient).
+        if (searchQ) return true
         if (isDeliveredTab) return s.status === "entregue" || s.status === "devolvido"
         return s.status === "em_transito" || s.status === "em transito" || s.status === "em_distribuicao" || s.status === "pendente"
       }
@@ -128,7 +126,7 @@ export default async function OpsTrackingPage(props: {
         } else {
           const createdDate = s.created_at ? new Date(s.created_at) : new Date()
           const today = new Date()
-          const isCreatedToday = createdDate.getDate() === today.getDate() && createdDate.getMonth() === today.getMonth()
+          const isCreatedToday = createdDate.toDateString() === today.toDateString()
           
           if (isCreatedToday) {
             dynamicEta = "Amanhã, até 19:00"
@@ -238,7 +236,7 @@ export default async function OpsTrackingPage(props: {
 
           <div className="flex items-center gap-1 bg-[var(--bg-secondary)] p-1 rounded-md border border-[var(--border-subtle)]">
             <Link
-              href={`/ops/tracking?tab=active${searchQ ? `&search=${searchQ}` : ""}`}
+              href={`/ops/tracking?tab=active${searchQ ? `&search=${encodeURIComponent(searchQ)}` : ""}`}
               className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${!isDeliveredTab
                   ? "bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm"
                   : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
@@ -247,7 +245,7 @@ export default async function OpsTrackingPage(props: {
               Em Trânsito
             </Link>
             <Link
-              href={`/ops/tracking?tab=entregues${searchQ ? `&search=${searchQ}` : ""}`}
+              href={`/ops/tracking?tab=entregues${searchQ ? `&search=${encodeURIComponent(searchQ)}` : ""}`}
               className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${isDeliveredTab
                   ? "bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm"
                   : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"

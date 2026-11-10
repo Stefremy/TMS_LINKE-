@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto"
 import { NextResponse } from "next/server"
 import { loadCommunicationsConfig } from "@/lib/services/communications/config"
 import {
@@ -154,6 +155,25 @@ async function forwardWebhookToBotpress(payload: unknown) {
   }
 }
 
+/**
+ * Meta signs every webhook POST with HMAC-SHA256 of the raw body using the App Secret.
+ * Both numbers may belong to different Meta apps, so either configured secret is accepted.
+ */
+function verifyMetaSignature(rawBody: string, header: string | null): "valid" | "invalid" | "unconfigured" {
+  const secrets = [process.env.WHATSAPP_APP_SECRET, process.env.INC_WHATSAPP_APP_SECRET]
+    .map((v) => String(v || "").trim())
+    .filter(Boolean)
+  if (secrets.length === 0) return "unconfigured"
+  const received = String(header || "").trim()
+  if (!received.startsWith("sha256=")) return "invalid"
+  const receivedBuf = Buffer.from(received.slice(7), "hex")
+  for (const secret of secrets) {
+    const expected = createHmac("sha256", secret).update(rawBody, "utf8").digest()
+    if (receivedBuf.length === expected.length && timingSafeEqual(receivedBuf, expected)) return "valid"
+  }
+  return "invalid"
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const mode = searchParams.get("hub.mode")
@@ -166,10 +186,8 @@ export async function GET(request: Request) {
 
   const isValidToken =
     token &&
-    (token === mainToken ||
-      (incToken && token === incToken) ||
-      token === "nathalia_whatsapp_token_2024" ||
-      token === "tms_linke_whatsapp_verify_token")
+    ((mainToken && token === mainToken) ||
+      (incToken && token === incToken))
 
   if (mode === "subscribe" && isValidToken) {
     return new Response(challenge || "", {
@@ -182,8 +200,18 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const rawText = await request.text()
+  const signature = verifyMetaSignature(rawText, request.headers.get("x-hub-signature-256"))
+  if (signature === "invalid") {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
+  }
+  if (signature === "unconfigured") {
+    console.warn("WhatsApp webhook: WHATSAPP_APP_SECRET is not set; payload signature was NOT verified.")
+  }
+
   try {
-    const rawBody = await request.json().catch(() => ({}))
+    let rawBody: unknown = {}
+    try { rawBody = JSON.parse(rawText || "{}") } catch { rawBody = {} }
     const body = (rawBody && typeof rawBody === "object" ? rawBody : {}) as {
       entry?: Array<{
         changes?: Array<{

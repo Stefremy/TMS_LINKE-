@@ -83,6 +83,14 @@ export async function GET(request: Request) {
         .in("key", ["contacts", "contact_notes", "team_reminders"]),
     ])
 
+    const failed = [inboundRes, outboundChatRes, incTemplateRes, stateRes].find((res) => res.error)
+    if (failed?.error) {
+      return NextResponse.json(
+        { error: "Erro ao carregar consola de chat WhatsApp", details: failed.error.message },
+        { status: 500 }
+      )
+    }
+
     const mergedById = new Map<string, ChatLogItem>()
     for (const raw of [
       ...(inboundRes.data || []),

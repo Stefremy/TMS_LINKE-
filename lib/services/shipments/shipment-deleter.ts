@@ -2,10 +2,13 @@
 import { errorMessage } from "@/lib/errors"
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { requireEmployee, getTenantId } from "@/lib/auth/context"
+import { requireEmployee } from "@/lib/auth/context"
+
+// Never sent to a carrier or already voided — safe to remove.
+const DELETABLE_STATUSES = ["pendente", "cancelado", "rascunho"]
 
 export async function deleteShipment(shipmentId: string) {
-  await requireEmployee("Emissão e Controlo de Guias CTT")
+  const ctx = await requireEmployee("Emissão e Controlo de Guias CTT")
 
   const supabase = createAdminClient()
   try {
@@ -14,7 +17,8 @@ export async function deleteShipment(shipmentId: string) {
       .from("shipments")
       .select("status, billing_statement_id")
       .eq("id", shipmentId)
-      .single()
+      .eq("tenant_id", ctx.tenant_id)
+      .maybeSingle()
 
     if (!shipment) return { success: false, error: "Envio não encontrado" }
 
@@ -23,8 +27,8 @@ export async function deleteShipment(shipmentId: string) {
       return { success: false, error: "Erro: Este envio já foi faturado e não pode ser eliminado." }
     }
 
-    if (shipment.status !== "pendente" && shipment.status !== "cancelado") {
-      return { success: false, error: "Apenas envios pendentes podem ser eliminados." }
+    if (!DELETABLE_STATUSES.includes(shipment.status)) {
+      return { success: false, error: "Apenas envios pendentes, cancelados ou em rascunho podem ser eliminados." }
     }
 
     // 1. Apagar volumes associados
@@ -34,14 +38,12 @@ export async function deleteShipment(shipmentId: string) {
     await supabase.from("tracking_events").delete().eq("shipment_id", shipmentId)
 
     // 3. Apagar o envio
-    const { error } = await supabase.from("shipments").delete().eq("id", shipmentId)
-    if (error) {
-      console.warn("Aviso ao apagar da tabela shipments:", error.message)
-    }
+    const { error } = await supabase.from("shipments").delete().eq("id", shipmentId).eq("tenant_id", ctx.tenant_id)
+    if (error) throw new Error(error.message)
 
     // 4. Registar na auditoria
     await supabase.from("audit_log").insert({
-      tenant_id: (await getTenantId()),
+      tenant_id: ctx.tenant_id,
       action: "shipment_deleted",
       details: { deletedShipmentId: shipmentId, deletedAt: new Date().toISOString() }
     })
@@ -59,7 +61,7 @@ export async function deleteShipment(shipmentId: string) {
 }
 
 export async function deleteShipmentsBulk(shipmentIds: string[]) {
-  await requireEmployee("Emissão e Controlo de Guias CTT")
+  const ctx = await requireEmployee("Emissão e Controlo de Guias CTT")
 
   const supabase = createAdminClient()
   try {
@@ -69,6 +71,7 @@ export async function deleteShipmentsBulk(shipmentIds: string[]) {
     const { data: shipments } = await supabase
       .from("shipments")
       .select("id, status, billing_statement_id")
+      .eq("tenant_id", ctx.tenant_id)
       .in("id", shipmentIds)
 
     if (!shipments) return { success: false, error: "Envios não encontrados" }
@@ -82,11 +85,11 @@ export async function deleteShipmentsBulk(shipmentIds: string[]) {
     }
     
     const validIds = shipments
-      .filter((s) => (s.status === "pendente" || s.status === "cancelado") && !s.billing_statement_id)
+      .filter((s) => DELETABLE_STATUSES.includes(s.status) && !s.billing_statement_id)
       .map((s) => s.id)
 
     if (validIds.length === 0) {
-      return { success: false, error: "Nenhum dos envios selecionados pode ser eliminado (apenas pendentes e não faturados)." }
+      return { success: false, error: "Nenhum dos envios selecionados pode ser eliminado (apenas pendentes, cancelados ou rascunhos não faturados)." }
     }
 
     // 1. Apagar volumes associados
@@ -96,14 +99,14 @@ export async function deleteShipmentsBulk(shipmentIds: string[]) {
     await supabase.from("tracking_events").delete().in("shipment_id", validIds)
 
     // 3. Apagar os envios
-    const { error } = await supabase.from("shipments").delete().in("id", validIds)
+    const { error } = await supabase.from("shipments").delete().in("id", validIds).eq("tenant_id", ctx.tenant_id)
     if (error) {
       throw new Error(error.message)
     }
 
     // 4. Registar na auditoria
     await supabase.from("audit_log").insert({
-      tenant_id: (await getTenantId()),
+      tenant_id: ctx.tenant_id,
       action: "shipments_bulk_deleted",
       details: { deletedShipmentIds: validIds, count: validIds.length, deletedAt: new Date().toISOString() }
     })

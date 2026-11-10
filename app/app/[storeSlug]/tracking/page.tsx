@@ -38,18 +38,14 @@ export default async function ClientTrackingPage({
     const allFetched = await getShipmentsAction({
       includeLabels: false,
       clientId: client.id,
-      limit: searchQ ? 200 : 100,
+      limit: searchQ ? 50 : 100,
+      search: searchQ || undefined,
     })
     const clientOnlyShipments = (allFetched || []).filter((s) => s.client_id === client.id)
 
     const activeShipments = clientOnlyShipments.filter((s) => {
-      if (searchQ) {
-        const match =
-          s.tracking_number?.toLowerCase().includes(searchQ.toLowerCase()) ||
-          s.reference?.toLowerCase().includes(searchQ.toLowerCase()) ||
-          s.recipient_name?.toLowerCase().includes(searchQ.toLowerCase())
-        return match
-      }
+      // Search is applied in the database (Linke ref, carrier code, recipient).
+      if (searchQ) return true
       if (isDeliveredTab) {
         return s.status === "entregue" || s.status === "devolvido"
       }

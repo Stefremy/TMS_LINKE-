@@ -11,6 +11,8 @@ import { shipmentOverrideError } from "@/lib/services/shipments/shipment-form-au
 import { calculateOversizeSurcharge } from "@/lib/pricing/oversize-surcharge"
 import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { after as runAfterResponse } from "next/server"
+import { randomInt } from "node:crypto"
 import { captureWeightPricingBasis, type WeightPricingBasis } from "@/lib/billing/carrier-weight-pricing"
 import { calculateShipmentPrice, isCttMultiVolumeService } from "@/lib/pricing/calculate-shipment-price"
 import { calculateChargeableWeight } from "@/lib/pricing/chargeable-weight"
@@ -39,7 +41,12 @@ import type { CTTShipment2Close, CTTCompleteShipmentOutput, CTTDocumentData } fr
 import { getCttShipmentLabels } from "@/lib/services/ctt/shipment-label"
 import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
 
-export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string } = {}): Promise<ShipmentRecord[]> {
+/** LTK + 7 digits across the full 1000000–9999999 range (crypto RNG). */
+function generateLinkeTrackingNumber() {
+  return `LTK${randomInt(1_000_000, 10_000_000)}`
+}
+
+export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string; search?: string } = {}): Promise<ShipmentRecord[]> {
   return fetchShipments(options)
 }
 
@@ -48,6 +55,7 @@ export async function getShipmentLabelAction(shipmentId: string): Promise<string
 }
 
 import { createShipment, dispatchShipment } from "@/lib/services/shipments/shipment-creator"
+import { canInvoiceShipment } from "@/lib/billing/shipment-eligibility"
 import { currentAccountOutstanding, payAsYouGoSpent, payAsYouGoBalance, isPrepaidShipment } from "@/lib/billing/client-balance"
 import { reserveWallet, transitionWallet, walletSnapshot, type WalletReservation } from "@/lib/billing/wallet"
 import { deleteShipment, deleteShipmentsBulk } from "@/lib/services/shipments/shipment-deleter"
@@ -97,7 +105,7 @@ export async function getClientPortalStatsAction(clientId?: string, clientName?:
   const monthCount = monthShipments.length
   const monthDeliveredCount = monthShipments.filter((s) => s.status === "entregue").length
   const monthRevenue = monthShipments
-    .filter((s) => s.status !== "anulado")
+    .filter((s) => canInvoiceShipment(s))
     .reduce((acc: number, s) => acc + Number(s.sell_price || 0), 0)
 
   const clientStatementsForBalance = allStatements.filter((stmt) => !effectiveClientId || stmt.client_id === effectiveClientId)
@@ -281,7 +289,7 @@ export async function emitClientGuiaAction(data: {
     }
 
     const supabase = createAdminClient()
-    const trackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
+    const trackingNumber = generateLinkeTrackingNumber()
     const shipmentId = crypto.randomUUID()
     const now = new Date().toISOString()
 
@@ -615,10 +623,6 @@ export async function emitClientGuiaAction(data: {
     // ─── STEP 2: CTT accepted — now write to DB ─────────────────────────────────
     // Insert into shipments table (only valid table columns to prevent silent schema rejection)
     try {
-      if (shipmentData.recipient_name === "ERRO_TESTE") {
-        throw new Error("Erro Simulado de Base de Dados (Teste de Resiliência)!")
-      }
-
       const shipmentRow = {
         id: shipmentId,
         tenant_id: shipmentData.tenant_id,
@@ -699,9 +703,11 @@ export async function emitClientGuiaAction(data: {
         if (after && after.balance < 15) {
           const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
           const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
-          void sendEmail({ to: matchedClient.email, subject: "Linke | Aviso de Saldo Baixo",
+          const lowBalanceEmail = { to: matchedClient.email, subject: "Linke | Aviso de Saldo Baixo",
             html: compileTemplate(emailTemplates.low_balance, { current_balance: after.balance.toFixed(2), topup_url: publicUrl("/app", "portal") })
-          }).catch(error => console.warn("Low balance email pending", error))
+          }
+          // after() keeps the function alive until the email is sent, without delaying the response.
+          runAfterResponse(() => sendEmail(lowBalanceEmail).catch(error => console.warn("Low balance email pending", error)))
         }
       } catch (error) { console.warn("Low balance notification pending", error) }
     }
@@ -710,18 +716,17 @@ export async function emitClientGuiaAction(data: {
     if (data.recipientEmail && !dbErrorMessage) {
       try {
         const { sendTrackingEmailNotification } = await import("@/lib/email/tracking-notifications")
-        // Run in background without awaiting to prevent UI blocking or timeout
-        sendTrackingEmailNotification(shipmentId, "tracking", {
-          shipment: {
-            ...shipmentData,
-            id: shipmentId,
-            recipient_email: data.recipientEmail,
-            carrier_tracking_number: realGuia,
-            carrier_code: carrierCode
-          }
-        }).catch(err => {
-          console.warn("Failed to trigger tracking email in background:", err)
-        })
+        // after() runs once the response is sent and keeps the function alive until it completes.
+        const trackingShipment = {
+          ...shipmentData,
+          id: shipmentId,
+          recipient_email: data.recipientEmail,
+          carrier_tracking_number: realGuia,
+          carrier_code: carrierCode
+        }
+        runAfterResponse(() => sendTrackingEmailNotification(shipmentId, "tracking", { shipment: trackingShipment }).catch(err => {
+          console.warn("Failed to send tracking email in background:", err)
+        }))
       } catch (err) {
         console.warn("Failed to trigger tracking email on creation:", err)
       }
@@ -786,17 +791,25 @@ export async function updateShipmentStatusAction(
   const supabase = createAdminClient()
   const now = new Date().toISOString()
 
-  // 1. Update in shipments table
-  try {
-    await supabase
-      .from("shipments")
-      .update({
-        status: newStatus,
-        updated_at: now,
-      })
-      .eq("id", shipmentId)
-  } catch (err) {
-    console.warn("Could not update status in shipments table:", errorMessage(err))
+  // "em_transito" is a display alias (see fetchShipments); the shipment_status enum stores "entrada_rede".
+  const dbStatus = newStatus === "em_transito" ? "entrada_rede" : newStatus
+
+  // 1. Update in shipments table (scoped to the caller's tenant)
+  const { data: updatedRows, error: updateError } = await supabase
+    .from("shipments")
+    .update({
+      status: dbStatus,
+      updated_at: now,
+    })
+    .eq("id", shipmentId)
+    .eq("tenant_id", ctx.tenant_id)
+    .select("id")
+  if (updateError) {
+    console.error("Could not update status in shipments table:", updateError.message)
+    return { success: false, error: "Não foi possível atualizar o estado do envio." }
+  }
+  if (!updatedRows?.length) {
+    return { success: false, error: "Envio não encontrado." }
   }
 
   // 2. Dual-write in audit_log
@@ -838,14 +851,18 @@ export async function updateShipmentStatusAction(
       ? `Estado alterado para ${newStatus} (${reason})` 
       : `Estado atualizado para ${newStatus}`
 
-    await supabase.from("tracking_events").insert({
-      tenant_id: (await getTenantId()),
+    const { error: eventError } = await supabase.from("tracking_events").insert({
+      tenant_id: ctx.tenant_id,
       shipment_id: shipmentId,
       event_code: eventCode,
       description: eventDesc,
+      timestamp: now,
       created_at: now,
     })
-  } catch {}
+    if (eventError) console.warn("Could not insert status tracking event:", eventError.message)
+  } catch (err) {
+    console.warn("Could not insert status tracking event:", errorMessage(err))
+  }
 
   revalidatePath("/ops/envios")
   revalidatePath("/ops")
@@ -1209,9 +1226,19 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
   const supabase = createAdminClient()
   try {
     // 1. Obter dados do envio original
-    const { data: dbShipments } = await supabase.from("shipments").select("*").or(`id.eq.${originalShipmentId},tracking_number.eq.${originalShipmentId}`).limit(1)
+    const lookupId = String(originalShipmentId || "").trim()
+    if (!lookupId || !/^[A-Za-z0-9-]+$/.test(lookupId)) {
+      return { success: false, error: "Envio original não encontrado." }
+    }
+    // id is a uuid column: comparing it to an LTK reference would make the whole query fail.
+    const lookupFilter = isValidUuid(lookupId)
+      ? `id.eq.${lookupId},tracking_number.eq.${lookupId}`
+      : `tracking_number.eq.${lookupId},carrier_tracking_number.eq.${lookupId}`
+    const { data: dbShipments, error: lookupError } = await supabase.from("shipments").select("*")
+      .eq("tenant_id", ctx.tenant_id).or(lookupFilter).limit(1)
+    if (lookupError) throw new Error(lookupError.message)
     const original = dbShipments?.[0]
-    
+
     if (!original) {
       return { success: false, error: "Envio original não encontrado." }
     }
@@ -1221,13 +1248,14 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
     }
 
     const newShipmentId = crypto.randomUUID()
-    const newTrackingNumber = `LTK${Math.floor(1000000 + Math.random() * 900000)}`
+    const newTrackingNumber = generateLinkeTrackingNumber()
     const now = new Date().toISOString()
 
     // Inverter remetente e destinatário
+    // Native shipments columns only — unknown columns make PostgREST reject the whole insert.
     const returnShipmentData = {
       id: newShipmentId,
-      tenant_id: original.tenant_id || (await getTenantId()),
+      tenant_id: ctx.tenant_id,
       client_id: original.client_id,
       tracking_number: newTrackingNumber,
       service_type: original.service_type || "Linke Expresso 24H",
@@ -1239,15 +1267,13 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
       sender_zip3: original.recipient_zip3 || "",
       sender_zip4: original.recipient_zip4 || "",
       sender_phone: original.recipient_phone || "",
-      sender_contact_email: original.recipient_contact_email || original.recipient_email || "",
-      
+
       // Destinatário passa a ser o Remetente original (armazém/sede)
       recipient_name: original.sender_name || "Armazém Linke",
       recipient_address: original.sender_address || "",
       recipient_zip3: original.sender_zip3 || "",
       recipient_zip4: original.sender_zip4 || "",
       recipient_phone: original.sender_phone || "",
-      recipient_contact_email: original.sender_contact_email || original.sender_email || "",
 
       buy_price: original.buy_price || 2.85,
       sell_price: original.sell_price || 4.37,
@@ -1256,19 +1282,21 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
     }
 
     // Inserir na tabela shipments
-    await supabase.from("shipments").insert(returnShipmentData)
-
-
+    const { error: insertError } = await supabase.from("shipments").insert(returnShipmentData)
+    if (insertError) {
+      console.error("Return shipment insert failed:", insertError.message)
+      return { success: false, error: "Não foi possível registar a guia de devolução. Tente novamente." }
+    }
 
     // Inserir evento de rastreio inicial da devolução
-    await supabase.from("tracking_events").insert({
+    const { error: eventError } = await supabase.from("tracking_events").insert({
+      tenant_id: ctx.tenant_id,
       shipment_id: newShipmentId,
       event_code: "EMA",
-      event_name: "Guia de Devolução Emitida",
-      description: `Guia de devolução registada para recolha no remetente (referente à guia original ${original.tracking_number || original.id}).`,
-      location: original.recipient_address?.split(",")?.[0] || "Destino Inicial",
+      description: `Guia de devolução emitida — recolha no remetente (referente à guia original ${original.tracking_number || original.id}).`,
       timestamp: now,
     })
+    if (eventError) console.warn("Return shipment tracking event not saved:", eventError.message)
 
     // Atualizar estado do envio original para 'devolvido'
     try {
@@ -1305,27 +1333,30 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
   }
 
   const supabase = createAdminClient()
+  // Only native shipments columns: the CTT object id is stored as carrier_tracking_number.
   const dbFilters = [
     `tracking_number.eq.${query}`,
     `carrier_tracking_number.eq.${query}`,
-    `ctt_object_id.eq.${query}`,
   ]
   if (isValidUuid(query)) dbFilters.push(`id.eq.${query.toLowerCase()}`)
 
-  const metadataResult = await supabase.from("shipment_metadata")
-    .select("details").or(dbFilters.join(",")).limit(1).maybeSingle()
-  let dbRow: (Partial<ShipmentRecord> & { details?: ShipmentRecord }) | null = metadataResult.data
-  let dbError = metadataResult.error
-  if (dbError) {
-    const fallback = await supabase.from("shipments")
-      .select("id,client_id,tracking_number,carrier_tracking_number,carrier_code,ctt_object_id,status,service_type,recipient_name,recipient_address,sender_name,sender_address,created_at,updated_at,weight_kg")
-      .or(dbFilters.join(",")).limit(1).maybeSingle()
-    dbRow = fallback.data
-    dbError = fallback.error
+  const { data: dbRow, error: dbError } = await supabase.from("shipments")
+    .select("id,tracking_number,carrier_tracking_number,carrier_code,status,service_type,recipient_name,recipient_address,sender_name,sender_address,created_at,updated_at")
+    .or(dbFilters.join(",")).limit(1).maybeSingle()
+  if (dbError) console.error("Public tracking lookup failed:", dbError.message)
+  const shipment = (dbError ? null : dbRow) as ShipmentRecord | null
+
+  // Declared parcels live in packages (weight_g); shipments has no weight column.
+  let packageCount = 1
+  let weightKg = 1
+  if (shipment) {
+    const { data: packages } = await supabase.from("packages").select("weight_g").eq("shipment_id", shipment.id)
+    if (packages?.length) {
+      packageCount = packages.length
+      const grams = packages.reduce((acc: number, p: { weight_g?: number | null }) => acc + Number(p.weight_g || 0), 0)
+      if (grams > 0) weightKg = Math.round(grams / 10) / 100
+    }
   }
-  const shipment = (dbError ? null : (dbRow?.details || dbRow)) as ShipmentRecord | null
-
-
 
   if (!shipment) {
     return { success: false, error: `Nenhum envio encontrado para a referência "${query}". Verifique o código e tente novamente.` }
@@ -1377,8 +1408,8 @@ export async function getPublicShipmentTrackingAction(trackingOrId: string) {
       destinationCity,
       senderName: shipment.sender_name,
       senderCity,
-      packageCount: shipment.package_count || shipment.volumes_count || 1,
-      weightKg: shipment.weight_kg || shipment.declared_weight || 1,
+      packageCount,
+      weightKg,
       deliveryDate: shipment.status === "entregue" ? shipment.updated_at : null,
     },
     timeline: events
@@ -1410,7 +1441,7 @@ export async function resolveShipmentIncidentAction(params: {
   newPhone?: string
   notes?: string
 }) {
-  await requireEmployee(["Emissão e Controlo de Guias CTT","Atendimento & Suporte a Incidências"])
+  const ctx = await requireEmployee(["Emissão e Controlo de Guias CTT","Atendimento & Suporte a Incidências"])
   const supabase = createAdminClient()
   const now = new Date().toISOString()
   const { shipmentId, actionType, scheduledDate, timeWindow, newAddress, newZipCode, newCity, newPhone, notes } = params
@@ -1452,10 +1483,13 @@ export async function resolveShipmentIncidentAction(params: {
     }
     if (newPhone) updatePayload.recipient_phone = newPhone
 
-    await supabase.from("shipments").update(updatePayload).eq("id", shipmentId)
+    const { data: updatedRows, error: updateError } = await supabase.from("shipments").update(updatePayload)
+      .eq("id", shipmentId).eq("tenant_id", ctx.tenant_id).select("id")
+    if (updateError) throw new Error(updateError.message)
+    if (!updatedRows?.length) return { success: false, error: "Envio não encontrado." }
 
     // 2. Atualizar em audit_log
-    const logs = await findShipmentAuditRecords(supabase, await getTenantId(), shipmentId)
+    const logs = await findShipmentAuditRecords(supabase, ctx.tenant_id, shipmentId)
 
     if (logs) {
       for (const item of logs) {
@@ -1476,14 +1510,15 @@ export async function resolveShipmentIncidentAction(params: {
     }
 
     // 3. Inserir tracking event
-    await supabase.from("tracking_events").insert({
-      tenant_id: (await getTenantId()),
+    const { error: eventError } = await supabase.from("tracking_events").insert({
+      tenant_id: ctx.tenant_id,
       shipment_id: shipmentId,
       event_code: eventCode,
       description: statusDescription,
-      location: "Hub Central - Linke Ops",
+      timestamp: now,
       created_at: now,
     })
+    if (eventError) console.warn("Incident tracking event not saved:", eventError.message)
 
     revalidatePath("/ops/incidencias")
     revalidatePath("/ops/envios")
