@@ -141,8 +141,8 @@ export function ClientMobileNav() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] text-[var(--text-primary)] font-semibold leading-tight">Suporte Dedicado</p>
-                  <a href="mailto:suporte@linke.pt" className="text-[10px] text-[var(--accent)] font-medium hover:underline truncate block">
-                    suporte@linke.pt
+                  <a href="mailto:geral@linke.pt" className="text-[10px] text-[var(--accent)] font-medium hover:underline truncate block">
+                    geral@linke.pt
                   </a>
                 </div>
               </div>

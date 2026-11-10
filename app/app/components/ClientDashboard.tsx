@@ -1,4 +1,5 @@
 "use client"
+import { toast } from "sonner"
 import { useLocalStorage } from "@/lib/use-local-storage"
 import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
 import { errorMessage } from "@/lib/errors"
@@ -127,10 +128,10 @@ export function ClientDashboard() {
       const url = new URL(window.location.href)
       const topup = url.searchParams.get("topup")
       if (topup === "success") {
-        alert("O carregamento de saldo foi finalizado! O valor será creditado assim que o pagamento for confirmado.")
+        toast.success("Carregamento concluído. O valor será creditado assim que o pagamento for confirmado.")
         window.history.replaceState({}, '', window.location.pathname + window.location.search.replace(/&?topup=success/, ''))
       } else if (topup === "cancelled") {
-        alert("O carregamento foi cancelado.")
+        toast("O carregamento foi cancelado.")
         window.history.replaceState({}, '', window.location.pathname + window.location.search.replace(/&?topup=cancelled/, ''))
       }
     }
@@ -258,7 +259,7 @@ export function ClientDashboard() {
           base64: res.manifestPdfBase64,
           documents: res.documents
         })
-        if (res.warning) alert(res.warning)
+        if (res.warning) toast.warning(res.warning)
         setShipments(prev => prev.map(s => {
           if (idsToClose.includes(s.tracking_number || "") || idsToClose.includes(s.id)) {
             return { ...s, ops_substatus: "manifesto_fechado" }
@@ -266,10 +267,10 @@ export function ClientDashboard() {
           return s
         }))
       } else {
-        alert(res.error || "Não foi possível confirmar o fecho do manifesto CTT.")
+        toast.error(res.error || "Não foi possível confirmar o fecho do manifesto CTT.")
       }
     } catch (e) {
-      alert("Erro ao fechar lote: " + errorMessage(e))
+      toast.error("Erro ao fechar lote: " + errorMessage(e))
     } finally {
       setClosingBatch(false)
     }
@@ -280,7 +281,7 @@ export function ClientDashboard() {
     if (rawLabel.trimStart().startsWith("^XA")) {
       const res = await convertZplToPdfAction(rawLabel)
       if (res.success && res.base64) return res.base64
-      alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+      toast.error(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
       return null
     }
     return rawLabel
@@ -296,7 +297,7 @@ export function ClientDashboard() {
     if (label) {
       printCttLabel(label)
     } else {
-      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
+      toast.error("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
     }
   }
 
@@ -306,7 +307,7 @@ export function ClientDashboard() {
       const carrier = (shipmentItem?.transportadora || shipmentItem?.servico || "").toLowerCase().includes("correos") ? "Correos" : "CTT"
       await downloadCttLabel(label, `${ref || "envio"}_Etiqueta_${carrier}.pdf`)
     } else {
-      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
+      toast.error("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
     }
   }
 
@@ -371,7 +372,7 @@ export function ClientDashboard() {
           </h1>
 
           <p className="text-xs sm:text-sm text-[var(--text-secondary)] max-w-2xl leading-relaxed">
-            Painel operacional e analítico com métricas em tempo real, tabelas de preçário acordadas e emissão integrada de envios.
+            Crie envios, acompanhe as entregas e consulte as faturas da sua loja.
           </p>
         </div>
 
@@ -380,33 +381,23 @@ export function ClientDashboard() {
             <button
               type="button"
               onClick={() => setIsTopUpOpen(true)}
-              className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-2 transition-colors cursor-pointer"
+              className="px-4 py-2.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-2 transition-colors cursor-pointer"
             >
-              <CreditCard className="w-4 h-4 text-slate-500" />
+              <CreditCard className="w-4 h-4 text-[var(--text-tertiary)]" />
               <span>Carregar Saldo</span>
             </button>
-          ) : (
-            <button
-              type="button"
-              disabled
-              title="Não aplicável a clientes com Conta Corrente"
-              className="px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-400 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-2 cursor-not-allowed opacity-60"
-            >
-              <CreditCard className="w-4 h-4 text-slate-400" />
-              <span>Carregar Saldo</span>
-            </button>
-          )}
+          ) : null /* Conta corrente clients are invoiced; top-ups don't apply, so no dead button. */}
           
           {currentClient && currentClient.billing_type === 'pay_as_you_go' && availableCredit <= -2 ? (
             <button
               type="button"
               onClick={() => {
-                alert("Conta bloqueada. O teu saldo atingiu o limite de descoberto permitido (-2,00€). Efetua um carregamento para voltares a criar envios.")
+                toast.error("Conta bloqueada: o saldo atingiu o limite de descoberto permitido (-2,00 €). Carregue saldo para voltar a criar envios.")
                 setIsTopUpOpen(true)
               }}
-              className="px-4 py-2.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-not-allowed shadow-2xs"
+              className="px-4 py-2.5 bg-[var(--surface-dim)] text-[var(--text-tertiary)] border border-[var(--border-strong)] rounded-lg text-xs font-semibold flex items-center gap-2 cursor-not-allowed shadow-2xs"
             >
-              <PlusCircle className="w-4 h-4 text-slate-400" />
+              <PlusCircle className="w-4 h-4 text-[var(--text-tertiary)]" />
               <span>Novo Envio (Bloqueado)</span>
             </button>
           ) : (
@@ -429,26 +420,26 @@ export function ClientDashboard() {
 
       {/* Avisos / Mensagens enviadas pela Equipa Linke */}
       {unreadNotices.length > 0 && (
-        <div className="bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-white border border-emerald-200 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+        <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] border-l-4 border-l-[var(--accent)] rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-start gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-lg bg-[#008A4B] text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+            <div className="w-10 h-10 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center shrink-0 mt-0.5">
               <Bell className="w-5 h-5" />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded">
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 rounded">
                   Mensagem da Linke
                 </span>
                 {unreadNoticesTotal > 1 && (
-                  <span className="text-[10px] font-bold text-slate-700 bg-white border border-emerald-200 px-1.5 py-0.5 rounded">
+                  <span className="text-xs font-bold text-[var(--text-secondary)] bg-[var(--surface-bg)] border border-[var(--accent)]/25 px-1.5 py-0.5 rounded">
                     +{unreadNoticesTotal - 1} por ler
                   </span>
                 )}
               </div>
-              <p className="text-xs sm:text-sm text-slate-900 font-semibold mt-1">
+              <p className="text-xs sm:text-sm text-[var(--text-primary)] font-semibold mt-1">
                 {unreadNotices[0].title}
               </p>
-              <p className="text-xs text-slate-700 mt-0.5 whitespace-pre-line break-words line-clamp-3">
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5 whitespace-pre-line break-words line-clamp-3">
                 {unreadNotices[0].body}
               </p>
             </div>
@@ -456,7 +447,7 @@ export function ClientDashboard() {
           <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
             <Link
               href={`${basePath}/mensagens`}
-              className="px-3.5 py-2 bg-[#008A4B] hover:bg-[#00703C] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <span>Ver Mensagens</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -464,7 +455,7 @@ export function ClientDashboard() {
             <button
               type="button"
               onClick={() => void handleDismissNotice(unreadNotices[0].id)}
-              className="text-slate-400 hover:text-slate-600 p-1.5 rounded-md hover:bg-white/60 transition-colors cursor-pointer"
+              className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] p-1.5 rounded-md hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
               title="Marcar como lida"
               aria-label="Marcar mensagem como lida"
             >
@@ -476,35 +467,35 @@ export function ClientDashboard() {
 
       {/* Notificação de Nova Fatura Emitida */}
       {stats.latestInvoice && dismissedInvoiceId !== stats.latestInvoice.id && (
-        <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-emerald-50/60 border border-blue-200 rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+        <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] border-l-4 border-l-[var(--accent)] rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <div className="w-10 h-10 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center shrink-0">
               <FileText className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900 bg-blue-100 px-2 py-0.5 rounded">
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 rounded">
                   Nova Fatura Emitida
                 </span>
                 {stats.latestInvoice.hasReceipt ? (
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                  <span className="text-xs font-bold text-[var(--accent)] bg-[var(--accent-soft)] px-1.5 py-0.5 rounded">
                     Liquidada / Recibo Emitido
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                  <span className="text-xs font-bold text-[var(--status-warning)] bg-[var(--status-warning-soft)] px-1.5 py-0.5 rounded">
                     Pendente de Pagamento
                   </span>
                 )}
               </div>
-              <p className="text-xs sm:text-sm text-slate-800 font-medium mt-1">
-                A fatura oficial <strong className="font-semibold text-slate-900">{stats.latestInvoice.moloni_document_number || stats.latestInvoice.statement_number}</strong> no valor de <strong className="font-semibold text-slate-900">{stats.latestInvoice.total_value.toFixed(2)}€</strong> (+ IVA) já se encontra disponível.
+              <p className="text-xs sm:text-sm text-[var(--text-primary)] font-medium mt-1">
+                A fatura oficial <strong className="font-semibold text-[var(--text-primary)]">{stats.latestInvoice.moloni_document_number || stats.latestInvoice.statement_number}</strong> no valor de <strong className="font-semibold text-[var(--text-primary)]">{stats.latestInvoice.total_value.toFixed(2)}€</strong> (+ IVA) já se encontra disponível.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
             <Link
               href={`${basePath}/faturas`}
-              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <span>Ver Fatura</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -515,10 +506,10 @@ export function ClientDashboard() {
                 target="_blank"
                 rel="noreferrer"
                 download={`Fatura_${String(stats.latestInvoice.moloni_document_number || stats.latestInvoice.statement_number || 'Doc').replace(/[\/\\]/g, '_')}.pdf`}
-                className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-2 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)] text-[var(--text-secondary)] text-xs font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
                 title="Descarregar PDF oficial da AT"
               >
-                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <Download className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
                 <span className="hidden sm:inline">Descarregar</span>
               </a>
             )}
@@ -530,8 +521,9 @@ export function ClientDashboard() {
                   localStorage.setItem(`dismissed_inv_${currentClient.id}`, stats.latestInvoice?.id || '')
                 } catch {}
               }}
-              className="text-slate-400 hover:text-slate-600 p-1.5 rounded-md hover:bg-white/60 transition-colors cursor-pointer"
+              className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] p-1.5 rounded-md hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
               title="Dispensar aviso"
+              aria-label="Dispensar aviso da fatura"
             >
               <X className="w-4 h-4" />
             </button>
@@ -578,7 +570,7 @@ export function ClientDashboard() {
                 <span className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
                   {(stats.monthRevenue !== undefined ? stats.monthRevenue : stats.totalRevenue).toFixed(2)}€
                 </span>
-                <span className="text-[11px] text-[var(--text-tertiary)] font-medium">+ IVA</span>
+                <span className="text-xs text-[var(--text-tertiary)] font-medium">+ IVA</span>
               </div>
               <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate capitalize">
                 {stats.currentPeriodName ? stats.currentPeriodName : `Condições: ${paymentTerms}`}
@@ -623,7 +615,7 @@ export function ClientDashboard() {
                 <button
                   type="button"
                   onClick={() => setIsTopUpOpen(true)}
-                  className="text-[10px] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold px-2 py-0.5 rounded transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+                  className="text-xs bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold px-2 py-0.5 rounded transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
                 >
                   <PlusCircle className="w-3 h-3" />
                   <span>Carregar</span>
@@ -633,17 +625,17 @@ export function ClientDashboard() {
             <div className="mt-3.5">
               <div className="flex items-baseline gap-2">
                 <span className={`text-2xl sm:text-[28px] leading-none font-bold tracking-tight font-mono tabular-nums ${
-                  availableCredit < 0 ? "text-amber-600" : "text-[var(--text-primary)]"
+                  availableCredit < 0 ? "text-[var(--status-warning)]" : "text-[var(--text-primary)]"
                 }`}>
                   {unlimitedCredit ? 'Sem limite' : `${availableCredit.toFixed(2)}€`}
                 </span>
                 {currentClient?.billing_type === 'pay_as_you_go' && availableCredit < 0 && (
-                  <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                  <span className="text-xs text-[var(--status-warning)] bg-[var(--status-warning-soft)] border border-[var(--status-warning)]/25 px-1.5 py-0.5 rounded font-medium">
                     Descoberto
                   </span>
                 )}
                 {!unlimitedCredit && currentClient?.billing_type !== 'pay_as_you_go' && creditLimit > 0 && (
-                  <span className="text-[11px] text-[var(--text-tertiary)] font-medium">
+                  <span className="text-xs text-[var(--text-tertiary)] font-medium">
                     / {creditLimit.toLocaleString("pt-PT")}€
                   </span>
                 )}
@@ -673,7 +665,7 @@ export function ClientDashboard() {
           </div>
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
             <span className="text-xs text-[var(--text-secondary)]">Estado da Conta</span>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded ${availableCredit < -2 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded ${availableCredit < -2 ? 'bg-[var(--status-critical-soft)] text-[var(--status-critical)]' : 'bg-[var(--accent-soft)] text-[var(--accent)]'}`}>
               {availableCredit < -2 ? 'Bloqueada (-2€)' : 'Ativa / Regular'}
             </span>
           </div>
@@ -742,7 +734,7 @@ export function ClientDashboard() {
               <button
                 onClick={handleCloseBatch}
                 disabled={closingBatch}
-                className="px-3.5 py-2 bg-[var(--text-primary)] hover:bg-[#202420] active:scale-[0.99] disabled:opacity-50 text-white rounded-md text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+                className="px-3.5 py-2 bg-[var(--text-primary)] hover:opacity-90 active:scale-[0.99] disabled:opacity-50 text-white rounded-md text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
               >
                 {closingBatch ? "A Fechar..." : `Fechar ${pendingShipments.length} Envios`}
               </button>
@@ -843,13 +835,13 @@ export function ClientDashboard() {
                           {primaryDisplay}
                         </button>
                         {secondaryDisplay && (
-                          <div className="font-mono text-[10px] text-[var(--text-tertiary)] truncate">
+                          <div className="font-mono text-xs text-[var(--text-tertiary)] truncate">
                             {isCorreos ? "CORREOS: " : "CTT: "}
                             <span className="font-semibold text-[var(--text-secondary)]">{secondaryDisplay}</span>
                           </div>
                         )}
                       </div>
-                      <Badge variant={statusCfg.badgeVariant} className="shrink-0 text-[10px]">
+                      <Badge variant={statusCfg.badgeVariant} className="shrink-0 text-xs">
                         {statusCfg.label}
                       </Badge>
                     </div>
@@ -860,7 +852,7 @@ export function ClientDashboard() {
                         <div className="font-bold text-[var(--text-primary)] truncate">
                           {shipment.recipient_name || "Sem nome"}
                         </div>
-                        <div className="text-[11px] text-[var(--text-tertiary)] truncate">
+                        <div className="text-xs text-[var(--text-tertiary)] truncate">
                           {shipment.recipient_city || shipment.recipient_postal || shipment.recipient_address || "Portugal"}
                         </div>
                       </div>
@@ -872,7 +864,7 @@ export function ClientDashboard() {
                             <img src={carrierLogo} alt="Carrier" className="max-w-full max-h-full object-contain" />
                           </div>
                         ) : null}
-                        <span className="text-[11px] font-semibold text-[var(--text-secondary)]">
+                        <span className="text-xs font-semibold text-[var(--text-secondary)]">
                           {getClientServiceName(shipment.service_type || "CTT Expresso")}
                         </span>
                       </div>
@@ -886,28 +878,30 @@ export function ClientDashboard() {
                         <span className="font-bold font-mono text-[var(--text-primary)]">
                           {shipment.sell_price ? `${Number(shipment.sell_price).toFixed(2)}€` : "0.00€"}
                         </span>
-                        <span className="text-[10px] text-[var(--text-tertiary)]">{dateStr}</span>
+                        <span className="text-xs text-[var(--text-tertiary)]">{dateStr}</span>
                       </div>
 
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => setSelectedShipment(shipment)}
-                          className="px-2.5 py-1 text-[11px] font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] hover:bg-[var(--border-subtle)] rounded-md transition-colors"
+                          className="min-h-11 px-3.5 py-1 text-xs font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] hover:bg-[var(--border-subtle)] rounded-md transition-colors"
                         >
                           Ver
                         </button>
                         <Link
                           href={`${basePath}/tracking?search=${encodeURIComponent(shipment.tracking_number || shipment.id)}`}
-                          className="p-1.5 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-md border border-[var(--border-subtle)] transition-colors"
+                          className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-md border border-[var(--border-subtle)] transition-colors"
                           title="Ver no Mapa"
+                          aria-label={`Ver o envio ${shipment.tracking_number || shipment.id} no mapa`}
                         >
                           <MapPin className="w-3.5 h-3.5" />
                         </Link>
                         <button
                           type="button"
                           onClick={() => printLabel(shipment)}
-                          className="p-1.5 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-md border border-[var(--border-subtle)] transition-colors"
+                          aria-label={`Imprimir etiqueta do envio ${tracking}`}
+                          className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-md border border-[var(--border-subtle)] transition-colors"
                           title="Imprimir Etiqueta"
                         >
                           <Printer className="w-3.5 h-3.5" />
@@ -915,7 +909,8 @@ export function ClientDashboard() {
                         <button
                           type="button"
                           onClick={() => downloadLabel(shipment, tracking)}
-                          className="p-1.5 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] rounded-md border border-[var(--border-subtle)] transition-colors"
+                          aria-label={`Descarregar etiqueta PDF do envio ${tracking}`}
+                          className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] rounded-md border border-[var(--border-subtle)] transition-colors"
                           title="Descarregar PDF"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -930,7 +925,7 @@ export function ClientDashboard() {
             {/* ─── DESKTOP TABLE VIEW (hidden md:block) ─── */}
             <div className="tms-wide-list overflow-x-auto">
               <table className="w-full text-left text-xs text-[var(--text-secondary)]">
-              <thead className="bg-[var(--surface-muted)] text-[var(--text-tertiary)] font-bold uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
+              <thead className="bg-[var(--surface-muted)] text-[var(--text-tertiary)] font-bold uppercase tracking-wider text-xs border-b border-[var(--border-subtle)]">
                 <tr>
                   <th className="py-3.5 px-5">Guia / Rastreio</th>
                   <th className="py-3.5 px-5">Serviço / Operador</th>
@@ -989,8 +984,8 @@ export function ClientDashboard() {
                                 <span>{primaryDisplay}</span>
                               </button>
                               {secondaryDisplay && (
-                                <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-[var(--text-secondary)] mt-0.5" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Objeto / Guia CTT Expresso"}>
-                                  <span className="text-[var(--text-tertiary)] font-sans text-[10px] uppercase font-bold tracking-wide">{isCorreos ? "CORREOS:" : "CTT:"}</span>
+                                <div className="flex items-center gap-1 font-mono text-xs font-semibold text-[var(--text-secondary)] mt-0.5" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Objeto / Guia CTT Expresso"}>
+                                  <span className="text-[var(--text-tertiary)] font-sans text-xs uppercase font-bold tracking-wide">{isCorreos ? "CORREOS:" : "CTT:"}</span>
                                   <span className="font-bold text-[var(--text-primary)]">{secondaryDisplay}</span>
                                 </div>
                               )}
@@ -1022,7 +1017,7 @@ export function ClientDashboard() {
                       {/* Destinatário */}
                       <td className="py-4 px-5 max-w-[260px]">
                         <div className="font-bold text-[var(--text-primary)] truncate">{shipment.recipient_name}</div>
-                        <div className="text-[11px] text-[var(--text-tertiary)] truncate flex items-center gap-1 mt-0.5">
+                        <div className="text-xs text-[var(--text-tertiary)] truncate flex items-center gap-1 mt-0.5">
                           <MapPin className="w-3 h-3 shrink-0 text-[var(--text-tertiary)]" />
                           <span>{shipment.recipient_address || "Portugal"}</span>
                         </div>
@@ -1059,6 +1054,9 @@ export function ClientDashboard() {
                               e.stopPropagation()
                               setOpenDropdownId(openDropdownId === shipment.id ? null : shipment.id)
                             }}
+                            aria-label={`Ações do envio ${shipment.tracking_number || shipment.id}`}
+                            aria-haspopup="menu"
+                            aria-expanded={openDropdownId === shipment.id}
                             className="p-1.5 rounded-md border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] transition-colors cursor-pointer"
                           >
                             <MoreVertical className="w-4 h-4" />
@@ -1181,7 +1179,7 @@ export function ClientDashboard() {
             <div className="h-64 flex flex-col items-center justify-center text-center p-6 bg-[var(--surface-muted)] rounded-xl border border-dashed border-[var(--border-strong)]">
               <Package className="w-8 h-8 text-[var(--text-tertiary)] mb-2" />
               <p className="text-xs font-bold text-[var(--text-secondary)]">Sem envios registados</p>
-              <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5">
+              <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
                 Os gráficos de barras serão preenchidos em tempo real à medida que emitir novas guias.
               </p>
             </div>
@@ -1189,7 +1187,7 @@ export function ClientDashboard() {
             <div className="h-64 flex items-end justify-between gap-3 sm:gap-6 pt-8 pb-2 px-2 border-b border-[var(--border-subtle)]">
               {stats.weeklyVolume.map((item, idx) => (
                 <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                  <div className="text-[11px] font-mono font-bold text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="text-xs font-mono font-bold text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity">
                     {item.count}
                   </div>
                   <div className="w-full max-w-[48px] bg-[var(--surface-muted)] rounded-t-md overflow-hidden flex items-end h-full border border-[var(--border-subtle)] border-b-0">
@@ -1200,7 +1198,7 @@ export function ClientDashboard() {
                   </div>
                   <div className="text-center mt-1">
                     <span className="block text-xs font-bold text-[var(--text-primary)]">{item.day}</span>
-                    <span className="block text-[10px] text-[var(--text-tertiary)] font-mono font-bold">{item.count}</span>
+                    <span className="block text-xs text-[var(--text-tertiary)] font-mono font-bold">{item.count}</span>
                   </div>
                 </div>
               ))}
@@ -1236,7 +1234,7 @@ export function ClientDashboard() {
           <div className="py-8 text-center bg-[var(--surface-muted)] rounded-xl border border-dashed border-[var(--border-strong)]">
             <MapPin className="w-6 h-6 text-[var(--text-tertiary)] mx-auto mb-1.5" />
             <p className="text-xs font-bold text-[var(--text-secondary)]">Sem destinos registados</p>
-            <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5">As localidades de destino aparecerão aqui após emissão.</p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-0.5">As localidades de destino aparecerão aqui após emissão.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 pt-2">
@@ -1245,7 +1243,7 @@ export function ClientDashboard() {
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-[var(--text-primary)]">{dest.region}</span>
                   <div className="flex items-center gap-2 font-mono">
-                    <span className="text-[var(--text-tertiary)] text-[11px]">{dest.count}</span>
+                    <span className="text-[var(--text-tertiary)] text-xs">{dest.count}</span>
                     <span className="font-bold text-[var(--text-primary)]">{dest.pct}%</span>
                   </div>
                 </div>

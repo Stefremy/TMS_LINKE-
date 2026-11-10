@@ -7,11 +7,8 @@ import { Home, FileText, Search, Plus, UserCheck, CreditCard, Inbox, MapPin, Ban
 import { useClientScope } from "./ClientScope"
 import { ClientMessageBell } from "./ClientMessages"
 
-export function ClientSidebarNav() {
-  const pathname = usePathname()
-  const { basePath } = useClientScope()
-
-  const navSections = [
+function clientNavSections(basePath: string) {
+  return [
     {
       category: "Principal",
       items: [
@@ -25,7 +22,7 @@ export function ClientSidebarNav() {
         { href: `${basePath}/tracking`, label: "Rastreio & Mapa", icon: MapPin },
         { href: `${basePath}/envios`, label: "Histórico & Envios", icon: Search },
         { href: `${basePath}/destinatarios`, label: "Destinatários", icon: UserCheck },
-        { href: `${basePath}/cotacoes`, label: "Pedido de envio internacional aéreo", icon: Plane },
+        { href: `${basePath}/cotacoes`, label: "Envio aéreo internacional", icon: Plane },
       ],
     },
     {
@@ -37,24 +34,25 @@ export function ClientSidebarNav() {
       ],
     },
     {
-      category: "Comunicação",
+      category: "Conta",
       items: [
         { href: `${basePath}/mensagens`, label: "Caixa de Entrada", icon: Inbox },
-      ],
-    },
-    {
-      category: "E-Commerce",
-      items: [
         { href: `${basePath}/integracoes`, label: "Lojas & Webservices", icon: ShoppingBag },
       ],
     },
   ]
+}
+
+export function ClientSidebarNav() {
+  const pathname = usePathname()
+  const { basePath } = useClientScope()
+  const navSections = clientNavSections(basePath)
 
   return (
     <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
       {navSections.flatMap((section) => [
         <div key={`cat-${section.category}`} className="pt-3.5 first:pt-1 pb-1 px-2.5 select-none">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
             {section.category}
           </span>
         </div>,
@@ -80,12 +78,35 @@ export function ClientSidebarNav() {
                   }`} 
                   strokeWidth={1.75}
                 />
-                <span className={item.href === `${basePath}/cotacoes` ? "min-w-0 leading-tight" : "truncate"}>{item.label}</span>
+                <span className="truncate">{item.label}</span>
               </div>
             </Link>
           )
         }),
       ])}
+    </nav>
+  )
+}
+
+/** Breadcrumb for the desktop header: names the section of the page being viewed. */
+export function ClientBreadcrumb() {
+  const pathname = usePathname()
+  const { basePath } = useClientScope()
+  const items = clientNavSections(basePath).flatMap((section) => section.items)
+  const current = items
+    .filter((item) => pathname === item.href || (item.href !== basePath && pathname.startsWith(`${item.href}/`)))
+    .sort((a, b) => b.href.length - a.href.length)[0]
+
+  return (
+    <nav aria-label="Localização" className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)] font-medium">
+      <Link href={basePath} className="flex items-center gap-1.5 hover:text-[var(--text-primary)]">
+        <Home className="w-3.5 h-3.5" aria-hidden="true" />
+        <span>Área de Cliente</span>
+      </Link>
+      <span aria-hidden="true" className="text-[var(--border-strong)]">/</span>
+      <span aria-current="page" className="text-[var(--text-primary)] font-semibold">
+        {current?.label ?? "Painel Principal"}
+      </span>
     </nav>
   )
 }

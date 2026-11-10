@@ -1,4 +1,5 @@
 "use client"
+import { toast } from "sonner"
 import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
 import { errorMessage } from "@/lib/errors"
 
@@ -38,7 +39,7 @@ export function ClientShipmentsHistory() {
     if (rawLabel.trimStart().startsWith("^XA")) {
       const res = await convertZplToPdfAction(rawLabel)
       if (res.success && res.base64) return res.base64
-      alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+      toast.error(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
       return null
     }
     return rawLabel
@@ -54,7 +55,7 @@ export function ClientShipmentsHistory() {
     if (label) {
       printCttLabel(label)
     } else {
-      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
+      toast.error("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
     }
   }
 
@@ -64,7 +65,7 @@ export function ClientShipmentsHistory() {
       const carrier = (envioItem?.transportadora || envioItem?.servico || "").toLowerCase().includes("correos") ? "Correos" : "CTT"
       await downloadCttLabel(label, `${ref || "envio"}_Etiqueta_${carrier}.pdf`)
     } else {
-      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
+      toast.error("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
     }
   }
 
@@ -151,7 +152,7 @@ export function ClientShipmentsHistory() {
           base64: res.manifestPdfBase64,
           documents: res.documents
         })
-        if (res.warning) alert(res.warning)
+        if (res.warning) toast.warning(res.warning)
         // update local state
         setShipments(prev => prev.map(s => {
           if (idsToClose.includes(s.tracking_number || "") || idsToClose.includes(s.id)) {
@@ -160,10 +161,10 @@ export function ClientShipmentsHistory() {
           return s
         }))
       } else {
-        alert(res.error || "Não foi possível confirmar o fecho do manifesto CTT.")
+        toast.error(res.error || "Não foi possível confirmar o fecho do manifesto CTT.")
       }
     } catch (e) {
-      alert("Erro ao fechar lote: " + errorMessage(e))
+      toast.error("Erro ao fechar lote: " + errorMessage(e))
     } finally {
       setClosingBatch(false)
     }
@@ -181,8 +182,8 @@ export function ClientShipmentsHistory() {
   }, [])
 
   if (loading || loadError) return (
-    <div className="p-8 text-sm text-slate-600" role="status">
-      <h1 className="text-lg font-semibold text-slate-900">{currentClient.legal_name || currentClient.short_name}</h1>
+    <div className="p-8 text-sm text-[var(--text-secondary)]" role="status">
+      <h1 className="text-lg font-semibold text-[var(--text-primary)]">{currentClient.legal_name || currentClient.short_name}</h1>
       <p>{loadError ? "Não foi possível carregar os envios desta conta." : "A carregar os envios desta conta..."}</p>
     </div>
   )
@@ -202,13 +203,13 @@ export function ClientShipmentsHistory() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <Link href={basePath} className="hover:text-emerald-700">Painel Principal</Link>
+          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-tertiary)] mb-1">
+            <Link href={basePath} className="hover:text-[var(--accent-hover)]">Painel Principal</Link>
             <span>&gt;</span>
-            <span className="text-emerald-600 font-bold">Histórico & Envios</span>
+            <span className="text-[var(--accent)] font-bold">Histórico & Envios</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Histórico de Envios & Rastreamento</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-xl sm:text-2xl font-black text-[var(--text-primary)] tracking-tight">Histórico de Envios & Rastreamento</h1>
+          <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
             Acompanhe o estado de entrega e comprovativos de receção de todas as guias emitidas.
           </p>
         </div>
@@ -218,14 +219,14 @@ export function ClientShipmentsHistory() {
             <button
               onClick={handleCloseBatch}
               disabled={closingBatch}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-900 active:scale-[0.99] disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
+              className="px-4 py-2.5 bg-[var(--text-primary)] hover:opacity-90 active:scale-[0.99] disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
             >
               {closingBatch ? "A Fechar..." : `Fechar ${pendingShipments.length} Envios`}
             </button>
           )}
           <Link
             href={`${basePath}/criar-guia`}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
+            className="px-4 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Novo Envio</span>
@@ -234,13 +235,13 @@ export function ClientShipmentsHistory() {
       </div>
 
       {manifestData && (
-        <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in shadow-xs">
+        <div className="bg-[var(--accent-soft)] border-2 border-[var(--accent)] rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in shadow-xs">
           <div className="flex items-center gap-3.5">
             <div>
-              <div className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+              <div className="text-sm font-bold text-[var(--accent-hover)] flex items-center gap-2">
                 <span>Lote Fechado com Sucesso!</span>
               </div>
-              <p className="text-xs text-emerald-800 mt-0.5">
+              <p className="text-xs text-[var(--accent)] mt-0.5">
                 O manifesto (Certificado de Aceitação) foi gerado.
               </p>
             </div>
@@ -256,7 +257,7 @@ export function ClientShipmentsHistory() {
                 link.click()
                 document.body.removeChild(link)
               }}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all"
+              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all"
             >
               Descarregar Manifesto
             </button>
@@ -264,7 +265,7 @@ export function ClientShipmentsHistory() {
             <button
               type="button"
               onClick={() => setManifestData(null)}
-              className="text-emerald-700 hover:text-emerald-950 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
+              className="text-[var(--accent)] hover:text-[var(--accent-hover)] text-xs font-bold px-2.5 py-2 rounded-xl transition-colors cursor-pointer"
             >
               Fechar
             </button>
@@ -273,27 +274,27 @@ export function ClientShipmentsHistory() {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-[var(--surface-bg)] rounded-2xl p-4 border border-[var(--border-strong)] shadow-2xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-1 max-w-md">
           <div className="relative w-full">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input 
               type="text" 
               placeholder="Pesquisar por envio, guia, destinatário ou cidade..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full pl-9 pr-3 py-2 bg-[var(--surface-muted)] border border-[var(--border-strong)] rounded-xl text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             />
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-400" />
-          <span className="text-xs font-semibold text-slate-500">Estado:</span>
+          <Filter className="w-4 h-4 text-[var(--text-tertiary)]" />
+          <span className="text-xs font-semibold text-[var(--text-tertiary)]">Estado:</span>
           <select 
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none"
+            className="px-3 py-1.5 bg-[var(--surface-muted)] border border-[var(--border-strong)] rounded-xl text-xs font-bold text-[var(--text-secondary)] focus:outline-none"
           >
             <option value="todos">Todos os Estados</option>
             <option value="entregue">Entregues</option>
@@ -304,17 +305,17 @@ export function ClientShipmentsHistory() {
       </div>
 
       {/* Shipments List Table / Clean State */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 p-3.5 sm:p-6">
+      <div className="bg-[var(--surface-bg)] rounded-2xl sm:rounded-3xl shadow-sm border border-[var(--border-strong)] p-3.5 sm:p-6">
         {filteredShipments.length === 0 ? (
-          <div className="py-12 px-4 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-            <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm font-bold text-slate-700">Nenhum envio a apresentar</p>
-            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+          <div className="py-12 px-4 text-center bg-[var(--surface-muted)] rounded-2xl border border-dashed border-[var(--border-strong)]">
+            <Package className="w-10 h-10 text-[var(--text-tertiary)] mx-auto mb-3" />
+            <p className="text-sm font-bold text-[var(--text-secondary)]">Nenhum envio a apresentar</p>
+            <p className="text-xs text-[var(--text-tertiary)] mt-1 max-w-sm mx-auto">
               Assim que criar novos envios na plataforma, eles ficarão disponíveis aqui com rastreamento detalhado em tempo real.
             </p>
             <Link 
               href={`${basePath}/criar-guia`}
-              className="mt-4 inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-xs transition-colors"
+              className="mt-4 inline-flex items-center gap-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-xs transition-colors"
             >
               <PlusCircle className="w-4 h-4" />
               <span>Novo Envio</span>
@@ -323,7 +324,7 @@ export function ClientShipmentsHistory() {
         ) : (
           <div>
             {/* ─── MOBILE CARDS VIEW (md:hidden) ─── */}
-            <div className="tms-compact-list divide-y divide-slate-100">
+            <div className="tms-compact-list divide-y divide-[var(--border-subtle)]">
               {paginatedShipments.map((envio) => {
                 const linkeRef =
                   (envio.reference?.startsWith("LTK") ? envio.reference : null) ||
@@ -349,25 +350,25 @@ export function ClientShipmentsHistory() {
                 const tracking = envio.tracking_number || envio.id
 
                 return (
-                  <div key={envio.id} className="p-3.5 space-y-2.5 hover:bg-slate-50/80 transition-colors">
+                  <div key={envio.id} className="p-3.5 space-y-2.5 hover:bg-[var(--surface-muted)] transition-colors">
                     {/* Top Row: Ref/Tracking + Status */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <button
                           type="button"
                           onClick={() => setSelectedShipment(envio)}
-                          className="font-mono font-bold text-xs text-emerald-700 hover:underline truncate text-left block"
+                          className="font-mono font-bold text-xs text-[var(--accent)] hover:underline truncate text-left block"
                         >
                           {primaryDisplay}
                         </button>
                         {secondaryDisplay && (
-                          <div className="font-mono text-[10px] text-slate-500 truncate">
+                          <div className="font-mono text-xs text-[var(--text-tertiary)] truncate">
                             {isCorreos ? "CORREOS: " : "CTT: "}
-                            <span className="font-semibold text-slate-800">{secondaryDisplay}</span>
+                            <span className="font-semibold text-[var(--text-primary)]">{secondaryDisplay}</span>
                           </div>
                         )}
                       </div>
-                      <Badge variant={statusCfg.badgeVariant} className="shrink-0 text-[10px]">
+                      <Badge variant={statusCfg.badgeVariant} className="shrink-0 text-xs">
                         {statusCfg.label}
                       </Badge>
                     </div>
@@ -375,22 +376,22 @@ export function ClientShipmentsHistory() {
                     {/* Middle Row: Recipient & Carrier */}
                     <div className="flex items-center justify-between text-xs gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="font-bold text-slate-800 truncate">
+                        <div className="font-bold text-[var(--text-primary)] truncate">
                           {envio.recipient_name || "Sem nome"}
                         </div>
-                        <div className="text-[11px] text-slate-500 truncate">
+                        <div className="text-xs text-[var(--text-tertiary)] truncate">
                           {envio.recipient_city || envio.recipient_postal || envio.recipient_address || "Portugal"}
                         </div>
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
                         {carrierLogo ? (
-                          <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center overflow-hidden shadow-2xs">
+                          <div className="w-5 h-5 rounded bg-[var(--surface-bg)] border border-[var(--border-strong)] p-0.5 flex items-center justify-center overflow-hidden shadow-2xs">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={carrierLogo} alt="Carrier" className="max-w-full max-h-full object-contain" />
                           </div>
                         ) : null}
-                        <span className="text-[11px] font-semibold text-slate-700">
+                        <span className="text-xs font-semibold text-[var(--text-secondary)]">
                           {getClientServiceName(envio.service_type || "CTT Expresso")}
                         </span>
                       </div>
@@ -399,24 +400,25 @@ export function ClientShipmentsHistory() {
                     <ShipmentParcelWeight summary={envio.parcel_summary} />
 
                     {/* Bottom Row: Value & Action Buttons */}
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                      <div className="font-bold font-mono text-slate-900">
+                    <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)] text-xs">
+                      <div className="font-bold font-mono text-[var(--text-primary)]">
                         {envio.ops_substatus === "aguarda_emissao_parceiro" ? "Aguarda guia" : envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
-                        {envio.payment_status === "paid" && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-sans font-bold">Pago</span>}
+                        {envio.payment_status === "paid" && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/25 text-xs font-sans font-bold">Pago</span>}
                       </div>
 
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => setSelectedShipment(envio)}
-                          className="px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                          className="min-h-11 px-3.5 py-1 text-xs font-bold text-[var(--text-secondary)] bg-[var(--surface-dim)] hover:bg-[var(--border-strong)] rounded-lg transition-colors cursor-pointer"
                         >
                           Ver
                         </button>
                         <button
                           type="button"
                           onClick={() => printLabel(envio)}
-                          className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                          aria-label={`Imprimir etiqueta do envio ${tracking}`}
+                          className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-lg border border-[var(--border-strong)] transition-colors cursor-pointer"
                           title="Imprimir Etiqueta"
                         >
                           <Printer className="w-3.5 h-3.5" />
@@ -424,7 +426,8 @@ export function ClientShipmentsHistory() {
                         <button
                           type="button"
                           onClick={() => downloadLabel(envio, tracking)}
-                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                          aria-label={`Descarregar etiqueta PDF do envio ${tracking}`}
+                          className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--text-secondary)] hover:bg-[var(--surface-dim)] rounded-lg border border-[var(--border-strong)] transition-colors cursor-pointer"
                           title="Descarregar PDF"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -440,7 +443,7 @@ export function ClientShipmentsHistory() {
             <div className="tms-wide-list overflow-x-auto">
               <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-600 font-bold">
+                <tr className="border-b border-[var(--border-strong)] text-[var(--text-secondary)] font-bold">
                   <th className="pb-3">Guia</th>
                   <th className="pb-3">Destinatário</th>
                   <th className="pb-3">Morada</th>
@@ -450,9 +453,9 @@ export function ClientShipmentsHistory() {
                   <th className="pb-3 text-center">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-[var(--border-subtle)]">
                 {paginatedShipments.map((envio) => (
-                  <tr key={envio.id} className="hover:bg-slate-50">
+                  <tr key={envio.id} className="hover:bg-[var(--surface-muted)]">
                     <td className="py-3">
                       {(() => {
                         const linkeRef =
@@ -480,27 +483,27 @@ export function ClientShipmentsHistory() {
                             <button
                               type="button"
                               onClick={() => setSelectedShipment(envio)}
-                              className="font-mono font-bold text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer text-left transition-colors text-xs flex items-center gap-1.5"
+                              className="font-mono font-bold text-[var(--accent)] hover:text-[var(--accent-hover)] hover:underline cursor-pointer text-left transition-colors text-xs flex items-center gap-1.5"
                               title="Clique para ver os detalhes do envio e rastreio interno"
                             >
                               <span>{primaryDisplay}</span>
                             </button>
                             {secondaryDisplay && (
-                              <div className="flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-600 mt-0.5" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Objeto / Guia CTT Expresso"}>
-                                <span className="text-slate-400 font-sans text-[10px] uppercase font-bold">{isCorreos ? "CORREOS:" : "CTT:"}</span>
-                                <span className="font-bold text-slate-800">{secondaryDisplay}</span>
+                              <div className="flex items-center gap-1 font-mono text-xs font-semibold text-[var(--text-secondary)] mt-0.5" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Objeto / Guia CTT Expresso"}>
+                                <span className="text-[var(--text-tertiary)] font-sans text-xs uppercase font-bold">{isCorreos ? "CORREOS:" : "CTT:"}</span>
+                                <span className="font-bold text-[var(--text-primary)]">{secondaryDisplay}</span>
                               </div>
                             )}
                           </div>
                         )
                       })()}
                     </td>
-                    <td className="py-3 font-semibold text-slate-800">{envio.recipient_name}</td>
-                    <td className="py-3 text-slate-500 truncate max-w-[200px]">{envio.recipient_address}</td>
+                    <td className="py-3 font-semibold text-[var(--text-primary)]">{envio.recipient_name}</td>
+                    <td className="py-3 text-[var(--text-tertiary)] truncate max-w-[200px]">{envio.recipient_address}</td>
                     <td className="py-3">
                       <div className="flex items-center gap-2">
                         {getCarrierLogo(envio.service_type || envio.carrier || "ctt") ? (
-                          <div className="w-5 h-5 rounded bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                          <div className="w-5 h-5 rounded bg-[var(--surface-bg)] border border-[var(--border-strong)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
                               src={getCarrierLogo(envio.service_type || envio.carrier || "ctt")!} 
@@ -509,7 +512,7 @@ export function ClientShipmentsHistory() {
                             />
                           </div>
                         ) : null}
-                        <span className="text-xs font-semibold text-slate-700">{getClientServiceName(envio.service_type || "CTT Expresso")}</span>
+                        <span className="text-xs font-semibold text-[var(--text-secondary)]">{getClientServiceName(envio.service_type || "CTT Expresso")}</span>
                       </div>
                       <div className="mt-1.5"><ShipmentParcelWeight summary={envio.parcel_summary} /></div>
                     </td>
@@ -523,9 +526,9 @@ export function ClientShipmentsHistory() {
                         )
                       })()}
                     </td>
-                    <td className="py-3 text-right font-mono font-bold text-slate-900">
+                    <td className="py-3 text-right font-mono font-bold text-[var(--text-primary)]">
                       {envio.ops_substatus === "aguarda_emissao_parceiro" ? "Aguarda guia" : envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
-                      {envio.payment_status === "paid" && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-sans font-bold">Pago</span>}
+                      {envio.payment_status === "paid" && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/25 text-xs font-sans font-bold">Pago</span>}
                     </td>
                     <td className="py-3 text-center relative action-dropdown">
                       <button 
@@ -533,21 +536,25 @@ export function ClientShipmentsHistory() {
                           e.stopPropagation();
                           setOpenDropdownId(openDropdownId === envio.id ? null : envio.id);
                         }}
-                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+                        type="button"
+                        aria-label={`Ações do envio ${envio.tracking_number || envio.id}`}
+                        aria-haspopup="menu"
+                        aria-expanded={openDropdownId === envio.id}
+                        className="p-1.5 rounded-lg hover:bg-[var(--border-strong)] text-[var(--text-tertiary)] transition-colors"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       
                       {openDropdownId === envio.id && (
-                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-10 text-left">
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-[var(--surface-bg)] rounded-xl shadow-lg border border-[var(--border-strong)] py-1.5 z-10 text-left">
                           <button 
                             onClick={() => {
                               setSelectedShipment(envio);
                               setOpenDropdownId(null);
                             }}
-                            className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                            className="w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors"
                           >
-                            <Package className="w-3.5 h-3.5 text-slate-500" />
+                            <Package className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
                             Ver Detalhes
                           </button>
                           
@@ -556,9 +563,9 @@ export function ClientShipmentsHistory() {
                               setOpenDropdownId(null);
                               printLabel(envio);
                             }}
-                            className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                            className="w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
                           >
-                            <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                            <Printer className="w-3.5 h-3.5 text-[var(--accent)]" />
                             <span>Imprimir Etiqueta CTT</span>
                           </button>
                           <button 
@@ -566,9 +573,9 @@ export function ClientShipmentsHistory() {
                               setOpenDropdownId(null);
                               downloadLabel(envio, envio.tracking_number || envio.id);
                             }}
-                            className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                            className="w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
                           >
-                            <Download className="w-3.5 h-3.5 text-emerald-600" />
+                            <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
                             <span>Descarregar PDF</span>
                           </button>
                           <button 
@@ -576,9 +583,9 @@ export function ClientShipmentsHistory() {
                               setSelectedShipment(envio);
                               setOpenDropdownId(null);
                             }}
-                            className="w-full px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                            className="w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
                           >
-                            <MapPinIcon className="w-3.5 h-3.5 text-indigo-600" />
+                            <MapPinIcon className="w-3.5 h-3.5 text-[var(--accent)]" />
                             Rastreio em Tempo Real
                           </button>
 

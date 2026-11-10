@@ -1,15 +1,13 @@
 import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { 
-  Home, 
-  LogOut, 
-  HelpCircle,
-} from "lucide-react"
+import { LogOut, HelpCircle } from "lucide-react"
 
 import { Suspense } from "react"
 import { ClientImpersonationBanner, ClientProfileSidebar } from "./ClientImpersonationBanner"
-import { ClientSidebarNav, ClientTopHeaderAction } from "./ClientSidebarNav"
+import { ClientBreadcrumb, ClientSidebarNav, ClientTopHeaderAction } from "./ClientSidebarNav"
+import { Toaster } from "@/components/ui/toaster"
+import { ConfirmDialogHost } from "@/components/ui/confirm-dialog"
 import type { requirePortalStore } from "@/lib/client-portal/access"
 import { ClientScopeProvider } from "./ClientScope"
 import { ClientAnnouncements } from "./ClientAnnouncements"
@@ -48,7 +46,7 @@ export function ClientPortalShell({ children, store, isSuspended = false, access
           <div className="pt-7 pb-5 px-5">
             <div className="flex flex-col">
               <Image src="/Linke-logo.png" alt="Linke" width={100} height={30} className="object-contain" style={{ height: "auto" }} preload />
-              <span className="text-[var(--text-tertiary)] text-[10px] font-semibold tracking-wider mt-2 uppercase">Portal do Cliente</span>
+              <span className="text-[var(--text-tertiary)] text-xs font-semibold tracking-wider mt-2 uppercase">Portal do Cliente</span>
             </div>
           </div>
 
@@ -69,8 +67,8 @@ export function ClientPortalShell({ children, store, isSuspended = false, access
                 <HelpCircle className="w-3.5 h-3.5 text-white" />
               </div>
               <div>
-                <p className="text-[11px] text-[var(--text-primary)] font-semibold">Suporte Dedicado</p>
-                <a href="mailto:suporte@linke.pt" className="text-[11px] text-[var(--accent)] font-medium hover:underline flex items-center gap-1 mt-0.5">
+                <p className="text-xs text-[var(--text-primary)] font-semibold">Suporte Dedicado</p>
+                <a href="mailto:geral@linke.pt" className="text-xs text-[var(--accent)] font-medium hover:underline flex items-center gap-1 mt-0.5">
                   Fale connosco
                 </a>
               </div>
@@ -95,13 +93,9 @@ export function ClientPortalShell({ children, store, isSuspended = false, access
         <div className="flex-1 flex flex-col min-w-0">
           {/* Desktop Topbar / Header */}
           <header className="tms-desktop-only h-12 items-center justify-between px-5 sm:px-6 shrink-0 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)]">
-            <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-tertiary)] font-medium">
-              <Home className="w-3 h-3" />
-              <span className="text-[var(--border-strong)]">&gt;</span>
-              <span>Área de Cliente</span>
-              <span className="text-[var(--border-strong)]">&gt;</span>
-              <span className="text-[var(--accent)] font-semibold">Painel & Operações</span>
-            </div>
+            <Suspense fallback={null}>
+              <ClientBreadcrumb />
+            </Suspense>
             
             <Suspense fallback={null}>
               <ClientTopHeaderAction />
@@ -116,6 +110,8 @@ export function ClientPortalShell({ children, store, isSuspended = false, access
           </main>
         </div>
       </div>
+      <Toaster />
+      <ConfirmDialogHost />
     </div>
     </ClientMessagesProvider>
     </ClientScopeProvider>

@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { useState } from "react"
-import { ArrowRight, AlertCircle, Loader2, Package, Truck, MapPin } from "lucide-react"
+import { ArrowRight, AlertCircle, Loader2, Package, Truck, MapPin, Eye, EyeOff } from "lucide-react"
 import { useFormStatus } from "react-dom"
 import { clientLogin } from "@/app/login/actions"
 
@@ -17,6 +17,7 @@ function ClientSubmitButton() {
 
 export function ClientLoginForm({ returnTo, isError }: { returnTo?: string; isError: boolean }) {
   const [recovering, setRecovering] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [recoveryPending, setRecoveryPending] = useState(false)
   const [recoveryMessage, setRecoveryMessage] = useState("")
   const [recoveryError, setRecoveryError] = useState("")
@@ -45,7 +46,7 @@ export function ClientLoginForm({ returnTo, isError }: { returnTo?: string; isEr
     <main className="min-h-screen bg-[#f3f6f2] px-5 py-8 font-sans text-[#1a3028] sm:px-8">
       <header className="mx-auto flex max-w-6xl items-center justify-between">
         <Image src="/Linke-logo.png" alt="Linke" width={115} height={35} style={{ width: 115, height: "auto" }} preload />
-        <a href="mailto:suporte@linke.pt" className="text-sm font-medium text-[#426355] underline-offset-4 hover:underline">Precisa de ajuda?</a>
+        <a href="mailto:geral@linke.pt" className="text-sm font-medium text-[#426355] underline-offset-4 hover:underline">Precisa de ajuda?</a>
       </header>
       <div className="mx-auto grid max-w-6xl items-center gap-12 py-12 sm:py-20 lg:grid-cols-[1.1fr_1fr] lg:gap-20">
         <section className="hidden lg:block">
@@ -81,7 +82,12 @@ export function ClientLoginForm({ returnTo, isError }: { returnTo?: string; isEr
             </div>
             <div>
               <label htmlFor="client-password" className="mb-2 block text-sm font-medium">Password</label>
-              <input id="client-password" name="password" type="password" autoComplete="current-password" required placeholder="A sua password" className="w-full rounded-xl border border-[#d8e3da] bg-[#fcfdfb] px-4 py-3 text-base outline-none transition placeholder:text-[#9aa99e] focus:border-[#126b4a] focus:ring-2 focus:ring-emerald-100" />
+              <div className="relative">
+                <input id="client-password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required placeholder="A sua password" className="w-full rounded-xl border border-[#d8e3da] bg-[#fcfdfb] py-3 pl-4 pr-12 text-base outline-none transition placeholder:text-[#9aa99e] focus:border-[#126b4a] focus:ring-2 focus:ring-emerald-100" />
+                <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Ocultar password" : "Mostrar password"} aria-pressed={showPassword} aria-controls="client-password" className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-[#5f6f64] hover:text-[#126b4a] focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-emerald-700">
+                  {showPassword ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}
+                </button>
+              </div>
             </div>
             <button type="button" onClick={() => { setRecoveryMessage(""); setRecoveryError(""); setRecovering(true) }} className="text-sm font-medium text-[#126b4a] underline underline-offset-4">Esqueci-me da palavra-passe</button>
             <div className="pt-2"><ClientSubmitButton /></div>

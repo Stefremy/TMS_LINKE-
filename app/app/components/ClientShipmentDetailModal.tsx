@@ -1,4 +1,7 @@
 "use client"
+import { toast } from "sonner"
+import { confirmAction } from "@/components/ui/confirm-dialog"
+import { useDialogA11y } from "@/components/ui/use-dialog-a11y"
 import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
 import { errorMessage } from "@/lib/errors"
 
@@ -134,6 +137,8 @@ setTimelineEvents(data || [])
   }, [shipment, loadTimeline])
 
   const [copiedLink, setCopiedLink] = React.useState(false)
+  const dialogRef = React.useRef<HTMLDivElement>(null)
+  useDialogA11y(dialogRef, onClose, Boolean(shipment && currentShipment))
 
   // Null guard AFTER all hooks
   if (!shipment || !currentShipment) return null
@@ -154,7 +159,7 @@ setTimelineEvents(data || [])
     if (rawLabel.trimStart().startsWith("^XA")) {
       const res = await convertZplToPdfAction(rawLabel)
       if (res.success && res.base64) return res.base64
-      alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+      toast.error(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
       return null
     }
     return rawLabel
@@ -171,7 +176,7 @@ setTimelineEvents(data || [])
     if (label) {
       printCttLabel(label)
     } else {
-      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
+      toast.error("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
     }
   }
 
@@ -184,7 +189,7 @@ setTimelineEvents(data || [])
         : "CTT"
       await downloadCttLabel(label, `${tracking || "envio"}_Etiqueta_${carrier}.pdf`)
     } else {
-      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
+      toast.error("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
     }
   }
 
@@ -200,10 +205,10 @@ setTimelineEvents(data || [])
         setLoadingTimeline(true)
         await loadTimeline(currentShipment.id, tracking)
       } else {
-        alert("Atenção: " + (res.error || "Não foi possível obter pickagens para este envio."))
+        toast.warning(res.error || "Não foi possível obter pickagens para este envio.")
       }
     } catch (e) {
-      alert("Erro ao sincronizar com CTT: " + errorMessage(e))
+      toast.error("Erro ao sincronizar com CTT: " + errorMessage(e))
     } finally {
       setIsSyncing(false)
     }
@@ -214,7 +219,7 @@ setTimelineEvents(data || [])
     try {
       const res = await injectTrackingEventAction(currentShipment.id, tracking, selectedEvent, selectedReason, selectedSituation)
       if (res.success) {
-        alert(`🎉 Evento ${selectedEvent} injetado com sucesso!`)
+        toast.success(`Evento ${selectedEvent} injetado com sucesso.`)
         // Re-sincroniza
         setLoadingTimeline(true)
         await loadTimeline(currentShipment.id, tracking)
@@ -224,10 +229,10 @@ setTimelineEvents(data || [])
         setCurrentShipment(updated)
         if (onUpdateShipment) onUpdateShipment(updated)
       } else {
-        alert("Erro ao injetar evento: " + res.error)
+        toast.error("Erro ao injetar evento: " + res.error)
       }
     } catch (e) {
-      alert("Erro ao injetar evento: " + errorMessage(e))
+      toast.error("Erro ao injetar evento: " + errorMessage(e))
     } finally {
       setIsInjectingEvent(false)
     }
@@ -251,23 +256,27 @@ setTimelineEvents(data || [])
 
   const handleCreateReturn = async () => {
     if (!currentShipment?.id) return
-    const confirmed = window.confirm(`Deseja criar uma guia de DEVOLUÇÃO para o envio ${tracking}?\n\nO Remetente e Destinatário serão invertidos automaticamente.`)
+    const confirmed = await confirmAction({
+      title: `Criar guia de devolução para ${tracking}?`,
+      description: "O remetente e o destinatário são trocados automaticamente.",
+      confirmLabel: "Criar devolução",
+    })
     if (!confirmed) return
 
     setIsCreatingReturn(true)
     try {
       const res = await createReturnShipmentAction(currentShipment.id)
       if (res.success) {
-        alert(`✅ Guia de devolução criada com sucesso!\n\nNovo Tracking: ${res.newTrackingNumber}`)
+        toast.success(`Guia de devolução criada. Novo tracking: ${res.newTrackingNumber}`)
         const updated = { ...currentShipment, status: "devolvido" }
         setCurrentShipment(updated)
         if (onUpdateShipment) onUpdateShipment(updated)
         onClose()
       } else {
-        alert("Erro ao criar devolução: " + (res.error || "Erro desconhecido"))
+        toast.error("Erro ao criar devolução: " + (res.error || "Erro desconhecido"))
       }
     } catch (e) {
-      alert("Erro ao criar devolução: " + errorMessage(e))
+      toast.error("Erro ao criar devolução: " + errorMessage(e))
     } finally {
       setIsCreatingReturn(false)
     }
@@ -275,21 +284,26 @@ setTimelineEvents(data || [])
 
   const handleDelete = async () => {
     if (!currentShipment?.id) return
-    const confirmed = window.confirm(`⚠️ Tem a certeza que deseja ELIMINAR permanentemente o envio ${tracking}?\n\nEsta ação apagará a guia e todo o histórico de rastreio associado.`)
+    const confirmed = await confirmAction({
+      title: `Eliminar o envio ${tracking}?`,
+      description: "A guia e todo o histórico de rastreio associado são apagados. Esta ação não pode ser desfeita.",
+      confirmLabel: "Eliminar envio",
+      tone: "danger",
+    })
     if (!confirmed) return
 
     setIsDeleting(true)
     try {
       const res = await deleteShipmentAction(currentShipment.id)
       if (res.success) {
-        alert(`🗑️ Envio ${tracking} eliminado com sucesso!`)
+        toast.success(`Envio ${tracking} eliminado.`)
         onClose()
         window.location.reload()
       } else {
-        alert("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"))
+        toast.error("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"))
       }
     } catch (e) {
-      alert("Erro ao eliminar envio: " + errorMessage(e))
+      toast.error("Erro ao eliminar envio: " + errorMessage(e))
     } finally {
       setIsDeleting(false)
     }
@@ -350,30 +364,35 @@ setTimelineEvents(data || [])
   return (
     <div className="tms-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
-        className="tms-modal-fit bg-[var(--surface-bg)] rounded-xl w-full max-w-4xl shadow-2xl border border-[var(--border-strong)] overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="client-shipment-detail-title"
+        tabIndex={-1}
+        className="tms-modal-fit outline-none bg-[var(--surface-bg)] rounded-xl w-full max-w-4xl shadow-2xl border border-[var(--border-strong)] overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div className="p-5 sm:p-6 border-b border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-muted)]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 text-slate-800 flex items-center justify-center font-bold shadow-2xs">
-              <Package className="w-5 h-5 text-slate-700" />
+            <div className="w-10 h-10 rounded-lg bg-[var(--surface-bg)] border border-[var(--border-strong)] text-[var(--text-primary)] flex items-center justify-center font-bold shadow-2xs">
+              <Package className="w-5 h-5 text-[var(--text-secondary)]" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-slate-900 tracking-tight">Detalhes do Envio</h3>
-                <span className="font-mono text-xs bg-white text-slate-900 border border-slate-200 px-2.5 py-0.5 rounded-md font-bold shadow-2xs">
+                <h3 id="client-shipment-detail-title" className="text-lg font-bold text-[var(--text-primary)] tracking-tight">Detalhes do Envio</h3>
+                <span className="font-mono text-xs bg-[var(--surface-bg)] text-[var(--text-primary)] border border-[var(--border-strong)] px-2.5 py-0.5 rounded-md font-bold shadow-2xs">
                   {internalRef}
                 </span>
                 {carrierTracking && (
-                  <span className="font-mono text-xs bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-md font-medium" title={externalTrackingUrl ? "Tracking informativo FedEx" : isCorreos ? "Expedición / Rastreio Correos Express" : "Referência CTT Expresso"}>
+                  <span className="font-mono text-xs bg-[var(--surface-dim)] text-[var(--text-secondary)] border border-[var(--border-strong)] px-2.5 py-0.5 rounded-md font-medium" title={externalTrackingUrl ? "Tracking informativo FedEx" : isCorreos ? "Expedición / Rastreio Correos Express" : "Referência CTT Expresso"}>
                     {externalTrackingUrl ? "FedEx: " : isCorreos ? "Correos: " : "CTT: "}{carrierTracking}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 font-medium">
+              <div className="flex items-center gap-3 text-xs text-[var(--text-tertiary)] mt-1 font-medium">
                 <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <Calendar className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
                   {dateFormatted}
                 </span>
                 <span>•</span>
@@ -403,10 +422,10 @@ setTimelineEvents(data || [])
             <button
               type="button"
               onClick={downloadLabel}
-              className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Descarregar etiqueta em PDF"
             >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <Download className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
               <span>Descarregar PDF</span>
             </button>
 
@@ -415,10 +434,10 @@ setTimelineEvents(data || [])
               target={externalTrackingUrl ? "_blank" : undefined}
               rel={externalTrackingUrl ? "noopener noreferrer" : undefined}
               onClick={onClose}
-              className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 bg-[var(--accent-soft)] border border-[var(--accent)]/25 hover:brightness-95 text-[var(--accent)] rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title={externalTrackingUrl ? "Consultar o tracking no site da FedEx" : "Abrir no Mapa Interativo Leaflet"}
             >
-              <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+              <MapPin className="w-3.5 h-3.5 text-[var(--accent)]" />
               <span>{externalTrackingUrl ? "Tracking FedEx" : "Ver no Mapa"}</span>
             </Link>
 
@@ -426,7 +445,8 @@ setTimelineEvents(data || [])
             <button 
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer ml-1 shadow-2xs"
+              aria-label="Fechar detalhes do envio"
+              className="w-11 h-11 sm:w-8 sm:h-8 rounded-lg bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors cursor-pointer ml-1 shadow-2xs"
             >
               <X className="w-4 h-4" />
             </button>
@@ -434,9 +454,9 @@ setTimelineEvents(data || [])
         </div>
 
         {/* Status Control Bar */}
-        <div className="px-6 py-2 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="px-6 py-2 bg-[var(--surface-muted)] border-b border-[var(--border-strong)] flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2.5">
-            <span className="text-slate-500 font-medium text-xs">Estado da Encomenda:</span>
+            <span className="text-[var(--text-tertiary)] font-medium text-xs">Estado da Encomenda:</span>
             {(() => {
               const cfg = getShipmentStatusConfig(currentStatus)
               return (
@@ -445,7 +465,7 @@ setTimelineEvents(data || [])
                 </Badge>
               )
             })()}
-            <span className="text-xs text-slate-400 font-normal hidden sm:inline ml-1">
+            <span className="text-xs text-[var(--text-tertiary)] font-normal hidden sm:inline ml-1">
               {externalTrackingUrl ? "Tracking informativo · consulta no site da FedEx" : isCorreos ? "(Sincronizado com API Correos Express)" : "(Sincronizado com API CTT)"}
             </span>
           </div>
@@ -455,10 +475,10 @@ setTimelineEvents(data || [])
               type="button"
               onClick={handleSyncTracking}
               disabled={isSyncing}
-              className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-slate-900 font-medium px-3 py-1 rounded-md flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50 text-xs"
+              className="bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium px-3 py-1 rounded-md flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer disabled:opacity-50 text-xs"
               title={isCorreos ? "Consultar API Correos Express para obter novas leituras de tracking" : "Consultar API dos CTT para obter novas leituras de tracking"}
             >
-              <RefreshIcon className={`w-4 h-4 ${isSyncing ? "animate-spin text-slate-600" : "text-slate-500"}`} />
+              <RefreshIcon className={`w-4 h-4 ${isSyncing ? "animate-spin text-[var(--text-secondary)]" : "text-[var(--text-tertiary)]"}`} />
               <span>{isSyncing ? "A Sincronizar..." : "Sincronizar"}</span>
             </button>}
           </div>
@@ -469,7 +489,7 @@ setTimelineEvents(data || [])
           <button
             type="button"
             onClick={() => setActiveTab("tracking")}
-            className={`py-2.5 px-3 text-[11px] font-bold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`py-2.5 px-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === "tracking"
                 ? "border-[var(--accent)] text-[var(--accent)]"
                 : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]"
@@ -482,7 +502,7 @@ setTimelineEvents(data || [])
           <button
             type="button"
             onClick={() => setActiveTab("dados")}
-            className={`py-2.5 px-3 text-[11px] font-bold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`py-2.5 px-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer ${
               activeTab === "dados"
                 ? "border-[var(--accent)] text-[var(--accent)]"
                 : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-strong)]"
@@ -536,10 +556,10 @@ setTimelineEvents(data || [])
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-mono text-[10px] font-bold uppercase tracking-wider">
+                          <span className="font-mono text-xs font-bold uppercase tracking-wider">
                             Etapa {idx + 1}
                           </span>
-                          <span className="w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shadow-2xs">
+                          <span className="w-5 h-5 rounded-full flex items-center justify-center font-bold text-xs shadow-2xs">
                             {isCompleted ? (
                               <CheckCircle2 className="w-5 h-5 text-[var(--status-success)]" />
                             ) : isCurrent ? (
@@ -554,7 +574,7 @@ setTimelineEvents(data || [])
                         <div className="text-xs font-bold text-[var(--text-primary)]">
                           {step.label}
                         </div>
-                        <div className="text-[10px] text-[var(--text-tertiary)] font-mono mt-0.5">
+                        <div className="text-xs text-[var(--text-tertiary)] font-mono mt-0.5">
                           Pickagem: {step.eventCode}
                         </div>
                       </div>
@@ -571,7 +591,7 @@ setTimelineEvents(data || [])
                   </div>
                   <div>
                     <h5 className="text-xs font-bold text-[var(--text-primary)]">Partilhar Rastreio com o Cliente</h5>
-                    <p className="text-[11px] text-[var(--text-secondary)]">Link público direto para o destinatário acompanhar a entrega</p>
+                    <p className="text-xs text-[var(--text-secondary)]">Link público direto para o destinatário acompanhar a entrega</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -597,6 +617,7 @@ setTimelineEvents(data || [])
                     rel="noreferrer"
                     className="p-1.5 bg-[var(--surface-dim)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-md text-xs font-semibold flex items-center gap-1 transition-all"
                     title="Abrir portal de rastreio em novo separador"
+                    aria-label="Abrir portal de rastreio em novo separador"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
@@ -610,7 +631,7 @@ setTimelineEvents(data || [])
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <strong className="text-sm font-bold text-[var(--status-critical)]">Alerta de Incidência ({isCorreos ? "Correos Express" : "CTT Expresso"})</strong>
-                      <span className="font-mono text-[10px] font-bold bg-[rgba(220,38,38,0.15)] text-[var(--status-critical)] px-2 py-0.5 rounded">
+                      <span className="font-mono text-xs font-bold bg-[rgba(220,38,38,0.15)] text-[var(--status-critical)] px-2 py-0.5 rounded">
                         Entrega Não Conseguida
                       </span>
                     </div>
@@ -641,7 +662,7 @@ setTimelineEvents(data || [])
                     <Clock className="w-4 h-4 text-[var(--accent)]" />
                     <span>Histórico de Pickagens</span>
                   </h4>
-                  <span className="text-[11px] text-[var(--text-tertiary)] uppercase tracking-wider font-semibold">
+                  <span className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider font-semibold">
                     {timelineEvents.length} evento(s)
                   </span>
                 </div>
@@ -657,7 +678,7 @@ setTimelineEvents(data || [])
                       <Clock className="w-5 h-5" />
                     </div>
                     <p className="text-xs font-bold text-[var(--text-secondary)] mb-1 uppercase tracking-wider">Aguardar Pickagens</p>
-                    <p className="text-[11px] text-[var(--text-tertiary)] max-w-sm mx-auto">
+                    <p className="text-xs text-[var(--text-tertiary)] max-w-sm mx-auto">
                       Ainda não existem leituras óticas registadas para este envio. O histórico será preenchido automaticamente.
                     </p>
                   </div>
@@ -706,7 +727,7 @@ setTimelineEvents(data || [])
                           }`}>
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                               <div className="flex items-center gap-2">
-                                <span className={`font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                                <span className={`font-mono text-xs font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
                                   isIncidencia
                                     ? "bg-[var(--status-critical)] text-white"
                                     : isEntregue
@@ -723,13 +744,13 @@ setTimelineEvents(data || [])
                                   {ev.eventName}
                                 </span>
                                 {isIncidencia && (
-                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider bg-[rgba(220,38,38,0.15)] text-[var(--status-critical)] px-2 py-0.5 rounded-full">
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider bg-[rgba(220,38,38,0.15)] text-[var(--status-critical)] px-2 py-0.5 rounded-full">
                                     <AlertTriangle className="w-3 h-3" />
                                     <span>Incidência</span>
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[11px] font-mono text-[var(--text-tertiary)] font-semibold">
+                              <span className="text-xs font-mono text-[var(--text-tertiary)] font-semibold">
                                 {dateStr}
                               </span>
                             </div>
@@ -740,7 +761,7 @@ setTimelineEvents(data || [])
                               {ev.description}
                             </p>
 
-                            <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-tertiary)] mt-2 font-medium uppercase tracking-wider text-[9px]">
+                            <div className="flex items-center gap-1.5 text-xs text-[var(--text-tertiary)] mt-2 font-medium uppercase tracking-wider text-xs">
                               <MapPin className="w-3 h-3 text-[var(--text-tertiary)]" />
                               <span>{ev.location || (isCorreos ? "Rede Correos Express" : "Rede CTT Expresso")}</span>
                             </div>
@@ -767,11 +788,11 @@ setTimelineEvents(data || [])
                 {/* Remetente Card */}
                 <div className="space-y-2 bg-[var(--surface-muted)] p-4 rounded-xl border border-[var(--border-subtle)]">
                   <div className="flex items-center justify-between">
-                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Remetente (Empresa)</label>
-                    <span className="text-[9px] text-[var(--text-secondary)] font-bold bg-[var(--surface-dim)] border border-[var(--border-strong)] px-2 py-0.5 rounded-sm uppercase tracking-wider">Conta Cliente</span>
+                    <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Remetente (Empresa)</label>
+                    <span className="text-xs text-[var(--text-secondary)] font-bold bg-[var(--surface-dim)] border border-[var(--border-strong)] px-2 py-0.5 rounded-sm uppercase tracking-wider">Conta Cliente</span>
                   </div>
                   <div className="text-xs text-[var(--text-primary)] font-bold">{currentShipment.sender_name || "Empresa Cliente"}</div>
-                  <div className="text-[11px] text-[var(--text-tertiary)] font-medium">
+                  <div className="text-xs text-[var(--text-tertiary)] font-medium">
                     {currentShipment.sender_address || "Sede Comercial"}
                     {currentShipment.sender_zip4 ? ` (${currentShipment.sender_zip4}${currentShipment.sender_zip3 ? `-${currentShipment.sender_zip3}` : ""})` : ""}
                   </div>
@@ -779,7 +800,7 @@ setTimelineEvents(data || [])
 
                 {/* Destinatário Name */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Nome do Destinatário</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Nome do Destinatário</label>
                   <input 
                     type="text" 
                     disabled
@@ -792,7 +813,7 @@ setTimelineEvents(data || [])
               {/* 2. Morada, CP e Cidade */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2 space-y-1.5">
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Morada de Entrega</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Morada de Entrega</label>
                   <div className="relative">
                     <input 
                       type="text" 
@@ -805,7 +826,7 @@ setTimelineEvents(data || [])
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">CP & Cidade</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">CP & Cidade</label>
                   <div className="flex gap-2">
                     <input 
                       type="text" 
@@ -835,7 +856,7 @@ setTimelineEvents(data || [])
               {/* 3. Telefone, Email e Volumes */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Telemóvel Dest.</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Telemóvel Dest.</label>
                   <div className="relative">
                     <input 
                       type="text" 
@@ -848,7 +869,7 @@ setTimelineEvents(data || [])
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Email Dest.</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Email Dest.</label>
                   <div className="relative">
                     <input 
                       type="text" 
@@ -861,7 +882,7 @@ setTimelineEvents(data || [])
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Nº Volumes</label>
+                  <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Nº Volumes</label>
                   <input 
                     type="text" 
                     disabled
@@ -873,7 +894,7 @@ setTimelineEvents(data || [])
 
               {/* 4. Serviço Escolhido */}
               <div className="bg-[var(--surface-muted)] p-4 rounded-xl border border-[var(--border-subtle)] space-y-2">
-                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Serviço de Transporte Linke</label>
+                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Serviço de Transporte Linke</label>
                 <div className="flex items-center gap-3">
                   {getCarrierLogo(serviceType || "ctt") ? (
                     <div className="w-8 h-8 rounded-md bg-[var(--surface-bg)] border border-[var(--border-strong)] p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
@@ -895,13 +916,13 @@ setTimelineEvents(data || [])
 
               {/* 5. Serviços Especiais */}
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-[10px]">Serviços Especiais & Suplementares</label>
+                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Serviços Especiais & Suplementares</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   
                   {/* Cobrança */}
                   <div className={`p-3 rounded-md border ${isCOD ? "bg-[var(--accent-soft)] border-[var(--accent)] shadow-2xs" : "bg-[var(--surface-muted)] border-[var(--border-subtle)] opacity-70"}`}>
                     <div className="flex items-center justify-between">
-                      <span className={`font-bold text-[11px] uppercase tracking-wider ${isCOD ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"}`}>Cobrança / COD</span>
+                      <span className={`font-bold text-xs uppercase tracking-wider ${isCOD ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"}`}>Cobrança / COD</span>
                       {isCOD && <span className="font-mono font-bold text-[var(--status-success)] text-xs">{codAmount}</span>}
                     </div>
                   </div>
@@ -910,7 +931,7 @@ setTimelineEvents(data || [])
                   <div className={`p-3 rounded-md border ${isFragil ? "bg-[var(--accent-soft)] border-[var(--accent)] shadow-2xs" : "bg-[var(--surface-muted)] border-[var(--border-subtle)] opacity-70"}`}>
                     <div className="flex items-center gap-2">
                       <input type="checkbox" checked={isFragil} disabled className="w-3.5 h-3.5 rounded text-[var(--accent)] cursor-not-allowed border-[var(--border-strong)]" />
-                      <span className={`font-bold text-[11px] uppercase tracking-wider ${isFragil ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"}`}>Mercadoria Frágil</span>
+                      <span className={`font-bold text-xs uppercase tracking-wider ${isFragil ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"}`}>Mercadoria Frágil</span>
                     </div>
                   </div>
 
@@ -918,7 +939,7 @@ setTimelineEvents(data || [])
                   <div className={`p-3 rounded-md border ${isSMS ? "bg-[var(--accent-soft)] border-[var(--accent)] shadow-2xs" : "bg-[var(--surface-muted)] border-[var(--border-subtle)] opacity-70"}`}>
                     <div className="flex items-center gap-2">
                       <input type="checkbox" checked={isSMS} disabled className="w-3.5 h-3.5 rounded text-[var(--accent)] cursor-not-allowed border-[var(--border-strong)]" />
-                      <span className={`font-bold text-[11px] uppercase tracking-wider ${isSMS ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"}`}>Alerta SMS Tracking</span>
+                      <span className={`font-bold text-xs uppercase tracking-wider ${isSMS ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)]"}`}>Alerta SMS Tracking</span>
                     </div>
                   </div>
 
@@ -932,10 +953,10 @@ setTimelineEvents(data || [])
 
         {/* Modal Footer */}
         <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-3">
-          <div className="text-[11px] text-[var(--text-secondary)] font-bold uppercase tracking-wider">
+          <div className="text-xs text-[var(--text-secondary)] font-bold uppercase tracking-wider">
             {currentShipment.payment_status === "paid" ? "Total Pago" : "Total Faturado"}: <strong className="text-[var(--text-primary)] font-mono text-sm ml-1">{currentShipment.sell_price ? `${Number(currentShipment.sell_price).toFixed(2)}€` : "0.00€"}</strong>
             {currentShipment.payment_status === "paid" && (
-              <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold normal-case tracking-normal">Pago</span>
+              <span className="ml-2 px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/25 text-xs font-bold normal-case tracking-normal">Pago</span>
             )}
           </div>
 

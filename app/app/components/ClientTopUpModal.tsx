@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { CreditCard, X, AlertCircle, ShieldCheck } from "lucide-react"
+import { useDialogA11y } from "@/components/ui/use-dialog-a11y"
 
 interface ClientTopUpModalProps {
   isOpen: boolean
@@ -13,6 +14,8 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
   const [amount, setAmount] = React.useState<number | "">("")
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState("")
+  const dialogRef = React.useRef<HTMLDivElement>(null)
+  useDialogA11y(dialogRef, onClose, isOpen)
 
   if (!isOpen) return null
 
@@ -48,7 +51,13 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
 
   return (
     <div className="tms-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="tms-modal-scroll bg-[var(--surface-bg)] rounded-xl shadow-xl w-full max-w-md overflow-hidden relative border border-[var(--border-subtle)]">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="client-topup-title"
+        tabIndex={-1}
+        className="tms-modal-scroll outline-none bg-[var(--surface-bg)] rounded-xl shadow-xl w-full max-w-md overflow-hidden relative border border-[var(--border-subtle)]">
         
         {/* Top 1px Accent Line */}
         <div className="h-1 w-full bg-[var(--accent)]" />
@@ -60,7 +69,7 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
               <CreditCard className="w-5 h-5" strokeWidth={1.75} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[var(--text-primary)]">Carregar Saldo</h2>
+              <h2 id="client-topup-title" className="text-base font-bold text-[var(--text-primary)]">Carregar Saldo</h2>
               <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
                 Adicione fundos à sua conta corrente com segurança
               </p>
@@ -68,8 +77,9 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
           </div>
 
           <button 
+            type="button"
             onClick={onClose}
-            className="p-1 rounded-md text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
+            className="w-11 h-11 sm:w-8 sm:h-8 flex items-center justify-center rounded-md text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
             aria-label="Fechar"
           >
             <X className="w-4 h-4" />
@@ -80,7 +90,7 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
         <div className="p-5 sm:p-6 space-y-5">
           {/* Quick Amounts */}
           <div>
-            <label className="block text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2.5">
+            <label className="block text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2.5">
               Valores Rápidos
             </label>
             <div className="grid grid-cols-3 gap-2.5">
@@ -106,7 +116,7 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
 
           {/* Custom Amount */}
           <div>
-            <label className="block text-[11px] font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
               Ou introduza outro montante (€)
             </label>
             <div className="relative">
@@ -120,7 +130,7 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
                 value={amount}
                 onChange={(e) => setAmount(Number(e.target.value) || "")}
                 placeholder="Ex: 50"
-                className="w-full border border-[var(--border-subtle)] rounded-lg pl-8 pr-3 py-2 text-base font-mono font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] focus:bg-white focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none transition-all"
+                className="w-full border border-[var(--border-subtle)] rounded-lg pl-8 pr-3 py-2 text-base font-mono font-bold text-[var(--text-primary)] bg-[var(--surface-muted)] focus:bg-[var(--surface-bg)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] outline-none transition-all"
               />
             </div>
           </div>
@@ -143,11 +153,11 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
             </button>
             
             <div className="pt-1 flex flex-col items-center justify-center gap-1.5 text-center">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-tertiary)]">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-tertiary)]">
                 <ShieldCheck className="w-3.5 h-3.5 text-[var(--accent)]" />
                 <span>Processamento Seguro via Stripe</span>
               </div>
-              <p className="text-[10px] text-[var(--text-tertiary)]">
+              <p className="text-xs text-[var(--text-tertiary)]">
                 Aceita MB WAY, Multibanco, Cartões de Crédito e Débito.
               </p>
             </div>
