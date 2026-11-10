@@ -199,7 +199,9 @@ export function ShipmentCard({ shipment, isSelected, onSelect }: ShipmentCardPro
 
           <div className="flex items-center justify-between text-[10px] font-bold text-[var(--text-primary)] bg-[var(--surface-bg)] border border-[var(--border-subtle)] px-2 py-1.5 rounded-lg shadow-2xs mt-2">
             <span>{shipment.serviceType}</span>
-            <span className="text-[var(--text-secondary)] font-semibold">Seguro: {shipment.documentation.insuredValueEur.toLocaleString()} €</span>
+            {shipment.documentation.insuredValueEur != null && (
+              <span className="text-[var(--text-secondary)] font-semibold">Seguro: {shipment.documentation.insuredValueEur.toLocaleString()} €</span>
+            )}
           </div>
         </div>
       )}

@@ -73,7 +73,7 @@ export function DocumentationModal({ shipment, isOpen, onClose }: DocumentationM
                   Código de Comunicação AT
                 </span>
                 <span className="font-mono font-bold text-emerald-900 dark:text-emerald-200 text-xs">
-                  {documentation.atDocCode}
+                  {documentation.atDocCode ?? "Sem código AT"}
                 </span>
               </div>
             </div>
@@ -133,11 +133,11 @@ export function DocumentationModal({ shipment, isOpen, onClose }: DocumentationM
               </div>
               <div>
                 <span className="text-[10px] text-[var(--text-tertiary)]">Peso Bruto</span>
-                <p className="font-bold text-[var(--text-primary)]">{documentation.cargoWeightKg} kg</p>
+                <p className="font-bold text-[var(--text-primary)]">{documentation.cargoWeightKg != null ? `${documentation.cargoWeightKg} kg` : "—"}</p>
               </div>
               <div>
                 <span className="text-[10px] text-[var(--text-tertiary)]">Valor Declarado</span>
-                <p className="font-bold text-[var(--text-primary)]">{documentation.insuredValueEur.toLocaleString()} €</p>
+                <p className="font-bold text-[var(--text-primary)]">{documentation.insuredValueEur != null ? `${documentation.insuredValueEur.toLocaleString()} €` : "—"}</p>
               </div>
             </div>
           </div>

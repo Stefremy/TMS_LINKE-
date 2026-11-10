@@ -21,7 +21,8 @@ export interface ShipmentPickagem {
 
 export interface ShipmentDocumentation {
   guiaNumber: string
-  atDocCode: string
+  /** null when no AT communication code exists for this shipment */
+  atDocCode: string | null
   issueDate: string
   senderName: string
   senderVat: string
@@ -30,9 +31,10 @@ export interface ShipmentDocumentation {
   recipientVat: string
   recipientAddress: string
   goodsDescription: string
-  cargoWeightKg: number
+  cargoWeightKg: number | null
   cargoPackages: number
-  insuredValueEur: number
+  /** null when no insured/declared value was recorded */
+  insuredValueEur: number | null
 }
 
 export interface TrackingShipment {

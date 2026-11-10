@@ -23,6 +23,10 @@ export async function listStaffAuthUsers(db: SupabaseClient): Promise<StaffAuthU
 
 /** Both the editor and the current session read the same trusted persisted access. */
 export async function loadStaffDirectory(db: SupabaseClient, tenantId: string, users: StaffAuthUser[]) {
+  // Client accounts are never staff (skipped below). Without this, an all-client input leaves
+  // no candidate ids and the queries further down would load every staff profile instead.
+  if (users.length > 0 && users.every(user => user.app_metadata?.role === "client")) return []
+
   const profiles = new Map<string, Colaborador>()
   const candidateIds = new Set<string>()
 

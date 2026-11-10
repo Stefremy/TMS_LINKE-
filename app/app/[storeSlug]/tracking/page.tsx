@@ -4,6 +4,8 @@ import Link from "next/link"
 import { requirePortalStore } from "@/lib/client-portal/access"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { createAdminClient } from "@/lib/supabase/server"
+import { loadShipmentParcelSummaries } from "@/lib/services/shipments/shipment-parcel-summaries"
+import type { ParcelSummary } from "@/lib/services/shipments/parcel-summary"
 import { resolveCoordinates } from "@/lib/services/geo/geocoder"
 import { TrackingShipment } from "@/app/ops/tracking/types"
 import { buildTrackingCheckpoints } from "@/app/ops/tracking/checkpoints"
@@ -13,6 +15,14 @@ import { DeliveryTrackingClient } from "@/app/ops/tracking/components/DeliveryTr
 export const metadata: Metadata = {
   title: "Rastreio & Mapeamento | Área do Cliente",
   description: "Acompanhe em tempo real a geolocalização e as pickagens dos seus envios.",
+}
+
+/** Carrier-measured weight when available, otherwise the declared weight. */
+function parcelWeightKg(summary?: ParcelSummary | null): number | null {
+  if (!summary) return null
+  const carrier = summary.carrierWeight
+  if (carrier?.value) return carrier.unit === "g" ? Math.round(carrier.value / 10) / 100 : carrier.value
+  return summary.declaredWeightKg ?? null
 }
 
 export default async function ClientTrackingPage({
@@ -57,6 +67,8 @@ export default async function ClientTrackingPage({
       )
     }).slice(0, searchQ ? 50 : 25)
 
+    // Real declared/carrier weight and volume count (same source as the Envios list).
+    const parcels = await loadShipmentParcelSummaries(supabase, activeShipments[0]?.tenant_id || "", activeShipments)
     const shipmentIds = activeShipments.map((s) => s.id)
     const eventsByShipment: Record<string, { event_code: string; description: string; timestamp: string }[]> = {}
 
@@ -207,8 +219,8 @@ export default async function ClientTrackingPage({
           pickagens,
           documentation: {
             guiaNumber: s.reference || `GT-${s.id.slice(0, 8).toUpperCase()}`,
-            atDocCode: `AT-${s.id.slice(0, 10).toUpperCase()}`,
-            issueDate: new Date().toLocaleDateString("pt-PT"),
+            atDocCode: null,
+            issueDate: s.created_at ? new Date(s.created_at).toLocaleDateString("pt-PT") : "—",
             senderName: s.sender_name || client.legal_name || client.short_name || "Remetente",
             senderVat: client.nif || "Consulte Fatura",
             senderAddress: s.sender_address || s.sender_city || "Portugal",
@@ -216,9 +228,9 @@ export default async function ClientTrackingPage({
             recipientVat: "Consumidor Final",
             recipientAddress: s.recipient_address || s.recipient_city || "Portugal",
             goodsDescription: s.goods_description || "Volumes de mercadoria geral",
-            cargoWeightKg: Number(s.weight) || 1,
-            cargoPackages: s.volumes || 1,
-            insuredValueEur: Number(s.sell_price) || 50,
+            cargoWeightKg: parcelWeightKg(parcels.get(s.id)),
+            cargoPackages: parcels.get(s.id)?.volumeCount || 1,
+            insuredValueEur: null,
           },
         }
       })

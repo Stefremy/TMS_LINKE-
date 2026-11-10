@@ -2,6 +2,19 @@
 import { errorMessage } from "@/lib/errors"
 import { moloniMaturityDateId } from "@/lib/billing/payment-terms"
 
+/**
+ * Moloni definitively refused the request (structured error answer, or the request never
+ * left because the session could not be obtained). No document was created, so a billing
+ * lock taken for it can be released. Network failures and unreadable responses are NOT
+ * this error: the document may exist, so their locks must stay.
+ */
+export class MoloniRejectedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "MoloniRejectedError"
+  }
+}
+
 export class MoloniClient {
   private companyId: string;
   private tenantId?: string;
@@ -179,7 +192,13 @@ export class MoloniClient {
    * Realiza um pedido genérico à API do Moloni usando JSON
    */
   public async request(endpoint: string, payload: object = {}) {
-    const token = await this.getAccessToken();
+    let token: string;
+    try {
+      token = await this.getAccessToken();
+    } catch (err) {
+      // Nothing was sent to Moloni.
+      throw new MoloniRejectedError(errorMessage(err) || "Sessão Moloni indisponível.");
+    }
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
     const finalEndpoint = cleanEndpoint.endsWith('/') ? cleanEndpoint : `${cleanEndpoint}/`;
 
@@ -204,25 +223,27 @@ export class MoloniClient {
     });
 
     const json = await res.json();
+    // A structured error with no document id means Moloni refused and created nothing.
+    const Rejected = json && !Array.isArray(json) && json.document_id ? Error : MoloniRejectedError;
     
     // Check for error structures in Moloni API
     if (Array.isArray(json)) {
       if (json[0]?.error) {
-        throw new Error(`Moloni API Error [${endpoint}]: ${json[0].error_description || json[0].error}`);
+        throw new Rejected(`Moloni API Error [${endpoint}]: ${json[0].error_description || json[0].error}`);
       }
       if (json[0]?.msg || json[0]?.description) {
         const errorMsg = json.map((e) => `${e.field || ''}: ${e.msg || e.description || JSON.stringify(e)}`).join(', ');
-        throw new Error(`Moloni API Error [${endpoint}]: ${errorMsg}`);
+        throw new Rejected(`Moloni API Error [${endpoint}]: ${errorMsg}`);
       }
     }
 
     if (json && json.valid === 0) {
       const errorMsg = json.error_description || json.error || json.description || JSON.stringify(json);
-      throw new Error(`Moloni API Error [${endpoint}]: ${errorMsg}`);
+      throw new Rejected(`Moloni API Error [${endpoint}]: ${errorMsg}`);
     }
 
     if (json && json.error) {
-      throw new Error(`Moloni API Error [${endpoint}]: ${json.error_description || json.error}`);
+      throw new Rejected(`Moloni API Error [${endpoint}]: ${json.error_description || json.error}`);
     }
 
     return json;

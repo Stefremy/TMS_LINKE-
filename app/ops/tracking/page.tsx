@@ -4,6 +4,8 @@ import { Metadata } from "next"
 import { DeliveryTrackingClient } from "./components/DeliveryTrackingClient"
 import { getShipmentsAction } from "@/app/actions/shipments"
 import { getClientesAction } from "@/app/actions/clientes"
+import { loadShipmentParcelSummaries } from "@/lib/services/shipments/shipment-parcel-summaries"
+import type { ParcelSummary } from "@/lib/services/shipments/parcel-summary"
 import { createAdminClient } from "@/lib/supabase/server"
 import { resolveCoordinates } from "@/lib/services/geo/geocoder"
 import { TrackingShipment } from "./types"
@@ -15,6 +17,14 @@ export const metadata: Metadata = {
   description: "Rastreio e itinerários geolocalizados por pickagens e checkpoints de rede.",
 }
 import Link from "next/link"
+
+/** Carrier-measured weight when available, otherwise the declared weight. */
+function parcelWeightKg(summary?: ParcelSummary | null): number | null {
+  if (!summary) return null
+  const carrier = summary.carrierWeight
+  if (carrier?.value) return carrier.unit === "g" ? Math.round(carrier.value / 10) / 100 : carrier.value
+  return summary.declaredWeightKg ?? null
+}
 
 /**
  * shipments has no country column; the postal code format identifies it:
@@ -71,6 +81,9 @@ export default async function OpsTrackingPage(props: {
         })
       }
     }
+
+    // Real declared/carrier weight and volume count (same source as the Envios list).
+    const parcels = await loadShipmentParcelSummaries(supabase, activeShipments[0]?.tenant_id || "", activeShipments)
 
     // Real fiscal numbers for the guia: the sender is the client account (NIF on file).
     const clientNif = new Map<string, string>()
@@ -209,8 +222,8 @@ export default async function OpsTrackingPage(props: {
           pickagens,
           documentation: {
             guiaNumber: s.reference || `GT-${s.id.slice(0, 8).toUpperCase()}`,
-            atDocCode: `AT-${s.id.slice(0, 10).toUpperCase()}`,
-            issueDate: new Date().toLocaleDateString("pt-PT"),
+            atDocCode: null,
+            issueDate: s.created_at ? new Date(s.created_at).toLocaleDateString("pt-PT") : "—",
             senderName: s.sender_name || "Remetente",
             senderVat: (s.client_id && clientNif.get(s.client_id)) || "Não indicado",
             senderAddress: s.sender_address || s.sender_city || "Portugal",
@@ -218,9 +231,9 @@ export default async function OpsTrackingPage(props: {
             recipientVat: "Consumidor Final",
             recipientAddress: s.recipient_address || s.recipient_city || "Portugal",
             goodsDescription: s.goods_description || "Volumes de carga geral",
-            cargoWeightKg: Number(s.weight) || 5,
-            cargoPackages: s.volumes || 1,
-            insuredValueEur: Number(s.sell_price) || 250
+            cargoWeightKg: parcelWeightKg(parcels.get(s.id)),
+            cargoPackages: parcels.get(s.id)?.volumeCount || 1,
+            insuredValueEur: null
           }
         }
       }))

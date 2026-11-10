@@ -9,7 +9,7 @@ import { invoiceBillingAddress, getClientBillingAddress, usesPrincipalBillingAdd
 
 import {loadInvoiceCredits, invoiceCreditSummary} from "@/lib/billing/credit-notes/balances"
 import { createAdminClient } from "@/lib/supabase/server"
-import { MoloniClient } from "@/lib/moloni/moloni-client"
+import { MoloniClient, MoloniRejectedError } from "@/lib/moloni/moloni-client"
 import { revalidatePath } from "next/cache"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getShipmentsAction } from "@/app/actions/shipments"
@@ -29,11 +29,32 @@ const isValidUuid = (val?: string) => Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[
 async function claimManualInvoiceShipments(clientId: string, shipmentIds: string[], expected?: { id: string; sell_price?: unknown }[]) {
   const ctx = await requireEmployee("Faturação & Contas Correntes")
   const guarded = expected && process.env.CARRIER_WEIGHT_REPRICING_ENABLED === 'true'
+  const emissionId = crypto.randomUUID()
   const { error } = await createAdminClient().rpc(guarded ? 'claim_weight_safe_billing_shipments' : 'claim_billing_shipments', {
-    p_tenant: ctx.tenant_id, p_client: clientId, p_emission: crypto.randomUUID(),
+    p_tenant: ctx.tenant_id, p_client: clientId, p_emission: emissionId,
     ...(guarded ? { p_expected: expected.map(s => ({ id: s.id, price: Number(s.sell_price) })) } : { p_shipments: shipmentIds }),
   })
   if (error) throw new Error('Os preços ou o estado de faturação destes envios mudaram, ou existe uma emissão em curso/por confirmar. Atualize a página antes de emitir; não repita uma emissão por confirmar.')
+  return emissionId
+}
+
+/**
+ * Runs the fiscal insert; if Moloni definitively refused it (nothing created), frees the
+ * shipments locked for this emission so they can be invoiced again. Uncertain failures
+ * (timeouts, lost responses) keep the lock, because the invoice may exist in Moloni.
+ */
+async function releaseClaimOnRejection<T>(emissionId: string | null, insert: () => Promise<T>): Promise<T> {
+  try {
+    return await insert()
+  } catch (err) {
+    if (emissionId && err instanceof MoloniRejectedError) {
+      const ctx = await requireEmployee("Faturação & Contas Correntes")
+      const { error } = await createAdminClient().from("billing_emission_claims").delete()
+        .eq("tenant_id", ctx.tenant_id).eq("emission_id", emissionId)
+      if (error) console.error("Could not release billing claim after Moloni rejection:", error.message)
+    }
+    throw err
+  }
 }
 
 /**
@@ -168,7 +189,7 @@ export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Client
         invoiceDate = dateNow
         invoiceDueDate = expirationDate
 
-        if (!isProForma) await claimManualInvoiceShipments(client.id, shipments.map((s) => s.id), shipments)
+        const emissionId = isProForma ? null : await claimManualInvoiceShipments(client.id, shipments.map((s) => s.id), shipments)
 
         // D. Emitir Fatura ou Fatura Pró-Forma
         let invoiceRes;
@@ -182,14 +203,14 @@ export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Client
             products: validProducts
           })
         } else {
-          invoiceRes = await moloni.createInvoice({
+          invoiceRes = await releaseClaimOnRejection(emissionId, () => moloni.createInvoice({
             customerId: moloniCustomerId,
             date: dateNow,
             expirationDate: expirationDate,
             paymentDays,
             documentSetId: documentSetId,
             products: validProducts
-          })
+          }))
         }
         
         moloniDocumentId = invoiceRes.document_id
@@ -635,7 +656,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     const paymentDays = paymentDueDays(client.payment_due_days, billingConfig.defaultPaymentDays === undefined ? 30 : billingConfig.defaultPaymentDays)
     const expirationDate = addCalendarDays(dateNow, paymentDays)
 
-    if (!isProForma) await claimManualInvoiceShipments(stmt.client_id, stmt.shipment_ids || stmt.shipments?.map((s: ShipmentRecord) => s.id) || [])
+    const emissionId = isProForma ? null : await claimManualInvoiceShipments(stmt.client_id, stmt.shipment_ids || stmt.shipments?.map((s: ShipmentRecord) => s.id) || [])
 
     // 7. Criar fatura/pro-forma no Moloni
     let invoiceRes
@@ -649,14 +670,14 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
         products: validProducts
       })
     } else {
-      invoiceRes = await moloni.createInvoice({
+      invoiceRes = await releaseClaimOnRejection(emissionId, () => moloni.createInvoice({
         customerId: moloniCustomerId,
         date: dateNow,
         expirationDate: expirationDate,
         paymentDays,
         documentSetId: documentSetId,
         products: validProducts
-      })
+      }))
     }
 
     const moloniDocId = invoiceRes.document_id
