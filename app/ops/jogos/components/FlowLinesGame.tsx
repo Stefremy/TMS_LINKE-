@@ -1,181 +1,199 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback } from "react"
-import { Play, RotateCcw, Award, CheckCircle2, Volume2, VolumeX, ArrowRight } from "lucide-react"
-import { playConnectSound, playStepSound, playSuccessChime, playErrorBuzz } from "../lib/audio"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
+import { RotateCcw, CheckCircle2, ArrowRight, Lightbulb, Shuffle } from "lucide-react"
+import { playConnectSound, playStepSound, playSuccessChime } from "../lib/audio"
+import { generateFlowLevel, getLisbonDateKey, type GeneratedFlowLevel } from "../lib/puzzle-generator"
 import type { GameCompletionEvent } from "../types"
 
 interface PairColor {
   id: number
   name: string
   color: string
-  bgDot: string
-  bgLine: string
-  border: string
 }
 
 const COLORS: PairColor[] = [
-  { id: 1, name: "Vermelho", color: "#ef4444", bgDot: "bg-red-500", bgLine: "bg-red-500/80", border: "border-red-400" },
-  { id: 2, name: "Azul", color: "#3b82f6", bgDot: "bg-blue-500", bgLine: "bg-blue-500/80", border: "border-blue-400" },
-  { id: 3, name: "Verde", color: "#10b981", bgDot: "bg-emerald-500", bgLine: "bg-emerald-500/80", border: "border-emerald-400" },
-  { id: 4, name: "Amarelo", color: "#f59e0b", bgDot: "bg-amber-500", bgLine: "bg-amber-500/80", border: "border-amber-400" },
-  { id: 5, name: "Roxo", color: "#8b5cf6", bgDot: "bg-purple-500", bgLine: "bg-purple-500/80", border: "border-purple-400" },
-  { id: 6, name: "Ciano", color: "#06b6d4", bgDot: "bg-cyan-500", bgLine: "bg-cyan-500/80", border: "border-cyan-400" },
+  { id: 1, name: "Vermelho", color: "#ef4444" },
+  { id: 2, name: "Azul", color: "#3b82f6" },
+  { id: 3, name: "Verde", color: "#10b981" },
+  { id: 4, name: "Amarelo", color: "#f59e0b" },
+  { id: 5, name: "Roxo", color: "#8b5cf6" },
+  { id: 6, name: "Ciano", color: "#06b6d4" },
+  { id: 7, name: "Rosa", color: "#ec4899" },
 ]
 
-interface LevelDef {
-  levelNumber: number
-  size: number
-  title: string
-  endpoints: { [colorId: number]: [ [number, number], [number, number] ] }
-}
-
-const FLOW_LEVELS: LevelDef[] = [
-  {
-    levelNumber: 1,
-    size: 5,
-    title: "Nível 1 - Inicial (5x5)",
-    endpoints: {
-      1: [[0, 0], [4, 1]], // Red
-      2: [[0, 1], [3, 2]], // Blue
-      3: [[0, 4], [4, 4]], // Green
-      4: [[2, 3], [4, 2]], // Yellow
-    },
-  },
-  {
-    levelNumber: 2,
-    size: 5,
-    title: "Nível 2 - Fluxos Cruzados (5x5)",
-    endpoints: {
-      1: [[0, 0], [4, 4]], // Red
-      2: [[0, 4], [4, 0]], // Blue
-      3: [[1, 2], [3, 2]], // Green
-      4: [[0, 2], [4, 2]], // Yellow
-    },
-  },
-  {
-    levelNumber: 3,
-    size: 6,
-    title: "Nível 3 - Expansão (6x6)",
-    endpoints: {
-      1: [[0, 0], [5, 0]], // Red
-      2: [[0, 1], [4, 2]], // Blue
-      3: [[0, 5], [5, 5]], // Green
-      4: [[1, 3], [5, 2]], // Yellow
-      5: [[1, 5], [4, 4]], // Purple
-    },
-  },
-  {
-    levelNumber: 4,
-    size: 6,
-    title: "Nível 4 - Labirinto Central (6x6)",
-    endpoints: {
-      1: [[0, 0], [3, 3]], // Red
-      2: [[0, 3], [5, 1]], // Blue
-      3: [[0, 5], [5, 4]], // Green
-      4: [[2, 1], [5, 0]], // Yellow
-      5: [[1, 4], [4, 5]], // Purple
-    },
-  },
-  {
-    levelNumber: 5,
-    size: 7,
-    title: "Nível 5 - Mestre das Linhas (7x7)",
-    endpoints: {
-      1: [[0, 0], [6, 1]], // Red
-      2: [[0, 2], [6, 3]], // Blue
-      3: [[0, 6], [6, 6]], // Green
-      4: [[2, 4], [5, 5]], // Yellow
-      5: [[1, 1], [5, 2]], // Purple
-      6: [[3, 1], [4, 4]], // Cyan
-    },
-  },
-]
+const TOTAL_LEVELS = 5
 
 export function FlowLinesGame({
+  dailyKey,
   onComplete,
 }: {
+  dailyKey?: string
   onComplete: (event: GameCompletionEvent) => void
 }) {
+  const effectiveDailyKey = dailyKey || getLisbonDateKey()
   const [levelIdx, setLevelIdx] = useState(0)
+  const [variant, setVariant] = useState(0)
+  const [resetCount, setResetCount] = useState(0)
+
+  const currentLevel = useMemo(
+    () => generateFlowLevel(levelIdx + 1, effectiveDailyKey, variant),
+    [levelIdx, effectiveDailyKey, variant]
+  )
+
+  return (
+    <FlowLinesBoard
+      key={`${effectiveDailyKey}-${levelIdx}-${variant}-${resetCount}`}
+      level={currentLevel}
+      levelIdx={levelIdx}
+      variant={variant}
+      onSelectLevel={idx => {
+        setLevelIdx(idx)
+        setVariant(0)
+      }}
+      onRestart={() => setResetCount(c => c + 1)}
+      onNewVariant={() => setVariant(v => v + 1)}
+      onNextLevel={() => {
+        if (levelIdx < TOTAL_LEVELS - 1) {
+          setLevelIdx(prev => prev + 1)
+          setVariant(0)
+        }
+      }}
+      onComplete={onComplete}
+    />
+  )
+}
+
+function FlowLinesBoard({
+  level,
+  levelIdx,
+  variant,
+  onSelectLevel,
+  onRestart,
+  onNewVariant,
+  onNextLevel,
+  onComplete,
+}: {
+  level: GeneratedFlowLevel
+  levelIdx: number
+  variant: number
+  onSelectLevel: (idx: number) => void
+  onRestart: () => void
+  onNewVariant: () => void
+  onNextLevel: () => void
+  onComplete: (event: GameCompletionEvent) => void
+}) {
   const [activeColorId, setActiveColorId] = useState<number | null>(null)
   const [paths, setPaths] = useState<{ [colorId: number]: [number, number][] }>({})
   const [connectedColors, setConnectedColors] = useState<number[]>([])
   const [moves, setMoves] = useState(0)
-  const [startTime, setStartTime] = useState<number>(Date.now())
+  const [hintsUsed, setHintsUsed] = useState(0)
   const [elapsedMs, setElapsedMs] = useState(0)
   const [isWon, setIsWon] = useState(false)
-  const [muted, setMuted] = useState(false)
   const [levelScore, setLevelScore] = useState(0)
-  const boardRef = useRef<HTMLDivElement>(null)
 
-  const currentLevel = FLOW_LEVELS[levelIdx]
-  const size = currentLevel.size
+  const size = level.size
 
-  // Reset or start level
-  const initLevel = useCallback((lvl: LevelDef) => {
-    setActiveColorId(null)
-    setPaths({})
-    setConnectedColors([])
-    setMoves(0)
-    setStartTime(Date.now())
-    setElapsedMs(0)
-    setIsWon(false)
-    setLevelScore(0)
-  }, [])
-
-  useEffect(() => {
-    initLevel(currentLevel)
-  }, [currentLevel, initLevel])
-
-  // Timer
   useEffect(() => {
     if (isWon) return
+    const startedAt = Date.now()
     const interval = setInterval(() => {
-      setElapsedMs(Date.now() - startTime)
-    }, 200)
+      setElapsedMs(Date.now() - startedAt)
+    }, 100)
     return () => clearInterval(interval)
-  }, [startTime, isWon])
+  }, [isWon])
 
-  const isEndpoint = useCallback((r: number, c: number, colorId: number): boolean => {
-    const pair = currentLevel.endpoints[colorId]
-    if (!pair) return false
-    return (pair[0][0] === r && pair[0][1] === c) || (pair[1][0] === r && pair[1][1] === c)
-  }, [currentLevel])
+  const isEndpoint = useCallback(
+    (r: number, c: number, colorId: number): boolean => {
+      const pair = level.endpoints[colorId]
+      if (!pair) return false
+      return (pair[0][0] === r && pair[0][1] === c) || (pair[1][0] === r && pair[1][1] === c)
+    },
+    [level]
+  )
 
-  const getEndpointAt = useCallback((r: number, c: number): number | null => {
-    for (const [cIdStr, pair] of Object.entries(currentLevel.endpoints)) {
-      const cId = Number(cIdStr)
-      if ((pair[0][0] === r && pair[0][1] === c) || (pair[1][0] === r && pair[1][1] === c)) {
-        return cId
+  const getEndpointAt = useCallback(
+    (r: number, c: number): number | null => {
+      for (const [cIdStr, pair] of Object.entries(level.endpoints)) {
+        const cId = Number(cIdStr)
+        if ((pair[0][0] === r && pair[0][1] === c) || (pair[1][0] === r && pair[1][1] === c)) {
+          return cId
+        }
       }
-    }
-    return null
-  }, [currentLevel])
+      return null
+    },
+    [level]
+  )
 
-  // Check if cell is occupied by any path
-  const getCellOccupant = useCallback((r: number, c: number): { colorId: number; idx: number } | null => {
-    for (const [cIdStr, p] of Object.entries(paths)) {
-      const cId = Number(cIdStr)
-      const idx = p.findIndex(([pr, pc]) => pr === r && pc === c)
-      if (idx !== -1) {
-        return { colorId: cId, idx }
+  const getCellOccupant = useCallback(
+    (
+      r: number,
+      c: number,
+      sourcePaths: { [colorId: number]: [number, number][] } = paths
+    ): { colorId: number; idx: number } | null => {
+      for (const [cIdStr, p] of Object.entries(sourcePaths)) {
+        const cId = Number(cIdStr)
+        const idx = p.findIndex(([pr, pc]) => pr === r && pc === c)
+        if (idx !== -1) {
+          return { colorId: cId, idx }
+        }
       }
-    }
-    return null
-  }, [paths])
+      return null
+    },
+    [paths]
+  )
 
-  // Dragging logic
+  const finalizeIfWon = useCallback(
+    (
+      currentPaths: { [colorId: number]: [number, number][] },
+      connected: number[],
+      moveTotal: number,
+      hintsTotal: number
+    ) => {
+      const totalPairs = Object.keys(level.endpoints).length
+      if (connected.length !== totalPairs) return
+
+      const occupiedCells = new Set<string>()
+      for (const p of Object.values(currentPaths)) {
+        for (const [r, c] of p) {
+          occupiedCells.add(`${r},${c}`)
+        }
+      }
+      const coverage = occupiedCells.size / (size * size)
+      const finalElapsed = elapsedMs
+      const timeSec = Math.max(1, Math.round(finalElapsed / 1000))
+      const baseScore = level.levelNumber * 1200
+      const coverageBonus = Math.round(coverage * 800)
+      const speedBonus = Math.max(0, 1500 - timeSec * 15)
+      const hintPenalty = hintsTotal * 180
+      const finalScore = Math.max(200, Math.round(baseScore + coverageBonus + speedBonus - hintPenalty))
+
+      setLevelScore(finalScore)
+      setIsWon(true)
+      playSuccessChime()
+
+      onComplete({
+        gameId: "flow_lines",
+        score: finalScore,
+        level: level.levelNumber,
+        timeMs: finalElapsed,
+        moves: moveTotal,
+        metadata: {
+          coverage: Math.round(coverage * 100),
+          size,
+          hintsUsed: hintsTotal,
+        },
+      })
+    },
+    [elapsedMs, level, onComplete, size]
+  )
+
   const handleCellDown = (r: number, c: number) => {
     if (isWon) return
     const epColor = getEndpointAt(r, c)
     const occupant = getCellOccupant(r, c)
 
-    let targetColor: number | null = null
-
     if (epColor) {
-      targetColor = epColor
-      // Start or restart from this endpoint
       setPaths(prev => ({
         ...prev,
         [epColor]: [[r, c]],
@@ -185,8 +203,6 @@ export function FlowLinesGame({
       setMoves(m => m + 1)
       playStepSound(epColor)
     } else if (occupant) {
-      targetColor = occupant.colorId
-      // Trim path to this cell
       setPaths(prev => ({
         ...prev,
         [occupant.colorId]: prev[occupant.colorId].slice(0, occupant.idx + 1),
@@ -197,154 +213,179 @@ export function FlowLinesGame({
     }
   }
 
-  const handleCellEnter = (r: number, c: number) => {
-    if (isWon || activeColorId === null) return
+  const handleCellEnter = useCallback(
+    (r: number, c: number) => {
+      if (isWon || activeColorId === null) return
 
-    const currentPath = paths[activeColorId] || []
-    if (currentPath.length === 0) return
+      const currentPath = paths[activeColorId] || []
+      if (currentPath.length === 0) return
 
-    const [lastR, lastC] = currentPath[currentPath.length - 1]
+      const [lastR, lastC] = currentPath[currentPath.length - 1]
+      if (lastR === r && lastC === c) return
 
-    // Only allow orthogonal adjacency
-    const dist = Math.abs(r - lastR) + Math.abs(c - lastC)
-    if (dist !== 1) return
+      // Only allow orthogonal adjacency
+      if (Math.abs(r - lastR) + Math.abs(c - lastC) !== 1) return
 
-    // If back-tracking to previous cell in the same path
-    if (currentPath.length > 1) {
-      const [prevR, prevC] = currentPath[currentPath.length - 2]
-      if (prevR === r && prevC === c) {
+      // Backtrack 1 cell
+      if (currentPath.length > 1) {
+        const [prevR, prevC] = currentPath[currentPath.length - 2]
+        if (prevR === r && prevC === c) {
+          setPaths(prev => ({
+            ...prev,
+            [activeColorId]: prev[activeColorId].slice(0, -1),
+          }))
+          return
+        }
+      }
+
+      // Cannot cross another color's endpoint
+      const epColor = getEndpointAt(r, c)
+      if (epColor !== null && epColor !== activeColorId) return
+
+      // Loop back to an earlier cell in the same path
+      const existingIdx = currentPath.findIndex(([pr, pc]) => pr === r && pc === c)
+      if (existingIdx !== -1) {
         setPaths(prev => ({
           ...prev,
-          [activeColorId]: prev[activeColorId].slice(0, -1),
+          [activeColorId]: prev[activeColorId].slice(0, existingIdx + 1),
         }))
         return
       }
-    }
 
-    // Check if cell is an endpoint
-    const epColor = getEndpointAt(r, c)
-    if (epColor !== null && epColor !== activeColorId) {
-      // Cannot cross another color's endpoint
-      return
-    }
-
-    // If entering another color's path, cut their path
-    const occupant = getCellOccupant(r, c)
-    if (occupant && occupant.colorId !== activeColorId) {
-      setPaths(prev => ({
-        ...prev,
-        [occupant.colorId]: prev[occupant.colorId].slice(0, occupant.idx),
-      }))
-      setConnectedColors(prev => prev.filter(id => id !== occupant.colorId))
-    }
-
-    // If already in this path earlier, loop back
-    const existingIdx = currentPath.findIndex(([pr, pc]) => pr === r && pc === c)
-    if (existingIdx !== -1) {
-      setPaths(prev => ({
-        ...prev,
-        [activeColorId]: prev[activeColorId].slice(0, existingIdx + 1),
-      }))
-      return
-    }
-
-    // Add cell to path
-    const newPath: [number, number][] = [...currentPath, [r, c]]
-    const newPaths = {
-      ...paths,
-      [activeColorId]: newPath,
-    }
-    setPaths(newPaths)
-    playStepSound(newPath.length)
-
-    // Check if reached the OTHER endpoint for this color
-    if (epColor === activeColorId && isEndpoint(r, c, activeColorId)) {
-      const startEp = currentLevel.endpoints[activeColorId][0]
-      const endEp = currentLevel.endpoints[activeColorId][1]
-      const [firstR, firstC] = newPath[0]
-      const wasStartFirst = firstR === startEp[0] && firstC === startEp[1]
-      const targetEp = wasStartFirst ? endEp : startEp
-
-      if (r === targetEp[0] && c === targetEp[1]) {
-        // Connected!
-        playConnectSound()
-        const newConnected = Array.from(new Set([...connectedColors, activeColorId]))
-        setConnectedColors(newConnected)
-        setActiveColorId(null)
-
-        // Check overall win condition
-        checkVictory(newPaths, newConnected)
+      // Trim another color's path if we cross it
+      let nextConnected = connectedColors
+      const newPaths = { ...paths }
+      const occupant = getCellOccupant(r, c, newPaths)
+      if (occupant && occupant.colorId !== activeColorId) {
+        newPaths[occupant.colorId] = newPaths[occupant.colorId].slice(0, occupant.idx)
+        nextConnected = nextConnected.filter(id => id !== occupant.colorId)
       }
+
+      const newPath: [number, number][] = [...currentPath, [r, c]]
+      newPaths[activeColorId] = newPath
+      setPaths(newPaths)
+      playStepSound(newPath.length)
+
+      if (epColor === activeColorId && isEndpoint(r, c, activeColorId)) {
+        const startEp = level.endpoints[activeColorId][0]
+        const endEp = level.endpoints[activeColorId][1]
+        const [firstR, firstC] = newPath[0]
+        const targetEp = firstR === startEp[0] && firstC === startEp[1] ? endEp : startEp
+
+        if (r === targetEp[0] && c === targetEp[1]) {
+          playConnectSound()
+          const updatedConnected = Array.from(new Set([...nextConnected, activeColorId]))
+          setConnectedColors(updatedConnected)
+          setActiveColorId(null)
+          finalizeIfWon(newPaths, updatedConnected, moves + 1, hintsUsed)
+          return
+        }
+      }
+
+      if (nextConnected !== connectedColors) {
+        setConnectedColors(nextConnected)
+      }
+    },
+    [
+      activeColorId,
+      connectedColors,
+      finalizeIfWon,
+      getCellOccupant,
+      getEndpointAt,
+      hintsUsed,
+      isEndpoint,
+      isWon,
+      level.endpoints,
+      moves,
+      paths,
+    ]
+  )
+
+  const handleBoardPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isWon || activeColorId === null) return
+    if (e.pointerType === "mouse" && (e.buttons & 1) === 0) {
+      setActiveColorId(null)
+      return
     }
+    const target = document.elementFromPoint(e.clientX, e.clientY)
+    const cellEl = target?.closest("[data-flow-cell]") as HTMLElement | null
+    if (!cellEl) return
+    const raw = cellEl.dataset.flowCell
+    if (!raw) return
+    const [r, c] = raw.split(",").map(Number)
+    handleCellEnter(r, c)
   }
 
-  const handlePointerUp = () => {
+  const handleHint = () => {
+    if (isWon) return
+    const allColorIds = Object.keys(level.endpoints).map(Number)
+    const targetColorId = allColorIds.find(id => !connectedColors.includes(id))
+    if (!targetColorId) return
+
+    const solPath = level.solutionPaths[targetColorId]
+    if (!solPath || solPath.length < 2) return
+
+    const solKeys = new Set(solPath.map(([r, c]) => `${r},${c}`))
+    const updatedPaths: { [colorId: number]: [number, number][] } = {}
+    let nextConnected = connectedColors.filter(id => id !== targetColorId)
+
+    for (const [cIdStr, existing] of Object.entries(paths)) {
+      const cId = Number(cIdStr)
+      if (cId === targetColorId) continue
+      const collideIdx = existing.findIndex(([r, c]) => solKeys.has(`${r},${c}`))
+      if (collideIdx !== -1) {
+        updatedPaths[cId] = existing.slice(0, collideIdx)
+        nextConnected = nextConnected.filter(id => id !== cId)
+      } else {
+        updatedPaths[cId] = existing
+      }
+    }
+
+    updatedPaths[targetColorId] = solPath
+    const finalConnected = Array.from(new Set([...nextConnected, targetColorId]))
+    const nextHints = hintsUsed + 1
+
+    setPaths(updatedPaths)
+    setConnectedColors(finalConnected)
+    setHintsUsed(nextHints)
     setActiveColorId(null)
+    playConnectSound()
+
+    finalizeIfWon(updatedPaths, finalConnected, moves + 1, nextHints)
   }
 
-  const checkVictory = (currentPaths: { [colorId: number]: [number, number][] }, connected: number[]) => {
-    const totalPairs = Object.keys(currentLevel.endpoints).length
-    if (connected.length !== totalPairs) return
-
-    // Calculate cell coverage
-    const occupiedCells = new Set<string>()
-    for (const p of Object.values(currentPaths)) {
-      for (const [r, c] of p) {
-        occupiedCells.add(`${r},${c}`)
-      }
-    }
-    const coverage = occupiedCells.size / (size * size)
-
-    // Calculate score
-    const timeSec = Math.max(1, Math.round(elapsedMs / 1000))
-    const baseScore = currentLevel.levelNumber * 1200
-    const coverageBonus = Math.round(coverage * 800)
-    const speedBonus = Math.max(0, 1500 - timeSec * 15)
-    const finalScore = Math.round(baseScore + coverageBonus + speedBonus)
-
-    setLevelScore(finalScore)
-    setIsWon(true)
-    playSuccessChime()
-
-    onComplete({
-      gameId: "flow_lines",
-      score: finalScore,
-      level: currentLevel.levelNumber,
-      timeMs: elapsedMs,
-      moves: moves + 1,
-      metadata: {
-        coverage: Math.round(coverage * 100),
-        size,
-      },
-    })
-  }
-
-  // Calculate stats
-  const totalPairs = Object.keys(currentLevel.endpoints).length
+  const totalPairs = Object.keys(level.endpoints).length
   const connectedCount = connectedColors.length
-  let totalOccupied = 0
-  for (const p of Object.values(paths)) totalOccupied += p.length
-  const coveragePercent = Math.min(100, Math.round((totalOccupied / (size * size)) * 100))
+  const uniqueCells = new Set<string>()
+  for (const p of Object.values(paths)) {
+    for (const [r, c] of p) uniqueCells.add(`${r},${c}`)
+  }
+  const coveragePercent = Math.min(100, Math.round((uniqueCells.size / (size * size)) * 100))
 
   return (
     <div
       className="flex flex-col items-center select-none"
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
+      onPointerUp={() => setActiveColorId(null)}
+      onPointerCancel={() => setActiveColorId(null)}
     >
       {/* Top Controls & Status */}
-      <div className="w-full max-w-md flex items-center justify-between gap-3 mb-4 p-3 rounded-xl bg-[var(--surface-bg)] border border-[var(--border-subtle)] shadow-xs">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--accent)]">
-            {currentLevel.title}
+      <div className="w-full max-w-md flex items-center justify-between gap-2 mb-4 p-3 rounded-xl bg-[var(--surface-bg)] border border-[var(--border-subtle)] shadow-xs">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--accent)]">
+              {level.title}
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold uppercase">
+              {variant === 0 ? "Diário" : `Aleatório #${variant}`}
+            </span>
           </div>
           <div className="text-[13px] font-semibold text-[var(--text-primary)]">
             {connectedCount}/{totalPairs} Fluxos • {coveragePercent}% Tabuleiro
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="text-right mr-2">
+        <div className="flex items-center gap-1 shrink-0">
+          <div className="text-right mr-1.5">
             <span className="text-[11px] text-[var(--text-tertiary)] block">Tempo</span>
             <span className="text-[13px] font-mono font-bold text-[var(--text-primary)]">
               {(elapsedMs / 1000).toFixed(1)}s
@@ -352,8 +393,25 @@ export function FlowLinesGame({
           </div>
 
           <button
-            onClick={() => initLevel(currentLevel)}
-            title="Reiniciar nível"
+            onClick={handleHint}
+            disabled={isWon || connectedCount >= totalPairs}
+            title="Revelar 1 fluxo garantido (Dica)"
+            className="p-2 rounded-lg hover:bg-amber-500/10 text-amber-500 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          >
+            <Lightbulb className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={onNewVariant}
+            title="Gerar novo tabuleiro aleatório"
+            className="p-2 rounded-lg hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            <Shuffle className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={onRestart}
+            title="Reiniciar tabuleiro"
             className="p-2 rounded-lg hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
           >
             <RotateCcw className="w-4 h-4" />
@@ -363,7 +421,7 @@ export function FlowLinesGame({
 
       {/* Grid Canvas */}
       <div
-        ref={boardRef}
+        onPointerMove={handleBoardPointerMove}
         className="relative p-2.5 rounded-2xl bg-[var(--surface-bg)] border-2 border-[var(--border-subtle)] shadow-md touch-none"
         style={{
           display: "grid",
@@ -386,29 +444,28 @@ export function FlowLinesGame({
             return (
               <div
                 key={`${r}-${c}`}
+                data-flow-cell={`${r},${c}`}
                 onPointerDown={e => {
                   e.preventDefault()
                   handleCellDown(r, c)
                 }}
                 onPointerEnter={() => handleCellEnter(r, c)}
-                className={`relative flex items-center justify-center rounded-lg cursor-pointer transition-all ${
+                className={`relative flex items-center justify-center rounded-lg cursor-pointer transition-colors ${
                   occupant && !epColorId
                     ? "bg-[var(--surface-muted)]"
                     : "bg-[var(--surface-muted)]/50 hover:bg-[var(--surface-muted)]"
                 }`}
               >
-                {/* Path indicator */}
                 {occupant && activeColor && (
                   <div
-                    className="absolute inset-1.5 rounded-md opacity-85 transition-transform"
+                    className="absolute inset-1.5 rounded-md opacity-85 pointer-events-none"
                     style={{ backgroundColor: activeColor.color }}
                   />
                 )}
 
-                {/* Endpoint circle */}
                 {epColorId && activeColor && (
                   <div
-                    className="relative z-10 w-6 h-6 rounded-full flex items-center justify-center shadow-sm border-2 border-white/80 animate-pulse"
+                    className="relative z-10 w-6 h-6 rounded-full flex items-center justify-center shadow-sm border-2 border-white/80 pointer-events-none"
                     style={{ backgroundColor: activeColor.color }}
                   >
                     <div className="w-2 h-2 rounded-full bg-white/90" />
@@ -420,22 +477,20 @@ export function FlowLinesGame({
         )}
       </div>
 
-      {/* Bottom Level Indicator & Legend */}
+      {/* Bottom Level Selector */}
       <div className="w-full max-w-md mt-4 flex items-center justify-between text-xs text-[var(--text-secondary)]">
         <div className="flex items-center gap-1.5">
-          {FLOW_LEVELS.map((lvl, i) => (
+          {Array.from({ length: TOTAL_LEVELS }, (_, i) => i + 1).map((lvlNum, i) => (
             <button
-              key={lvl.levelNumber}
-              onClick={() => {
-                setLevelIdx(i)
-              }}
+              key={lvlNum}
+              onClick={() => onSelectLevel(i)}
               className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
                 i === levelIdx
                   ? "bg-[var(--accent)] text-white shadow-xs"
                   : "bg-[var(--surface-muted)] hover:bg-[var(--surface-hover)] text-[var(--text-secondary)]"
               }`}
             >
-              {lvl.levelNumber}
+              {lvlNum}
             </button>
           ))}
         </div>
@@ -450,21 +505,27 @@ export function FlowLinesGame({
         <div className="w-full max-w-md mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 flex flex-col gap-2 items-center text-center animate-in fade-in zoom-in-95 duration-200">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-            <span className="font-bold text-sm">Nível {currentLevel.levelNumber} Concluído com Sucesso!</span>
+            <span className="font-bold text-sm">Nível {level.levelNumber} Concluído com Sucesso!</span>
           </div>
           <p className="text-xs text-emerald-600 dark:text-emerald-400">
             Pontuação registada no Ranking: <strong className="font-bold">+{levelScore} XP</strong> em {(elapsedMs / 1000).toFixed(1)}s!
           </p>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
             <button
-              onClick={() => initLevel(currentLevel)}
+              onClick={onRestart}
               className="px-3 py-1.5 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/20 text-xs font-semibold"
             >
               Repetir
             </button>
-            {levelIdx < FLOW_LEVELS.length - 1 && (
+            <button
+              onClick={onNewVariant}
+              className="px-3 py-1.5 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/20 text-xs font-semibold flex items-center gap-1"
+            >
+              <Shuffle className="w-3 h-3" /> Novo Tabuleiro
+            </button>
+            {levelIdx < TOTAL_LEVELS - 1 && (
               <button
-                onClick={() => setLevelIdx(prev => prev + 1)}
+                onClick={onNextLevel}
                 className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs"
               >
                 Próximo Nível <ArrowRight className="w-3.5 h-3.5" />
@@ -476,4 +537,3 @@ export function FlowLinesGame({
     </div>
   )
 }
-

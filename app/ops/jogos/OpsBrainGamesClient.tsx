@@ -1,22 +1,18 @@
 "use client"
 
 import React, { useState, useTransition } from "react"
-import { 
-  Trophy, 
-  Gamepad2, 
+import {
+  Trophy,
   Brain,
-  Volume2, 
-  VolumeX, 
-  Sparkles, 
-  Flame, 
-  ChevronRight, 
-  ArrowLeft,
-  Crown,
+  Volume2,
+  VolumeX,
+  Sparkles,
+  CalendarDays,
   BrainCircuit,
   Zap,
   PenTool,
   GitCommit,
-  Milestone
+  Milestone,
 } from "lucide-react"
 import type { OpsGamesDashboardData, OpsGameId, GameCompletionEvent } from "./types"
 import { OPS_GAMES } from "./types"
@@ -26,14 +22,18 @@ import { NumberPathGame } from "./components/NumberPathGame"
 import { MemoryMatrixGame } from "./components/MemoryMatrixGame"
 import { SpeedMathGame } from "./components/SpeedMathGame"
 import { LeaderboardView } from "./components/LeaderboardView"
-import { setSoundMuted, isSoundMuted } from "./lib/audio"
+import { setSoundMuted } from "./lib/audio"
+import { formatPtDateFromKey, getLisbonDateKey } from "./lib/puzzle-generator"
 import { submitOpsGameScoreAction } from "@/app/actions/ops-games"
 
 export function OpsBrainGamesClient({
   initialDashboard,
+  dailyKey,
 }: {
   initialDashboard: OpsGamesDashboardData
+  dailyKey?: string
 }) {
+  const effectiveDailyKey = dailyKey || getLisbonDateKey()
   const [dashboard, setDashboard] = useState<OpsGamesDashboardData>(initialDashboard)
   const [activeTab, setActiveTab] = useState<"games" | "leaderboard">("games")
   const [selectedGameId, setSelectedGameId] = useState<OpsGameId | null>("flow_lines")
@@ -96,9 +96,13 @@ export function OpsBrainGamesClient({
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-emerald-600/10 via-[var(--surface-bg)] to-blue-600/10 border border-[var(--border-subtle)] shadow-xs">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full bg-[var(--accent)] text-white text-[10px] font-extrabold uppercase tracking-wide">
               OPS Arena
+            </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold">
+              <CalendarDays className="w-3 h-3" />
+              Desafio Diário • {formatPtDateFromKey(effectiveDailyKey)}
             </span>
             <span className="text-xs font-semibold text-[var(--text-tertiary)]">TMS Linke Brain Exercises</span>
           </div>
@@ -106,7 +110,7 @@ export function OpsBrainGamesClient({
             Brain Exercises & Classificação da Equipa
           </h1>
           <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5">
-            Puzzles de lógica espacial, conexões de linhas e exercícios mentais para a equipa de operações.
+            Puzzles diários sempre solucionáveis e aleatorizados a cada dia para a equipa de operações.
           </p>
         </div>
 
@@ -175,7 +179,7 @@ export function OpsBrainGamesClient({
         </div>
 
         <span className="text-xs text-[var(--text-tertiary)] hidden sm:inline">
-          {dashboard.leaderboard.length} colaboradores ativos
+          {isPending ? "A guardar pontuação..." : `${dashboard.leaderboard.length} colaboradores ativos`}
         </span>
       </div>
 
@@ -229,19 +233,19 @@ export function OpsBrainGamesClient({
           {selectedGameId && (
             <div className="rounded-3xl bg-[var(--surface-bg)] border border-[var(--border-subtle)] shadow-sm p-4 sm:p-6">
               {selectedGameId === "flow_lines" && (
-                <FlowLinesGame onComplete={handleGameComplete} />
+                <FlowLinesGame dailyKey={effectiveDailyKey} onComplete={handleGameComplete} />
               )}
               {selectedGameId === "one_stroke" && (
-                <OneStrokeGame onComplete={handleGameComplete} />
+                <OneStrokeGame dailyKey={effectiveDailyKey} onComplete={handleGameComplete} />
               )}
               {selectedGameId === "number_path" && (
-                <NumberPathGame onComplete={handleGameComplete} />
+                <NumberPathGame dailyKey={effectiveDailyKey} onComplete={handleGameComplete} />
               )}
               {selectedGameId === "memory_matrix" && (
-                <MemoryMatrixGame onComplete={handleGameComplete} />
+                <MemoryMatrixGame dailyKey={effectiveDailyKey} onComplete={handleGameComplete} />
               )}
               {selectedGameId === "speed_math" && (
-                <SpeedMathGame onComplete={handleGameComplete} />
+                <SpeedMathGame dailyKey={effectiveDailyKey} onComplete={handleGameComplete} />
               )}
             </div>
           )}
@@ -250,13 +254,7 @@ export function OpsBrainGamesClient({
 
       {/* Tab Content: Leaderboard */}
       {activeTab === "leaderboard" && (
-        <LeaderboardView
-          data={dashboard}
-          onSelectGame={gameId => {
-            setSelectedGameId(gameId)
-            setActiveTab("games")
-          }}
-        />
+        <LeaderboardView data={dashboard} />
       )}
     </div>
   )

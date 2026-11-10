@@ -1,16 +1,15 @@
 "use client"
 
 import React, { useState } from "react"
-import { Trophy, Medal, Crown, Sparkles, Flame, User, Gamepad2, Clock, CheckCircle } from "lucide-react"
-import type { OpsGamesDashboardData, OpsTeamMemberStats, OpsGameScoreRecord, OpsGameId } from "../types"
+import { Crown, Flame } from "lucide-react"
+import type { OpsGamesDashboardData, OpsGameId } from "../types"
 import { OPS_GAMES } from "../types"
 
 interface LeaderboardViewProps {
   data: OpsGamesDashboardData
-  onSelectGame?: (gameId: OpsGameId) => void
 }
 
-export function LeaderboardView({ data, onSelectGame }: LeaderboardViewProps) {
+export function LeaderboardView({ data }: LeaderboardViewProps) {
   const [filterGame, setFilterGame] = useState<"all" | OpsGameId>("all")
 
   const { leaderboard, recentScores, currentPlayer } = data

@@ -1,8 +1,9 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
-import { Play, RotateCcw, Heart, Award, CheckCircle2 } from "lucide-react"
+import { Play, RotateCcw, Heart, Award, Shuffle } from "lucide-react"
 import { playNote, playStepSound, playSuccessChime, playErrorBuzz } from "../lib/audio"
+import { createRng, getLisbonDateKey, shuffleArray } from "../lib/puzzle-generator"
 import type { GameCompletionEvent } from "../types"
 
 interface MatrixConfig {
@@ -19,11 +20,22 @@ function getLevelConfig(lvl: number): MatrixConfig {
   return { level: lvl, size: 5, activeCount: Math.min(13, lvl + 2), displayMs: 1700 }
 }
 
+function pickSeededPattern(dailyKey: string, variant: number, lvl: number, size: number, activeCount: number): Set<number> {
+  const rng = createRng(`${dailyKey}|memory|v${variant}|L${lvl}`)
+  const allIndices = Array.from({ length: size * size }, (_, i) => i)
+  const shuffled = shuffleArray(allIndices, rng)
+  return new Set(shuffled.slice(0, Math.min(activeCount, allIndices.length)))
+}
+
 export function MemoryMatrixGame({
+  dailyKey,
   onComplete,
 }: {
+  dailyKey?: string
   onComplete: (event: GameCompletionEvent) => void
 }) {
+  const effectiveDailyKey = dailyKey || getLisbonDateKey()
+  const [variant, setVariant] = useState(0)
   const [level, setLevel] = useState(1)
   const [lives, setLives] = useState(3)
   const [gameState, setGameState] = useState<"idle" | "memorize" | "recall" | "game_over">("idle")
@@ -31,44 +43,72 @@ export function MemoryMatrixGame({
   const [selectedCells, setSelectedCells] = useState<Set<number>>(new Set())
   const [wrongCells, setWrongCells] = useState<Set<number>>(new Set())
   const [score, setScore] = useState(0)
-  const [startTime, setStartTime] = useState<number>(0)
-  const [totalTimeMs, setTotalTimeMs] = useState(0)
+
+  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const elapsedRef = useRef(0)
+
+  const clearTimers = useCallback(() => {
+    if (phaseTimerRef.current) {
+      clearTimeout(phaseTimerRef.current)
+      phaseTimerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => clearTimers()
+  }, [clearTimers])
+
+  // Track active play elapsed time safely inside an effect interval
+  useEffect(() => {
+    if (gameState !== "memorize" && gameState !== "recall") return
+    const tickStart = Date.now()
+    const baseElapsed = elapsedRef.current
+    const interval = setInterval(() => {
+      elapsedRef.current = baseElapsed + (Date.now() - tickStart)
+    }, 200)
+    return () => {
+      elapsedRef.current = baseElapsed + (Date.now() - tickStart)
+      clearInterval(interval)
+    }
+  }, [gameState])
 
   const config = getLevelConfig(level)
   const totalCells = config.size * config.size
 
-  const startLevel = useCallback((lvl: number) => {
-    const cfg = getLevelConfig(lvl)
-    const count = cfg.activeCount
-    const allIndices = Array.from({ length: cfg.size * cfg.size }, (_, i) => i)
+  const startLevel = useCallback(
+    (lvl: number, activeVariant: number) => {
+      clearTimers()
+      const cfg = getLevelConfig(lvl)
+      const picked = pickSeededPattern(
+        effectiveDailyKey,
+        activeVariant,
+        lvl,
+        cfg.size,
+        cfg.activeCount
+      )
 
-    // Pick random unique indices
-    const picked = new Set<number>()
-    while (picked.size < count) {
-      const randIdx = allIndices[Math.floor(Math.random() * allIndices.length)]
-      picked.add(randIdx)
-    }
+      setActiveCells(picked)
+      setSelectedCells(new Set())
+      setWrongCells(new Set())
+      setGameState("memorize")
 
-    setActiveCells(picked)
-    setSelectedCells(new Set())
-    setWrongCells(new Set())
-    setGameState("memorize")
+      playNote(400, 0.1, "sine")
 
-    playNote(400, 0.1, "sine")
+      phaseTimerRef.current = setTimeout(() => {
+        setGameState("recall")
+        playNote(600, 0.12, "sine")
+      }, cfg.displayMs)
+    },
+    [clearTimers, effectiveDailyKey]
+  )
 
-    setTimeout(() => {
-      setGameState("recall")
-      playNote(600, 0.12, "sine")
-    }, cfg.displayMs)
-  }, [])
-
-  const startGame = () => {
+  const startGame = (nextVariant = variant) => {
+    elapsedRef.current = 0
+    setVariant(nextVariant)
     setLevel(1)
     setLives(3)
     setScore(0)
-    setTotalTimeMs(0)
-    setStartTime(Date.now())
-    startLevel(1)
+    startLevel(1, nextVariant)
   }
 
   const handleCellClick = (idx: number) => {
@@ -76,28 +116,26 @@ export function MemoryMatrixGame({
     if (selectedCells.has(idx) || wrongCells.has(idx)) return
 
     if (activeCells.has(idx)) {
-      // Correct!
       const newSelected = new Set(selectedCells)
       newSelected.add(idx)
       setSelectedCells(newSelected)
       playStepSound(newSelected.size)
 
       const pts = level * 150
-      setScore(s => s + pts)
+      const updatedScore = score + pts
+      setScore(updatedScore)
 
-      // Checked all?
       if (newSelected.size === activeCells.size) {
-        // Level cleared!
         playSuccessChime()
         const nextLvl = level + 1
         setLevel(nextLvl)
         setGameState("memorize")
-        setTimeout(() => {
-          startLevel(nextLvl)
-        }, 800)
+        clearTimers()
+        phaseTimerRef.current = setTimeout(() => {
+          startLevel(nextLvl, variant)
+        }, 700)
       }
     } else {
-      // Wrong!
       playErrorBuzz()
       const newWrong = new Set(wrongCells)
       newWrong.add(idx)
@@ -107,16 +145,13 @@ export function MemoryMatrixGame({
       setLives(remainingLives)
 
       if (remainingLives <= 0) {
-        // Game Over!
+        clearTimers()
         setGameState("game_over")
-        const elapsed = startTime > 0 ? Date.now() - startTime : 0
-        setTotalTimeMs(elapsed)
-
         onComplete({
           gameId: "memory_matrix",
           score: Math.max(score, 100),
           level,
-          timeMs: elapsed,
+          timeMs: elapsedRef.current,
           moves: selectedCells.size + 1,
         })
       }
@@ -126,19 +161,23 @@ export function MemoryMatrixGame({
   return (
     <div className="flex flex-col items-center select-none">
       {/* Top Status */}
-      <div className="w-full max-w-md flex items-center justify-between gap-3 mb-4 p-3 rounded-xl bg-[var(--surface-bg)] border border-[var(--border-subtle)] shadow-xs">
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-wider text-purple-500">
-            Nível {level} • Matriz {config.size}x{config.size}
+      <div className="w-full max-w-md flex items-center justify-between gap-2 mb-4 p-3 rounded-xl bg-[var(--surface-bg)] border border-[var(--border-subtle)] shadow-xs">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-purple-500">
+              Nível {level} • Matriz {config.size}x{config.size}
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[9px] font-bold uppercase">
+              {variant === 0 ? "Diário" : `Aleatório #${variant}`}
+            </span>
           </div>
           <div className="text-[13px] font-semibold text-[var(--text-primary)]">
             Pontuação: <span className="font-bold font-mono text-purple-600 dark:text-purple-400">{score} XP</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Lives */}
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 mr-1">
             {Array.from({ length: 3 }).map((_, i) => (
               <Heart
                 key={i}
@@ -152,7 +191,15 @@ export function MemoryMatrixGame({
           </div>
 
           <button
-            onClick={startGame}
+            onClick={() => startGame(variant + 1)}
+            title="Novo padrão aleatório"
+            className="p-2 rounded-lg hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            <Shuffle className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => startGame(variant)}
             title="Reiniciar jogo"
             className="p-2 rounded-lg hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
           >
@@ -179,10 +226,12 @@ export function MemoryMatrixGame({
             </div>
             <div>
               <p className="text-sm font-bold text-[var(--text-primary)]">Preparado para testar a memória?</p>
-              <p className="text-xs text-[var(--text-secondary)] mt-1">Memorize os quadrados roxos e reproduza o padrão.</p>
+              <p className="text-xs text-[var(--text-secondary)] mt-1">
+                Memorize os quadrados roxos do desafio de hoje e reproduza o padrão.
+              </p>
             </div>
             <button
-              onClick={startGame}
+              onClick={() => startGame(variant)}
               className="mt-2 px-5 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition-transform active:scale-95"
             >
               Começar Desafio
@@ -224,7 +273,7 @@ export function MemoryMatrixGame({
           {gameState === "memorize" && "Memorize o padrão..."}
           {gameState === "recall" && `Encontre ${activeCells.size - selectedCells.size} células restantes`}
           {gameState === "game_over" && "Fim do Jogo"}
-          {gameState === "idle" && "3 Vidas • Aumenta de dificuldade"}
+          {gameState === "idle" && "3 Vidas • Padrões renovados todos os dias"}
         </span>
 
         {gameState === "recall" && (
@@ -242,15 +291,16 @@ export function MemoryMatrixGame({
           <p className="text-xs text-purple-600 dark:text-purple-400">
             Pontuação total enviada para o Ranking: <strong className="font-bold font-mono text-sm">{score} XP</strong>
           </p>
-          <button
-            onClick={startGame}
-            className="mt-2 px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs"
-          >
-            Jogar Novamente
-          </button>
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              onClick={() => startGame(variant + 1)}
+              className="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs flex items-center gap-1"
+            >
+              <Shuffle className="w-3.5 h-3.5" /> Novo Desafio
+            </button>
+          </div>
         </div>
       )}
     </div>
   )
 }
-
