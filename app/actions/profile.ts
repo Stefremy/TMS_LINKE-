@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server"
 import { getAuthContext } from "@/lib/auth/context"
+import { invalidateChatAvatars } from "@/lib/team-chat-avatars"
 
 export async function saveMyProfileAction(input: {
   name: string
@@ -39,5 +40,6 @@ export async function saveMyProfileAction(input: {
     await admin.auth.admin.updateUserById(ctx.user.id, { user_metadata: rest })
   }
 
+  invalidateChatAvatars(ctx.tenant_id)
   return { success: true }
 }

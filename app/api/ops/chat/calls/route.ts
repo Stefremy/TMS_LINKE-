@@ -6,7 +6,14 @@ import { readCallSignals, readIncomingCalls, writeCallSignal } from "@/lib/team-
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 const headers = { "Cache-Control": "private, no-store" }
-const failure = (error: unknown) => NextResponse.json({ error: error instanceof ChatError ? error.message : "Não foi possível ligar a chamada." }, { status: error instanceof ChatError ? error.status : 500, headers })
+const failure = (error: unknown) => {
+  const status = error instanceof ChatError ? error.status : 500
+  const responseHeaders = status === 429 ? { ...headers, "Retry-After": "15" } : headers
+  return NextResponse.json(
+    { error: error instanceof ChatError ? error.message : "Não foi possível ligar a chamada." },
+    { status, headers: responseHeaders }
+  )
+}
 export async function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams

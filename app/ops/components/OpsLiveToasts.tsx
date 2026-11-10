@@ -6,7 +6,7 @@ import { MessageSquare, Phone, PhoneOff, Video, X } from "lucide-react"
 import { useIncomingCall } from "../chat/hooks/useIncomingCall"
 import type { ChatNotification } from "@/lib/team-chat"
 
-const MESSAGE_POLL_MS = 3500
+const MESSAGE_POLL_MS = 4000
 const MESSAGE_TOAST_MS = 9000
 const MAX_VISIBLE_MESSAGES = 3
 
@@ -84,13 +84,29 @@ export function OpsLiveToasts({ viewerId }: { viewerId: string }) {
       return () => clearTimeout(clear)
     }
     const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout>
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let stopped = false
+    let inFlight = false
+    let consecutiveErrors = 0
+    let lastPollAt = 0
+
+    const scheduleNext = (delayMs: number) => {
+      if (controller.signal.aborted || stopped) return
+      clearTimeout(timer)
+      timer = setTimeout(() => { void poll() }, delayMs)
+    }
+
     const poll = async () => {
+      if (controller.signal.aborted || stopped || inFlight) return
+      let nextDelay = MESSAGE_POLL_MS + Math.floor(Math.random() * 500)
       if (document.visibilityState === "visible") {
+        inFlight = true
+        lastPollAt = Date.now()
         try {
           const query = cursor.current === null ? "" : `&after=${cursor.current}`
           const response = await fetch(`/api/ops/chat?viewer=${encodeURIComponent(viewerId)}&notify=1${query}`, { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]) })
           if (response.ok) {
+            consecutiveErrors = 0
             const data = await response.json() as { viewerId: string; latestSequence: number; items: ChatNotification[] }
             if (data.viewerId === viewerId && !controller.signal.aborted) {
               const fresh = cursor.current !== null ? data.items : []
@@ -104,13 +120,27 @@ export function OpsLiveToasts({ viewerId }: { viewerId: string }) {
                 })
               }
             }
+          } else if ([401, 403, 409].includes(response.status)) {
+            stopped = true
+            return
+          } else {
+            consecutiveErrors = Math.min(5, consecutiveErrors + 1)
+            const retryAfter = Number(response.headers?.get("Retry-After"))
+            nextDelay = response.status === 429 && Number.isFinite(retryAfter) && retryAfter > 0
+              ? Math.min(60_000, retryAfter * 1000)
+              : Math.min(60_000, MESSAGE_POLL_MS * Math.pow(2, consecutiveErrors))
           }
-        } catch { /* The next poll retries after a temporary network failure. */ }
+        } catch {
+          consecutiveErrors = Math.min(5, consecutiveErrors + 1)
+          nextDelay = Math.min(60_000, MESSAGE_POLL_MS * Math.pow(2, consecutiveErrors))
+        } finally {
+          inFlight = false
+        }
       }
-      if (!controller.signal.aborted) timer = setTimeout(() => { void poll() }, MESSAGE_POLL_MS)
+      scheduleNext(nextDelay)
     }
     const onFocusOrVisible = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && !stopped && !inFlight && Date.now() - lastPollAt > 1200) {
         clearTimeout(timer)
         void poll()
       }
@@ -119,6 +149,7 @@ export function OpsLiveToasts({ viewerId }: { viewerId: string }) {
     window.addEventListener("focus", onFocusOrVisible)
     void poll()
     return () => {
+      stopped = true
       controller.abort()
       clearTimeout(timer)
       document.removeEventListener("visibilitychange", onFocusOrVisible)

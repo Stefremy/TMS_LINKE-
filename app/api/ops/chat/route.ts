@@ -6,7 +6,12 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 const headers = { "Cache-Control": "private, no-store" }
 function failure(error: unknown) {
-  return NextResponse.json({ error: error instanceof ChatError ? error.message : "Não foi possível aceder ao chat." }, { status: error instanceof ChatError ? error.status : 500, headers })
+  const status = error instanceof ChatError ? error.status : 500
+  const responseHeaders = status === 429 ? { ...headers, "Retry-After": "15" } : headers
+  return NextResponse.json(
+    { error: error instanceof ChatError ? error.message : "Não foi possível aceder ao chat." },
+    { status, headers: responseHeaders }
+  )
 }
 
 export async function GET(request: Request) {

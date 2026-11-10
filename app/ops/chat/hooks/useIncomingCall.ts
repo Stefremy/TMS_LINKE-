@@ -26,22 +26,57 @@ export function useIncomingCall(viewer: string, activeRoom?: string, enabled = t
   useEffect(() => {
     if (!enabled) { const reset = setTimeout(() => setIncoming(null), 0); return () => clearTimeout(reset) }
     const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout>
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let stopped = false
+    let inFlight = false
+    let consecutiveErrors = 0
+    let lastPollAt = 0
+
+    const scheduleNext = (delayMs: number) => {
+      if (controller.signal.aborted || stopped) return
+      clearTimeout(timer)
+      timer = setTimeout(() => { void poll() }, delayMs)
+    }
+
     const poll = async () => {
+      if (controller.signal.aborted || stopped || inFlight) return
+      if (document.visibilityState !== "visible") {
+        scheduleNext(4000)
+        return
+      }
+      inFlight = true
+      lastPollAt = Date.now()
+      let nextDelay = 3000 + Math.floor(Math.random() * 400)
       try {
         const response = await fetch(`/api/ops/chat/calls?viewer=${encodeURIComponent(viewer)}&incoming=1`, { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]) })
         if (response.ok) {
+          consecutiveErrors = 0
           const data = await response.json()
           if (data.viewerId === viewer && !controller.signal.aborted) {
             const next = (data.calls as IncomingCall[]).find(call => !dismissed.current.has(call.roomId) && call.roomId !== activeRoom)
             setIncoming(activeRoom ? null : next || null)
           }
+        } else if ([401, 403, 409].includes(response.status)) {
+          stopped = true
+          setIncoming(null)
+          return
+        } else {
+          consecutiveErrors = Math.min(5, consecutiveErrors + 1)
+          const retryAfter = Number(response.headers?.get("Retry-After"))
+          nextDelay = response.status === 429 && Number.isFinite(retryAfter) && retryAfter > 0
+            ? Math.min(60_000, retryAfter * 1000)
+            : Math.min(60_000, 3500 * Math.pow(2, consecutiveErrors))
         }
-      } catch { /* The next bounded poll retries a temporary network failure. */ }
-      if (!controller.signal.aborted) timer = setTimeout(() => { void poll() }, 2500)
+      } catch {
+        consecutiveErrors = Math.min(5, consecutiveErrors + 1)
+        nextDelay = Math.min(60_000, 3500 * Math.pow(2, consecutiveErrors))
+      } finally {
+        inFlight = false
+      }
+      scheduleNext(nextDelay)
     }
     const onFocusOrVisible = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && !stopped && !inFlight && Date.now() - lastPollAt > 1200) {
         clearTimeout(timer)
         void poll()
       }
@@ -50,6 +85,7 @@ export function useIncomingCall(viewer: string, activeRoom?: string, enabled = t
     window.addEventListener("focus", onFocusOrVisible)
     void poll()
     return () => {
+      stopped = true
       controller.abort()
       clearTimeout(timer)
       document.removeEventListener("visibilitychange", onFocusOrVisible)

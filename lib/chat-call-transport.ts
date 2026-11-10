@@ -10,7 +10,11 @@ export async function openCallTransport(options: { room: string; viewer: string;
   const read = async (configuration = false) => {
     const response = await fetch(`${base}&configuration=${configuration ? "1" : "0"}${since ? `&since=${encodeURIComponent(since)}` : ""}`, { cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12000)]) })
     const data = await response.json()
-    if (!response.ok || data.viewerId !== options.viewer) throw new Error(data.error || "Não foi possível ligar a chamada.")
+    if (!response.ok || data.viewerId !== options.viewer) {
+      const err = new Error(data.error || "Não foi possível ligar a chamada.") as Error & { status?: number }
+      if (typeof response.status === "number") err.status = response.status
+      throw err
+    }
     return data as { signals: CallSignal[]; iceServers?: RTCIceServer[]; relayConfigured?: boolean; iceTransportPolicy?: RTCIceTransportPolicy }
   }
   const initial = await read(true)
@@ -33,6 +37,7 @@ export async function openCallTransport(options: { room: string; viewer: string;
       sendQueue = sendQueue.then(() => post(signal)).catch(options.onError)
     },
     start(handle: (signal: CallSignal) => Promise<void>) {
+      let consecutiveErrors = 0
       const consume = async (signals: CallSignal[]) => {
         for (const signal of signals) {
           if (stopped) return
@@ -44,9 +49,21 @@ export async function openCallTransport(options: { room: string; viewer: string;
         }
       }
       const poll = async () => {
-        try { await consume((await read()).signals) }
-        catch (error) { if (!stopped) options.onError(error) }
-        if (!stopped) timer = setTimeout(() => { void poll() }, 1000)
+        let nextDelay = 1000
+        try {
+          await consume((await read()).signals)
+          consecutiveErrors = 0
+        } catch (error) {
+          const status = (error as { status?: number })?.status
+          if (!stopped) options.onError(error)
+          if (typeof status === "number" && [401, 403, 404, 409].includes(status)) {
+            stopped = true
+            return
+          }
+          consecutiveErrors = Math.min(4, consecutiveErrors + 1)
+          nextDelay = Math.min(15_000, 1000 * Math.pow(2, consecutiveErrors))
+        }
+        if (!stopped) timer = setTimeout(() => { void poll() }, nextDelay)
       }
       void consume(initial.signals).then(() => { if (!stopped) void poll() })
     },

@@ -1,5 +1,6 @@
 import "server-only"
-import { getAuthContext, type AuthContext } from "@/lib/auth/context"
+import * as authContextModule from "@/lib/auth/context"
+import type { AuthContext } from "@/lib/auth/context"
 import { getChatStaffAvatars, getChatStaffMembers } from "@/lib/team-chat-avatars"
 import { getMyProfile } from "@/lib/auth/profile"
 import { createAdminClient } from "@/lib/supabase/server"
@@ -9,7 +10,16 @@ import { CHAT_PAGE_SIZE, ChatError, DEFAULT_CHANNELS, normalizeChannelSlug, type
 const MESSAGE_FIELDS = "id, sequence, sender_id, recipient_id, sender_name, sender_avatar_url, body, created_at"
 
 export async function chatContext(expectedUserId?: string): Promise<AuthContext> {
-  const context = await getAuthContext()
+  let context: AuthContext | null = null
+  let rateLimited = false
+  if ("getAuthContextState" in authContextModule && typeof authContextModule.getAuthContextState === "function") {
+    const state = await authContextModule.getAuthContextState()
+    context = state.context
+    rateLimited = state.rateLimited
+  } else {
+    context = await authContextModule.getAuthContext()
+  }
+  if (rateLimited && !context) throw new ChatError("Demasiados pedidos de autenticação. A tentar novamente em instantes.", 429)
   if (!context?.user?.id) throw new ChatError("Inicie sessão para abrir o chat.", 401)
   if (context.role !== "admin" && context.role !== "employee") throw new ChatError("O chat é exclusivo da equipa.", 403)
   if (expectedUserId && expectedUserId !== context.user.id) throw new ChatError("A sessão mudou. Atualize a página antes de continuar.", 409)

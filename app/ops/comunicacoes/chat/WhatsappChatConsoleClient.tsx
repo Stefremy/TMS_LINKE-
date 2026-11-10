@@ -45,6 +45,9 @@ interface ConversationThread {
   lastMessageDirection: "in" | "out"
   lastMessageStatus: string | null
   lastMessageChannel: string
+  isIncidenciaThread: boolean
+  lastInboundPrincipalAt: number
+  lastInboundIncAt: number
   lastTimestamp: number
   lastTimeFormatted: string
   inboundCount: number
@@ -220,6 +223,17 @@ export function WhatsappChatConsoleClient({
   const [sending, setSending] = React.useState(false)
   const [sendFeedback, setSendFeedback] = React.useState<{ type: "ok" | "err"; text: string } | null>(null)
   const [emojiOpen, setEmojiOpen] = React.useState(false)
+  const [replyChannelOverride, setReplyChannelOverride] = React.useState<Record<string, "principal" | "incidencias">>({})
+  const [nowMs, setNowMs] = React.useState<number | null>(null)
+
+  React.useEffect(() => {
+    const initial = window.setTimeout(() => setNowMs(Date.now()), 0)
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => {
+      window.clearTimeout(initial)
+      window.clearInterval(timer)
+    }
+  }, [])
 
   // Team note & reminder inputs
   const [noteDraft, setNoteDraft] = React.useState("")
@@ -311,12 +325,12 @@ export function WhatsappChatConsoleClient({
       if (activeInbox === "incidencias") {
         return ch === "chat_incidencias" || ch === "template_incidencias"
       }
-      // Principal inbox shows chat, text, media, plus any inbound message
+      // Principal inbox shows chat, text, media, plus active incidências conversations
       return (
         ch === "chat" ||
         ch === "text" ||
         ch === "media" ||
-        (msg.direction === "in" && ch === "chat_incidencias")
+        ch === "chat_incidencias"
       )
     })
 
@@ -330,6 +344,8 @@ export function WhatsappChatConsoleClient({
       if (!phone) continue
 
       const msgTs = new Date(msg.created_at).getTime() || 0
+      const ch = String(msg.channel || "").toLowerCase()
+      const isIncMsg = ch === "chat_incidencias" || ch === "template_incidencias"
       const lastReadTs = readTimestamps[phone] || 0
       const isUnreadInbound = msg.direction === "in" && msgTs > lastReadTs
 
@@ -341,6 +357,8 @@ export function WhatsappChatConsoleClient({
       if (!existing) {
         const customName = savedContacts[phone] || ""
         const profileName = msg.contact_name ? String(msg.contact_name).trim() : null
+        const lastInboundPrincipalAt = msg.direction === "in" && !isIncMsg ? msgTs : 0
+        const lastInboundIncAt = msg.direction === "in" && isIncMsg ? msgTs : 0
         byPhone.set(phone, {
           phone,
           displayName: customName || profileName || formatPhoneDisplay(phone),
@@ -349,6 +367,9 @@ export function WhatsappChatConsoleClient({
           lastMessageDirection: msg.direction,
           lastMessageStatus: msg.status,
           lastMessageChannel: msg.channel,
+          isIncidenciaThread: lastInboundIncAt > 0 ? lastInboundIncAt >= lastInboundPrincipalAt : isIncMsg,
+          lastInboundPrincipalAt,
+          lastInboundIncAt,
           lastTimestamp: msgTs,
           lastTimeFormatted: formatConversationTimestamp(msgTs),
           inboundCount: msg.direction === "in" ? 1 : 0,
@@ -365,6 +386,14 @@ export function WhatsappChatConsoleClient({
         existing.lastMessageDirection = msg.direction
         existing.lastMessageStatus = msg.status
         existing.lastMessageChannel = msg.channel
+        if (msg.direction === "in") {
+          if (isIncMsg && msgTs >= existing.lastInboundIncAt) existing.lastInboundIncAt = msgTs
+          if (!isIncMsg && msgTs >= existing.lastInboundPrincipalAt) existing.lastInboundPrincipalAt = msgTs
+        }
+        existing.isIncidenciaThread =
+          existing.lastInboundIncAt > 0 || existing.lastInboundPrincipalAt > 0
+            ? existing.lastInboundIncAt >= existing.lastInboundPrincipalAt
+            : isIncMsg
         if (msgTs >= existing.lastTimestamp) {
           existing.lastTimestamp = msgTs
           existing.lastTimeFormatted = formatConversationTimestamp(msgTs)
@@ -435,6 +464,9 @@ export function WhatsappChatConsoleClient({
       lastMessageDirection: "out",
       lastMessageStatus: null,
       lastMessageChannel: activeInbox === "incidencias" ? "chat_incidencias" : "text",
+      isIncidenciaThread: activeInbox === "incidencias",
+      lastInboundPrincipalAt: 0,
+      lastInboundIncAt: 0,
       lastTimestamp: 0,
       lastTimeFormatted: "Agora",
       inboundCount: 0,
@@ -442,6 +474,71 @@ export function WhatsappChatConsoleClient({
       messages: [],
     }
   }, [activeInbox, activePhone, conversations, savedContacts])
+
+  // Channel & 24h Customer Service Window detection for active conversation
+  const activeChannelRouting = React.useMemo(() => {
+    const WINDOW_MS = 24 * 60 * 60 * 1000
+    const mergedById = new Map<string, ChatLogItem>()
+    for (const m of [...(activeConversation?.messages || []), ...(activePhone ? phoneFullHistory[activePhone] || [] : [])]) {
+      mergedById.set(String(m.id), m)
+    }
+
+    let lastPrincipalInboundAt = activeConversation?.lastInboundPrincipalAt || 0
+    let lastIncInboundAt = activeConversation?.lastInboundIncAt || 0
+    for (const m of mergedById.values()) {
+      if (m.direction !== "in") continue
+      const ts = new Date(m.created_at).getTime() || 0
+      const ch = String(m.channel || "").toLowerCase()
+      if (ch === "chat_incidencias") {
+        if (ts > lastIncInboundAt) lastIncInboundAt = ts
+      } else {
+        if (ts > lastPrincipalInboundAt) lastPrincipalInboundAt = ts
+      }
+    }
+
+    const refNow = nowMs ?? 0
+    const principalWindowOpen = nowMs !== null && lastPrincipalInboundAt > 0 && refNow - lastPrincipalInboundAt < WINDOW_MS
+    const incidenciasWindowOpen = nowMs !== null && lastIncInboundAt > 0 && refNow - lastIncInboundAt < WINDOW_MS
+
+    const principalHoursLeft = principalWindowOpen
+      ? Math.max(1, Math.ceil((WINDOW_MS - (refNow - lastPrincipalInboundAt)) / (60 * 60 * 1000)))
+      : 0
+    const incidenciasHoursLeft = incidenciasWindowOpen
+      ? Math.max(1, Math.ceil((WINDOW_MS - (refNow - lastIncInboundAt)) / (60 * 60 * 1000)))
+      : 0
+
+    let autoUseInc = activeInbox === "incidencias"
+    if (activeInbox !== "incidencias") {
+      if (incidenciasWindowOpen && !principalWindowOpen) {
+        autoUseInc = true
+      } else if (principalWindowOpen && !incidenciasWindowOpen) {
+        autoUseInc = false
+      } else if (incidenciasWindowOpen && principalWindowOpen) {
+        autoUseInc = lastIncInboundAt >= lastPrincipalInboundAt
+      } else {
+        autoUseInc = Boolean(activeConversation?.isIncidenciaThread)
+      }
+    }
+
+    const override = activePhone ? replyChannelOverride[activePhone] : undefined
+    const effectiveUseInc = override ? override === "incidencias" : autoUseInc
+    const selectedWindowOpen = effectiveUseInc ? incidenciasWindowOpen : principalWindowOpen
+    const selectedHoursLeft = effectiveUseInc ? incidenciasHoursLeft : principalHoursLeft
+    const otherWindowOpen = effectiveUseInc ? principalWindowOpen : incidenciasWindowOpen
+
+    return {
+      lastPrincipalInboundAt,
+      lastIncInboundAt,
+      principalWindowOpen,
+      incidenciasWindowOpen,
+      principalHoursLeft,
+      incidenciasHoursLeft,
+      effectiveUseInc,
+      selectedWindowOpen,
+      selectedHoursLeft,
+      otherWindowOpen,
+    }
+  }, [activeConversation, activeInbox, activePhone, nowMs, phoneFullHistory, replyChannelOverride])
 
   // Active thread messages (merging full phone history when available)
   const activeThreadMessages = React.useMemo<ChatLogItem[]>(() => {
@@ -592,7 +689,7 @@ export function WhatsappChatConsoleClient({
     e.preventDefault()
     if (!activePhone || sending) return
 
-    const useIncNumber = activeInbox === "incidencias"
+    const useIncNumber = activeChannelRouting.effectiveUseInc
 
     // If a media file is attached, send media (with optional composeText as caption)
     if (composeFile) {
@@ -1086,6 +1183,7 @@ export function WhatsappChatConsoleClient({
                   .slice(0, 2)
                   .toUpperCase() || "WA"
                 const hasNote = Boolean(contactNotes[conv.phone]?.trim())
+                const isIncConv = activeInbox === "incidencias" || conv.isIncidenciaThread
 
                 return (
                   <button
@@ -1098,22 +1196,38 @@ export function WhatsappChatConsoleClient({
                         : "hover:bg-[#202c33]/80 bg-transparent"
                     }`}
                   >
-                    {/* Avatar */}
-                    <div
-                      className={`w-11 h-11 rounded-full shrink-0 flex items-center justify-center font-bold text-xs shadow-sm ${
-                        activeInbox === "incidencias"
-                          ? "bg-gradient-to-br from-amber-500/30 to-rose-500/30 text-amber-200 border border-amber-500/30"
-                          : "bg-gradient-to-br from-emerald-500/30 to-teal-600/30 text-emerald-200 border border-emerald-500/30"
-                      }`}
-                    >
-                      {initials}
+                    {/* Avatar + Channel Logo Badge */}
+                    <div className="relative shrink-0">
+                      <div
+                        className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-xs shadow-sm ${
+                          isIncConv
+                            ? "bg-gradient-to-br from-amber-500/30 to-rose-500/30 text-amber-200 border border-amber-500/40"
+                            : "bg-gradient-to-br from-emerald-500/30 to-teal-600/30 text-emerald-200 border border-emerald-500/30"
+                        }`}
+                      >
+                        {initials}
+                      </div>
+                      <span
+                        title={isIncConv ? "Chat Incidências (+351 923 354 371)" : "Chat Principal"}
+                        className={`absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full border-2 border-[#111b21] flex items-center justify-center shadow-sm ${
+                          isIncConv
+                            ? "bg-amber-400 text-slate-950"
+                            : "bg-emerald-400 text-slate-950"
+                        }`}
+                      >
+                        {isIncConv ? (
+                          <AlertTriangle className="w-2.5 h-2.5 stroke-[2.5]" />
+                        ) : (
+                          <MessageSquare className="w-2.5 h-2.5 stroke-[2.5]" />
+                        )}
+                      </span>
                     </div>
 
                     {/* Meta */}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-1.5">
                         <span className="font-semibold text-xs text-slate-100 truncate flex items-center gap-1.5">
-                          {conv.displayName}
+                          <span className="truncate">{conv.displayName}</span>
                           {hasNote ? (
                             <span
                               title="Tem nota da equipa"
@@ -1121,14 +1235,27 @@ export function WhatsappChatConsoleClient({
                             />
                           ) : null}
                         </span>
-                        <span
-                          suppressHydrationWarning
-                          className={`text-[10px] shrink-0 ${
-                            conv.unreadCount > 0 ? "text-emerald-400 font-semibold" : "text-slate-400"
-                          }`}
-                        >
-                          {conv.lastTimeFormatted}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {activeInbox === "principal" ? (
+                            <span
+                              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide border ${
+                                isIncConv
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/35"
+                                  : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                              }`}
+                            >
+                              {isIncConv ? "Incidência" : "Principal"}
+                            </span>
+                          ) : null}
+                          <span
+                            suppressHydrationWarning
+                            className={`text-[10px] ${
+                              conv.unreadCount > 0 ? "text-emerald-400 font-semibold" : "text-slate-400"
+                            }`}
+                          >
+                            {conv.lastTimeFormatted}
+                          </span>
+                        </div>
                       </div>
 
                       {conv.displayName !== formatPhoneDisplay(conv.phone) ? (
@@ -1140,7 +1267,9 @@ export function WhatsappChatConsoleClient({
                       <div className="flex items-center justify-between gap-2 mt-0.5">
                         <span className="text-xs text-slate-400 truncate flex items-center gap-1">
                           {conv.lastMessageDirection === "out" ? (
-                            conv.lastMessageStatus === "read" ? (
+                            String(conv.lastMessageStatus || "").startsWith("failed") ? (
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                            ) : conv.lastMessageStatus === "read" ? (
                               <CheckCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                             ) : conv.lastMessageStatus === "delivered" ? (
                               <CheckCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -1170,19 +1299,37 @@ export function WhatsappChatConsoleClient({
           {/* WhatsApp Chat Header */}
           <header className="px-4 py-3 bg-[#202c33] border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div
-                className={`w-10 h-10 rounded-full shrink-0 flex items-center justify-center font-bold text-xs ${
-                  activeInbox === "incidencias"
-                    ? "bg-amber-500/25 text-amber-300 border border-amber-500/40"
-                    : "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
-                }`}
-              >
-                {activeConversation
-                  ? activeConversation.displayName
-                      .replace(/[^a-zA-Z0-9]/g, "")
-                      .slice(0, 2)
-                      .toUpperCase() || "WA"
-                  : "LN"}
+              <div className="relative shrink-0">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
+                    (activeConversation ? activeChannelRouting.effectiveUseInc : activeInbox === "incidencias")
+                      ? "bg-amber-500/25 text-amber-300 border border-amber-500/40"
+                      : "bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
+                  }`}
+                >
+                  {activeConversation
+                    ? activeConversation.displayName
+                        .replace(/[^a-zA-Z0-9]/g, "")
+                        .slice(0, 2)
+                        .toUpperCase() || "WA"
+                    : "LN"}
+                </div>
+                {activeConversation ? (
+                  <span
+                    title={activeChannelRouting.effectiveUseInc ? "Canal Incidências" : "Canal Principal"}
+                    className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#202c33] flex items-center justify-center ${
+                      activeChannelRouting.effectiveUseInc
+                        ? "bg-amber-400 text-slate-950"
+                        : "bg-emerald-400 text-slate-950"
+                    }`}
+                  >
+                    {activeChannelRouting.effectiveUseInc ? (
+                      <AlertTriangle className="w-2.5 h-2.5 stroke-[2.5]" />
+                    ) : (
+                      <MessageSquare className="w-2.5 h-2.5 stroke-[2.5]" />
+                    )}
+                  </span>
+                ) : null}
               </div>
 
               <div className="min-w-0">
@@ -1242,7 +1389,7 @@ export function WhatsappChatConsoleClient({
                   </strong>
                 )}
 
-                <div className="flex items-center gap-2 text-xs text-slate-400">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                   {activeConversation ? (
                     <>
                       <span className="inline-flex items-center gap-1">
@@ -1259,6 +1406,43 @@ export function WhatsappChatConsoleClient({
                       >
                         <Copy className="w-3 h-3" />
                       </button>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                          activeChannelRouting.effectiveUseInc
+                            ? "bg-amber-500/15 text-amber-300 border-amber-500/35"
+                            : "bg-emerald-500/15 text-emerald-300 border-emerald-500/35"
+                        }`}
+                      >
+                        {activeChannelRouting.effectiveUseInc ? (
+                          <>
+                            <AlertTriangle className="w-2.5 h-2.5" />
+                            Incidências (+351 923 354 371)
+                          </>
+                        ) : (
+                          <>
+                            <MessageSquare className="w-2.5 h-2.5" />
+                            Principal
+                          </>
+                        )}
+                      </span>
+                      {nowMs !== null ? (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                            activeChannelRouting.selectedWindowOpen
+                              ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/25"
+                              : "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              activeChannelRouting.selectedWindowOpen ? "bg-emerald-400" : "bg-rose-400"
+                            }`}
+                          />
+                          {activeChannelRouting.selectedWindowOpen
+                            ? `Janela 24h ativa (~${activeChannelRouting.selectedHoursLeft}h)`
+                            : "Fora janela 24h"}
+                        </span>
+                      ) : null}
                     </>
                   ) : (
                     <span>Escolhe um cliente na barra lateral ou inicia uma nova conversa</span>
@@ -1463,28 +1647,42 @@ export function WhatsappChatConsoleClient({
                         </p>
 
                         {/* Timestamp & Delivery Status Ticks */}
-                        <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-slate-300/75 select-none">
-                          <span suppressHydrationWarning>{timeStr}</span>
-                          {!isInbound ? (
-                            msg.status === "read" ? (
-                              <span title="Lida pelo destinatário" className="text-sky-300 font-bold">
-                                ✓✓
+                        <div className="flex items-center justify-between gap-2 mt-1 text-[10px] text-slate-300/75 select-none">
+                          <span className="inline-flex items-center gap-1">
+                            {ch === "chat_incidencias" || ch === "template_incidencias" ? (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-200 border border-amber-400/30 text-[9px] font-semibold">
+                                <AlertTriangle className="w-2.5 h-2.5" /> Incidência
                               </span>
-                            ) : msg.status === "delivered" ? (
-                              <span title="Entregue" className="text-slate-200 font-bold">
-                                ✓✓
-                              </span>
-                            ) : String(msg.status || "").startsWith("failed") ? (
-                              <span title={`Falhou (${msg.status})`} className="text-rose-300 font-bold">
-                                ⚠️ falhou
-                              </span>
-                            ) : (
-                              <span title="Enviada / Aceite" className="text-slate-300">
-                                ✓
-                              </span>
-                            )
-                          ) : null}
+                            ) : null}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <span suppressHydrationWarning>{timeStr}</span>
+                            {!isInbound ? (
+                              msg.status === "read" ? (
+                                <span title="Lida pelo destinatário" className="text-sky-300 font-bold">
+                                  ✓✓
+                                </span>
+                              ) : msg.status === "delivered" ? (
+                                <span title="Entregue" className="text-slate-200 font-bold">
+                                  ✓✓
+                                </span>
+                              ) : String(msg.status || "").startsWith("failed") ? (
+                                <span title={msg.error_reason || `Falhou (${msg.status})`} className="text-rose-300 font-bold">
+                                  ⚠️ falhou
+                                </span>
+                              ) : (
+                                <span title="Enviada / Aceite" className="text-slate-300">
+                                  ✓
+                                </span>
+                              )
+                            ) : null}
+                          </div>
                         </div>
+                        {!isInbound && String(msg.status || "").startsWith("failed") && msg.error_reason ? (
+                          <div className="mt-1.5 px-2 py-1 rounded-lg bg-rose-950/70 border border-rose-500/40 text-[10px] text-rose-200 leading-snug">
+                            Não entregue: {msg.error_reason}
+                          </div>
+                        ) : null}
                       </article>
                     </div>
                   </React.Fragment>
@@ -1499,6 +1697,76 @@ export function WhatsappChatConsoleClient({
             onSubmit={handleSendMessage}
             className="bg-[#202c33] border-t border-slate-800/80 p-3 space-y-2"
           >
+            {/* Active Outbound Number Selector & 24h Window Alert */}
+            {activeConversation ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] bg-[#111b21] border border-slate-800/80 rounded-xl px-3 py-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-slate-400">Responder via:</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReplyChannelOverride((prev) => ({
+                        ...prev,
+                        [activeConversation.phone]: "principal",
+                      }))
+                    }
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium border transition ${
+                      !activeChannelRouting.effectiveUseInc
+                        ? "bg-emerald-600/25 text-emerald-200 border-emerald-500/50"
+                        : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200"
+                    }`}
+                  >
+                    <MessageSquare className="w-3 h-3" />
+                    <span>Principal</span>
+                    {nowMs !== null && activeChannelRouting.principalWindowOpen ? (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Janela 24h ativa" />
+                    ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReplyChannelOverride((prev) => ({
+                        ...prev,
+                        [activeConversation.phone]: "incidencias",
+                      }))
+                    }
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium border transition ${
+                      activeChannelRouting.effectiveUseInc
+                        ? "bg-amber-600/25 text-amber-200 border-amber-500/50"
+                        : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200"
+                    }`}
+                  >
+                    <AlertTriangle className="w-3 h-3" />
+                    <span>Incidências</span>
+                    {nowMs !== null && activeChannelRouting.incidenciasWindowOpen ? (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Janela 24h ativa" />
+                    ) : null}
+                  </button>
+                </div>
+
+                {nowMs !== null && !activeChannelRouting.selectedWindowOpen ? (
+                  activeChannelRouting.otherWindowOpen ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReplyChannelOverride((prev) => ({
+                          ...prev,
+                          [activeConversation.phone]: activeChannelRouting.effectiveUseInc ? "principal" : "incidencias",
+                        }))
+                      }
+                      className="text-amber-300 hover:text-amber-200 font-semibold underline"
+                    >
+                      Janela 24h só está aberta em {activeChannelRouting.effectiveUseInc ? "Principal" : "Incidências"} — trocar agora
+                    </button>
+                  ) : (
+                    <span className="text-rose-300 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                      Sem janela 24h ativa: texto livre falhará (use Template em Templates &amp; Auto)
+                    </span>
+                  )
+                ) : null}
+              </div>
+            ) : null}
             {/* Staged Attachment Bar */}
             {composeFile ? (
               <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#111b21] border border-emerald-500/40 text-xs">

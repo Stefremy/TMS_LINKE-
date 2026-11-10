@@ -190,17 +190,24 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
 
   useEffect(() => {
     const controller = new AbortController()
+    let stopped = false
+    let inFlight = false
     const refresh = async () => {
+      if (stopped || inFlight || controller.signal.aborted) return
+      inFlight = true
       try {
         const response = await fetch(`/api/ops/chat?viewer=${initial.viewerId}&inbox=1`, { cache: "no-store", signal: controller.signal })
         if (response.ok) {
           const data = await response.json()
           if (data.viewerId === initial.viewerId && Array.isArray(data.items)) setInbox(data.items)
+        } else if ([401, 403, 409].includes(response.status)) {
+          stopped = true
         }
       } catch { /* Keep the last inbox snapshot and retry on the next interval. */ }
+      finally { inFlight = false }
     }
-    const timer = setInterval(() => { if (document.visibilityState === "visible") void refresh() }, 15000)
-    return () => { controller.abort(); clearInterval(timer) }
+    const timer = setInterval(() => { if (document.visibilityState === "visible" && !stopped) void refresh() }, 15000)
+    return () => { stopped = true; controller.abort(); clearInterval(timer) }
   }, [initial.viewerId])
 
   useEffect(() => {
@@ -234,14 +241,18 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
 
   useEffect(() => {
     const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout>
+    let timer: ReturnType<typeof setTimeout> | undefined
     let running = false
+    let stopped = false
+    let consecutiveErrors = 0
+    let retryAfterMs: number | null = null
     const first = firstEffect.current
     firstEffect.current = false
     if (!first) initialized.current = false
     async function update() {
-      if (running || controller.signal.aborted || document.visibilityState === "hidden") return
+      if (running || stopped || controller.signal.aborted || document.visibilityState === "hidden") return
       running = true
+      retryAfterMs = null
       try {
         let more = true, pages = 0
         let cursor = initialized.current && latest.current ? Math.max(1, latest.current - 100) : 0
@@ -252,10 +263,17 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
           const data = await response.json()
           if (controller.signal.aborted) return
           if (!response.ok) {
-            if ([401, 403, 409].includes(response.status)) setBlocked(true)
+            if ([401, 403, 409].includes(response.status)) {
+              stopped = true
+              setBlocked(true)
+            } else if (response.status === 429) {
+              const header = Number(response.headers?.get("Retry-After"))
+              if (Number.isFinite(header) && header > 0) retryAfterMs = Math.min(60_000, header * 1000)
+            }
             throw new Error(data.error || "Não foi possível atualizar a conversa.")
           }
-          if (data.viewerId !== initial.viewerId) { setBlocked(true); throw new Error("A sessão mudou. Atualize a página.") }
+          if (data.viewerId !== initial.viewerId) { stopped = true; setBlocked(true); throw new Error("A sessão mudou. Atualize a página.") }
+          consecutiveErrors = 0
           const page = data as ChatPage
           setMembers(page.members)
           if (page.channels && Array.isArray(page.channels)) {
@@ -272,14 +290,21 @@ export function TeamChatClient({ initial, initialError, initialInbox }: { initia
           cursor = nextCursor
         }
       } catch (failure) {
+        consecutiveErrors = Math.min(5, consecutiveErrors + 1)
         if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "Ligação interrompida. Vamos tentar novamente.")
       } finally { running = false }
     }
-    function schedule() { timer = setTimeout(async () => { await update(); if (!controller.signal.aborted) schedule() }, 5000) }
-    queueMicrotask(() => { void update(); schedule() })
-    const onVisible = () => { if (document.visibilityState === "visible") void update() }
+    function schedule() {
+      if (stopped || controller.signal.aborted) return
+      const delay = consecutiveErrors === 0
+        ? 5000
+        : retryAfterMs ?? Math.min(60_000, 5000 * Math.pow(2, consecutiveErrors))
+      timer = setTimeout(async () => { await update(); if (!controller.signal.aborted && !stopped) schedule() }, delay)
+    }
+    queueMicrotask(() => { void update().then(() => { if (!controller.signal.aborted && !stopped) schedule() }) })
+    const onVisible = () => { if (document.visibilityState === "visible" && !stopped) void update() }
     document.addEventListener("visibilitychange", onVisible)
-    return () => { controller.abort(); clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible) }
+    return () => { stopped = true; controller.abort(); clearTimeout(timer); document.removeEventListener("visibilitychange", onVisible) }
   }, [endpoint, initial.viewerId, retry])
 
   useEffect(() => {

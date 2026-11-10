@@ -21,6 +21,146 @@ export type AuthContext = {
   permissions: string[]
 }
 
+export type AuthContextResolution = {
+  context: AuthContext | null
+  rateLimited: boolean
+}
+
+type CookieEntry = { name: string; value: string }
+type CapturedCookie = { name: string; value: string; options?: Record<string, unknown> }
+type ParsedCookieSession = {
+  accessToken: string
+  refreshToken: string | null
+  expiresAtMs: number | null
+}
+type VerifiedResolution = {
+  user: User | null
+  rateLimited: boolean
+  capturedCookies: CapturedCookie[]
+}
+
+const VERIFIED_USER_CACHE_TTL_MS = 45_000
+const RECENT_REFRESH_CACHE_TTL_MS = 15_000
+const RATE_LIMIT_COOLDOWN_MS = 15_000
+const PROACTIVE_REFRESH_MARGIN_MS = 95_000
+const MAX_AUTH_CACHE_SIZE = 500
+
+const verifiedUserCache = new Map<string, { user: User; expiresAtMs: number }>()
+const proactivePreserveCache = new Map<string, { user: User; hardExpiresAtMs: number }>()
+const recentRefreshCache = new Map<string, { user: User; capturedCookies: CapturedCookie[]; expiresAtMs: number }>()
+const rateLimitCooldownCache = new Map<string, number>()
+const authResolutionInFlight = new Map<string, Promise<VerifiedResolution>>()
+
+function setBoundedCache<V>(map: Map<string, V>, key: string, value: V) {
+  if (map.has(key)) map.delete(key)
+  else if (map.size >= MAX_AUTH_CACHE_SIZE) {
+    const oldest = map.keys().next().value
+    if (oldest !== undefined) map.delete(oldest)
+  }
+  map.set(key, value)
+}
+
+function decodeBase64UrlUtf8(input: string): string | null {
+  try {
+    const base64 = input.replace(/-/g, "+").replace(/_/g, "/")
+    const padLength = (4 - (base64.length % 4)) % 4
+    const binary = atob(base64 + "=".repeat(padLength))
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
+}
+
+function parseSupabaseSessionFromCookies(allCookies: CookieEntry[]): ParsedCookieSession | null {
+  const groups = new Map<string, { direct?: string; chunks: Array<{ index: number; value: string }> }>()
+  for (const cookie of allCookies) {
+    const match = /^(sb-[^-]+-auth-token)(?:\.(\d+))?$/.exec(cookie.name)
+    if (!match) continue
+    const baseName = match[1]
+    const group = groups.get(baseName) || { chunks: [] }
+    if (match[2] === undefined) {
+      group.direct = cookie.value
+    } else {
+      group.chunks.push({ index: Number(match[2]), value: cookie.value })
+    }
+    groups.set(baseName, group)
+  }
+
+  for (const group of groups.values()) {
+    const raw =
+      typeof group.direct === "string" && group.direct.length > 0
+        ? group.direct
+        : group.chunks.length > 0
+          ? group.chunks.sort((a, b) => a.index - b.index).map(chunk => chunk.value).join("")
+          : ""
+    if (!raw) continue
+
+    const jsonText = raw.startsWith("base64-") ? decodeBase64UrlUtf8(raw.slice(7)) : raw
+    if (!jsonText) continue
+    try {
+      const parsed = JSON.parse(jsonText) as Record<string, unknown>
+      if (typeof parsed?.access_token !== "string" || !parsed.access_token) continue
+
+      let expiresAtMs: number | null =
+        typeof parsed.expires_at === "number" && Number.isFinite(parsed.expires_at)
+          ? parsed.expires_at * 1000
+          : null
+
+      if (expiresAtMs === null) {
+        const jwtParts = parsed.access_token.split(".")
+        if (jwtParts.length === 3) {
+          const payloadText = decodeBase64UrlUtf8(jwtParts[1])
+          if (payloadText) {
+            const payload = JSON.parse(payloadText) as { exp?: unknown }
+            if (typeof payload.exp === "number" && Number.isFinite(payload.exp)) {
+              expiresAtMs = payload.exp * 1000
+            }
+          }
+        }
+      }
+
+      return {
+        accessToken: parsed.access_token,
+        refreshToken: typeof parsed.refresh_token === "string" && parsed.refresh_token ? parsed.refresh_token : null,
+        expiresAtMs,
+      }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const subtle = globalThis.crypto?.subtle
+  if (!subtle) return value
+  const digest = await subtle.digest("SHA-256", new TextEncoder().encode(value))
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")
+}
+
+function isAuthRateLimitError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false
+  const record = err as { status?: unknown; code?: unknown; message?: unknown }
+  return (
+    record.status === 429 ||
+    record.code === "over_request_rate_limit" ||
+    (typeof record.message === "string" && record.message.toLowerCase().includes("rate limit"))
+  )
+}
+
+export async function invalidateAuthCacheForCookies(allCookies: CookieEntry[]) {
+  const session = parseSupabaseSessionFromCookies(allCookies)
+  if (!session) return
+  const accessHash = await sha256Hex(session.accessToken)
+  verifiedUserCache.delete(accessHash)
+  proactivePreserveCache.delete(accessHash)
+  const sessionKey = await sha256Hex(session.refreshToken || session.accessToken)
+  recentRefreshCache.delete(sessionKey)
+  rateLimitCooldownCache.delete(sessionKey)
+}
+
 /**
  * Retrieves the current authenticated user and parses their role/context securely.
  */
@@ -29,25 +169,189 @@ export async function getTenantId(): Promise<string> {
   return ctx?.tenant_id || LINKE_TENANT_ID
 }
 
-export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
+export const getAuthContextState = cache(async (): Promise<AuthContextResolution> => {
   const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    supabasePublicKey(),
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll() {} // Read-only context
+  const allCookies = cookieStore.getAll()
+  const cookieOptions = {
+    maxAge: 60 * 60 * 24 * 7,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  }
+  const applyCookiesToStore = (cookiesToSet: CapturedCookie[]) => {
+    const writable = cookieStore as unknown as {
+      set?: (name: string, value: string, options?: Record<string, unknown>) => void
+    }
+    if (typeof writable.set !== "function" || cookiesToSet.length === 0) return
+    try {
+      for (const { name, value, options } of cookiesToSet) {
+        writable.set(name, value, { ...cookieOptions, ...options })
+      }
+    } catch {
+      // Server Components cannot mutate cookies; Route Handlers and Server Actions persist them.
+    }
+  }
+
+  const parsedSession = parseSupabaseSessionFromCookies(allCookies)
+  let user: User | null = null
+  let rateLimited = false
+
+  if (parsedSession) {
+    const now = Date.now()
+    const accessHash = await sha256Hex(parsedSession.accessToken)
+    const tokenFarFromExpiry =
+      parsedSession.expiresAtMs !== null && parsedSession.expiresAtMs - now > PROACTIVE_REFRESH_MARGIN_MS
+
+    if (tokenFarFromExpiry) {
+      const cached = verifiedUserCache.get(accessHash)
+      if (cached && cached.expiresAtMs > now) {
+        user = cached.user
       }
     }
-  )
 
-  const { data: { user }, error } = await supabase.auth.getUser()
+    if (!user) {
+      const sessionKey = await sha256Hex(parsedSession.refreshToken || parsedSession.accessToken)
+      const recentRefresh = recentRefreshCache.get(sessionKey)
+      if (recentRefresh && recentRefresh.expiresAtMs > now) {
+        applyCookiesToStore(recentRefresh.capturedCookies)
+        user = recentRefresh.user
+      } else {
+        const cooldownUntil = rateLimitCooldownCache.get(sessionKey)
+        if (cooldownUntil && cooldownUntil > now) {
+          const preserved = proactivePreserveCache.get(accessHash)
+          if (
+            preserved &&
+            parsedSession.expiresAtMs !== null &&
+            parsedSession.expiresAtMs > now + 5_000 &&
+            preserved.hardExpiresAtMs > now + 5_000
+          ) {
+            user = preserved.user
+          } else {
+            return { context: null, rateLimited: true }
+          }
+        } else {
+          let pending = authResolutionInFlight.get(sessionKey)
+          if (!pending) {
+            pending = (async (): Promise<VerifiedResolution> => {
+              const capturedCookies: CapturedCookie[] = []
+              const supabase = createServerClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                supabasePublicKey(),
+                {
+                  cookieOptions,
+                  cookies: {
+                    getAll() {
+                      return allCookies
+                    },
+                    setAll(cookiesToSet) {
+                      capturedCookies.push(...cookiesToSet)
+                      applyCookiesToStore(cookiesToSet)
+                    },
+                  },
+                }
+              )
 
-  if (error || !user) {
-    return null
+              const { data: { user: fetchedUser }, error } = await supabase.auth.getUser()
+              const hitRateLimit = isAuthRateLimitError(error)
+              const resolvedAt = Date.now()
+
+              if (fetchedUser && !error) {
+                if (parsedSession.expiresAtMs !== null) {
+                  setBoundedCache(proactivePreserveCache, accessHash, {
+                    user: fetchedUser,
+                    hardExpiresAtMs: parsedSession.expiresAtMs,
+                  })
+                  if (parsedSession.expiresAtMs - resolvedAt > PROACTIVE_REFRESH_MARGIN_MS) {
+                    setBoundedCache(verifiedUserCache, accessHash, {
+                      user: fetchedUser,
+                      expiresAtMs: Math.min(
+                        resolvedAt + VERIFIED_USER_CACHE_TTL_MS,
+                        parsedSession.expiresAtMs - PROACTIVE_REFRESH_MARGIN_MS
+                      ),
+                    })
+                  }
+                }
+                if (capturedCookies.length > 0) {
+                  setBoundedCache(recentRefreshCache, sessionKey, {
+                    user: fetchedUser,
+                    capturedCookies,
+                    expiresAtMs: resolvedAt + RECENT_REFRESH_CACHE_TTL_MS,
+                  })
+                  const refreshedSession = parseSupabaseSessionFromCookies(capturedCookies)
+                  if (refreshedSession?.accessToken && refreshedSession.expiresAtMs !== null) {
+                    const refreshedAccessHash = await sha256Hex(refreshedSession.accessToken)
+                    setBoundedCache(proactivePreserveCache, refreshedAccessHash, {
+                      user: fetchedUser,
+                      hardExpiresAtMs: refreshedSession.expiresAtMs,
+                    })
+                    if (refreshedSession.expiresAtMs - resolvedAt > PROACTIVE_REFRESH_MARGIN_MS) {
+                      setBoundedCache(verifiedUserCache, refreshedAccessHash, {
+                        user: fetchedUser,
+                        expiresAtMs: Math.min(
+                          resolvedAt + VERIFIED_USER_CACHE_TTL_MS,
+                          refreshedSession.expiresAtMs - PROACTIVE_REFRESH_MARGIN_MS
+                        ),
+                      })
+                    }
+                  }
+                }
+                return { user: fetchedUser, rateLimited: false, capturedCookies }
+              }
+
+              if (hitRateLimit) {
+                setBoundedCache(rateLimitCooldownCache, sessionKey, resolvedAt + RATE_LIMIT_COOLDOWN_MS)
+                const preserved = proactivePreserveCache.get(accessHash)
+                if (
+                  preserved &&
+                  parsedSession.expiresAtMs !== null &&
+                  parsedSession.expiresAtMs > resolvedAt + 5_000 &&
+                  preserved.hardExpiresAtMs > resolvedAt + 5_000
+                ) {
+                  return { user: preserved.user, rateLimited: false, capturedCookies }
+                }
+              }
+
+              return { user: null, rateLimited: hitRateLimit, capturedCookies }
+            })().finally(() => {
+              authResolutionInFlight.delete(sessionKey)
+            })
+            authResolutionInFlight.set(sessionKey, pending)
+          }
+
+          const resolution = await pending
+          if (resolution.capturedCookies.length > 0) {
+            applyCookiesToStore(resolution.capturedCookies)
+          }
+          user = resolution.user
+          rateLimited = resolution.rateLimited
+        }
+      }
+    }
+  } else {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      supabasePublicKey(),
+      {
+        cookies: {
+          getAll() {
+            return allCookies
+          },
+          setAll(cookiesToSet) {
+            applyCookiesToStore(cookiesToSet)
+          },
+        },
+      }
+    )
+
+    const { data: { user: fetchedUser }, error } = await supabase.auth.getUser()
+    if (error || !fetchedUser) {
+      return { context: null, rateLimited: isAuthRateLimitError(error) }
+    }
+    user = fetchedUser
+  }
+
+  if (!user) {
+    return { context: null, rateLimited }
   }
 
   // Staff permissions come from trusted storage, shared with the employee editor.
@@ -76,12 +380,15 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
     }
     if (client_id) await enforcePortalSuspension(metadata.tenant_id || LINKE_TENANT_ID, client_id)
     return {
-      user,
-      role: 'client',
-      tenant_id: metadata.tenant_id || LINKE_TENANT_ID,
-      client_id,
-      colaborador_id: null,
-      permissions: [],
+      context: {
+        user,
+        role: 'client',
+        tenant_id: metadata.tenant_id || LINKE_TENANT_ID,
+        client_id,
+        colaborador_id: null,
+        permissions: [],
+      },
+      rateLimited: false,
     }
   }
 
@@ -114,13 +421,20 @@ export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
 
   if (role === 'client' && client_id) await enforcePortalSuspension(LINKE_TENANT_ID, client_id)
   return {
-    user,
-    role,
-    tenant_id: tenantId,
-    client_id,
-    colaborador_id,
-    permissions
+    context: {
+      user,
+      role,
+      tenant_id: tenantId,
+      client_id,
+      colaborador_id,
+      permissions
+    },
+    rateLimited: false,
   }
+})
+
+export const getAuthContext = cache(async (): Promise<AuthContext | null> => {
+  return (await getAuthContextState()).context
 })
 
 /**
