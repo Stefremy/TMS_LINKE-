@@ -246,6 +246,7 @@ export function WhatsappChatConsoleClient({
   const lastMessageRef = React.useRef<HTMLElement | null>(null)
   const formRef = React.useRef<HTMLFormElement | null>(null)
   const lastCompositionEndAtRef = React.useRef<number | null>(null)
+  const sendingRef = React.useRef(false)
 
   const markPhoneAsRead = React.useCallback((phone: string) => {
     if (!phone) return
@@ -267,7 +268,17 @@ export function WhatsappChatConsoleClient({
       const res = await fetch("/api/ops/communications/chat?limit=900")
       const body = await res.json().catch(() => ({}))
       if (res.ok && Array.isArray(body.messages)) {
-        setMessages(body.messages as ChatLogItem[])
+        const freshRows = body.messages as ChatLogItem[]
+        const freshApiIds = new Set(freshRows.map(m => m.api_message_id).filter((id): id is string => Boolean(id)))
+        setMessages((prev) => {
+          const pendingOpts = prev.filter((item) => {
+            if (!String(item.id).startsWith("opt-")) return false
+            if (item.api_message_id && freshApiIds.has(item.api_message_id)) return false
+            const ageMs = Date.now() - (new Date(item.created_at).getTime() || 0)
+            return ageMs < 15_000
+          })
+          return [...pendingOpts, ...freshRows]
+        })
         if (body.contacts && typeof body.contacts === "object") {
           setSavedContacts(body.contacts as Record<string, string>)
         }
@@ -293,10 +304,26 @@ export function WhatsappChatConsoleClient({
       const res = await fetch(`/api/ops/communications/chat?phone=${encodeURIComponent(cleanPhone)}`)
       const body = await res.json().catch(() => ({}))
       if (res.ok && Array.isArray(body.messages)) {
+        const fetched = body.messages as ChatLogItem[]
+        const fetchedApiIds = new Set(fetched.map(m => m.api_message_id).filter((id): id is string => Boolean(id)))
         setPhoneFullHistory((prev) => ({
           ...prev,
-          [cleanPhone]: body.messages as ChatLogItem[],
+          [cleanPhone]: fetched,
         }))
+        setMessages((prev) =>
+          prev.filter((item) => {
+            if (!String(item.id).startsWith("opt-")) return true
+            if (item.api_message_id && fetchedApiIds.has(item.api_message_id)) return false
+            if (normalizePhoneKey(item.to_number) !== cleanPhone) return true
+            const itemTs = new Date(item.created_at).getTime() || 0
+            return !fetched.some(
+              (real) =>
+                real.direction === "out" &&
+                (real.message_text || "") === (item.message_text || "") &&
+                Math.abs((new Date(real.created_at).getTime() || 0) - itemTs) < 60_000
+            )
+          })
+        )
       }
     } catch {
       // Ignore
@@ -545,9 +572,15 @@ export function WhatsappChatConsoleClient({
     if (!activePhone) return []
     const baseMessages = activeConversation?.messages || []
     const fullHistory = phoneFullHistory[activePhone] || []
+    const combined = [...baseMessages, ...fullHistory]
 
-    const byId = new Map<string, ChatLogItem>()
-    for (const item of [...baseMessages, ...fullHistory]) {
+    const realItems = combined.filter((item) => !String(item.id).startsWith("opt-"))
+    const realApiIds = new Set(
+      realItems.map((item) => item.api_message_id).filter((id): id is string => Boolean(id))
+    )
+
+    const deduped = new Map<string, ChatLogItem>()
+    for (const item of combined) {
       const ch = String(item.channel || "").toLowerCase()
       if (!includeTemplatesInThread && (ch === "template" || ch === "template_incidencias" || ch === "sms")) {
         continue
@@ -555,10 +588,29 @@ export function WhatsappChatConsoleClient({
       if (activeInbox === "incidencias") {
         if (ch !== "chat_incidencias" && ch !== "template_incidencias") continue
       }
-      byId.set(String(item.id), item)
+
+      const isOpt = String(item.id).startsWith("opt-")
+      if (isOpt) {
+        if (item.api_message_id && realApiIds.has(item.api_message_id)) continue
+        const itemTs = new Date(item.created_at).getTime() || 0
+        const matchedReal = realItems.some(
+          (real) =>
+            real.direction === "out" &&
+            String(real.channel || "").toLowerCase() === ch &&
+            (real.message_text || "") === (item.message_text || "") &&
+            Math.abs((new Date(real.created_at).getTime() || 0) - itemTs) < 60_000
+        )
+        if (matchedReal) continue
+      }
+
+      const canonicalKey = item.api_message_id ? `api:${item.api_message_id}` : `id:${item.id}`
+      const existing = deduped.get(canonicalKey)
+      if (!existing || (String(existing.id).startsWith("opt-") && !isOpt)) {
+        deduped.set(canonicalKey, item)
+      }
     }
 
-    return Array.from(byId.values()).sort(
+    return Array.from(deduped.values()).sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     )
   }, [activeConversation?.messages, activeInbox, activePhone, includeTemplatesInThread, phoneFullHistory])
@@ -687,12 +739,13 @@ export function WhatsappChatConsoleClient({
   // Send text or media message
   async function handleSendMessage(e: React.FormEvent) {
     e.preventDefault()
-    if (!activePhone || sending) return
+    if (!activePhone || sending || sendingRef.current) return
 
     const useIncNumber = activeChannelRouting.effectiveUseInc
 
     // If a media file is attached, send media (with optional composeText as caption)
     if (composeFile) {
+      sendingRef.current = true
       setSending(true)
       setSendFeedback(null)
       try {
@@ -750,6 +803,7 @@ export function WhatsappChatConsoleClient({
           text: err instanceof Error ? err.message : "Erro de rede ao enviar ficheiro.",
         })
       } finally {
+        sendingRef.current = false
         setSending(false)
       }
       return
@@ -759,6 +813,7 @@ export function WhatsappChatConsoleClient({
     const cleanText = composeText.trim()
     if (!cleanText) return
 
+    sendingRef.current = true
     setSending(true)
     setSendFeedback(null)
     try {
@@ -813,6 +868,7 @@ export function WhatsappChatConsoleClient({
         text: err instanceof Error ? err.message : "Erro ao enviar mensagem.",
       })
     } finally {
+      sendingRef.current = false
       setSending(false)
     }
   }
