@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getAuthContext } from "@/lib/auth/context"
+import { authorizeCommunicationsApi } from "@/lib/services/communications/api-auth"
 import {
   loadCommunicationsConfig,
   maskConfigSecrets,
@@ -10,11 +10,9 @@ import {
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-export async function GET() {
-  const ctx = await getAuthContext()
-  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+export async function GET(request: Request) {
+  const auth = await authorizeCommunicationsApi(request)
+  if (!auth.ok) return auth.response
 
   const config = await loadCommunicationsConfig()
   return NextResponse.json({
@@ -24,10 +22,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const ctx = await getAuthContext()
-  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+  const auth = await authorizeCommunicationsApi(request, { requireConfigAdmin: true, checkOrigin: true })
+  if (!auth.ok) return auth.response
 
   try {
     const body = (await request.json().catch(() => ({}))) as Partial<CommunicationsConfig>

@@ -35,7 +35,11 @@ export default async function ClientTrackingPage({
 
   try {
     // Strictly fetch ONLY this client's own shipments
-    const allFetched = await getShipmentsAction({ includeLabels: false, clientId: client.id })
+    const allFetched = await getShipmentsAction({
+      includeLabels: false,
+      clientId: client.id,
+      limit: searchQ ? 200 : 100,
+    })
     const clientOnlyShipments = (allFetched || []).filter((s) => s.client_id === client.id)
 
     const activeShipments = clientOnlyShipments.filter((s) => {

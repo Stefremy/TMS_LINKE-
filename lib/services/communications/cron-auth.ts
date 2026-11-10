@@ -1,31 +1,32 @@
+import { timingSafeEqual } from "node:crypto"
 import { getAuthContext } from "@/lib/auth/context"
+import { canAccessOpsRoute } from "@/lib/auth/permissions"
 
-const LEGACY_NATHALIA_CRON_SECRET = "a1f411e2e71db8c7761be008ecb324f3911d5ababe90fcb6953e3a196c9f53e6"
+function safeSecretEqual(expected: string, supplied: string): boolean {
+  const expectedBuf = Buffer.from(expected)
+  const suppliedBuf = Buffer.from(supplied)
+  if (expectedBuf.length !== suppliedBuf.length) return false
+  return timingSafeEqual(expectedBuf, suppliedBuf)
+}
 
 export async function isCronAuthorized(request: Request): Promise<boolean> {
   const envSecret = process.env.CRON_SECRET?.trim()
-  const validSecrets = new Set<string>()
-  if (envSecret) validSecrets.add(envSecret)
-  validSecrets.add(LEGACY_NATHALIA_CRON_SECRET)
 
-  const authHeader = request.headers.get("authorization")?.trim() || ""
-  if (authHeader.toLowerCase().startsWith("bearer ")) {
-    const token = authHeader.slice(7).trim()
-    if (token && validSecrets.has(token)) return true
+  if (envSecret) {
+    const authHeader = request.headers.get("authorization")?.trim() || ""
+    if (authHeader.toLowerCase().startsWith("bearer ")) {
+      const token = authHeader.slice(7).trim()
+      if (token && safeSecretEqual(envSecret, token)) return true
+    }
+
+    const customHeader = request.headers.get("x-cron-secret")?.trim()
+    if (customHeader && safeSecretEqual(envSecret, customHeader)) return true
   }
 
-  const customHeader = request.headers.get("x-cron-secret")?.trim()
-  if (customHeader && validSecrets.has(customHeader)) return true
-
-  // Also accept query param ?secret=... for external webhook schedulers like cron-job.org
-  const url = new URL(request.url)
-  const querySecret = url.searchParams.get("secret")?.trim()
-  if (querySecret && validSecrets.has(querySecret)) return true
-
-  // Allow authenticated operations staff session
+  // Allow authenticated operations staff with communications permissions (manual UI / dry-run)
   try {
     const ctx = await getAuthContext()
-    if (ctx && ["admin", "employee"].includes(ctx.role || "")) {
+    if (ctx && canAccessOpsRoute(ctx, "/ops/comunicacoes")) {
       return true
     }
   } catch {
@@ -34,4 +35,3 @@ export async function isCronAuthorized(request: Request): Promise<boolean> {
 
   return false
 }
-

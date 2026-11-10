@@ -39,9 +39,11 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
       shipmentsQuery = shipmentsQuery.gte("created_at", options.createdAfter)
     }
     if (options.limit) {
-      shipmentsQuery = shipmentsQuery.limit(options.limit)
-    } else {
+      shipmentsQuery = shipmentsQuery.limit(Math.min(options.limit, 10000))
+    } else if (options.createdAfter) {
       shipmentsQuery = shipmentsQuery.limit(10000) // allow up to 10000 to cover 90 days for Contas Corrente
+    } else {
+      shipmentsQuery = shipmentsQuery.limit(1000) // safe default prevents unbounded 10000-row transfers
     }
 
     const { data: dbShipments, error } = await shipmentsQuery

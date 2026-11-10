@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAuthContext } from "@/lib/auth/context"
+import { authorizeCommunicationsApi } from "@/lib/services/communications/api-auth"
 import { loadCommunicationsConfig, type NotificationSourceMode } from "@/lib/services/communications/config"
 import {
   fetchUnifiedShipmentsByCategory,
@@ -20,10 +20,8 @@ const VALID_CATEGORIES = new Set<ShipmentListCategory>([
 ])
 
 export async function GET(request: NextRequest) {
-  const ctx = await getAuthContext()
-  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+  const auth = await authorizeCommunicationsApi(request)
+  if (!auth.ok) return auth.response
 
   try {
     const { searchParams } = new URL(request.url)
@@ -67,10 +65,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const ctx = await getAuthContext()
-  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+  const auth = await authorizeCommunicationsApi(request, { checkOrigin: true })
+  if (!auth.ok) return auth.response
 
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>

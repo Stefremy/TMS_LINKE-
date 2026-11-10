@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getAuthContext } from "@/lib/auth/context"
+import { authorizeCommunicationsApi } from "@/lib/services/communications/api-auth"
 import { lookupShipmentByTracking } from "@/lib/services/communications/shipment-sources"
 import {
   listWhatsappTemplates,
@@ -10,10 +10,8 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET(request: Request) {
-  const ctx = await getAuthContext()
-  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+  const auth = await authorizeCommunicationsApi(request)
+  if (!auth.ok) return auth.response
 
   const { searchParams } = new URL(request.url)
   const lookupTracking = searchParams.get("lookupTracking")?.trim()
@@ -34,10 +32,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const ctx = await getAuthContext()
-  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+  const auth = await authorizeCommunicationsApi(request, { checkOrigin: true })
+  if (!auth.ok) return auth.response
 
   try {
     const body = (await request.json().catch(() => ({}))) as {

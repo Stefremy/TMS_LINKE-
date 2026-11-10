@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getAuthContext } from "@/lib/auth/context"
+import { authorizeCommunicationsApi } from "@/lib/services/communications/api-auth"
 import { fetchWhatsappMediaBinary } from "@/lib/services/communications/whatsapp-cloud"
 
 export const runtime = "nodejs"
@@ -9,10 +9,8 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ mediaId: string }> }
 ) {
-  const ctx = await getAuthContext()
-  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+  const auth = await authorizeCommunicationsApi(request)
+  if (!auth.ok) return auth.response
 
   const { mediaId } = await context.params
   const { searchParams } = new URL(request.url)

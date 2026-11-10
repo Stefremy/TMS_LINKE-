@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getAuthContext } from "@/lib/auth/context"
+import { authorizeCommunicationsApi } from "@/lib/services/communications/api-auth"
 import { createAdminClient } from "@/lib/supabase/server"
 import { getLegacyWhatsappSupabaseClient } from "@/lib/services/communications/whatsapp-cloud"
 
@@ -52,10 +52,8 @@ function normalizeLegacyRow(raw: Record<string, unknown>): NormalizedLogRow {
 }
 
 export async function GET(request: Request) {
-  const ctx = await getAuthContext()
-  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+  const auth = await authorizeCommunicationsApi(request)
+  if (!auth.ok) return auth.response
 
   const { searchParams } = new URL(request.url)
   const q = (searchParams.get("q") || "").trim()

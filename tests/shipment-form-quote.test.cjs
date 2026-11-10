@@ -55,7 +55,7 @@ test('international CTT and Correos services hide stale COD; server quotes rejec
   assert.deepEqual(result.activeSpecialServices,[])
   if(carrier==='ctt') assert.equal(result.quote.specialFeesAmount,0)
   else { assert.equal(result.quote.specialFeesAmount,0);assert.equal(result.requiresQuotation,true) }
-  assert.throws(()=>calculateShipmentQuote(1,customer,table,country,postal,[code],50),/COD.*apenas/)
+  assert.throws(()=>calculateShipmentQuote(1,customer,table,country,postal,[code],50),/cobrança (?:CTT|Correos) está disponível apenas/)
   if(carrier==='correos') {
    const multi=getShipmentQuote({role:'client',services:[table],client:customer,values:{...values,serviceId:table.id,
     recipientCountry:country,recipientPostal:postal,volumesCount:3,parcelWeightsKg:[0.3,0.3,0.4]}})

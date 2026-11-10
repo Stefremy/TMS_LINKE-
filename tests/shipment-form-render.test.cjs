@@ -61,7 +61,7 @@ test('requests have a store-scoped sidebar entry on desktop and mobile, without 
  const scope={client,isEmployee:false,basePath:'/app/fixture'}
  const uiLoad=createLoader({react:React,'react/jsx-runtime':jsx,'lucide-react':require('lucide-react'),
   'next/link':{__esModule:true,default:({children,...props})=>{delete props.prefetch;return React.createElement('a',props,children)}},
-  'next/image':{__esModule:true,default:()=>null},'next/navigation':{usePathname:()=>'/app/fixture/cotacoes'},
+  'next/image':{__esModule:true,default:()=>null},'next/navigation':{usePathname:()=>'/app/fixture/cotacoes',useSearchParams:()=>new URLSearchParams()},
   '@/app/app/components/ClientScope':{useClientScope:()=>scope},'./ClientScope':{useClientScope:()=>scope},
   './ClientMessages':{ClientMessageBell:()=>null},'@/components/ui/mobile-drawer':{MobileDrawer:({children})=>children},
   './ClientAccountDetailsModal':{ClientAccountDetailsModal:()=>null},'./ClientImpersonationBanner':{ClientProfileSidebar:()=>null},

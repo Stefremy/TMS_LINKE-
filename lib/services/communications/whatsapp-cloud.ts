@@ -498,13 +498,27 @@ export async function sendGenericTemplateMessage(input: SendTemplateMessageInput
       }
     }
 
+    const smsFallbackSent = Boolean(
+      smsFallback &&
+      typeof smsFallback === "object" &&
+      (smsFallback as { ok?: boolean; status?: string }).ok === true &&
+      (smsFallback as { ok?: boolean; status?: string }).status === "sent"
+    )
+
+    const delivered = response.ok || smsFallbackSent
+    const channelUsed: "whatsapp" | "sms" | null = response.ok ? "whatsapp" : smsFallbackSent ? "sms" : null
+
     return {
-      ok: response.ok,
-      status: response.ok ? 200 : response.status,
-      messageId,
+      ok: delivered,
+      delivered,
+      channelUsed,
+      status: response.ok ? 200 : (smsFallbackSent ? 200 : response.status),
+      messageId: messageId || (smsFallback && typeof smsFallback === "object" ? String((smsFallback as { apiMessageId?: string }).apiMessageId || "") : ""),
       to: normalizedTo,
       finalBody: {
         ...responseBody,
+        channelUsed,
+        delivered,
         ...(logWarning ? { _supabaseWarning: logWarning } : {}),
         ...(smsFallback ? { _smsFallback: smsFallback } : {}),
       },
@@ -512,6 +526,8 @@ export async function sendGenericTemplateMessage(input: SendTemplateMessageInput
   } catch (error) {
     return {
       ok: false,
+      delivered: false,
+      channelUsed: null,
       status: 500,
       finalBody: {
         error: "Falha ao enviar template WhatsApp",

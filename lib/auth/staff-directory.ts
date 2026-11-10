@@ -24,6 +24,8 @@ export async function listStaffAuthUsers(db: SupabaseClient): Promise<StaffAuthU
 /** Both the editor and the current session read the same trusted persisted access. */
 export async function loadStaffDirectory(db: SupabaseClient, tenantId: string, users: StaffAuthUser[]) {
   const profiles = new Map<string, Colaborador>()
+  const candidateIds = new Set<string>()
+
   for (const user of users) {
     const metadata = user.app_metadata || {}
     if (metadata.role === "client") continue
@@ -53,6 +55,10 @@ export async function loadStaffDirectory(db: SupabaseClient, tenantId: string, u
       ...(metadata.access_level !== undefined || metadata.role === "admin" ? { access_level: level } : {}),
       ...(metadata.staff_status === "Inativo" ? { status: "Inativo" as const } : {}),
     })
+    candidateIds.add(id)
+    if (metadata.colaborador_id && typeof metadata.colaborador_id === "string") candidateIds.add(metadata.colaborador_id)
+    if (fallback?.id) candidateIds.add(fallback.id)
+    if (user.id) candidateIds.add(`col-${user.id.slice(0, 8)}`)
   }
   const merge = (id: string, fields: Partial<Colaborador>) => {
     const email = staffEmail(fields.email)
@@ -64,16 +70,33 @@ export async function loadStaffDirectory(db: SupabaseClient, tenantId: string, u
   }
   try {
     if (await supportsDatabaseFeature(db, "colaboradores")) {
-      const { data, error } = await db.from("colaboradores").select("*").eq("tenant_id", tenantId)
-      if (!error) for (const row of data || []) merge(row.id, { ...row, permissions: parsePermissions(row.permissions) })
+      let query = db.from("colaboradores").select("*").eq("tenant_id", tenantId)
+      if (candidateIds.size > 0 && users.length <= 10) {
+        query = query.in("id", Array.from(candidateIds))
+      }
+      const { data, error } = await query
+      if (!error && data) {
+        for (const row of data) {
+          merge(row.id, { ...row, permissions: parsePermissions(row.permissions) })
+          candidateIds.add(row.id)
+        }
+      }
     }
   } catch { /* Older installations persist profiles in audit_log. */ }
 
+  const candidateIdList = Array.from(candidateIds).filter(Boolean)
   for (let offset = 0; ; offset += 1000) {
-    const { data: logs, error } = await db.from("audit_log").select("id, action, details, created_at")
+    let query = db.from("audit_log").select("id, action, details, created_at")
       .eq("tenant_id", tenantId)
       .in("action", ["colaborador_created", "colaborador_updated", "colaborador_deleted", "colaborador_credentials_updated"])
       .order("created_at", { ascending: true }).order("id", { ascending: true }).range(offset, offset + 999)
+
+    // PERF-001: Only replay audit events for the relevant collaborator IDs instead of scanning the full table
+    if (candidateIdList.length > 0) {
+      query = query.in("details->>id", candidateIdList)
+    }
+
+    const { data: logs, error } = await query
     if (error) throw new Error("Não foi possível consultar os acessos dos colaboradores.")
     for (const log of logs || []) {
       const details = log.details as Partial<Colaborador> & { colaborador_id?: string }

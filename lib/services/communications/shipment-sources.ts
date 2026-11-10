@@ -460,7 +460,7 @@ export async function fetchLegacyTmsShipmentsByType(
 
     const shipmentsEndpoint = `${baseUrl}/admin/shipments/datatable`
 
-    async function fetchDatatablePage(draw: number, start: number, length: number, isRetry = false): Promise<any> {
+    async function fetchDatatablePage(draw: number, start: number, length: number, isRetry = false): Promise<Record<string, unknown>> {
       const requestBody = new URLSearchParams()
       requestBody.set("_token", session.csrfToken)
       requestBody.set("draw", String(draw))
@@ -607,17 +607,22 @@ export async function fetchNativeTmsShipmentsByType(
 export async function loadPudoNotifiedMap(): Promise<Record<string, { notified: boolean; updatedAt: string }>> {
   try {
     const supabase = createAdminClient()
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("whatsapp_communications_config")
-      .select("config")
-      .eq("id", "pudo_notifications")
+      .select("value")
+      .eq("key", "pudo_notifications")
       .maybeSingle()
 
-    if (data?.config && typeof data.config === "object") {
-      return data.config as Record<string, { notified: boolean; updatedAt: string }>
+    if (error) {
+      console.warn("Falha ao ler configuração PUDO do Supabase:", error.message)
+      return {}
     }
-  } catch {
-    // ignore
+
+    if (data?.value && typeof data.value === "object") {
+      return data.value as Record<string, { notified: boolean; updatedAt: string }>
+    }
+  } catch (err) {
+    console.warn("Erro ao ler mapa PUDO:", err instanceof Error ? err.message : String(err))
   }
   return {}
 }
@@ -638,16 +643,19 @@ export async function setPudoShipmentNotified(
 
   try {
     const supabase = createAdminClient()
-    await supabase.from("whatsapp_communications_config").upsert(
+    const { error } = await supabase.from("whatsapp_communications_config").upsert(
       {
-        id: "pudo_notifications",
-        config: current,
+        key: "pudo_notifications",
+        value: current,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "id" }
+      { onConflict: "key" }
     )
-  } catch {
-    // ignore
+    if (error) {
+      console.warn("Falha ao atualizar mapa PUDO no Supabase:", error.message)
+    }
+  } catch (err) {
+    console.warn("Erro ao atualizar mapa PUDO:", err instanceof Error ? err.message : String(err))
   }
   return current
 }
@@ -765,29 +773,37 @@ export async function fetchUnifiedShipmentsByCategory(
 
   const notifiedLookup = new Map<string, { at: string; template: string | null }>()
 
-  try {
-    const { data: recentLogs } = await supabase
-      .from("whatsapp_logs")
-      .select("tracking_number, template_name, created_at, status")
-      .in("direction", ["out", "outbound"])
-      .not("tracking_number", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(1500)
+  if (trackingKeys.size > 0) {
+    try {
+      const trackingList = Array.from(trackingKeys)
+      const CHUNK_SIZE = 100
+      for (let i = 0; i < trackingList.length; i += CHUNK_SIZE) {
+        const chunk = trackingList.slice(i, i + CHUNK_SIZE)
+        const { data: recentLogs, error: logsError } = await supabase
+          .from("whatsapp_logs")
+          .select("tracking_number, template_name, created_at, status")
+          .in("direction", ["out", "outbound"])
+          .in("tracking_number", chunk)
+          .order("created_at", { ascending: false })
 
-    for (const log of recentLogs || []) {
-      const trk = String(log.tracking_number || "").trim().toUpperCase()
-      if (!trk || !trackingKeys.has(trk)) continue
-      const st = String(log.status || "").toLowerCase()
-      if (st === "failed") continue
-      if (!notifiedLookup.has(trk)) {
-        notifiedLookup.set(trk, {
-          at: String(log.created_at || ""),
-          template: log.template_name ? String(log.template_name) : null,
-        })
+        if (!logsError && Array.isArray(recentLogs)) {
+          for (const log of recentLogs) {
+            const trk = String(log.tracking_number || "").trim().toUpperCase()
+            if (!trk) continue
+            const st = String(log.status || "").toLowerCase()
+            if (st === "failed" || st.startsWith("failed_") || st === "error") continue
+            if (!notifiedLookup.has(trk)) {
+              notifiedLookup.set(trk, {
+                at: String(log.created_at || ""),
+                template: log.template_name ? String(log.template_name) : null,
+              })
+            }
+          }
+        }
       }
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
   }
 
   const searchLower = String(options.search || "").trim().toLowerCase()

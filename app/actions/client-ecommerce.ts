@@ -2,7 +2,7 @@
 
 import { errorMessage } from "@/lib/errors"
 import { createAdminClient } from "@/lib/supabase/server"
-import { requireClientAccess, getTenantId } from "@/lib/auth/context"
+import { requireClientAccess } from "@/lib/auth/context"
 import { revalidatePath } from "next/cache"
 
 export type PlatformType = "woocommerce" | "shopify" | "linke_store" | "prestashop" | "custom_api"
@@ -123,19 +123,19 @@ export async function getClientStoresAction(clientId: string): Promise<ClientEco
     const deletedIds = new Set<string>()
 
     for (const log of logs) {
-      const details = log.details as any
+      const details = log.details as (Partial<ClientEcommerceStore> & { id?: string; client_id?: string }) | null
       if (!details || details.client_id !== clientId) continue
 
       if (log.action === "client_ecommerce_store_deleted") {
-        deletedIds.add(details.id)
+        if (details.id) deletedIds.add(details.id)
         continue
       }
 
-      if (!deletedIds.has(details.id) && !storesMap.has(details.id)) {
+      if (details.id && !deletedIds.has(details.id) && !storesMap.has(details.id)) {
         // Mask credentials before returning to UI
         const creds = details.credentials || {}
         storesMap.set(details.id, {
-          ...details,
+          ...(details as ClientEcommerceStore),
           credentials: {
             consumer_key: creds.consumer_key ? `${creds.consumer_key.slice(0, 7)}••••••••` : undefined,
             consumer_secret: creds.consumer_secret ? `cs_••••••••` : undefined,
@@ -181,7 +181,7 @@ export async function saveClientStoreAction(
   const now = new Date().toISOString()
 
   // Se já existir, preservar credenciais existentes caso o utilizador não tenha reintroduzido (campos com ••••)
-  let finalCredentials = { ...storePayload.credentials }
+  const finalCredentials = { ...storePayload.credentials }
   if (storePayload.id) {
     const { data: existing } = await supabase
       .from("audit_log")
@@ -286,7 +286,8 @@ export async function testStoreConnectionAction(
   const ctx = await requireClientAccess(clientId)
   const supabase = createAdminClient()
 
-  let { platform, store_url, credentials, existingStoreId } = params
+  const { platform, store_url, credentials: rawCredentials, existingStoreId } = params
+  const credentials = { ...rawCredentials }
 
   // Se o utilizador não editou o campo e tem máscara, obter chaves originais
   if (existingStoreId) {
@@ -529,9 +530,44 @@ export async function syncStoreOrdersAction(
         return { success: false, error: `Erro ao buscar encomendas (HTTP ${res.status}): ${msg.slice(0, 150)}` }
       }
 
-      const wcData = await res.json()
+      interface WooAddress {
+        first_name?: string
+        last_name?: string
+        email?: string
+        phone?: string
+        address_1?: string
+        address_2?: string
+        city?: string
+        postcode?: string
+        country?: string
+      }
+      interface WooLineItemRaw {
+        id: string | number
+        name?: string
+        quantity?: number
+        total?: string | number
+        price?: string | number
+        sku?: string
+      }
+      interface WooOrderRaw {
+        id: string | number
+        number?: string | number
+        status?: string
+        date_created?: string
+        total?: string | number
+        currency?: string
+        customer_email?: string
+        payment_method?: string
+        payment_method_title?: string
+        shipping?: WooAddress
+        billing?: WooAddress
+        line_items?: WooLineItemRaw[]
+        meta_data?: Array<{ key?: string; value?: unknown }>
+      }
+
+      const wcData: unknown = await res.json()
       if (Array.isArray(wcData)) {
-        rawOrders = wcData.map((order: any) => {
+        rawOrders = (wcData as WooOrderRaw[]).map((order) => {
           const shipping = order.shipping || {}
           const billing = order.billing || {}
           const name = [shipping.first_name || billing.first_name || "", shipping.last_name || billing.last_name || ""]
@@ -544,11 +580,11 @@ export async function syncStoreOrdersAction(
             (order.payment_method_title || "").toLowerCase().includes("cobrança")
 
           const lineItems = Array.isArray(order.line_items)
-            ? order.line_items.map((li: any) => ({
+            ? order.line_items.map((li) => ({
                 id: li.id,
                 name: li.name || "Artigo",
                 quantity: li.quantity || 1,
-                price: parseFloat(li.total || li.price || 0),
+                price: parseFloat(String(li.total || li.price || 0)),
                 sku: li.sku || "",
               }))
             : []
@@ -556,7 +592,7 @@ export async function syncStoreOrdersAction(
           // Detectar se já tem tracking associado nos metadados
           let trackingCode = ""
           if (Array.isArray(order.meta_data)) {
-            const meta = order.meta_data.find((m: any) =>
+            const meta = order.meta_data.find((m) =>
               m.key === "_linke_tracking_code" || m.key === "tracking_number" || m.key === "_tracking_number"
             )
             if (meta?.value) trackingCode = String(meta.value)
@@ -570,7 +606,7 @@ export async function syncStoreOrdersAction(
             order_number: `#${order.number || order.id}`,
             status: order.status || "processing",
             created_at: order.date_created || new Date().toISOString(),
-            total_price: parseFloat(order.total || 0),
+            total_price: parseFloat(String(order.total || 0)),
             currency: order.currency || "EUR",
             customer_name: name,
             customer_email: billing.email || order.customer_email || "",
@@ -581,7 +617,7 @@ export async function syncStoreOrdersAction(
             shipping_country: shipping.country || billing.country || "PT",
             payment_method: order.payment_method_title || order.payment_method || "Online",
             is_cod: isCod,
-            cod_amount: isCod ? parseFloat(order.total || 0) : 0,
+            cod_amount: isCod ? parseFloat(String(order.total || 0)) : 0,
             line_items: lineItems,
             tracking_number: trackingCode,
             shipment_created: !!trackingCode,
@@ -605,10 +641,47 @@ export async function syncStoreOrdersAction(
         return { success: false, error: `Erro na API da Shopify (HTTP ${res.status})` }
       }
 
-      const shopifyData = await res.json()
+      interface ShopifyPersonAddress {
+        first_name?: string
+        last_name?: string
+        email?: string
+        phone?: string
+        address1?: string
+        address2?: string
+        city?: string
+        zip?: string
+        country_code?: string
+      }
+      interface ShopifyLineItemRaw {
+        id: string | number
+        title?: string
+        name?: string
+        quantity?: number
+        price?: string | number
+        sku?: string
+      }
+      interface ShopifyOrderRaw {
+        id: string | number
+        name?: string
+        order_number?: string | number
+        financial_status?: string
+        created_at?: string
+        total_price?: string | number
+        currency?: string
+        email?: string
+        gateway?: string
+        payment_gateway_names?: string[]
+        shipping_address?: ShopifyPersonAddress
+        billing_address?: ShopifyPersonAddress
+        customer?: ShopifyPersonAddress
+        line_items?: ShopifyLineItemRaw[]
+        fulfillments?: Array<{ tracking_number?: string }>
+      }
+
+      const shopifyData = (await res.json()) as { orders?: ShopifyOrderRaw[] }
       const orders = shopifyData.orders || []
 
-      rawOrders = orders.map((order: any) => {
+      rawOrders = orders.map((order) => {
         const shipping = order.shipping_address || order.billing_address || {}
         const customer = order.customer || {}
         const name = [shipping.first_name || customer.first_name, shipping.last_name || customer.last_name]
@@ -620,11 +693,11 @@ export async function syncStoreOrdersAction(
           (order.payment_gateway_names || []).some((g: string) => g.toLowerCase().includes("cash") || g.toLowerCase().includes("cobrança"))
 
         const lineItems = Array.isArray(order.line_items)
-          ? order.line_items.map((li: any) => ({
+          ? order.line_items.map((li) => ({
               id: li.id,
               name: li.title || li.name || "Artigo",
               quantity: li.quantity || 1,
-              price: parseFloat(li.price || 0),
+              price: parseFloat(String(li.price || 0)),
               sku: li.sku || "",
             }))
           : []
@@ -637,7 +710,7 @@ export async function syncStoreOrdersAction(
           order_number: order.name || `#${order.order_number || order.id}`,
           status: order.financial_status || "open",
           created_at: order.created_at || new Date().toISOString(),
-          total_price: parseFloat(order.total_price || 0),
+          total_price: parseFloat(String(order.total_price || 0)),
           currency: order.currency || "EUR",
           customer_name: name,
           customer_email: order.email || customer.email || "",
@@ -648,7 +721,7 @@ export async function syncStoreOrdersAction(
           shipping_country: shipping.country_code || "PT",
           payment_method: (order.payment_gateway_names || []).join(", ") || "Shopify Payments",
           is_cod: isCod,
-          cod_amount: isCod ? parseFloat(order.total_price || 0) : 0,
+          cod_amount: isCod ? parseFloat(String(order.total_price || 0)) : 0,
           line_items: lineItems,
           tracking_number: order.fulfillments?.[0]?.tracking_number || "",
           shipment_created: !!order.fulfillments?.[0]?.tracking_number,
@@ -723,7 +796,7 @@ export async function getClientSyncedOrdersAction(
     const allOrders: SyncedOrder[] = []
 
     for (const log of logs) {
-      const details = log.details as any
+      const details = log.details as { store_id?: string; orders?: SyncedOrder[] } | null
       const sId = details?.store_id
       if (sId && !seenStores.has(sId) && Array.isArray(details.orders)) {
         seenStores.add(sId)
@@ -802,6 +875,7 @@ export async function updateStoreOrderTrackingAction(
           "User-Agent": "LinkeTMS/2.0",
         },
         body: JSON.stringify(updatePayload),
+        signal: AbortSignal.timeout(7000),
       })
 
       if (!res.ok) {
@@ -816,6 +890,7 @@ export async function updateStoreOrderTrackingAction(
       // 1. Obter fulfillment orders da encomenda
       const foRes = await fetch(`https://${domain}/admin/api/2024-01/orders/${orderId}/fulfillment_orders.json`, {
         headers: { "X-Shopify-Access-Token": token },
+        signal: AbortSignal.timeout(7000),
       })
 
       if (!foRes.ok) {
@@ -851,6 +926,7 @@ export async function updateStoreOrderTrackingAction(
             notify_customer: true,
           },
         }),
+        signal: AbortSignal.timeout(7000),
       })
 
       if (!createFulfillmentRes.ok) {
@@ -864,5 +940,166 @@ export async function updateStoreOrderTrackingAction(
   } catch (err) {
     return { success: false, error: errorMessage(err) }
   }
+}
+
+export interface EcommerceFulfillmentSyncRecord {
+  sync_key: string
+  client_id: string
+  shipment_id: string
+  store_id: string
+  store_name: string
+  order_id: string
+  order_number: string
+  tracking_code: string
+  status: "synced" | "failed"
+  attempts: number
+  last_error?: string
+  updated_at: string
+}
+
+async function writeFulfillmentSyncAudit(
+  tenantId: string,
+  record: EcommerceFulfillmentSyncRecord
+) {
+  try {
+    const supabase = createAdminClient()
+    await supabase.from("audit_log").insert({
+      tenant_id: tenantId,
+      action: "client_ecommerce_fulfillment_sync",
+      details: record,
+    })
+  } catch (err) {
+    console.warn("Falha ao registar estado de sincronização e-commerce:", errorMessage(err))
+  }
+}
+
+/**
+ * Sincroniza de forma aguardada e persistente o tracking de um envio emitido para a loja e-commerce correspondente.
+ */
+export async function syncStoreOrderForEmittedShipmentAction(
+  clientId: string,
+  params: {
+    shipmentId: string
+    trackingCode: string
+    orderRef: string
+  }
+): Promise<{
+  matched: boolean
+  synced: boolean
+  error?: string
+  orderNumber?: string
+  storeName?: string
+}> {
+  const ctx = await requireClientAccess(clientId)
+  const orders = await getClientSyncedOrdersAction(clientId)
+  const cleanOrderRef = params.orderRef.trim().replace(/^#/, "")
+  const matched = orders.find(
+    (o) => o.order_number.replace(/^#/, "") === cleanOrderRef || o.id === cleanOrderRef
+  )
+
+  if (!matched || !matched.store_id) {
+    return { matched: false, synced: false }
+  }
+
+  const syncKey = `${params.shipmentId}|${matched.store_id}|${matched.id}`
+  const res = await updateStoreOrderTrackingAction(
+    clientId,
+    matched.store_id,
+    matched.id,
+    params.trackingCode
+  )
+
+  await writeFulfillmentSyncAudit(ctx.tenant_id, {
+    sync_key: syncKey,
+    client_id: clientId,
+    shipment_id: params.shipmentId,
+    store_id: matched.store_id,
+    store_name: matched.store_name || "Loja",
+    order_id: matched.id,
+    order_number: matched.order_number,
+    tracking_code: params.trackingCode,
+    status: res.success ? "synced" : "failed",
+    attempts: 1,
+    last_error: res.error,
+    updated_at: new Date().toISOString(),
+  })
+
+  return {
+    matched: true,
+    synced: res.success,
+    error: res.error,
+    orderNumber: matched.order_number,
+    storeName: matched.store_name,
+  }
+}
+
+/**
+ * Lista sincronizações falhadas mais recentes (que ainda não foram recuperadas com sucesso) para reenvio manual.
+ */
+export async function getClientFulfillmentSyncFailuresAction(
+  clientId: string
+): Promise<EcommerceFulfillmentSyncRecord[]> {
+  const ctx = await requireClientAccess(clientId)
+  const supabase = createAdminClient()
+
+  try {
+    const { data: logs, error } = await supabase
+      .from("audit_log")
+      .select("details")
+      .eq("tenant_id", ctx.tenant_id)
+      .eq("action", "client_ecommerce_fulfillment_sync")
+      .eq("details->>client_id", clientId)
+      .order("created_at", { ascending: false })
+      .limit(50)
+
+    if (error || !logs) return []
+
+    const latestByKey = new Map<string, EcommerceFulfillmentSyncRecord>()
+    for (const row of logs) {
+      const d = row.details as Partial<EcommerceFulfillmentSyncRecord> | null
+      if (!d?.sync_key || latestByKey.has(d.sync_key)) continue
+      if (d.status === "synced" || d.status === "failed") {
+        latestByKey.set(d.sync_key, d as EcommerceFulfillmentSyncRecord)
+      }
+    }
+
+    return Array.from(latestByKey.values()).filter((r) => r.status === "failed")
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Reenvia uma sincronização e-commerce que falhou anteriormente.
+ */
+export async function retryClientFulfillmentSyncAction(
+  clientId: string,
+  syncKey: string
+): Promise<{ success: boolean; error?: string }> {
+  const ctx = await requireClientAccess(clientId)
+  const failures = await getClientFulfillmentSyncFailuresAction(clientId)
+  const target = failures.find((f) => f.sync_key === syncKey)
+
+  if (!target) {
+    return { success: false, error: "Registo de falha não encontrado ou já sincronizado." }
+  }
+
+  const res = await updateStoreOrderTrackingAction(
+    clientId,
+    target.store_id,
+    target.order_id,
+    target.tracking_code
+  )
+
+  await writeFulfillmentSyncAudit(ctx.tenant_id, {
+    ...target,
+    status: res.success ? "synced" : "failed",
+    attempts: (target.attempts || 1) + 1,
+    last_error: res.success ? undefined : res.error,
+    updated_at: new Date().toISOString(),
+  })
+
+  if (res.success) revalidatePath("/app", "layout")
+  return res
 }
 

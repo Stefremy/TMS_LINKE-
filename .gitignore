@@ -48,6 +48,8 @@ next-env.d.ts
 /public/patches/
 /public/Listagem de Clientes*.xls
 /outputs/clientes-importacao*/
+/output/
+/scratch/
 /.temp_ops.mjs
 /lib/services/ctt/correos api docs/
 /app/ops/envios/components/*Etiqueta*.pdf

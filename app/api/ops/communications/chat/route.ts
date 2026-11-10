@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getAuthContext } from "@/lib/auth/context"
+import { authorizeCommunicationsApi } from "@/lib/services/communications/api-auth"
 import { createAdminClient } from "@/lib/supabase/server"
 import {
   sendWhatsappTextMessage,
@@ -16,10 +16,8 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET(request: Request) {
-  const ctx = await getAuthContext()
-  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+  const auth = await authorizeCommunicationsApi(request)
+  if (!auth.ok) return auth.response
 
   const { searchParams } = new URL(request.url)
   const phoneFilter = String(searchParams.get("phone") || "").replace(/\D/g, "")
@@ -137,10 +135,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const ctx = await getAuthContext()
-  if (!ctx || !["admin", "employee"].includes(ctx.role || "")) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+  const auth = await authorizeCommunicationsApi(request, { checkOrigin: true })
+  if (!auth.ok) return auth.response
+  const ctx = auth.ctx
 
   const contentType = String(request.headers.get("content-type") || "").toLowerCase()
 

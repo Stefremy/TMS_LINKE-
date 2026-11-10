@@ -78,14 +78,21 @@ async function loadExistingSentDispatchKeys(type: AutoNotificationType, dateKey:
     const supabase = createAdminClient()
     const { data } = await supabase
       .from("whatsapp_dispatch_locks")
-      .select("dispatch_key")
+      .select("dispatch_key, status, updated_at")
       .eq("notification_type", type)
       .eq("run_date_key", dateKey)
-      .eq("status", "sent")
+      .in("status", ["sent", "pending"])
 
+    const nowMs = Date.now()
     for (const row of data || []) {
-      if (row.dispatch_key) {
+      if (!row.dispatch_key) continue
+      if (row.status === "sent") {
         keys.add(String(row.dispatch_key))
+      } else if (row.status === "pending") {
+        const updatedMs = new Date(row.updated_at || 0).getTime()
+        if (nowMs - updatedMs < 5 * 60 * 1000) {
+          keys.add(String(row.dispatch_key))
+        }
       }
     }
   } catch {
@@ -93,6 +100,66 @@ async function loadExistingSentDispatchKeys(type: AutoNotificationType, dateKey:
   }
 
   return keys
+}
+
+async function tryClaimDispatchLock(input: {
+  dispatchKey: string
+  type: AutoNotificationType
+  row: UnifiedNotificationShipmentRow
+  recipientPhone: string
+  dateKey: string
+}): Promise<boolean> {
+  if (inMemorySentDispatchKeys.has(input.dispatchKey)) {
+    return false
+  }
+
+  try {
+    const supabase = createAdminClient()
+    const { data: existing } = await supabase
+      .from("whatsapp_dispatch_locks")
+      .select("status, updated_at")
+      .eq("dispatch_key", input.dispatchKey)
+      .maybeSingle()
+
+    if (existing?.status === "sent") {
+      inMemorySentDispatchKeys.add(input.dispatchKey)
+      return false
+    }
+
+    if (existing?.status === "pending") {
+      const updatedAtMs = new Date(existing.updated_at || 0).getTime()
+      if (Date.now() - updatedAtMs < 5 * 60 * 1000) {
+        return false
+      }
+    }
+
+    const nowIso = new Date().toISOString()
+    const { error } = await supabase.from("whatsapp_dispatch_locks").upsert(
+      [
+        {
+          dispatch_key: input.dispatchKey,
+          notification_type: input.type,
+          parcel_id: input.row.parcelId || input.row.providerTrackingCode,
+          provider_tracking_code: input.row.providerTrackingCode || null,
+          recipient_phone: input.recipientPhone,
+          recipient_name: input.row.recipient || null,
+          sender_name: input.row.sender || null,
+          incident_reason: input.row.incidentReason || input.row.incidence || null,
+          source_system: input.row.sourceSystem,
+          status: "pending",
+          last_error: null,
+          run_date_key: input.dateKey,
+          updated_at: nowIso,
+        },
+      ],
+      { onConflict: "dispatch_key" }
+    )
+
+    if (error) return false
+    return true
+  } catch {
+    return !inMemorySentDispatchKeys.has(input.dispatchKey)
+  }
 }
 
 async function recordDispatchResult(input: {
@@ -110,6 +177,18 @@ async function recordDispatchResult(input: {
 
   try {
     const supabase = createAdminClient()
+    if (input.status === "failed") {
+      const { data: existing } = await supabase
+        .from("whatsapp_dispatch_locks")
+        .select("status")
+        .eq("dispatch_key", input.dispatchKey)
+        .maybeSingle()
+
+      if (existing?.status === "sent") {
+        return
+      }
+    }
+
     await supabase.from("whatsapp_dispatch_locks").upsert(
       [
         {
@@ -265,6 +344,20 @@ export async function runAutoNotificationByType(options: AutoNotificationRunOpti
       break
     }
 
+    if (dispatchKey) {
+      const claimed = await tryClaimDispatchLock({
+        dispatchKey,
+        type,
+        row,
+        recipientPhone: normalizedTo,
+        dateKey,
+      })
+      if (!claimed) {
+        skippedAlreadySent += 1
+        continue
+      }
+    }
+
     processed += 1
 
     const useSeparateIncNumber =
@@ -313,7 +406,9 @@ export async function runAutoNotificationByType(options: AutoNotificationRunOpti
       })
     }
 
-    if (sendRes.ok) {
+    const isSuccess = Boolean(sendRes.ok || (sendRes as { delivered?: boolean }).delivered)
+
+    if (isSuccess) {
       sent += 1
       if (dispatchKey) {
         sentKeysToday.add(dispatchKey)

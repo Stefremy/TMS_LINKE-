@@ -28,7 +28,7 @@ export default async function OpsTrackingPage(props: {
   let realShipmentsMapped: TrackingShipment[] = []
 
   try {
-    const shipments = await getShipmentsAction({ includeLabels: false })
+    const shipments = await getShipmentsAction({ includeLabels: false, limit: searchQ ? 200 : 100 })
     const activeShipments = (shipments || []).filter(
       (s) => {
         if (searchQ) {

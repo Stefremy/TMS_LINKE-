@@ -8,6 +8,14 @@ import { importClientServices, importableClientServiceIds, type ClientServiceImp
 import { CLIENT_ACTIVITY_COLORS, clientActivityColor } from "@/lib/clients/activity-color"
 import { CountrySelect } from "@/components/country-select"
 import { normalizeClientBillingFields, usesPrincipalBillingAddress, getClientBillingAddress } from "@/lib/client-addresses"
+import {
+  EU_VIES_PORTAL_URL,
+  VIES_MEMBER_STATES,
+  detectVatPrefix,
+  parseVatInput,
+  toViesCountryCode,
+  type ViesValidationResult,
+} from "@/lib/tax/vies"
 
 import * as React from "react"
 import { ClientPortalAccessControl } from './ClientPortalAccessControl'
@@ -30,11 +38,9 @@ import {
   ExternalLink, 
   Layers,
   Percent,
-  Check,
   Plus,
   Trash2,
   RotateCcw,
-  Sparkles,
   Sliders,
   Tag,
   Clock,
@@ -167,11 +173,25 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
   const clientTierDrag = React.useRef<{ scope: string; tierId: string } | null>(null)
   const [draggedClientTier, setDraggedClientTier] = React.useState<string | null>(null)
   const [tierOrderAnnouncement, setTierOrderAnnouncement] = React.useState("")
+  const [viesCountryOverride, setViesCountryOverride] = React.useState<string>(() => {
+    const detected = detectVatPrefix(initialData?.nif || "").prefix
+    if (detected) return detected
+    return toViesCountryCode(initialData?.billing_country_code || initialData?.country_code) || "PT"
+  })
+  const [viesLoading, setViesLoading] = React.useState(false)
+  const [viesResult, setViesResult] = React.useState<ViesValidationResult | null>(null)
+  const [viesApplied, setViesApplied] = React.useState(false)
 
   const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
   if (observedInputs1 === null || !Object.is(observedInputs1[0], initialData) || !Object.is(observedInputs1[1], servicosLinke) || !Object.is(observedInputs1[2], defaultPaymentDays) || !Object.is(observedInputs1[3], standardSpecialFees)) {
     const previousClient = observedInputs1?.[0] as Cliente | null | undefined
     if ((previousClient?.id || draftId) !== (initialData?.id || draftId)) setIsSaved(false)
+    if (observedInputs1 !== null && !Object.is(observedInputs1[0], initialData)) {
+      const detectedPrefix = detectVatPrefix(initialData?.nif || "").prefix
+      setViesCountryOverride(detectedPrefix || toViesCountryCode(initialData?.billing_country_code || initialData?.country_code) || "PT")
+      setViesResult(null)
+      setViesApplied(false)
+    }
     setObservedInputs1([initialData, servicosLinke, defaultPaymentDays, standardSpecialFees])
 
     if (initialData) {
@@ -244,6 +264,115 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
         },
       }
     })
+  }
+
+  const handleValidateVies = async () => {
+    const rawNif = (formData.nif || "").trim()
+    if (!rawNif || viesLoading) return
+
+    const localParsed = parseVatInput(rawNif, viesCountryOverride)
+    if (!localParsed.ok) {
+      setViesApplied(false)
+      setViesResult({
+        ok: false,
+        valid: false,
+        countryCode: localParsed.countryCode,
+        vatNumber: localParsed.vatNumber,
+        formattedVat: localParsed.formattedVat,
+        localNifValid: localParsed.localNifValid,
+        name: "",
+        address: "",
+        parsedAddress: null,
+        errorCode: "INVALID_INPUT",
+        message: localParsed.error || "NIF/VAT inválido.",
+        portalUrl: EU_VIES_PORTAL_URL,
+      })
+      return
+    }
+
+    setViesLoading(true)
+    setViesApplied(false)
+    try {
+      const response = await fetch("/api/ops/vies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nif: rawNif,
+          countryCode: viesCountryOverride,
+        }),
+      })
+      const payload = (await response.json().catch(() => null)) as (ViesValidationResult & { error?: string }) | null
+      if (!response.ok || !payload || typeof payload !== "object" || !("message" in payload)) {
+        setViesResult({
+          ok: false,
+          valid: false,
+          countryCode: localParsed.countryCode,
+          vatNumber: localParsed.vatNumber,
+          formattedVat: localParsed.formattedVat,
+          localNifValid: localParsed.localNifValid,
+          name: "",
+          address: "",
+          parsedAddress: null,
+          errorCode: `HTTP_${response.status}`,
+          message: payload?.error || "Não foi possível validar no portal VIES.",
+          portalUrl: EU_VIES_PORTAL_URL,
+        })
+        return
+      }
+      setViesResult(payload)
+      if (payload.countryCode) {
+        setViesCountryOverride(payload.countryCode)
+      }
+    } catch {
+      setViesResult({
+        ok: false,
+        valid: false,
+        countryCode: localParsed.countryCode,
+        vatNumber: localParsed.vatNumber,
+        formattedVat: localParsed.formattedVat,
+        localNifValid: localParsed.localNifValid,
+        name: "",
+        address: "",
+        parsedAddress: null,
+        errorCode: "NETWORK_ERROR",
+        message: "Erro de comunicação ao consultar o portal VIES.",
+        portalUrl: EU_VIES_PORTAL_URL,
+      })
+    } finally {
+      setViesLoading(false)
+    }
+  }
+
+  const handleApplyViesData = () => {
+    if (!viesResult || !viesResult.valid) return
+    const parsedAddr = viesResult.parsedAddress
+    setFormData(prev => {
+      const sameBilling = usesPrincipalBillingAddress(prev)
+      const nextLegal = viesResult.name || prev.legal_name || ""
+      const nextShort = prev.short_name?.trim() ? prev.short_name : viesResult.name || prev.short_name || ""
+      return {
+        ...prev,
+        legal_name: nextLegal,
+        short_name: nextShort,
+        ...(parsedAddr
+          ? {
+              address: parsedAddr.street || prev.address || "",
+              postal_code: parsedAddr.postalCode || prev.postal_code || "",
+              city: parsedAddr.city || prev.city || "",
+              country_code: parsedAddr.countryCode || prev.country_code || "PT",
+              ...(!sameBilling
+                ? {
+                    billing_address: prev.billing_address?.trim() ? prev.billing_address : parsedAddr.street || prev.billing_address || "",
+                    billing_postal_code: prev.billing_postal_code?.trim() ? prev.billing_postal_code : parsedAddr.postalCode || prev.billing_postal_code || "",
+                    billing_city: prev.billing_city?.trim() ? prev.billing_city : parsedAddr.city || prev.billing_city || "",
+                    billing_country_code: prev.billing_country_code?.trim() ? prev.billing_country_code : parsedAddr.countryCode || prev.billing_country_code || "PT",
+                  }
+                : {}),
+            }
+          : {}),
+      }
+    })
+    setViesApplied(true)
   }
 
   const updateClientTiers = (servico: ServicoLinke, zoneCode: string, update: (rows: ClientWeightTier[]) => ClientWeightTier[]) => {
@@ -1010,14 +1139,108 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">NIF / Número Fiscal</label>
-                  <input
-                    type="text"
-                    value={formData.nif || ""}
-                    onChange={(e) => setFormData({ ...formData, nif: e.target.value })}
-                    className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs font-mono font-semibold text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
-                    placeholder="514987123"
-                  />
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label htmlFor="client-nif-input" className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                      NIF / Número Fiscal
+                    </label>
+                    <a
+                      href={EU_VIES_PORTAL_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+                      title="Abrir portal oficial VIES"
+                    >
+                      <span>VIES</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      aria-label="País VIES"
+                      value={viesCountryOverride}
+                      onChange={(e) => {
+                        setViesCountryOverride(e.target.value)
+                        setViesResult(null)
+                        setViesApplied(false)
+                      }}
+                      className="w-[64px] shrink-0 border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-2 py-2 text-xs font-semibold text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none cursor-pointer"
+                    >
+                      {VIES_MEMBER_STATES.map((ms) => (
+                        <option key={ms.code} value={ms.code}>{ms.code}</option>
+                      ))}
+                    </select>
+                    <input
+                      id="client-nif-input"
+                      type="text"
+                      value={formData.nif || ""}
+                      onChange={(e) => {
+                        const nextVal = e.target.value
+                        const detected = detectVatPrefix(nextVal).prefix
+                        if (detected) setViesCountryOverride(detected)
+                        setViesResult(null)
+                        setViesApplied(false)
+                        setFormData({ ...formData, nif: nextVal })
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          void handleValidateVies()
+                        }
+                      }}
+                      className="w-full min-w-0 border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs font-mono font-semibold text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
+                      placeholder="514987123"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { void handleValidateVies() }}
+                      disabled={viesLoading || !(formData.nif || "").trim()}
+                      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-primary)] text-xs font-semibold shadow-2xs transition-colors disabled:opacity-45 disabled:pointer-events-none cursor-pointer"
+                      title="Validar NIF / VAT no portal oficial EU VIES"
+                    >
+                      {viesLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--text-secondary)]" />}
+                      <span>{viesLoading ? "A validar..." : "Validar"}</span>
+                    </button>
+                  </div>
+
+                  {viesResult && (
+                    viesResult.valid ? (
+                      <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            {viesResult.message}
+                          </span>
+                          {(viesResult.name || viesResult.address) && (
+                            <button
+                              type="button"
+                              onClick={handleApplyViesData}
+                              disabled={viesApplied}
+                              className="shrink-0 text-[11px] font-bold text-emerald-800 hover:underline disabled:no-underline disabled:opacity-60 cursor-pointer"
+                            >
+                              {viesApplied ? "Aplicado" : "Preencher ficha"}
+                            </button>
+                          )}
+                        </div>
+                        {(viesResult.name || viesResult.address) && (
+                          <p className="text-[11px] text-emerald-950/80 border-t border-emerald-200/80 pt-1 leading-snug">
+                            {viesResult.name && <strong className="font-semibold">{viesResult.name}</strong>}
+                            {viesResult.name && viesResult.address ? " · " : ""}
+                            {viesResult.address ? viesResult.address.replace(/\r?\n+/g, ", ") : ""}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div
+                        className={`mt-2 rounded-md border px-3 py-1.5 text-xs ${
+                          viesResult.ok && viesResult.localNifValid === true
+                            ? "border-amber-200 bg-amber-50 text-amber-800"
+                            : "border-red-200 bg-red-50 text-red-700"
+                        }`}
+                      >
+                        {viesResult.message}
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
 
@@ -1223,6 +1446,9 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                     <option value="FR">França (FR)</option>
                     <option value="DE">Alemanha (DE)</option>
                     <option value="UK">Reino Unido (UK)</option>
+                    {formData.country_code && !["PT", "ES", "FR", "DE", "UK"].includes(formData.country_code) && (
+                      <option value={formData.country_code}>{formData.country_code}</option>
+                    )}
                   </select>
                 </div>
               </div>

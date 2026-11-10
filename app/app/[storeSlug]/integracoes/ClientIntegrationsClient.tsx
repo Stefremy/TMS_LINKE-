@@ -33,13 +33,16 @@ import { useClientScope } from "@/app/app/components/ClientScope"
 import {
   ClientEcommerceStore,
   SyncedOrder,
+  EcommerceFulfillmentSyncRecord,
   PlatformType,
   getClientStoresAction,
   saveClientStoreAction,
   deleteClientStoreAction,
   testStoreConnectionAction,
   syncStoreOrdersAction,
-  getClientSyncedOrdersAction
+  getClientSyncedOrdersAction,
+  getClientFulfillmentSyncFailuresAction,
+  retryClientFulfillmentSyncAction,
 } from "@/app/actions/client-ecommerce"
 
 const PLATFORMS: Array<{
@@ -106,6 +109,8 @@ export function ClientIntegrationsClient() {
   const [activeTab, setActiveTab] = React.useState<"stores" | "orders" | "guide">("stores")
   const [stores, setStores] = React.useState<ClientEcommerceStore[]>([])
   const [orders, setOrders] = React.useState<SyncedOrder[]>([])
+  const [syncFailures, setSyncFailures] = React.useState<EcommerceFulfillmentSyncRecord[]>([])
+  const [retryingSyncKey, setRetryingSyncKey] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [syncingAll, setSyncingAll] = React.useState(false)
   const [syncingStoreId, setSyncingStoreId] = React.useState<string | null>(null)
@@ -132,21 +137,29 @@ export function ClientIntegrationsClient() {
     success: boolean
     message: string
     latencyMs?: number
-    details?: any
+    details?: {
+      storeName?: string
+      environment?: string
+      currency?: string
+      email?: string
+      domain?: string
+      [key: string]: unknown
+    }
   } | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [feedbackMsg, setFeedbackMsg] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
 
-  // Load stores and cached orders
-  const loadData = React.useCallback(async () => {
+  const refreshData = React.useCallback(async () => {
     try {
       setLoading(true)
-      const [fetchedStores, fetchedOrders] = await Promise.all([
+      const [fetchedStores, fetchedOrders, fetchedFailures] = await Promise.all([
         getClientStoresAction(client.id),
-        getClientSyncedOrdersAction(client.id)
+        getClientSyncedOrdersAction(client.id),
+        getClientFulfillmentSyncFailuresAction(client.id),
       ])
       setStores(fetchedStores)
       setOrders(fetchedOrders)
+      setSyncFailures(fetchedFailures)
     } catch (err) {
       console.error("Erro ao carregar dados:", err)
     } finally {
@@ -155,8 +168,47 @@ export function ClientIntegrationsClient() {
   }, [client.id])
 
   React.useEffect(() => {
-    loadData()
-  }, [loadData])
+    let active = true
+    Promise.all([
+      getClientStoresAction(client.id),
+      getClientSyncedOrdersAction(client.id),
+      getClientFulfillmentSyncFailuresAction(client.id),
+    ])
+      .then(([fetchedStores, fetchedOrders, fetchedFailures]) => {
+        if (!active) return
+        setStores(fetchedStores)
+        setOrders(fetchedOrders)
+        setSyncFailures(fetchedFailures)
+      })
+      .catch((err) => {
+        console.error("Erro ao carregar dados:", err)
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [client.id])
+
+  const handleRetrySyncFailure = async (syncKey: string) => {
+    setRetryingSyncKey(syncKey)
+    try {
+      const res = await retryClientFulfillmentSyncAction(client.id, syncKey)
+      if (res.success) {
+        setFeedbackMsg({ type: "success", text: "Tracking reenviado para a loja com sucesso!" })
+        await refreshData()
+        setTimeout(() => setFeedbackMsg(null), 4000)
+      } else {
+        setFeedbackMsg({ type: "error", text: res.error || "Não foi possível reenviar o tracking." })
+        await refreshData()
+      }
+    } catch (err: unknown) {
+      setFeedbackMsg({ type: "error", text: err instanceof Error ? err.message : "Erro ao reenviar tracking." })
+    } finally {
+      setRetryingSyncKey(null)
+    }
+  }
 
   // Open modal for new store
   const handleOpenNewModal = (selectedPlatform: PlatformType = "woocommerce") => {
@@ -226,10 +278,10 @@ export function ClientIntegrationsClient() {
           latencyMs: res.latencyMs
         })
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: err.message || "Erro inesperado ao testar conexão."
+        message: err instanceof Error ? err.message : "Erro inesperado ao testar conexão."
       })
     } finally {
       setTesting(false)
@@ -259,13 +311,13 @@ export function ClientIntegrationsClient() {
       if (res.success) {
         setModalOpen(false)
         setFeedbackMsg({ type: "success", text: "Loja guardada com sucesso!" })
-        await loadData()
+        await refreshData()
         setTimeout(() => setFeedbackMsg(null), 4000)
       } else {
         setFeedbackMsg({ type: "error", text: res.error || "Erro ao guardar loja." })
       }
-    } catch (err: any) {
-      setFeedbackMsg({ type: "error", text: err.message || "Erro inesperado." })
+    } catch (err: unknown) {
+      setFeedbackMsg({ type: "error", text: err instanceof Error ? err.message : "Erro inesperado." })
     } finally {
       setSaving(false)
     }
@@ -278,11 +330,11 @@ export function ClientIntegrationsClient() {
       const res = await deleteClientStoreAction(client.id, storeId)
       if (res.success) {
         setFeedbackMsg({ type: "success", text: "Loja desligada com sucesso." })
-        await loadData()
+        await refreshData()
         setTimeout(() => setFeedbackMsg(null), 4000)
       }
-    } catch (err: any) {
-      alert("Erro ao remover: " + err.message)
+    } catch (err: unknown) {
+      alert("Erro ao remover: " + (err instanceof Error ? err.message : "Erro inesperado."))
     }
   }
 
@@ -296,13 +348,13 @@ export function ClientIntegrationsClient() {
           type: "success",
           text: `Sincronização concluída! ${res.orders?.length || 0} encomendas obtidas.`
         })
-        await loadData()
+        await refreshData()
         setTimeout(() => setFeedbackMsg(null), 5000)
       } else {
         setFeedbackMsg({ type: "error", text: res.error || "Erro ao sincronizar." })
       }
-    } catch (err: any) {
-      setFeedbackMsg({ type: "error", text: err.message || "Erro ao sincronizar." })
+    } catch (err: unknown) {
+      setFeedbackMsg({ type: "error", text: err instanceof Error ? err.message : "Erro ao sincronizar." })
     } finally {
       setSyncingStoreId(null)
     }
@@ -325,10 +377,10 @@ export function ClientIntegrationsClient() {
         type: "success",
         text: `Todas as lojas sincronizadas! Total de ${total} encomendas prontas.`
       })
-      await loadData()
+      await refreshData()
       setTimeout(() => setFeedbackMsg(null), 5000)
-    } catch (err: any) {
-      setFeedbackMsg({ type: "error", text: err.message || "Falha na sincronização geral." })
+    } catch (err: unknown) {
+      setFeedbackMsg({ type: "error", text: err instanceof Error ? err.message : "Falha na sincronização geral." })
     } finally {
       setSyncingAll(false)
     }
@@ -412,6 +464,44 @@ export function ClientIntegrationsClient() {
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
           )}
           <span>{feedbackMsg.text}</span>
+        </div>
+      )}
+
+      {/* ─── Failed Fulfillment Retries Banner ─── */}
+      {syncFailures.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2.5 text-xs text-amber-900">
+          <div className="flex items-center gap-2 font-bold">
+            <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>Atualizações de tracking pendentes na loja ({syncFailures.length})</span>
+          </div>
+          <div className="space-y-1.5">
+            {syncFailures.map((fail) => (
+              <div
+                key={fail.sync_key}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <span className="font-bold text-slate-800">{fail.store_name}</span>
+                  <span className="mx-1.5 text-slate-400">·</span>
+                  <span className="font-mono font-semibold text-slate-700">{fail.order_number}</span>
+                  <span className="mx-1.5 text-slate-400">→</span>
+                  <span className="font-mono text-emerald-700">{fail.tracking_code}</span>
+                  {fail.last_error && (
+                    <span className="block text-[11px] text-red-700 mt-0.5">{fail.last_error}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={retryingSyncKey === fail.sync_key}
+                  onClick={() => { void handleRetrySyncFailure(fail.sync_key) }}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white font-semibold text-[11px] disabled:opacity-50 cursor-pointer"
+                >
+                  <RefreshCw className={`w-3 h-3 ${retryingSyncKey === fail.sync_key ? "animate-spin" : ""}`} />
+                  <span>{retryingSyncKey === fail.sync_key ? "A reenviar..." : "Reenviar tracking"}</span>
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -870,7 +960,7 @@ export function ClientIntegrationsClient() {
                     <li>Entre no WordPress da sua loja.</li>
                     <li>Vá a <strong>WooCommerce &gt; Definições &gt; Avançado &gt; REST API</strong>.</li>
                     <li>Clique em <strong>Adicionar Chave</strong>.</li>
-                    <li>Dê o nome "Linke TMS" e permissão de <strong>Leitura / Escrita</strong>.</li>
+                    <li>Dê o nome &quot;Linke TMS&quot; e permissão de <strong>Leitura / Escrita</strong>.</li>
                     <li>Copie a <strong>Consumer Key</strong> e <strong>Consumer Secret</strong> para aqui.</li>
                   </ol>
                 </div>
@@ -895,7 +985,7 @@ export function ClientIntegrationsClient() {
                   <ol className="text-xs text-slate-600 space-y-2 list-decimal list-inside leading-relaxed">
                     <li>Entre no painel da Shopify.</li>
                     <li>Vá a <strong>Definições &gt; Apps e canais de vendas &gt; Desenvolver apps</strong>.</li>
-                    <li>Clique em <strong>Criar uma app</strong> (ex: "Linke Logistics").</li>
+                    <li>Clique em <strong>Criar uma app</strong> (ex: &quot;Linke Logistics&quot;).</li>
                     <li>Ative os scopes de API <code>read_orders</code> e <code>write_orders</code>.</li>
                     <li>Instale a app e copie o <strong>Admin API Access Token</strong>.</li>
                   </ol>
@@ -922,7 +1012,7 @@ export function ClientIntegrationsClient() {
                     <li>Entre no painel de administração da sua <strong>Linke Store</strong>.</li>
                     <li>Vá a <strong>Conectores &gt; API e Dados</strong>.</li>
                     <li>Copie o URL da sua loja e as chaves <strong>Consumer Key</strong> e <strong>Consumer Secret</strong>.</li>
-                    <li>Cole aqui e clique em "Testar Ligação".</li>
+                    <li>Cole aqui e clique em &quot;Testar Ligação&quot;.</li>
                   </ol>
                 </div>
                 <button
@@ -1142,7 +1232,7 @@ export function ClientIntegrationsClient() {
                     className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
                   />
                   <span className="text-xs text-slate-700 font-medium">
-                    Atualizar automaticamente a encomenda para 'Concluída' na loja e enviar tracking ao emitir guia no TMS
+                    Atualizar automaticamente a encomenda para &apos;Concluída&apos; na loja e enviar tracking ao emitir guia no TMS
                   </span>
                 </label>
               </div>
