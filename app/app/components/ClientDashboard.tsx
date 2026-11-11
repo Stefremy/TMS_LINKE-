@@ -314,17 +314,12 @@ export function ClientDashboard() {
   // Contractual and pricing details from real client record
   const discountPct = currentClient?.pricing?.discount_pct ?? 0
   const fuelPct = currentClient?.pricing?.standard_fuel_surcharge_pct ?? currentClient?.pricing?.fuel_surcharge_pct ?? 12.5
-  const creditLimit = currentClient?.credit_limit ?? 0
-  const unlimitedCredit = currentClient?.billing_type !== 'pay_as_you_go' && currentClient?.credit_limit_enabled !== true
   const paymentTerms = currentClient?.payment_terms || "Pronto Pagamento"
   const activeServices = (currentClient?.pricing?.services_pricing || DEFAULT_CTT_SERVICES_PRICING).filter(s => s.is_enabled)
 
   // Real credit calculation
-  const rawBalance = currentClient?.billing_type === "pay_as_you_go" && stats.walletBalance !== undefined ? stats.walletBalance : creditLimit - stats.totalRevenue
-  const availableCredit = currentClient?.billing_type === 'pay_as_you_go' 
-    ? rawBalance 
-    : Math.max(rawBalance, 0)
-  const usedCreditPct = creditLimit > 0 ? Math.min((stats.totalRevenue / creditLimit) * 100, 100).toFixed(1) : "0"
+  // Só pré-pagamento tem saldo. Em conta corrente o cliente vê apenas o que tem por liquidar.
+  const availableCredit = stats.walletBalance !== undefined ? stats.walletBalance : (currentClient?.credit_limit ?? 0) - stats.totalRevenue
 
   if (loadingStats || statsError) return (
     <div className="p-8 text-sm text-[var(--text-secondary)]" role="status">
@@ -600,7 +595,7 @@ export function ClientDashboard() {
             </div>
           </div>
 
-          {/* KPI 4: Saldo / Crédito Disponível */}
+          {/* KPI 4: Saldo (pré-pagamento) / Por liquidar (conta corrente). O limite de faturação é interno e nunca é mostrado. */}
           <div className="min-w-0 border-t-4 p-4 sm:p-5 flex flex-col justify-between" style={{ borderTopColor: "#007F8B" }}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 text-sm font-medium text-[var(--text-primary)]">
@@ -608,7 +603,7 @@ export function ClientDashboard() {
                   <ShieldCheck aria-hidden="true" className="w-4 h-4" strokeWidth={2} />
                 </span>
                 <span className="text-[12px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-                  {currentClient?.billing_type === 'pay_as_you_go' ? 'Saldo Disponível' : 'Crédito Disponível'}
+                  {currentClient?.billing_type === 'pay_as_you_go' ? 'Saldo Disponível' : 'Por Liquidar'}
                 </span>
               </div>
               {currentClient?.billing_type === 'pay_as_you_go' && (
@@ -627,23 +622,18 @@ export function ClientDashboard() {
                 <span className={`text-2xl sm:text-[28px] leading-none font-bold tracking-tight font-mono tabular-nums ${
                   availableCredit < 0 ? "text-[var(--status-warning)]" : "text-[var(--text-primary)]"
                 }`}>
-                  {unlimitedCredit ? 'Sem limite' : `${availableCredit.toFixed(2)}€`}
+                  {currentClient?.billing_type === 'pay_as_you_go' ? `${availableCredit.toFixed(2)}€` : `${stats.totalRevenue.toFixed(2)}€`}
                 </span>
                 {currentClient?.billing_type === 'pay_as_you_go' && availableCredit < 0 && (
                   <span className="text-xs text-[var(--status-warning)] bg-[var(--status-warning-soft)] border border-[var(--status-warning)]/25 px-1.5 py-0.5 rounded font-medium">
                     Descoberto
                   </span>
                 )}
-                {!unlimitedCredit && currentClient?.billing_type !== 'pay_as_you_go' && creditLimit > 0 && (
-                  <span className="text-xs text-[var(--text-tertiary)] font-medium">
-                    / {creditLimit.toLocaleString("pt-PT")}€
-                  </span>
-                )}
               </div>
               <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate">
                 {currentClient?.billing_type === 'pay_as_you_go'
                   ? (availableCredit <= -2.0 ? "Limite de descoberto atingido (-2.00€)" : "Descoberto até -2.00€ permitido")
-                  : unlimitedCredit ? `Por liquidar: ${stats.totalRevenue.toFixed(2)}€` : `Usado: ${stats.totalRevenue.toFixed(2)}€ (${usedCreditPct}% consumido)`}
+                  : "Envios por faturar e faturas por pagar"}
               </p>
             </div>
           </div>

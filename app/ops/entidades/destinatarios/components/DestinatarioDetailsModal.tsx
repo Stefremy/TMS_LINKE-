@@ -85,7 +85,7 @@ export function DestinatarioDetailsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
       <div
-        className="bg-[var(--surface-bg)] rounded-xl shadow-2xl border border-[var(--border-subtle)] w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+        className="bg-[var(--surface-bg)] rounded-xl shadow-2xl border border-[var(--border-subtle)] w-full max-w-3xl max-h-[90dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

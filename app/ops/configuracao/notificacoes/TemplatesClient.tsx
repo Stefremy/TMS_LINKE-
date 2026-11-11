@@ -87,7 +87,7 @@ async function loadTemplates() {
       {/* MODAL DE PREVIEW */}
       {previewTemplate && !editTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--text-primary)]/40 backdrop-blur-sm">
-          <div className="bg-[var(--surface-bg)] rounded-xl shadow-[0_20px_50px_rgba(20,23,20,0.22)] w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-[var(--border-strong)]">
+          <div className="bg-[var(--surface-bg)] rounded-xl shadow-[0_20px_50px_rgba(20,23,20,0.22)] w-full max-w-2xl overflow-hidden flex flex-col max-h-[90dvh] border border-[var(--border-strong)]">
             <div className="px-5 py-3 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] flex items-center justify-between">
               <div>
                 <h3 className="text-[13px] font-bold text-[var(--text-primary)]">Preview: {previewTemplate.name}</h3>
@@ -113,7 +113,7 @@ async function loadTemplates() {
       {/* MODAL DE EDIÇÃO */}
       {editTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--text-primary)]/40 backdrop-blur-sm">
-          <div className="bg-[var(--surface-bg)] rounded-xl shadow-[0_20px_50px_rgba(20,23,20,0.22)] w-full max-w-6xl h-[85vh] overflow-hidden flex flex-col border border-[var(--border-strong)]">
+          <div className="bg-[var(--surface-bg)] rounded-xl shadow-[0_20px_50px_rgba(20,23,20,0.22)] w-full max-w-6xl h-[85dvh] overflow-hidden flex flex-col border border-[var(--border-strong)]">
             <div className="px-5 py-3 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] flex items-center justify-between">
               <div>
                 <h3 className="text-[13px] font-bold text-[var(--text-primary)]">Editar: {editTemplate.name}</h3>

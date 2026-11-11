@@ -29,7 +29,7 @@ export function DocumentationModal({ shipment, isOpen, onClose }: DocumentationM
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
       <div 
-        className="w-full max-w-2xl bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200"
+        className="w-full max-w-2xl bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] animate-in fade-in zoom-in-95 duration-200"
       >
         {/* Header */}
         <div className="p-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-950/20">

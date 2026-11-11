@@ -61,7 +61,7 @@ export function HeaderClockDate() {
             {weekday}, {dayNumber}
           </span>
 
-          <span className={styles.dateMonth} suppressHydrationWarning>
+          <span className={styles.dateMonth} data-widget-extra suppressHydrationWarning>
             {monthName} {year}
           </span>
         </span>

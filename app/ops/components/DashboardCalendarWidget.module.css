@@ -5,7 +5,7 @@
   align-items: center;
   flex-shrink: 0;
   width: var(--dashboard-widget-icon, 44px);
-  height: 52px;
+  height: calc(var(--dashboard-widget-icon, 44px) + 8px);
   overflow: hidden;
   border: 1px solid var(--border-default, var(--border-subtle));
   border-radius: 7px;
@@ -25,7 +25,7 @@
   text-align: center;
   text-transform: uppercase;
 }
-.day { font-size: 25px; font-weight: 650; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.day { font-size: calc(var(--dashboard-widget-icon, 44px) * 0.56); font-weight: 650; line-height: 1.4; font-variant-numeric: tabular-nums; }
 .reading { display: flex; flex-direction: column; gap: 4px; min-width: 0; line-height: 1.25; }
 .month { font-size: var(--dashboard-widget-title, 14px); font-weight: 650; text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); white-space: nowrap; }

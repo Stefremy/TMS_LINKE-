@@ -134,7 +134,9 @@ test(`${pagePath} sends real scans, Guimarães locality and geographic distances
     react: React,
     'react/jsx-runtime': require('react/jsx-runtime'),
     'next/link': { __esModule: true, default: () => null },
+    'next/navigation': { redirect(url) { throw new Error(`redirect:${url}`) }, notFound() { throw new Error('notFound') } },
     '@/lib/auth/ops-page-access': { requireOpsPageAccess: async () => {} },
+    '@/app/actions/clientes': { getClientesAction: async () => [] },
     './components/DeliveryTrackingClient': { DeliveryTrackingClient: () => null },
     '@/app/ops/tracking/components/DeliveryTrackingClient': { DeliveryTrackingClient: () => null },
     '@/lib/client-portal/access': { requirePortalStore: async () => ({

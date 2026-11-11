@@ -28,7 +28,7 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
     '@/lib/services/shipments/shipment-fetcher':{SHIPMENT_LIST_COLUMNS:'*'},
     '@/app/actions/billing-config':{getBillingConfigAction:async()=>({defaultVatRate:23})},
     'next/cache':{revalidatePath(){}},
-    '@/lib/moloni/moloni-client':{MoloniClient:class {
+    '@/lib/moloni/moloni-client':{MoloniRejectedError:class extends Error{},MoloniClient:class {
       async request(endpoint,payload){
         assert.equal(endpoint,'documents/getOne')
         if(payload.document_id===321)return{document_id:321,company_id:42,status:1,customer_id:lastReceiptPayload.customerId,
@@ -264,7 +264,7 @@ test('Official PDF recovery uses the saved tenant connection when no deployment 
       loadFinancialDocument:async()=>({supabase:db.client,ctx:{tenant_id:TENANT},document:{id:'stmt',details:{moloni_document_id:123,statement_number:'EXT-test'}}}),
       financialPdfResponse:(body,init)=>new Response(body,init),
     },
-    '@/lib/moloni/moloni-client':{MoloniClient:class{
+    '@/lib/moloni/moloni-client':{MoloniRejectedError:class extends Error{},MoloniClient:class{
       constructor(value){config=value}
       async getDocumentPDFLink(id){assert.equal(id,123);return 'https://fixture.invalid/official.pdf'}
     }},

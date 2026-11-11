@@ -137,7 +137,7 @@ export function ClientAccountDetailsModal({
       onClick={event => { if (event.target === event.currentTarget) onClose() }}
       className="tms-modal-overlay fixed inset-0 m-0 h-[100dvh] w-screen max-h-none max-w-none border-0 bg-black/60 backdrop-blur-xs z-50 hidden open:flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
       <div 
-        className={`tms-modal-fit bg-[var(--surface-bg)] rounded-2xl shadow-[var(--shadow-layer)] w-full ${canChangePassword ? 'max-w-4xl' : 'max-w-3xl'} max-h-[92vh] flex flex-col overflow-hidden border border-[var(--border-subtle)]`}
+        className={`tms-modal-fit bg-[var(--surface-bg)] rounded-2xl shadow-[var(--shadow-layer)] w-full ${canChangePassword ? 'max-w-4xl' : 'max-w-3xl'} max-h-[92dvh] flex flex-col overflow-hidden border border-[var(--border-subtle)]`}
         onClick={(e) => e.stopPropagation()}
       >
         
@@ -448,9 +448,9 @@ export function ClientAccountDetailsModal({
                   </div>
 
                   <div>
-                    <span className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">Limite de Crédito Concedido</span>
+                    <span className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">Modalidade</span>
                     <div className="p-2.5 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-lg font-bold text-[var(--text-primary)]">
-                      {client.billing_type === 'pay_as_you_go' ? 'Pré-pagamento' : client.credit_limit_enabled === true ? `${(client.credit_limit ?? 0).toFixed(2)}€` : "Sem limite"}
+                      {client.billing_type === 'pay_as_you_go' ? 'Pré-pagamento' : 'Conta Corrente'}
                     </div>
                   </div>
 

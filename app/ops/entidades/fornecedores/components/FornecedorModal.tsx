@@ -689,7 +689,7 @@ export function FornecedorModal({
 
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1240px] h-[94vh] flex flex-col overflow-hidden border border-slate-300">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[1240px] h-[94dvh] flex flex-col overflow-hidden border border-slate-300">
         
         {/* ===================== OVERVIEW HEADER ===================== */}
         <div className="px-6 py-3.5 border-b border-slate-200 bg-white flex flex-wrap items-center justify-between gap-4">
@@ -2472,7 +2472,7 @@ export function FornecedorModal({
 
             {/* Modal Form */}
             <form onSubmit={handleSaveFee} className="p-6 space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="col-span-1">
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Código *</label>
                   <input
@@ -2560,7 +2560,7 @@ export function FornecedorModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Custo Mínimo (€)</label>
                   <input
@@ -2725,7 +2725,7 @@ export function FornecedorModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Validade Seguro</label>
                   <input
@@ -2807,7 +2807,7 @@ export function FornecedorModal({
             </div>
 
             <form onSubmit={handleSaveDriver} className="p-6 space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Código</label>
                   <input

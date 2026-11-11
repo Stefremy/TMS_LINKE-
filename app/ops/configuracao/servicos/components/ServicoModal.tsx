@@ -698,7 +698,7 @@ function ServicoModalForm({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200/90 ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92dvh] flex flex-col overflow-hidden border border-slate-200/90 ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
 
         {/* TOP BAR / HEADER */}
         <div className="px-6 pt-5 pb-3 border-b border-slate-200/80 bg-gradient-to-b from-slate-50/70 to-white">

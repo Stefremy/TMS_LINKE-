@@ -145,7 +145,7 @@ export function NovoDestinatarioModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
       <div
-        className="bg-[var(--surface-bg)] rounded-xl shadow-2xl border border-[var(--border-subtle)] w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+        className="bg-[var(--surface-bg)] rounded-xl shadow-2xl border border-[var(--border-subtle)] w-full max-w-2xl max-h-[92dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

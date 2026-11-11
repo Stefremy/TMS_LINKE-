@@ -1,11 +1,16 @@
+/* Sem `isolation`/z-index aqui: criar um stacking context prendia os modais (fixed, z-50)
+   por baixo da barra superior e da navegação inferior no telemóvel (z-40). */
 .dashboard {
   position: relative;
-  isolation: isolate;
+}
+/* O conteúdo da página fica por cima do fundo decorativo sem criar stacking context. */
+.dashboard > :not(.backdrop) {
+  position: relative;
 }
 .backdrop {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   overflow: hidden;
   pointer-events: none;
   background-color: color-mix(in srgb, var(--canvas-bg) 42%, #d8dee3 58%);

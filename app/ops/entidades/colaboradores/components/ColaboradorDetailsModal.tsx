@@ -54,7 +54,7 @@ export function ColaboradorDetailsModal({
       onClick={onClose}
     >
       <div
-        className="bg-[var(--surface-bg)] rounded-2xl shadow-[var(--shadow-layer)] border border-[var(--border-subtle)] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-[var(--surface-bg)] rounded-2xl shadow-[var(--shadow-layer)] border border-[var(--border-subtle)] w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

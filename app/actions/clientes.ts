@@ -1,4 +1,5 @@
 "use server"
+import { defaultCreditLimit, redactClientForViewer } from "@/lib/billing/client-limit"
 import { errorMessage } from "@/lib/errors"
 
 
@@ -169,6 +170,13 @@ function clearClientProfileMemoryCache(id?: string) {
  * Obtém todos os clientes para listagem
  */
 export async function getClientesAction(selectedClientId?: string): Promise<Cliente[]> {
+  const clientes = await loadClientes(selectedClientId)
+  const ctx = await requireUser()
+  // O limite de faturação de conta corrente é interno: nunca sai do servidor para o browser do cliente.
+  return clientes.map((c) => redactClientForViewer(c, ctx.role))
+}
+
+async function loadClientes(selectedClientId?: string): Promise<Cliente[]> {
   const ctx = await requireUser()
   const scopedId = ctx.role === "client" ? ctx.client_id! : selectedClientId
   const supabase = createAdminClient()
@@ -366,7 +374,8 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
       ? previous?.details?.payment_due_days
       : paymentDueDays(cliente.payment_due_days, 0),
     iban: cliente.iban?.trim() || "",
-    credit_limit: cliente.credit_limit ?? 5000,
+    // Pré-pagamento: credit_limit é o saldo carregado, por isso nunca assume o limite por omissão.
+    credit_limit: cliente.credit_limit ?? defaultCreditLimit(cliente.billing_type),
     credit_limit_enabled: cliente.credit_limit_enabled ?? previous?.details?.credit_limit_enabled ?? false,
     balance: cliente.balance || "0,00€",
     assigned_seller: cliente.assigned_seller?.trim() || "Gestão Comercial",
@@ -388,7 +397,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
   if (typeof fullRecord.credit_limit_enabled !== 'boolean' ||
     (fullRecord.billing_type !== 'pay_as_you_go' && fullRecord.credit_limit_enabled &&
       (!Number.isFinite(fullRecord.credit_limit) || fullRecord.credit_limit! < 0))) {
-    throw new Error('Indique um limite de crédito válido, igual ou superior a zero.')
+    throw new Error('Indique um limite de faturação válido, igual ou superior a zero.')
   }
 
   // Check every write before the UI can invite a client to a supposedly saved store.

@@ -462,8 +462,8 @@ export default function ReembolsosClient({ initialBatches, managePayments = true
 
           {/* 6. TAB 1: LIQUIDAÇÃO POR CLIENTE */}
           {activeTab === "clientes" && (
-            <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl shadow-2xs overflow-hidden">
-              <div className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] px-4 py-2.5 grid grid-cols-12 gap-3 text-[10px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider items-center">
+            <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl shadow-2xs overflow-x-auto">
+              <div className="bg-[var(--surface-muted)] border-b border-[var(--border-subtle)] px-4 py-2.5 min-w-[760px] grid grid-cols-12 gap-3 text-[10px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider items-center">
                 <div className="col-span-4">Cliente</div>
                 <div className="col-span-4">IBAN para Liquidação</div>
                 <div className="col-span-1 text-center">Guias</div>
@@ -478,7 +478,7 @@ export default function ReembolsosClient({ initialBatches, managePayments = true
 
                   return (
                     <div key={client.clientId} className="flex flex-col transition-colors hover:bg-[var(--surface-muted)]/30">
-                      <div className="px-4 py-3 grid grid-cols-12 gap-3 items-center text-xs">
+                      <div className="px-4 py-3 min-w-[760px] grid grid-cols-12 gap-3 items-center text-xs">
                         
                         {/* Cliente */}
                         <div className="col-span-4 flex items-center gap-2.5">

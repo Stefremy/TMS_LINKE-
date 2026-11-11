@@ -181,7 +181,7 @@ export function LocalWeather() {
             {weather ? `${Math.round(weather.temperature)}°C` : "--°C"}
           </span>
           <span className={styles.location}>{weather?.location || location.name}</span>
-          <span className={styles.condition}>{condition?.label || "A obter tempo…"}</span>
+          <span className={styles.condition} data-widget-extra>{condition?.label || "A obter tempo…"}</span>
         </span>
         <ChevronDown className={`${styles.chevron} ${isOpen ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>

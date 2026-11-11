@@ -130,7 +130,7 @@ test('credit-limit activation persists and switching it off preserves the config
     assert.equal(reloaded.credit_limit_enabled, enabled)
     assert.equal(reloaded.credit_limit, 15000)
   }
-  await assert.rejects(h.actions.saveClienteAction({ id: A, credit_limit: -1, credit_limit_enabled: true }), /limite de crédito válido/)
+  await assert.rejects(h.actions.saveClienteAction({ id: A, credit_limit: -1, credit_limit_enabled: true }), /limite de faturação válido/)
 })
 
 for (const error of [

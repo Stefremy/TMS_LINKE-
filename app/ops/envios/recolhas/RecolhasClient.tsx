@@ -959,7 +959,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                       />
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Código Postal *</label>
                         <input
@@ -984,7 +984,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Email</label>
                         <input
@@ -1024,7 +1024,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                         </div>
                       </div>
                     </div>
-                    <p className="col-span-3 -mt-2 text-[11px] text-[var(--text-tertiary)]">
+                    <p className="col-span-full -mt-2 text-[11px] text-[var(--text-tertiary)]">
                       O telefone principal é opcional se preencher o telemóvel alternativo. Os CTT exigem pelo menos um número válido; sem telefone, não é possível agendar por este serviço.
                     </p>
                   </div>

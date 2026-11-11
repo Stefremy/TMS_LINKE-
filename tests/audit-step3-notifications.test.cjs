@@ -177,7 +177,8 @@ test("NOT-004 sendGenericTemplateMessage treats successful SMS fallback as deliv
 })
 
 test("NOT-001 Dispatch lock prevents concurrent duplicate sends and avoids overwriting sent status with failed", async () => {
-  const dateKey = "2026-11-10"
+  // A chave de envio inclui a data de hoje em Lisboa; calculada como no código, para o teste não depender do dia em que corre.
+  const dateKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
   const dispatchKey = `em_distribuicao|${dateKey}|DA555666777PT|351912345678`
   const tables = {
     whatsapp_dispatch_locks: [],
@@ -193,9 +194,9 @@ test("NOT-001 Dispatch lock prevents concurrent duplicate sends and avoids overw
     source_system: "tms_linke",
     status: "sent",
     run_date_key: dateKey,
-    sent_at: "2026-11-10T10:00:00Z",
-    created_at: "2026-11-10T10:00:00Z",
-    updated_at: "2026-11-10T10:00:00Z",
+    sent_at: `${dateKey}T10:00:00Z`,
+    created_at: `${dateKey}T10:00:00Z`,
+    updated_at: `${dateKey}T10:00:00Z`,
   })
 
   let sendAttempted = false

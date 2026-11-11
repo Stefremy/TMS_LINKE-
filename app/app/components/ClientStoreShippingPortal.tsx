@@ -727,11 +727,13 @@ export function ClientStoreShippingPortal() {
               <p className="text-[11px] text-slate-400 mt-0.5">Condições: {currentClient?.payment_terms || "Pronto Pagamento"}</p>
             </div>
 
+            {/* O limite de faturação de conta corrente é interno: nunca é mostrado ao cliente. */}
+            {currentClient?.billing_type === 'pay_as_you_go' && (<>
             <div className="h-px bg-slate-100 w-full" />
 
             <div>
               <div className="flex justify-between items-end mb-1.5">
-                <p className="text-slate-600 font-bold">Crédito (Saldo)</p>
+                <p className="text-slate-600 font-bold">Saldo</p>
                 <p className="font-bold text-emerald-600">
                   {currentClient?.credit_limit && currentClient.credit_limit > 0
                     ? `${Math.min(
@@ -759,9 +761,10 @@ export function ClientStoreShippingPortal() {
                   </p>
                 </>
               ) : (
-                <p className="text-[11px] text-slate-500">Sem limite de crédito fixado.</p>
+                <p className="text-[11px] text-slate-500">Sem saldo carregado.</p>
               )}
             </div>
+            </>)}
 
             {currentClient?.pricing?.discount_pct ? (
               <>

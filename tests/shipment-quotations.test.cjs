@@ -54,8 +54,10 @@ test('a closed shipment modal is safe and manual FedEx shows an informational li
   '@/lib/services/reembolsos/client-cod':{codCents:()=>null},
   '@/components/ui/refresh-icon':{RefreshIcon:'svg'},'@/components/ui/badge':{Badge:'span'},
   '@/app/actions/shipments':{},'@/app/actions/ctt':{},'@/lib/label-utils':{},'@/lib/official-shipment-label':{},
-  '@/lib/carrier-logos':{getCarrierLogo:()=>null},'@/lib/status-helpers':{getShipmentStatusConfig:()=>({label:'Pendente'})},
+  '@/lib/carrier-logos':{getCarrierLogo:()=>null,getShipmentCarrierLogo:()=>null},
+  '@/components/ui/confirm-dialog':{confirmAction:async()=>true},'@/components/ui/use-dialog-a11y':{useDialogA11y:()=>({})},'@/lib/status-helpers':{getShipmentStatusConfig:()=>({label:'Pendente'})},
   '@/lib/services/ctt/ctt-types':{},'@/components/shipments/CarrierMeasurementsPanel':{CarrierMeasurementsPanel:()=>null},
+  sonner:{toast:Object.assign(()=>{},{success(){},error(){},info(){},warning(){}})},
  })('app/app/components/ClientShipmentDetailModal.tsx')
  const render=shipment=>renderToStaticMarkup(React.createElement(ClientShipmentDetailModal,{shipment,onClose(){}}))
  assert.equal(render(null),'')

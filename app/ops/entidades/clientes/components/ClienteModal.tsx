@@ -1,4 +1,5 @@
 "use client"
+import { applyWalletInjection, parseWalletInjection, switchBillingModel, walletPreview } from "@/lib/billing/client-limit"
 
 import { SpecialFeesEditor } from "@/components/shipments/SpecialFeesEditor"
 import { DEFAULT_STANDARD_SPECIAL_FEES } from "@/lib/pricing/special-fee-catalogue"
@@ -167,6 +168,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
   const [expandedPriceServico, setExpandedPriceServico] = React.useState<string | null>(null)
   const [activeZoneByServico, setActiveZoneByServico] = React.useState<Record<string, number>>({})
   const [isEditingCredit, setIsEditingCredit] = React.useState(false)
+  const [walletInjection, setWalletInjection] = React.useState("")
   const [importSourceId, setImportSourceId] = React.useState("")
   const [replaceImportedPrices, setReplaceImportedPrices] = React.useState(false)
   const [importNotice, setImportNotice] = React.useState("")
@@ -953,14 +955,14 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-[var(--surface-bg)] rounded-xl shadow-[var(--shadow-layer)] w-full max-w-5xl max-h-[94vh] flex flex-col overflow-hidden border border-[var(--border-subtle)]">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-stretch sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
+      <div className="bg-[var(--surface-bg)] sm:rounded-xl shadow-[var(--shadow-layer)] w-full max-w-5xl h-[100dvh] sm:h-auto sm:max-h-[94dvh] flex flex-col overflow-hidden sm:border border-[var(--border-subtle)]">
         
         {/* ===================== OVERVIEW HEADER ===================== */}
-        <div className="px-6 py-4 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)] flex items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-3.5 min-w-0">
+        <div className="px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6 sm:py-4 border-b border-[var(--border-subtle)] bg-[var(--surface-bg)] flex items-center justify-between gap-2 sm:gap-4 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
             <div 
-              className="w-11 h-11 rounded-lg flex items-center justify-center text-white font-black text-base shadow-2xs shrink-0 overflow-hidden relative border border-[var(--border-subtle)]"
+              className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg flex items-center justify-center text-white font-black text-base shadow-2xs shrink-0 overflow-hidden relative border border-[var(--border-subtle)]"
               style={{ backgroundColor: formData.color || "#246B45" }}
             >
               {formData.logo_url ? (
@@ -976,7 +978,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg font-bold text-[var(--text-primary)] tracking-tight truncate">
+                <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight truncate max-w-full">
                   {formData.short_name || (initialData ? "Editar Cliente" : "Novo Cliente")}
                 </h1>
                 
@@ -984,28 +986,28 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                   {formData.code || "CL000"}
                 </span>
 
-                <span className="bg-[#EEF3EF] border border-[#C9D7CD] text-[#315B43] text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0">
+                <span className="hidden sm:inline bg-[#EEF3EF] border border-[#C9D7CD] text-[#315B43] text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0">
                   {formData.category || "Cliente Conta Corrente"}
                 </span>
               </div>
 
-              <div className="flex items-center gap-2.5 text-xs text-[var(--text-tertiary)] mt-0.5 truncate">
-                <span className="text-[var(--text-secondary)] font-medium truncate">
+              <div className="flex items-center gap-2.5 text-xs text-[var(--text-tertiary)] mt-0.5 min-w-0">
+                <span className="hidden sm:inline text-[var(--text-secondary)] font-medium truncate">
                   {formData.legal_name || "Designação Social / Fiscal"}
                 </span>
-                <span>•</span>
-                <span>NIF: <strong className="text-[var(--text-primary)] font-mono">{formData.nif || "—"}</strong></span>
+                <span className="hidden sm:inline">•</span>
+                <span className="whitespace-nowrap">NIF: <strong className="text-[var(--text-primary)] font-mono">{formData.nif || "—"}</strong></span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Redirect to Client Store / Portal UI */}
             <a
               href={`/app/selecionar?clientId=${encodeURIComponent(formData.id || "")}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3.5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.99] text-white rounded-md text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-2.5 sm:px-3.5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.99] text-white rounded-md text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
               title="Aceder à loja / portal do cliente para criar novos envios e pedidos"
             >
               <ExternalLink className="w-3.5 h-3.5" />
@@ -1016,7 +1018,8 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded-md transition-colors cursor-pointer"
+              aria-label="Fechar"
+              className="p-2 sm:p-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] rounded-md transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1024,12 +1027,12 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
         </div>
 
         {/* ===================== TABS NAVIGATION ===================== */}
-        <div className="flex border-b border-[var(--border-subtle)] bg-[var(--surface-muted)]/70 px-4 sm:px-6 shrink-0 overflow-x-auto gap-1">
+        <div className="flex border-b border-[var(--border-subtle)] bg-[var(--surface-muted)]/70 px-2 sm:px-6 shrink-0 overflow-x-auto overscroll-x-contain gap-1 [scrollbar-width:none]">
           {[
             { id: "geral", label: "Identidade & Geral", icon: Building2 },
             { id: "faturacao", label: "Moradas & Faturação", icon: MapPin },
             { id: "contactos", label: "Contactos", icon: Phone },
-            { id: "comercial", label: "Condições & Crédito", icon: Euro },
+            { id: "comercial", label: "Condições & Limite", icon: Euro },
             { id: "precario", label: "Preços & Serviços", icon: Percent, badge: `${visibleAssignedTablesCount} serviços` },
             ...((canManageAccess || canSendAccessEmail) ? [{ id: "acesso", label: "Acesso à Área do Cliente", icon: ShieldCheck }] : []),
           ].map((tab) => {
@@ -1061,13 +1064,13 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
         </div>
 
         {/* ===================== FORM CONTENT ===================== */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[var(--canvas-bg)]">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2.5 sm:p-6 bg-[var(--canvas-bg)]">
           {saveError && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{saveError}</p>}
           {invitationMessage && <p role="status" className="mb-4 rounded-lg border border-[#C9D7CD] bg-[#F4F7F4] p-3 text-sm text-[#315B43]">{invitationMessage}</p>}
           
           {/* TAB 1: IDENTIDADE & GERAL */}
           {activeTab === "geral" && (
-            <div className="space-y-5 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
+            <div className="space-y-5 bg-[var(--surface-bg)] p-3.5 sm:p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
               {initialData?.id && <ClientServiceHistory key={initialData.id} clientId={initialData.id} />}
               {!initialData && canSendAccessEmail && <div className="rounded-lg border border-[#C9D7CD] bg-[#F4F7F4] p-4">
                 <label className="flex items-center gap-2 text-sm font-semibold text-[#244C35]">
@@ -1270,7 +1273,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                     )}
                   </div>
 
-                  <div className="flex-1 min-w-[240px] space-y-2">
+                  <div className="flex-1 min-w-0 sm:min-w-[240px] space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <label className="px-3 py-1.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-xs font-bold text-[var(--text-primary)] shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer">
                         <Upload className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -1388,7 +1391,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
 
           {/* TAB 2: MORADAS & FATURAÇÃO */}
           {activeTab === "faturacao" && (
-            <div className="space-y-5 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)]">
+            <div className="space-y-5 bg-[var(--surface-bg)] p-3.5 sm:p-6 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)]">
               <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 border-b border-[var(--border-subtle)] pb-2.5">
                 <MapPin className="w-4 h-4 text-[var(--accent)]" />
                 Moradas de Recolha e Faturação
@@ -1523,7 +1526,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
 
           {/* TAB 3: CONTACTOS */}
           {activeTab === "contactos" && (
-            <div className="space-y-5 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)]">
+            <div className="space-y-5 bg-[var(--surface-bg)] p-3.5 sm:p-6 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)]">
               <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 border-b border-[var(--border-subtle)] pb-2.5">
                 <Phone className="w-4 h-4 text-[var(--accent)]" />
                 Pessoas de Contacto & Comunicação
@@ -1581,10 +1584,10 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
 
           {/* TAB 4: CONDIÇÕES & CRÉDITO */}
           {activeTab === "comercial" && (
-            <div className="space-y-5 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)]">
+            <div className="space-y-5 bg-[var(--surface-bg)] p-3.5 sm:p-6 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)]">
               <h2 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2 border-b border-[var(--border-subtle)] pb-2.5">
                 <Euro className="w-4 h-4 text-[var(--accent)]" />
-                Condições Comerciais & Crédito
+                Condições Comerciais & Limite
               </h2>
 
               {/* Tipo de Cliente / Modelo de Faturação */}
@@ -1596,7 +1599,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                   {/* Conta Corrente */}
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, billing_type: "conta_corrente", category: "Cliente Conta Corrente" })}
+                    onClick={() => setFormData(prev => switchBillingModel(prev, "conta_corrente", initialData))}
                     className={`relative p-4 rounded-xl border text-left transition-all cursor-pointer ${
                       (formData.billing_type || "conta_corrente") === "conta_corrente"
                         ? "border-[var(--accent)] bg-[var(--accent-soft)]/50 shadow-xs ring-1 ring-[var(--accent)]/30"
@@ -1630,7 +1633,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                   {/* Pay as You Go */}
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, billing_type: "pay_as_you_go", category: "Cliente Pré-Pagamento" })}
+                    onClick={() => setFormData(prev => switchBillingModel(prev, "pay_as_you_go", initialData))}
                     className={`relative p-4 rounded-xl border text-left transition-all cursor-pointer ${
                       formData.billing_type === "pay_as_you_go"
                         ? "border-[#315D82] bg-[#F1F5F7] shadow-xs ring-1 ring-[#315D82]/20"
@@ -1696,10 +1699,12 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                   <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">Dias após emissão da fatura. 0 = pagamento no próprio dia. Aplica-se às próximas faturas.</p>
                 </div>
 
+                {/* O limite só existe em conta corrente (não damos crédito: serve para limitar a exposição). Em pré-pagamento o cliente usa o saldo da wallet. */}
+                {formData.billing_type !== "pay_as_you_go" && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Crédito (€)</label>
-                    {formData.billing_type !== "pay_as_you_go" && formData.credit_limit_enabled && (
+                    <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Limite de faturação (€)</label>
+                    {formData.credit_limit_enabled && (
                       <button 
                         type="button" 
                         onClick={() => setIsEditingCredit(!isEditingCredit)}
@@ -1710,7 +1715,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                     )}
                   </div>
                   
-                  {isEditingCredit && formData.billing_type !== "pay_as_you_go" && formData.credit_limit_enabled ? (
+                  {isEditingCredit && formData.credit_limit_enabled ? (
                     <input
                       type="number"
                       min="0"
@@ -1721,58 +1726,99 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                       placeholder="5000"
                     />
                   ) : (
-                    <div className={`w-full border border-[var(--border-subtle)] rounded-md px-3 py-2 text-xs font-mono font-bold text-[var(--text-primary)] flex items-center justify-between ${formData.billing_type === "pay_as_you_go" ? "bg-slate-100 text-slate-500 opacity-80 cursor-not-allowed" : "bg-[var(--surface-muted)]"}`}>
-                      <span>{formData.billing_type !== "pay_as_you_go" && !formData.credit_limit_enabled ? "Sem limite" : `${Number(formData.credit_limit || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}</span>
+                    <div className={`w-full border border-[var(--border-subtle)] rounded-md px-3 py-2 text-xs font-mono font-bold text-[var(--text-primary)] flex items-center justify-between bg-[var(--surface-muted)]`}>
+                      <span>{!formData.credit_limit_enabled ? "Sem limite" : `${Number(formData.credit_limit || 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}</span>
                       <span className="text-[10px] text-[var(--text-tertiary)] font-normal font-sans">
-                        {formData.billing_type === "pay_as_you_go" ? "Carregamentos Acumulados (Bloqueado)" : formData.credit_limit_enabled ? "Limite Base" : "Conta Corrente"}
+                        {formData.credit_limit_enabled ? "Limite Base" : "Conta Corrente"}
                       </span>
                     </div>
                   )}
-                  {formData.billing_type !== "pay_as_you_go" && (
+                  {(
                     <div className="mt-2">
                       <button type="button" role="switch" aria-checked={formData.credit_limit_enabled === true}
-                        aria-label="Ativar limite de crédito"
+                        aria-label="Ativar limite de faturação"
                         onClick={() => { setFormData(prev => ({ ...prev, credit_limit_enabled: !prev.credit_limit_enabled })); setIsEditingCredit(false) }}
                         className="inline-flex items-center gap-2 text-[11px] font-semibold text-[var(--text-secondary)] cursor-pointer">
                         <span aria-hidden="true" className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${formData.credit_limit_enabled ? "bg-[#246B45]" : "bg-slate-300"}`}>
                           <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${formData.credit_limit_enabled ? "translate-x-4" : "translate-x-0"}`} />
                         </span>
-                        {formData.credit_limit_enabled ? "Limite de crédito ativo" : "Ativar limite de crédito"}
+                        {formData.credit_limit_enabled ? "Limite de faturação ativo" : "Ativar limite de faturação"}
                       </button>
-                      <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">{formData.credit_limit_enabled ? "Novos envios não podem ultrapassar o crédito disponível." : "Sem limite de crédito. O valor definido fica guardado para reativar."} Alteração aplicada ao guardar.</p>
+                      <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">{formData.credit_limit_enabled ? "Máximo que o cliente pode dever (envios por faturar + faturas por pagar). Novos envios são recusados acima deste valor." : "Sem limite de faturação. O valor definido fica guardado para reativar."} Alteração aplicada ao guardar.</p>
                     </div>
                   )}
                 </div>
-
-                {formData.billing_type === "pay_as_you_go" && (
-                  <div className="mt-1 p-3 rounded-md bg-[var(--accent-soft)] border border-[rgba(18,138,71,0.2)] col-span-2">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Gestão de Saldo (Wallet)</span>
-                      <span className="text-[9px] bg-white px-1.5 py-0.5 rounded text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)]">Privilégio Admin</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-[10px] text-[var(--text-tertiary)] mb-0.5">Saldo Disponível (Projetado)</div>
-                        <div className="text-lg font-bold font-mono text-[var(--text-primary)]">
-                          {((initialData?.available_credit || 0) + ((formData.credit_limit || 0) - (initialData?.credit_limit || 0))).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const val = window.prompt("Introduza o valor a carregar (ex: 50.00). Use valores negativos para remover saldo:");
-                          if (val && !isNaN(Number(val))) {
-                            setFormData(prev => ({ ...prev, credit_limit: (prev.credit_limit || 0) + Number(val) }));
-                          }
-                        }}
-                        className="bg-white hover:bg-slate-50 text-[var(--text-primary)] text-[11px] font-semibold py-1.5 px-3 rounded-md border border-[var(--border-strong)] shadow-2xs flex items-center gap-1.5 transition-colors"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Injetar Saldo
-                      </button>
-                    </div>
-                  </div>
                 )}
+
+                {formData.billing_type === "pay_as_you_go" && (() => {
+                  // Em pré-pagamento credit_limit guarda o total carregado na wallet (Stripe + injeções).
+                  const { wasPrepaid, baseLoaded, currentBalance, pending, projected } = walletPreview(initialData, formData.credit_limit)
+                  const eur = (v: number) => `${v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+                  const injection = parseWalletInjection(walletInjection)
+                  const injectionValid = injection !== null
+                  const applyInjection = () => {
+                    if (injection === null) return
+                    setFormData(prev => ({ ...prev, credit_limit: applyWalletInjection(prev.credit_limit, injection) }))
+                    setWalletInjection("")
+                  }
+                  return (
+                    <div className="md:col-span-2 p-3 sm:p-4 rounded-lg bg-[var(--accent-soft)] border border-[rgba(18,138,71,0.2)]">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Saldo da wallet</span>
+                        <span className="text-[9px] bg-white px-1.5 py-0.5 rounded text-[var(--text-secondary)] font-semibold border border-[var(--border-subtle)]">Privilégio Admin</span>
+                      </div>
+
+                      <div className="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                          <div className="text-[10px] text-[var(--text-tertiary)] mb-0.5">{wasPrepaid ? "Saldo atual" : "Saldo inicial"}</div>
+                          <div className={`text-xl font-bold font-mono ${currentBalance < 0 ? "text-[var(--status-critical)]" : "text-[var(--text-primary)]"}`}>{eur(currentBalance)}</div>
+                          {!wasPrepaid && <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">A wallet começa a zero. O cliente carrega saldo na loja (Stripe).</p>}
+                        </div>
+                        {pending !== 0 && (
+                          <div className="text-right">
+                            <div className="text-[10px] text-[var(--text-tertiary)] mb-0.5">Após gravar ({pending > 0 ? "+" : ""}{eur(pending)})</div>
+                            <div className={`text-xl font-bold font-mono ${projected < 0 ? "text-[var(--status-critical)]" : "text-[var(--accent)]"}`}>{eur(projected)}</div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-[rgba(18,138,71,0.2)]">
+                        <label htmlFor="wallet-injection" className="block text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Injetar saldo (emergência)</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            id="wallet-injection"
+                            type="text"
+                            inputMode="decimal"
+                            value={walletInjection}
+                            onChange={e => setWalletInjection(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); applyInjection() } }}
+                            placeholder="ex: 50,00 ou -10,00"
+                            className="min-w-0 flex-1 border border-[var(--border-subtle)] bg-[var(--surface-bg)] rounded-md px-3 py-2 text-xs font-mono font-semibold text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={applyInjection}
+                            disabled={!injectionValid}
+                            className="shrink-0 bg-white hover:bg-slate-50 text-[var(--text-primary)] text-xs font-semibold py-2 px-3 rounded-md border border-[var(--border-strong)] shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Adicionar
+                          </button>
+                          {pending !== 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => ({ ...prev, credit_limit: baseLoaded }))}
+                              className="shrink-0 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline-offset-2 hover:underline cursor-pointer"
+                            >
+                              Anular
+                            </button>
+                          )}
+                        </div>
+                        <p className="mt-1.5 text-[10px] text-[var(--text-tertiary)]">Valores negativos retiram saldo. O ajuste só é aplicado ao clicar em «Gravar Cliente».</p>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 <div>
                   <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Comercial / Gestor de Conta</label>
@@ -1891,7 +1937,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                         Cliente de origem
                         <select value={importSourceId} disabled={isSaving || importSources.length === 0}
                           onChange={e => { setImportSourceId(e.target.value); setReplaceImportedPrices(false); setImportNotice("") }}
-                          className="mt-1 block w-full min-w-48 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs text-[var(--text-primary)]">
+                          className="mt-1 block w-full min-w-0 sm:min-w-48 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs text-[var(--text-primary)]">
                           <option value="">{importSources.length ? "Escolher cliente…" : "Não existem outros clientes disponíveis"}</option>
                           {importSources.map(client => <option key={client.id} value={client.id}>{client.short_name} · {client.code}</option>)}
                         </select>
@@ -2019,7 +2065,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
 
               {/* SUBTAB 3: TAXA COMBUSTÍVEL & DESCONTOS GERAIS */}
               {precarioSubTab === "geral" && (
-                <div className="bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)] space-y-5">
+                <div className="bg-[var(--surface-bg)] p-3.5 sm:p-6 rounded-xl border border-[var(--border-subtle)] shadow-[var(--shadow-layer)] space-y-5">
                   <div className="border-b border-[var(--border-subtle)] pb-3">
                     <h2 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
                       <Sliders className="w-4 h-4 text-[var(--accent)]" />
@@ -2080,7 +2126,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
 
           {/* TAB 6: ACESSO À ÁREA DO CLIENTE */}
           {activeTab === "acesso" && (canManageAccess || canSendAccessEmail) && (
-            <div className="space-y-6 bg-[var(--surface-bg)] p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
+            <div className="space-y-6 bg-[var(--surface-bg)] p-3.5 sm:p-6 rounded-xl border border-[var(--border-subtle)] shadow-2xs">
               <div>
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">Acesso à Área do Cliente</h3>
                 <p className="mt-1 text-xs text-[var(--text-secondary)]">
@@ -2161,8 +2207,8 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
 
         </div>
         {/* ===================== FOOTER BUTTONS ===================== */}
-        <div className="px-6 py-3.5 border-t border-[var(--border-subtle)] bg-[var(--surface-bg)] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+        <div className="px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-3.5 border-t border-[var(--border-subtle)] bg-[var(--surface-bg)] flex items-center justify-between gap-2 shrink-0">
+          <div className="flex min-w-0 items-center gap-2 text-xs text-[var(--text-secondary)]">
             {saveSuccessMsg && (
               <span className="text-[var(--accent)] font-bold flex items-center gap-1 animate-in fade-in">
                 <CheckCircle2 className="w-4 h-4" />
@@ -2171,7 +2217,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-1 sm:flex-none items-center justify-end gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -2185,7 +2231,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
               type="button"
               onClick={() => handleSubmit()}
               disabled={isSaving || saveSuccessMsg}
-              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold px-5 py-2 rounded-lg text-xs shadow-sm flex items-center gap-2 transition-all cursor-pointer disabled:cursor-default disabled:opacity-75"
+              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold px-4 sm:px-5 py-2.5 sm:py-2 rounded-lg text-xs shadow-sm flex flex-1 sm:flex-none justify-center items-center gap-2 transition-all cursor-pointer disabled:cursor-default disabled:opacity-75"
             >
               {isSaving ? (
                 <>

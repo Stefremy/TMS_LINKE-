@@ -90,8 +90,8 @@ export default function FaturasClient({
             <p className="text-slate-500 mt-2">Ainda não existem faturas ou extratos emitidos para a sua conta.</p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
-            <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 grid grid-cols-12 gap-4 items-center">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto shadow-2xs">
+            <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 min-w-[640px] grid grid-cols-12 gap-4 items-center">
               <div className="col-span-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Documento</div>
               <div className="col-span-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Data</div>
               <div className="col-span-2 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Valor</div>
@@ -105,7 +105,7 @@ export default function FaturasClient({
                 return (
                   <div key={stmt.id} className="flex flex-col transition-colors hover:bg-slate-50/50">
                     <div 
-                      className="px-6 py-4 grid grid-cols-12 gap-4 items-center cursor-pointer select-none group"
+                      className="px-6 py-4 min-w-[640px] grid grid-cols-12 gap-4 items-center cursor-pointer select-none group"
                       onClick={() => setExpandedStatement(isExpanded ? null : stmt.id)}
                     >
                       <div className="col-span-4 flex items-center gap-3">
@@ -242,14 +242,14 @@ export default function FaturasClient({
                           </div>
                           
                           <div className="divide-y divide-slate-50 max-h-[400px] overflow-y-auto">
-                            <div className="bg-slate-50 px-4 py-2 grid grid-cols-12 gap-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider sticky top-0">
+                            <div className="bg-slate-50 px-4 py-2 min-w-[640px] grid grid-cols-12 gap-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider sticky top-0">
                               <div className="col-span-3">Data</div>
                               <div className="col-span-3">Tracking</div>
                               <div className="col-span-4">Destinatário</div>
                               <div className="col-span-2 text-right">Valor</div>
                             </div>
                             {stmt.shipments.map((s) => (
-                              <div key={s.id} className="px-4 py-3 grid grid-cols-12 gap-4 items-center hover:bg-slate-50 text-xs">
+                              <div key={s.id} className="px-4 py-3 min-w-[640px] grid grid-cols-12 gap-4 items-center hover:bg-slate-50 text-xs">
                                 <div className="col-span-3 text-slate-500">
                                   {new Date(s.created_at).toLocaleDateString("pt-PT")}
                                 </div>

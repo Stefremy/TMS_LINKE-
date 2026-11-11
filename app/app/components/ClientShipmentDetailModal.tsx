@@ -369,7 +369,7 @@ setTimelineEvents(data || [])
         aria-modal="true"
         aria-labelledby="client-shipment-detail-title"
         tabIndex={-1}
-        className="tms-modal-fit outline-none bg-[var(--surface-bg)] rounded-xl w-full max-w-4xl shadow-2xl border border-[var(--border-strong)] overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+        className="tms-modal-fit outline-none bg-[var(--surface-bg)] rounded-xl w-full max-w-4xl shadow-2xl border border-[var(--border-strong)] overflow-hidden flex flex-col max-h-[92dvh] animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}

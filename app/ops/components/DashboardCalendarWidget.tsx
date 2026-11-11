@@ -68,7 +68,7 @@ export function DashboardCalendarWidget({ initialDate }: { initialDate: string }
           {summary.status === 'ready' && (summary.total || 0) > 0 && <span className={styles.dot} aria-hidden="true" />}
           {status}
         </span>
-        <span className={styles.event}>{nextEvent}</span>
+        <span className={styles.event} data-widget-extra>{nextEvent}</span>
       </span>
     </Link>
   )

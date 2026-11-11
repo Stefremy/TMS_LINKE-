@@ -104,7 +104,7 @@ export function ClientPortalShell({ children, store, isSuspended = false, access
 
           <ClientAnnouncements />
           {/* Page Content with Visão Geral Backdrop */}
-          <main className={`tms-main flex-1 bg-[var(--canvas-bg)] ${backdropStyles.dashboard} relative isolate min-h-0`}>
+          <main className={`tms-main flex-1 bg-[var(--canvas-bg)] ${backdropStyles.dashboard} relative min-h-0`}>
             <DashboardBackdrop />
             {children}
           </main>

@@ -918,7 +918,8 @@ for (const carrier of ['CTT','Correos']) {
   const h=shipmentHarness({carrier,adjust:t=>Object.assign(t.audit_log[0].details,{billing_type:'conta_corrente',credit_limit_enabled:true,credit_limit:0})})
   h.db.client.rpc=async name=>{assert.equal(name,'reserve_current_account_credit');return {data:{refused:true,balance:0},error:null}}
   const result=await emit(h)
-  assert.equal(result.success,false);assert.match(result.error,/Limite de crédito atingido/)
+  assert.equal(result.success,false);assert.match(result.error,/valores por regularizar/)
+  assert.doesNotMatch(result.error,/\d|limite|crédito|disponível/i) // o cliente nunca vê o limite interno
   assert.equal(h.providerCalls.length,0)
  })
 }

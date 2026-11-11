@@ -138,7 +138,7 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
         </button>
 
         {isOpen && (
-          <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 text-left max-h-[80vh] overflow-y-auto">
+          <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 text-left max-h-[80dvh] overflow-y-auto">
             
             <div className="px-2 py-1">
               <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded text-[13px] text-slate-600 font-medium">

@@ -335,7 +335,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
               <th className="py-2.5 px-3 min-w-[140px]">Categoria</th>
               <th className="py-2.5 px-3 w-24 text-right" title="Contagem histórica da plataforma anterior">Serviços<br /><span className="font-normal normal-case">Histórico</span></th>
               <th className="py-2.5 px-3 w-24">Faturação / Prazo</th>
-              <th className="py-2.5 px-3 w-24 text-right">Crédito</th>
+              <th className="py-2.5 px-3 w-24 text-right">Limite / Saldo</th>
               <th className="py-2.5 px-3 w-20 text-center">Estado</th>
               <th className="py-2.5 px-4 w-12 text-center"></th>
             </tr>
@@ -467,14 +467,15 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
                       {item.billing_type !== 'pay_as_you_go' && <span className="block text-[10px] text-[var(--text-tertiary)] mt-0.5">Pagar em {item.payment_due_days ?? defaultPaymentDays} dias</span>}
                     </td>
 
-                    {/* Crédito */}
+                    {/* Limite / Saldo */}
                     <td className="py-3 px-3 text-right font-mono text-[11px] text-[var(--text-primary)]">
                       {item.billing_type !== 'pay_as_you_go' && !item.credit_limit_enabled ? <span className="text-[var(--text-secondary)] font-sans">Sem limite</span> : typeof item.credit_limit === 'number' ? (
                         item.billing_type === 'pay_as_you_go' ? (
                           <div className="flex flex-col items-end gap-0.5">
-                            <span className="font-semibold">
-                              {item.available_credit !== undefined ? item.available_credit.toLocaleString("pt-PT") : item.credit_limit.toLocaleString("pt-PT")}€
+                            <span className={`font-semibold ${(item.available_credit ?? 0) < 0 ? 'text-[var(--status-critical)]' : ''}`}>
+                              {item.available_credit !== undefined ? item.available_credit.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "€" : "—"}
                             </span>
+                            <span className="text-[9px] text-[var(--text-tertiary)] font-sans">saldo</span>
                           </div>
                         ) : (
                           <div className="flex flex-col items-end gap-0.5">

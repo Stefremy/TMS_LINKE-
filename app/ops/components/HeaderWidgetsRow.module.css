@@ -1,0 +1,49 @@
+/* Grelha dos widgets do cabeçalho (tempo, relógio, calculadora, calendário).
+   Os widgets leem estas variáveis; aqui garantimos tamanhos iguais e responsivos. */
+.row {
+  --dashboard-widget-width: 100%;
+  --dashboard-widget-height: 60px;
+  --dashboard-widget-padding: 10px;
+  --dashboard-widget-gap: 9px;
+  --dashboard-widget-icon: 30px;
+  --dashboard-widget-number: 18px;
+  --dashboard-widget-title: 12.5px;
+  --dashboard-weather-scene: 62px;
+
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.row > * { min-width: 0; }
+
+/* Mobile: menos texto secundário para caber em meia largura */
+@media (max-width: 767px) {
+  .row :global([data-widget-extra]) { display: none; }
+}
+
+@media (min-width: 768px) {
+  .row {
+    --dashboard-widget-height: 68px;
+    --dashboard-widget-padding: 12px;
+    --dashboard-widget-gap: 11px;
+    --dashboard-widget-icon: 36px;
+    --dashboard-widget-number: 20px;
+    --dashboard-widget-title: 14px;
+    --dashboard-weather-scene: 78px;
+    gap: 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1536px) {
+  .row {
+    --dashboard-widget-height: 76px;
+    --dashboard-widget-icon: 42px;
+    --dashboard-widget-number: 22px;
+    --dashboard-weather-scene: 92px;
+  }
+}

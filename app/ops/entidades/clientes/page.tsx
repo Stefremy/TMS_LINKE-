@@ -9,7 +9,8 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { defaultClientPaymentDays } from "@/lib/billing/payment-settings"
 import { requireEmployee } from "@/lib/auth/context"
 import { canSendClientAccessEmail } from "@/lib/auth/client-access-email"
-import { currentAccountOutstanding } from "@/lib/billing/client-balance"
+import { currentAccountOutstanding, payAsYouGoBalance } from "@/lib/billing/client-balance"
+import { walletSnapshot } from "@/lib/billing/wallet"
 
 import { readPortalAccessStatuses } from "@/lib/client-portal/suspension"
 
@@ -29,39 +30,31 @@ export default async function EntidadesClientesPage() {
     getStandardSpecialFeesAction()
   ])
 
-  // Calcular o crédito disponível para cada cliente
+  // Pré-pagamento: o saldo vem da mesma wallet que autoriza os envios (inclui valores reservados),
+  // para a ficha do cliente mostrar exatamente o que o cliente vê e o que o sistema aplica.
+  const admin = createAdminClient()
+  const prepaidBalances = new Map(await Promise.all(
+    clientes.filter(c => c.billing_type === 'pay_as_you_go').map(async (c) => {
+      let balance: number
+      try {
+        const wallet = await walletSnapshot(admin, ctx.tenant_id, c.id)
+        balance = wallet ? wallet.balance
+          : payAsYouGoBalance(c.credit_limit, shipments.filter(s => s.client_id === c.id), [], c.pay_as_you_go_since)
+      } catch {
+        balance = payAsYouGoBalance(c.credit_limit, shipments.filter(s => s.client_id === c.id), [], c.pay_as_you_go_since)
+      }
+      return [c.id, balance] as const
+    })
+  ))
+
+  // Conta corrente: crédito disponível = limite − dívida (só quando o limite está ativo).
   const clientesComCredito = clientes.map(c => {
-    let unbilledShipmentsTotal = 0
-    let unpaidStatementsTotal = 0
-
-    // 1. Envios pendentes de faturação (billing_statement_id === null)
-    shipments.forEach((s) => {
-      if (s.client_id === c.id && !s.billing_statement_id) {
-        unbilledShipmentsTotal += (Number(s.sell_price || 0) + Number(s.fuel_tax_amount || 0))
-      }
-    })
-
-    // 2. Extratos faturados mas não pagos (sem recibo)
-    statements.forEach((stmt) => {
-      if (stmt.client_id === c.id) {
-        // Se tem fatura Moloni mas não tem recibo
-        if (stmt.moloni_document_id && !stmt.moloni_receipt_pdf) {
-          unpaidStatementsTotal += Number(stmt.outstanding_value ?? stmt.total_value ?? 0)
-        }
-        // Se for Fatura Completa interna (sem Moloni) também é não pago?
-        else if (!stmt.is_pro_forma && !stmt.moloni_document_id) {
-           // Assumimos não pago porque não tem sistema de recibo no TMS puro
-           unpaidStatementsTotal += Number(stmt.outstanding_value ?? stmt.total_value ?? 0)
-        }
-      }
-    })
-
-    const totalDebt = c.billing_type === 'pay_as_you_go' ? unbilledShipmentsTotal + unpaidStatementsTotal
-      : currentAccountOutstanding(shipments.filter(s => s.client_id === c.id), statements.filter((s: { client_id?: string }) => s.client_id === c.id))
-    let available_credit = undefined
-
-    if (typeof c.credit_limit === 'number' && (c.billing_type === 'pay_as_you_go' || c.credit_limit_enabled === true)) {
-      available_credit = Math.max(0, c.credit_limit - totalDebt)
+    let available_credit: number | undefined = undefined
+    if (c.billing_type === 'pay_as_you_go') {
+      available_credit = prepaidBalances.get(c.id)
+    } else if (typeof c.credit_limit === 'number' && c.credit_limit_enabled === true) {
+      const debt = currentAccountOutstanding(shipments.filter(s => s.client_id === c.id), statements.filter((s: { client_id?: string }) => s.client_id === c.id))
+      available_credit = Math.max(0, c.credit_limit - debt)
     }
 
     return {

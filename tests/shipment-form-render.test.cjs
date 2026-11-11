@@ -71,7 +71,7 @@ test('requests have a store-scoped sidebar entry on desktop and mobile, without 
  const {ClientMobileNav}=uiLoad('app/app/components/ClientMobileNav.tsx')
  for(const Component of [ClientSidebarNav,ClientMobileNav]){
   const html=renderToStaticMarkup(React.createElement(Component))
-  assert.match(html,/href="\/app\/fixture\/cotacoes"/);assert.match(html,/Pedido de envio internacional aéreo/)
+  assert.match(html,/href="\/app\/fixture\/cotacoes"/);assert.match(html,/Envio aéreo internacional/)
  }
  const {ClientCreateGuia}=uiLoad('app/app/components/ClientCreateGuia.tsx')
  const html=renderToStaticMarkup(React.createElement(ClientCreateGuia))
