@@ -1,4 +1,5 @@
 "use client"
+import { AnimatedNumber, Skeleton } from "@/components/ui/motion"
 import { toast } from "sonner"
 import { useLocalStorage } from "@/lib/use-local-storage"
 import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
@@ -321,12 +322,13 @@ export function ClientDashboard() {
   // Só pré-pagamento tem saldo. Em conta corrente o cliente vê apenas o que tem por liquidar.
   const availableCredit = stats.walletBalance !== undefined ? stats.walletBalance : (currentClient?.credit_limit ?? 0) - stats.totalRevenue
 
-  if (loadingStats || statsError) return (
+  if (statsError) return (
     <div className="p-8 text-sm text-[var(--text-secondary)]" role="status">
       <h1 className="text-lg font-semibold text-[var(--text-primary)]">{currentClient.legal_name || currentClient.short_name}</h1>
-      <p>{statsError ? "Não foi possível carregar os dados desta conta." : "A carregar os dados desta conta..."}</p>
+      <p>Não foi possível carregar os dados desta conta.</p>
     </div>
   )
+  if (loadingStats) return <ClientDashboardSkeleton name={currentClient.legal_name || currentClient.short_name} />
 
   return (
     <div className="flex flex-col gap-6 max-w-7xl mx-auto font-sans relative">
@@ -542,7 +544,7 @@ export function ClientDashboard() {
             </div>
             <div className="mt-3.5">
               <div className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
-                {stats.monthCount !== undefined ? stats.monthCount : stats.totalCount}
+                <AnimatedNumber value={stats.monthCount !== undefined ? stats.monthCount : stats.totalCount} />
               </div>
               <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate">
                 {stats.monthDeliveredCount !== undefined ? `${stats.monthDeliveredCount} entregues este mês` : `${stats.deliveredCount} entregues no destino`}
@@ -563,7 +565,7 @@ export function ClientDashboard() {
             <div className="mt-3.5">
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
-                  {(stats.monthRevenue !== undefined ? stats.monthRevenue : stats.totalRevenue).toFixed(2)}€
+                  <AnimatedNumber value={stats.monthRevenue !== undefined ? stats.monthRevenue : stats.totalRevenue} decimals={2} suffix="€" />
                 </span>
                 <span className="text-xs text-[var(--text-tertiary)] font-medium">+ IVA</span>
               </div>
@@ -587,7 +589,7 @@ export function ClientDashboard() {
             </div>
             <div className="mt-3.5">
               <div className="text-2xl sm:text-[28px] leading-none font-bold tracking-tight text-[var(--text-primary)] font-mono tabular-nums">
-                {shipments.filter(s => s.status === "em_transito" || s.status === "em_distribuicao").length}
+                <AnimatedNumber value={shipments.filter(s => s.status === "em_transito" || s.status === "em_distribuicao").length} />
               </div>
               <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate">
                 {shipments.filter(s => s.status === "pendente").length} pendentes de recolha • {stats.deliveryRate}% taxa sucesso
@@ -622,7 +624,7 @@ export function ClientDashboard() {
                 <span className={`text-2xl sm:text-[28px] leading-none font-bold tracking-tight font-mono tabular-nums ${
                   availableCredit < 0 ? "text-[var(--status-warning)]" : "text-[var(--text-primary)]"
                 }`}>
-                  {currentClient?.billing_type === 'pay_as_you_go' ? `${availableCredit.toFixed(2)}€` : `${stats.totalRevenue.toFixed(2)}€`}
+                  <AnimatedNumber value={currentClient?.billing_type === 'pay_as_you_go' ? availableCredit : stats.totalRevenue} decimals={2} suffix="€" />
                 </span>
                 {currentClient?.billing_type === 'pay_as_you_go' && availableCredit < 0 && (
                   <span className="text-xs text-[var(--status-warning)] bg-[var(--status-warning-soft)] border border-[var(--status-warning)]/25 px-1.5 py-0.5 rounded font-medium">
@@ -1249,6 +1251,34 @@ export function ClientDashboard() {
         )}
       </div>
 
+    </div>
+  )
+}
+
+/** Esqueleto com a mesma forma do painel (cabeçalho, 4 KPIs, gráfico e lista) enquanto os dados carregam. */
+function ClientDashboardSkeleton({ name }: { name?: string }) {
+  return (
+    <div className="flex flex-col gap-5" role="status" aria-busy="true">
+      <span className="sr-only">A carregar os dados de {name || "esta conta"}…</span>
+      <div className="flex items-center justify-between gap-4">
+        <div className="space-y-2"><Skeleton className="h-7 w-56" /><Skeleton className="h-4 w-40" /></div>
+        <Skeleton className="h-9 w-32" />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--border-subtle)]">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="space-y-3 bg-[var(--surface-bg)] p-4 sm:p-5">
+            <div className="flex items-center gap-2.5"><Skeleton className="h-8 w-8 rounded-md" /><Skeleton className="h-4 w-24" /></div>
+            <Skeleton className="h-7 w-28" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <Skeleton className="h-72 xl:col-span-2" />
+        <div className="space-y-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4">
+          {Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-10" />)}
+        </div>
+      </div>
     </div>
   )
 }

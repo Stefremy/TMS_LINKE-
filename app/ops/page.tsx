@@ -34,6 +34,7 @@ import { LocalWeather } from "./components/LocalWeather"
 import { HeaderClockDate } from "./components/HeaderClockDate"
 import { DashboardBillingPanel } from "./components/DashboardBillingPanel"
 import { DashboardCalendarWidget } from "./components/DashboardCalendarWidget"
+import { AnimatedNumber } from "@/components/ui/motion"
 import headerWidgetStyles from "./components/HeaderWidgetsRow.module.css"
 import { lisbonDate } from "@/lib/billing/recurring-periods"
 
@@ -238,36 +239,42 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
     { 
       label: "Envios Registados", 
       value: totalShipments.toLocaleString("pt-PT"), 
+      numeric: { value: totalShipments, locale: "pt-PT" },
       icon: Package, 
       subtext: `${deliveredCount} entregues` 
     },
     { 
       label: "Entregas à 1ª", 
       value: `${firstAttemptRate}%`, 
+      numeric: { value: firstAttemptRate, suffix: "%" },
       icon: CheckCircle2, 
       subtext: `${firstAttemptCount} envios sem incidência` 
     },
     { 
       label: "Tempo Médio", 
       value: `${avgTransitTime}d`, 
+      numeric: { value: Number(avgTransitTime), decimals: avgTransitTime.includes(".") ? 1 : 0, suffix: "d" },
       icon: Clock, 
       subtext: "Tempo médio de trânsito" 
     },
     { 
       label: "Taxa de Entrega", 
       value: `${deliveryRate}%`, 
+      numeric: { value: deliveryRate, suffix: "%" },
       icon: PieChart, 
       subtext: totalShipments > 0 ? `${deliveredCount} de ${totalShipments} envios` : "Sem envios finalizados" 
     },
     {
       label: "Receitas",
       value: `${clientRevenue.toFixed(2)}€`,
+      numeric: { value: clientRevenue, decimals: 2, suffix: "€" },
       icon: ReceiptEuro,
       subtext: "Total faturado"
     },
     {
       label: "Margem",
       value: `${clientMargin.toFixed(2)}€`,
+      numeric: { value: clientMargin, decimals: 2, suffix: "€" },
       icon: TrendingUp,
       subtext: "Lucro estimado"
     },
@@ -328,7 +335,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
                 {stat.label}
               </div>
               <div className="mt-3 text-2xl sm:text-[28px] leading-none font-semibold tracking-tight text-[var(--text-primary)] tabular-nums">
-                {stat.value}
+                <AnimatedNumber {...stat.numeric} />
               </div>
               <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate">{stat.subtext}</p>
             </div>
@@ -338,7 +345,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
           {secondaryStats.map((stat, index) => (
             <div key={stat.label} className={`flex items-center justify-between gap-3 px-4 py-3 sm:px-5 ${index ? "border-l border-[var(--border-subtle)]" : ""}`}>
               <span className="text-xs text-[var(--text-secondary)]">{stat.label}</span>
-              <span className="text-sm font-medium text-[var(--text-primary)] tabular-nums">{stat.value}</span>
+              <span className="text-sm font-medium text-[var(--text-primary)] tabular-nums"><AnimatedNumber {...stat.numeric} /></span>
             </div>
           ))}
         </div>
@@ -417,7 +424,7 @@ export default async function OpsDashboardPage(props: { searchParams?: Promise<{
                 </span>
                 {/* Mobile: valor por cima da etiqueta; md+: etiqueta à esquerda, valor à direita */}
                 <span className="flex min-w-0 flex-1 flex-col leading-tight md:flex-row md:items-center md:justify-between md:gap-2">
-                  <span className={`text-sm font-bold tabular-nums md:order-2 ${s.tone}`}>{s.value}</span>
+                  <AnimatedNumber value={s.value} className={`text-sm font-bold tabular-nums md:order-2 ${s.tone}`} />
                   <span className="truncate text-[10.5px] md:text-xs font-semibold text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] md:order-1">
                     <span className="md:hidden">{s.shortLabel ?? s.label}</span>
                     <span className="hidden md:inline">{s.label}</span>

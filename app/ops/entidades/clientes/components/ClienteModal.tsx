@@ -1,5 +1,6 @@
 "use client"
 import { applyWalletInjection, parseWalletInjection, switchBillingModel, walletPreview } from "@/lib/billing/client-limit"
+import { AnimatedNumber } from "@/components/ui/motion"
 
 import { SpecialFeesEditor } from "@/components/shipments/SpecialFeesEditor"
 import { DEFAULT_STANDARD_SPECIAL_FEES } from "@/lib/pricing/special-fee-catalogue"
@@ -1771,13 +1772,13 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                       <div className="flex flex-wrap items-end justify-between gap-3">
                         <div>
                           <div className="text-[10px] text-[var(--text-tertiary)] mb-0.5">{wasPrepaid ? "Saldo atual" : "Saldo inicial"}</div>
-                          <div className={`text-xl font-bold font-mono ${currentBalance < 0 ? "text-[var(--status-critical)]" : "text-[var(--text-primary)]"}`}>{eur(currentBalance)}</div>
+                          <div className={`text-xl font-bold font-mono ${currentBalance < 0 ? "text-[var(--status-critical)]" : "text-[var(--text-primary)]"}`}><AnimatedNumber value={currentBalance} decimals={2} locale="pt-PT" suffix=" €" /></div>
                           {!wasPrepaid && <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">A wallet começa a zero. O cliente carrega saldo na loja (Stripe).</p>}
                         </div>
                         {pending !== 0 && (
                           <div className="text-right">
                             <div className="text-[10px] text-[var(--text-tertiary)] mb-0.5">Após gravar ({pending > 0 ? "+" : ""}{eur(pending)})</div>
-                            <div className={`text-xl font-bold font-mono ${projected < 0 ? "text-[var(--status-critical)]" : "text-[var(--accent)]"}`}>{eur(projected)}</div>
+                            <div className={`text-xl font-bold font-mono ${projected < 0 ? "text-[var(--status-critical)]" : "text-[var(--accent)]"}`}><AnimatedNumber value={projected} decimals={2} locale="pt-PT" suffix=" €" /></div>
                           </div>
                         )}
                       </div>
@@ -2231,7 +2232,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
               type="button"
               onClick={() => handleSubmit()}
               disabled={isSaving || saveSuccessMsg}
-              className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold px-4 sm:px-5 py-2.5 sm:py-2 rounded-lg text-xs shadow-sm flex flex-1 sm:flex-none justify-center items-center gap-2 transition-all cursor-pointer disabled:cursor-default disabled:opacity-75"
+              className={`bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold px-4 sm:px-5 py-2.5 sm:py-2 rounded-lg text-xs shadow-sm flex flex-1 sm:flex-none justify-center items-center gap-2 transition-all cursor-pointer disabled:cursor-default disabled:opacity-75 ${saveSuccessMsg ? "tms-success-pop" : ""}`}
             >
               {isSaving ? (
                 <>
