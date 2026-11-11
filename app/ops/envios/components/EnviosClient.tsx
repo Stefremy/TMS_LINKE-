@@ -35,7 +35,7 @@ import { NovaRecolhaModal } from "./NovaRecolhaModal"
 import { ManifestModal } from "./ManifestModal"
 import { ShipmentLateralDrawer } from "./ShipmentLateralDrawer"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
-import { getCarrierLogo } from "@/lib/carrier-logos"
+import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { getMutedShipmentBadgeClass } from "@/lib/shipment-status-colors"
 import { closeCttShipmentsAction } from "@/app/actions/ctt"
@@ -521,11 +521,11 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                     {/* Bottom Row: Service + Price + Actions */}
                     <div className="flex items-center justify-between pt-0.5 text-xs">
                       <div className="flex items-center gap-2">
-                        {getCarrierLogo(envio.service?.name || envio.service?.code || envio.rawShipment?.carrier_name || "ctt") && (
+                        {getShipmentCarrierLogo(envio.rawShipment) && (
                           <div className="w-4 h-4 rounded bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
-                              src={getCarrierLogo(envio.service?.name || envio.service?.code || envio.rawShipment?.carrier_name || "ctt")!} 
+                              src={getShipmentCarrierLogo(envio.rawShipment)} 
                               alt="Logo" 
                               className="max-w-full max-h-full object-contain" 
                             />
@@ -681,11 +681,11 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-1.5 items-start">
                     <div className="flex items-center gap-1.5">
-                      {getCarrierLogo(envio.service?.name || envio.service?.code || envio.rawShipment?.carrier_name || "ctt") ? (
+                      {getShipmentCarrierLogo(envio.rawShipment) ? (
                         <div className="w-4 h-4 rounded bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img 
-                            src={getCarrierLogo(envio.service?.name || envio.service?.code || envio.rawShipment?.carrier_name || "ctt")!} 
+                            src={getShipmentCarrierLogo(envio.rawShipment)} 
                             alt={envio.service?.name || "Transportadora"} 
                             className="max-w-full max-h-full object-contain" 
                           />

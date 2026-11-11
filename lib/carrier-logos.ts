@@ -81,3 +81,29 @@ export function getCarrierLogo(nameOrCode?: string, customOverrides?: Record<str
   return "/logo_transportadoras/ctt_express_logo.svg"
 }
 
+
+/**
+ * Resolve o logo a partir da transportadora real do envio (carrier_code / carrier_name / formato do tracking),
+ * em vez do nome do serviço Linke (ex: "Linke-PaQ24 PT"), que resolveria sempre para CTT.
+ */
+export function getShipmentCarrierLogo(shipment?: {
+  carrier_code?: string | null
+  carrier_name?: string | null
+  carrier?: string | null
+  carrier_tracking_number?: string | null
+  service_type?: string | null
+} | null): string {
+  if (!shipment) return CARRIER_LOGOS.ctt
+  // Mesma regra de deteção usada na listagem (page.tsx): Correos tem prioridade se qualquer sinal o indicar,
+  // porque carrier_code pode estar gravado como CTT em envios encaminhados para Correos.
+  const isCorreos =
+    /correos/i.test(shipment.carrier_code || "") && !/correios/i.test(shipment.carrier_code || "") ||
+    /correos/i.test(shipment.carrier_name || "") ||
+    /correos/i.test(shipment.service_type || "") ||
+    /^\d{16}$/.test((shipment.carrier_tracking_number || "").trim())
+  if (isCorreos) return CARRIER_LOGOS.correos
+  for (const c of [shipment.carrier_code, shipment.carrier_name, shipment.carrier]) {
+    if (c && c.trim()) return getCarrierLogo(c) || CARRIER_LOGOS.ctt
+  }
+  return getCarrierLogo(shipment.service_type || "ctt") || CARRIER_LOGOS.ctt
+}

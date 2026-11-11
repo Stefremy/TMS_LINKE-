@@ -113,14 +113,14 @@ export function ClientAuthModal({ clientId, clientName, clientEmail, allowManual
               <input
                 type="password"
                 autoComplete="new-password"
-                minLength={12}
+                minLength={8}
                 maxLength={128}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                 placeholder="Deixar em branco para manter a atual..."
               />
-              <p className="text-[11px] text-slate-500 mt-1">Use pelo menos 12 caracteres. Deixe em branco para manter a atual.</p>
+              <p className="text-[11px] text-slate-500 mt-1">Use pelo menos 8 caracteres. Deixe em branco para manter a atual.</p>
             </div>}
 
           </div>

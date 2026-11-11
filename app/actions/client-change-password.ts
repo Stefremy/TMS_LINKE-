@@ -12,9 +12,9 @@ export async function changeClientPasswordAction(input: {
     return { success: false, error: 'Apenas o próprio cliente pode alterar a sua palavra-passe.' }
   }
   if (!input || typeof input.currentPassword !== 'string' || !input.currentPassword || input.currentPassword.length > 1024
-    || typeof input.password !== 'string' || input.password.length < 12 || input.password.length > 128
+    || typeof input.password !== 'string' || input.password.length < 8 || input.password.length > 128
     || input.password !== input.confirmation) {
-    return { success: false, error: 'Preencha a palavra-passe atual e uma nova de 12 a 128 caracteres, igual nos dois campos.' }
+    return { success: false, error: 'Preencha a palavra-passe atual e uma nova de 8 a 128 caracteres, igual nos dois campos.' }
   }
   if (input.currentPassword === input.password) return { success: false, error: 'Escolha uma palavra-passe diferente da atual.' }
 

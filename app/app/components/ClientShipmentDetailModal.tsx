@@ -53,7 +53,7 @@ import {
 import { convertZplToPdfAction, syncCttTrackingAction, injectTrackingEventAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
-import { getCarrierLogo } from "@/lib/carrier-logos"
+import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CTT_TRACKING_EVENTS, CTT_NON_DELIVERY_REASONS, CTT_SITUATIONS } from "@/lib/services/ctt/ctt-types"
 import { CarrierMeasurementsPanel } from '@/components/shipments/CarrierMeasurementsPanel'
@@ -896,11 +896,11 @@ setTimelineEvents(data || [])
               <div className="bg-[var(--surface-muted)] p-4 rounded-xl border border-[var(--border-subtle)] space-y-2">
                 <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Serviço de Transporte Linke</label>
                 <div className="flex items-center gap-3">
-                  {getCarrierLogo(serviceType || "ctt") ? (
+                  {getShipmentCarrierLogo(currentShipment) ? (
                     <div className="w-8 h-8 rounded-md bg-[var(--surface-bg)] border border-[var(--border-strong)] p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img 
-                        src={getCarrierLogo(serviceType || "ctt")!} 
+                        src={getShipmentCarrierLogo(currentShipment)} 
                         alt="Logo" 
                         className="max-w-full max-h-full object-contain" 
                       />

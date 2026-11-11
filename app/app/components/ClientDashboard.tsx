@@ -44,7 +44,7 @@ import {
 } from "@/app/actions/shipments"
 import { DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
-import { getCarrierLogo } from "@/lib/carrier-logos"
+import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CreditCard } from "lucide-react"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
@@ -820,7 +820,7 @@ export function ClientDashboard() {
                 const primaryDisplay = linkeRef || carrierRef || shipment.id
                 const secondaryDisplay = (linkeRef && carrierRef && carrierRef !== linkeRef) ? carrierRef : null
                 const statusCfg = getShipmentStatusConfig(shipment.status)
-                const carrierLogo = getCarrierLogo(shipment.service_type || shipment.carrier || "ctt")
+                const carrierLogo = getShipmentCarrierLogo(shipment)
 
                 return (
                   <div key={shipment.id} className="p-3.5 space-y-2.5 hover:bg-[var(--surface-muted)] transition-colors">
@@ -997,11 +997,11 @@ export function ClientDashboard() {
                       {/* Service Type */}
                       <td className="py-4 px-5">
                         <div className="flex items-center gap-2">
-                          {getCarrierLogo(shipment.service_type || shipment.carrier || "ctt") ? (
+                          {getShipmentCarrierLogo(shipment) ? (
                             <div className="w-5 h-5 rounded bg-[var(--surface-bg)] border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img 
-                                src={getCarrierLogo(shipment.service_type || shipment.carrier || "ctt")!} 
+                                src={getShipmentCarrierLogo(shipment)} 
                                 alt={getClientServiceName(shipment.service_type || "Transportadora")}
                                 className="max-w-full max-h-full object-contain" 
                               />

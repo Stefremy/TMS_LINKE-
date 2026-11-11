@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     if (raw.length > 4096) return invalid()
     input = JSON.parse(raw)
   } catch { return invalid() }
-  if (!validPasswordSetup(input)) return Response.json({ error: "Use o link do convite e uma palavra-passe de 12 a 128 caracteres, igual nos dois campos." }, { status: 400, headers })
+  if (!validPasswordSetup(input)) return Response.json({ error: "Use o link do convite e uma palavra-passe de 8 a 128 caracteres, igual nos dois campos." }, { status: 400, headers })
 
   // An isolated anonymous client verifies the email token. No browser/administrator
   // session is replaced, and no privileged service key is used to change passwords.

@@ -67,8 +67,8 @@ export function ClientPasswordForm() {
           {ready && !token && <p role="alert" className="mb-5 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Abra esta página pelo botão do email de convite. Se o link expirou, peça um novo à equipa Linke.</p>}
           {error && <p role="alert" className="mb-5 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
           <form onSubmit={submit} className="space-y-5">
-            <div><label htmlFor="new-password" className="mb-2 block text-sm font-medium">Nova palavra-passe</label><input id="new-password" name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={128} className={inputClass} /><p className="mt-2 text-xs text-[#64756a]">Pelo menos 12 caracteres. Pode usar uma frase fácil de recordar.</p></div>
-            <div><label htmlFor="confirm-password" className="mb-2 block text-sm font-medium">Repetir palavra-passe</label><input id="confirm-password" name="confirmation" type="password" autoComplete="new-password" required minLength={12} maxLength={128} className={inputClass} /></div>
+            <div><label htmlFor="new-password" className="mb-2 block text-sm font-medium">Nova palavra-passe</label><input id="new-password" name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={128} className={inputClass} /><p className="mt-2 text-xs text-[#64756a]">Pelo menos 8 caracteres. Pode usar uma frase fácil de recordar.</p></div>
+            <div><label htmlFor="confirm-password" className="mb-2 block text-sm font-medium">Repetir palavra-passe</label><input id="confirm-password" name="confirmation" type="password" autoComplete="new-password" required minLength={8} maxLength={128} className={inputClass} /></div>
             <button type="submit" disabled={!token || pending} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#126b4a] px-5 py-3.5 text-sm font-semibold text-white hover:bg-[#0d553a] disabled:opacity-50">{pending ? <><Loader2 className="h-4 w-4 animate-spin" />A guardar…</> : "Guardar palavra-passe"}</button>
           </form>
         </>}

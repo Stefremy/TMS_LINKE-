@@ -15,7 +15,7 @@ import { closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ct
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
-import { getCarrierLogo } from "@/lib/carrier-logos"
+import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { useClientScope } from "./ClientScope"
 import { useTrackingPolling } from "@/lib/hooks/useTrackingPolling"
@@ -346,7 +346,7 @@ export function ClientShipmentsHistory() {
                 const primaryDisplay = linkeRef || carrierRef || envio.id
                 const secondaryDisplay = (linkeRef && carrierRef && carrierRef !== linkeRef) ? carrierRef : null
                 const statusCfg = getShipmentStatusConfig(envio.status)
-                const carrierLogo = getCarrierLogo(envio.service_type || envio.carrier || "ctt")
+                const carrierLogo = getShipmentCarrierLogo(envio)
                 const tracking = envio.tracking_number || envio.id
 
                 return (
@@ -502,11 +502,11 @@ export function ClientShipmentsHistory() {
                     <td className="py-3 text-[var(--text-tertiary)] truncate max-w-[200px]">{envio.recipient_address}</td>
                     <td className="py-3">
                       <div className="flex items-center gap-2">
-                        {getCarrierLogo(envio.service_type || envio.carrier || "ctt") ? (
+                        {getShipmentCarrierLogo(envio) ? (
                           <div className="w-5 h-5 rounded bg-[var(--surface-bg)] border border-[var(--border-strong)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
-                              src={getCarrierLogo(envio.service_type || envio.carrier || "ctt")!} 
+                              src={getShipmentCarrierLogo(envio)} 
                               alt={getClientServiceName(envio.service_type || "Transportadora")}
                               className="max-w-full max-h-full object-contain" 
                             />

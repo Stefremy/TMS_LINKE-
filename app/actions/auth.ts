@@ -10,8 +10,8 @@ export async function setClientPasswordAction(clientId: string, email: string, p
   const ctx = await requireAdmin()
   const supabaseAdmin = createAdminClient()
   email = normalizeInvitationEmail(email)
-  if (password && (password.length < 12 || password.length > 128)) {
-    throw new Error("A palavra-passe deve ter entre 12 e 128 caracteres.")
+  if (password && (password.length < 8 || password.length > 128)) {
+    throw new Error("A palavra-passe deve ter entre 8 e 128 caracteres.")
   }
   await loadInvitationStore(supabaseAdmin, clientId, ctx.tenant_id)
   await assertClientEmail(supabaseAdmin, email)

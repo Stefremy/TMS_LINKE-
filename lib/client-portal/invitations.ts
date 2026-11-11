@@ -100,6 +100,6 @@ export function validPasswordSetup(value: unknown): value is { token_hash: strin
   const v = value as Record<string, unknown>
   return typeof v.token_hash === "string" && /^[a-f0-9]{40,128}$/i.test(v.token_hash)
     && (v.type === "invite" || v.type === "recovery")
-    && typeof v.password === "string" && v.password.length >= 12 && v.password.length <= 128
+    && typeof v.password === "string" && v.password.length >= 8 && v.password.length <= 128
     && v.password === v.confirmation
 }
