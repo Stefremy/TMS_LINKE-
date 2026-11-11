@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ShipmentRecord } from "@/lib/services/shipments/types"
 import type { BillingStatement } from "@/lib/billing/types"
@@ -184,10 +185,10 @@ export default function ContasCorrenteClient({
       try {
         const {previewCreditAdjustedReceiptAction} = await import('@/app/actions/credit-notes')
         const result = await previewCreditAdjustedReceiptAction({id:stmt.audit_id||stmt.id,kind:'billing_statement'})
-        if (!result.success) {alert(result.error);return}
+        if (!result.success) {notify.error(result.error);return}
         stmt = {...stmt,receipt_amount:result.data.remainingTotal}
       } catch {
-        alert('Não foi possível confirmar o valor por liquidar no Moloni. Tente novamente antes de emitir o recibo.')
+        notify.error('Não foi possível confirmar o valor por liquidar no Moloni. Tente novamente antes de emitir o recibo.')
         return
       }
     }
@@ -241,13 +242,13 @@ export default function ContasCorrenteClient({
             console.error("Auto download failed", err)
           }
         }
-        alert("Recibo emitido com sucesso! A conta foi liquidada e está disponível no arquivo da loja.")
+        notify.success("Recibo emitido com sucesso! A conta foi liquidada e está disponível no arquivo da loja.")
         window.location.reload()
       } else {
-        alert(`Erro ao emitir recibo: ${res.error}`)
+        notify.error(`Erro ao emitir recibo: ${res.error}`)
       }
     } catch (err) {
-      alert(`Erro ao emitir recibo: ${errorMessage(err) || err}`)
+      notify.error(`Erro ao emitir recibo: ${errorMessage(err) || err}`)
     } finally {
       setIsLoading(false)
     }
@@ -489,7 +490,7 @@ export default function ContasCorrenteClient({
                                 const { emitInvoiceAction } = await import("@/app/actions/moloni")
                                 const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, groupInvoicesByService)
                                 if (!res?.success || !res.statementNumber || !res.moloniDocumentId) {
-                                  alert(`Erro ao emitir fatura: ${res?.error || "O Moloni não confirmou a emissão."}`)
+                                  notify.error(`Erro ao emitir fatura: ${res?.error || "O Moloni não confirmou a emissão."}`)
                                   return
                                 }
                                 const stmtNum = res.statementNumber
@@ -519,7 +520,7 @@ export default function ContasCorrenteClient({
                                 setExpandedClient(client.id)
                                 router.refresh()
                               } catch {
-                                alert("Não foi possível confirmar o resultado da emissão. Consulte o Moloni antes de repetir para evitar uma fatura duplicada.")
+                                notify.critical("Não foi possível confirmar o resultado da emissão. Consulte o Moloni antes de repetir para evitar uma fatura duplicada.")
                               } finally {
                                 invoiceInFlight.current = false
                                 setIsIssuingInvoice(false)
@@ -905,7 +906,7 @@ export default function ContasCorrenteClient({
                                                 })
                                                 router.refresh()
                                               } else {
-                                                alert(`Erro: ${res.error || "Não foi possível emitir no Moloni"}`)
+                                                notify.error(`Erro: ${res.error || "Não foi possível emitir no Moloni"}`)
                                               }
                                             }}
                                             className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-bold text-[var(--accent)] hover:bg-[var(--accent-soft)] transition-colors"

@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
 import { errorMessage } from "@/lib/errors"
 
@@ -139,7 +140,7 @@ export function PerfilClient({ user, profile }: { user: SupabaseUser; profile: U
       router.refresh()
       setTimeout(() => setShowSuccess(false), 3000)
     } catch (err) {
-      alert("Erro ao guardar perfil: " + errorMessage(err))
+      notify.error("Erro ao guardar perfil: " + errorMessage(err))
     } finally {
       setIsSaving(false)
     }

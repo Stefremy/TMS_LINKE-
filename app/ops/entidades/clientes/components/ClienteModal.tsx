@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import { applyWalletInjection, parseWalletInjection, switchBillingModel, walletPreview } from "@/lib/billing/client-limit"
 import { AnimatedNumber } from "@/components/ui/motion"
 
@@ -471,7 +472,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
     const file = e.target.files?.[0]
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-        alert("A imagem selecionada não deve exceder 2MB.")
+        notify.warning("A imagem selecionada não deve exceder 2MB.")
         return
       }
       const reader = new FileReader()
@@ -489,7 +490,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
     if (e) e.preventDefault()
     if (isSaving) return
     if (!formData.short_name?.trim()) {
-      alert("Por favor preencha a Designação Curta / Nome do Cliente.")
+      notify.warning("Por favor preencha a Designação Curta / Nome do Cliente.")
       setActiveTab("geral")
       return
     }

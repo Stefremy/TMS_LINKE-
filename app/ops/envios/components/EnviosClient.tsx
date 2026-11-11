@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import type { ShipmentListRow, ShipmentRecord, ShipmentDrawerRecord } from "@/lib/services/shipments/types"
 import { errorMessage } from "@/lib/errors"
 
@@ -150,10 +151,10 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
         setSelectedIds([])
         router.refresh()
       } else {
-        alert(res.error || "Erro ao fechar expedição.")
+        notify.error(res.error || "Erro ao fechar expedição.")
       }
     } catch (err) {
-      alert("Erro ao fechar expedição: " + errorMessage(err))
+      notify.error("Erro ao fechar expedição: " + errorMessage(err))
     } finally {
       setIsClosingManifest(false)
     }
@@ -166,11 +167,11 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
       for (const id of selectedIds) {
         await syncShipmentTrackingAction("", id)
       }
-      alert(`Sincronização concluída com sucesso para ${selectedIds.length} envio(s).`)
+      notify.success(`Sincronização concluída com sucesso para ${selectedIds.length} envio(s).`)
       setSelectedIds([])
       router.refresh()
     } catch (err) {
-      alert("Erro na sincronização: " + errorMessage(err))
+      notify.error("Erro na sincronização: " + errorMessage(err))
     } finally {
       setIsSyncingSelected(false)
     }
@@ -187,10 +188,10 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
         setSelectedIds([])
         router.refresh()
       } else {
-        alert(res.error || "Erro ao eliminar envios.")
+        notify.error(res.error || "Erro ao eliminar envios.")
       }
     } catch (err) {
-      alert("Erro ao eliminar envios: " + errorMessage(err))
+      notify.error("Erro ao eliminar envios: " + errorMessage(err))
     } finally {
       setIsDeletingSelected(false)
     }

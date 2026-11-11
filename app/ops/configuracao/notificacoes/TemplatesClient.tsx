@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 type EmailTemplate = { id: string; name: string; subject: string; html_content: string; description?: string; trigger_event?: string }
 
 import * as React from "react"
@@ -40,7 +41,7 @@ async function loadTemplates() {
       setTemplates(templates.map(t => t.id === editTemplate.id ? { ...t, html_content: editContent } : t))
       setEditTemplate(null)
     } else {
-      alert("Erro ao gravar o template: " + res.error)
+      notify.error("Erro ao gravar o template: " + res.error)
     }
   }
 

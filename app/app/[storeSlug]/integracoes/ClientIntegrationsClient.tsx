@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 
 import * as React from "react"
 import Link from "next/link"
@@ -334,7 +335,7 @@ export function ClientIntegrationsClient() {
         setTimeout(() => setFeedbackMsg(null), 4000)
       }
     } catch (err: unknown) {
-      alert("Erro ao remover: " + (err instanceof Error ? err.message : "Erro inesperado."))
+      notify.error("Erro ao remover: " + (err instanceof Error ? err.message : "Erro inesperado."))
     }
   }
 

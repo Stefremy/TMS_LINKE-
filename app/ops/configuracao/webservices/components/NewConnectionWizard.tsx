@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import type { CarrierConnection } from "@/lib/services/carriers/types"
 import { errorMessage } from "@/lib/errors"
 
@@ -183,7 +184,7 @@ export function NewConnectionWizard({ onClose, onSaved, initialData }: WizardPro
         onClose()
       }
     } catch (err) {
-      alert("Erro ao gravar ligação: " + errorMessage(err))
+      notify.error("Erro ao gravar ligação: " + errorMessage(err))
     } finally {
       setIsSaving(false)
     }

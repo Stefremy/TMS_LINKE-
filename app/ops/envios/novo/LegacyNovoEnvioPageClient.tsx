@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import type { Destinatario } from "@/app/ops/entidades/destinatarios/types"
 import { errorMessage } from "@/lib/errors"
 
@@ -383,10 +384,10 @@ export function LegacyNovoEnvioPageClient({ clients, servicosLinke = [] }: { cli
           }
         }) : null)
       } else {
-        alert(res.error || "Não foi possível emitir no Moloni. Verifique se a conta está conectada em Faturação.")
+        notify.error(res.error || "Não foi possível emitir no Moloni. Verifique se a conta está conectada em Faturação.")
       }
     } catch (e) {
-      alert("Erro ao comunicar com o Moloni: " + (errorMessage(e) || "Tente novamente."))
+      notify.error("Erro ao comunicar com o Moloni: " + (errorMessage(e) || "Tente novamente."))
     } finally {
       setEmittingMoloni(false)
     }

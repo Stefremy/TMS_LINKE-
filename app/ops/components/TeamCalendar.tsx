@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 
 import React, { useState, useEffect, useMemo } from "react"
 import { Bell, BellRing, ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, X } from "lucide-react"
@@ -319,10 +320,10 @@ export function TeamCalendar() {
         setEvents(previous => [...previous, ...newEvents])
         setIsModalOpen(false)
       } else {
-        alert("Erro ao guardar evento: " + (result.error || "Erro desconhecido"))
+        notify.error("Erro ao guardar evento: " + (result.error || "Erro desconhecido"))
       }
     } catch {
-      alert("Não foi possível confirmar a gravação. Consulte o calendário antes de repetir o pedido.")
+      notify.critical("Não foi possível confirmar a gravação. Consulte o calendário antes de repetir o pedido.")
     } finally {
       setIsSubmitting(false)
     }

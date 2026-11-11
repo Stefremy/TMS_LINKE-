@@ -82,7 +82,8 @@ function menuHarness(t, dashboard, label) {
     '@/app/app/components/ClientShipmentDetailModal': { ClientShipmentDetailModal: 'dialog' },
     '@/app/app/components/ClientTopUpModal': { ClientTopUpModal: 'dialog' },
     '@/lib/carrier-logos': { getCarrierLogo: () => null, getShipmentCarrierLogo: () => null },
-    sonner: { toast: Object.assign(() => {}, { error: message => calls.alerts.push(message), success() {}, info() {}, warning() {} }) },
+    // Mensagens ao utilizador chegam por notificação (lib/notify); qualquer tipo conta como aviso mostrado.
+    sonner: { toast: Object.assign(m => calls.alerts.push(m), { error: m => calls.alerts.push(m), warning: m => calls.alerts.push(m), info: m => calls.alerts.push(m), success: m => calls.alerts.push(m) }) },
     '@/lib/status-helpers': { getShipmentStatusConfig: () => ({ label: 'Pendente', badgeVariant: 'warning' }) },
     './ClientScope': { useClientScope: () => ({ client: { id: 'client-a', short_name: 'Fixture', pricing: {} }, basePath: '/app/fixture' }) },
     './ClientMessages': { useClientMessageCounter: () => ({ unreadCount: 0, refresh: async () => {} }) },

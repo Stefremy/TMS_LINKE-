@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 
 import React from "react"
 import { TrackingShipment } from "../types"
@@ -176,7 +177,7 @@ export function DocumentationModal({ shipment, isOpen, onClose }: DocumentationM
 
           <button
             type="button"
-            onClick={() => alert(`A descarregar guia digital ${documentation.guiaNumber}.pdf`)}
+            onClick={() => notify.info(`O download da guia digital ${documentation.guiaNumber} ainda não está disponível.`)}
             className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-xs"
           >
             <Download className="w-3.5 h-3.5" />

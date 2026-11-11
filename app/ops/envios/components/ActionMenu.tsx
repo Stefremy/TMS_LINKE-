@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
 import { errorMessage } from "@/lib/errors"
 
@@ -82,7 +83,7 @@ export function ActionMenu({
     if (rawLabel.trimStart().startsWith("^XA")) {
       const res = await convertZplToPdfAction(rawLabel)
       if (res.success && res.base64) return res.base64
-      alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+      notify.error(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
       return null
     }
     return rawLabel
@@ -92,7 +93,7 @@ export function ActionMenu({
     const rawLabel = await fetchOfficialShipmentLabel(shipment, getShipmentLabelAction, [effectiveId, effectiveRef])
 
     if (!rawLabel) {
-      alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
+      notify.warning("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
       return null
     }
 
@@ -133,9 +134,9 @@ export function ActionMenu({
       const result = await dispatchShipmentAction(effectiveId)
       if (!result.success) throw new Error(result.error || "Os CTT não aceitaram o envio.")
       onUpdateShipment?.({ ...shipment, status: "pendente", carrier_tracking_number: result.trackingNumber })
-      alert(result.dbWarning || "Envio CTT emitido com sucesso!")
+      if (result.dbWarning) notify.warning(result.dbWarning); else notify.success("Envio CTT emitido com sucesso!")
     } catch (err) {
-      alert("Erro ao emitir CTT: " + errorMessage(err))
+      notify.error("Erro ao emitir CTT: " + errorMessage(err))
     } finally {
       setIsEmitting(false)
       setIsOpen(false)
@@ -153,7 +154,7 @@ export function ActionMenu({
         }
       }
     } catch (e) {
-      alert("Erro ao sincronizar tracking: " + errorMessage(e))
+      notify.error("Erro ao sincronizar tracking: " + errorMessage(e))
     } finally {
       setIsProcessing(false)
       setIsOpen(false)
@@ -169,16 +170,16 @@ export function ActionMenu({
     try {
       const res = await createReturnShipmentAction(effectiveId)
       if (res.success) {
-        alert(`✅ Guia de devolução criada com sucesso!\n\nNovo Tracking: ${res.newTrackingNumber}`)
+        notify.success(`Guia de devolução criada. Novo tracking: ${res.newTrackingNumber}`)
         if (onUpdateShipment) {
           onUpdateShipment({ ...shipment, status: "devolvido" })
         }
         window.location.reload()
       } else {
-        alert("Erro ao criar devolução: " + (res.error || "Erro desconhecido"))
+        notify.error("Erro ao criar devolução: " + (res.error || "Erro desconhecido"))
       }
     } catch (e) {
-      alert("Erro ao criar devolução: " + errorMessage(e))
+      notify.error("Erro ao criar devolução: " + errorMessage(e))
     } finally {
       setIsCreatingReturn(false)
       setIsOpen(false)
@@ -190,7 +191,7 @@ export function ActionMenu({
 
     // Proteção na UI contra eliminação de envio faturado
     if (isBilled) {
-      alert("🔒 Este envio já foi faturado e não pode ser eliminado para garantir a conformidade fiscal e contábil.")
+      notify.warning("Este envio já foi faturado e não pode ser eliminado, para garantir a conformidade fiscal e contabilística.")
       return
     }
 
@@ -201,17 +202,17 @@ export function ActionMenu({
     try {
       const res = await deleteShipmentAction(effectiveId)
       if (res.success) {
-        alert(`🗑️ Envio ${effectiveRef} eliminado com sucesso!`)
+        notify.success(`Envio ${effectiveRef} eliminado.`)
         if (onDeleteShipment) {
           onDeleteShipment(effectiveId)
         } else {
           window.location.reload()
         }
       } else {
-        alert("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"))
+        notify.error("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"))
       }
     } catch (e) {
-      alert("Erro ao eliminar envio: " + errorMessage(e))
+      notify.error("Erro ao eliminar envio: " + errorMessage(e))
     } finally {
       setIsDeleting(false)
       setIsOpen(false)
@@ -395,7 +396,7 @@ export function ActionMenu({
             <button 
               type="button"
               onClick={() => {
-                alert(`Enviar detalhes do envio ${effectiveRef} por e-mail`)
+                notify.info(`O envio de detalhes por e-mail ainda não está disponível (${effectiveRef}).`)
                 setIsOpen(false)
               }}
               className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-slate-50 rounded-lg text-xs text-slate-500 font-medium transition-colors cursor-pointer"

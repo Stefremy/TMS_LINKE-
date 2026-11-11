@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import type { ShipmentDrawerRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
 import { errorMessage } from "@/lib/errors"
 
@@ -186,7 +187,7 @@ export function ShipmentLateralDrawer({
       ])
 
       if (!labelToDownload) {
-        alert("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
+        notify.warning("A etiqueta oficial da transportadora ainda não está disponível para este envio.")
         return
       }
 
@@ -195,14 +196,14 @@ export function ShipmentLateralDrawer({
         if (res.success && res.base64) {
           labelToDownload = res.base64
         } else {
-          alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+          notify.error(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
           return
         }
       }
 
       await downloadCttLabel(labelToDownload, `etiqueta_${carrierCode}.pdf`)
     } catch (err) {
-      alert("Erro ao descarregar etiqueta: " + errorMessage(err))
+      notify.error("Erro ao descarregar etiqueta: " + errorMessage(err))
     } finally {
       setIsPrinting(false)
     }

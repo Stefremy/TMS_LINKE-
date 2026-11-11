@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import { errorMessage } from "@/lib/errors"
 
 
@@ -142,7 +143,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
   const handleToggleStatus = async (client: Cliente, e: React.MouseEvent) => {
     e.stopPropagation()
     if (client.code === "CL001") {
-      alert("A Conta GO Linke (CL001) é protegida e não pode ser desativada.")
+      notify.warning("A Conta GO Linke (CL001) é protegida e não pode ser desativada.")
       return
     }
     const newStatus = !client.is_active
@@ -154,14 +155,14 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
     try {
       await toggleClienteStatusAction(client.id, newStatus)
     } catch (err) {
-      alert("Erro ao atualizar estado: " + errorMessage(err))
+      notify.error("Erro ao atualizar estado: " + errorMessage(err))
     }
   }
 
   const handleDelete = async (client: Cliente, e: React.MouseEvent) => {
     e.stopPropagation()
     if (client.code === "CL001") {
-      alert("A Conta GO Linke (CL001) é protegida e não pode ser eliminada.")
+      notify.warning("A Conta GO Linke (CL001) é protegida e não pode ser eliminada.")
       return
     }
     const confirmed = window.confirm(
@@ -176,7 +177,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
     try {
       await deleteClienteAction(client.id)
     } catch (err) {
-      alert("Erro ao eliminar: " + errorMessage(err))
+      notify.error("Erro ao eliminar: " + errorMessage(err))
     }
   }
 

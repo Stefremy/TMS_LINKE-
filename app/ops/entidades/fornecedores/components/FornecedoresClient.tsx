@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import { errorMessage } from "@/lib/errors"
 
 
@@ -132,7 +133,7 @@ export function FornecedoresClient({ initialFornecedores }: FornecedoresClientPr
     try {
       await deleteFornecedorAction(forn.id)
     } catch (err) {
-      alert("Erro ao eliminar: " + errorMessage(err))
+      notify.error("Erro ao eliminar: " + errorMessage(err))
     }
   }
 

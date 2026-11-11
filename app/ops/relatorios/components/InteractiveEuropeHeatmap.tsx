@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 
 import * as React from "react"
 import {
@@ -328,7 +329,7 @@ export function InteractiveEuropeHeatmap({
           <div className="pt-4 border-t border-[var(--border-subtle)] mt-4">
             <button
               onClick={() => {
-                alert(`Filtrando envios expedidos para ${selectedDest.name}...`)
+                notify.info(`O filtro de envios por destino (${selectedDest.name}) ainda não está disponível.`)
               }}
               className="w-full py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center justify-center gap-2"
             >

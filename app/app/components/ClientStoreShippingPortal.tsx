@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 
 import * as React from "react"
 import { 
@@ -226,7 +227,7 @@ export function ClientStoreShippingPortal() {
   const handleCreateShipment = (e: React.FormEvent) => {
     e.preventDefault()
     if (!recipientName) {
-      alert("Por favor indique o nome do destinatário.")
+      notify.warning("Por favor indique o nome do destinatário.")
       return
     }
 

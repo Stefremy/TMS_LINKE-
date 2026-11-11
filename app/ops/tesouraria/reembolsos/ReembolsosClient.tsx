@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import { errorMessage } from "@/lib/errors"
 
 
@@ -150,7 +151,7 @@ export default function ReembolsosClient({ initialBatches, managePayments = true
         setSelectedBatch(updatedBatch)
         setBatches(prev => prev.map(b => b.id === updatedBatch.id ? updatedBatch : b))
       } else {
-        alert(res.error || "Erro ao atualizar estado de liquidação.")
+        notify.error(res.error || "Erro ao atualizar estado de liquidação.")
       }
     } finally {
       setUpdatingClientId(null)
@@ -168,7 +169,7 @@ export default function ReembolsosClient({ initialBatches, managePayments = true
         setSelectedBatch(remaining[0] || null)
       }
     } else {
-      alert(res.error || "Erro ao apagar lote.")
+      notify.error(res.error || "Erro ao apagar lote.")
     }
   }
 

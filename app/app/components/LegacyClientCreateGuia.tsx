@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import type { Destinatario } from "@/app/ops/entidades/destinatarios/types"
 import { errorMessage } from "@/lib/errors"
 
@@ -307,7 +308,7 @@ export function LegacyClientCreateGuia() {
     }
     if (submissionRef.current) return
     if (!recipientName) {
-      alert("Por favor indique o nome do destinatário.")
+      notify.warning("Por favor indique o nome do destinatário.")
       return
     }
 
@@ -546,7 +547,7 @@ export function LegacyClientCreateGuia() {
                     if (label?.trimStart().startsWith("^XA")) {
                       const res = await convertZplToPdfAction(label)
                       if (!res.success || !res.base64) {
-                        alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+                        notify.error(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
                         return
                       }
                       label = res.base64
@@ -567,13 +568,13 @@ export function LegacyClientCreateGuia() {
                     if (label?.trimStart().startsWith("^XA")) {
                       const res = await convertZplToPdfAction(label)
                       if (!res.success || !res.base64) {
-                        alert(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
+                        notify.error(`Falha ao converter etiqueta ZPL para PDF: ${res.error || "Erro desconhecido"}`)
                         return
                       }
                       label = res.base64
                     }
                     const ok = downloadCttLabel(label, fname)
-                    if (!ok) alert('Não foi possível descarregar a etiqueta. Verifique a consola do browser.')
+                    if (!ok) notify.error('Não foi possível descarregar a etiqueta. Tente novamente ou contacte geral@linke.pt.')
                   }}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
                 >

@@ -5,6 +5,7 @@ import { OpsSidebar } from "./components/OpsSidebar"
 import { getMyProfile } from "@/lib/auth/profile"
 import { NotificationBell } from "./components/NotificationBell"
 import { OpsLiveToasts } from "./components/OpsLiveToasts"
+import { Toaster } from "@/components/ui/toaster"
 import { TrackingQuickBar } from "./components/TrackingQuickBar"
 import { OpsPageSurface } from "./components/OpsPageSurface"
 import { canAccessOpsRoute } from "@/lib/auth/permissions"
@@ -42,6 +43,7 @@ export default async function OpsLayout({
       {/* Interactive Collapsible Sidebar */}
       <OpsSidebar key={user.id} canAccessDocuments={canAccessStaffDocuments(authContext)} canSendMessages={canSendClientMessages(authContext)} access={access} />
       {user?.id && <OpsLiveToasts viewerId={user.id} />}
+      <Toaster />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">

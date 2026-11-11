@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import type { CarrierConnection } from "@/lib/services/carriers/types"
 import { errorMessage } from "@/lib/errors"
 
@@ -160,7 +161,7 @@ export function WebservicesClient({ connections: initialConnections, fornecedore
 
   const handleBulkToggleActive = async () => {
     if (selectedIds.length === 0) {
-      alert("Selecione pelo menos uma ligação na tabela.")
+      notify.warning("Selecione pelo menos uma ligação na tabela.")
       return
     }
 

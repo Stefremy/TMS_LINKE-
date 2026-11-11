@@ -197,6 +197,7 @@ test('Each mounted invoice button owns its loading state, from either row and af
     return {...node,props:{...node.props,children:renderNode(node.props.children,path+'/children')}}
   }
   const load=createLoader({
+    sonner:{toast:Object.assign(m=>alerts.push(m),{error:m=>alerts.push(m),warning:m=>alerts.push(m),info:m=>alerts.push(m),success:m=>alerts.push(m)})},
     react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},
     'next/link':{default:'link'},'next/navigation':{useRouter:()=>({refresh(){}})},
     'lucide-react':new Proxy({},{get:(_,name)=>String(name)}),

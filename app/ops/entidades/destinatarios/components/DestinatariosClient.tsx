@@ -1,4 +1,5 @@
 "use client"
+import { notify } from "@/lib/notify"
 import { errorMessage } from "@/lib/errors"
 
 
@@ -157,10 +158,10 @@ export function DestinatariosClient({
       if (res.success) {
         setDestinatarios((prev) => prev.filter((d) => d.id !== id))
       } else {
-        alert(res.error || "Não foi possível remover o destinatário.")
+        notify.error(res.error || "Não foi possível remover o destinatário.")
       }
     } catch (err) {
-      alert("Erro ao remover: " + (errorMessage(err) || err))
+      notify.error("Erro ao remover: " + (errorMessage(err) || err))
     }
   }
 
