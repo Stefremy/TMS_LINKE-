@@ -37,9 +37,22 @@ test('hook uses the existing selling-price calculation and exposes no costs or m
  assert.equal(result.selected.zone,'PT-CONT')
 })
 test('quote rejects missing service, incomplete destinations, unavailable tables and suspended clients',()=>{
- for(const v of [{serviceId:''},{recipientPostal:'4000'},{weightKg:0},{lengthCm:0}]) assert.equal(quote(v).isBlocked,true)
+ for(const v of [{serviceId:''},{recipientPostal:'4000'},{weightKg:0}]) assert.equal(quote(v).isBlocked,true)
  assert.equal(quote({}, {assigned_linke_service_ids:[]}).options.length,0)
  assert.equal(quote({}, {portal_access_status:'suspended'}).isBlocked,true)
+})
+test('mainland quotes use weight without dimensions and ignore stale island measurements; islands still require dimensions',()=>{
+ const mainland=quote({lengthCm:0,widthCm:0,heightCm:0})
+ assert.equal(mainland.isBlocked,false,mainland.blockedReason)
+ assert.equal(mainland.quote.billableWeightKg,1)
+ assert.equal(mainland.quote.volumetricWeightKg,null)
+ const stale=quote({lengthCm:200,widthCm:100,heightCm:100})
+ assert.equal(stale.isBlocked,false,stale.blockedReason)
+ assert.equal(stale.quote.totalWithVat,mainland.quote.totalWithVat)
+ for(const postal of ['9000-001','9500-001']) {
+  assert.equal(quote({recipientPostal:postal,lengthCm:0,widthCm:0,heightCm:0}).isBlocked,true)
+  assert.equal(quote({recipientPostal:postal}).isBlocked,false)
+ }
 })
 test('international CTT and Correos services hide stale COD; server quotes reject COD outside the agreed regions',()=>{
  const {calculateShipmentQuote}=load('lib/pricing/calculate-shipment-quote.ts')

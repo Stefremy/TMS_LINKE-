@@ -18,6 +18,7 @@ import { calculateShipmentPrice, isCttMultiVolumeService } from "@/lib/pricing/c
 import { calculateChargeableWeight } from "@/lib/pricing/chargeable-weight"
 import { calculateShipmentSpecialFees, resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
 import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
+import { hasOmittedParcelDimensions } from "@/lib/services/shipments/parcel-dimensions"
 import { getAuthContext, requireUser, requireEmployee, requireClientAccess, getTenantId } from "@/lib/auth/context"
 import { CTT_TRACKING_EVENTS, CTT_INCIDENT_CODES } from "@/lib/services/ctt/ctt-types"
 import { CttProvider } from "@/lib/services/carriers/ctt-provider"
@@ -371,7 +372,7 @@ export async function emitClientGuiaAction(data: {
       computedBasePrice = priceResult.basePrice
       const specials = calculateShipmentSpecialFees(computedSellPrice, matchedClient, carrierCode,
         data.selectedSpecialServices, data.codValue, { country: recipientCountry, postal: recipientPostal })
-      const oversize = calculateOversizeSurcharge(chosenService, recipientCountry, data.weightKg, data)
+      const oversize = calculateOversizeSurcharge(chosenService, recipientCountry, data.weightKg, data, recipientPostal)
       computedSellPrice = Number((specials.totalPrice + oversize.amount).toFixed(2))
       computedSpecialAmount = Number((specials.amount + oversize.amount).toFixed(2))
       const specialItems = [...specials.items, ...oversize.items]
@@ -474,7 +475,7 @@ export async function emitClientGuiaAction(data: {
           },
           bultos: data.volumesCount || 1,
           kilos: data.weightKg || 1,
-          dimensionsCm: { length: data.lengthCm, width: data.widthCm, height: data.heightCm },
+          dimensionsCm: hasOmittedParcelDimensions(data) ? undefined : { length: data.lengthCm, width: data.widthCm, height: data.heightCm },
           producto: data.subProductId || "63",
           portes: "P",
           reembolso: data.selectedSpecialServices?.includes("correos_cod") && data.codValue ? data.codValue.toString() : "",
@@ -568,7 +569,7 @@ export async function emitClientGuiaAction(data: {
           },
           weightKg: data.weightKg || 1,
           volumes: data.volumesCount || 1,
-          dimensionsCm: { length: data.lengthCm, width: data.widthCm, height: data.heightCm },
+          dimensionsCm: hasOmittedParcelDimensions(data) ? undefined : { length: data.lengthCm, width: data.widthCm, height: data.heightCm },
           subProduct: data.subProductId || "EMSF056.01",
           codValue: data.selectedSpecialServices?.includes("cod") ? data.codValue : 0,
           isReturn: data.isReturn,

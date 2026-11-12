@@ -132,7 +132,7 @@ export function calculateShipmentQuote(
   const weight = calculateChargeableWeight(weightKg, service, country, postal, parcel)
   const transport = calculateShipmentPrice(weight.billableWeightKg, { ...client, default_linke_table_id: service.id },
     [service], country, postal, { requireConfiguredTariff: true })
-  const oversize = calculateOversizeSurcharge(service, country, weightKg, parcel)
+  const oversize = calculateOversizeSurcharge(service, country, weightKg, parcel, postal)
   const specials = calculateShipmentSpecialFees(transport.sellPrice, client, resolveServiceCarrier(service), specialCodes, codValue, { country, postal })
   const zoneCode = resolveServiceZoneCode(service, country, postal)
   const vatPct = resolveShipmentVatPct(zoneCode)

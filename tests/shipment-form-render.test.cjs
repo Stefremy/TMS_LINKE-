@@ -21,9 +21,22 @@ const client={id:'fixture',code:'TEST',short_name:'Loja de demonstração',phone
 const render=role=>renderToStaticMarkup(React.createElement(ShipmentForm,{role,client,services:[service],initialValues:{recipientName:'Destino',recipientAddress:'Rua de Destino 2',recipientCity:'Porto',recipientPostal:'4000-001',recipientPhone:'923456789',lengthCm:30,widthCm:20,heightCm:10,serviceId:'service'}}))
 test('shared form renders the two accessible steps, client chip and native mobile summary without internal costs',()=>{
  const html=render('client')
- for(const text of ['Dados do envio','Remetente','Destinatário','Volumes e medidas','Serviço e preço','Revisão','Loja de demonstração','TEST','Guardar na agenda','Resumo do envio','aria-haspopup="dialog"','aria-valuemax="2"']) assert.ok(html.includes(text),text)
+ for(const text of ['Dados do envio','Remetente','Destinatário','Volumes e peso','Serviço e preço','Revisão','Loja de demonstração','TEST','Guardar na agenda','Resumo do envio','aria-haspopup="dialog"','aria-valuemax="2"']) assert.ok(html.includes(text),text)
  assert.doesNotMatch(html,/Apenas Ops|internalNotes|carrierOverride|9187|9876/)
  assert.doesNotMatch(html,/alert\(/)
+})
+test('Portugal is visibly selected by default and mainland shipment forms hide measurements and volumetric details',()=>{
+ const html=render('client')
+ assert.match(html,/<option value="PT" selected="">Portugal<\/option>/)
+ assert.match(html,/name="weightKg"/)
+ assert.doesNotMatch(html,/name="(?:lengthCm|widthCm|heightCm)"|Comprimento \(cm\)|Largura \(cm\)|Altura \(cm\)|peso volumétrico|Peso volumétrico|cm por volume/)
+})
+test('island and foreign destinations retain all three measurement fields, including partial island postal codes',()=>{
+ for(const [country,postal] of [['PT','9'],['PT','9000-001'],['PT','9500-001'],['ES','28013'],['FR','75001']]) {
+  const html=renderToStaticMarkup(React.createElement(ShipmentForm,{role:'client',client,services:[service],initialValues:{recipientCountry:country,recipientPostal:postal}}))
+  for(const field of ['lengthCm','widthCm','heightCm']) assert.match(html,new RegExp(`name="${field}"`),`${country} ${postal}: ${field}`)
+  assert.match(html,/Volumes e medidas/)
+ }
 })
 test('ops renders the same form with a collapsed internal panel, while archived forms remain available',()=>{
  const html=render('ops')

@@ -1,5 +1,19 @@
 export type ParcelDimensionsCm = { length: number; width: number; height: number }
 
+/** Show island measurements as soon as the Portuguese postal prefix is entered. */
+export function requiresShipmentDimensions(country: string, postal: string): boolean {
+  return country.trim().toUpperCase() !== "PT" || postal.trim().startsWith("9")
+}
+
+export function isMainlandPortugalDestination(country: string, postal: string): boolean {
+  return !requiresShipmentDimensions(country, postal) && /^\d{4}-?\d{3}$/.test(postal.trim())
+}
+
+/** Zeroes represent measurements that were not requested, never actual dimensions. */
+export function hasOmittedParcelDimensions(parcel: { lengthCm?: number; widthCm?: number; heightCm?: number }): boolean {
+  return parcel.lengthCm === 0 && parcel.widthCm === 0 && parcel.heightCm === 0
+}
+
 export function validateParcelDimensions(dimensions: ParcelDimensionsCm): ParcelDimensionsCm {
   if (![dimensions.length, dimensions.width, dimensions.height].every(value => Number.isFinite(value) && value >= 0.1)) {
     throw new Error("Indique comprimento, largura e altura válidos em centímetros.")

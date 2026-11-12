@@ -33,6 +33,17 @@ test('client ownership comes from the session and all original prices are calcul
  assert.equal(result.success,true);assert.equal(h.calls[0].clientId,'own-client');assert.equal(h.calls[0].calculatedPrice,0)
  assert.equal(h.calls[0].serviceName,'Configured service');assert.equal(h.calls[0].clientName,'Loja');assert.equal(h.calls[0].manualPrice,undefined)
 })
+test('mainland submission accepts omitted dimensions and clears hidden measurements before emission; islands require them',async()=>{
+ for(const dimensions of [{lengthCm:0,widthCm:0,heightCm:0},{lengthCm:200,widthCm:100,heightCm:100}]) {
+  const h=harness(),result=await h.api.submitShipmentFormAction({...valid(),...dimensions})
+  assert.equal(result.success,true)
+  for(const field of ['lengthCm','widthCm','heightCm']) assert.equal(h.calls[0][field],0)
+ }
+ for(const postal of ['9000-001','9500-001']) {
+  const h=harness(),result=await h.api.submitShipmentFormAction({...valid(),recipientPostal:postal,lengthCm:0,widthCm:0,heightCm:0})
+  assert.equal(result.success,false);assert.equal(h.calls.length,0)
+ }
+})
 test('ops uses verified services and stores internal notes separately from client shipment metadata',async()=>{
  const h=harness('employee'),result=await h.api.submitShipmentFormAction({...valid(),carrierOverride:'ctt',internalNotes:'Nota só para operações'},'owned-client')
  assert.equal(result.success,true);assert.equal(h.calls[0].internalNotes,undefined)

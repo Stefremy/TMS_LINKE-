@@ -14,6 +14,7 @@ import { isCttSpecialServiceAvailable } from "@/lib/services/ctt/special-service
 import type { ShipmentFormRole, ShipmentFormValues } from "./schema"
 import { requiresCorreosQuotation } from "@/lib/services/correos/shipment-policy"
 import { correosQuotationEstimate } from "@/lib/services/correos/quotation-pricing"
+import { requiresShipmentDimensions } from "@/lib/services/shipments/parcel-dimensions"
 
 type Preview = ReturnType<typeof calculateClientShipmentPreview>
 export type ShipmentQuoteOption = { service: ServicoLinke; carrier: "ctt" | "correos"; zone: string; quote: Preview | null; error: string | null; requiresQuotation?: boolean }
@@ -21,6 +22,7 @@ export type ShipmentQuoteInput = { client: Cliente; services: ServicoLinke[]; va
 
 /** Pure composition of the existing coverage, COD, extras and pricing policies. */
 export function getShipmentQuote({ client, services, values, role }: ShipmentQuoteInput) {
+  if (!requiresShipmentDimensions(values.recipientCountry, values.recipientPostal)) values = { ...values, lengthCm: 0, widthCm: 0, heightCm: 0 }
   const available = services.filter(service => service.is_active !== false && (!Array.isArray(client.assigned_linke_service_ids) || client.assigned_linke_service_ids.includes(service.id)))
   const countries = getAuthorizedDestinationCountries(available)
   const destinationReady = isDestinationPostalReady(values.recipientCountry, values.recipientPostal)

@@ -1,6 +1,7 @@
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { resolveServiceZoneCode } from "./calculate-shipment-price"
 import { ShipmentPricingError } from "./shipment-pricing-errors"
+import { hasOmittedParcelDimensions } from "@/lib/services/shipments/parcel-dimensions"
 
 export type VolumetricRule = { divisor: number; zoneDivisors?: Record<string, number>; excludeZones?: string[] }
 export type ParcelPricingDimensions = { lengthCm: number; widthCm: number; heightCm: number; volumesCount?: number; parcelWeightsKg?: number[] }
@@ -39,11 +40,12 @@ export function calculateChargeableWeightForZone(weightKg: number, service: Serv
   parcel?: ParcelPricingDimensions) {
   if (!Number.isFinite(weightKg) || weightKg <= 0) throw new ShipmentPricingError("Peso inválido.")
   const rule = getServiceVolumetricRule(service)
+  const dimensionsOmitted = zone === "PT-CONT" && !!parcel && hasOmittedParcelDimensions(parcel)
   const excluded = Boolean(zone && rule?.excludeZones?.includes(zone))
-  const divisor = rule && !excluded ? (rule.zoneDivisors?.[zone] ?? rule.divisor) : null
+  const divisor = rule && !excluded && !dimensionsOmitted ? (rule.zoneDivisors?.[zone] ?? rule.divisor) : null
   if (divisor !== null && (!Number.isFinite(divisor) || divisor <= 0)) throw new ShipmentPricingError("Fator de conversão volumétrica inválido neste serviço.")
   if (parcel) {
-    if (![parcel.lengthCm, parcel.widthCm, parcel.heightCm].every(value => Number.isFinite(value) && value >= 0.1)) {
+    if (!dimensionsOmitted && ![parcel.lengthCm, parcel.widthCm, parcel.heightCm].every(value => Number.isFinite(value) && value >= 0.1)) {
       throw new ShipmentPricingError("Indique comprimento, largura e altura válidos em centímetros.")
     }
     if (!Number.isSafeInteger(parcel.volumesCount ?? 1) || (parcel.volumesCount ?? 1) < 1) throw new ShipmentPricingError("Número de volumes inválido.")

@@ -180,6 +180,29 @@ function withDimensions(form) {
 }
 async function emit(h, extra) { return h.load('app/actions/shipments.ts').emitClientGuiaAction(shipmentInput(extra)) }
 
+for(const carrier of ['CTT','Correos']) test(`${carrier}: mainland weight-only shipments reach the carrier without fabricated dimensions`,async()=>{
+ const h=shipmentHarness({carrier})
+ const result=await emit(h,{lengthCm:0,widthCm:0,heightCm:0})
+ assert.equal(result.success,true,result.error)
+ assert.equal(h.providerCalls.length,1)
+ assert.equal(h.providerCalls[0].payload.dimensionsCm,undefined)
+ assert.equal(h.providerCalls[0].payload[carrier==='CTT'?'weightKg':'kilos'],1)
+ assert.equal(result.sellPrice,9)
+})
+
+test('omitted dimensions cannot bypass island or international validation, nor mainland weight limits',async()=>{
+ for(const [country,postal] of [['PT','9000-001'],['PT','9500-001'],['ES','28013'],['BE','1000']]) {
+  const h=shipmentHarness(),result=await emit(h,{recipientCountry:country,recipientPostal:postal,lengthCm:0,widthCm:0,heightCm:0})
+  assert.equal(result.success,false);assert.match(result.error,/Dimensões/)
+  assert.equal(h.providerCalls.length,0);assert.equal(h.db.writes.length,0)
+ }
+ const h=shipmentHarness({adjust:t=>{t.servicos_linke[0].zones[0].tiers[0].weight_max=50}})
+ const result=await emit(h,{weightKg:31,lengthCm:0,widthCm:0,heightCm:0})
+ assert.equal(result.success,true,result.error)
+ const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='shipment_data').value.details
+ assert.equal(saved.special_fees_amount,69.9)
+})
+
 test('unselected stale COD values are cleared before carrier creation and financial persistence',async()=>{
  const h=shipmentHarness()
  const result=await emit(h,{codValue:80,selectedSpecialServices:[]})

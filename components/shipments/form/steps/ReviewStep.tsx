@@ -8,6 +8,7 @@ import type { ShipmentFormRole, ShipmentFormValues } from "../schema"
 import type { ShipmentQuote } from "../useShipmentQuote"
 import { getClientServiceName } from "@/lib/services/client-service-label"
 import { money } from "./ServiceStep"
+import { requiresShipmentDimensions } from "@/lib/services/shipments/parcel-dimensions"
 
 export function ReviewStep({ quote, role, onEdit }: { quote: ShipmentQuote; role: ShipmentFormRole; onEdit: (section: "parties" | "parcel" | "service") => void }) {
   const form = useFormContext<ShipmentFormValues>()
@@ -17,7 +18,7 @@ export function ReviewStep({ quote, role, onEdit }: { quote: ShipmentQuote; role
     <div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-zinc-900">Percurso</h3><button type="button" onClick={() => onEdit("parties")} className="flex items-center gap-1.5 text-xs font-medium text-emerald-700"><Pencil size={12} />Editar moradas</button></div>
     <div className="grid gap-6 sm:grid-cols-[1fr_auto_1fr]">{address("Remetente", values.senderName, values.senderAddress, values.senderPostal, values.senderCity, "PT", values.senderPhone)}<ArrowRight className="hidden self-center text-zinc-300 sm:block" size={19} />{address("Destinatário", values.recipientName, values.recipientAddress, values.recipientPostal, values.recipientCity, values.recipientCountry, values.recipientPhone || values.recipientEmail)}</div>
     <div className="border-t border-zinc-100 pt-5"><div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-zinc-900">Volumes</h3><button type="button" onClick={() => onEdit("parcel")} className="text-xs font-medium text-emerald-700">Editar volumes</button></div>
-      <p className="text-sm text-zinc-600">{values.volumesCount} volume(s) · {values.weightKg.toLocaleString("pt-PT")} kg · {values.lengthCm} × {values.widthCm} × {values.heightCm} cm por volume</p>
+      <p className="text-sm text-zinc-600">{values.volumesCount} volume(s) · {values.weightKg.toLocaleString("pt-PT")} kg{requiresShipmentDimensions(values.recipientCountry, values.recipientPostal) && <> · {values.lengthCm} × {values.widthCm} × {values.heightCm} cm por volume</>}</p>
       {!!values.parcelWeightsKg.length && <p className="mt-2 text-xs text-zinc-500">Pesos por volume: {values.parcelWeightsKg.map(weight => `${weight.toLocaleString("pt-PT")} kg`).join(" · ")}</p>}
     </div>
     <div className="border-t border-zinc-100 pt-5"><div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-zinc-900">Serviço e opções</h3><button type="button" onClick={() => onEdit("service")} className="text-xs font-medium text-emerald-700">Editar serviço</button></div>

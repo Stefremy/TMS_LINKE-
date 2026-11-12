@@ -2,8 +2,8 @@ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import type { ParcelPricingDimensions } from "@/lib/pricing/chargeable-weight"
 import { calculateOversizeSurcharge, getParcelLimits, getServiceParcelLimitProduct } from "@/lib/pricing/oversize-surcharge"
 
-export function ShipmentOversizeSummary({ service, country, weightKg, weights, onWeightsChange, showWeights = true, ...parcel }: {
-  service?: ServicoLinke | null; country: string; weightKg: number
+export function ShipmentOversizeSummary({ service, country, postal, weightKg, weights, onWeightsChange, showWeights = true, ...parcel }: {
+  service?: ServicoLinke | null; country: string; postal?: string; weightKg: number
   weights: string[]; onWeightsChange: (weights: string[]) => void; showWeights?: boolean
 } & ParcelPricingDimensions) {
   if (!service) return null
@@ -14,7 +14,7 @@ export function ShipmentOversizeSummary({ service, country, weightKg, weights, o
   const needsWeights = count > 1 && count <= 1000 && Number.isSafeInteger(count) && weightKg > limits.maxWeightKg
   let message = ""
   try {
-    const result = calculateOversizeSurcharge(service, country, weightKg, parcel)
+    const result = calculateOversizeSurcharge(service, country, weightKg, parcel, postal)
     if (result.count) message = `${result.count} volume(s) fora dos limites: +${result.amount.toLocaleString("pt-PT", { minimumFractionDigits: 2 })} € (69,90 € por volume).`
   } catch (err) { if (needsWeights) message = err instanceof Error ? err.message : "Indique os pesos por volume." }
   return <div className="space-y-3 text-xs text-[#735b39]">

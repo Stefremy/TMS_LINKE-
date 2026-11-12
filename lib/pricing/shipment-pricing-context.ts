@@ -8,11 +8,13 @@ import { resolveClientTable } from "./calculate-shipment-price"
 import { ShipmentPricingError, ShipmentPricingUnavailableError } from "./shipment-pricing-errors"
 import { isTemporarilyWithdrawnService } from "@/lib/services/service-availability"
 import { generalCorreosQuotationReference } from "@/lib/services/correos/quotation-pricing"
+import { hasOmittedParcelDimensions, isMainlandPortugalDestination } from "@/lib/services/shipments/parcel-dimensions"
 export { ShipmentPricingError, ShipmentPricingUnavailableError } from "./shipment-pricing-errors"
 
 export function validateShipmentPricingInput(input: {
   weightKg: number; volumesCount?: number; lengthCm?: number; widthCm?: number; heightCm?: number;
   codValue?: number; selectedSpecialServices?: string[]
+  recipientCountry?: string; recipientPostal?: string
 }) {
   if (!Number.isFinite(input.weightKg) || input.weightKg <= 0) {
     throw new ShipmentPricingError("Peso inválido. Indique um peso superior a zero.")
@@ -20,7 +22,8 @@ export function validateShipmentPricingInput(input: {
   if (input.volumesCount !== undefined && (!Number.isSafeInteger(input.volumesCount) || input.volumesCount < 1)) {
     throw new ShipmentPricingError("Número de volumes inválido.")
   }
-  for (const dimension of [input.lengthCm, input.widthCm, input.heightCm]) {
+  const dimensionsOmitted = isMainlandPortugalDestination(input.recipientCountry || "", input.recipientPostal || "") && hasOmittedParcelDimensions(input)
+  for (const dimension of dimensionsOmitted ? [] : [input.lengthCm, input.widthCm, input.heightCm]) {
     if (typeof dimension !== 'number' || !Number.isFinite(dimension) || dimension < 0.1) {
       throw new ShipmentPricingError("Dimensões obrigatórias. Indique comprimento, largura e altura em cm, todos iguais ou superiores a 0,1.")
     }

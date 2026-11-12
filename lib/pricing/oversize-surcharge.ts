@@ -1,6 +1,7 @@
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import type { ParcelPricingDimensions } from "./chargeable-weight"
 import { ShipmentPricingError } from "./shipment-pricing-errors"
+import { hasOmittedParcelDimensions, isMainlandPortugalDestination } from "@/lib/services/shipments/parcel-dimensions"
 
 // Business charge confirmed by Linke; limits from CTT, not an acceptance guarantee.
 export const OVERSIZE_FEE_EUR = 69.9
@@ -30,7 +31,7 @@ export function getParcelLimits(service: Partial<ServicoLinke> | null | undefine
   return null
 }
 
-export function calculateOversizeSurcharge(service: Partial<ServicoLinke>, country: string, weightKg: number, parcel?: ParcelPricingDimensions) {
+export function calculateOversizeSurcharge(service: Partial<ServicoLinke>, country: string, weightKg: number, parcel?: ParcelPricingDimensions, postal = "") {
   const limits = getParcelLimits(service, country)
   const empty = { amount: 0, count: 0, items: [] as { name: string; amount: number }[], limits }
   if (!limits && parcel && country && getServiceParcelLimitProduct(service) === "international") {
@@ -39,7 +40,8 @@ export function calculateOversizeSurcharge(service: Partial<ServicoLinke>, count
   if (!limits || !parcel) return empty
   const count = parcel.volumesCount ?? 1
   const sides = [parcel.lengthCm, parcel.widthCm, parcel.heightCm].sort((a, b) => b - a)
-  if (!Number.isFinite(weightKg) || weightKg <= 0 || !Number.isSafeInteger(count) || count < 1 || count > 1000 || sides.some(v => !Number.isFinite(v) || v < 0.1)) {
+  const dimensionsOmitted = isMainlandPortugalDestination(country, postal) && hasOmittedParcelDimensions(parcel)
+  if (!Number.isFinite(weightKg) || weightKg <= 0 || !Number.isSafeInteger(count) || count < 1 || count > 1000 || (!dimensionsOmitted && sides.some(v => !Number.isFinite(v) || v < 0.1))) {
     throw new ShipmentPricingError("Peso, dimensões ou número de volumes inválidos.")
   }
   const dimensional = sides[0] > limits.maxSideCm ||

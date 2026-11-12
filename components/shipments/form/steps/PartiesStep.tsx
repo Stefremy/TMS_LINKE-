@@ -65,7 +65,7 @@ export function PartiesStep({ clientId, quote }: { clientId: string; quote: Ship
         </label>}
       </div>}
       <div className="grid gap-2 sm:grid-cols-3"><label className="space-y-1 text-xs font-medium text-zinc-700">País
-        <select {...form.register("recipientCountry")} aria-invalid={!!form.formState.errors.recipientCountry} className={`${inputClass.replace("py-2.5", "py-2")} min-h-11 text-xs sm:min-h-10 sm:text-sm`}
+        <select {...form.register("recipientCountry")} value={country} aria-invalid={!!form.formState.errors.recipientCountry} className={`${inputClass.replace("py-2.5", "py-2")} min-h-11 text-xs sm:min-h-10 sm:text-sm`}
           onChange={event => { form.setValue("recipientCountry", event.target.value, { shouldDirty: true }); form.setValue("recipientPostal", ""); form.setValue("recipientCity", ""); form.setValue("serviceId", ""); form.setValue("islandTransportMode", ""); form.setValue("exportFields", {}); recipientLookup.reset() }}>
           <option value="">Selecionar país…</option>{quote.countries.map(option => <option key={option.code} value={option.code}>{option.name}</option>)}
         </select>{form.formState.errors.recipientCountry && <span role="alert" className="block text-xs text-red-700">{form.formState.errors.recipientCountry.message}</span>}

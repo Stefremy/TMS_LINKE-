@@ -17,6 +17,7 @@ import { requiresCorreosQuotation } from "@/lib/services/correos/shipment-policy
 import { createQuotation, QUOTATION_PERMISSIONS } from "@/lib/shipments/quotations/server"
 import { canRequestCorreosQuotation, publicCorreosQuotationReference } from "@/lib/services/correos/quotation-pricing"
 import { readPortalAccess } from "@/lib/client-portal/suspension"
+import { requiresShipmentDimensions } from "@/lib/services/shipments/parcel-dimensions"
 
 const failure = (field: ShipmentFieldError["field"], message: string) => ({ success: false as const, error: message, fieldErrors: [{ field, message }] })
 
@@ -45,7 +46,8 @@ async function submitShipment(input: unknown, clientId: string | undefined, quot
     success: false as const, error: "Verifique os campos assinalados.",
     fieldErrors: parsed.error.issues.map(issue => ({ field: (issue.path[0] || "root") as ShipmentFieldError["field"], message: issue.message })),
   }
-  const values = parsed.data
+  const values = requiresShipmentDimensions(parsed.data.recipientCountry, parsed.data.recipientPostal)
+    ? parsed.data : { ...parsed.data, lengthCm: 0, widthCm: 0, heightCm: 0 }
   const effectiveClientId = ctx.role === "client" ? ctx.client_id : clientId
   if (!effectiveClientId) return failure("root", "Selecione o cliente do envio.")
   let service: ServicoLinke | undefined, carrier: "ctt" | "correos" | undefined, exportDetails: CttExportDetails | undefined, client: Cliente | undefined
