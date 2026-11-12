@@ -46,8 +46,15 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
       throw new Error("Cliente não encontrado. ID recebido: " + (clientId || "Vazio"))
     }
 
-    if (amountEuro < 1) {
-      throw new Error("O montante mínimo de carregamento é 1€.")
+    // Billing settings live in the latest tenant-scoped client profile.
+    // Read them afresh so an old tab cannot top up a client switched to invoicing.
+    const { data: profile, error: profileError } = await supabase.from('audit_log')
+      .select('details').eq('tenant_id', ctx.tenant_id).eq('action', 'client_data')
+      .eq('details->>id', client.id).order('created_at', { ascending: false })
+      .order('id', { ascending: false }).limit(1).maybeSingle()
+    if (profileError) throw new Error("Não foi possível verificar o modelo de faturação desta conta. Tente novamente.")
+    if ((profile ? profile.details?.billing_type : client.billing_type) !== 'pay_as_you_go') {
+      throw new Error("Os carregamentos de saldo estão disponíveis apenas para contas em pré-pagamento. Esta conta utiliza faturação em conta corrente.")
     }
 
     // 2. Create Transaction Record

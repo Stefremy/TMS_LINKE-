@@ -26,8 +26,8 @@ function fixtureService(id, owner) {
     webservice_service_code: 'FICTIONAL-SERVICE',
     zones: [{ zone_code: 'PT-CONT', tiers: [{ weight_max: 5, cost_price: 7, sell_price: 9, margin_pct: 25 }] }] }
 }
-function harness({ ctx = ctxA, fallback = false, eventsOnA = false, failure } = {}) {
-  const clients = [{ id: A, tenant_id: TENANT, short_name: 'Fictional A', billing_type: 'conta_corrente', credit_limit: 100 },
+function harness({ ctx = ctxA, fallback = false, eventsOnA = false, failure, billingType = 'conta_corrente' } = {}) {
+  const clients = [{ id: A, tenant_id: TENANT, short_name: 'Fictional A', billing_type: billingType, credit_limit: 100 },
     { id: B, tenant_id: TENANT, short_name: 'Fictional B', billing_type: 'conta_corrente', credit_limit: 900 }]
   const services = [fixtureService('service-a', A), fixtureService('service-b', B)]
   const statement = owner => ({ tenant_id: TENANT, action: 'billing_statement', created_at: '2026-10-01', details: {
@@ -153,7 +153,7 @@ test('CONTROL: topping up B is rejected before transaction inserts and Stripe ca
   assert.equal(h.calls.stripe, 0)
 })
 test('CONTROL: topping up A succeeds using only a simulated checkout', async () => {
-  const h = harness()
+  const h = harness({ billingType: 'pay_as_you_go' })
   const result = await h.load('app/actions/stripe.ts').createTopUpCheckoutSession(A, 10)
   assert.equal(result.success, true)
   assert.equal(h.calls.stripe, 1)

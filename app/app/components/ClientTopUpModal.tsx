@@ -3,6 +3,7 @@
 import * as React from "react"
 import { CreditCard, X, AlertCircle, ShieldCheck } from "lucide-react"
 import { useDialogA11y } from "@/components/ui/use-dialog-a11y"
+import { useOptionalClientScope } from "./ClientScope"
 
 interface ClientTopUpModalProps {
   isOpen: boolean
@@ -11,13 +12,15 @@ interface ClientTopUpModalProps {
 }
 
 export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModalProps) {
+  const scope = useOptionalClientScope()
+  const canTopUp = scope?.client.id === clientId && scope.client.billing_type === "pay_as_you_go"
   const [amount, setAmount] = React.useState<number | "">("")
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState("")
   const dialogRef = React.useRef<HTMLDivElement>(null)
-  useDialogA11y(dialogRef, onClose, isOpen)
+  useDialogA11y(dialogRef, onClose, isOpen && canTopUp)
 
-  if (!isOpen) return null
+  if (!isOpen || !canTopUp) return null
 
   const handleQuickAmount = (val: number) => {
     setAmount(val)
@@ -71,7 +74,7 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
             <div>
               <h2 id="client-topup-title" className="text-base font-bold text-[var(--text-primary)]">Carregar Saldo</h2>
               <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                Adicione fundos à sua conta corrente com segurança
+                Adicione fundos à sua carteira pré-paga com segurança
               </p>
             </div>
           </div>

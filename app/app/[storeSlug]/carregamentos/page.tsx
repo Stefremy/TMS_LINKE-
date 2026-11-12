@@ -23,9 +23,9 @@ export default async function CarregamentosPage({
     <div className="p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-black text-slate-900">Carteira & Carregamentos</h1>
+          <h1 className="text-2xl font-black text-slate-900">{targetClient.billing_type === "pay_as_you_go" ? "Carteira & Carregamentos" : "Histórico de Carregamentos"}</h1>
           <p className="text-slate-500 mt-1">
-            Consulte o saldo disponível, histórico de carregamentos via Stripe e faturas associadas {targetClient ? `de ${targetClient.legal_name || targetClient.short_name}` : ""}.
+            {targetClient.billing_type === "pay_as_you_go" ? "Consulte o saldo disponível, histórico de carregamentos via Stripe e faturas associadas" : "Consulte o histórico de carregamentos anteriores e as faturas associadas"} {targetClient ? `de ${targetClient.legal_name || targetClient.short_name}` : ""}.
           </p>
         </div>
         

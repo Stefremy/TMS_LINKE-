@@ -321,6 +321,7 @@ export function ClientDashboard() {
   // Real credit calculation
   // Só pré-pagamento tem saldo. Em conta corrente o cliente vê apenas o que tem por liquidar.
   const availableCredit = stats.walletBalance !== undefined ? stats.walletBalance : (currentClient?.credit_limit ?? 0) - stats.totalRevenue
+  const isWalletBlocked = currentClient?.billing_type === 'pay_as_you_go' && availableCredit <= -2
 
   if (statsError) return (
     <div className="p-8 text-sm text-[var(--text-secondary)]" role="status">
@@ -374,7 +375,7 @@ export function ClientDashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3 shrink-0">
-          {currentClient?.billing_type !== 'conta_corrente' ? (
+          {currentClient?.billing_type === 'pay_as_you_go' ? (
             <button
               type="button"
               onClick={() => setIsTopUpOpen(true)}
@@ -385,7 +386,7 @@ export function ClientDashboard() {
             </button>
           ) : null /* Conta corrente clients are invoiced; top-ups don't apply, so no dead button. */}
           
-          {currentClient && currentClient.billing_type === 'pay_as_you_go' && availableCredit <= -2 ? (
+          {isWalletBlocked ? (
             <button
               type="button"
               onClick={() => {
@@ -622,7 +623,7 @@ export function ClientDashboard() {
             <div className="mt-3.5">
               <div className="flex items-baseline gap-2">
                 <span className={`text-2xl sm:text-[28px] leading-none font-bold tracking-tight font-mono tabular-nums ${
-                  availableCredit < 0 ? "text-[var(--status-warning)]" : "text-[var(--text-primary)]"
+                  currentClient?.billing_type === 'pay_as_you_go' && availableCredit < 0 ? "text-[var(--status-warning)]" : "text-[var(--text-primary)]"
                 }`}>
                   <AnimatedNumber value={currentClient?.billing_type === 'pay_as_you_go' ? availableCredit : stats.totalRevenue} decimals={2} suffix="€" />
                 </span>
@@ -657,8 +658,8 @@ export function ClientDashboard() {
           </div>
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
             <span className="text-xs text-[var(--text-secondary)]">Estado da Conta</span>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded ${availableCredit < -2 ? 'bg-[var(--status-critical-soft)] text-[var(--status-critical)]' : 'bg-[var(--accent-soft)] text-[var(--accent)]'}`}>
-              {availableCredit < -2 ? 'Bloqueada (-2€)' : 'Ativa / Regular'}
+            <span className={`text-xs font-bold px-2 py-0.5 rounded ${isWalletBlocked ? 'bg-[var(--status-critical-soft)] text-[var(--status-critical)]' : 'bg-[var(--accent-soft)] text-[var(--accent)]'}`}>
+              {isWalletBlocked ? 'Bloqueada (-2€)' : 'Ativa / Regular'}
             </span>
           </div>
         </div>

@@ -15,7 +15,7 @@ const verifier=new Stripe('sk_test_local_audit_fixture_only')
 function harness(options={}) {
  const tables={clients:[{id:A,tenant_id:TENANT,email:'a@example.invalid',short_name:'Fixture A'},{id:B,tenant_id:OTHER_TENANT,email:'b@example.invalid',short_name:'Fixture B'}],
   client_transactions:[{id:TX,tenant_id:TENANT,client_id:A,amount:10,status:'pending',stripe_session_id:SESSION}],
-  audit_log:options.noProfile?[]:[{id:'profile-a',tenant_id:TENANT,action:'client_data',details:{id:A,credit_limit:0}},{id:'profile-b',tenant_id:OTHER_TENANT,action:'client_data',details:{id:B,credit_limit:0}}]}
+  audit_log:options.noProfile?[]:[{id:'profile-a',tenant_id:TENANT,action:'client_data',details:{id:A,credit_limit:0,billing_type:Object.hasOwn(options,'billingType')?options.billingType:'pay_as_you_go'}},{id:'profile-b',tenant_id:OTHER_TENANT,action:'client_data',details:{id:B,credit_limit:0,billing_type:'pay_as_you_go'}}]}
  const db=fakeSupabase(tables,options.failure,{persistInserts:true}),calls={rpc:[],checkout:[]}
  // Simulate the UUID default only, rather than weakening the production payload requirements.
  const from=db.client.from
@@ -101,6 +101,29 @@ test('CONTROL: a normal top-up stores the pending amount and checkout binding',a
  const tx=h.tables.client_transactions.find(r=>r.id===CHECKOUT_TX)
  assert.equal(tx.amount,10);assert.equal(tx.status,'pending');assert.equal(tx.client_id,A);assert.equal(tx.stripe_session_id,'cs_test_local_checkout')
  assert.equal(h.calls.checkout[0].line_items[0].price_data.unit_amount,1000)
+})
+
+test('top-ups reject conta corrente and unspecified billing models for clients and staff before financial writes',async()=>{
+ for(const role of ['client','employee','admin']) for(const billingType of ['conta_corrente',undefined]) {
+  const h=harness({billingType,ctx:{user:{id:'fixture'},role,tenant_id:TENANT,client_id:role==='client'?A:null}})
+  const result=await h.checkout(10)
+  assert.equal(result.success,false)
+  assert.match(result.error,/apenas para contas em pré-pagamento/)
+  assert.equal(h.db.writes.length,0);assert.equal(h.calls.checkout.length,0)
+ }
+})
+test('top-up eligibility uses the latest saved billing model, ignoring stale prepaid data',async()=>{
+ const h=harness()
+ h.tables.clients[0].billing_type='pay_as_you_go'
+ h.tables.audit_log.push({id:'new-profile-a',tenant_id:TENANT,action:'client_data',created_at:'2026-11-12T12:00:00Z',details:{id:A,billing_type:'conta_corrente'}})
+ const result=await h.checkout(10)
+ assert.equal(result.success,false);assert.equal(h.db.writes.length,0);assert.equal(h.calls.checkout.length,0)
+})
+test('unavailable or missing billing settings cannot open a payment session',async()=>{
+ for(const options of [{noProfile:true},{failure:q=>q.table==='audit_log'&&!q.write?{message:'Fixture profile read failed'}:null}]) {
+  const h=harness(options),result=await h.checkout(10)
+  assert.equal(result.success,false);assert.equal(h.db.writes.length,0);assert.equal(h.calls.checkout.length,0)
+ }
 })
 
 test('SW01: failed credit must not acknowledge successful fulfillment to Stripe',async()=>{

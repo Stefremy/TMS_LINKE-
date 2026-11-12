@@ -26,6 +26,7 @@ export function ClientCarregamentosHistory({
   availableCredit,
 }: ClientCarregamentosHistoryProps) {
   const { client } = useClientScope()
+  const canTopUp = client.billing_type === "pay_as_you_go"
   const [isTopUpOpen, setIsTopUpOpen] = React.useState(false)
   const [statusFilter, setStatusFilter] = React.useState<string>("todos")
 
@@ -41,7 +42,7 @@ export function ClientCarregamentosHistory({
   return (
     <div className="space-y-6">
       {/* Top Up Modal */}
-      {client && (
+      {canTopUp && (
         <ClientTopUpModal
           isOpen={isTopUpOpen}
           onClose={() => setIsTopUpOpen(false)}
@@ -49,10 +50,10 @@ export function ClientCarregamentosHistory({
         />
       )}
 
-      <section aria-label="Resumo da carteira" className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
-        <div className="grid grid-cols-1 gap-px bg-[var(--border-subtle)] sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label={canTopUp ? "Resumo da carteira" : "Resumo de carregamentos anteriores"} className="overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]">
+        <div className={`grid grid-cols-1 gap-px bg-[var(--border-subtle)] sm:grid-cols-2 ${canTopUp ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
           {[
-            { label: "Saldo disponível", value: `${(availableCredit !== undefined ? availableCredit : (client?.credit_limit ?? 0)).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`, icon: Wallet, color: "#155EEF", description: "Utilizado nos novos envios" },
+            ...(canTopUp ? [{ label: "Saldo disponível", value: `${(availableCredit !== undefined ? availableCredit : (client?.credit_limit ?? 0)).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`, icon: Wallet, color: "#155EEF", description: "Utilizado nos novos envios" }] : []),
             { label: "Total carregado", value: `${totalPaidAmount.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`, icon: ArrowUpRight, color: "#187744", description: `${paidTransactions.length} carregamento(s) confirmado(s)` },
             { label: "Em processamento", value: pendingTransactions.length, icon: Clock, color: "#965A28", description: pendingTransactions.length ? "A aguardar confirmação de pagamento" : "Sem pagamentos pendentes" },
           ].map(item => <div key={item.label} className="min-w-0 border-t-[3px] bg-[var(--surface-bg)] p-5" style={{ borderTopColor: item.color }}>
@@ -60,12 +61,15 @@ export function ClientCarregamentosHistory({
             <div className="mt-3 text-[28px] font-semibold leading-none tracking-tight text-[var(--text-primary)] tabular-nums">{item.value}</div>
             <p className="mt-2 text-xs text-[var(--text-tertiary)]">{item.description}</p>
           </div>)}
-          <div className="flex flex-col justify-between border-t-[3px] border-[var(--accent)] bg-[var(--surface-bg)] p-5">
+          {canTopUp ? <div className="flex flex-col justify-between border-t-[3px] border-[var(--accent)] bg-[var(--surface-bg)] p-5">
             <div><h2 className="text-sm font-semibold text-[var(--text-primary)]">Carregar carteira</h2><p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">Cartão, MB WAY ou Multibanco. Saldo disponível após confirmação do pagamento.</p></div>
             <button type="button" onClick={() => setIsTopUpOpen(true)} className="mt-4 inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]">
               <PlusCircle aria-hidden="true" className="h-4 w-4" />Novo carregamento
             </button>
-          </div>
+          </div> : <div className="border-t-[3px] border-[var(--accent)] bg-[var(--surface-bg)] p-5">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Conta corrente</h2>
+            <p className="mt-2 text-xs leading-relaxed text-[var(--text-secondary)]">Os seus envios são faturados em conta corrente. Os carregamentos de saldo estão disponíveis apenas para contas em pré-pagamento.</p>
+          </div>}
         </div>
       </section>
 
@@ -133,9 +137,9 @@ export function ClientCarregamentosHistory({
             <p className="text-xs text-[var(--text-tertiary)] mt-1 max-w-sm mx-auto">
               {statusFilter !== "todos" 
                 ? "Não existem transações com o filtro selecionado." 
-                : "Ainda não realizou nenhum carregamento de saldo nesta conta."}
+                : canTopUp ? "Ainda não realizou nenhum carregamento de saldo nesta conta." : "Não existem carregamentos anteriores nesta conta."}
             </p>
-            {statusFilter === "todos" && (
+            {canTopUp && statusFilter === "todos" && (
               <button
                 type="button"
                 onClick={() => setIsTopUpOpen(true)}

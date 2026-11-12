@@ -34,7 +34,7 @@ const flatten = node => Array.isArray(node) ? node.flatMap(flatten) :
 const textOf = node => Array.isArray(node) ? node.map(textOf).join('') :
   node && typeof node === 'object' ? textOf(node.props?.children) : String(node ?? '')
 
-function menuHarness(t, dashboard, label) {
+function menuHarness(t, dashboard, label, account = {}) {
   const slots = [], dependencies = [], effects = []
   let cursor = 0
   const react = {
@@ -69,6 +69,7 @@ function menuHarness(t, dashboard, label) {
     '@/app/actions/shipments': {
       getShipmentLabelAction: async id => { calls.lookups.push(id); return label },
       getClientPortalStatsAction: async () => ({ totalCount: 1, totalRevenue: 4, deliveredCount: 0, deliveryRate: 0,
+        walletBalance: account.walletBalance,
         weeklyVolume: [], destinationRegions: [], recentShipments: [shipment], allShipments: [shipment] }),
     },
     '@/app/actions/ctt': {},
@@ -85,7 +86,7 @@ function menuHarness(t, dashboard, label) {
     // Mensagens ao utilizador chegam por notificação (lib/notify); qualquer tipo conta como aviso mostrado.
     sonner: { toast: Object.assign(m => calls.alerts.push(m), { error: m => calls.alerts.push(m), warning: m => calls.alerts.push(m), info: m => calls.alerts.push(m), success: m => calls.alerts.push(m) }) },
     '@/lib/status-helpers': { getShipmentStatusConfig: () => ({ label: 'Pendente', badgeVariant: 'warning' }) },
-    './ClientScope': { useClientScope: () => ({ client: { id: 'client-a', short_name: 'Fixture', pricing: {} }, basePath: '/app/fixture' }) },
+    './ClientScope': { useClientScope: () => ({ client: { id: 'client-a', short_name: 'Fixture', pricing: {}, billing_type: account.billingType }, basePath: '/app/fixture' }) },
     './ClientMessages': { useClientMessageCounter: () => ({ unreadCount: 0, refresh: async () => {} }) },
     '@/components/manifest-documents': { ManifestDocuments: 'div' },
   })
@@ -97,16 +98,43 @@ function menuHarness(t, dashboard, label) {
     effects.splice(0).forEach(fn => fn())
     return nodes
   }
-  return { calls, async open() {
+  const ready = async () => {
     render()
     await new Promise(resolve => setImmediate(resolve))
-    const nodes = render()
+    return render()
+  }
+  return { calls, ready, async open() {
+    const nodes = await ready()
     const icon = dashboard ? 'MoreVertical' : 'ChevronDown'
     nodes.find(n => n.type === 'button' && flatten(n.props.children).some(child => child.type === icon))
       .props.onClick({ stopPropagation() {} })
     return render()
   } }
 }
+
+test('dashboard: conta corrente and legacy invoiced accounts never inherit a prepaid wallet block', async t => {
+  for (const billingType of ['conta_corrente', undefined]) {
+    for (const walletBalance of [undefined, -2, -20]) {
+      const nodes = await menuHarness(t, true, officialPdf, { billingType, walletBalance }).ready()
+      const status = nodes.find(n => n.type === 'div' && n.props.children?.some?.(child => textOf(child) === 'Estado da Conta'))
+      assert.ok(status)
+      assert.match(textOf(status), /Ativa \/ Regular/)
+      assert.doesNotMatch(textOf(status), /Bloqueada/)
+      assert.ok(nodes.some(n => n.type === 'a' && n.props.href === '/app/fixture/criar-guia'))
+      assert.ok(!nodes.some(n => n.type === 'button' && textOf(n).includes('Novo Envio (Bloqueado)')))
+    }
+  }
+})
+
+test('dashboard: prepaid status and new-shipment button agree at the minus-two-euro boundary', async t => {
+  for (const [walletBalance, blocked] of [[-2.01, true], [-2, true], [-1.99, false], [0, false]]) {
+    const nodes = await menuHarness(t, true, officialPdf, { billingType: 'pay_as_you_go', walletBalance }).ready()
+    const status = nodes.find(n => n.type === 'div' && n.props.children?.some?.(child => textOf(child) === 'Estado da Conta'))
+    assert.ok(status)
+    assert.equal(textOf(status).includes('Bloqueada (-2€)'), blocked)
+    assert.equal(nodes.some(n => n.type === 'button' && textOf(n).includes('Novo Envio (Bloqueado)')), blocked)
+  }
+})
 
 for (const dashboard of [true, false]) {
   const surface = dashboard ? 'client dashboard' : 'OPS menu'
