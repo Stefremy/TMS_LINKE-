@@ -55,12 +55,12 @@ function menuHarness(t, dashboard, label, account = {}) {
       }
     },
   }
-  const calls = { lookups: [], downloads: [], prints: [], alerts: [] }
+  const calls = { lookups: [], downloads: [], prints: [], alerts: [], manifests: [], reprints: [] }
   const previous = { document: global.document, alert: global.alert }
   global.document = { addEventListener() {}, removeEventListener() {} }
   global.alert = message => calls.alerts.push(message)
   t.after(() => Object.assign(global, previous))
-  const jsx = (type, props) => ({ type, props: props || {} })
+  const jsx = (type, props) => typeof type === 'function' && /^CttCertificate/.test(type.name) ? type(props) : ({ type, props: props || {} })
   const load = createLoader({
     fetch: async () => ({ ok: true, json: async () => ({ messages: [], unreadCount: 0 }) }),
     react, 'react/jsx-runtime': { jsx, jsxs: jsx },
@@ -70,13 +70,15 @@ function menuHarness(t, dashboard, label, account = {}) {
       getShipmentLabelAction: async id => { calls.lookups.push(id); return label },
       getClientPortalStatsAction: async () => ({ totalCount: 1, totalRevenue: 4, deliveredCount: 0, deliveryRate: 0,
         walletBalance: account.walletBalance,
-        weeklyVolume: [], destinationRegions: [], recentShipments: [shipment], allShipments: [shipment] }),
+        weeklyVolume: [], destinationRegions: [], recentShipments: account.shipments || [shipment], allShipments: account.shipments || [shipment] }),
     },
     '@/app/actions/ctt': {},
+    '@/app/actions/shipment-manifests': { downloadCttAcceptanceCertificateAction: async id => { calls.reprints.push(id); return account.manifestResponse || {success:false,error:'Fixture missing PDF'} }, generateCttAcceptanceCertificateAction: async ids => { calls.manifests.push(ids); return account.manifestResponse || { success: false, error: 'Fixture: no manifest generated during label tests' } } },
     '@/lib/label-utils': {
       downloadCttLabel: async (...args) => { calls.downloads.push(args); return true },
       printCttLabel: (...args) => { calls.prints.push(args); return true },
     },
+    '@/lib/hooks/useTrackingPolling': { useTrackingPolling() {} },
     '@/components/shipments/ShipmentParcelWeight': { ShipmentParcelWeight: 'span' },
     '@/components/ui/badge': { Badge: 'span' },
     '@/app/ops/entidades/clientes/types': { DEFAULT_CTT_SERVICES_PRICING: [] },
@@ -86,11 +88,11 @@ function menuHarness(t, dashboard, label, account = {}) {
     // Mensagens ao utilizador chegam por notificação (lib/notify); qualquer tipo conta como aviso mostrado.
     sonner: { toast: Object.assign(m => calls.alerts.push(m), { error: m => calls.alerts.push(m), warning: m => calls.alerts.push(m), info: m => calls.alerts.push(m), success: m => calls.alerts.push(m) }) },
     '@/lib/status-helpers': { getShipmentStatusConfig: () => ({ label: 'Pendente', badgeVariant: 'warning' }) },
-    './ClientScope': { useClientScope: () => ({ client: { id: 'client-a', short_name: 'Fixture', pricing: {}, billing_type: account.billingType }, basePath: '/app/fixture' }) },
+    './ClientScope': { useClientScope: () => ({ client: { id: account.clientId || 'client-a', short_name: 'Fixture', pricing: {}, billing_type: account.billingType }, basePath: '/app/fixture' }) },
     './ClientMessages': { useClientMessageCounter: () => ({ unreadCount: 0, refresh: async () => {} }) },
     '@/components/manifest-documents': { ManifestDocuments: 'div' },
   })
-  const Component = dashboard ? load('app/app/components/ClientDashboard.tsx').ClientDashboard :
+  const Component = dashboard === 'history' ? load('app/app/components/ClientShipmentsHistory.tsx').ClientShipmentsHistory : dashboard ? load('app/app/components/ClientDashboard.tsx').ClientDashboard :
     load('app/ops/envios/components/ActionMenu.tsx').ActionMenu
   const render = () => {
     cursor = 0
@@ -111,6 +113,24 @@ function menuHarness(t, dashboard, label, account = {}) {
     return render()
   } }
 }
+
+test('overview: certificate action lives in Ações, then the row shows it was generated and reprints the saved original', async t => {
+  const h = menuHarness(t, true, officialPdf, { manifestResponse: { success: true, manifestPdfBase64: officialPdf, documents: [{FileName: 'CertAceitResumo.pdf', File: officialPdf}] } })
+  let nodes = await h.ready()
+  assert.equal(nodes.some(n => n.type === 'input' && /^Selecionar envio CTT/.test(n.props['aria-label'] || '')), false)
+  assert.equal(nodes.some(n => n.type === 'span' && textOf(n) === 'Certificado de aceitação gerado'), false)
+  nodes = await h.open()
+  await nodes.find(n => n.type === 'button' && textOf(n) === 'Gerar certificado de aceitação').props.onClick()
+  assert.deepEqual(h.calls.manifests, [[shipment.id]])
+  const after = await h.ready()
+  assert.ok(after.some(n => n.type === 'span' && textOf(n) === 'Certificado de Aceitação CTT'))
+  assert.ok(after.some(n => n.type === 'span' && textOf(n) === 'Certificado de aceitação gerado'))
+  assert.equal(after.some(n => n.type === 'button' && /^Gerar certificado de aceitação/.test(n.props['aria-label'] || '')), false)
+  const menu = await h.open()
+  assert.equal(menu.some(n => n.type === 'button' && textOf(n) === 'Gerar certificado de aceitação'), false)
+  await menu.find(n => n.type === 'button' && textOf(n) === 'Descarregar certificado de aceitação').props.onClick()
+  assert.deepEqual(h.calls.reprints, [shipment.id]); assert.equal(h.calls.manifests.length, 1)
+})
 
 test('dashboard: conta corrente and legacy invoiced accounts never inherit a prepaid wallet block', async t => {
   for (const billingType of ['conta_corrente', undefined]) {
@@ -159,3 +179,34 @@ for (const dashboard of [true, false]) {
     assert.match(h.calls.alerts[0], /etiqueta oficial.*não está disponível/)
   })
 }
+
+
+test('only open CTT shipments can be closed: history by checked selection, overview one at a time',async t=>{
+ for(const screen of [true,'history']){
+  const second={...shipment,id:'shipment-b',tracking_number:'LTK-SECOND',carrier_tracking_number:'CE000000002PT'}
+  const closed={...shipment,id:'closed',tracking_number:'LTK-CLOSED',ops_substatus:'manifesto_fechado'}
+  const correos={...shipment,id:'correos',tracking_number:'CEX-DEMO',carrier_code:'correos',carrier_tracking_number:'1234567890123456'}
+  const h=menuHarness(t,screen,officialPdf,{shipments:[shipment,second,closed,correos],manifestResponse:{success:true,manifestPdfBase64:officialPdf}})
+  let nodes=await h.ready()
+  const control=screen==='history'?(ref=>n=>n.type==='input'&&n.props['aria-label']===`Selecionar envio CTT ${ref}`):(ref=>n=>n.type==='button'&&n.props['aria-label']===`Gerar certificado de aceitação do envio ${ref}`)
+  assert.equal(nodes.some(control('LTK-CLOSED')),false)
+  assert.equal(nodes.some(control('CEX-DEMO')),false)
+  if(screen==='history'){
+   nodes.find(control('LTK-SECOND')).props.onChange()
+   nodes=await h.ready()
+   await nodes.find(n=>n.type==='button'&&textOf(n)==='Gerar certificado CTT (1)').props.onClick()
+  } else await nodes.find(control('LTK-SECOND')).props.onClick()
+  assert.deepEqual(h.calls.manifests,[[second.id]])
+  nodes=await h.ready()
+  assert.ok(nodes.some(control('LTK1234567')))
+ }
+})
+
+test('failed generation does not mark a shipment closed',async t=>{
+ const h=menuHarness(t,true,officialPdf)
+ let nodes=await h.ready()
+ await nodes.find(n=>n.type==='button'&&n.props['aria-label']==='Gerar certificado de aceitação do envio LTK1234567').props.onClick()
+ nodes=await h.ready()
+ assert.ok(nodes.some(n=>n.type==='button'&&n.props['aria-label']==='Gerar certificado de aceitação do envio LTK1234567'))
+ assert.equal(nodes.some(n=>n.type==='span'&&textOf(n)==='Certificado de aceitação gerado'),false)
+})

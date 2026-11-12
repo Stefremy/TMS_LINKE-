@@ -27,6 +27,7 @@ import {
   Eye,
   FileText,
   Download,
+  FileCheck2,
   Undo2,
   Trash2,
   X,
@@ -34,7 +35,7 @@ import {
   Truck
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { syncCttTrackingAction, closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
+import { syncCttTrackingAction, convertZplToPdfAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 import { 
@@ -51,8 +52,10 @@ import { CreditCard } from "lucide-react"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 import { useClientScope } from "./ClientScope"
 import { useClientMessageCounter } from "./ClientMessages"
+import { generateCttAcceptanceCertificateAction, downloadCttAcceptanceCertificateAction } from "@/app/actions/shipment-manifests"
 import { ManifestDocuments } from "@/components/manifest-documents"
 import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
+import { canSelectCttCertificate, hasCttClosure } from "@/lib/services/ctt/certificate-status"
 import type { ClientMessage, MessagePage } from "@/lib/client-messages/types"
 
 export function ClientDashboard() {
@@ -117,8 +120,13 @@ export function ClientDashboard() {
   const [currentPage, setCurrentPage] = React.useState(1)
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = React.useState<ShipmentRecord | null>(null)
-  const [closingBatch, setClosingBatch] = React.useState(false)
+  const [generatingManifest, setGeneratingManifest] = React.useState(false)
   const [manifestData, setManifestData] = React.useState<{ fileName: string; base64: string; documents?: CTTDocumentData[] } | null>(null)
+  const certificateScope = React.useRef<string | null>(currentClient.id)
+  React.useEffect(() => {
+    certificateScope.current = currentClient.id
+    return () => { certificateScope.current = null }
+  }, [currentClient.id])
   const [isTopUpOpen, setIsTopUpOpen] = React.useState(false)
 
   const pageSize = 15
@@ -143,6 +151,8 @@ export function ClientDashboard() {
     setStatsClientKey([currentClient.id, currentClient.short_name])
     setLoadingStats(true)
     setStatsError(false)
+    setGeneratingManifest(false)
+    setManifestData(null)
   }
 
   React.useEffect(() => {
@@ -242,40 +252,53 @@ export function ClientDashboard() {
     return filteredShipments.slice(startIndex, startIndex + pageSize)
   }, [filteredShipments, currentPage, pageSize])
 
-  const pendingShipments = React.useMemo(() => {
-    return shipments.filter(s => s.status === "pendente" && ["ctt", "ctt_expresso"].includes(s.carrier_code || "") && !s.ctt_manifest_pdf && !["manifesto_fechado", "expedido"].includes(s.ops_substatus || ""))
-  }, [shipments])
+  /** One shipment per CTT batch keeps the overview simple; batching stays in the history page. */
+  const handleGenerateManifest = async (id: string) => {
+    const manifestIds = [id]
+    if (generatingManifest) return
+    const requestedScope = currentClient.id
 
-  const handleCloseBatch = async () => {
-    if (pendingShipments.length === 0) return
-    const idsToClose = pendingShipments.map(s => s.id).filter(Boolean)
-    if (idsToClose.length === 0) return
-
-    setClosingBatch(true)
+    setGeneratingManifest(true)
     try {
-      const res = await closeCttShipmentsAction(idsToClose)
+      const res = await generateCttAcceptanceCertificateAction(manifestIds)
+      if (certificateScope.current !== requestedScope) return
       if (res.success) {
         if (res.manifestPdfBase64) setManifestData({
-          fileName: "Manifesto_CTT.pdf",
+          fileName: "Certificado_Aceitacao_CTT.pdf",
           base64: res.manifestPdfBase64,
           documents: res.documents
         })
+        const closedIds = new Set(res.shipmentIds || manifestIds)
+        setShipments(previous => previous.map(shipment => closedIds.has(shipment.id) ? { ...shipment, ops_substatus: "manifesto_fechado" } : shipment))
         if (res.warning) toast.warning(res.warning)
-        setShipments(prev => prev.map(s => {
-          if (idsToClose.includes(s.tracking_number || "") || idsToClose.includes(s.id)) {
-            return { ...s, ops_substatus: "manifesto_fechado" }
-          }
-          return s
-        }))
       } else {
-        toast.error(res.error || "Não foi possível confirmar o fecho do manifesto CTT.")
+        toast.error(res.error || "Não foi possível obter o certificado de aceitação CTT.")
       }
     } catch (e) {
-      toast.error("Erro ao fechar lote: " + errorMessage(e))
+      if (certificateScope.current !== requestedScope) return
+      toast.error("Erro ao obter certificado CTT: " + errorMessage(e))
     } finally {
-      setClosingBatch(false)
+      if (certificateScope.current === requestedScope) setGeneratingManifest(false)
     }
   }
+
+  const downloadSavedCertificate = async (id: string) => {
+    if (generatingManifest) return
+    const requestedScope = currentClient.id
+    setGeneratingManifest(true)
+    try {
+      const res = await downloadCttAcceptanceCertificateAction(id)
+      if (certificateScope.current !== requestedScope) return
+      if (res.success && res.manifestPdfBase64) {
+        setManifestData({ fileName: "Certificado_Aceitacao_CTT.pdf", base64: res.manifestPdfBase64, documents: res.documents })
+      } else toast.error(res.error || "O certificado original não está guardado. Contacte a equipa Ops.")
+    } catch {
+      if (certificateScope.current === requestedScope) toast.error("Não foi possível carregar o certificado guardado.")
+    } finally {
+      if (certificateScope.current === requestedScope) setGeneratingManifest(false)
+    }
+  }
+
 
   const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
     if (!rawLabel) return null
@@ -665,16 +688,16 @@ export function ClientDashboard() {
         </div>
       </section>
 
-      {/* MANIFEST ALERT IF CLOSED */}
+      {/* Original CTT acceptance certificate */}
       {manifestData && (
         <div className="bg-[var(--status-success-soft)] border border-[var(--status-success)] rounded-xl p-5 flex flex-wrap items-center justify-between gap-4 animate-in fade-in shadow-xs">
           <div className="flex items-center gap-3.5">
             <div>
               <div className="text-sm font-bold text-[var(--status-success)] flex items-center gap-2">
-                <span>Lote Fechado com Sucesso!</span>
+                <span>Certificado de Aceitação CTT</span>
               </div>
               <p className="text-xs text-[var(--status-success)] opacity-90 mt-0.5">
-                O manifesto (Certificado de Aceitação CTT) foi gerado.
+                Documento oficial CTT. Imprima e apresente ao estafeta para assinatura.
               </p>
             </div>
           </div>
@@ -691,7 +714,7 @@ export function ClientDashboard() {
               }}
               className="bg-[var(--status-success)] hover:opacity-90 text-white px-3.5 py-2.5 rounded-md text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
             >
-              Descarregar Manifesto
+              Descarregar certificado CTT
             </button>
             <ManifestDocuments documents={manifestData.documents} />
             <button
@@ -723,15 +746,7 @@ export function ClientDashboard() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {pendingShipments.length > 0 && (
-              <button
-                onClick={handleCloseBatch}
-                disabled={closingBatch}
-                className="px-3.5 py-2 bg-[var(--text-primary)] hover:opacity-90 active:scale-[0.99] disabled:opacity-50 text-white rounded-md text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
-              >
-                {closingBatch ? "A Fechar..." : `Fechar ${pendingShipments.length} Envios`}
-              </button>
-            )}
+
 
             {/* Status Filter */}
             <select
@@ -863,6 +878,7 @@ export function ClientDashboard() {
                       </div>
                     </div>
 
+                    {hasCttClosure(shipment) && <span className="mt-1 inline-flex w-fit items-center gap-1 rounded border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent)]"><FileCheck2 className="w-3 h-3" />Certificado de aceitação gerado</span>}
                     <ShipmentParcelWeight summary={shipment.parcel_summary} />
 
                     {/* Bottom Row: Date, Price & Quick Actions */}
@@ -908,6 +924,18 @@ export function ClientDashboard() {
                         >
                           <Download className="w-3.5 h-3.5" />
                         </button>
+                        {(canSelectCttCertificate(shipment) || hasCttClosure(shipment)) && (
+                          <button
+                            type="button"
+                            disabled={generatingManifest}
+                            onClick={() => hasCttClosure(shipment) ? void downloadSavedCertificate(shipment.id) : void handleGenerateManifest(shipment.id)}
+                            aria-label={`${hasCttClosure(shipment) ? "Descarregar" : "Gerar"} certificado de aceitação do envio ${tracking}`}
+                            className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-md border border-[var(--border-subtle)] transition-colors disabled:opacity-50"
+                            title={hasCttClosure(shipment) ? "Descarregar certificado de aceitação" : "Gerar certificado de aceitação"}
+                          >
+                            <FileCheck2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -985,6 +1013,7 @@ export function ClientDashboard() {
                             </div>
                           )
                         })()}
+                      {hasCttClosure(shipment) && <span className="mt-1 inline-flex w-fit items-center gap-1 rounded border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent)]"><FileCheck2 className="w-3 h-3" />Certificado de aceitação gerado</span>}
                       </td>
 
                       {/* Service Type */}
@@ -1056,7 +1085,7 @@ export function ClientDashboard() {
                           </button>
 
                           {openDropdownId === shipment.id && (
-                            <div className="absolute right-0 mt-1 w-48 bg-[var(--surface-bg)] rounded-md shadow-lg border border-[var(--border-subtle)] py-1.5 z-30 animate-in fade-in-50 zoom-in-95 text-left">
+                            <div className="absolute right-0 mt-1 w-64 bg-[var(--surface-bg)] rounded-md shadow-lg border border-[var(--border-subtle)] py-1.5 z-30 animate-in fade-in-50 zoom-in-95 text-left">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1079,6 +1108,21 @@ export function ClientDashboard() {
                                 <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
                                 <span>Descarregar PDF</span>
                               </button>
+                              {(canSelectCttCertificate(shipment) || hasCttClosure(shipment)) && (
+                                <button
+                                  type="button"
+                                  disabled={generatingManifest}
+                                  onClick={() => {
+                                    setOpenDropdownId(null)
+                                    if (hasCttClosure(shipment)) void downloadSavedCertificate(shipment.id)
+                                    else void handleGenerateManifest(shipment.id)
+                                  }}
+                                  className="w-full px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                                >
+                                  <FileCheck2 className="w-3.5 h-3.5 text-[var(--accent)]" />
+                                  <span>{hasCttClosure(shipment) ? "Descarregar certificado de aceitação" : "Gerar certificado de aceitação"}</span>
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => {

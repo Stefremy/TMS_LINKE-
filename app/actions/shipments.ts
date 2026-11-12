@@ -703,9 +703,9 @@ export async function emitClientGuiaAction(data: {
         const after = await walletSnapshot(supabase, ctx.tenant_id, matchedClient.id!)
         if (after && after.balance < 15) {
           const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
-          const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
+          const { storedEmailTemplate } = await import("@/lib/email/stored-template")
           const lowBalanceEmail = { to: matchedClient.email, subject: "Linke | Aviso de Saldo Baixo",
-            html: compileTemplate(emailTemplates.low_balance, { current_balance: after.balance.toFixed(2), topup_url: publicUrl("/app", "portal") })
+            html: compileTemplate(await storedEmailTemplate(supabase, "low_balance"), { current_balance: after.balance.toFixed(2), topup_url: publicUrl("/app", "portal") })
           }
           // after() keeps the function alive until the email is sent, without delaying the response.
           runAfterResponse(() => sendEmail(lowBalanceEmail).catch(error => console.warn("Low balance email pending", error)))

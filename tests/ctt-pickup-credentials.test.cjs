@@ -7,9 +7,10 @@ const input={connection_id:'selected',carrier_code:'ctt_expresso',date:'2026-10-
 const config={carrier_code:'ctt_expresso',client_id:'client-selected',contract_number:'contract-selected',auth_id:'fixture-auth',environment:'production',is_active:true}
 
 function setup(tables,denied=false,pickupResult={success:false,error:'MOCK_ONLY_NO_BOOKING'}){
-  const db=fakeSupabase(tables),initialized=[],pickups=[],references=[]
+  const db=fakeSupabase(tables),initialized=[],pickups=[],references=[],emails=[]
   const load=createLoader({
-    '@/lib/config/public-origins':{},
+    '@/lib/config/public-origins':{publicUrl:path=>`https://portal.example.invalid${path}`},
+    '@/lib/email/resend':{sendEmail:async value=>{emails.push(value);return{success:true,data:{id:'fixture-mail'}}},compileTemplate:(template,variables)=>JSON.stringify(variables)},
     '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
     '@/lib/auth/context':{requireEmployee:async()=>{if(denied)throw new Error('Forbidden');return {user:{id:'authenticated-user',email:'operator@example.test'},colaborador_id:'staff-profile'}},getTenantId:async()=>'own'},
     'next/cache':{revalidatePath(){}},
@@ -19,7 +20,7 @@ function setup(tables,denied=false,pickupResult={success:false,error:'MOCK_ONLY_
     '@/lib/label-utils':{},
     '@/lib/services/ctt/close-manifest':{},
   })
-  return {api:load('app/actions/ctt.ts'),db,initialized,pickups,references}
+  return {api:load('app/actions/ctt.ts'),db,initialized,pickups,references,emails}
 }
 
 async function withoutEnvironment(run){
@@ -78,6 +79,16 @@ test('accepted pickups record the authenticated login, never a claimed operator 
   assert.deepEqual(audit.details.requested_by,{user_id:'authenticated-user',email:'operator@example.test',colaborador_id:'staff-profile'})
   assert.equal(audit.details.requester.name,'Carrier contact')
   assert.ok(Number.isFinite(Date.parse(audit.details.requested_at)))
+}))
+
+test('client-request bookings defer their email to the completion flow; standalone Ops confirmations use notificacoes',()=>withoutEnvironment(async()=>{
+  for(const linked of [true,false]) {
+    const h=setup({carrier_connections:[{...config,id:'selected',tenant_id:'own'}]},false,{success:true,pickupNumber:'FIXTURE-ONLY'})
+    const result=await h.api.scheduleCttPickupAction({...input,client_request_id:linked?'linked-request':undefined,sender:{...input.sender,email:'form@example.invalid'}})
+    assert.equal(result.success,true)
+    assert.equal(h.emails.length,linked?0:1)
+    if(!linked)assert.equal(h.emails[0].from,'Linke <notificacoes@linke.pt>')
+  }
 }))
 
 test('CTT points load from the latest company account when several connections exist and env credentials are absent',()=>withoutEnvironment(async()=>{

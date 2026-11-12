@@ -16,6 +16,7 @@ import { positiveMeasurement } from "../tracking/carrier-measurements"
 import { resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
 import { readCttExportForm, type CttExportDetails } from "../ctt/export-details"
 import { getCttRecipientContactError } from "../ctt/recipient-contact"
+import type { CTTCompleteShipmentOutput } from "../ctt/ctt-types"
 import { reserveWallet, transitionWallet, type WalletReservation } from "@/lib/billing/wallet"
 
 export async function createShipment(formData: FormData) {
@@ -287,7 +288,17 @@ export async function dispatchShipment(shipmentId: string) {
     subProduct,
     cttExportDetails: saved.ctt_export_details,
     observations: saved.observations,
+    // CompleteShipment closes the batch at CTT immediately; the acceptance certificate must
+    // then come from a later CloseShipment, which cannot be repeated or reprinted.
+    autoClose: false,
   })
+  const cttOutputs = (cttResult.rawResponse as CTTCompleteShipmentOutput | undefined)?.ShipmentData || []
+  const emitted = cttOutputs[0]
+  const cttCloseData = emitted?.FirstObject && emitted.LastObject ? {
+    shipmentId: shipment.id, connectionId: saved.webservice_connection_id,
+    FirstObjectCode: emitted.FirstObject, LastObjectCode: emitted.LastObject, SubProductCode: subProduct,
+  } : null
+  const cttDocuments = cttOutputs.flatMap(output => output.DocumentsList || [])
   const labelBase64 = cttResult.labelBase64 ? await applyLinkeLogoToCttLabel(await convertZplToPdfBase64(cttResult.labelBase64), cttResult.trackingNumber) : undefined
   let dbWarning: string | undefined
   if (cttResult.success) {
@@ -297,7 +308,7 @@ export async function dispatchShipment(shipmentId: string) {
         carrier_code: 'ctt', status: 'pendente', updated_at: now }).eq('tenant_id', ctx.tenant_id).eq('id', shipment.id)
       const log = await supabase.from('audit_log').insert({ tenant_id: ctx.tenant_id, action: 'shipment_data', created_at: now,
         details: { ...saved, carrier_tracking_number: cttResult.trackingNumber, carrier_code: 'ctt', status: 'pendente',
-          ctt_label_base64: labelBase64, weight_kg: weightKg, package_count: volumes, length_cm: length, width_cm: width, height_cm: height } })
+          ctt_label_base64: labelBase64, ctt_close_data: cttCloseData, ctt_documents: cttDocuments, weight_kg: weightKg, package_count: volumes, length_cm: length, width_cm: width, height_cm: height } })
       if (update.error || log.error) throw new Error('Persistência por confirmar')
     } catch {
       dbWarning = 'Os CTT aceitaram o envio, mas a gravação ficou por confirmar. Não volte a emitir; confirme o rastreio e a etiqueta.'

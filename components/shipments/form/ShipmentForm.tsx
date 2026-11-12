@@ -5,12 +5,13 @@ import Image from "next/image"
 import Link from "next/link"
 import { FormProvider, useForm, useWatch, type FieldPath } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { ArrowLeft, ArrowRight, Check, ChevronRight, CheckCircle2, ChevronUp, Download, Loader2, Printer, X, AlertCircle, PackagePlus, Building2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, ChevronRight, CheckCircle2, ChevronUp, Download, FileCheck2, Loader2, Printer, X, AlertCircle, PackagePlus, Building2 } from "lucide-react"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { submitShipmentFormAction, type ShipmentFormResult } from "@/app/actions/shipment-form"
 import { getShipmentLabelAction } from "@/app/actions/shipments"
+import { generateCttAcceptanceCertificateAction } from "@/app/actions/shipment-manifests"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { saveDestinatarioAction } from "@/app/actions/destinatarios"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
@@ -34,10 +35,10 @@ type Props = {
   onCreated?: (result: ShipmentFormResult) => void; services?: ServicoLinke[]
   hideQuotationServices?: boolean
 }
-type Feedback = { created: ShipmentFormResult | null; quotation: { id: string; reference: string } | null; label: string | null; labelError: string; warning: string; labelBusy: boolean }
+type Feedback = { created: ShipmentFormResult | null; quotation: { id: string; reference: string } | null; label: string | null; labelError: string; warning: string; labelBusy: boolean; certificate: string | null; certificateBusy: boolean; certificateError: string }
 const SERVICE_STEP = stepForField("serviceId")
 const REVIEW_STEP = SHIPMENT_STEPS.length - 1
-const emptyFeedback: Feedback = { created: null, quotation: null, label: null, labelError: "", warning: "", labelBusy: false }
+const emptyFeedback: Feedback = { created: null, quotation: null, label: null, labelError: "", warning: "", labelBusy: false, certificate: null, certificateBusy: false, certificateError: "" }
 
 export function ShipmentForm({ role: requestedRole, client, initialValues, onCreated, services: providedServices, hideQuotationServices = false }: Props) {
   const scope = useOptionalClientScope()
@@ -58,7 +59,7 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
   const errorSummary = React.useRef<HTMLDivElement>(null)
   const formServices = React.useMemo(() => (providedServices || resource.services).filter(service => !hideQuotationServices || !isCorreosQuotationService(service)), [providedServices, resource.services, hideQuotationServices])
   const quote = useShipmentQuote({ client: effectiveClient, services: formServices, values, role })
-  const busy = form.formState.isSubmitting || feedback.labelBusy
+  const busy = form.formState.isSubmitting || feedback.labelBusy || feedback.certificateBusy
   const basePath = role === "ops" ? "/ops" : scope?.basePath || (client.portal_slug ? `/app/${client.portal_slug}` : "/app")
   const historyPath = `${basePath}/envios`
   const validation = shipmentFormSchema.safeParse(values)
@@ -148,6 +149,23 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start",
     }))
   }
+  /** Closes a CTT batch with only this shipment; repeat clicks reuse the saved original. */
+  const prepareCertificate = async (created: ShipmentFormResult) => {
+    if (!created.id) return
+    setFeedback(previous => ({ ...previous, certificateBusy: true, certificateError: "" }))
+    try {
+      let pdf = feedback.certificate
+      if (!pdf) {
+        const result = await generateCttAcceptanceCertificateAction([created.id])
+        if (!result.success || !result.manifestPdfBase64) throw new Error(result.error || result.warning || "Os CTT não devolveram o certificado de aceitação.")
+        pdf = result.manifestPdfBase64
+        setFeedback(previous => ({ ...previous, certificate: pdf, warning: [previous.warning, result.warning].filter(Boolean).join(" ") }))
+      }
+      if (!await downloadCttLabel(pdf, `${created.guia}_Certificado_Aceitacao.pdf`)) throw new Error("Não foi possível abrir o certificado.")
+    } catch (error) { setFeedback(previous => ({ ...previous, certificateError: error instanceof Error ? error.message : "Não foi possível obter o certificado de aceitação." })) }
+    finally { setFeedback(previous => ({ ...previous, certificateBusy: false })) }
+  }
+
   const prepareLabel = async (created: ShipmentFormResult, print = false) => {
     setFeedback(previous => ({ ...previous, labelBusy: true, labelError: "" }))
     try {
@@ -224,7 +242,9 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
         {feedback.warning && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{feedback.warning}</p>}
         {feedback.labelError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{feedback.labelError}</p>}
         {!feedback.created.labelBase64 && !feedback.label && <p className="text-sm text-zinc-500">A etiqueta oficial ainda não foi devolvida. Pode tentar obtê-la sem criar outro envio.</p>}
-        <div className="flex flex-wrap gap-3"><button type="button" disabled={busy} onClick={() => void prepareLabel(feedback.created!)} className={primaryButton}>{feedback.labelBusy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <Download size={16} />}{feedback.labelBusy ? "A preparar etiqueta…" : "Descarregar etiqueta"}</button><button type="button" disabled={busy} onClick={() => void prepareLabel(feedback.created!, true)} className={secondaryButton}><Printer size={16} />Imprimir</button></div>
+        <div className="flex flex-wrap gap-3"><button type="button" disabled={busy} onClick={() => void prepareLabel(feedback.created!)} className={primaryButton}>{feedback.labelBusy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <Download size={16} />}{feedback.labelBusy ? "A preparar etiqueta…" : "Descarregar etiqueta"}</button><button type="button" disabled={busy} onClick={() => void prepareLabel(feedback.created!, true)} className={secondaryButton}><Printer size={16} />Imprimir</button>{/^[A-Z]{2}\d{9}PT$/.test(feedback.created.guia || "") && <button type="button" disabled={busy} onClick={() => void prepareCertificate(feedback.created!)} className={secondaryButton}>{feedback.certificateBusy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <FileCheck2 size={16} />}{feedback.certificateBusy ? "A obter certificado…" : "Certificado de aceitação"}</button>}</div>
+        {feedback.certificateError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{feedback.certificateError}</p>}
+        {/^[A-Z]{2}\d{9}PT$/.test(feedback.created.guia || "") && !feedback.certificate && <p className="text-xs leading-relaxed text-zinc-500">O certificado fecha este envio nos CTT num lote próprio. Para juntar vários envios num só certificado, use o histórico. Não feche este envio também no portal CTT.</p>}
         <div className="flex flex-wrap gap-3 border-t border-zinc-100 pt-5"><Link href={historyPath} className={secondaryButton}>Ver no histórico<ArrowRight size={15} /></Link><button type="button" disabled={busy} className={secondaryButton} onClick={() => { form.reset(shipmentDefaults(client)); setFeedback(emptyFeedback); setStep(0) }}><PackagePlus size={16} />Criar outro envio</button></div>
       </div>
     </section> : <FormProvider {...form}>

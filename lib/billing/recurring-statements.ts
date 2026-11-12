@@ -1,3 +1,4 @@
+import { periodStatementHtml } from "@/lib/email/code-templates"
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/server'
 import { ensureRecurringInvoice, recurringInvoiceAttachment } from '@/lib/billing/recurring-invoices'
@@ -170,7 +171,7 @@ export async function statementEmail(statement: PeriodStatement, recipient: stri
   const amount = statement.total_value.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })
   return { to: recipient, from: process.env.STORE_FROM_EMAIL || 'notificacoes@linke.pt',
     subject: `${isTest ? '[TESTE] ' : ''}Linke | Extrato de envios · ${label}`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:640px;margin:auto;color:#17251e;padding:24px"><h2 style="color:#128a47">${isTest ? 'Teste de ' : ''}Extrato de Envios</h2>${isTest ? '<p><strong>Dados fictícios para testar a entrega. Não representa uma cobrança.</strong></p>' : ''}<p>Olá ${escapeHtml(statement.client_name)},</p><p>Segue em anexo o extrato dos envios do período <strong>${escapeHtml(label)}</strong>.</p><p>${statement.shipments_count} envio(s) · Valor líquido dos envios (s/ IVA): <strong>${escapeHtml(amount)}</strong></p><p>Referência: ${escapeHtml(statement.statement_number)}</p><p style="font-size:12px;color:#68756d">Este é um extrato interno de movimentos. Não substitui uma fatura.</p><p>Equipa Linke</p></div>`,
+    html: periodStatementHtml({isTest,client_name:statement.client_name,label,shipments_count:statement.shipments_count,amount,statement_number:statement.statement_number}),
     attachments: [{ filename: `${isTest ? 'TESTE_' : ''}Extrato_${statement.statement_number.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`, content: pdf.toString('base64') }],
   }
 }

@@ -3,7 +3,7 @@ import { resolveCttCredentials } from '@/lib/services/carriers/credentials'
 import { CTTShipmentService } from './ctt-shipment.service'
 import type { CTTDocumentData, CTTShipment2Close } from './ctt-types'
 
-interface ManifestResult {
+export interface ManifestResult {
   success: boolean
   error?: string
   count: number
@@ -11,6 +11,8 @@ interface ManifestResult {
   manifestPdfBase64?: string
   documents?: CTTDocumentData[]
   warning?: string
+  shipmentIds?: string[]
+  reused?: boolean
 }
 
 interface ManifestShipment {
@@ -130,11 +132,18 @@ export async function closeCttManifest(tenantId: string, shipmentIds?: string[],
   const warnings: string[] = []
   if (!manifestPdfBase64) warnings.push('Os CTT confirmaram o fecho, mas não devolveram um PDF válido. Obtenha o certificado junto dos CTT; não repita o fecho.')
   try {
-    const { data: saved, error: saveError } = await supabase.from('shipments').update({
+    let { data: saved, error: saveError } = await supabase.from('shipments').update({
       ctt_manifest_pdf: manifestPdfBase64 || null,
       ops_substatus: 'manifesto_fechado',
       updated_at: new Date().toISOString(),
     }).eq('tenant_id', tenantId).in('id', ids).select('id')
+    // Some installations archive PDFs only in audit_log. Still persist the closure flag.
+    if (saveError && /ctt_manifest_pdf/i.test(saveError.message || '') && ['42703', 'PGRST204'].includes(saveError.code || '')) {
+      const fallback = await supabase.from('shipments').update({ ops_substatus: 'manifesto_fechado', updated_at: new Date().toISOString() })
+        .eq('tenant_id', tenantId).in('id', ids).select('id')
+      saved = fallback.data
+      saveError = fallback.error
+    }
     if (saveError || saved?.length !== ids.length) throw new Error('Manifest archive failed')
   } catch {
     warnings.push('O fecho foi confirmado pelos CTT, mas não foi possível guardar o manifesto nos envios. Guarde a referência e os PDF; não repita o fecho.')

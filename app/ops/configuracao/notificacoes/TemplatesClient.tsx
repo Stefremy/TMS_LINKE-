@@ -1,12 +1,12 @@
 "use client"
 import { notify } from "@/lib/notify"
-type EmailTemplate = { id: string; name: string; subject: string; html_content: string; description?: string; trigger_event?: string }
+type EmailTemplate = { id: string; name?: string; subject?: string; html_content?: string; description?: string; trigger_event?: string; readonly?: boolean; sender?: string }
 
 import * as React from "react"
 import { Mail, X, Save, Edit3, Loader2 } from "lucide-react"
 import { getEmailTemplates, updateEmailTemplate } from "@/app/actions/templates"
 
-export function TemplatesClient() {
+export function TemplatesClient({ initialPreviewId }: { initialPreviewId?: string }) {
   const [templates, setTemplates] = React.useState<EmailTemplate[]>([])
   const [loading, setLoading] = React.useState(true)
   
@@ -16,33 +16,34 @@ export function TemplatesClient() {
   const [editContent, setEditContent] = React.useState("")
   const [isSaving, setIsSaving] = React.useState(false)
 
-async function loadTemplates() {
-    try {
-      const data = await getEmailTemplates()
-      setTemplates(data || [])
-    } finally {
-      setLoading(false)
-    }
-  }
-
   React.useEffect(() => {
-    loadTemplates()
-  }, [])
+    let active = true
+    getEmailTemplates().then(data => {
+      if (!active) return
+      setTemplates(data || [])
+      setPreviewTemplate(data.find(t => t.id === initialPreviewId) || null)
+    }).catch(() => {
+      if (active) notify.error("Não foi possível carregar os modelos de email.")
+    }).finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [initialPreviewId])
 
   
 
   async function handleSave() {
     if (!editTemplate) return
     setIsSaving(true)
-    const res = await updateEmailTemplate(editTemplate.id, editContent)
-    setIsSaving(false)
-    
-    if (res.success) {
-      setTemplates(templates.map(t => t.id === editTemplate.id ? { ...t, html_content: editContent } : t))
-      setEditTemplate(null)
-    } else {
-      notify.error("Erro ao gravar o template: " + res.error)
-    }
+    try {
+      const res = await updateEmailTemplate(editTemplate.id, editContent)
+      if (res.success) {
+        setTemplates(templates.map(t => t.id === editTemplate.id ? { ...t, html_content: editContent } : t))
+        setEditTemplate(null)
+      } else {
+        notify.error("Erro ao gravar o template: " + res.error)
+      }
+    } catch {
+      notify.error("Não foi possível gravar o modelo. Verifique a sessão e tente novamente.")
+    } finally { setIsSaving(false) }
   }
 
   return (
@@ -66,7 +67,7 @@ async function loadTemplates() {
           </div>
         ) : templates.length === 0 ? (
           <div className="text-center p-6 text-[12px] text-[var(--text-secondary)]">
-            Nenhum template encontrado. Corre o script de seed.
+            Não foi possível carregar os modelos de email. Atualize a página para tentar novamente.
           </div>
         ) : (
           <div className="space-y-2">
@@ -77,7 +78,7 @@ async function loadTemplates() {
                 onPreview={() => setPreviewTemplate(t)}
                 onEdit={() => {
                   setEditTemplate(t)
-                  setEditContent(t.html_content)
+                  setEditContent(t.html_content || "")
                 }}
               />
             ))}
@@ -92,6 +93,8 @@ async function loadTemplates() {
             <div className="px-5 py-3 border-b border-[var(--border-subtle)] bg-[var(--surface-muted)] flex items-center justify-between">
               <div>
                 <h3 className="text-[13px] font-bold text-[var(--text-primary)]">Preview: {previewTemplate.name}</h3>
+                <p className="text-xs text-[var(--text-secondary)]">Dados fictícios · {previewTemplate.sender || "Remetente configurado"}</p>
+                <p className="text-xs text-[var(--text-secondary)]">Assunto: {previewTemplate.subject}</p>
               </div>
               <button 
                 onClick={() => setPreviewTemplate(null)}
@@ -102,7 +105,8 @@ async function loadTemplates() {
             </div>
             <div className="flex-1 overflow-auto bg-[var(--surface-muted)]">
               <iframe 
-                srcDoc={getMockedHtml(previewTemplate.html_content)}
+                srcDoc={getMockedHtml(previewTemplate.html_content || "")}
+                sandbox=""
                 className="w-full h-[600px] border-0 bg-white"
                 title="Email Preview"
               />
@@ -153,6 +157,7 @@ async function loadTemplates() {
                   Live Preview
                 </div>
                 <iframe 
+                  sandbox=""
                   srcDoc={getMockedHtml(editContent)}
                   className="flex-1 w-full border-0 bg-white"
                   title="Email Preview"
@@ -182,9 +187,10 @@ function TemplateRow({ template, onPreview, onEdit }: { template: EmailTemplate,
           onClick={onPreview}
           className="px-3 py-1.5 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-container)] rounded-md transition-colors border border-transparent hover:border-[var(--border-strong)]"
         >
-          Preview
+          Pré-visualizar
         </button>
-        <button 
+        {template.readonly && <span className="px-2 text-[10px] text-[var(--text-tertiary)]">Gerido no código</span>}
+        {!template.readonly && <button
           onClick={onEdit}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-md transition-colors cursor-pointer ${
             isError ? "text-[var(--status-critical)] hover:bg-[var(--status-critical-soft)]" : "text-[var(--accent)] hover:bg-[var(--accent-soft)]"
@@ -192,7 +198,7 @@ function TemplateRow({ template, onPreview, onEdit }: { template: EmailTemplate,
         >
           <Edit3 className="w-3.5 h-3.5" />
           Editar Template
-        </button>
+        </button>}
       </div>
     </div>
   )
@@ -213,4 +219,6 @@ function getMockedHtml(html: string) {
     .replace(/{{address}}/g, "Rua da Boavista, 4000-123 Porto")
     .replace(/{{volumes}}/g, "1")
     .replace(/{{incident_reason}}/g, "Morada incompleta ou incorreta")
+    .replace(/{{incident_date}}/g, "12/11/2026, 10:30")
+    .replace(/{{support_url}}/g, "https://portal.example.invalid/tracking")
 }

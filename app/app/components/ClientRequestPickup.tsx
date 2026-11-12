@@ -1,179 +1,84 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
-import { Calendar, Truck, CheckCircle2, Building2, Clock, MapPin, Package, ArrowLeft } from "lucide-react"
+import { CalendarDays, CheckCircle2, Clock, Loader2, RefreshCw, Truck } from "lucide-react"
 import { useClientScope } from "./ClientScope"
+import { requestClientPickupAction, listClientPickupRequestsAction } from "@/app/actions/client-pickup-requests"
+import { CTT_PICKUP_PERIODS, CORREOS_PICKUP_PERIODS, PICKUP_REQUEST_PAGE_SIZE, pickupRequestToday, type PickupRequestPage } from "@/lib/client-pickup-requests"
+import { inputClass, primaryButton, secondaryButton } from "@/components/shipments/form/fields"
 
-export function ClientRequestPickup() {
-  const { client: currentClient, basePath } = useClientScope()
-  const [pickupDate, setPickupDate] = React.useState(new Date().toISOString().split("T")[0])
-  const [pickupVolumes, setPickupVolumes] = React.useState("2")
-  const [pickupWeight, setPickupWeight] = React.useState("5.0")
-  const [pickupTimeSlot, setPickupTimeSlot] = React.useState("tarde")
-  const [notes, setNotes] = React.useState("")
-  const [pickupSuccess, setPickupSuccess] = React.useState(false)
-  const [pickupId, setPickupId] = React.useState<string | null>(null)
-
-
-  const senderAddress = currentClient?.address 
-    ? `${currentClient.address}, ${currentClient.postal_code} ${currentClient.city}` 
-    : "Sede Comercial da Empresa"
-
-  const handleConfirmPickup = (e: React.FormEvent) => {
-    e.preventDefault()
-    const newPickupCode = `REC-CTT-${Math.floor(100000 + Math.random() * 900000)}`
-    setPickupId(newPickupCode)
-    setPickupSuccess(true)
+const emptyPage: PickupRequestPage = { requests: [], total: 0, page: 0 }
+export function ClientRequestPickup({ initialPage = emptyPage, initialError = "" }: { initialPage?: PickupRequestPage; initialError?: string }) {
+  const { client, isSuspended } = useClientScope()
+  const [history, setHistory] = React.useState(initialPage)
+  const [error, setError] = React.useState(initialError)
+  const [busy, setBusy] = React.useState(false)
+  const [sent, setSent] = React.useState("")
+  const [volumes, setVolumes] = React.useState(1)
+  const [carrier, setCarrier] = React.useState("ctt_expresso")
+  const [period, setPeriod] = React.useState("09:00-19:00")
+  const lock = React.useRef(false)
+  const requestId = React.useRef<string | null>(null)
+  const today = pickupRequestToday()
+  const suspended = isSuspended || client.portal_access_status === "suspended" || client.portal_access_status === "blocked" || client.is_active === false
+  const load = async (page = 0) => {
+    if (lock.current) return
+    lock.current = true; setBusy(true); setError("")
+    try {
+      const result = await listClientPickupRequestsAction({ clientId: client.id, page })
+      if (!result.success) { setError(result.error); return }
+      setHistory(previous => ({ ...result, requests: page ? [...previous.requests, ...result.requests] : result.requests }))
+    } catch { setError("Não foi possível atualizar os pedidos. Tente novamente.") }
+    finally { lock.current = false; setBusy(false) }
   }
-
-  return (
-    <div className="flex flex-col gap-6 max-w-4xl mx-auto">
-      
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <Link href={basePath} className="hover:text-emerald-700">Painel Principal</Link>
-            <span>&gt;</span>
-            <span className="text-indigo-600 font-bold">Pedir Recolha CTT</span>
-          </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Agendar Recolha de Mercadoria</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Agende a passagem do estafeta CTT Expresso nas suas instalações para levantamento de volumes.
-          </p>
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (lock.current || suspended || sent) return
+    const data = new FormData(event.currentTarget)
+    const value = (name: string) => String(data.get(name) || "")
+    lock.current = true; setBusy(true); setError("")
+    requestId.current ||= crypto.randomUUID()
+    try {
+      const weightKg = Number(value("weightKg"))
+      const result = await requestClientPickupAction({ date: value("date"), period: value("period"), carrier: value("carrier"),
+        volumes, weightKg, heaviestWeightKg: volumes === 1 ? weightKg : Number(value("heaviestWeightKg")),
+        name: value("name"), address: value("address"), postal: value("postal"), city: value("city"), contact: value("contact"), phone: value("phone"), email: value("email"), notes: value("notes"),
+      }, requestId.current, client.id)
+      if (!result.success) { setError(result.error); return }
+      setSent(result.request.reference)
+      setHistory(previous => ({ ...previous, requests: [result.request, ...previous.requests.filter(row => row.id !== result.request.id)], total: previous.total + (previous.requests.some(row => row.id === result.request.id) ? 0 : 1) }))
+      requestId.current = null
+    } catch { setError("Não foi possível confirmar o pedido. Atualize o histórico antes de tentar novamente.") }
+    finally { lock.current = false; setBusy(false) }
+  }
+  const field = (name: string, label: string, type: string, defaultValue: string | number = "", required = true) => <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">{label}<input name={name} type={type} defaultValue={defaultValue} required={required} maxLength={type === "text" ? 200 : undefined} className={inputClass} /></label>
+  return <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
+    <header><h1 className="flex items-center gap-2 text-xl font-semibold text-[var(--text-primary)]"><Truck size={22} />Pedidos de recolha</h1><p className="mt-2 text-sm text-[var(--text-secondary)]">Envie o pedido à equipa Linke. O agendamento com a transportadora será tratado pela nossa equipa.</p></header>
+    {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+    {suspended && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Esta conta não pode criar novos pedidos. Contacte a equipa Linke.</p>}
+    {sent ? <section role="status" className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-5"><h2 className="flex items-center gap-2 font-semibold text-emerald-900"><CheckCircle2 size={18} />Pedido enviado à equipa Linke · {sent}</h2><p className="text-sm text-emerald-900">Estado: Pendente. A equipa irá tratar do agendamento com a transportadora.</p><button type="button" className={secondaryButton} onClick={() => setSent("")}>Novo pedido</button></section> : <form onSubmit={submit} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 sm:p-5">
+      <h2 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">Solicitar recolha</h2>
+      <fieldset disabled={busy || suspended} className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-3"><label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Data pretendida<input type="date" name="date" min={today} defaultValue={today} required className={inputClass} /></label>
+          <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Período pretendido<select name="period" value={period} onChange={event => setPeriod(event.target.value)} className={inputClass}>{(carrier === "ctt_expresso" ? CTT_PICKUP_PERIODS : CORREOS_PICKUP_PERIODS).map(option => <option key={option} value={option}>{option}</option>)}</select></label>
+          <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Transportadora<select name="carrier" value={carrier} onChange={event => { setCarrier(event.target.value); setPeriod(event.target.value === "ctt_expresso" ? "09:00-19:00" : "10:00-13:00") }} className={inputClass}><option value="ctt_expresso">CTT Expresso</option><option value="correos_express">Correos Express</option></select></label>
         </div>
-
-        {currentClient && (
-          <div className="flex items-center gap-2.5 bg-white border border-slate-200 px-4 py-2 rounded-2xl shadow-2xs text-xs">
-            <Building2 className="w-4 h-4 text-indigo-600" />
-            <span className="font-bold text-slate-900">{currentClient.short_name}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Success Banner */}
-      {pickupSuccess && (
-        <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-3 animate-in fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-sm font-bold text-emerald-950 flex items-center gap-2">
-                <span>Pedido de Recolha Registado!</span>
-                <span className="font-mono text-xs bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded font-bold">
-                  {pickupId}
-                </span>
-              </div>
-              <p className="text-xs text-emerald-800">
-                O estafeta CTT passará na data e período indicados.
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setPickupSuccess(false)}
-            className="text-emerald-800 hover:text-emerald-950 text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-100 cursor-pointer"
-          >
-            Novo Pedido
-          </button>
+        <div className="grid gap-4 sm:grid-cols-3"><label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">N.º de volumes<input type="number" name="volumes" min={1} max={1000} step={1} required value={volumes} onChange={event => setVolumes(Number(event.target.value))} className={inputClass} /></label>
+          <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Peso total (kg)<input type="number" name="weightKg" min={0.001} max={20000} step={0.001} required className={inputClass} /></label>
+          {volumes > 1 && <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Volume mais pesado (kg)<input type="number" name="heaviestWeightKg" min={0.001} max={20000} step={0.001} required className={inputClass} /></label>}
         </div>
-      )}
-
-      {/* Form Card */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 sm:p-8">
-        <form onSubmit={handleConfirmPickup} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Data Pretendida para Recolha *</label>
-              <input 
-                type="date" 
-                required
-                value={pickupDate}
-                onChange={(e) => setPickupDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Período de Recolha CTT</label>
-              <select
-                value={pickupTimeSlot}
-                onChange={(e) => setPickupTimeSlot(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="manha">Manhã (09h00 às 13h00)</option>
-                <option value="tarde">Tarde (14h00 às 18h00)</option>
-                <option value="dia_todo">Qualquer hora útil (09h00 às 19h00)</option>
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Nº de Volumes Previstos *</label>
-              <input 
-                type="number" 
-                min="1"
-                required
-                value={pickupVolumes}
-                onChange={(e) => setPickupVolumes(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">Peso Total Estimado (kg)</label>
-              <input 
-                type="number" 
-                step="0.5"
-                min="0.5"
-                value={pickupWeight}
-                onChange={(e) => setPickupWeight(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-              />
-            </div>
-
-            <div className="space-y-1.5 md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700">Morada de Recolha (Instalações)</label>
-              <input 
-                type="text" 
-                defaultValue={senderAddress}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-              />
-            </div>
-
-            <div className="space-y-1.5 md:col-span-2">
-              <label className="block text-xs font-bold text-slate-700">Instruções Adicionais para o Estafeta</label>
-              <textarea 
-                rows={3}
-                placeholder="Ex: Tocar à campainha do armazém 2 / Cais das traseiras"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-              />
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-slate-200 flex items-center justify-between">
-            <Link
-              href={basePath}
-              className="text-xs font-bold text-slate-500 hover:text-slate-800"
-            >
-              Cancelar
-            </Link>
-
-            <button 
-              type="submit" 
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-7 py-3 rounded-xl text-xs font-bold shadow-sm transition-colors flex items-center gap-2 cursor-pointer"
-            >
-              <Truck className="w-4 h-4" />
-              <span>Confirmar Pedido de Recolha CTT</span>
-            </button>
-          </div>
-        </form>
-      </div>
-
-    </div>
-  )
+        <div className="grid gap-4 sm:grid-cols-2">{field("name", "Nome / empresa no local", "text", client.short_name || client.legal_name)}{field("contact", "Pessoa de contacto", "text", client.short_name || client.legal_name)}</div>
+        {field("address", "Morada de recolha", "text", client.address)}
+        <div className="grid gap-4 sm:grid-cols-2">{field("postal", "Código postal", "text", client.postal_code)}{field("city", "Localidade", "text", client.city)}{field("phone", "Telefone / telemóvel", "tel", client.mobile_phone || client.phone)}{field("email", "Email (opcional)", "email", client.email, false)}</div>
+        <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Observações (opcional)<textarea name="notes" rows={2} maxLength={500} className={inputClass} placeholder="Acesso ao armazém, campainha, instruções úteis…" /></label>
+        <p className="text-xs text-[var(--text-secondary)]">A data e o período são preferências, sujeitos a confirmação pela equipa e pela transportadora.</p>
+        <button type="submit" className={primaryButton}>{busy ? <Loader2 size={16} className="animate-spin" /> : <CalendarDays size={16} />}Enviar pedido à Linke</button>
+      </fieldset>
+    </form>}
+    <section className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 sm:p-5"><div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-[var(--text-primary)]">Os meus pedidos ({history.total})</h2><button type="button" disabled={busy} className={secondaryButton} onClick={() => void load()}><RefreshCw size={14} />Atualizar</button></div>
+      <p className="mb-4 text-xs text-[var(--text-secondary)]">Pendente: aguarda tratamento pela Linke. Efetuado: a Linke já fez o pedido à transportadora; não confirma o levantamento da mercadoria.</p>
+      {!history.requests.length ? <p className="py-5 text-sm text-[var(--text-secondary)]">Ainda não existem pedidos de recolha.</p> : <ul className="divide-y divide-[var(--border-subtle)]">{history.requests.map(request => <li key={request.id} className="space-y-2 py-4"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="font-mono text-xs text-[var(--text-primary)]">{request.reference}</strong><span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium ${request.status === "completed" ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>{request.status === "completed" ? <CheckCircle2 size={13} /> : <Clock size={13} />}{request.status === "completed" ? "Efetuado" : "Pendente"}</span></div><p className="text-sm text-[var(--text-primary)]">{request.pickup.date.split("-").reverse().join("/")} · {request.pickup.period} · {request.pickup.volumes} volume(s) · {request.pickup.weightKg} kg</p><p className="text-xs text-[var(--text-secondary)]">{request.pickup.address} · {request.pickup.postal} {request.pickup.city}</p>{request.carrier_reference && <p className="text-xs text-[var(--text-secondary)]">{request.carrier_name} · Referência: {request.carrier_reference}</p>}</li>)}</ul>}
+      {history.total > (history.page + 1) * PICKUP_REQUEST_PAGE_SIZE && <button type="button" disabled={busy} className={`${secondaryButton} mt-4`} onClick={() => void load(history.page + 1)}>Ver mais pedidos</button>}
+    </section>
+  </div>
 }

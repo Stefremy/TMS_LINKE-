@@ -23,12 +23,16 @@ import styles from "./SidebarPattern.module.css"
 import { APP_VERSION } from "@/lib/config/version"
 import { useQuotationUnread } from "@/components/shipments/quotations/useQuotationUnread"
 import { QuotationUnreadBadge } from "@/components/shipments/quotations/QuotationUnreadBadge"
+import { usePickupRequestCount } from "@/components/pickups/usePickupRequestCount"
+import { PickupRequestBadge } from "@/components/pickups/PickupRequestBadge"
 
 export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false, access }: { canAccessDocuments?: boolean; canSendMessages?: boolean; access?: PermissionContext }) {
   const [isCollapsed, setIsCollapsed] = React.useState(false)
   const [isMobileOpen, setIsMobileOpen] = React.useState(false)
   const pathname = usePathname()
   const quotationUnreadCount = useQuotationUnread(canAccessOpsRoute(access, "/ops/envios/cotacoes"))
+  const pickupRequestCount = usePickupRequestCount(canAccessOpsRoute(access, "/ops/envios/recolhas"))
+  const navigationAlerts = quotationUnreadCount + pickupRequestCount
 
   // Auto-close mobile drawer whenever route changes
   React.useEffect(() => {
@@ -73,13 +77,13 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
           <button
             type="button"
             onClick={() => setIsMobileOpen(true)}
-            aria-label={quotationUnreadCount ? `Abrir menu de navegação, ${quotationUnreadCount} pedidos por ler` : "Abrir menu de navegação"}
+            aria-label={navigationAlerts ? `Abrir menu de navegação, ${navigationAlerts} pedidos pendentes ou por ler` : "Abrir menu de navegação"}
             aria-controls="ops-mobile-menu"
             aria-expanded={isMobileOpen}
             className="relative min-h-11 min-w-11 flex items-center justify-center p-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-muted)] text-[var(--text-primary)] hover:bg-[rgba(0,0,0,0.05)] active:scale-95 transition-all cursor-pointer"
           >
             <Menu className="w-5 h-5" />
-            <QuotationUnreadBadge count={quotationUnreadCount} className="absolute -right-1 -top-1" />
+            <QuotationUnreadBadge count={navigationAlerts} label={`${navigationAlerts} alertas de navegação`} className="absolute -right-1 -top-1" />
           </button>
 
           <Link href="/ops" className="flex items-center gap-2">
@@ -140,7 +144,7 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
           <div className={`tms-drawer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain ${styles.pattern} ${styles.mobilePattern}`}>
             {/* Scrollable Navigation */}
             <div className="py-2">
-              <SidebarNav collapsed={false} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} access={access} quotationUnreadCount={quotationUnreadCount} />
+              <SidebarNav collapsed={false} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} access={access} quotationUnreadCount={quotationUnreadCount} pickupRequestCount={pickupRequestCount} />
             </div>
 
             {/* Drawer Footer Actions */}
@@ -210,7 +214,7 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
         </div>
 
         {/* Navigation */}
-        <SidebarNav collapsed={isCollapsed} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} access={access} quotationUnreadCount={quotationUnreadCount} />
+        <SidebarNav collapsed={isCollapsed} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} access={access} quotationUnreadCount={quotationUnreadCount} pickupRequestCount={pickupRequestCount} />
 
         {/* Bottom Sidebar Action: Recolher painel */}
         <div className={`pb-4 pt-2 ${isCollapsed ? "px-2" : "px-4"}`}>
@@ -290,7 +294,7 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
               : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
           }`}
         >
-          <CalendarCheck className={`w-5 h-5 mb-0.5 ${pathname.startsWith("/ops/envios/recolhas") ? "text-[var(--accent)] stroke-[2.5]" : ""}`} />
+          <span className="relative"><CalendarCheck className={`w-5 h-5 mb-0.5 ${pathname.startsWith("/ops/envios/recolhas") ? "text-[var(--accent)] stroke-[2.5]" : ""}`} /><PickupRequestBadge count={pickupRequestCount} className="absolute -right-4 -top-2" /></span>
           <span className="text-[11px] tracking-tight">Recolhas</span>
         </Link>)}
 

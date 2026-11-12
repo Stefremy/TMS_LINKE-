@@ -11,6 +11,7 @@ import { addDays, todayKey } from "@/features/calendar/lib/dates";
 import { upcomingPersonalEvents } from "@/features/calendar/lib/reminders";
 import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 import { QUOTATION_ACTION } from "@/lib/shipments/quotations/types";
+import { PICKUP_REQUEST_ACTION } from "@/lib/pickup-request-notifications";
 
 export interface OperationalNotification {
   id: string;
@@ -21,7 +22,8 @@ export interface OperationalNotification {
     | "system"
     | "warning"
     | "success"
-    | "calendar";
+    | "calendar"
+    | "pickup";
   title: string;
   message: string;
   timestamp: string;
@@ -174,6 +176,21 @@ export async function getOperationalNotificationsAction(): Promise<
         message: `${row.reference} · ${row.client_name}`, timestamp: row.updated_at || row.created_at,
         link: `/ops/envios/cotacoes?pedido=${row.id}`, actionLabel: "Ver cotação", priority: "medium" });
     } catch { /* Other operational notifications remain available. */ }
+  }
+
+  if (hasPermission(ctx, PERMISSIONS.pickups)) {
+    try {
+      const { data, error } = await createAdminClient().from("audit_log")
+        .select("id,created_at,reference:details->>reference,client_name:details->>client_name")
+        .eq("tenant_id", ctx.tenant_id).eq("action", PICKUP_REQUEST_ACTION)
+        .in("details->>status", ["pending", "processing"])
+        .order("created_at", { ascending: false }).limit(10);
+      if (!error) for (const row of data || []) notifications.push({
+        id: `pickup-request-${row.id}`, type: "pickup",
+        title: "Pedido de recolha do cliente", message: `${row.reference} · ${row.client_name} aguarda agendamento pela equipa Linke.`,
+        timestamp: row.created_at, link: "/ops/envios/recolhas", actionLabel: "Tratar pedido", priority: "medium",
+      });
+    } catch { /* A pickup lookup must not hide other operational alerts. */ }
   }
 
   // Personal calendar reminders remain available throughout Ops, not only on the calendar page.

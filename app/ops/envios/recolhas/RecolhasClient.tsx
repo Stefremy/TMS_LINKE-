@@ -35,6 +35,11 @@ import { formatPickupRequestTime, type PickupSummary } from "@/lib/pickup-manage
 import { PickupDetailsDialog, PickupSearchPanel } from "./PickupManagement"
 import { PickupCutoffNotice } from "./PickupCutoffNotice"
 import { PickupStatus } from "./PickupStatus"
+import { useRouter } from "next/navigation"
+import type { ClientPickupRequest, PickupRequestPage } from "@/lib/client-pickup-requests"
+import { scheduleClientPickupRequestAction } from "@/app/actions/client-pickup-requests"
+import { ClientPickupRequestsPanel } from "./ClientPickupRequestsPanel"
+import { PICKUP_REQUESTS_CHANGED_EVENT } from "@/lib/pickup-request-notifications"
 
 interface MappedClient {
   id: string
@@ -60,6 +65,8 @@ interface CarrierConnection {
 type Recolha = PickupSummary
 
 interface RecolhasClientProps {
+  clientRequests?: PickupRequestPage
+  clientRequestsError?: string
   initialError?: string
   requesterContact?: CTTPickupRequester
   recolhas: Recolha[]
@@ -79,15 +86,20 @@ function todayDate() {
   }).format(new Date())
 }
 
-export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConnections, requesterContact, initialError }: RecolhasClientProps) {
+export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConnections, requesterContact, initialError, clientRequests = { requests: [], total: 0, page: 0 }, clientRequestsError }: RecolhasClientProps) {
+  const router = useRouter()
+  const [activeRequest, setActiveRequest] = React.useState<ClientPickupRequest | null>(null)
+  const submissionLock = React.useRef(false)
   const [updatedPickups, setUpdatedPickups] = React.useState<Record<string, PickupSummary>>({})
   const recolhas = initialRecolhas.map(row => updatedPickups[row.id] || row)
-  const [view, setView] = React.useState<"list" | "search" | "form">("list")
+  const [view, setView] = React.useState<"list" | "search" | "form" | "requests">(clientRequests.total ? "requests" : "list")
   const [openedPickup, setOpenedPickup] = React.useState<PickupSummary | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [result, setResult] = React.useState<{
     success?: boolean; Success?: boolean; error?: string; carrier_name?: string
     metadata_saved?: boolean; pickupNumber?: string; PickUpID?: string
+    request_update_warning?: string
+    notification_warning?: string
   } | null>(null)
   const [copiedId, setCopiedId] = React.useState<string | null>(null)
 
@@ -170,6 +182,19 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
 
   const selectedCarrier = carrierConnections.find(c => c.id === selectedCarrierId) || availableConnectionsForCarrier[0]
 
+  const prepareClientRequest = (request: ClientPickupRequest) => {
+    const pickup = request.pickup
+    handleSelectCarrierTab(pickup.carrier)
+    setActiveRequest(request); setSelectedClientId(request.client_id)
+    setDate(pickup.date); setPeriod(pickup.period); setVolumes(pickup.volumes)
+    setWeightKg(pickup.weightKg); setHeaviestWeightKg(pickup.heaviestWeightKg)
+    setSenderName(pickup.name); setSenderContact(pickup.contact); setSenderEmail(pickup.email)
+    setSenderAddress(pickup.address); setSenderZip(pickup.postal); setSenderCity(pickup.city)
+    setSenderPhone(pickup.phone); setSenderMobile(""); setSenderCountry("PT")
+    setObservations(pickup.notes); setDimLength(""); setDimWidth(""); setDimHeight("")
+    setDestination("PT"); setGuideStatus("Disponível no local"); setResult(null); setView("form")
+  }
+
   const handleCopy = (text: string) => {
     if (!text) return
     navigator.clipboard.writeText(text)
@@ -185,6 +210,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (submissionLock.current) return
     const formData = new FormData(e.currentTarget)
     const submittedContact = readPickupContact(formData)
     const submittedRequester = readPickupRequester(formData)
@@ -203,6 +229,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
       setResult({ success: false, error: "O peso do volume mais pesado deve ser maior que 0 e não pode ultrapassar o peso total." })
       return
     }
+    submissionLock.current = true
     setLoading(true)
     setResult(null)
     try {
@@ -212,7 +239,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
 
       const [startHour, endHour] = period.split("-")
 
-      const res = await scheduleCttPickupAction({
+      const booking: Parameters<typeof scheduleCttPickupAction>[0] = {
         requester: isCttActive ? submittedRequester : undefined,
         connection_id: selectedCarrier?.id || selectedCarrierId,
         carrier_code: selectedCarrierCode,
@@ -240,11 +267,14 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
           ...submittedContact,
         },
         observations: finalObs || undefined,
-      })
+      }
+      const res = activeRequest ? await scheduleClientPickupRequestAction(activeRequest.id, booking) : await scheduleCttPickupAction(booking)
       setResult(res)
+      if (activeRequest) { window.dispatchEvent(new Event(PICKUP_REQUESTS_CHANGED_EVENT)); router.refresh() }
     } catch (err) {
       setResult({ success: false, error: err instanceof Error ? err.message : "Não foi possível pedir a recolha." })
     } finally {
+      submissionLock.current = false
       setLoading(false)
     }
   }
@@ -304,16 +334,19 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => { setView("requests"); setResult(null); router.refresh() }} className={`flex items-center gap-2 rounded-lg border px-3.5 py-1.5 text-xs font-bold ${view === "requests" ? "bg-[var(--accent)] text-white" : "bg-[var(--surface-bg)] text-[var(--text-secondary)]"}`}>Pedidos dos clientes <span className="rounded-full bg-amber-100 px-1.5 text-amber-900">{clientRequests.total}</span></button>
           <button
+            type="button"
+            aria-pressed={view === "list"}
             onClick={() => { setView("list"); setResult(null) }}
-            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-colors flex items-center gap-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
               view === "list"
                 ? "bg-[var(--text-primary)] text-[var(--surface-bg)] border-[var(--text-primary)] shadow-xs"
-                : "bg-[var(--surface-bg)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)]"
+                : "bg-[var(--surface-bg)] text-[var(--text-primary)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)]"
             }`}
           >
             Lista de Recolhas
-            <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200/60 dark:bg-slate-700 font-mono">
+            <span className="inline-flex h-5 min-w-6 shrink-0 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--surface-bg)] px-1.5 text-[11px] font-semibold leading-none text-[var(--text-primary)] tabular-nums">
               {recolhas.length}
             </span>
           </button>
@@ -322,7 +355,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
             className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 ${view === "search" ? "bg-[var(--text-primary)] text-[var(--surface-bg)] border-[var(--text-primary)]" : "bg-[var(--surface-bg)] text-[var(--text-secondary)] border-[var(--border-strong)] hover:bg-[var(--surface-muted)]"}`}
           ><Search className="h-3.5 w-3.5" />Pesquisar</button>
           <button
-            onClick={() => { setView("form"); setResult(null) }}
+            onClick={() => { setActiveRequest(null); setView("form"); setResult(null) }}
             className={`px-3.5 py-1.5 text-xs font-bold rounded-lg border transition-colors flex items-center gap-1.5 shadow-xs ${
               view === "form"
                 ? "bg-[var(--accent)] text-white border-[var(--accent)]"
@@ -336,7 +369,8 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
       </div>
 
       {initialError && view === "list" && <p role="alert" className="m-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{initialError} Tente novamente no separador Pesquisar.</p>}
-      {view === "search" ? (
+      {clientRequestsError && view !== "requests" && <p role="alert" className="m-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">{clientRequestsError} Abra Pedidos dos clientes para atualizar.</p>}
+      {view === "requests" ? <ClientPickupRequestsPanel initialPage={clientRequests} initialError={clientRequestsError} onSchedule={prepareClientRequest} /> : view === "search" ? (
         <PickupSearchPanel onOpen={setOpenedPickup} onUpdated={pickup => setUpdatedPickups(previous => ({ ...previous, [pickup.id]: pickup }))} updatedPickups={updatedPickups} connections={carrierConnections.filter(c => c.carrier_code === "ctt_expresso")} />
       ) : view === "list" ? (
         /* ───── LIST VIEW ───── */
@@ -581,6 +615,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
         /* ───── FORM VIEW ───── */
         <div className="flex-1 overflow-auto">
           <div className="max-w-5xl mx-auto w-full p-4 sm:p-6">
+            {activeRequest && !result?.success && <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Pedido {activeRequest.reference} · {activeRequest.client_name}. Confirme os dados e complete as medidas exigidas pela transportadora antes de agendar.</p>}
 
             {result && (result.success || result.Success) ? (
               /* ── Success State ── */
@@ -600,6 +635,8 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                     {result.metadata_saved === false && <p role="alert" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
                       A transportadora aceitou a recolha, mas os dados detalhados não foram arquivados no TMS. Guarde a referência {result.pickupNumber} e contacte a administração para recuperar este registo.
                     </p>}
+                    {result.request_update_warning && <p role="alert" className="mt-3 text-sm font-medium text-amber-900">{result.request_update_warning}</p>}
+                    {result.notification_warning && <p role="alert" className="mt-3 text-sm font-medium text-amber-900">{result.notification_warning}</p>}
                   </div>
                 </div>
 
@@ -831,6 +868,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                         <Building2 className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <select
                           value={selectedClientId}
+                          disabled={!!activeRequest}
                           onChange={e => handleClientChange(e.target.value)}
                           className="w-full pl-9 pr-8 border border-slate-300 dark:border-slate-700 rounded-lg py-2 text-xs font-medium text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >

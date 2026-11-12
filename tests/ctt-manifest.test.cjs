@@ -200,3 +200,10 @@ test('manifest notification excludes other carriers, companies and already close
   assert.match(batch.message, /Existem 1 envio/)
   assert.ok(db.queries.every(query => !query.filters.some(filter => filter.field === 'ctt_manifest_pdf')))
 })
+
+test('the closure flag persists when only the optional shipment PDF column is absent',async()=>{
+ const h=harness({failure:q=>q.write?.value?.ctt_manifest_pdf?{code:'42703',message:'column ctt_manifest_pdf does not exist'}:null})
+ const result=await h.close(TENANT,[A])
+ assert.equal(result.success,true);assert.equal(h.calls.length,1);assert.equal(h.rows[0].ops_substatus,'manifesto_fechado');assert.equal(h.rows[0].status,'pendente')
+ assert.equal(h.db.writes.find(w=>w.table==='audit_log').value.details.manifest_pdf_base64,PDF)
+})

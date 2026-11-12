@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { canAccessOpsRoute, type PermissionContext } from "@/lib/auth/permissions"
 import { QuotationUnreadBadge } from "@/components/shipments/quotations/QuotationUnreadBadge"
+import { PickupRequestBadge } from "@/components/pickups/PickupRequestBadge"
 import { 
   LayoutDashboard, 
   Package, 
@@ -144,9 +145,10 @@ interface SidebarNavProps {
   canAccessDocuments?: boolean
   canSendMessages?: boolean
   quotationUnreadCount?: number
+  pickupRequestCount?: number
 }
 
-export function SidebarNav({ collapsed = false, canAccessDocuments = false, canSendMessages = false, access, quotationUnreadCount = 0 }: SidebarNavProps) {
+export function SidebarNav({ collapsed = false, canAccessDocuments = false, canSendMessages = false, access, quotationUnreadCount = 0, pickupRequestCount = 0 }: SidebarNavProps) {
   const pathname = usePathname()
   const visibleNavConfig = React.useMemo(() => navConfig.map((section) => ({
     ...section,
@@ -268,7 +270,7 @@ export function SidebarNav({ collapsed = false, canAccessDocuments = false, canS
                     <Link
                       href={item.href}
                       prefetch={false}
-                      aria-label={item.href === "/ops/envios/cotacoes" && quotationUnreadCount ? `${item.title}, ${quotationUnreadCount} pedidos por ler` : item.title}
+                      aria-label={item.href === "/ops/envios/recolhas" && pickupRequestCount ? `${item.title}, ${pickupRequestCount} pedidos pendentes` : item.href === "/ops/envios/cotacoes" && quotationUnreadCount ? `${item.title}, ${quotationUnreadCount} pedidos por ler` : item.title}
                       className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors relative ${
                         isActive
                           ? "bg-[var(--surface-muted)] text-[var(--text-primary)] font-semibold"
@@ -276,7 +278,7 @@ export function SidebarNav({ collapsed = false, canAccessDocuments = false, canS
                       }`}
                     >
                       <item.icon className="w-5 h-5" strokeWidth={1.75} />
-                      {item.href === "/ops/envios/cotacoes" ? <QuotationUnreadBadge count={quotationUnreadCount} className="absolute -right-1 -top-1 ring-2 ring-[var(--surface-bg)]" /> : item.badge && (
+                      {item.href === "/ops/envios/recolhas" ? <PickupRequestBadge count={pickupRequestCount} className="absolute -right-1 -top-1 ring-2 ring-[var(--surface-bg)]" /> : item.href === "/ops/envios/cotacoes" ? <QuotationUnreadBadge count={quotationUnreadCount} className="absolute -right-1 -top-1 ring-2 ring-[var(--surface-bg)]" /> : item.badge && (
                         <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-[var(--surface-bg)]" />
                       )}
                     </Link>
@@ -399,7 +401,7 @@ export function SidebarNav({ collapsed = false, canAccessDocuments = false, canS
                     />
                     {item.title}
                   </div>
-                  {item.href === "/ops/envios/cotacoes" ? <QuotationUnreadBadge count={quotationUnreadCount} /> : item.badge && (
+                  {item.href === "/ops/envios/recolhas" ? <PickupRequestBadge count={pickupRequestCount} /> : item.href === "/ops/envios/cotacoes" ? <QuotationUnreadBadge count={quotationUnreadCount} /> : item.badge && (
                     <span className="bg-[#FEF3C7] text-[#D97706] text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center justify-center">
                       {item.badge}
                     </span>

@@ -4,14 +4,16 @@ import { getClientesAction } from "@/app/actions/clientes"
 import { getCarrierConnectionsAction } from "@/app/actions/ctt"
 import { RecolhasClient } from "./RecolhasClient"
 import { getCttPickupRequester } from "@/lib/config/ctt-pickup-requester"
+import { listClientPickupRequestsAction } from "@/app/actions/client-pickup-requests"
 
 export default async function RecolhasPage() {
   await requireOpsPageAccess("/ops/envios/recolhas")
 
-  const [recolhasResult, clients, carrierConnections] = await Promise.all([
+  const [recolhasResult, clients, carrierConnections, clientRequests] = await Promise.all([
     searchPickupsAction(),
     getClientesAction(),
     getCarrierConnectionsAction(),
+    listClientPickupRequestsAction({ pendingOnly: true }),
   ])
 
   if (!recolhasResult.success) console.error("Error fetching recolhas:", recolhasResult.error)
@@ -73,6 +75,8 @@ export default async function RecolhasPage() {
 
   return (
     <RecolhasClient
+      clientRequests={clientRequests.success ? clientRequests : undefined}
+      clientRequestsError={clientRequests.success ? undefined : clientRequests.error}
       recolhas={mappedRecolhas}
       initialError={recolhasResult.success ? undefined : recolhasResult.error}
       clients={mappedClients}

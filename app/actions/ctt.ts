@@ -474,6 +474,7 @@ export async function syncCttTrackingAction(trackingNumber: string, shipmentId?:
  * Agenda uma recolha junto da transportadora (CTT Expresso ou Correos Express)
  */
 export async function scheduleCttPickupAction(input: {
+  client_request_id?: string
   requester?: CTTPickupRequester
   connection_id?: string
   carrier_code?: string
@@ -604,6 +605,7 @@ export async function scheduleCttPickupAction(input: {
           carrier_code: carrierCode,
           carrier_name: carrierName,
           client_id: input.client_id || null,
+          client_request_id: input.client_request_id || null,
           sender_name: input.sender.name,
           sender_address: input.sender.address,
           sender_city: input.sender.city,
@@ -636,13 +638,14 @@ export async function scheduleCttPickupAction(input: {
       console.warn("Could not save recolha metadata to audit_log:", errorMessage(auditErr))
     }
 
-    // Disparar email de confirmação se fornecido
-    if (input.sender.email) {
+    // Client requests send one registered-contact email after their status commits.
+    // Standalone Ops pickups retain their existing confirmation.
+    if (input.sender.email && !input.client_request_id) {
       try {
       const { sendEmail, compileTemplate } = await import("@/lib/email/resend")
-      const { emailTemplates } = await import("@/app/ops/configuracao/notificacoes/templates")
+      const { storedEmailTemplate } = await import("@/lib/email/stored-template")
       
-      const html = compileTemplate(emailTemplates.pickup_scheduled, {
+      const html = compileTemplate(await storedEmailTemplate(supabase, "pickup_scheduled"), {
         date: input.date,
         time_period: `${input.startHour}h - ${input.endHour}h`,
         address: `${input.sender.address}, ${input.sender.zip} ${input.sender.city}`,
@@ -651,6 +654,7 @@ export async function scheduleCttPickupAction(input: {
       })
 
       sendEmail({
+        from: "Linke <notificacoes@linke.pt>",
         to: input.sender.email,
         subject: `Linke | Recolha ${carrierName} Agendada com Sucesso (${result.pickupNumber})`,
         html,

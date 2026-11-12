@@ -1,3 +1,4 @@
+import { clientInvitationHtml } from "@/lib/email/code-templates"
 import "server-only"
 import type { SupabaseClient, User } from "@supabase/supabase-js"
 import { DEFAULT_COLABORADORES } from "@/app/ops/entidades/colaboradores/types"
@@ -84,15 +85,7 @@ export function invitationConfig() {
 }
 
 export function invitationEmail(storeName: string, link: string) {
-  const escape = (value: string) => value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!))
-  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1a3028;padding:32px">
-    <h1 style="font-size:24px">Bem-vindo à Área do Cliente Linke</h1>
-    <p>O acesso à loja <strong>${escape(storeName)}</strong> está preparado.</p>
-    <p>Escolha a sua palavra-passe para entrar e começar a criar envios.</p>
-    <p style="margin:28px 0"><a href="${escape(link)}" style="background:#126b4a;color:white;padding:14px 22px;border-radius:8px;text-decoration:none">Definir palavra-passe</a></p>
-    <p>Depois, entre com este email e a palavra-passe que escolheu.</p>
-    <p style="font-size:12px;color:#64756a">Este link é pessoal, tem validade limitada e só pode ser utilizado uma vez. Se expirar, peça um novo convite à equipa Linke. Se não esperava este convite, ignore este email.</p>
-  </div>`
+  return clientInvitationHtml(storeName, link)
 }
 
 export function validPasswordSetup(value: unknown): value is { token_hash: string; type: "invite" | "recovery"; password: string; confirmation: string } {

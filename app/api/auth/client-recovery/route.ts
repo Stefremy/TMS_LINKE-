@@ -1,3 +1,4 @@
+import { clientRecoveryHtml } from "@/lib/email/code-templates"
 import { createHash } from "node:crypto"
 import type { User } from "@supabase/supabase-js"
 import { Resend } from "resend"
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     link.hash = new URLSearchParams({ token_hash: data.properties.hashed_token, type: "recovery" }).toString()
     const { error: deliveryError } = await new Resend(process.env.RESEND_API_KEY!).emails.send({
       from: config.from, to: [email], subject: "Recuperar palavra-passe · Área do Cliente Linke",
-      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1a3028;padding:32px"><h1>Recuperar palavra-passe</h1><p>Recebemos um pedido para definir uma nova palavra-passe na Área do Cliente Linke.</p><p><a href="${link.toString().replace(/&/g, "&amp;")}">Definir nova palavra-passe</a></p><p>Este link é pessoal, tem validade limitada e só pode ser utilizado uma vez. A palavra-passe atual continua válida até guardar uma nova.</p><p>Se não fez este pedido, ignore este email.</p></div>`,
+      html: clientRecoveryHtml(link.toString()),
     })
     if (deliveryError) throw new Error("Recovery delivery failed")
   } catch {

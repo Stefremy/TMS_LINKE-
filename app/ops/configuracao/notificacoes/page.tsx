@@ -3,8 +3,9 @@ import * as React from "react"
 import { Settings, CheckCircle2, AlertCircle } from "lucide-react"
 import { TemplatesClient } from "./TemplatesClient"
 
-export default async function NotificacoesPage() {
+export default async function NotificacoesPage({ searchParams }: { searchParams: Promise<{ template?: string }> }) {
   await requireOpsPageAccess("/ops/configuracao/notificacoes")
+  const { template } = await searchParams
 
   const resendKey = process.env.RESEND_API_KEY
   const fromEmail = process.env.STORE_FROM_EMAIL || "notificacoes@linke.pt"
@@ -50,7 +51,7 @@ export default async function NotificacoesPage() {
               <label className="block text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">API Key do Resend</label>
               <input 
                 type="password" 
-                value={resendKey || ""}
+                value={isConnected ? "••••••••••••" : ""}
                 placeholder="re_..." 
                 className="w-full px-3 py-2 bg-[var(--surface-muted)] border border-[var(--border-strong)] rounded-md text-[13px] font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-colors shadow-2xs opacity-75 cursor-not-allowed" 
                 disabled 
@@ -75,7 +76,7 @@ export default async function NotificacoesPage() {
         </div>
       </div>
 
-      <TemplatesClient />
+      <TemplatesClient initialPreviewId={template} />
     </div>
   )
 }

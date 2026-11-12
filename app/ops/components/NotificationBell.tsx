@@ -15,12 +15,14 @@ import {
   Trash2,
   X,
   Radio,
+  Truck,
 } from "lucide-react";
 import { RefreshIcon } from "@/components/ui/refresh-icon";
 import {
   getOperationalNotificationsAction,
   OperationalNotification,
 } from "@/app/actions/notifications";
+import { OPERATIONAL_NOTIFICATIONS_CHANGED_EVENT } from "@/lib/pickup-request-notifications";
 
 const READ_STORAGE_KEY = "linke_notifications_read_ids_v1";
 const DISMISSED_STORAGE_KEY = "linke_notifications_dismissed_ids_v1";
@@ -56,6 +58,7 @@ export function NotificationBell() {
   );
 
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const fetchGeneration = React.useRef(0);
 
   // Initialize persisted IDs after hydration.
   React.useEffect(() => {
@@ -72,10 +75,11 @@ export function NotificationBell() {
 
   // Fetch notifications
   const fetchNotifications = React.useCallback(async (isManual = false) => {
+    const generation = ++fetchGeneration.current;
     if (isManual) setRefreshing(true);
     try {
       const list = await getOperationalNotificationsAction();
-      setNotifications(list);
+      if (generation === fetchGeneration.current) setNotifications(list);
     } catch (err) {
       console.error("Error loading notifications:", err);
     } finally {
@@ -92,6 +96,7 @@ export function NotificationBell() {
       void fetchNotifications();
     };
     window.addEventListener("linke-calendar-events-changed", refreshCalendar);
+    window.addEventListener(OPERATIONAL_NOTIFICATIONS_CHANGED_EVENT, refreshCalendar);
     const initial = setTimeout(() => fetchNotifications(), 4000);
     // Poll every 5 minutes, only while the tab is visible
     const interval = setInterval(() => {
@@ -102,6 +107,7 @@ export function NotificationBell() {
         "linke-calendar-events-changed",
         refreshCalendar,
       );
+      window.removeEventListener(OPERATIONAL_NOTIFICATIONS_CHANGED_EVENT, refreshCalendar);
       clearTimeout(initial);
       clearInterval(interval);
     };
@@ -240,6 +246,8 @@ export function NotificationBell() {
 
   const getNotificationIcon = (type: OperationalNotification["type"]) => {
     switch (type) {
+      case "pickup":
+        return <Truck className="w-4 h-4 text-rose-600" />;
       case "calendar":
         return <CalendarDays className="w-4 h-4 text-violet-600" />;
       case "batch":
@@ -259,6 +267,8 @@ export function NotificationBell() {
 
   const getIconBg = (type: OperationalNotification["type"]) => {
     switch (type) {
+      case "pickup":
+        return "bg-rose-100/70 border-rose-200";
       case "calendar":
         return "bg-violet-100/70 border-violet-200";
       case "batch":

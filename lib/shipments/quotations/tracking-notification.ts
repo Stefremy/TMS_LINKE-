@@ -1,11 +1,11 @@
 import "server-only"
+import { quotationTrackingHtml } from "@/lib/email/code-templates"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { sendEmail } from "@/lib/email/resend"
 import { publicUrl } from "@/lib/config/public-origins"
 import type { ShipmentQuotation } from "./types"
 import { partnerTrackingUrl } from "./tracking"
 
-const escape = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]!))
 
 /** Notify the store's registered contact only after the booking transaction commits. */
 export async function notifyQuotationTracking(db: SupabaseClient, tenant: string, quote: ShipmentQuotation) {
@@ -20,7 +20,7 @@ export async function notifyQuotationTracking(db: SupabaseClient, tenant: string
   const result = await sendEmail({
     to: email.trim(), subject: `O seu envio está registado · ${quote.reference}`,
     idempotencyKey: `quotation-tracking-${quote.id}`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1a3028;padding:32px"><h1>O seu envio está registado</h1><p>O envio do pedido <strong>${escape(quote.reference)}</strong> foi registado pela equipa Linke.</p><p>Tracking ${carrier}: <strong>${escape(quote.tracking_number)}</strong></p><p><a href="${escape(url)}">Acompanhar o envio</a></p><p>O envio está disponível no histórico da sua loja.</p></div>`,
+    html: quotationTrackingHtml({reference:quote.reference,tracking_number:quote.tracking_number,carrier,url}),
   })
   if (!result.success) throw new Error("Não foi possível enviar o email de tracking.")
 }

@@ -11,7 +11,7 @@ import Link from "next/link"
 import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon, Undo2, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientPortalStatsAction, getShipmentLabelAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
-import { closeCttShipmentsAction, convertZplToPdfAction } from "@/app/actions/ctt"
+import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
@@ -19,8 +19,11 @@ import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { useClientScope } from "./ClientScope"
 import { useTrackingPolling } from "@/lib/hooks/useTrackingPolling"
+import { generateCttAcceptanceCertificateAction, downloadCttAcceptanceCertificateAction } from "@/app/actions/shipment-manifests"
 import { ManifestDocuments } from "@/components/manifest-documents"
 import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
+import { useCttCertificateSelection, CttCertificateToolbar, CttCertificateCheckbox, CttCertificateStatus } from "@/components/shipments/CttCertificateControls"
+import { matchesCttCertificateFilter } from "@/lib/services/ctt/certificate-status"
 
 export function ClientShipmentsHistory() {
   const { client: currentClient, basePath } = useClientScope()
@@ -29,8 +32,14 @@ export function ClientShipmentsHistory() {
   const [statusFilter, setStatusFilter] = React.useState("todos")
   const [loading, setLoading] = React.useState(true)
   const [loadError, setLoadError] = React.useState(false)
-  const [closingBatch, setClosingBatch] = React.useState(false)
+  const [generatingManifest, setGeneratingManifest] = React.useState(false)
   const [manifestData, setManifestData] = React.useState<{ fileName: string, base64: string, documents?: CTTDocumentData[] } | null>(null)
+  const certificateSelection = useCttCertificateSelection(shipments, currentClient.id)
+  const certificateScope = React.useRef<string | null>(currentClient.id)
+  React.useEffect(() => {
+    certificateScope.current = currentClient.id
+    return () => { certificateScope.current = null }
+  }, [currentClient.id])
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = React.useState<ShipmentRecord | null>(null)
 
@@ -74,6 +83,8 @@ export function ClientShipmentsHistory() {
     setStatsClientKey([currentClient.id, currentClient.short_name])
     setLoading(true)
     setLoadError(false)
+    setGeneratingManifest(false)
+    setManifestData(null)
   }
 
   React.useEffect(() => {
@@ -111,9 +122,9 @@ export function ClientShipmentsHistory() {
       const matchesSearch = !q || ref.includes(q) || internalRef.includes(q) || cttRef.includes(q) || rec.includes(q) || addr.includes(q)
       const matchesStatus = statusFilter === "todos" || item.status === statusFilter
 
-      return matchesSearch && matchesStatus
+      return matchesSearch && matchesStatus && matchesCttCertificateFilter(item, certificateSelection.filter)
     })
-  }, [shipments, searchTerm, statusFilter])
+  }, [shipments, searchTerm, statusFilter, certificateSelection.filter])
 
   // Pagination (15 por página)
   const pageSize = 15
@@ -121,8 +132,8 @@ export function ClientShipmentsHistory() {
 
   // Reiniciar página quando os filtros ou pesquisa mudam
   const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
-  if (observedInputs1 === null || !Object.is(observedInputs1[0], searchTerm) || !Object.is(observedInputs1[1], statusFilter)) {
-    setObservedInputs1([searchTerm, statusFilter])
+  if (observedInputs1 === null || !Object.is(observedInputs1[0], searchTerm) || !Object.is(observedInputs1[1], statusFilter) || !Object.is(observedInputs1[2], certificateSelection.filter)) {
+    setObservedInputs1([searchTerm, statusFilter, certificateSelection.filter])
 
     setCurrentPage(1)
   
@@ -134,41 +145,53 @@ export function ClientShipmentsHistory() {
     return filteredShipments.slice(startIndex, startIndex + pageSize)
   }, [filteredShipments, currentPage, pageSize])
 
-  const pendingShipments = React.useMemo(() => {
-    return shipments.filter(s => s.status === "pendente" && ["ctt", "ctt_expresso"].includes(s.carrier_code || "") && !s.ctt_manifest_pdf && !["manifesto_fechado", "expedido"].includes(s.ops_substatus || ""))
-  }, [shipments])
+  const handleGenerateManifest = async () => {
+    const manifestIds = [...certificateSelection.selectedIds]
+    if (!manifestIds.length || generatingManifest) return
+    const requestedScope = currentClient.id
 
-  const handleCloseBatch = async () => {
-    if (pendingShipments.length === 0) return
-    const idsToClose = pendingShipments.map(s => s.id).filter(Boolean)
-    if (idsToClose.length === 0) return
-
-    setClosingBatch(true)
+    setGeneratingManifest(true)
     try {
-      const res = await closeCttShipmentsAction(idsToClose)
+      const res = await generateCttAcceptanceCertificateAction(manifestIds)
+      if (certificateScope.current !== requestedScope) return
       if (res.success) {
         if (res.manifestPdfBase64) setManifestData({
-          fileName: "Manifesto_CTT.pdf",
+          fileName: "Certificado_Aceitacao_CTT.pdf",
           base64: res.manifestPdfBase64,
           documents: res.documents
         })
+        const closedIds = new Set(res.shipmentIds || manifestIds)
+        setShipments(previous => previous.map(shipment => closedIds.has(shipment.id) ? { ...shipment, ops_substatus: "manifesto_fechado" } : shipment))
+        certificateSelection.clear()
         if (res.warning) toast.warning(res.warning)
-        // update local state
-        setShipments(prev => prev.map(s => {
-          if (idsToClose.includes(s.tracking_number || "") || idsToClose.includes(s.id)) {
-            return { ...s, ops_substatus: "manifesto_fechado" }
-          }
-          return s
-        }))
       } else {
-        toast.error(res.error || "Não foi possível confirmar o fecho do manifesto CTT.")
+        toast.error(res.error || "Não foi possível obter o certificado de aceitação CTT.")
       }
     } catch (e) {
-      toast.error("Erro ao fechar lote: " + errorMessage(e))
+      if (certificateScope.current !== requestedScope) return
+      toast.error("Erro ao obter certificado CTT: " + errorMessage(e))
     } finally {
-      setClosingBatch(false)
+      if (certificateScope.current === requestedScope) setGeneratingManifest(false)
     }
   }
+
+  const downloadSavedCertificate = async (id: string) => {
+    if (generatingManifest) return
+    const requestedScope = currentClient.id
+    setGeneratingManifest(true)
+    try {
+      const res = await downloadCttAcceptanceCertificateAction(id)
+      if (certificateScope.current !== requestedScope) return
+      if (res.success && res.manifestPdfBase64) {
+        setManifestData({ fileName: "Certificado_Aceitacao_CTT.pdf", base64: res.manifestPdfBase64, documents: res.documents })
+      } else toast.error(res.error || "O certificado original não está guardado. Contacte a equipa Ops.")
+    } catch {
+      if (certificateScope.current === requestedScope) toast.error("Não foi possível carregar o certificado guardado.")
+    } finally {
+      if (certificateScope.current === requestedScope) setGeneratingManifest(false)
+    }
+  }
+
 
   // Handle click outside to close dropdown
   React.useEffect(() => {
@@ -215,15 +238,7 @@ export function ClientShipmentsHistory() {
         </div>
 
         <div className="flex gap-2">
-          {pendingShipments.length > 0 && (
-            <button
-              onClick={handleCloseBatch}
-              disabled={closingBatch}
-              className="px-4 py-2.5 bg-[var(--text-primary)] hover:opacity-90 active:scale-[0.99] disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
-            >
-              {closingBatch ? "A Fechar..." : `Fechar ${pendingShipments.length} Envios`}
-            </button>
-          )}
+
           <Link
             href={`${basePath}/criar-guia`}
             className="px-4 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] active:scale-[0.99] text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-2"
@@ -239,10 +254,10 @@ export function ClientShipmentsHistory() {
           <div className="flex items-center gap-3.5">
             <div>
               <div className="text-sm font-bold text-[var(--accent-hover)] flex items-center gap-2">
-                <span>Lote Fechado com Sucesso!</span>
+                <span>Certificado de Aceitação CTT</span>
               </div>
               <p className="text-xs text-[var(--accent)] mt-0.5">
-                O manifesto (Certificado de Aceitação) foi gerado.
+                Documento oficial CTT. Imprima e apresente ao estafeta para assinatura.
               </p>
             </div>
           </div>
@@ -259,7 +274,7 @@ export function ClientShipmentsHistory() {
               }}
               className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all"
             >
-              Descarregar Manifesto
+              Descarregar certificado CTT
             </button>
             <ManifestDocuments documents={manifestData.documents} />
             <button
@@ -306,6 +321,7 @@ export function ClientShipmentsHistory() {
 
       {/* Shipments List Table / Clean State */}
       <div className="bg-[var(--surface-bg)] rounded-2xl sm:rounded-3xl shadow-sm border border-[var(--border-strong)] p-3.5 sm:p-6">
+        <div className="mb-4 border-b border-[var(--border-subtle)] pb-3"><CttCertificateToolbar selection={certificateSelection} page={paginatedShipments} busy={generatingManifest} onGenerate={handleGenerateManifest} /></div>
         {filteredShipments.length === 0 ? (
           <div className="py-12 px-4 text-center bg-[var(--surface-muted)] rounded-2xl border border-dashed border-[var(--border-strong)]">
             <Package className="w-10 h-10 text-[var(--text-tertiary)] mx-auto mb-3" />
@@ -353,6 +369,7 @@ export function ClientShipmentsHistory() {
                   <div key={envio.id} className="p-3.5 space-y-2.5 hover:bg-[var(--surface-muted)] transition-colors">
                     {/* Top Row: Ref/Tracking + Status */}
                     <div className="flex items-start justify-between gap-2">
+                      <CttCertificateCheckbox shipment={envio} selection={certificateSelection} busy={generatingManifest} />
                       <div className="min-w-0">
                         <button
                           type="button"
@@ -397,6 +414,7 @@ export function ClientShipmentsHistory() {
                       </div>
                     </div>
 
+                    <CttCertificateStatus shipment={envio} busy={generatingManifest} onDownload={downloadSavedCertificate} />
                     <ShipmentParcelWeight summary={envio.parcel_summary} />
 
                     {/* Bottom Row: Value & Action Buttons */}
@@ -444,6 +462,7 @@ export function ClientShipmentsHistory() {
               <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
                 <tr className="border-b border-[var(--border-strong)] text-[var(--text-secondary)] font-bold">
+                  <th className="w-10 px-2"><span className="sr-only">Selecionar para certificado CTT</span></th>
                   <th className="pb-3">Guia</th>
                   <th className="pb-3">Destinatário</th>
                   <th className="pb-3">Morada</th>
@@ -456,6 +475,7 @@ export function ClientShipmentsHistory() {
               <tbody className="divide-y divide-[var(--border-subtle)]">
                 {paginatedShipments.map((envio) => (
                   <tr key={envio.id} className="hover:bg-[var(--surface-muted)]">
+                      <td className="px-2"><CttCertificateCheckbox shipment={envio} selection={certificateSelection} busy={generatingManifest} /></td>
                     <td className="py-3">
                       {(() => {
                         const linkeRef =
@@ -497,7 +517,8 @@ export function ClientShipmentsHistory() {
                           </div>
                         )
                       })()}
-                    </td>
+                    <CttCertificateStatus shipment={envio} busy={generatingManifest} onDownload={downloadSavedCertificate} />
+                      </td>
                     <td className="py-3 font-semibold text-[var(--text-primary)]">{envio.recipient_name}</td>
                     <td className="py-3 text-[var(--text-tertiary)] truncate max-w-[200px]">{envio.recipient_address}</td>
                     <td className="py-3">
