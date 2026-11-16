@@ -23,6 +23,7 @@ import { ClientAccountDetailsModal } from "./ClientAccountDetailsModal"
 import { ClientProfileSidebar } from "./ClientImpersonationBanner"
 import { ClientMessageBell } from "./ClientMessages"
 import { ClientSidebarNav } from "./ClientSidebarNav"
+import { ClientSupportCard } from "./ClientSupportRequest"
 import sidebarStyles from "@/app/ops/components/SidebarPattern.module.css"
 
 export function ClientMobileNav() {
@@ -135,17 +136,7 @@ export function ClientMobileNav() {
 
             {/* Support and Signout */}
             <div className="p-3 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)]/50 space-y-2 text-xs">
-              <div className="p-2.5 border border-[var(--border-subtle)] rounded-lg bg-[var(--surface-bg)] flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md bg-[var(--accent)] flex items-center justify-center shrink-0">
-                  <HelpCircle className="w-3.5 h-3.5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] text-[var(--text-primary)] font-semibold leading-tight">Suporte Dedicado</p>
-                  <a href="mailto:geral@linke.pt" className="text-[10px] text-[var(--accent)] font-medium hover:underline truncate block">
-                    geral@linke.pt
-                  </a>
-                </div>
-              </div>
+              <ClientSupportCard compact />
 
               {isEmployee ? (
                 <Link

@@ -44,3 +44,39 @@ export async function downloadCttAcceptanceCertificateAction(shipmentId: string)
     return { success: false, count: 0, error: 'Não foi possível carregar o certificado guardado.' }
   }
 }
+
+const correosListErrors: Record<string, string> = {
+  "1": "Algum envio não pertence a esta conta Correos Express.",
+  "-1": "A Correos já recebeu pelo menos um volume. A lista só pode ser gerada antes da recolha.",
+}
+
+/** Correos Express equivalent of the CTT acceptance certificate: the "Lista de Envíos" PDF for the driver. Closes nothing. */
+export async function generateCorreosShipmentListAction(shipmentIds: string[]): Promise<ManifestResult> {
+  const ctx = await requireUser('Emissão e Controlo de Guias CTT')
+  const fail = (error: string): ManifestResult => ({ success: false, count: 0, error })
+  if (!ctx.tenant_id || (ctx.role === 'client' && !ctx.client_id)) return fail('Não foi possível identificar a conta desta sessão.')
+  const ids = [...new Set(Array.isArray(shipmentIds) ? shipmentIds : [])]
+  if (!ids.length || ids.length > 100 || ids.some(id => typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) return fail('Selecione entre 1 e 100 envios Correos Express.')
+  try {
+    let query = createAdminClient().from('shipments').select('id, carrier_code, service_type, carrier_tracking_number, created_at').eq('tenant_id', ctx.tenant_id).in('id', ids)
+    if (ctx.role === 'client') query = query.eq('client_id', ctx.client_id!)
+    const { data, error } = await query
+    if (error || !data || data.length !== ids.length) return fail('Não foi possível encontrar todos os envios selecionados.')
+    const isCorreos = (row: { carrier_code?: string | null; service_type?: string | null }) => row.carrier_code === 'correos' || row.carrier_code === 'correos_express' || !!row.service_type?.toLowerCase().includes('correos')
+    if (!data.every(isCorreos)) return fail('A lista de envios só está disponível para envios Correos Express.')
+    const numbers = data.map(row => row.carrier_tracking_number).filter((value): value is string => !!value)
+    if (numbers.length !== data.length) return fail('Há envios sem número Correos Express. Contacte a equipa Linke.')
+    const day = (value: string) => new Date(value).toLocaleDateString('en-CA', { timeZone: 'Europe/Lisbon' })
+    if (new Set(data.map(row => day(row.created_at))).size > 1) return fail('Selecione envios Correos Express do mesmo dia.')
+    const { resolveCorreosCredentials } = await import('@/lib/services/carriers/credentials')
+    const { CorreosReportService } = await import('@/lib/services/correos/correos-report.service')
+    const report = await new CorreosReportService().generateShipmentList(await resolveCorreosCredentials(), { date: new Date(data[0].created_at), shipmentNumbers: numbers })
+    const code = String(report.codErr)
+    if (code !== '0' || !report.result) {
+      return fail(correosListErrors[code] || `Correos Express não devolveu a lista de envios${report.desErr ? `: ${report.desErr}` : '.'}`)
+    }
+    return { success: true, count: numbers.length, shipmentIds: ids, manifestPdfBase64: report.result }
+  } catch {
+    return fail('Não foi possível obter a lista de envios da Correos Express. Tente novamente.')
+  }
+}

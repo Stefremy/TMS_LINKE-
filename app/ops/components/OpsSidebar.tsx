@@ -25,6 +25,7 @@ import { useQuotationUnread } from "@/components/shipments/quotations/useQuotati
 import { QuotationUnreadBadge } from "@/components/shipments/quotations/QuotationUnreadBadge"
 import { usePickupRequestCount } from "@/components/pickups/usePickupRequestCount"
 import { PickupRequestBadge } from "@/components/pickups/PickupRequestBadge"
+import { useSupportRequestCount } from "@/components/support/useSupportRequestCount"
 
 export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false, access }: { canAccessDocuments?: boolean; canSendMessages?: boolean; access?: PermissionContext }) {
   const [isCollapsed, setIsCollapsed] = React.useState(false)
@@ -32,7 +33,8 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
   const pathname = usePathname()
   const quotationUnreadCount = useQuotationUnread(canAccessOpsRoute(access, "/ops/envios/cotacoes"))
   const pickupRequestCount = usePickupRequestCount(canAccessOpsRoute(access, "/ops/envios/recolhas"))
-  const navigationAlerts = quotationUnreadCount + pickupRequestCount
+  const supportRequestCount = useSupportRequestCount(canSendMessages && canAccessOpsRoute(access, "/ops/mensagens"))
+  const navigationAlerts = quotationUnreadCount + pickupRequestCount + supportRequestCount
 
   // Auto-close mobile drawer whenever route changes
   React.useEffect(() => {
@@ -144,7 +146,7 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
           <div className={`tms-drawer-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain ${styles.pattern} ${styles.mobilePattern}`}>
             {/* Scrollable Navigation */}
             <div className="py-2">
-              <SidebarNav collapsed={false} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} access={access} quotationUnreadCount={quotationUnreadCount} pickupRequestCount={pickupRequestCount} />
+              <SidebarNav collapsed={false} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} access={access} quotationUnreadCount={quotationUnreadCount} pickupRequestCount={pickupRequestCount} supportRequestCount={supportRequestCount} />
             </div>
 
             {/* Drawer Footer Actions */}
@@ -214,7 +216,7 @@ export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false
         </div>
 
         {/* Navigation */}
-        <SidebarNav collapsed={isCollapsed} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} access={access} quotationUnreadCount={quotationUnreadCount} pickupRequestCount={pickupRequestCount} />
+        <SidebarNav collapsed={isCollapsed} canAccessDocuments={canAccessDocuments} canSendMessages={canSendMessages} access={access} quotationUnreadCount={quotationUnreadCount} pickupRequestCount={pickupRequestCount} supportRequestCount={supportRequestCount} />
 
         {/* Bottom Sidebar Action: Recolher painel */}
         <div className={`pb-4 pt-2 ${isCollapsed ? "px-2" : "px-4"}`}>

@@ -25,7 +25,6 @@ import {
   ChevronRight,
   MoreVertical,
   Eye,
-  FileText,
   Download,
   FileCheck2,
   Undo2,
@@ -486,40 +485,21 @@ export function ClientDashboard() {
         </div>
       )}
 
-      {/* Notificação de Nova Fatura Emitida */}
+      {/* Aviso discreto da última fatura */}
       {stats.latestInvoice && dismissedInvoiceId !== stats.latestInvoice.id && (
-        <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] border-l-4 border-l-[var(--accent)] rounded-xl p-4 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 rounded">
-                  Nova Fatura Emitida
-                </span>
-                {stats.latestInvoice.hasReceipt ? (
-                  <span className="text-xs font-bold text-[var(--accent)] bg-[var(--accent-soft)] px-1.5 py-0.5 rounded">
-                    Liquidada / Recibo Emitido
-                  </span>
-                ) : (
-                  <span className="text-xs font-bold text-[var(--status-warning)] bg-[var(--status-warning-soft)] px-1.5 py-0.5 rounded">
-                    Pendente de Pagamento
-                  </span>
-                )}
-              </div>
-              <p className="text-xs sm:text-sm text-[var(--text-primary)] font-medium mt-1">
-                A fatura oficial <strong className="font-semibold text-[var(--text-primary)]">{stats.latestInvoice.moloni_document_number || stats.latestInvoice.statement_number}</strong> no valor de <strong className="font-semibold text-[var(--text-primary)]">{stats.latestInvoice.total_value.toFixed(2)}€</strong> (+ IVA) já se encontra disponível.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-            <Link
-              href={`${basePath}/faturas`}
-              className="px-3.5 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>Ver Fatura</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+        <div className="flex flex-col gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <p className="min-w-0 text-sm text-[var(--text-secondary)]">
+            <span className="font-medium text-[var(--text-primary)]">Fatura {stats.latestInvoice.moloni_document_number || stats.latestInvoice.statement_number}</span>
+            <span className="mx-1.5 text-[var(--text-tertiary)]" aria-hidden>·</span>
+            <span className="tabular-nums">{stats.latestInvoice.total_value.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € + IVA</span>
+            <span className="mx-1.5 text-[var(--text-tertiary)]" aria-hidden>·</span>
+            <span className={stats.latestInvoice.hasReceipt ? "" : "text-[var(--status-warning)]"}>
+              {stats.latestInvoice.hasReceipt ? "Paga" : "Por pagar"}
+            </span>
+          </p>
+          <div className="flex shrink-0 items-center gap-1 self-end sm:self-auto">
+            <Link href={`${basePath}/faturas`} className="rounded-md px-2.5 py-1.5 text-sm font-medium text-[var(--accent)] hover:bg-[var(--surface-muted)] transition-colors">
+              Ver fatura
             </Link>
             {stats.latestInvoice.id && (
               <a
@@ -527,11 +507,9 @@ export function ClientDashboard() {
                 target="_blank"
                 rel="noreferrer"
                 download={`Fatura_${String(stats.latestInvoice.moloni_document_number || stats.latestInvoice.statement_number || 'Doc').replace(/[\/\\]/g, '_')}.pdf`}
-                className="px-3 py-2 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] border border-[var(--border-strong)] text-[var(--text-secondary)] text-xs font-semibold rounded-lg shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                title="Descarregar PDF oficial da AT"
+                className="rounded-md px-2.5 py-1.5 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] transition-colors"
               >
-                <Download className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
-                <span className="hidden sm:inline">Descarregar</span>
+                Descarregar PDF
               </a>
             )}
             <button
@@ -542,11 +520,11 @@ export function ClientDashboard() {
                   localStorage.setItem(`dismissed_inv_${currentClient.id}`, stats.latestInvoice?.id || '')
                 } catch {}
               }}
-              className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] p-1.5 rounded-md hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
+              className="rounded-md p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)] transition-colors"
               title="Dispensar aviso"
               aria-label="Dispensar aviso da fatura"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
           </div>
         </div>

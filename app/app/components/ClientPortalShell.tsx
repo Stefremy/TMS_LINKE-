@@ -13,6 +13,7 @@ import { ClientScopeProvider } from "./ClientScope"
 import { ClientAnnouncements } from "./ClientAnnouncements"
 import { ClientMessagesProvider } from "./ClientMessages"
 import { ClientMobileNav } from "./ClientMobileNav"
+import { ClientSupportCard } from "./ClientSupportRequest"
 import { DashboardBackdrop } from "@/app/ops/components/DashboardBackdrop"
 import backdropStyles from "@/app/ops/components/DashboardBackdrop.module.css"
 import sidebarStyles from "@/app/ops/components/SidebarPattern.module.css"
@@ -62,17 +63,7 @@ export function ClientPortalShell({ children, store, isSuspended = false, access
         
           {/* Footer actions */}
           <div className="p-3 space-y-3 mt-auto">
-            <div className="p-3 border border-[var(--border-subtle)] rounded-lg bg-[var(--surface-muted)] flex items-start gap-2.5">
-              <div className="w-7 h-7 rounded-md bg-[var(--accent)] flex items-center justify-center shrink-0">
-                <HelpCircle className="w-3.5 h-3.5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-[var(--text-primary)] font-semibold">Suporte Dedicado</p>
-                <a href="mailto:geral@linke.pt" className="text-xs text-[var(--accent)] font-medium hover:underline flex items-center gap-1 mt-0.5">
-                  Fale connosco
-                </a>
-              </div>
-            </div>
+            <ClientSupportCard />
             {isEmployee ? (
               <Link href="/ops/entidades/clientes" className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-[var(--text-tertiary)] hover:text-[var(--text-primary)]">
                 <LogOut className="w-3.5 h-3.5" />

@@ -78,6 +78,7 @@ test('requests have a store-scoped sidebar entry on desktop and mobile, without 
   '@/app/app/components/ClientScope':{useClientScope:()=>scope},'./ClientScope':{useClientScope:()=>scope},
   './ClientMessages':{ClientMessageBell:()=>null},'@/components/ui/mobile-drawer':{MobileDrawer:({children})=>children},
   './ClientAccountDetailsModal':{ClientAccountDetailsModal:()=>null},'./ClientImpersonationBanner':{ClientProfileSidebar:()=>null},
+  './ClientSupportRequest':{ClientSupportCard:()=>null},
   '@/components/shipments/form/ShipmentForm':{ShipmentForm:()=>React.createElement('div',null,'Novo envio')},
  })
  const {ClientSidebarNav}=uiLoad('app/app/components/ClientSidebarNav.tsx')

@@ -23,7 +23,8 @@ export const shipmentBaseSchema = z.object({
   serviceId: required("o serviço de transporte"), islandTransportMode: z.enum(["", "air", "sea", "other"]),
   selectedSpecialServices: z.array(z.string()).max(20, "Selecione até 20 serviços especiais."),
   codValue: z.number({ error: "Indique um valor de cobrança válido." }).finite().min(0, "A cobrança não pode ser negativa."),
-  observations: z.string().trim().max(500, "Use até 500 caracteres nas observações."), saveToAgenda: z.boolean(),
+  observations: z.string().trim().max(500, "Use até 500 caracteres nas observações."),
+  reference: z.string().trim().max(100, "Use até 100 caracteres na referência."), printCertificate: z.boolean(), saveToAgenda: z.boolean(),
   exportFields: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
 })
 
@@ -55,13 +56,13 @@ export function shipmentDefaults(client: Partial<Cliente>, initial: Partial<Ship
     senderPostal: client.postal_code || "", senderPhone: client.phone || client.mobile_phone || "",
     recipientName: "", recipientAddress: "", recipientCity: "", recipientPostal: "", recipientCountry: "PT", recipientPhone: "", recipientEmail: "",
     weightKg: 1, volumesCount: 1, lengthCm: 0, widthCm: 0, heightCm: 0, parcelWeightsKg: [], serviceId: "", islandTransportMode: "",
-    selectedSpecialServices: [], codValue: 0, observations: "", saveToAgenda: false, exportFields: {}, ...initial,
+    selectedSpecialServices: [], codValue: 0, observations: "", reference: "", printCertificate: false, saveToAgenda: false, exportFields: {}, ...initial,
   }
 }
 
 export const SHIPMENT_STEPS = ["Dados do envio", "Revisão"] as const
 export const STEP_FIELDS: (keyof ShipmentFormValues)[][] = [
   ["senderName", "senderAddress", "senderCity", "senderPostal", "senderPhone", "recipientName", "recipientAddress", "recipientCity", "recipientCountry", "recipientPostal", "recipientPhone", "recipientEmail", "saveToAgenda", "weightKg", "volumesCount", "lengthCm", "widthCm", "heightCm", "parcelWeightsKg", "serviceId", "islandTransportMode", "selectedSpecialServices", "codValue", "exportFields", "carrierOverride", "internalNotes"],
-  ["observations"],
+  ["observations", "reference", "printCertificate"],
 ]
 export const stepForField = (field: string) => Math.max(0, STEP_FIELDS.findIndex(fields => fields.some(key => field === key || field.startsWith(`${key}.`))))

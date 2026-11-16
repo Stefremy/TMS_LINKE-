@@ -60,6 +60,7 @@ test('Client mobile navigation preserves scoped store links and keeps OPS access
       './ClientScope':{useClientScope:()=>scope},
       './ClientImpersonationBanner':{ClientProfileSidebar:()=>null},
       './ClientAccountDetailsModal':{ClientAccountDetailsModal:()=>null},
+      './ClientSupportRequest':{ClientSupportCard:()=>null},
       '@/app/login/actions':{signout:async()=>{}},
     })
     return renderToStaticMarkup(React.createElement(load('app/app/components/ClientMobileNav.tsx').ClientMobileNav))
@@ -99,6 +100,7 @@ test('Opening account details closes the navigation and renders the account moda
     './ClientScope':{useClientScope:()=>({client:{short_name:'Store A'},basePath:'/app/store-a',isEmployee:false})},
     './ClientImpersonationBanner':{ClientProfileSidebar:'profile'},
     './ClientAccountDetailsModal':{ClientAccountDetailsModal:'account'},
+    './ClientSupportRequest':{ClientSupportCard:'support-card'},
     './ClientSidebarNav':{ClientSidebarNav:'navigation'},
     './ClientMessages':{ClientMessageBell:'message-bell'},
     '@/components/ui/mobile-drawer':{MobileDrawer:'drawer'},
@@ -130,6 +132,7 @@ test('account details escape the sidebar via a native modal and restore focus an
     'lucide-react':new Proxy({},{get:(_,name)=>name}),
     '@/app/actions/servicos-linke':{getServicosLinkeAction:async()=>[]},
     './ClientChangePasswordForm':{ClientChangePasswordForm:()=>null},
+    '@/lib/client-portal/label-preference':{LABEL_PREFERENCES:[],useLabelPreference:()=>['download',()=>{}]},
   })
   const Modal=load('app/app/components/ClientAccountDetailsModal.tsx').ClientAccountDetailsModal
   const node=Modal({isOpen:true,onClose:()=>{closed++},client:{id:'a',short_name:'Store A'}})

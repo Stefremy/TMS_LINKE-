@@ -11,12 +11,14 @@ import {
   CreditCard,
   Copy,
   Check,
-  LockKeyhole
+  LockKeyhole,
+  Printer
 } from "lucide-react"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { getCarrierLogo } from "@/lib/carrier-logos"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { ClientChangePasswordForm } from './ClientChangePasswordForm'
+import { LABEL_PREFERENCES, useLabelPreference } from "@/lib/client-portal/label-preference"
 import { getClientServiceLabel } from "@/lib/services/client-service-label"
 
 interface ClientAccountDetailsModalProps {
@@ -27,7 +29,7 @@ interface ClientAccountDetailsModalProps {
   canChangePassword?: boolean
 }
 
-type TabType = "geral" | "morada" | "contactos" | "comercial" | "servicos" | "seguranca"
+type TabType = "geral" | "morada" | "contactos" | "comercial" | "servicos" | "etiquetas" | "seguranca"
 
 export function ClientAccountDetailsModal({
   isOpen,
@@ -40,6 +42,7 @@ export function ClientAccountDetailsModal({
   const [copiedField, setCopiedField] = React.useState<string | null>(null)
   const [servicosLinke, setServicosLinke] = React.useState<ServicoLinke[]>([])
   const dialogRef = React.useRef<HTMLDialogElement>(null)
+  const [labelPreference, setLabelPreference] = useLabelPreference(client?.id ?? "")
 
   React.useEffect(() => {
     const dialog = dialogRef.current
@@ -128,6 +131,7 @@ export function ClientAccountDetailsModal({
     { id: "contactos", label: "Contactos", icon: Phone },
     { id: "comercial", label: "Condições & Saldo", icon: CreditCard },
     { id: "servicos", label: "Transportadoras", icon: Truck },
+    { id: "etiquetas", label: "Etiquetas", icon: Printer },
     ...(canChangePassword ? [{ id: 'seguranca', label: 'Segurança', icon: LockKeyhole }] : []),
   ]
 
@@ -226,6 +230,23 @@ export function ClientAccountDetailsModal({
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 bg-[var(--canvas-bg)] space-y-4">
           {activeTab === 'seguranca' && canChangePassword && <ClientChangePasswordForm />}
           
+          {activeTab === "etiquetas" && (
+            <div className="bg-[var(--surface-bg)] p-5 rounded-xl border border-[var(--border-subtle)] shadow-2xs space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Etiqueta depois de emitir o envio</h3>
+                <p className="text-xs text-[var(--text-secondary)] mt-1">Escolha o que acontece automaticamente. Fica guardado neste computador.</p>
+              </div>
+              <div role="radiogroup" aria-label="Etiqueta depois de emitir o envio" className="space-y-2">
+                {LABEL_PREFERENCES.map(option => (
+                  <label key={option.id} className={`flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-[var(--accent)] ${labelPreference === option.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-[var(--border-subtle)] hover:bg-[var(--canvas-bg)]"}`}>
+                    <input type="radio" name="label-preference" value={option.id} checked={labelPreference === option.id} onChange={() => setLabelPreference(option.id)} className="mt-1 accent-[var(--accent)]" />
+                    <span><span className="block text-sm font-semibold text-[var(--text-primary)]">{option.title}</span><span className="block text-xs text-[var(--text-secondary)] mt-0.5">{option.description}</span></span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: IDENTIDADE & GERAL */}
           {activeTab === "geral" && (
             <div className="space-y-4">

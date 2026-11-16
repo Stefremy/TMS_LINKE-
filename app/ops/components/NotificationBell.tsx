@@ -16,6 +16,7 @@ import {
   X,
   Radio,
   Truck,
+  LifeBuoy,
 } from "lucide-react";
 import { RefreshIcon } from "@/components/ui/refresh-icon";
 import {
@@ -248,6 +249,8 @@ export function NotificationBell() {
     switch (type) {
       case "pickup":
         return <Truck className="w-4 h-4 text-rose-600" />;
+      case "support":
+        return <LifeBuoy className="w-4 h-4 text-red-600" />;
       case "calendar":
         return <CalendarDays className="w-4 h-4 text-violet-600" />;
       case "batch":
@@ -269,6 +272,8 @@ export function NotificationBell() {
     switch (type) {
       case "pickup":
         return "bg-rose-100/70 border-rose-200";
+      case "support":
+        return "bg-red-100/70 border-red-200";
       case "calendar":
         return "bg-violet-100/70 border-violet-200";
       case "batch":

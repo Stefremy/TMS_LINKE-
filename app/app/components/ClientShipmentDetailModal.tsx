@@ -52,6 +52,7 @@ import {
 } from "@/app/actions/shipments"
 import { convertZplToPdfAction, syncCttTrackingAction, injectTrackingEventAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
+import { ShipmentNotesSection } from "./ShipmentNotesSection"
 import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
@@ -779,6 +780,7 @@ setTimelineEvents(data || [])
           {/* TAB 2: FICHA DO ENVIO & MORADAS */}
           {activeTab === "dados" && (
             <div className="space-y-6">
+              <ShipmentNotesSection shipmentId={currentShipment.id} />
               
 
 

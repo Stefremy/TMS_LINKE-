@@ -266,6 +266,7 @@ export async function emitClientGuiaAction(data: {
   widthCm: number
   heightCm: number
   observations?: string
+  clientReference?: string
   cttExportDetails?: CttExportDetails
 }) {
   let reservation: WalletReservation | undefined
@@ -414,6 +415,9 @@ export async function emitClientGuiaAction(data: {
       buy_price: computedBuyPrice,
       sell_price: computedSellPrice,
       reference: trackingNumber,
+      // Kept with the shipment data so the detail view can show them (observations also go to the carrier).
+      observations: data.observations?.trim() || undefined,
+      client_reference: data.clientReference?.trim() || undefined,
       special_fees_amount: computedSpecialAmount || 0,
       special_fees_description: computedSpecialDesc,
       cod_value: data.codValue || 0,

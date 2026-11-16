@@ -12,6 +12,8 @@ import { upcomingPersonalEvents } from "@/features/calendar/lib/reminders";
 import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 import { QUOTATION_ACTION } from "@/lib/shipments/quotations/types";
 import { PICKUP_REQUEST_ACTION } from "@/lib/pickup-request-notifications";
+import { canSendClientMessages } from "@/lib/client-messages/types";
+import { supportCategoryLabel } from "@/lib/support-requests/types";
 
 export interface OperationalNotification {
   id: string;
@@ -23,7 +25,8 @@ export interface OperationalNotification {
     | "warning"
     | "success"
     | "calendar"
-    | "pickup";
+    | "pickup"
+    | "support";
   title: string;
   message: string;
   timestamp: string;
@@ -192,6 +195,19 @@ export async function getOperationalNotificationsAction(): Promise<
       });
     } catch { /* A pickup lookup must not hide other operational alerts. */ }
   }
+
+  try {
+    if (canSendClientMessages(ctx)) {
+      const { listSupportRequestsAction } = await import("./support-requests");
+      const [requests, clients] = await Promise.all([listSupportRequestsAction(), getClientesAction().catch(() => [])]);
+      const names = new Map(clients.map(client => [client.id, client.short_name || client.legal_name || "Cliente"]));
+      for (const request of requests.filter(item => item.status === "aberto").slice(0, 10)) notifications.push({
+        id: `support-request-${request.id}`, type: "support",
+        title: "Novo pedido de apoio", message: `${names.get(request.clientId) || "Cliente"} · ${supportCategoryLabel(request.category)}: ${request.subject}`,
+        timestamp: request.createdAt, link: "/ops/mensagens?tab=apoio", actionLabel: "Ver pedido", priority: "high",
+      });
+    }
+  } catch { /* A support lookup must not hide other operational alerts. */ }
 
   // Personal calendar reminders remain available throughout Ops, not only on the calendar page.
   try {

@@ -11,12 +11,13 @@ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { getServicosLinkeAction } from "@/app/actions/servicos-linke"
 import { submitShipmentFormAction, type ShipmentFormResult } from "@/app/actions/shipment-form"
 import { getShipmentLabelAction } from "@/app/actions/shipments"
-import { generateCttAcceptanceCertificateAction } from "@/app/actions/shipment-manifests"
+import { generateCorreosShipmentListAction, generateCttAcceptanceCertificateAction } from "@/app/actions/shipment-manifests"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { saveDestinatarioAction } from "@/app/actions/destinatarios"
 import { readCttExportForm } from "@/lib/services/ctt/export-details"
 import { getCttRecipientContactError } from "@/lib/services/ctt/recipient-contact"
 import { downloadCttLabel, printCttLabel } from "@/lib/label-utils"
+import { readLabelPreference, useLabelPreference } from "@/lib/client-portal/label-preference"
 import { useOptionalClientScope } from "@/app/app/components/ClientScope"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 import { isCorreosQuotationService } from "@/lib/services/correos/shipment-policy"
@@ -35,10 +36,10 @@ type Props = {
   onCreated?: (result: ShipmentFormResult) => void; services?: ServicoLinke[]
   hideQuotationServices?: boolean
 }
-type Feedback = { created: ShipmentFormResult | null; quotation: { id: string; reference: string } | null; label: string | null; labelError: string; warning: string; labelBusy: boolean; certificate: string | null; certificateBusy: boolean; certificateError: string }
+type Feedback = { created: ShipmentFormResult | null; quotation: { id: string; reference: string } | null; label: string | null; labelError: string; warning: string; labelBusy: boolean; certificate: string | null; certificateBusy: boolean; certificateError: string; carrier: "ctt" | "correos" | null }
 const SERVICE_STEP = stepForField("serviceId")
 const REVIEW_STEP = SHIPMENT_STEPS.length - 1
-const emptyFeedback: Feedback = { created: null, quotation: null, label: null, labelError: "", warning: "", labelBusy: false, certificate: null, certificateBusy: false, certificateError: "" }
+const emptyFeedback: Feedback = { created: null, quotation: null, label: null, labelError: "", warning: "", labelBusy: false, certificate: null, certificateBusy: false, certificateError: "", carrier: null }
 
 export function ShipmentForm({ role: requestedRole, client, initialValues, onCreated, services: providedServices, hideQuotationServices = false }: Props) {
   const scope = useOptionalClientScope()
@@ -59,6 +60,8 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
   const errorSummary = React.useRef<HTMLDivElement>(null)
   const formServices = React.useMemo(() => (providedServices || resource.services).filter(service => !hideQuotationServices || !isCorreosQuotationService(service)), [providedServices, resource.services, hideQuotationServices])
   const quote = useShipmentQuote({ client: effectiveClient, services: formServices, values, role })
+  const [savedLabelPreference] = useLabelPreference(client.id)
+  const printsByDefault = role === "client" && savedLabelPreference === "print"
   const busy = form.formState.isSubmitting || feedback.labelBusy || feedback.certificateBusy
   const basePath = role === "ops" ? "/ops" : scope?.basePath || (client.portal_slug ? `/app/${client.portal_slug}` : "/app")
   const historyPath = `${basePath}/envios`
@@ -150,23 +153,24 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
     }))
   }
   /** Closes a CTT batch with only this shipment; repeat clicks reuse the saved original. */
-  const prepareCertificate = async (created: ShipmentFormResult) => {
-    if (!created.id) return
+  const prepareCertificate = async (created: ShipmentFormResult, carrier: "ctt" | "correos", print = false, printTab: Window | null = null) => {
+    if (!created.id) { printTab?.close(); return }
     setFeedback(previous => ({ ...previous, certificateBusy: true, certificateError: "" }))
     try {
       let pdf = feedback.certificate
       if (!pdf) {
-        const result = await generateCttAcceptanceCertificateAction([created.id])
-        if (!result.success || !result.manifestPdfBase64) throw new Error(result.error || result.warning || "Os CTT não devolveram o certificado de aceitação.")
+        // CTT closes the batch and returns the official certificate; Correos returns its "Lista de Envíos" for the driver.
+        const result = carrier === "correos" ? await generateCorreosShipmentListAction([created.id]) : await generateCttAcceptanceCertificateAction([created.id])
+        if (!result.success || !result.manifestPdfBase64) throw new Error(result.error || result.warning || (carrier === "correos" ? "A Correos Express não devolveu a lista de envios." : "Os CTT não devolveram o certificado de aceitação."))
         pdf = result.manifestPdfBase64
         setFeedback(previous => ({ ...previous, certificate: pdf, warning: [previous.warning, result.warning].filter(Boolean).join(" ") }))
       }
-      if (!await downloadCttLabel(pdf, `${created.guia}_Certificado_Aceitacao.pdf`)) throw new Error("Não foi possível abrir o certificado.")
-    } catch (error) { setFeedback(previous => ({ ...previous, certificateError: error instanceof Error ? error.message : "Não foi possível obter o certificado de aceitação." })) }
+      if (!await (print ? printCttLabel(pdf, printTab, { fallbackDownload: false }) : downloadCttLabel(pdf, `${created.guia}_Certificado_Aceitacao.pdf`))) throw new Error(print ? "O browser bloqueou o separador de impressão. Clique em Certificado de aceitação para o abrir." : "Não foi possível abrir o certificado.")
+    } catch (error) { printTab?.close(); setFeedback(previous => ({ ...previous, certificateError: error instanceof Error ? error.message : "Não foi possível obter o certificado de aceitação." })) }
     finally { setFeedback(previous => ({ ...previous, certificateBusy: false })) }
   }
 
-  const prepareLabel = async (created: ShipmentFormResult, print = false) => {
+  const prepareLabel = async (created: ShipmentFormResult, print = false, printTab: Window | null = null) => {
     setFeedback(previous => ({ ...previous, labelBusy: true, labelError: "" }))
     try {
       let label = feedback.label || created.labelBase64 || (created.id ? await getShipmentLabelAction(created.id) : null)
@@ -177,25 +181,42 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
         label = converted.base64
       }
       setFeedback(previous => ({ ...previous, label }))
-      const completed = print ? await printCttLabel(label) : await downloadCttLabel(label, `${created.guia}_Etiqueta.pdf`)
-      if (completed === false) throw new Error("Não foi possível abrir a etiqueta. Tente descarregar novamente.")
-    } catch (error) { setFeedback(previous => ({ ...previous, labelError: error instanceof Error ? error.message : "Não foi possível abrir a etiqueta." })) }
+      const completed = print ? await printCttLabel(label, printTab, { fallbackDownload: false }) : await downloadCttLabel(label, `${created.guia}_Etiqueta.pdf`)
+      if (completed === false) throw new Error(print ? "O browser bloqueou o separador de impressão. Clique em Imprimir para abrir a etiqueta." : "Não foi possível abrir a etiqueta. Tente descarregar novamente.")
+    } catch (error) { printTab?.close(); setFeedback(previous => ({ ...previous, labelError: error instanceof Error ? error.message : "Não foi possível abrir a etiqueta." })) }
     finally { setFeedback(previous => ({ ...previous, labelBusy: false })) }
   }
+  // Print tabs must be opened synchronously in the click handler; any await before window.open lets popup blockers reject it.
+  const pendingTabs = React.useRef<{ label: Window | null; certificate: Window | null }>({ label: null, certificate: null })
+  const takeTabs = () => { const tabs = pendingTabs.current; pendingTabs.current = { label: null, certificate: null }; return tabs }
+  const closeTabs = () => { const tabs = takeTabs(); tabs.label?.close(); tabs.certificate?.close() }
+  const openTabsForEmission = () => {
+    closeTabs()
+    if (role !== "client" || quote.requiresQuotation || feedback.created || feedback.quotation || submissionLock.current) return
+    const label = readLabelPreference(client.id) === "print" ? window.open("", "_blank") : null
+    const certificate = form.getValues("printCertificate") && !!quote.selected ? window.open("", "_blank") : null
+    pendingTabs.current = { label, certificate }
+  }
   const submit = form.handleSubmit(async submitted => {
-    if (submissionLock.current || feedback.created || feedback.quotation) return
+    if (submissionLock.current || feedback.created || feedback.quotation) { closeTabs(); return }
     submissionLock.current = true
     form.clearErrors("root")
     try {
       const fresh = getShipmentQuote({ client: effectiveClient, services: formServices, values: submitted, role })
-      if (fresh.isBlocked) { form.setError("serviceId", { message: fresh.blockedReason || "Não foi possível calcular o preço." }); setStep(SERVICE_STEP); focusField("serviceId"); return }
-      if (!validateExport()) return
+      if (fresh.isBlocked) { closeTabs(); form.setError("serviceId", { message: fresh.blockedReason || "Não foi possível calcular o preço." }); setStep(SERVICE_STEP); focusField("serviceId"); return }
+      if (!validateExport()) { closeTabs(); return }
       const payload = { ...submitted, selectedSpecialServices: fresh.activeSpecialServices,
         codValue: fresh.activeSpecialServices.some(code => code === "cod" || code === "correos_cod") ? submitted.codValue : 0 }
       if (role === "client") { delete payload.carrierOverride; delete payload.internalNotes; delete payload.manualPrice }
       if (fresh.requiresQuotation && !quotationKey.current) quotationKey.current = crypto.randomUUID()
-      const result = await submitShipmentFormAction(payload, client.id, quotationKey.current || undefined)
+      // Clients choose between auto-download, auto-print or neither (Conta > Etiquetas). Ops always download.
+      const labelPreference = role === "client" ? readLabelPreference(client.id) : "download"
+      const createdCarrier = fresh.selected?.carrier ?? null
+      const wantsCertificate = submitted.printCertificate && role === "client" && !fresh.requiresQuotation && !!createdCarrier
+      const { label: printTab, certificate: certificateTab } = takeTabs()
+      const result = await submitShipmentFormAction(payload, client.id, quotationKey.current || undefined).catch(error => { printTab?.close(); certificateTab?.close(); throw error })
       if (!result.success) {
+        printTab?.close(); certificateTab?.close()
         const issues = result.fieldErrors
         for (const issue of issues) form.setError(issue.field as FieldPath<ShipmentFormValues> | "root", { type: "server", message: issue.message })
         const first = issues[0]
@@ -203,22 +224,27 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
         focusField(first?.field || "root"); return
       }
       const isQuotation = result.kind === "quotation"
-      setFeedback({ ...emptyFeedback, created: isQuotation ? null : result, quotation: isQuotation ? result.quotation : null, warning: result.dbWarning || "" })
+      setFeedback({ ...emptyFeedback, carrier: createdCarrier, created: isQuotation ? null : result, quotation: isQuotation ? result.quotation : null, warning: result.dbWarning || "" })
       if (submitted.saveToAgenda) {
         try { const saved = await saveDestinatarioAction({ client_id: client.id, name: submitted.recipientName, address: submitted.recipientAddress, postal_code: submitted.recipientPostal,
           city: submitted.recipientCity, country: submitted.recipientCountry, phone: submitted.recipientPhone, email: submitted.recipientEmail }); if (!saved.success) throw new Error("Agenda indisponível") }
         catch { setFeedback(previous => ({ ...previous, warning: [previous.warning, `${isQuotation ? "O pedido foi guardado" : "O envio foi emitido"}, mas não foi possível guardar o destinatário na agenda.`].filter(Boolean).join(" ") })) }
       }
-      if (isQuotation) return
+      if (isQuotation) { printTab?.close(); certificateTab?.close(); return }
       onCreated?.(result)
-      if (result.labelBase64) await prepareLabel(result)
-    } catch { form.setError("root", { message: "Não foi possível confirmar o resultado do pedido. Consulte o histórico antes de repetir a emissão." }); focusField("root") }
+      if (labelPreference === "manual") printTab?.close()
+      // prepareLabel also fetches the label when the creation response did not include it.
+      else if (result.labelBase64 || labelPreference === "print") await prepareLabel(result, labelPreference === "print", printTab)
+      // Always try the certificate when ticked. If the browser blocked the tab, the success screen says so (no download).
+      if (wantsCertificate && createdCarrier) await prepareCertificate(result, createdCarrier, true, certificateTab)
+    } catch { closeTabs(); form.setError("root", { message: "Não foi possível confirmar o resultado do pedido. Consulte o histórico antes de repetir a emissão." }); focusField("root") }
     finally { submissionLock.current = false }
   }, errors => {
+    closeTabs()
     const field = Object.keys(errors)[0] || "root"
     setStep(stepForField(field)); focusField(field)
   })
-  const next = () => step === REVIEW_STEP ? void submit() : void goToStep(step + 1)
+  const next = () => { if (step !== REVIEW_STEP) return void goToStep(step + 1); openTabsForEmission(); void submit() }
   const nextLabel = step === REVIEW_STEP ? quote.requiresQuotation ? "Pedir cotação" : "Emitir guia" : "Continuar"
   const rootError = form.formState.errors.root?.message || resource.error
   const progress = (step + 1) / SHIPMENT_STEPS.length * 100
@@ -242,7 +268,7 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
         {feedback.warning && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{feedback.warning}</p>}
         {feedback.labelError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{feedback.labelError}</p>}
         {!feedback.created.labelBase64 && !feedback.label && <p className="text-sm text-zinc-500">A etiqueta oficial ainda não foi devolvida. Pode tentar obtê-la sem criar outro envio.</p>}
-        <div className="flex flex-wrap gap-3"><button type="button" disabled={busy} onClick={() => void prepareLabel(feedback.created!)} className={primaryButton}>{feedback.labelBusy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <Download size={16} />}{feedback.labelBusy ? "A preparar etiqueta…" : "Descarregar etiqueta"}</button><button type="button" disabled={busy} onClick={() => void prepareLabel(feedback.created!, true)} className={secondaryButton}><Printer size={16} />Imprimir</button>{/^[A-Z]{2}\d{9}PT$/.test(feedback.created.guia || "") && <button type="button" disabled={busy} onClick={() => void prepareCertificate(feedback.created!)} className={secondaryButton}>{feedback.certificateBusy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <FileCheck2 size={16} />}{feedback.certificateBusy ? "A obter certificado…" : "Certificado de aceitação"}</button>}</div>
+        <div className="flex flex-wrap gap-3"><button type="button" disabled={busy} onClick={() => void prepareLabel(feedback.created!)} className={primaryButton}>{feedback.labelBusy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <Download size={16} />}{feedback.labelBusy ? "A preparar etiqueta…" : "Descarregar etiqueta"}</button><button type="button" disabled={busy} onClick={() => void prepareLabel(feedback.created!, true)} className={secondaryButton}><Printer size={16} />Imprimir</button>{(feedback.carrier === "correos" || /^[A-Z]{2}\d{9}PT$/.test(feedback.created.guia || "")) && <button type="button" disabled={busy} onClick={() => void prepareCertificate(feedback.created!, feedback.carrier === "correos" ? "correos" : "ctt", printsByDefault)} className={secondaryButton}>{feedback.certificateBusy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <FileCheck2 size={16} />}{feedback.certificateBusy ? "A obter certificado…" : "Certificado de aceitação"}</button>}</div>
         {feedback.certificateError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{feedback.certificateError}</p>}
         {/^[A-Z]{2}\d{9}PT$/.test(feedback.created.guia || "") && !feedback.certificate && <p className="text-xs leading-relaxed text-zinc-500">O certificado fecha este envio nos CTT num lote próprio. Para juntar vários envios num só certificado, use o histórico. Não feche este envio também no portal CTT.</p>}
         <div className="flex flex-wrap gap-3 border-t border-zinc-100 pt-5"><Link href={historyPath} className={secondaryButton}>Ver no histórico<ArrowRight size={15} /></Link><button type="button" disabled={busy} className={secondaryButton} onClick={() => { form.reset(shipmentDefaults(client)); setFeedback(emptyFeedback); setStep(0) }}><PackagePlus size={16} />Criar outro envio</button></div>

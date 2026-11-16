@@ -53,7 +53,7 @@ test('a closed shipment modal is safe and manual FedEx shows an informational li
   './ClientScope':{useOptionalClientScope:()=>null},
   '@/lib/services/reembolsos/client-cod':{codCents:()=>null},
   '@/components/ui/refresh-icon':{RefreshIcon:'svg'},'@/components/ui/badge':{Badge:'span'},
-  '@/app/actions/shipments':{},'@/app/actions/ctt':{},'@/lib/label-utils':{},'@/lib/official-shipment-label':{},
+  '@/app/actions/shipments':{},'@/app/actions/ctt':{},'@/lib/label-utils':{},'@/lib/official-shipment-label':{},'./ShipmentNotesSection':{ShipmentNotesSection:()=>null},
   '@/lib/carrier-logos':{getCarrierLogo:()=>null,getShipmentCarrierLogo:()=>null},
   '@/components/ui/confirm-dialog':{confirmAction:async()=>true},'@/components/ui/use-dialog-a11y':{useDialogA11y:()=>({})},'@/lib/status-helpers':{getShipmentStatusConfig:()=>({label:'Pendente'})},
   '@/lib/services/ctt/ctt-types':{},'@/components/shipments/CarrierMeasurementsPanel':{CarrierMeasurementsPanel:()=>null},

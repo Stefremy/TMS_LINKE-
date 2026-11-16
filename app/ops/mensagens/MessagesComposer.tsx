@@ -112,16 +112,7 @@ if (!signal?.aborted) {
     'mt-1.5 w-full rounded-md border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-2 focus:outline-[var(--accent)] disabled:opacity-60'
 
   return (
-    <div className="mx-auto flex max-w-[1000px] flex-col gap-6">
-      <header className="border-b border-[var(--border-subtle)] pb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-          Mensagens aos clientes
-        </h1>
-        <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Envie um aviso diretamente para o painel e caixa de mensagens da Área do Cliente.
-        </p>
-      </header>
-
+    <div className="flex flex-col gap-6">
       <AnnouncementsComposer clients={clients} />
 
       <form

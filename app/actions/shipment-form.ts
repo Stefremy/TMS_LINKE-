@@ -92,7 +92,7 @@ async function submitShipment(input: unknown, clientId: string | undefined, quot
     lengthCm: values.lengthCm, widthCm: values.widthCm, heightCm: values.heightCm, parcelWeightsKg: values.parcelWeightsKg.length ? values.parcelWeightsKg : undefined,
     serviceId: service.id, serviceName: service.name, calculatedPrice: 0,
     islandTransportMode: isPortugueseIslandDestination(values.recipientCountry, values.recipientPostal) ? values.islandTransportMode || getServiceIslandTransportMode(service) : undefined,
-    selectedSpecialServices: values.selectedSpecialServices, codValue: values.codValue, observations: values.observations, cttExportDetails: exportDetails,
+    selectedSpecialServices: values.selectedSpecialServices, codValue: values.codValue, observations: values.observations, clientReference: values.reference, cttExportDetails: exportDetails,
   })
   if (!result.success) return failure("root", result.error || "Não foi possível emitir o envio.")
 

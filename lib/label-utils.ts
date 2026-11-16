@@ -159,9 +159,10 @@ export async function downloadCttLabel(
 /**
  * Abre o PDF da etiqueta numa nova aba para impressão usando Blob URL.
  */
-export async function printCttLabel(labelInput?: string | null): Promise<boolean> {
+export async function printCttLabel(labelInput?: string | null, targetWindow?: Window | null, { fallbackDownload = true }: { fallbackDownload?: boolean } = {}): Promise<boolean> {
   if (!labelInput) {
     console.warn("printCttLabel: Sem etiqueta disponível.")
+    targetWindow?.close()
     return false
   }
 
@@ -186,7 +187,9 @@ export async function printCttLabel(labelInput?: string | null): Promise<boolean
   try {
     const blob = base64ToBlob(clean, "application/pdf")
     const url = URL.createObjectURL(blob)
-    const printWindow = window.open(url, "_blank")
+    // A tab opened during the click (targetWindow) avoids popup blockers after async work.
+    const printWindow = targetWindow && !targetWindow.closed ? targetWindow : window.open(url, "_blank")
+    if (printWindow && printWindow === targetWindow) printWindow.location.href = url
     if (printWindow) {
       printWindow.onload = () => {
         printWindow.focus()
@@ -194,7 +197,8 @@ export async function printCttLabel(labelInput?: string | null): Promise<boolean
       }
       return true
     }
-    // Popup bloqueado → fallback para download
+    // Popup bloqueado → download, exceto quando o cliente escolheu imprimir (nunca descarregar)
+    if (!fallbackDownload) return false
     console.warn("printCttLabel: Popup bloqueado, a fazer download como alternativa.")
     return downloadCttLabel(labelBase64, "etiqueta_ctt.pdf")
   } catch (err) {
