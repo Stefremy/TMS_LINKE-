@@ -322,6 +322,9 @@ export function normalizeShipmentDateIso(rawInput: string): string {
   return ""
 }
 
+/** WhatsApp templates that notify a customer their parcel is waiting at a Ponto Pickup. */
+export const PUDO_NOTIFICATION_TEMPLATES: ReadonlySet<string> = new Set(["order_pick_up_1", "order_pick_no_ctt"])
+
 export function isShipmentOverdue24h(row: UnifiedNotificationShipmentRow): boolean {
   const candidate = String(row.deliveryDate || row.pickupDate || "").trim()
   if (!candidate) return false
@@ -792,6 +795,8 @@ export async function fetchUnifiedShipmentsByCategory(
             if (!trk) continue
             const st = String(log.status || "").toLowerCase()
             if (st === "failed" || st.startsWith("failed_") || st === "error") continue
+            // PUDO only counts as notified when a Ponto Pickup template went out (not any other message).
+            if (category === "pudo" && !PUDO_NOTIFICATION_TEMPLATES.has(String(log.template_name || ""))) continue
             if (!notifiedLookup.has(trk)) {
               notifiedLookup.set(trk, {
                 at: String(log.created_at || ""),
