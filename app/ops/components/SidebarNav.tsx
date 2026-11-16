@@ -23,7 +23,7 @@ import {
   Euro,
   Navigation,
   Tags,
-  MessageSquare,
+  MessageSquare, Headset,
   MessageCircle,
   Mail,
   Gamepad2,
@@ -70,7 +70,7 @@ const navConfig: NavSection[] = [
     items: [
       { title: "WhatsApp & SMS", href: "/ops/comunicacoes/whatsapp", icon: MessageSquare },
       { title: "Chat Console WhatsApp", href: "/ops/comunicacoes/chat", icon: MessageCircle },
-      { title: "Comunicação clientes", href: "/ops/mensagens", icon: MessageSquare },
+      { title: "Comunicação clientes", href: "/ops/mensagens", icon: Headset },
     ]
   },
   {

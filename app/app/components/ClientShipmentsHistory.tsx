@@ -8,7 +8,7 @@ import { getClientServiceName } from '@/lib/services/client-service-label'
 
 import * as React from "react"
 import Link from "next/link"
-import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon, Undo2, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, Package, PlusCircle, Building2, Filter, MoreVertical, Printer, Download, MapPin as MapPinIcon, Undo2, Trash2, ChevronLeft, ChevronRight, LifeBuoy } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { getClientPortalStatsAction, getShipmentLabelAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
@@ -18,6 +18,7 @@ import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { useClientScope } from "./ClientScope"
+import { ClientSupportRequestDialog, shipmentSupportPrefill } from "./ClientSupportRequest"
 import { useTrackingPolling } from "@/lib/hooks/useTrackingPolling"
 import { generateCttAcceptanceCertificateAction, downloadCttAcceptanceCertificateAction } from "@/app/actions/shipment-manifests"
 import { ManifestDocuments } from "@/components/manifest-documents"
@@ -42,6 +43,7 @@ export function ClientShipmentsHistory() {
   }, [currentClient.id])
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = React.useState<ShipmentRecord | null>(null)
+  const [supportShipment, setSupportShipment] = React.useState<ShipmentRecord | null>(null)
 
   const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
     if (!rawLabel) return null
@@ -215,6 +217,7 @@ export function ClientShipmentsHistory() {
     <div className="flex flex-col gap-6 max-w-6xl mx-auto font-sans relative">
       
       {/* Detalhes do Envio Modal */}
+      <ClientSupportRequestDialog key={supportShipment?.id ?? "none"} open={!!supportShipment} onOpenChange={open => { if (!open) setSupportShipment(null) }} prefill={supportShipment ? shipmentSupportPrefill(supportShipment) : undefined} />
       <ClientShipmentDetailModal 
         shipment={selectedShipment} 
         onClose={() => setSelectedShipment(null)} 
@@ -608,6 +611,16 @@ export function ClientShipmentsHistory() {
                           >
                             <MapPinIcon className="w-3.5 h-3.5 text-[var(--accent)]" />
                             Rastreio em Tempo Real
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setSupportShipment(envio);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
+                          >
+                            <LifeBuoy className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+                            Pedir apoio
                           </button>
 
                         </div>

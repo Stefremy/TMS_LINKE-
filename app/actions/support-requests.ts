@@ -35,7 +35,7 @@ export async function createSupportRequestAction(input: SupportRequestInput): Pr
   const { data, error } = await db.from("audit_log").insert({
     tenant_id: ctx.tenant_id, action: "support_request",
     details: {
-      client_id: clientId, category, subject, issue_date: issueDate, shipment_ref: text(input?.shipmentRef, 60),
+      client_id: clientId, category, subject, issue_date: issueDate, shipment_ref: text(input?.shipmentRef, 100),
       description, contact: text(input?.contact, 120), user_id: ctx.user.id, user_email: ctx.user.email ?? null,
     },
   }).select("id").single()

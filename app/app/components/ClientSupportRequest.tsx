@@ -32,7 +32,17 @@ export function ClientSupportCard({ compact = false }: { compact?: boolean }) {
   )
 }
 
-export function ClientSupportRequestDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export type SupportPrefill = { shipmentRef?: string; subject?: string; category?: SupportCategory }
+
+/** "LTK… · tracking da transportadora" for a shipment, sent along with the support request. */
+export function shipmentSupportPrefill(shipment: { reference?: string | null; tracking_number?: string | null; carrier_tracking_number?: string | null; ctt_object_id?: string | null; ctt_label_base64?: string | null }): SupportPrefill {
+  const linke = [shipment.reference, shipment.tracking_number].find(value => value?.startsWith("LTK")) || shipment.ctt_label_base64?.match(/Ref:\s*(LTK\d+)/i)?.[1] || shipment.reference || ""
+  const carrier = shipment.carrier_tracking_number || shipment.ctt_object_id || (shipment.tracking_number && shipment.tracking_number !== linke ? shipment.tracking_number : "") || ""
+  const shipmentRef = [linke, carrier && carrier !== linke ? carrier : ""].filter(Boolean).join(" · ")
+  return { shipmentRef, category: "envio", subject: linke ? `Apoio ao envio ${linke}` : "" }
+}
+
+export function ClientSupportRequestDialog({ open, onOpenChange, prefill }: { open: boolean; onOpenChange: (open: boolean) => void; prefill?: SupportPrefill }) {
   const { client } = useClientScope()
   const [pending, setPending] = React.useState(false)
   const [error, setError] = React.useState("")
@@ -74,20 +84,20 @@ export function ClientSupportRequestDialog({ open, onOpenChange }: { open: boole
         ) : (
           <form onSubmit={submit} className="space-y-4">
             <label className={label}>Tipo de pedido
-              <select name="category" required defaultValue="" className={field}>
+              <select name="category" required defaultValue={prefill?.category ?? ""} className={field}>
                 <option value="" disabled>Escolha uma opção</option>
                 {SUPPORT_CATEGORIES.map(category => <option key={category.id} value={category.id}>{category.label}</option>)}
               </select>
             </label>
             <label className={label}>Assunto
-              <input name="subject" required minLength={3} maxLength={120} className={field} placeholder="Resumo do problema" />
+              <input name="subject" required minLength={3} maxLength={120} defaultValue={prefill?.subject ?? ""} className={field} placeholder="Resumo do problema" />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className={label}>Data do problema <span className="font-normal text-[var(--text-tertiary)]">(opcional)</span>
                 <input name="issueDate" type="date" max={today} className={field} />
               </label>
-              <label className={label}>Nº de envio / guia <span className="font-normal text-[var(--text-tertiary)]">(opcional)</span>
-                <input name="shipmentRef" maxLength={60} className={field} placeholder="Ex.: LTK123456" />
+              <label className={label}>Ref. Linke / tracking <span className="font-normal text-[var(--text-tertiary)]">(opcional)</span>
+                <input name="shipmentRef" maxLength={100} defaultValue={prefill?.shipmentRef ?? ""} className={field} placeholder="Ex.: LTK123456" />
               </label>
             </div>
             <label className={label}>Descrição

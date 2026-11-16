@@ -31,7 +31,8 @@ import {
   Trash2,
   X,
   Bell,
-  Truck
+  Truck,
+  LifeBuoy
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { syncCttTrackingAction, convertZplToPdfAction } from "@/app/actions/ctt"
@@ -50,6 +51,7 @@ import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CreditCard } from "lucide-react"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 import { useClientScope } from "./ClientScope"
+import { ClientSupportRequestDialog, shipmentSupportPrefill } from "./ClientSupportRequest"
 import { useClientMessageCounter } from "./ClientMessages"
 import { generateCttAcceptanceCertificateAction, downloadCttAcceptanceCertificateAction } from "@/app/actions/shipment-manifests"
 import { ManifestDocuments } from "@/components/manifest-documents"
@@ -120,6 +122,7 @@ export function ClientDashboard() {
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = React.useState<ShipmentRecord | null>(null)
   const [generatingManifest, setGeneratingManifest] = React.useState(false)
+  const [supportShipment, setSupportShipment] = React.useState<ShipmentRecord | null>(null)
   const [manifestData, setManifestData] = React.useState<{ fileName: string; base64: string; documents?: CTTDocumentData[] } | null>(null)
   const certificateScope = React.useRef<string | null>(currentClient.id)
   React.useEffect(() => {
@@ -357,6 +360,7 @@ export function ClientDashboard() {
     <div className="flex flex-col gap-6 max-w-7xl mx-auto font-sans relative">
 
       {/* Detalhes do Envio Modal (Read-Only Mirror of Creation Form) */}
+      <ClientSupportRequestDialog key={supportShipment?.id ?? "none"} open={!!supportShipment} onOpenChange={open => { if (!open) setSupportShipment(null) }} prefill={supportShipment ? shipmentSupportPrefill(supportShipment) : undefined} />
       <ClientShipmentDetailModal 
         shipment={selectedShipment} 
         onClose={() => setSelectedShipment(null)} 
@@ -902,6 +906,15 @@ export function ClientDashboard() {
                         >
                           <Download className="w-3.5 h-3.5" />
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setSupportShipment(shipment)}
+                          aria-label={`Pedir apoio para o envio ${tracking}`}
+                          className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] rounded-md border border-[var(--border-subtle)] transition-colors"
+                          title="Pedir apoio"
+                        >
+                          <LifeBuoy className="w-3.5 h-3.5" />
+                        </button>
                         {(canSelectCttCertificate(shipment) || hasCttClosure(shipment)) && (
                           <button
                             type="button"
@@ -1120,6 +1133,17 @@ export function ClientDashboard() {
                                 <MapPin className="w-3.5 h-3.5 text-[var(--accent)]" />
                                 <span>Ver no Mapa</span>
                               </Link>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenDropdownId(null)
+                                  setSupportShipment(shipment)
+                                }}
+                                className="w-full px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
+                              >
+                                <LifeBuoy className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
+                                <span>Pedir apoio</span>
+                              </button>
 
                             </div>
                           )}
