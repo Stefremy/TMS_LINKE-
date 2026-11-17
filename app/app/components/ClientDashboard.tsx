@@ -632,6 +632,9 @@ export function ClientDashboard() {
                 }`}>
                   <AnimatedNumber value={currentClient?.billing_type === 'pay_as_you_go' ? availableCredit : stats.totalRevenue} decimals={2} suffix="€" />
                 </span>
+                {currentClient?.billing_type !== 'pay_as_you_go' && (
+                  <span className="text-sm font-medium text-[var(--text-tertiary)]">+ IVA</span>
+                )}
                 {currentClient?.billing_type === 'pay_as_you_go' && availableCredit < 0 && (
                   <span className="text-xs text-[var(--status-warning)] bg-[var(--status-warning-soft)] border border-[var(--status-warning)]/25 px-1.5 py-0.5 rounded font-medium">
                     Descoberto
@@ -943,7 +946,7 @@ export function ClientDashboard() {
                   <th className="py-3.5 px-5">Serviço / Operador</th>
                   <th className="py-3.5 px-5">Destinatário & Destino</th>
                   <th className="py-3.5 px-5">Data Emissão</th>
-                  <th className="py-3.5 px-5">Valor</th>
+                  <th className="py-3.5 px-5">Valor <span className="normal-case font-medium text-[10px]">s/ IVA</span></th>
                   <th className="py-3.5 px-5">Estado</th>
                   <th className="py-3.5 px-5 text-right">Ações</th>
                 </tr>
