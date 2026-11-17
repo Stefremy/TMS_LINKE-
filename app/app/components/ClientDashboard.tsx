@@ -319,6 +319,7 @@ export function ClientDashboard() {
   }
 
   const printLabel = async (shipmentItem: ShipmentRecord) => {
+    if (["anulado", "cancelado"].includes(shipmentItem.status || "")) { toast.error("Este envio foi anulado. Já não é possível imprimir a etiqueta."); return }
     const label = await fetchLabelForShipment(shipmentItem)
     if (label) {
       printCttLabel(label)
@@ -328,6 +329,7 @@ export function ClientDashboard() {
   }
 
   const downloadLabel = async (shipmentItem: ShipmentRecord, ref: string) => {
+    if (["anulado", "cancelado"].includes(shipmentItem.status || "")) { toast.error("Este envio foi anulado. Já não é possível imprimir a etiqueta."); return }
     const label = await fetchLabelForShipment(shipmentItem, ref)
     if (label) {
       const carrier = (shipmentItem?.transportadora || shipmentItem?.servico || "").toLowerCase().includes("correos") ? "Correos" : "CTT"
@@ -894,6 +896,7 @@ export function ClientDashboard() {
                         <button
                           type="button"
                           onClick={() => printLabel(shipment)}
+                          disabled={["anulado", "cancelado"].includes(shipment.status || "")}
                           aria-label={`Imprimir etiqueta do envio ${tracking}`}
                           className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-md border border-[var(--border-subtle)] transition-colors"
                           title="Imprimir Etiqueta"
@@ -903,6 +906,7 @@ export function ClientDashboard() {
                         <button
                           type="button"
                           onClick={() => downloadLabel(shipment, tracking)}
+                          disabled={["anulado", "cancelado"].includes(shipment.status || "")}
                           aria-label={`Descarregar etiqueta PDF do envio ${tracking}`}
                           className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] rounded-md border border-[var(--border-subtle)] transition-colors"
                           title="Descarregar PDF"
@@ -964,7 +968,7 @@ export function ClientDashboard() {
                   const tracking = shipment.tracking_number || shipment.id
 
                   return (
-                    <tr key={shipment.id} className="hover:bg-[var(--surface-muted)] transition-colors">
+                    <tr key={shipment.id} className={`hover:bg-[var(--surface-muted)] transition-colors ${["anulado", "cancelado"].includes(shipment.status || "") ? "[&>td:not(:last-child)]:opacity-50 [&>td:not(:last-child)]:grayscale" : ""}`}>
                       {/* Tracking / Guia */}
                       <td className="py-4 px-5">
                         {(() => {
@@ -1073,12 +1077,14 @@ export function ClientDashboard() {
                             aria-label={`Ações do envio ${shipment.tracking_number || shipment.id}`}
                             aria-haspopup="menu"
                             aria-expanded={openDropdownId === shipment.id}
-                            className="p-1.5 rounded-md border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] transition-colors cursor-pointer"
+                            disabled={["anulado", "cancelado"].includes(shipment.status || "")}
+                            title={["anulado", "cancelado"].includes(shipment.status || "") ? "Envio anulado — sem ações disponíveis" : undefined}
+                            className="p-1.5 rounded-md border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                           >
                             <MoreVertical className="w-4 h-4" />
                           </button>
 
-                          {openDropdownId === shipment.id && (
+                          {openDropdownId === shipment.id && !["anulado", "cancelado"].includes(shipment.status || "") && (
                             <div className="absolute right-0 mt-1 w-64 bg-[var(--surface-bg)] rounded-md shadow-lg border border-[var(--border-subtle)] py-1.5 z-30 animate-in fade-in-50 zoom-in-95 text-left">
                               <button
                                 type="button"

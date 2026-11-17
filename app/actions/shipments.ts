@@ -59,7 +59,7 @@ import { createShipment, dispatchShipment } from "@/lib/services/shipments/shipm
 import { canInvoiceShipment } from "@/lib/billing/shipment-eligibility"
 import { currentAccountOutstanding, payAsYouGoSpent, payAsYouGoBalance, isPrepaidShipment } from "@/lib/billing/client-balance"
 import { reserveWallet, transitionWallet, walletSnapshot, type WalletReservation } from "@/lib/billing/wallet"
-import { deleteShipment, deleteShipmentsBulk } from "@/lib/services/shipments/shipment-deleter"
+import { deleteShipment, deleteShipmentsBulk, hardDeleteShipment } from "@/lib/services/shipments/shipment-deleter"
 import { duplicateShipment, previewShipmentDuplicate } from "@/lib/services/shipments/shipment-duplicator"
 
 export async function createShipmentAction(formData: FormData) {
@@ -1180,7 +1180,7 @@ export async function syncAllActiveShipmentsTrackingAction() {
   const { data: activeShipments } = await supabase
     .from("shipments")
     .select("id")
-    .not("status", "in", '("entregue","cancelado","devolvido")')
+    .not("status", "in", '("entregue","cancelado","devolvido","anulado")')
 
   if (!activeShipments || activeShipments.length === 0) {
     return { success: true, count: 0, errors: [] }
@@ -1222,6 +1222,11 @@ export async function deleteShipmentAction(shipmentId: string) {
   return deleteShipment(shipmentId)
 }
 
+/** Eliminação definitiva (só contas autorizadas — limpeza de testes). */
+export async function hardDeleteShipmentAction(shipmentId: string) {
+  return hardDeleteShipment(shipmentId)
+}
+
 export async function previewShipmentDuplicateAction(shipmentId: string) {
   return previewShipmentDuplicate(shipmentId)
 }
@@ -1260,6 +1265,10 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
 
     if (ctx.role === "client" && original.client_id !== ctx.client_id) {
       return { success: false, error: "Não autorizado. Envio não pertence à sua conta." }
+    }
+
+    if (["anulado", "cancelado"].includes(String(original.status || "").toLowerCase())) {
+      return { success: false, error: "Envio anulado: não é possível criar devolução." }
     }
 
     const newShipmentId = crypto.randomUUID()

@@ -62,6 +62,7 @@ export function ClientShipmentsHistory() {
   }
 
   const printLabel = async (envioItem: ShipmentRecord) => {
+    if (["anulado", "cancelado"].includes(envioItem.status || "")) { toast.error("Este envio foi anulado. Já não é possível imprimir a etiqueta."); return }
     const label = await fetchLabelForShipment(envioItem)
     if (label) {
       printCttLabel(label)
@@ -71,6 +72,7 @@ export function ClientShipmentsHistory() {
   }
 
   const downloadLabel = async (envioItem: ShipmentRecord, ref: string) => {
+    if (["anulado", "cancelado"].includes(envioItem.status || "")) { toast.error("Este envio foi anulado. Já não é possível imprimir a etiqueta."); return }
     const label = await fetchLabelForShipment(envioItem, ref)
     if (label) {
       const carrier = (envioItem?.transportadora || envioItem?.servico || "").toLowerCase().includes("correos") ? "Correos" : "CTT"
@@ -105,7 +107,7 @@ export function ClientShipmentsHistory() {
 
 
   const activeIds = React.useMemo(() => shipments
-    .filter(s => !["entregue", "devolvido", "cancelado"].includes(s.status))
+    .filter(s => !["entregue", "devolvido", "cancelado", "anulado"].includes(s.status))
     .map(s => s.id).filter(Boolean) as string[], [shipments])
   useTrackingPolling(activeIds, async signal => {
     const fresh = await getClientPortalStatsAction(currentClient.id, currentClient.short_name)
@@ -318,6 +320,7 @@ export function ClientShipmentsHistory() {
             <option value="entregue">Entregues</option>
             <option value="em transito">Em Trânsito</option>
             <option value="pendente">Pendentes</option>
+            <option value="cancelado">Anulados</option>
           </select>
         </div>
       </div>
@@ -369,7 +372,7 @@ export function ClientShipmentsHistory() {
                 const tracking = envio.tracking_number || envio.id
 
                 return (
-                  <div key={envio.id} className="p-3.5 space-y-2.5 hover:bg-[var(--surface-muted)] transition-colors">
+                  <div key={envio.id} className={`p-3.5 space-y-2.5 hover:bg-[var(--surface-muted)] transition-colors ${["anulado", "cancelado"].includes(envio.status || "") ? "opacity-50 grayscale" : ""}`}>
                     {/* Top Row: Ref/Tracking + Status */}
                     <div className="flex items-start justify-between gap-2">
                       <CttCertificateCheckbox shipment={envio} selection={certificateSelection} busy={generatingManifest} />
@@ -438,6 +441,7 @@ export function ClientShipmentsHistory() {
                         <button
                           type="button"
                           onClick={() => printLabel(envio)}
+                          disabled={["anulado", "cancelado"].includes(envio.status || "")}
                           aria-label={`Imprimir etiqueta do envio ${tracking}`}
                           className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-lg border border-[var(--border-strong)] transition-colors cursor-pointer"
                           title="Imprimir Etiqueta"
@@ -447,6 +451,7 @@ export function ClientShipmentsHistory() {
                         <button
                           type="button"
                           onClick={() => downloadLabel(envio, tracking)}
+                          disabled={["anulado", "cancelado"].includes(envio.status || "")}
                           aria-label={`Descarregar etiqueta PDF do envio ${tracking}`}
                           className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--text-secondary)] hover:bg-[var(--surface-dim)] rounded-lg border border-[var(--border-strong)] transition-colors cursor-pointer"
                           title="Descarregar PDF"
@@ -477,7 +482,7 @@ export function ClientShipmentsHistory() {
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)]">
                 {paginatedShipments.map((envio) => (
-                  <tr key={envio.id} className="hover:bg-[var(--surface-muted)]">
+                  <tr key={envio.id} className={`hover:bg-[var(--surface-muted)] ${["anulado", "cancelado"].includes(envio.status || "") ? "[&>td:not(:last-child)]:opacity-50 [&>td:not(:last-child)]:grayscale" : ""}`}>
                       <td className="px-2"><CttCertificateCheckbox shipment={envio} selection={certificateSelection} busy={generatingManifest} /></td>
                     <td className="py-3">
                       {(() => {
@@ -564,12 +569,14 @@ export function ClientShipmentsHistory() {
                         aria-label={`Ações do envio ${envio.tracking_number || envio.id}`}
                         aria-haspopup="menu"
                         aria-expanded={openDropdownId === envio.id}
-                        className="p-1.5 rounded-lg hover:bg-[var(--border-strong)] text-[var(--text-tertiary)] transition-colors"
+                        disabled={["anulado", "cancelado"].includes(envio.status || "")}
+                        title={["anulado", "cancelado"].includes(envio.status || "") ? "Envio anulado — sem ações disponíveis" : undefined}
+                        className="p-1.5 rounded-lg hover:bg-[var(--border-strong)] text-[var(--text-tertiary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       
-                      {openDropdownId === envio.id && (
+                      {openDropdownId === envio.id && !["anulado", "cancelado"].includes(envio.status || "") && (
                         <div className="absolute right-0 top-full mt-1 w-48 bg-[var(--surface-bg)] rounded-xl shadow-lg border border-[var(--border-strong)] py-1.5 z-10 text-left">
                           <button 
                             onClick={() => {
@@ -587,6 +594,7 @@ export function ClientShipmentsHistory() {
                               setOpenDropdownId(null);
                               printLabel(envio);
                             }}
+                            disabled={["anulado", "cancelado"].includes(envio.status || "")}
                             className="w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
                           >
                             <Printer className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -597,6 +605,7 @@ export function ClientShipmentsHistory() {
                               setOpenDropdownId(null);
                               downloadLabel(envio, envio.tracking_number || envio.id);
                             }}
+                            disabled={["anulado", "cancelado"].includes(envio.status || "")}
                             className="w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5 text-[var(--accent)]" />

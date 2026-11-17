@@ -120,6 +120,8 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
     }
     const saved = snapshot || shipment
     if (!saved) return null
+    // Envios anulados: ninguém (cliente ou operação) pode voltar a imprimir/descarregar etiquetas.
+    if (["anulado", "cancelado"].includes(shipment?.status || "")) return null
     const rawOutputs = saved.rawResponse?.ShipmentData || []
     const storedLabels = saved.carrier_labels?.length ? saved.carrier_labels : rawOutputs.flatMap(getCttShipmentLabels)
     let label = saved.ctt_label_base64 || saved.carrier_label_base64 || saved.labelBase64 ||

@@ -58,10 +58,11 @@ interface EnviosClientProps {
   filterError?: string | null
   initialSearch?: string
   initialStatus?: string
+  canHardDelete?: boolean
 }
 
 
-export function EnviosClient({ envios, recolhas, clients, pagination, initialSearch, initialStatus, initialFilters = EMPTY_SHIPMENT_FILTERS, filterFacets, filterError }: EnviosClientProps) {
+export function EnviosClient({ envios, recolhas, clients, pagination, initialSearch, initialStatus, initialFilters = EMPTY_SHIPMENT_FILTERS, filterFacets, filterError, canHardDelete = false }: EnviosClientProps) {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = React.useState(initialSearch || "")
   const [requestedSearch, setRequestedSearch] = React.useState(initialSearch || "")
@@ -179,7 +180,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
 
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return
-    if (!window.confirm(`Tem a certeza que deseja eliminar ${selectedIds.length} envio(s)? Esta ação é irreversível.`)) return
+    if (!window.confirm(`Tem a certeza que deseja anular ${selectedIds.length} envio(s)? Mantêm-se em Envios com o estado Anulado e o cliente deixa de poder imprimir etiquetas.`)) return
     
     setIsDeletingSelected(true)
     try {
@@ -188,10 +189,10 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
         setSelectedIds([])
         router.refresh()
       } else {
-        notify.error(res.error || "Erro ao eliminar envios.")
+        notify.error(res.error || "Erro ao anular envios.")
       }
     } catch (err) {
-      notify.error("Erro ao eliminar envios: " + errorMessage(err))
+      notify.error("Erro ao anular envios: " + errorMessage(err))
     } finally {
       setIsDeletingSelected(false)
     }
@@ -410,7 +411,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
               className="bg-[var(--status-critical)] hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               {isDeletingSelected ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-              <span>Eliminar</span>
+              <span>Anular</span>
             </button>
 
             <button
@@ -553,6 +554,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                           trackingRef={envio.trk?.ref || envio.trk?.id} 
                           isCtt={envio.service?.code?.includes('CTT')}
                           onOpenDetails={() => setSelectedShipment(envio.rawShipment || envio)}
+                          canHardDelete={canHardDelete}
                         />
                       </div>
                     </div>
@@ -604,7 +606,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                     : isSelected 
                     ? 'bg-[var(--accent-soft)]/50 hover:bg-[rgba(18,138,71,0.15)]' 
                     : 'hover:bg-[var(--surface-muted)]'
-                }`}
+                } ${["cancelado", "anulado"].includes(envio.rawShipment?.status || envio.status?.raw || "") ? '[&>td:not(:last-child)]:opacity-60' : ''}`}
                 onClick={(e) => {
                   if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('a') || (e.target as HTMLElement).closest('input')) return;
                   const target = { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id };
@@ -787,6 +789,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                     trackingRef={envio.trk?.ref || envio.trk?.id} 
                     isCtt={envio.service?.code?.includes('CTT')}
                     onOpenDetails={() => setSelectedShipment(envio.rawShipment || envio)}
+                    canHardDelete={canHardDelete}
                   />
                 </td>
               </tr>

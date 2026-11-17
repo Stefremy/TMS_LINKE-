@@ -173,6 +173,7 @@ setTimelineEvents(data || [])
 
   // 1. Imprimir Etiqueta
   const printLabel = async () => {
+    if (["anulado", "cancelado"].includes(currentShipment?.status || "")) { toast.error("Este envio foi anulado. Já não é possível imprimir a etiqueta."); return }
     const label = await fetchLabelForShipment()
     if (label) {
       printCttLabel(label)
@@ -183,6 +184,7 @@ setTimelineEvents(data || [])
 
   // 2. Descarregar Etiqueta PDF
   const downloadLabel = async () => {
+    if (["anulado", "cancelado"].includes(currentShipment?.status || "")) { toast.error("Este envio foi anulado. Já não é possível imprimir a etiqueta."); return }
     const label = await fetchLabelForShipment()
     if (label) {
       const carrier = (currentShipment?.carrier_code || currentShipment?.service_type || currentShipment?.servico || "").toLowerCase().includes("correos")
@@ -256,6 +258,7 @@ setTimelineEvents(data || [])
   }
 
   const handleCreateReturn = async () => {
+    if (["anulado", "cancelado"].includes(currentShipment?.status || "")) { toast.error("Envio anulado: não é possível criar devolução."); return }
     if (!currentShipment?.id) return
     const confirmed = await confirmAction({
       title: `Criar guia de devolução para ${tracking}?`,
@@ -286,9 +289,9 @@ setTimelineEvents(data || [])
   const handleDelete = async () => {
     if (!currentShipment?.id) return
     const confirmed = await confirmAction({
-      title: `Eliminar o envio ${tracking}?`,
-      description: "A guia e todo o histórico de rastreio associado são apagados. Esta ação não pode ser desfeita.",
-      confirmLabel: "Eliminar envio",
+      title: `Anular o envio ${tracking}?`,
+      description: "O envio passa a Anulado e deixa de poder imprimir etiquetas. Continua visível no histórico.",
+      confirmLabel: "Anular envio",
       tone: "danger",
     })
     if (!confirmed) return
@@ -297,7 +300,7 @@ setTimelineEvents(data || [])
     try {
       const res = await deleteShipmentAction(currentShipment.id)
       if (res.success) {
-        toast.success(`Envio ${tracking} eliminado.`)
+        toast.success(`Envio ${tracking} anulado.`)
         onClose()
         window.location.reload()
       } else {
@@ -413,6 +416,7 @@ setTimelineEvents(data || [])
             <button
               type="button"
               onClick={printLabel}
+              disabled={["anulado", "cancelado"].includes(currentShipment?.status || "")}
               className="px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Imprimir etiqueta em nova janela"
             >
@@ -423,6 +427,7 @@ setTimelineEvents(data || [])
             <button
               type="button"
               onClick={downloadLabel}
+              disabled={["anulado", "cancelado"].includes(currentShipment?.status || "")}
               className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Descarregar etiqueta em PDF"
             >
@@ -966,6 +971,7 @@ setTimelineEvents(data || [])
             <button
               type="button"
               onClick={printLabel}
+              disabled={["anulado", "cancelado"].includes(currentShipment?.status || "")}
               className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
               <Printer className="w-3.5 h-3.5" />
@@ -975,6 +981,7 @@ setTimelineEvents(data || [])
             <button
               type="button"
               onClick={downloadLabel}
+              disabled={["anulado", "cancelado"].includes(currentShipment?.status || "")}
               className="px-4 py-2 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
             >
               <Download className="w-3.5 h-3.5 text-[var(--accent)]" />

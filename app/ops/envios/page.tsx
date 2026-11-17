@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { loadFilteredShipmentPage } from "@/lib/services/shipments/filtered-shipment-list"
 import { readShipmentListFilters } from "@/lib/services/shipments/shipment-list-filters"
 import { requireEmployee } from "@/lib/auth/context"
+import { canHardDeleteShipments } from "@/lib/auth/hard-delete"
 import { getClientesAction } from "@/app/actions/clientes"
 import { EnviosClient } from "./components/EnviosClient"
 
@@ -199,6 +200,7 @@ const mappedRecolhas = recolhas.map((r) => ({
       filterError={paginatedResult.filterError}
       initialSearch={search}
       initialStatus={status}
+      canHardDelete={canHardDeleteShipments(ctx)}
     />
   )
 }

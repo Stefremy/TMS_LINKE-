@@ -24,6 +24,7 @@ import {
 import { 
   dispatchShipmentAction, 
   deleteShipmentAction, 
+  hardDeleteShipmentAction,
   createReturnShipmentAction,
   getShipmentLabelAction
 } from "@/app/actions/shipments"
@@ -40,6 +41,7 @@ interface ActionMenuProps {
   onOpenDetails?: () => void
   onUpdateShipment?: (updated: Partial<ShipmentRecord>) => void
   onDeleteShipment?: (id: string) => void
+  canHardDelete?: boolean
 }
 
 export function ActionMenu({ 
@@ -49,7 +51,8 @@ export function ActionMenu({
   isCtt = true,
   onOpenDetails,
   onUpdateShipment,
-  onDeleteShipment
+  onDeleteShipment,
+  canHardDelete = false
 }: ActionMenuProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [isEmitting, setIsEmitting] = React.useState(false)
@@ -68,6 +71,10 @@ export function ActionMenu({
     shipment?.rawShipment?.billing_statement_id ||
     shipment?.is_invoiced ||
     shipment?.invoiced
+  )
+
+  const isVoided = ["anulado", "cancelado"].includes(
+    String(shipment?.rawShipment?.status ?? shipment?.status ?? "").toLowerCase()
   )
 
   // Rascunho ainda não emitido: pode ser enviado à transportadora (CTT ou Correos).
@@ -110,6 +117,7 @@ export function ActionMenu({
 
   const handlePrint = async () => {
     setIsOpen(false)
+    if (isVoided) { notify.warning("Envio anulado: a etiqueta já não pode ser impressa nem descarregada."); return }
     setIsProcessing(true)
     try {
       const label = await getOrFetchLabel()
@@ -121,6 +129,7 @@ export function ActionMenu({
 
   const handleDownload = async () => {
     setIsOpen(false)
+    if (isVoided) { notify.warning("Envio anulado: a etiqueta já não pode ser impressa nem descarregada."); return }
     setIsProcessing(true)
     try {
       const label = await getOrFetchLabel()
@@ -178,6 +187,7 @@ export function ActionMenu({
 
   const handleCreateReturn = async () => {
     if (!effectiveId) return
+    if (isVoided) { notify.warning("Envio anulado: não é possível criar devolução."); return }
     const confirmed = window.confirm(`Deseja criar uma guia de DEVOLUÇÃO para o envio ${effectiveRef}?\n\nO Remetente e Destinatário serão invertidos automaticamente.`)
     if (!confirmed) return
 
@@ -201,6 +211,28 @@ export function ActionMenu({
     }
   }
 
+  const handleHardDelete = async () => {
+    if (!effectiveId) return
+    const confirmed = window.confirm(`🗑️ ELIMINAR DEFINITIVAMENTE o envio ${effectiveRef}?\n\nApaga o envio, volumes e histórico de rastreio. Não pode ser desfeito.`)
+    if (!confirmed) return
+    setIsDeleting(true)
+    try {
+      const res = await hardDeleteShipmentAction(effectiveId)
+      if (res.success) {
+        notify.success(`Envio ${effectiveRef} eliminado definitivamente.`)
+        if (onDeleteShipment) onDeleteShipment(effectiveId)
+        else window.location.reload()
+      } else {
+        notify.error("Erro ao eliminar envio: " + (res.error || "Erro desconhecido"))
+      }
+    } catch (e) {
+      notify.error("Erro ao eliminar envio: " + errorMessage(e))
+    } finally {
+      setIsDeleting(false)
+      setIsOpen(false)
+    }
+  }
+
   const handleDelete = async () => {
     if (!effectiveId) return
 
@@ -210,14 +242,14 @@ export function ActionMenu({
       return
     }
 
-    const confirmed = window.confirm(`⚠️ Tem a certeza que deseja ELIMINAR o envio ${effectiveRef}?\n\nEsta ação apagará permanentemente a guia e o histórico de rastreio.`)
+    const confirmed = window.confirm(`⚠️ Tem a certeza que deseja ANULAR o envio ${effectiveRef}?\n\nO envio mantém-se em Envios com o estado Anulado. O cliente deixa de poder imprimir etiquetas.`)
     if (!confirmed) return
 
     setIsDeleting(true)
     try {
       const res = await deleteShipmentAction(effectiveId)
       if (res.success) {
-        notify.success(`Envio ${effectiveRef} eliminado.`)
+        notify.success(`Envio ${effectiveRef} anulado.`)
         if (onDeleteShipment) {
           onDeleteShipment(effectiveId)
         } else {
@@ -311,8 +343,8 @@ export function ActionMenu({
             <button 
               type="button"
               onClick={handlePrint}
-              disabled={isProcessing}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-slate-50 rounded-lg text-xs text-slate-700 font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              disabled={isProcessing || isVoided}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-slate-50 rounded-lg text-xs text-slate-700 font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessing ? (
                 <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
@@ -325,7 +357,7 @@ export function ActionMenu({
             <button 
               type="button"
               onClick={handleDownload}
-              disabled={isProcessing}
+              disabled={isProcessing || isVoided}
               className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-slate-50 rounded-lg text-xs text-slate-700 font-semibold transition-colors cursor-pointer disabled:opacity-50"
             >
               <Download className="w-4 h-4 text-emerald-600" />
@@ -356,8 +388,8 @@ export function ActionMenu({
             <button 
               type="button"
               onClick={handleCreateReturn}
-              disabled={isCreatingReturn}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-amber-50 rounded-lg text-xs text-amber-800 font-semibold transition-colors cursor-pointer disabled:opacity-50 mt-0.5"
+              disabled={isCreatingReturn || isVoided}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-amber-50 rounded-lg text-xs text-amber-800 font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-0.5"
             >
               {isCreatingReturn ? (
                 <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
@@ -375,7 +407,7 @@ export function ActionMenu({
               >
                 <div className="flex items-center gap-2">
                   <Trash2 className="w-4 h-4 text-slate-300 shrink-0" />
-                  <span className="line-through text-slate-400">Eliminar Envio</span>
+                  <span className="line-through text-slate-400">Anular Envio</span>
                 </div>
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#eddccb] text-[#5c3e21]">
                   <Lock className="w-2.5 h-2.5 text-[#8f5d30] shrink-0" /> Faturado
@@ -393,7 +425,20 @@ export function ActionMenu({
                 ) : (
                   <Trash2 className="w-4 h-4 text-red-600" />
                 )}
-                <span>Eliminar Envio</span>
+                <span>Anular Envio</span>
+              </button>
+            )}
+
+            {canHardDelete && !isBilled && (
+              <button
+                type="button"
+                onClick={handleHardDelete}
+                disabled={isDeleting}
+                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-red-100 rounded-lg text-xs text-red-800 font-bold transition-colors cursor-pointer disabled:opacity-50 mt-0.5"
+                title="Apenas para limpeza de testes"
+              >
+                <Trash2 className="w-4 h-4 text-red-700" />
+                <span>Eliminar definitivamente</span>
               </button>
             )}
           </div>

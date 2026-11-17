@@ -65,10 +65,11 @@ export function getShipmentStatusConfig(rawStatus: unknown): StatusConfig {
         dotColor: "bg-slate-400",
         badgeVariant: "neutral",
       }
+    case "anulado":
     case "cancelado":
       return {
-        label: "Cancelado",
-        color: "bg-slate-50 text-slate-600 border border-slate-200 font-semibold",
+        label: "Anulado",
+        color: "bg-slate-100 text-slate-500 border border-slate-200 font-semibold",
         dotColor: "bg-slate-400",
         badgeVariant: "neutral",
       }
