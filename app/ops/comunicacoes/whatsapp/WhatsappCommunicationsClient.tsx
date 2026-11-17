@@ -1339,12 +1339,6 @@ export function WhatsappCommunicationsClient({ initialConfig }: { initialConfig?
                             <div className="truncate text-slate-700" title={row.incidentReason || row.incidence || row.status}>
                               {row.incidentReason || row.incidence || row.status || "—"}
                             </div>
-                            {row.overdue24h && (
-                              <span className="mt-1 inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800">
-                                <Clock className="h-2.5 w-2.5" />
-                                &gt; 24h
-                              </span>
-                            )}
                           </td>
                           <td className="border-b border-slate-100 px-3 py-2.5">
                             {row.alreadyNotified ? (
