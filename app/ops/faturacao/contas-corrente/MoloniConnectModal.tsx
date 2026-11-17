@@ -8,6 +8,8 @@ import { connectMoloniWithPasswordAction } from "@/app/actions/moloni"
 interface MoloniConnectModalProps {
   isOpen: boolean
   onClose: () => void
+  /** Which Moloni connection is being authorized. Defaults to the sandbox ("test"). */
+  environment?: "test" | "live"
   config?: {
     isConnected?: boolean
     companyName?: string
@@ -17,7 +19,7 @@ interface MoloniConnectModalProps {
   }
 }
 
-export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectModalProps) {
+export function MoloniConnectModal({ isOpen, onClose, config, environment = "test" }: MoloniConnectModalProps) {
   const router = useRouter()
   const [loading, setLoading] = React.useState(false)
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null)
@@ -32,6 +34,7 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
     setSuccessMsg(null)
 
     const formData = new FormData(e.currentTarget)
+    formData.set("environment", environment)
     const res = await connectMoloniWithPasswordAction(formData)
     setLoading(false)
 
@@ -51,7 +54,7 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
   // The server derives the public callback from OPS_ORIGIN.
   const registeredCallbackUri = config?.redirectUri || `${currentOrigin}/api/moloni/callback`
   // Correct Moloni OAuth authorization endpoint
-  const oauthAuthUrl = `https://www.moloni.pt/ac/root/oauth/?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(registeredCallbackUri)}&state=${encodeURIComponent(currentOrigin)}`
+  const oauthAuthUrl = `https://www.moloni.pt/ac/root/oauth/?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(registeredCallbackUri)}&state=${environment}`
 
   return (
     <div className="tms-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
@@ -66,7 +69,10 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
               <Plug aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-[var(--text-primary)]">Integração Moloni API</h2>
+              <h2 className="text-sm font-bold text-[var(--text-primary)]">
+                Integração Moloni API ·{" "}
+                <span className={environment === "live" ? "text-red-700" : "text-amber-700"}>{environment === "live" ? "Produção" : "Teste"}</span>
+              </h2>
               <p className="text-[11px] text-[var(--text-tertiary)] font-medium">Software de Faturação Certificado AT</p>
             </div>
           </div>
@@ -79,6 +85,12 @@ export function MoloniConnectModal({ isOpen, onClose, config }: MoloniConnectMod
         </div>
 
         <div className="p-5 space-y-4">
+          <div className={`p-3 rounded-lg border text-[11px] leading-relaxed ${environment === "live" ? "bg-red-50 border-red-200 text-red-900" : "bg-amber-50 border-amber-200 text-amber-900"}`}>
+            {environment === "live"
+              ? <>Está a ligar a conta <strong>oficial</strong>. Quando Produção estiver ativa, cada fatura é um documento fiscal real comunicado à AT. Ligar não ativa Produção; isso faz-se depois no interruptor.</>
+              : <>Está a ligar a conta de <strong>testes</strong> (sandbox). Os documentos emitidos aqui não são faturas reais.</>}
+          </div>
+
           {/* Status Atual */}
           {config?.isConnected ? (
             <div className="p-3.5 rounded-lg bg-[var(--status-success-soft)] border border-[rgba(18,138,71,0.2)] flex items-start gap-3">

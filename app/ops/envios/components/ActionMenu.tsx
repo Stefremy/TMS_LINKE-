@@ -17,7 +17,8 @@ import {
   Trash2, 
   Edit3, 
   Undo2,
-  Lock
+  Lock,
+  Copy
 } from "lucide-react"
 
 import { 
@@ -29,6 +30,7 @@ import {
 import { convertZplToPdfAction, syncCttTrackingAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
+import { DuplicateShipmentModal } from "./DuplicateShipmentModal"
 
 interface ActionMenuProps {
   shipment?: ShipmentRecord
@@ -54,6 +56,7 @@ export function ActionMenu({
   const [isProcessing, setIsProcessing] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [isCreatingReturn, setIsCreatingReturn] = React.useState(false)
+  const [isDuplicateOpen, setIsDuplicateOpen] = React.useState(false)
   const menuRef = React.useRef<HTMLDivElement>(null)
 
   const effectiveId = shipmentId || shipment?.id
@@ -66,6 +69,11 @@ export function ActionMenu({
     shipment?.is_invoiced ||
     shipment?.invoiced
   )
+
+  // Rascunho ainda não emitido: pode ser enviado à transportadora (CTT ou Correos).
+  const isEmittableDraft = ["rascunho", "draft"].includes(String(shipment?.status || "").toLowerCase()) &&
+    !shipment?.carrier_tracking_number
+  const draftCarrierName = String(shipment?.carrier_code || "").toLowerCase().includes("correos") ? "Correos" : "CTT"
 
   // Close when clicking outside
   React.useEffect(() => {
@@ -128,13 +136,20 @@ export function ActionMenu({
   }
 
   const handleEmitCtt = async () => {
-    if (!effectiveId) return
+    if (!effectiveId || isEmitting) return
+    const confirmed = window.confirm(`Emitir a guia ${effectiveRef} na ${draftCarrierName}?\n\nO envio será registado na transportadora e esta ação não pode ser repetida.`)
+    if (!confirmed) return
     setIsEmitting(true)
     try {
       const result = await dispatchShipmentAction(effectiveId)
       if (!result.success) throw new Error(result.error || "Os CTT não aceitaram o envio.")
       onUpdateShipment?.({ ...shipment, status: "pendente", carrier_tracking_number: result.trackingNumber })
-      if (result.dbWarning) notify.warning(result.dbWarning); else notify.success("Envio CTT emitido com sucesso!")
+      if (result.dbWarning) {
+        notify.warning(result.dbWarning)
+      } else {
+        notify.success(`Guia emitida (${draftCarrierName}). Tracking: ${result.trackingNumber}`)
+        window.location.reload()
+      }
     } catch (err) {
       notify.error("Erro ao emitir CTT: " + errorMessage(err))
     } finally {
@@ -324,6 +339,19 @@ export function ActionMenu({
           <div className="px-1.5 py-1">
             <div className="px-2 py-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ações de Gestão</div>
 
+            {/* Duplicar Envio */}
+            <button 
+              type="button"
+              onClick={() => {
+                setIsOpen(false)
+                setIsDuplicateOpen(true)
+              }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-teal-50 rounded-lg text-xs text-teal-800 font-semibold transition-colors cursor-pointer"
+            >
+              <Copy className="w-4 h-4 text-[#007F8B]" />
+              <span>Duplicar Envio</span>
+            </button>
+
             {/* Criar Devolução */}
             <button 
               type="button"
@@ -375,6 +403,18 @@ export function ActionMenu({
           {/* 4. Ações de Transportadora */}
           <div className="px-1.5 py-1 bg-red-50/40 rounded-lg mx-1 my-0.5">
             <div className="px-2 py-0.5 text-[10px] font-black text-red-600 uppercase tracking-wider">Ações de Transportadora</div>
+
+            {isEmittableDraft && (
+              <button
+                type="button"
+                onClick={handleEmitCtt}
+                disabled={isEmitting}
+                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 bg-white hover:bg-red-100/60 rounded-md text-xs text-red-700 font-bold transition-colors cursor-pointer disabled:opacity-50 mb-0.5"
+              >
+                {isEmitting ? <Loader2 className="w-3.5 h-3.5 text-red-600 animate-spin" /> : <Truck className="w-3.5 h-3.5 text-red-600" />}
+                <span>{isEmitting ? `A emitir na ${draftCarrierName}...` : `Emitir Guia ${draftCarrierName}`}</span>
+              </button>
+            )}
             
 
 
@@ -407,6 +447,14 @@ export function ActionMenu({
           </div>
 
         </div>
+      )}
+
+      {isDuplicateOpen && effectiveId && (
+        <DuplicateShipmentModal
+          shipmentId={effectiveId}
+          trackingRef={effectiveRef}
+          onClose={() => setIsDuplicateOpen(false)}
+        />
       )}
     </div>
   )

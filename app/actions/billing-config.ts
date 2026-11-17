@@ -1,35 +1,38 @@
 "use server"
-import type { MoloniConnection } from "@/lib/billing/types"
 import { errorMessage } from "@/lib/errors"
 
 
 import { createAdminClient } from "@/lib/supabase/server"
-import { MoloniClient } from "@/lib/moloni/moloni-client"
+import { billingConfigForEnvironment, getActiveMoloniClient, getActiveMoloniEnvironment, getMoloniConnection, moloniClientFor, type MoloniEnvironment } from "@/lib/moloni/connection"
 import { requireEmployee, getTenantId } from "@/lib/auth/context"
 import { revalidatePath } from "next/cache"
 
 import { type BillingConfig, DEFAULT_BILLING_CONFIG } from "./billing-config-types"
 
 
+type StoredBillingSettings = Partial<BillingConfig> & { documentSetIdByEnvironment?: Partial<Record<MoloniEnvironment, number | null>> }
+
+async function loadStoredBillingSettings(tenantId: string): Promise<StoredBillingSettings> {
+  const { data, error } = await createAdminClient().from("audit_log").select("details")
+    .eq("tenant_id", tenantId).eq("action", "moloni_billing_settings")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle()
+  if (error) throw error
+  return (data?.details || {}) as StoredBillingSettings
+}
+
 /**
- * Obtém as configurações de faturação do TMS e Moloni
+ * Obtém as configurações de faturação do TMS e Moloni.
+ * A série documental é da empresa Moloni do ambiente ativo (Teste ou Produção).
  */
 export async function getBillingConfigAction(): Promise<BillingConfig> {
-  const supabase = createAdminClient()
   try {
-    const { data: logs } = await supabase
-      .from("audit_log")
-      .select("details")
-      .eq("action", "moloni_billing_settings")
-      .order("created_at", { ascending: false })
-      .limit(1)
-
-    if (logs && logs[0]?.details) {
-      return {
-        ...DEFAULT_BILLING_CONFIG,
-        ...logs[0].details,
-      }
-    }
+    const tenantId = await getTenantId()
+    const [stored, environment] = await Promise.all([
+      loadStoredBillingSettings(tenantId),
+      getActiveMoloniEnvironment(createAdminClient(), tenantId),
+    ])
+    const { documentSetIdByEnvironment: _byEnv, ...config } = billingConfigForEnvironment({ ...DEFAULT_BILLING_CONFIG, ...stored }, environment) as StoredBillingSettings & BillingConfig
+    return config
   } catch (err) {
     console.error("Erro ao obter configurações de faturação:", err)
   }
@@ -41,11 +44,12 @@ export async function getBillingConfigAction(): Promise<BillingConfig> {
  * Guarda as configurações de faturação
  */
 export async function saveBillingConfigAction(config: Partial<BillingConfig>): Promise<{ success: boolean; error?: string }> {
-  await requireEmployee("Faturação & Contas Correntes")
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   const supabase = createAdminClient()
-  const tenantId = await getTenantId()
 
   try {
+    const environment = await getActiveMoloniEnvironment(supabase, ctx.tenant_id)
+    const stored = await loadStoredBillingSettings(ctx.tenant_id)
     const current = await getBillingConfigAction()
     const merged: BillingConfig = {
       ...current,
@@ -54,11 +58,14 @@ export async function saveBillingConfigAction(config: Partial<BillingConfig>): P
       articleDesignation: (config.articleDesignation || current.articleDesignation || "Serviço de Transporte").trim(),
       articleSummary: (config.articleSummary ?? current.articleSummary ?? "").trim(),
     }
+    // The document set belongs to one Moloni company: keep one per environment.
+    const byEnv = { test: stored.documentSetIdByEnvironment?.test ?? stored.defaultDocumentSetId ?? null,
+      ...stored.documentSetIdByEnvironment, [environment]: merged.defaultDocumentSetId ?? null }
 
     const { error } = await supabase.from("audit_log").insert({
       action: "moloni_billing_settings",
-      tenant_id: tenantId || "11111111-1111-1111-1111-111111111111",
-      details: merged,
+      tenant_id: ctx.tenant_id,
+      details: { ...merged, defaultDocumentSetId: byEnv.test ?? null, documentSetIdByEnvironment: byEnv },
     })
 
     if (error) throw error
@@ -84,34 +91,12 @@ export async function syncMoloniArticleAction(articleData: {
   const supabase = createAdminClient()
 
   try {
-    // 1. Obter credenciais do Moloni
-    let moloniConfig: MoloniConnection | null = null
-    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-      moloniConfig = {
-        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-        companyId: process.env.MOLONI_COMPANY_ID,
-      }
-    } else {
-      const { data: mLogs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("action", "moloni_connection_config")
-        .order("created_at", { ascending: false })
-        .limit(1)
-
-      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
-        moloniConfig = {
-          refreshToken: mLogs[0].details.refresh_token,
-          companyId: mLogs[0].details.company_id,
-        }
-      }
-    }
-
-    if (!moloniConfig) {
+    // 1. Ligação Moloni do ambiente ativo
+    const active = await getActiveMoloniClient(supabase, await getTenantId())
+    if (!active) {
       return { success: false, message: "A conta do Moloni não está conectada." }
     }
-
-    const moloni = new MoloniClient(moloniConfig)
+    const { moloni } = active
     const taxId = await moloni.getTaxId(23)
     const ref = (articleData.reference || "LINKE-TMS").trim().toUpperCase()
     const name = (articleData.name || "Serviço de Transporte").trim()
@@ -171,39 +156,16 @@ export async function getMoloniDetailsAction() {
   const supabase = createAdminClient()
 
   try {
-    let moloniConfig: MoloniConnection | null = null
-    let companyName = "Empresa Moloni"
-    let companyVat = ""
-
-    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-      moloniConfig = {
-        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-        companyId: process.env.MOLONI_COMPANY_ID,
-      }
-    } else {
-      const { data: mLogs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("action", "moloni_connection_config")
-        .order("created_at", { ascending: false })
-        .limit(1)
-
-      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
-        moloniConfig = {
-          refreshToken: mLogs[0].details.refresh_token,
-          companyId: mLogs[0].details.company_id,
-        }
-        companyName = mLogs[0].details.company_name || companyName
-        companyVat = mLogs[0].details.company_vat || companyVat
-      }
+    const tenantId = await getTenantId()
+    const environment = await getActiveMoloniEnvironment(supabase, tenantId)
+    const connection = await getMoloniConnection(supabase, tenantId, environment)
+    if (!connection) {
+      return { isConnected: false, environment }
     }
+    const companyName = connection.companyName || "Empresa Moloni"
+    const companyVat = connection.companyVat || ""
+    const moloni = moloniClientFor(connection, tenantId)
 
-    if (!moloniConfig) {
-      return { isConnected: false }
-    }
-
-    const moloni = new MoloniClient(moloniConfig)
-    
     // Obter Séries Documentais e Impostos
     let documentSets: {id:number; name:string; active:boolean}[] = []
     let taxes: {id:number; name:string; value:number}[] = []
@@ -231,7 +193,8 @@ export async function getMoloniDetailsAction() {
 
     return {
       isConnected: true,
-      companyId: moloniConfig.companyId,
+      environment,
+      companyId: connection.companyId,
       companyName,
       companyVat,
       documentSets,

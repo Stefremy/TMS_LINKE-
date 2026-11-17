@@ -1,6 +1,7 @@
 import { invoiceBillingAddress } from "@/lib/client-addresses"
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { MoloniClient } from '@/lib/moloni/moloni-client'
+import type { MoloniClient } from '@/lib/moloni/moloni-client'
+import { billingConfigForEnvironment, getActiveMoloniConnection, getMoloniClientForDocument, moloniClientFor, moloniDocumentStamp } from '@/lib/moloni/connection'
 import { DEFAULT_BILLING_CONFIG, type BillingConfig } from '@/app/actions/billing-config-types'
 import { addCalendarDays, lisbonDate, periodLabel, shipmentTotal, type RecurringClient } from './recurring-periods'
 import { paymentDueDays, moloniMaturityDateId } from './payment-terms'
@@ -11,10 +12,9 @@ import { hydrateShipmentCharges } from '@/lib/services/billing/shipment-charge-s
 interface InvoiceCycle { id: string; statement_id: string; client_id: string; invoice_status: string; invoice_token: string; invoice_document_id: number }
 
 async function moloniForTenant(db: SupabaseClient, tenantId: string) {
-  const { data, error } = await db.from('audit_log').select('details').eq('tenant_id', tenantId)
-    .eq('action', 'moloni_connection_config').order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (error || !data?.details?.company_id || !data.details.refresh_token) throw new Error('Ligue a conta Moloni desta empresa antes da emissão automática.')
-  return new MoloniClient({ tenantId, companyId: String(data.details.company_id), refreshToken: data.details.refresh_token })
+  const connection = await getActiveMoloniConnection(db, tenantId)
+  if (!connection) throw new Error('Ligue a conta Moloni desta empresa antes da emissão automática.')
+  return { connection, moloni: moloniClientFor(connection, tenantId) }
 }
 
 export async function buildRecurringInvoice(moloni: MoloniClient, client: RecurringClient, statement: PeriodStatement, config: BillingConfig) {
@@ -67,10 +67,11 @@ export async function ensureRecurringInvoice(tenantId: string, id: string, clien
     const { data: saved, error: configError } = await db.from('audit_log').select('details').eq('tenant_id', tenantId)
       .eq('action', 'moloni_billing_settings').order('created_at', { ascending: false }).limit(1).maybeSingle()
     if (configError) throw new Error('Configuração de faturação indisponível.')
-    const moloni = await moloniForTenant(db, tenantId)
+    const { connection, moloni } = await moloniForTenant(db, tenantId)
     const statement = doc.details as PeriodStatement
     const prepared = { ...statement, shipments: await hydrateShipmentCharges(db, tenantId, client.id, statement.shipments) }
-    const payload = await buildRecurringInvoice(moloni, client, prepared, { ...DEFAULT_BILLING_CONFIG, ...saved?.details })
+    const config = billingConfigForEnvironment({ ...DEFAULT_BILLING_CONFIG, ...saved?.details }, connection.environment)
+    const payload = await buildRecurringInvoice(moloni, client, prepared, config)
     const { data: armed, error: armError } = await db.rpc('arm_recurring_invoice', {
       p_tenant: tenantId, p_id: id, p_token: cycle.invoice_token, p_payload: payload,
     })
@@ -83,6 +84,7 @@ export async function ensureRecurringInvoice(tenantId: string, id: string, clien
       p_tenant: tenantId, p_id: id, p_token: cycle.invoice_token, p_document: Number(result.document_id), p_number: null,
     })
     if (finishError || !finished) throw new Error(`Fatura Moloni ${result.document_id} emitida; registo por confirmar. Não repita.`)
+    await stampRecurringInvoiceCompany(db, tenantId, id, moloniDocumentStamp(connection))
     return true
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Emissão automática por confirmar.'
@@ -96,7 +98,12 @@ export async function recurringInvoiceAttachment(tenantId: string, id: string, d
   const { data: cycle, error } = await db.from('recurring_statement_cycles').select('invoice_document_id,invoice_statement_id,invoice_status')
     .eq('tenant_id', tenantId).eq('id', id).single()
   if (error || cycle?.invoice_status !== 'issued' || !cycle.invoice_document_id) throw new Error('Fatura oficial ainda não confirmada.')
-  const moloni = await moloniForTenant(db, tenantId)
+  // Issued document: always read it from the Moloni company that issued it.
+  const { data: issued } = await db.from('audit_log').select('details').eq('tenant_id', tenantId)
+    .eq('action', 'billing_statement').eq('id', cycle.invoice_statement_id).maybeSingle()
+  const issuer = await getMoloniClientForDocument(db, tenantId, issued?.details)
+  if (!issuer) throw new Error('Ligue a conta Moloni que emitiu esta fatura antes de enviar o email.')
+  const { moloni } = issuer
   const document = await moloni.request('documents/getOne', { document_id: Number(cycle.invoice_document_id) })
   if (Number(document?.document_id) !== Number(cycle.invoice_document_id) || Number(document?.status) !== 1 || document?.document_type?.saft_code !== 'FT') throw new Error('A fatura Moloni ainda não está fechada.')
   const pdfUrl = await moloni.getDocumentPDFLink(Number(cycle.invoice_document_id))
@@ -122,4 +129,20 @@ export function automaticInvoicePayment(document: { document_id: number; status:
   const cents = Math.round(total * 100) - Math.round(reconciled * 100)
   if (!Number.isFinite(total) || !Number.isFinite(reconciled) || reconciled < 0 || cents <= 0) throw new Error('A fatura já está paga ou não tem um valor por receber válido.')
   return { customerId: Number(document.customer_id), value: cents / 100 }
+}
+
+/** Records the issuing Moloni company on the invoice so later reads never use the wrong one. */
+async function stampRecurringInvoiceCompany(db: SupabaseClient, tenantId: string, cycleId: string, stamp: Record<string, string>) {
+  try {
+    const { data: cycle } = await db.from('recurring_statement_cycles').select('invoice_statement_id')
+      .eq('tenant_id', tenantId).eq('id', cycleId).maybeSingle()
+    if (!cycle?.invoice_statement_id) return
+    const { data: audit } = await db.from('audit_log').select('details').eq('tenant_id', tenantId)
+      .eq('action', 'billing_statement').eq('id', cycle.invoice_statement_id).maybeSingle()
+    if (!audit?.details) return
+    await db.from('audit_log').update({ details: { ...audit.details, ...stamp } })
+      .eq('tenant_id', tenantId).eq('action', 'billing_statement').eq('id', cycle.invoice_statement_id)
+  } catch (error) {
+    console.warn('Recurring invoice company stamp not saved:', error instanceof Error ? error.message : error)
+  }
 }

@@ -66,6 +66,7 @@ function menuHarness(t, dashboard, label, account = {}) {
     react, 'react/jsx-runtime': { jsx, jsxs: jsx },
     'lucide-react': new Proxy({}, { get: (_, name) => name }),
     'next/link': { __esModule: true, default: 'a' },
+    './DuplicateShipmentModal': { DuplicateShipmentModal: 'duplicate-shipment-modal' },
     '@/app/actions/shipments': {
       getShipmentLabelAction: async id => { calls.lookups.push(id); return label },
       getClientPortalStatsAction: async () => ({ totalCount: 1, totalRevenue: 4, deliveredCount: 0, deliveryRate: 0,

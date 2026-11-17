@@ -60,6 +60,7 @@ import { canInvoiceShipment } from "@/lib/billing/shipment-eligibility"
 import { currentAccountOutstanding, payAsYouGoSpent, payAsYouGoBalance, isPrepaidShipment } from "@/lib/billing/client-balance"
 import { reserveWallet, transitionWallet, walletSnapshot, type WalletReservation } from "@/lib/billing/wallet"
 import { deleteShipment, deleteShipmentsBulk } from "@/lib/services/shipments/shipment-deleter"
+import { duplicateShipment, previewShipmentDuplicate } from "@/lib/services/shipments/shipment-duplicator"
 
 export async function createShipmentAction(formData: FormData) {
   return createShipment(formData)
@@ -1219,6 +1220,15 @@ export async function syncActiveShipmentsBatchAction(shipmentIds: string[]) {
  */
 export async function deleteShipmentAction(shipmentId: string) {
   return deleteShipment(shipmentId)
+}
+
+export async function previewShipmentDuplicateAction(shipmentId: string) {
+  return previewShipmentDuplicate(shipmentId)
+}
+
+/** Duplica um envio (mesmo cliente/loja) como novo rascunho com novo tracking. */
+export async function duplicateShipmentAction(shipmentId: string, options: { clientReference?: string } = {}) {
+  return duplicateShipment(shipmentId, options)
 }
 
 /**

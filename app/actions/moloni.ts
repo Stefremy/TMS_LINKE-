@@ -11,6 +11,7 @@ import { invoiceBillingAddress, getClientBillingAddress, usesPrincipalBillingAdd
 import {loadInvoiceCredits, invoiceCreditSummary} from "@/lib/billing/credit-notes/balances"
 import { createAdminClient } from "@/lib/supabase/server"
 import { MoloniClient, MoloniRejectedError } from "@/lib/moloni/moloni-client"
+import { getActiveMoloniConnection, getActiveMoloniEnvironment, getMoloniClientForDocument, getMoloniConnection, moloniClientFor, moloniDocumentStamp, parseMoloniEnvironment, pickMoloniCompany, saveMoloniConnection, type MoloniConnectionInfo } from "@/lib/moloni/connection"
 import { revalidatePath } from "next/cache"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getShipmentsAction } from "@/app/actions/shipments"
@@ -97,33 +98,14 @@ export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Client
     let invoiceDueDate: string | null = null
     
     // Verificar credenciais Moloni (no ambiente ou em audit_log)
-    let moloniConfig: MoloniConnection | null = null
-    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-      moloniConfig = {
-        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-        companyId: process.env.MOLONI_COMPANY_ID,
-      }
-    } else {
-      const { data: mLogs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("tenant_id", ctx.tenant_id)
-        .eq("action", "moloni_connection_config")
-        .order("created_at", { ascending: false })
-        .limit(1)
-      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
-        moloniConfig = {
-          refreshToken: mLogs[0].details.refresh_token,
-          companyId: mLogs[0].details.company_id,
-        }
-      }
-    }
+    // Novos documentos usam sempre a ligação do ambiente ativo (Teste ou Produção).
+    const moloniConfig: MoloniConnectionInfo | null = await getActiveMoloniConnection(supabase, ctx.tenant_id)
 
     let moloniEmissionError: string | null = null
 
     if (moloniConfig && !skipMoloni) {
       try {
-        const moloni = new MoloniClient(moloniConfig)
+        const moloni = moloniClientFor(moloniConfig, ctx.tenant_id)
         
         // A. Verificar/Criar Cliente no Moloni
         let moloniCustomerId = null
@@ -256,6 +238,7 @@ export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Client
         moloni_document_id: moloniDocumentId,
         moloni_document_number: moloniDocumentNumber,
         moloni_document_pdf: moloniDocumentUrl,
+        ...(moloniDocumentId && moloniConfig ? moloniDocumentStamp(moloniConfig) : {}),
         moloni_error: moloniEmissionError,
         invoice_date: moloniDocumentId ? invoiceDate : undefined,
         due_date: moloniDocumentId ? invoiceDueDate : undefined,
@@ -377,127 +360,109 @@ export async function getBillingStatementsAction(clientId?: string) {
 }
 
 /**
- * Obtém o estado da ligação ao Moloni
+ * Obtém o estado das ligações Moloni (Teste e Produção) e o ambiente ativo.
  */
 export async function getMoloniConfigAction() {
   const ctx = await requireEmployee("Faturação & Contas Correntes")
   const redirectUri = moloniRedirectUri()
+  const clientId = process.env.MOLONI_CLIENT_ID || "518600300"
   const supabase = createAdminClient()
   try {
-    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-      return {
-        isConnected: true,
-        companyId: process.env.MOLONI_COMPANY_ID,
-        redirectUri,
-        clientId: process.env.MOLONI_CLIENT_ID || "518600300"
-      }
-    }
-
-    const { data: logs } = await supabase
-      .from("audit_log")
-      .select("details")
-      .eq("tenant_id", ctx.tenant_id)
-      .eq("action", "moloni_connection_config")
-      .order("created_at", { ascending: false })
-      .limit(1)
-
-    if (logs && logs[0]?.details?.refresh_token) {
-      return {
-        isConnected: true,
-        companyId: logs[0].details.company_id,
-        companyName: logs[0].details.company_name,
-        redirectUri,
-        clientId: process.env.MOLONI_CLIENT_ID || "518600300"
-      }
-    }
-
+    const [environment, test, live] = await Promise.all([
+      getActiveMoloniEnvironment(supabase, ctx.tenant_id),
+      getMoloniConnection(supabase, ctx.tenant_id, "test"),
+      getMoloniConnection(supabase, ctx.tenant_id, "live"),
+    ])
+    const summary = (c: MoloniConnectionInfo | null) => c
+      ? { isConnected: true, companyId: c.companyId, companyName: c.companyName, connectedAt: c.connectedAt, fromEnvironmentVariables: Boolean(c.fromEnvironmentVariables) }
+      : { isConnected: false }
+    const active = environment === "live" ? live : test
     return {
-      isConnected: false,
+      environment,
+      isConnected: Boolean(active),
+      companyId: active?.companyId,
+      companyName: active?.companyName,
+      connections: { test: summary(test), live: summary(live) },
       redirectUri,
-      clientId: process.env.MOLONI_CLIENT_ID || "518600300"
+      clientId,
     }
   } catch {
-    return { isConnected: false }
+    return { environment: "test" as const, isConnected: false, redirectUri, clientId }
   }
 }
 
 /**
- * Conecta ao Moloni através de Utilizador e Password (grant_type=password)
+ * Conecta ao Moloni através de Utilizador e Password (grant_type=password),
+ * para o ambiente indicado no formulário (Teste por omissão).
  */
 export async function connectMoloniWithPasswordAction(formData: FormData) {
-  await requireEmployee("Faturação & Contas Correntes")
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const username = (formData.get("username") as string || "").trim()
     const password = (formData.get("password") as string || "").trim()
+    const environment = parseMoloniEnvironment(formData.get("environment")) || "test"
 
     if (!username || !password) {
       return { success: false, error: "Introduza o utilizador/email e password da sua conta Moloni." }
     }
 
     const { refreshToken, companies } = await MoloniClient.loginWithPassword(username, password)
-    
+
     if (!companies || companies.length === 0) {
       return { success: false, error: "Nenhuma empresa associada encontrada nesta conta Moloni." }
     }
 
-    const selectedCompany = (companies || []).find((c) => !c.name?.toLowerCase().includes("demonstração")) || companies[0]
-    const companyId = String(selectedCompany.company_id)
-
-    // 1. Guardar em audit_log
     const supabase = createAdminClient()
-    await supabase.from("audit_log").insert({
-      tenant_id: (await getTenantId()),
-      action: "moloni_connection_config",
-      details: {
-        company_id: companyId,
-        company_name: selectedCompany.name,
-        company_vat: (selectedCompany).vat,
-        refresh_token: refreshToken,
-        connected_at: new Date().toISOString(),
-      },
-    })
-
-    // 2. Tentar atualizar .env.local
-    try {
-      const fs = await import("fs")
-      const path = await import("path")
-      const envPath = path.join(process.cwd(), ".env.local")
-      if (fs.existsSync(envPath)) {
-        let envContent = fs.readFileSync(envPath, "utf8")
-        
-        if (envContent.includes("MOLONI_REFRESH_TOKEN=")) {
-          envContent = envContent.replace(/MOLONI_REFRESH_TOKEN=.*(\r?\n|$)/, `MOLONI_REFRESH_TOKEN=${refreshToken}\n`)
-        } else {
-          envContent += `\nMOLONI_REFRESH_TOKEN=${refreshToken}\n`
-        }
-
-        if (envContent.includes("MOLONI_COMPANY_ID=")) {
-          envContent = envContent.replace(/MOLONI_COMPANY_ID=.*(\r?\n|$)/, `MOLONI_COMPANY_ID=${companyId}\n`)
-        } else {
-          envContent += `MOLONI_COMPANY_ID=${companyId}\n`
-        }
-
-        fs.writeFileSync(envPath, envContent, "utf8")
-        
-        // Ensure running Node process gets updated values immediately
-        process.env.MOLONI_REFRESH_TOKEN = refreshToken
-        process.env.MOLONI_COMPANY_ID = companyId
-      }
-    } catch (e) {
-      console.warn("Could not write to .env.local:", errorMessage(e))
+    const selectedCompany = await pickMoloniCompany(supabase, ctx.tenant_id, companies, environment)
+    if (!selectedCompany) {
+      return { success: false, error: "Esta conta Moloni não tem uma empresa oficial diferente da de Teste." }
     }
+    const companyId = await saveMoloniConnection(supabase, ctx.tenant_id, environment, selectedCompany, refreshToken)
 
     revalidatePath("/ops/configuracao/faturacao")
     revalidatePath("/ops/faturacao/contas-corrente")
 
     return {
       success: true,
+      environment,
       companyName: selectedCompany.name,
-      companyId: companyId,
+      companyId,
     }
   } catch (err) {
     console.error("connectMoloniWithPasswordAction error:", err)
     return { success: false, error: errorMessage(err) || "Erro ao ligar ao Moloni." }
+  }
+}
+
+/**
+ * Muda o ambiente Moloni ativo. Só administradores; Produção exige confirmação escrita.
+ */
+export async function switchMoloniEnvironmentAction(target: "test" | "live", confirmation?: string) {
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
+  if (ctx.role !== "admin") return { success: false, error: "Só um administrador pode mudar o ambiente Moloni." }
+  const environment = parseMoloniEnvironment(target)
+  if (!environment) return { success: false, error: "Ambiente inválido." }
+  if (environment === "live" && (confirmation || "").trim().toUpperCase() !== "PRODUCAO") {
+    return { success: false, error: "Escreva PRODUCAO para confirmar a mudança." }
+  }
+  try {
+    const supabase = createAdminClient()
+    const current = await getActiveMoloniEnvironment(supabase, ctx.tenant_id)
+    if (current === environment) return { success: true, environment }
+    const connection = await getMoloniConnection(supabase, ctx.tenant_id, environment)
+    if (!connection) {
+      return { success: false, error: `Ligue primeiro a conta Moloni de ${environment === "live" ? "Produção" : "Teste"}.` }
+    }
+    const { error } = await supabase.from("audit_log").insert({
+      tenant_id: ctx.tenant_id, user_id: ctx.user?.id, action: "moloni_environment_switch",
+      details: { environment, previous: current, company_id: connection.companyId, company_name: connection.companyName,
+        changed_by: ctx.user?.email || ctx.user?.id, changed_at: new Date().toISOString() },
+    })
+    if (error) throw new Error("Não foi possível guardar a mudança de ambiente.")
+    revalidatePath("/ops", "layout")
+    return { success: true, environment }
+  } catch (err) {
+    return { success: false, error: errorMessage(err) || "Erro ao mudar o ambiente Moloni." }
   }
 }
 
@@ -544,33 +509,14 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     stmt.shipments = await hydrateShipmentCharges(supabase, ctx.tenant_id, stmt.client_id, stmt.shipments || [])
 
     // 2. Verificar se o Moloni está configurado
-    let moloniConfig: MoloniConnection | null = null
-    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-      moloniConfig = {
-        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-        companyId: process.env.MOLONI_COMPANY_ID,
-      }
-    } else {
-      const { data: mLogs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("tenant_id", ctx.tenant_id)
-        .eq("action", "moloni_connection_config")
-        .order("created_at", { ascending: false })
-        .limit(1)
-      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
-        moloniConfig = {
-          refreshToken: mLogs[0].details.refresh_token,
-          companyId: mLogs[0].details.company_id,
-        }
-      }
-    }
+    // Novos documentos usam sempre a ligação do ambiente ativo (Teste ou Produção).
+    const moloniConfig: MoloniConnectionInfo | null = await getActiveMoloniConnection(supabase, ctx.tenant_id)
 
     if (!moloniConfig) {
       throw new Error("Moloni ainda não está conectado. Clique em 'Ligar Moloni' no topo da página para autenticar.")
     }
 
-    const moloni = new MoloniClient(moloniConfig)
+    const moloni = moloniClientFor(moloniConfig, ctx.tenant_id)
 
     // 3. Obter dados do cliente
     const allClients = await getClientesAction()
@@ -712,7 +658,8 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
       moloni_proforma_pdf: stmt.is_pro_forma && !isProForma ? stmt.moloni_document_pdf : (isProForma ? moloniDocPdf : stmt.moloni_proforma_pdf),
       invoice_date: dateNow,
       due_date: expirationDate,
-      moloni_invoiced_at: new Date().toISOString()
+      moloni_invoiced_at: new Date().toISOString(),
+      ...moloniDocumentStamp(moloniConfig),
     }
 
 
@@ -792,7 +739,7 @@ export interface CustomInvoicePayload {
  * e guarda o registo no TMS audit_log.
  */
 export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
-  await requireEmployee("Faturação & Contas Correntes")
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
 
@@ -873,33 +820,12 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
     let moloniEmissionError: string | null = null
 
     // Verificar se Moloni está conectado
-    let moloniClientConfig: MoloniConnection | null = null
-    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-      moloniClientConfig = {
-        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-        companyId: process.env.MOLONI_COMPANY_ID,
-      }
-    } else {
-      const { data: mLogs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("action", "moloni_connection_config")
-        .order("created_at", { ascending: false })
-        .limit(1)
-      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
-        moloniClientConfig = {
-          refreshToken: mLogs[0].details.refresh_token,
-          companyId: mLogs[0].details.company_id,
-        }
-      }
-    }
+    // Novos documentos usam sempre a ligação do ambiente ativo (Teste ou Produção).
+    const moloniClientConfig: MoloniConnectionInfo | null = await getActiveMoloniConnection(supabase, ctx.tenant_id)
 
     if (moloniClientConfig) {
       try {
-        const moloni = new MoloniClient({
-          companyId: moloniClientConfig.companyId,
-          refreshToken: moloniClientConfig.refreshToken
-        })
+        const moloni = moloniClientFor(moloniClientConfig, ctx.tenant_id)
 
         // 1. Obter ou Criar Cliente no Moloni
         let moloniCustomerId: number | null = null
@@ -1009,6 +935,7 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
       moloni_document_id: moloniDocumentId,
       moloni_document_pdf: moloniDocumentPdf,
       moloni_error: moloniEmissionError,
+      ...(moloniDocumentId && moloniClientConfig ? moloniDocumentStamp(moloniClientConfig) : {}),
       created_at: new Date().toISOString()
     }
 
@@ -1109,31 +1036,13 @@ export async function emitReceiptAction(statementId: string, clientId: string, m
 }
 
 export async function getMoloniPaymentMethodsAction() {
-  await requireEmployee("Faturação & Contas Correntes")
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
-    let moloniConfig: MoloniConnection | null = null
-    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-      moloniConfig = {
-        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-        companyId: process.env.MOLONI_COMPANY_ID,
-      }
-    } else {
-      const { data: mLogs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("action", "moloni_connection_config")
-        .order("created_at", { ascending: false })
-        .limit(1)
-      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
-        moloniConfig = {
-          refreshToken: mLogs[0].details.refresh_token,
-          companyId: mLogs[0].details.company_id,
-        }
-      }
-    }
+    // Novos documentos usam sempre a ligação do ambiente ativo (Teste ou Produção).
+    const moloniConfig: MoloniConnectionInfo | null = await getActiveMoloniConnection(supabase, ctx.tenant_id)
     if (!moloniConfig) return { success: false, methods: [] }
-    const moloni = new MoloniClient(moloniConfig)
+    const moloni = moloniClientFor(moloniConfig, ctx.tenant_id)
     const methods = await moloni.getPaymentMethods()
     return { success: true, methods }
   } catch (err) {
@@ -1162,7 +1071,7 @@ export async function emitMoloniReceiptForStatementAction(
  * Emite a Guia de Transporte Oficial (GT) no Moloni para um envio do Ops
  */
 export async function emitMoloniWaybillForShipmentAction(shipmentId: string, notes?: string) {
-  await requireEmployee("Faturação & Contas Correntes")
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
 
@@ -1186,32 +1095,14 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
     }
 
     // 3. Obter Configuração Moloni
-    let moloniConfig: MoloniConnection | null = null
-    if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-      moloniConfig = {
-        refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-        companyId: process.env.MOLONI_COMPANY_ID,
-      }
-    } else {
-      const { data: mLogs } = await supabase
-        .from("audit_log")
-        .select("details")
-        .eq("action", "moloni_connection_config")
-        .order("created_at", { ascending: false })
-        .limit(1)
-      if (mLogs && mLogs[0]?.details?.refresh_token && mLogs[0]?.details?.company_id) {
-        moloniConfig = {
-          refreshToken: mLogs[0].details.refresh_token,
-          companyId: mLogs[0].details.company_id,
-        }
-      }
-    }
+    // Novos documentos usam sempre a ligação do ambiente ativo (Teste ou Produção).
+    const moloniConfig: MoloniConnectionInfo | null = await getActiveMoloniConnection(supabase, ctx.tenant_id)
 
     if (!moloniConfig) {
       throw new Error("A conta Moloni não está configurada ou conectada. Vá a Faturação > Gerir Conta Moloni para autorizar.")
     }
 
-    const moloni = new MoloniClient(moloniConfig)
+    const moloni = moloniClientFor(moloniConfig, ctx.tenant_id)
 
     // 4. Obter ou Criar Cliente no Moloni
     let moloniCustomerId = null
@@ -1303,6 +1194,7 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
         moloni_document_id: moloniDocId,
         moloni_document_number: moloniDocNum,
         moloni_document_pdf: moloniPdfUrl,
+        ...moloniDocumentStamp(moloniConfig),
         tracking_number: shipment.tracking_number,
         carrier_tracking_number: shipment.carrier_tracking_number,
         created_at: new Date().toISOString(),
@@ -1378,7 +1270,7 @@ export async function sendStatementInvoiceEmailAction(params: {
   includeMoloniPdf?: boolean
   includeStatementPdf?: boolean
 }) {
-  await requireEmployee("Faturação & Contas Correntes")
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
     const { statementIdOrNumber, recipientEmail, includeMoloniPdf = true, includeStatementPdf = true } = params
@@ -1387,6 +1279,7 @@ export async function sendStatementInvoiceEmailAction(params: {
     const { data: logs, error } = await supabase
       .from('audit_log')
       .select('*')
+      .eq('tenant_id', ctx.tenant_id)
       .eq('action', 'billing_statement')
       .order('created_at', { ascending: false })
 
@@ -1434,16 +1327,11 @@ export async function sendStatementInvoiceEmailAction(params: {
         pdfUrl = pdfUrl.replace("/downloads/?h=", "/downloads/index.php?action=getDownload&h=") + `&d=${stmt.moloni_document_id}&e=&i=1`
       }
       if (!pdfUrl && stmt.moloni_document_id) {
-        let moloniConfig: MoloniConnection | null = null
-        if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-          moloniConfig = {
-            refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-            companyId: process.env.MOLONI_COMPANY_ID,
-          }
-        }
-        if (moloniConfig) {
+        // Documento já emitido: usar sempre a empresa Moloni que o emitiu.
+        const issuer = await getMoloniClientForDocument(supabase, ctx.tenant_id, stmt).catch(() => null)
+        if (issuer) {
           try {
-            const moloni = new MoloniClient(moloniConfig)
+            const { moloni } = issuer
             pdfUrl = await moloni.getDocumentPDFLink(Number(stmt.moloni_document_id))
           } catch {}
         }

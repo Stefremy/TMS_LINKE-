@@ -31,11 +31,12 @@ import { MoloniConnectModal } from "@/app/ops/faturacao/contas-corrente/MoloniCo
 
 interface BillingConfigClientProps {
   automationSettings?: React.ReactNode
+  environmentSwitch?: React.ReactNode
   initialConfig: BillingConfig
   moloniDetails?: Awaited<ReturnType<typeof getMoloniDetailsAction>>
 }
 
-export function BillingConfigClient({ initialConfig, moloniDetails, automationSettings }: BillingConfigClientProps) {
+export function BillingConfigClient({ initialConfig, moloniDetails, automationSettings, environmentSwitch }: BillingConfigClientProps) {
   const router = useRouter()
   const [config, setConfig] = React.useState<BillingConfig>(initialConfig)
   const [hasChanges, setHasChanges] = React.useState(false)
@@ -44,6 +45,9 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
   const [isMoloniModalOpen, setIsMoloniModalOpen] = React.useState(false)
   const [feedback, setFeedback] = React.useState<{ message: string; type: "success" | "error" } | null>(null)
   const [syncResult, setSyncResult] = React.useState<{ message: string; type: "success" | "error" } | null>(null)
+
+  const moloniEnvironment = moloniDetails?.environment === "live" ? "live" : "test"
+  const moloniEnvironmentLabel = moloniEnvironment === "live" ? "Produção" : "Teste"
 
   const updateConfig = (updates: Partial<BillingConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }))
@@ -148,7 +152,8 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
 
       {/* Toolbar / Action Bar */}
       <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/60 flex flex-wrap items-center justify-between gap-3 text-[13px]">
-        {/* Left: Status Pill & Moloni Action */}
+        {/* Left: Moloni environment (Teste | Produção) and account */}
+        {environmentSwitch ?? (
         <div className="flex items-center gap-3">
           <div className={`px-3 py-1.5 rounded-md border text-xs font-semibold flex items-center gap-2 ${
             moloniDetails?.isConnected 
@@ -156,7 +161,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
               : "bg-amber-50 border-amber-200 text-amber-800"
           }`}>
             <span className={`w-2 h-2 rounded-full ${moloniDetails?.isConnected ? "bg-emerald-600 animate-pulse" : "bg-amber-500"}`} />
-            {moloniDetails?.isConnected ? `Moloni Ligado (${moloniDetails.companyName || "Empresa"})` : "Moloni Desconectado"}
+            {moloniDetails?.isConnected ? `Moloni ${moloniEnvironmentLabel} Ligado (${moloniDetails.companyName || "Empresa"})` : `Moloni ${moloniEnvironmentLabel} Desconectado`}
           </div>
 
           <button
@@ -168,6 +173,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
             <span>Gerir Conta Moloni</span>
           </button>
         </div>
+        )}
 
         {/* Right: Save Button */}
         <div className="flex items-center gap-2">
@@ -589,6 +595,7 @@ export function BillingConfigClient({ initialConfig, moloniDetails, automationSe
       <MoloniConnectModal
         isOpen={isMoloniModalOpen}
         onClose={() => setIsMoloniModalOpen(false)}
+        environment={moloniEnvironment}
         config={{
           isConnected: moloniDetails?.isConnected,
           companyName: moloniDetails?.companyName,

@@ -3,7 +3,7 @@ import { claimInvoiceFinancialLock, releaseInvoiceFinancialLock } from '../invoi
 import { createHash } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AuthContext } from '@/lib/auth/context'
-import { MoloniClient } from '@/lib/moloni/moloni-client'
+import { getMoloniConnectionForDocument, moloniClientFor } from '@/lib/moloni/connection'
 import { CreditNoteError, amount, positiveId, record, availableCreditLines, selectedCreditProducts } from './products'
 import type { CreditNote, CreditSource, CreditSelection, CreditState } from './types'
 import { lisbonDate } from '@/lib/billing/recurring-periods'
@@ -13,15 +13,17 @@ const lockId=(tenant:string,company:string,document:number)=>{
   const h=createHash('sha256').update(`credit-note:${tenant}:${company}:${document}`).digest('hex').slice(0,32)
   return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`
 }
+/**
+ * Moloni client of the company that issued the original document. Notes and receipts must be
+ * issued in that same company, whatever environment is active now. Documents without a stamped
+ * company predate the Teste/Produção switch and belong to the sandbox.
+ */
 export async function creditMoloni(db:SupabaseClient,tenantId:string,companyId?:string) {
-  let q=db.from('audit_log').select('details').eq('tenant_id',tenantId).eq('action','moloni_connection_config')
-  if (companyId) q=q.eq('details->>company_id',companyId)
-  const {data,error}=await q.order('created_at',{ascending:false}).limit(1).maybeSingle()
-  if (error) throw new CreditNoteError('Não foi possível consultar a ligação Moloni.')
-  const company=companyId || String(data?.details?.company_id || process.env.MOLONI_COMPANY_ID || '')
-  const refresh=data?.details?.refresh_token || (company===process.env.MOLONI_COMPANY_ID ? process.env.MOLONI_REFRESH_TOKEN : undefined)
-  if (!company || !refresh) throw new CreditNoteError('Ligue a conta Moloni desta empresa antes de continuar.')
-  return {company, moloni:new MoloniClient({tenantId,companyId:company,refreshToken:refresh})}
+  let connection
+  try { connection=await getMoloniConnectionForDocument(db,tenantId,{moloni_company_id:companyId}) }
+  catch { throw new CreditNoteError('Não foi possível consultar a ligação Moloni.') }
+  if (!connection) throw new CreditNoteError('Ligue a conta Moloni desta empresa antes de continuar.')
+  return {company:connection.companyId, moloni:moloniClientFor(connection,tenantId)}
 }
 export async function creditSource(db:SupabaseClient,tenantId:string,source:CreditSource) {
   if (!source || !uuid.test(source.id) || !['billing_statement','custom_invoice'].includes(source.kind)) throw new CreditNoteError('Fatura inválida.')

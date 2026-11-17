@@ -32,7 +32,8 @@ test('configuration page owns the automation control and date filters; the saved
  const load=createLoader({'@/lib/auth/ops-page-access':{requireOpsPageAccess:async()=>{}},'react/jsx-runtime':{jsx,jsxs:jsx},'@/lib/auth/context':{requireEmployee:async()=>({tenant_id:'tenant',role:'admin'})},
   '@/lib/billing/recurring-statements':{recurringPreview:async()=>({enabled:false})},'@/app/ops/faturacao/contas-corrente/RecurringStatementsPanel':{RecurringStatementsPanel:'automation'},
   '@/app/actions/billing-config':{getBillingConfigAction:async()=>({defaultGrouping:'detailed'}),getMoloniDetailsAction:async()=>({})},
-  './components/BillingConfigClient':{BillingConfigClient:'config'},'./components/BillingViewFilters':{BillingViewFilters:'filters'}})
+  './components/BillingConfigClient':{BillingConfigClient:'config'},'./components/BillingViewFilters':{BillingViewFilters:'filters'},
+  './components/MoloniEnvironmentSwitch':{MoloniEnvironmentSwitch:'environment-switch'},'@/app/actions/moloni':{getMoloniConfigAction:async()=>({environment:'test'})}})
  const result=await load('app/ops/configuracao/faturacao/page.tsx').default({searchParams:Promise.resolve({from:'2026-10-01'})})
  const children=result.props.automationSettings.props.children
  assert.equal(children[0].type,'automation')

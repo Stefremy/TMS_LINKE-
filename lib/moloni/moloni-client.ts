@@ -18,6 +18,7 @@ export class MoloniRejectedError extends Error {
 export class MoloniClient {
   private companyId: string;
   private tenantId?: string;
+  private environment?: "test" | "live";
   private developerId: string;
   private clientId: string;
   private clientSecret: string;
@@ -31,8 +32,9 @@ export class MoloniClient {
   // This could be fetched from DB or ENV, for now ENV
   private refreshTokenVal: string;
 
-  constructor(config?: { companyId?: string; refreshToken?: string; tenantId?: string }) {
+  constructor(config?: { companyId?: string; refreshToken?: string; tenantId?: string; environment?: "test" | "live" }) {
     this.tenantId = config?.tenantId;
+    this.environment = config?.environment;
     this.companyId = config?.companyId || process.env.MOLONI_COMPANY_ID || "";
     this.developerId = process.env.MOLONI_DEVELOPER_ID || process.env.MOLONI_CLIENT_ID || "518600300";
     this.clientId = process.env.MOLONI_CLIENT_ID || "518600300";
@@ -170,6 +172,9 @@ export class MoloniClient {
       const { error: saveError } = await supabase.from("audit_log").insert({
         tenant_id: tenantId, action: "moloni_connection_config",
         details: {
+          // Rotation must keep the environment: untagged rows are read as the sandbox.
+          environment: saved?.environment || this.environment || "test",
+          company_name: saved?.company_name, company_vat: saved?.company_vat,
           company_id: this.companyId, refresh_token: data.refresh_token,
           access_token: data.access_token, access_token_expires_at: expiresAt,
           connected_at: new Date().toISOString(), source: "token_rotation",

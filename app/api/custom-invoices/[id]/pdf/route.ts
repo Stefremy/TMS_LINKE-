@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 import { loadFinancialDocument, financialPdfResponse } from "@/lib/services/billing/document-access"
-import { MoloniClient } from "@/lib/moloni/moloni-client"
-import { getMoloniConfigAction } from "@/app/actions/moloni"
+import { getMoloniClientForDocument } from "@/lib/moloni/connection"
+import { createAdminClient } from "@/lib/supabase/server"
 import { generateCustomInvoicePdfBuffer } from "@/lib/services/billing/custom-invoice-pdf"
 
 export const dynamic = "force-dynamic"
@@ -43,12 +43,10 @@ export async function GET(
       // Se falhou, tentar obter link fresco através da API do Moloni
       if (!pdfResponse) {
         try {
-          const config = await getMoloniConfigAction()
-          if (config.isConnected && config.companyId) {
-            const moloni = new MoloniClient({
-              companyId: config.companyId,
-              refreshToken: (config as { refreshToken?: string }).refreshToken
-            })
+          // Documento já emitido: usar sempre a empresa Moloni que o emitiu (Teste ou Produção).
+          const issuer = await getMoloniClientForDocument(createAdminClient(), match.tenant_id, invoice)
+          if (issuer) {
+            const { moloni } = issuer
             const freshUrl = await moloni.getDocumentPDFLink(docId)
             if (freshUrl) {
               pdfResponse = await fetch(freshUrl, { cache: "no-store" })

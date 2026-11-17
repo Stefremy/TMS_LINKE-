@@ -18,6 +18,7 @@ import { readCttExportForm, type CttExportDetails } from "../ctt/export-details"
 import { getCttRecipientContactError } from "../ctt/recipient-contact"
 import type { CTTCompleteShipmentOutput } from "../ctt/ctt-types"
 import { reserveWallet, transitionWallet, type WalletReservation } from "@/lib/billing/wallet"
+import { isCorreosShipment } from "@/lib/services/shipments/shipment-utils"
 
 export async function createShipment(formData: FormData) {
   
@@ -230,6 +231,9 @@ export async function dispatchShipment(shipmentId: string) {
   const packages = (parcels.data || []) as { weight_g: unknown; dimensions?: {
     unit?: unknown; length_cm?: unknown; width_cm?: unknown; height_cm?: unknown
   } | null }[]
+  if (isCorreosShipment({ ...shipment, ...saved })) {
+    return dispatchCorreosDraft(supabase, ctx.tenant_id, shipment, saved, packages)
+  }
   const weights = packages.map(parcel => positiveMeasurement(parcel.weight_g))
   const grams = weights.length && weights.every(value => value !== null)
     ? weights.reduce<number>((sum, value) => sum + value!, 0) : null
@@ -321,4 +325,115 @@ export async function dispatchShipment(shipmentId: string) {
     trackingNumber: cttResult.trackingNumber,
     dbWarning,
   }
+}
+
+type DraftPackage = { weight_g: unknown; dimensions?: { unit?: unknown; length_cm?: unknown; width_cm?: unknown; height_cm?: unknown } | null }
+
+/** Saved draft fields used to emit with Correos (untyped JSON from shipments + audit_log). */
+type CorreosDraft = {
+  recipient_country?: string | null; correos_product_code?: string | null; webservice_service_code?: string | null
+  weight_pricing_basis?: { service?: { webservice_service_code?: string | null } | null } | null
+  weight_kg?: unknown; package_count?: unknown; volumes_count?: unknown; length_cm?: unknown; width_cm?: unknown; height_cm?: unknown
+  sender_name?: string | null; sender_address?: string | null; sender_city?: unknown; sender_phone?: string | null
+  sender_zip4?: string | null; sender_zip3?: string | null; sender_postal?: string | null
+  recipient_name?: string | null; recipient_address?: string | null; recipient_city?: unknown; recipient_phone?: string | null
+  recipient_email?: string | null; recipient_zip4?: string | null; recipient_zip3?: string | null; recipient_postal?: string | null
+  cod_value?: unknown; observations?: string | null; webservice_connection_id?: string | null
+}
+
+/** Emits a saved draft with Correos Express and stores the official tracking and label. */
+async function dispatchCorreosDraft(
+  supabase: ReturnType<typeof createAdminClient>, tenantId: string,
+  shipment: { id: string; tracking_number?: string | null }, saved: CorreosDraft, packages: DraftPackage[],
+) {
+  const country = String(saved.recipient_country || "PT").trim().toUpperCase()
+  if (country !== "PT" && country !== "ES") {
+    throw new Error("Os envios internacionais da Correos são tratados por cotação e não podem ser emitidos a partir de um rascunho.")
+  }
+  const product = String(saved.correos_product_code || saved.webservice_service_code || saved.weight_pricing_basis?.service?.webservice_service_code || "").trim()
+  if (!product) throw new Error("Confirme o produto Correos associado ao rascunho antes de emitir.")
+  const grams = packages.length && packages.every(p => positiveMeasurement(p.weight_g) !== null)
+    ? packages.reduce((sum, p) => sum + positiveMeasurement(p.weight_g)!, 0) : null
+  const weightKg = positiveMeasurement(saved.weight_kg) ?? (grams !== null ? grams / 1000 : null)
+  const volumes = positiveMeasurement(saved.package_count ?? saved.volumes_count) ?? (packages.length || null)
+  const dims = packages.length === 1 ? packages[0].dimensions : null
+  const length = positiveMeasurement(saved.length_cm) ?? positiveMeasurement(dims?.length_cm)
+  const width = positiveMeasurement(saved.width_cm) ?? positiveMeasurement(dims?.width_cm)
+  const height = positiveMeasurement(saved.height_cm) ?? positiveMeasurement(dims?.height_cm)
+  if (weightKg === null || volumes === null || length === null || width === null || height === null || packages.length > 1000) {
+    throw new Error("Complete o peso, o número de volumes e as dimensões guardados no rascunho antes de emitir.")
+  }
+  if (volumes > 1 && product === "90") {
+    throw new Error("O produto Correos 90 (Internacional Standard) permite apenas um volume por envio.")
+  }
+  const postal = (zip4: unknown, zip3: unknown, full: unknown) =>
+    String(full || [zip4, zip3].filter(Boolean).join("-")).trim()
+  const senderPostal = postal(saved.sender_zip4, saved.sender_zip3, saved.sender_postal)
+  const recipientPostal = postal(saved.recipient_zip4, saved.recipient_zip3, saved.recipient_postal)
+  const cityOf = (city: unknown, address: unknown) => typeof city === "string" && city.trim()
+    ? city.trim() : typeof address === "string" && address.includes(",") ? address.split(",").at(-1)!.trim() : ""
+  const stripCity = (address: unknown, city: string) => {
+    const text = String(address || "")
+    return city && text.endsWith(`, ${city}`) ? text.slice(0, -(city.length + 2)) : text
+  }
+  const senderCity = cityOf(saved.sender_city, saved.sender_address)
+  const recipientCity = cityOf(saved.recipient_city, saved.recipient_address)
+  const cod = Number(saved.cod_value || 0)
+  // Loaded on demand: the Correos client is only needed when a Correos draft is emitted.
+  const [{ CorreosShipmentService }, { getCorreosShipmentLabels }, { correosShipmentError }, { resolveCorreosCredentials },
+    { combineCarrierLabels }, { applyLinkeLogoToCorreosLabel }] = await Promise.all([
+    import("@/lib/services/correos/correos-shipment.service"), import("@/lib/services/correos/shipment-labels"),
+    import("@/lib/services/correos/shipment-policy"), import("@/lib/services/carriers/credentials"),
+    import("@/lib/services/shipments/label-bundle"), import("@/lib/services/correos/correos-label-customizer"),
+  ])
+
+  const creds = await resolveCorreosCredentials(saved.webservice_connection_id || undefined)
+  const result = await new CorreosShipmentService().createShipment(creds, {
+    ref: shipment.tracking_number || shipment.id.substring(0, 8).toUpperCase(),
+    fecha: new Date().toLocaleDateString("pt-PT").replace(/\//g, ""),
+    remitente: {
+      nombre: saved.sender_name || "", direccion: stripCity(saved.sender_address, senderCity) || "Sede Comercial",
+      poblacion: senderCity || "Portugal", cpNacional: "", cpInternacional: senderPostal || "4000-001", paisISO: "PT",
+      contacto: saved.sender_name || "", telefono: saved.sender_phone || "910000000",
+    },
+    destinatario: {
+      nombre: saved.recipient_name || "", direccion: stripCity(saved.recipient_address, recipientCity),
+      poblacion: recipientCity || "Portugal", cpNacional: country === "ES" ? recipientPostal : "",
+      cpInternacional: recipientPostal || "1000-001", paisISO: country,
+      contacto: saved.recipient_name || "", telefono: saved.recipient_phone || "920000000", email: saved.recipient_email || undefined,
+    },
+    bultos: volumes, kilos: weightKg, dimensionsCm: { length, width, height },
+    producto: product, portes: "P", reembolso: cod > 0 ? cod.toString() : "",
+    observaciones: String(saved.observations || "").substring(0, 40) || undefined,
+    tipoEtiqueta: "1",
+  })
+  const accepted = result.codigoRetorno === 0 || (result.codigoRetorno === 404 && result.datosResultado)
+  if (!accepted || !result.datosResultado) {
+    return { success: false, error: correosShipmentError(result, product, country), labelBase64: undefined, trackingNumber: undefined, dbWarning: undefined }
+  }
+
+  const trackingNumber = result.datosResultado as string
+  let labelBase64: string | undefined
+  let carrierLabels: Awaited<ReturnType<typeof getCorreosShipmentLabels>> = []
+  try {
+    carrierLabels = getCorreosShipmentLabels(result)
+    const bundle = await combineCarrierLabels(carrierLabels)
+    const pdf = bundle ? await convertZplToPdfBase64(bundle.data) : ""
+    if (pdf) labelBase64 = await applyLinkeLogoToCorreosLabel(pdf)
+  } catch { console.warn("Correos: envio emitido; não foi possível reunir as etiquetas oficiais.") }
+
+  let dbWarning: string | undefined
+  const now = new Date().toISOString()
+  try {
+    const update = await supabase.from("shipments").update({ carrier_tracking_number: trackingNumber,
+      carrier_code: "correos", status: "pendente", updated_at: now }).eq("tenant_id", tenantId).eq("id", shipment.id)
+    const log = await supabase.from("audit_log").insert({ tenant_id: tenantId, action: "shipment_data", created_at: now,
+      details: { ...saved, carrier_tracking_number: trackingNumber, carrier_code: "correos", status: "pendente",
+        ctt_label_base64: labelBase64, carrier_labels: carrierLabels, weight_kg: weightKg, package_count: volumes,
+        length_cm: length, width_cm: width, height_cm: height } })
+    if (update.error || log.error) throw new Error("Persistência por confirmar")
+  } catch {
+    dbWarning = "A Correos aceitou o envio, mas a gravação ficou por confirmar. Não volte a emitir; confirme o rastreio e a etiqueta."
+  }
+  return { success: true, error: undefined, labelBase64, trackingNumber, dbWarning }
 }

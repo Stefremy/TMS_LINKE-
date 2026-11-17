@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server"
 import { loadFinancialDocument, financialPdfResponse } from "@/lib/services/billing/document-access"
-import { MoloniClient } from "@/lib/moloni/moloni-client"
+import { getMoloniClientForDocument } from "@/lib/moloni/connection"
 
 export const dynamic = "force-dynamic"
 
@@ -43,26 +43,10 @@ export async function GET(
     // Fallback: If direct fetch failed or token expired, re-fetch fresh link from Moloni API
     if ((!pdfResponse || !pdfResponse.ok) && docId) {
       try {
-        let moloniConfig: { companyId: string; refreshToken: string } | null = null
-        if (process.env.MOLONI_REFRESH_TOKEN && process.env.MOLONI_COMPANY_ID) {
-          moloniConfig = {
-            refreshToken: process.env.MOLONI_REFRESH_TOKEN,
-            companyId: process.env.MOLONI_COMPANY_ID,
-          }
-        }
-        // Connections created through the portal also work without deployment tokens.
-        let connectionQuery = supabase.from("audit_log").select("details")
-          .eq("tenant_id", ctx.tenant_id).eq("action", "moloni_connection_config")
-        if (moloniConfig?.companyId) connectionQuery = connectionQuery.eq("details->>company_id", String(moloniConfig.companyId))
-        const { data: savedConnection } = await connectionQuery.order("created_at", { ascending: false }).limit(1).maybeSingle()
-        if (savedConnection?.details?.company_id && savedConnection.details.refresh_token) {
-          moloniConfig = {
-            companyId: String(savedConnection.details.company_id),
-            refreshToken: savedConnection.details.refresh_token,
-          }
-        }
-        if (moloniConfig) {
-          const moloni = new MoloniClient(moloniConfig)
+        // Documento já emitido: usar sempre a empresa Moloni que o emitiu (Teste ou Produção).
+        const issuer = await getMoloniClientForDocument(supabase, ctx.tenant_id, stmt)
+        if (issuer) {
+          const { moloni } = issuer
           const freshPdfUrl = await moloni.getDocumentPDFLink(Number(docId))
           if (freshPdfUrl) {
             pdfUrl = freshPdfUrl

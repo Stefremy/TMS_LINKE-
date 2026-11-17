@@ -131,8 +131,6 @@ const navConfig: NavSection[] = [
           { title: "Taxa de Combustível", href: "/ops/configuracao/combustivel" },
           { title: "Zonas de Preço", href: "/ops/configuracao/zonas" },
           { title: "Comunicações", isSeparator: true },
-          { title: "WhatsApp & SMS", href: "/ops/comunicacoes/whatsapp" },
-          { title: "Chat Console WhatsApp", href: "/ops/comunicacoes/chat" },
           { title: "Email Templates", href: "/ops/configuracao/notificacoes" },
         ]
       },
