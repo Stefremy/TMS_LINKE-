@@ -10,6 +10,7 @@ import * as React from "react"
 import { codCents } from "@/lib/services/reembolsos/client-cod"
 import { getClientServiceName } from "@/lib/services/client-service-label"
 import { partnerTrackingUrl } from "@/lib/shipments/quotations/tracking"
+import { ShipmentChargeBreakdown } from "@/components/shipments/ShipmentChargeBreakdown"
 import { 
   Building2, 
   MapPin, 
@@ -953,6 +954,14 @@ setTimelineEvents(data || [])
                 </div>
               </div>
 
+              {/* 6. Preço do envio: same breakdown as the checkout */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider text-xs">Preço do Envio</label>
+                <div className="bg-[var(--surface-bg)] p-4 rounded-xl border border-[var(--border-subtle)]">
+                  <ShipmentChargeBreakdown shipmentId={String(currentShipment.rawId || currentShipment.id)} sellPrice={currentShipment.sell_price} />
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -961,7 +970,7 @@ setTimelineEvents(data || [])
         {/* Modal Footer */}
         <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-3">
           <div className="text-xs text-[var(--text-secondary)] font-bold uppercase tracking-wider">
-            {currentShipment.payment_status === "paid" ? "Total Pago" : "Total Faturado"}: <strong className="text-[var(--text-primary)] font-mono text-sm ml-1">{currentShipment.sell_price ? `${Number(currentShipment.sell_price).toFixed(2)}€` : "0.00€"}</strong>
+            {currentShipment.payment_status === "paid" ? "Total Pago" : "Total Faturado"} <span className="normal-case font-medium">(s/ IVA)</span>: <strong className="text-[var(--text-primary)] font-mono text-sm ml-1">{currentShipment.sell_price ? `${Number(currentShipment.sell_price).toFixed(2)}€` : "0.00€"}</strong>
             {currentShipment.payment_status === "paid" && (
               <span className="ml-2 px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/25 text-xs font-bold normal-case tracking-normal">Pago</span>
             )}

@@ -309,6 +309,7 @@ export async function emitClientGuiaAction(data: {
     let computedBuyPrice = 0
     let computedSpecialAmount = 0
     let computedFuelAmount = 0
+    let computedFuelRatePct: number | null = null
     let computedBasePrice: number
     let computedSpecialDesc: string | null = null
     let weightPricingBasis: WeightPricingBasis
@@ -371,6 +372,7 @@ export async function emitClientGuiaAction(data: {
       computedSellPrice = priceResult.sellPrice
       computedBuyPrice = priceResult.buyPrice
       computedFuelAmount = priceResult.fuelSurchargeAmount
+      computedFuelRatePct = computedFuelAmount > 0 ? priceResult.fuelRatePct ?? null : null
       computedBasePrice = priceResult.basePrice
       const specials = calculateShipmentSpecialFees(computedSellPrice, matchedClient, carrierCode,
         data.selectedSpecialServices, data.codValue, { country: recipientCountry, postal: recipientPostal })
@@ -413,6 +415,7 @@ export async function emitClientGuiaAction(data: {
       sender_phone: data.senderPhone,
       base_price: computedBasePrice,
       fuel_tax_amount: computedFuelAmount,
+      fuel_rate_pct: computedFuelRatePct,
       buy_price: computedBuyPrice,
       sell_price: computedSellPrice,
       reference: trackingNumber,

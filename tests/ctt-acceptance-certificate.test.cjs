@@ -8,7 +8,7 @@ const archive=(ids=[A],extra={})=>({tenant_id:T,action:'manifest_closed',details
 const emission=(id=A,documents=[doc])=>({id:'snapshot-'+id,tenant_id:T,action:'shipment_data',details:{id,ctt_documents:documents}})
 function harness(o={}){
  const db=fakeSupabase({shipments:o.rows||[row()],audit_log:o.audit||[]},o.failure),closes=[]
- const load=createLoader({
+ const load=createLoader({'pdf-lib':require('pdf-lib'),
   '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},
   './close-manifest':{closeCttManifest:async(...args)=>{closes.push(args);return o.response||{success:true,count:1,manifestPdfBase64:PDF,documents:[doc]}}},
   '@/lib/auth/context':{requireUser:async permission=>{assert.equal(permission,'Emissão e Controlo de Guias CTT');if(o.denied)throw Error('ACCESS_DENIED');return {tenant_id:T,role:'client',client_id:o.missingClient?null:C}}},
@@ -85,9 +85,10 @@ test('client dashboard and history expose only CTT certificate controls and use 
   assert.match(source,bulk?/CttCertificateStatus/:/Certificado de aceitação gerado/)
   assert.match(source,/generateCttAcceptanceCertificateAction\(manifestIds\)/)
   assert.match(source,/Documento oficial CTT/)
-  // Bulk closing lives in the history; the overview closes one shipment at a time.
-  for(const control of [/CttCertificateCheckbox/,/CttCertificateToolbar/]) bulk?assert.match(source,control):assert.doesNotMatch(source,control)
-  if(!bulk) assert.match(source,/void handleGenerateManifest\(shipment\.id\)/)
+  // Both lists let clients select several CTT shipments and close them in one batch (one certificate).
+  assert.match(source,/CttCertificateCheckbox/)
+  if(!bulk) assert.match(source,/void handleGenerateManifest\(certificateSelection\.selectedIds\)/)
+  if(!bulk) assert.match(source,/void handleGenerateManifest\(\[shipment\.id\]\)/)
   assert.doesNotMatch(source,/generateHandoverManifest|Manifesto pronto para assinatura/)
  }
 })

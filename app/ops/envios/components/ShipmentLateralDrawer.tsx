@@ -36,6 +36,7 @@ import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 import { Button } from "@/components/ui/button"
 import { CarrierMeasurementsPanel } from '@/components/shipments/CarrierMeasurementsPanel'
+import { ShipmentChargeBreakdown } from "@/components/shipments/ShipmentChargeBreakdown"
 
 interface ShipmentLateralDrawerProps {
   shipment: ShipmentDrawerRecord | null
@@ -59,6 +60,7 @@ export function ShipmentLateralDrawer({
   const [isLoadingTimeline, setIsLoadingTimeline] = React.useState(Boolean(shipment))
   const [isSyncing, setIsSyncing] = React.useState(false)
   const [isPrinting, setIsPrinting] = React.useState(false)
+
 
   const [timelineShipment, setTimelineShipment] = React.useState(shipment)
   if (timelineShipment !== shipment) { setTimelineShipment(shipment); setIsLoadingTimeline(true) }
@@ -153,21 +155,6 @@ export function ShipmentLateralDrawer({
   } catch {
     formattedCreated = shipment.trk?.date || "Hoje"
   }
-
-  // Safe Preço e métricas
-  let parsedPrice = 15.61
-  try {
-    const rawPrice = shipment.sell_price || shipment.rawShipment?.sell_price || shipment.total_price || shipment.value?.amount
-    if (rawPrice !== undefined && rawPrice !== null) {
-      const cleaned = String(rawPrice).replace(/[^0-9.,]/g, "").replace(",", ".")
-      const val = parseFloat(cleaned)
-      if (!isNaN(val) && val > 0) parsedPrice = val
-    }
-  } catch {}
-  const subtotalFrete = (parsedPrice * 0.74).toFixed(2)
-  const taxaBaf = (parsedPrice * 0.07).toFixed(2)
-  const taxaIva = (parsedPrice * 0.19).toFixed(2)
-  const totalFormatado = parsedPrice.toFixed(2)
 
   // Declared weight and carrier measurements are loaded separately on demand.
   const volumesCount = shipment.package_count || shipment.volumes_count || shipment.package?.count || 1
@@ -363,9 +350,6 @@ export function ShipmentLateralDrawer({
               </span>
             </div>
 
-            <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-[var(--accent-soft)] text-[var(--accent)] border border-[rgba(18,138,71,0.2)]">
-              24h Garantido
-            </span>
           </div>
 
           <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-secondary)]">
@@ -482,26 +466,8 @@ export function ShipmentLateralDrawer({
               <span className="font-semibold text-[var(--text-primary)] font-mono">{volumesCount} caixa(s)</span>
             </div>
 
-            <div className="border-t border-[var(--border-subtle)] pt-2 space-y-1 text-[11px]">
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--text-tertiary)]">Subtotal Frete:</span>
-                <span className="font-mono text-[var(--text-secondary)]">€ {subtotalFrete}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--text-tertiary)]">Taxa Combustível (BAF):</span>
-                <span className="font-mono text-[var(--text-secondary)]">€ {taxaBaf}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--text-tertiary)]">IVA (23%):</span>
-                <span className="font-mono text-[var(--text-secondary)]">€ {taxaIva}</span>
-              </div>
-            </div>
-
-            <div className="border-t border-[var(--border-subtle)] pt-2.5 flex items-center justify-between">
-              <span className="font-bold text-xs text-[var(--text-primary)]">Total Custo de Envio:</span>
-              <span className="font-bold text-sm text-[var(--accent)] font-mono">
-                € {totalFormatado}
-              </span>
+            <div className="border-t border-[var(--border-subtle)] pt-2">
+              <ShipmentChargeBreakdown shipmentId={String(shipment.rawId || shipment.id)} sellPrice={shipment.sell_price ?? shipment.rawShipment?.sell_price} />
             </div>
           </div>
         </div>

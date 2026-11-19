@@ -5,6 +5,38 @@ import { revalidatePath } from 'next/cache'
 import { getCttAcceptanceCertificate } from '@/lib/services/ctt/acceptance-certificate'
 import type { ManifestResult } from '@/lib/services/ctt/close-manifest'
 import { createAdminClient } from '@/lib/supabase/server'
+import { loadShipmentParcelSummaries } from '@/lib/services/shipments/shipment-parcel-summaries'
+import { stampCertificateObjectList, type CertificateObjectRow } from '@/lib/services/ctt/certificate-object-list'
+
+/** CTT's certificate body is blank: add the object codes of the batch to the copy handed to the user. */
+async function withObjectList(result: ManifestResult, tenantId: string, clientId?: string): Promise<ManifestResult> {
+  if (!result.success || !result.manifestPdfBase64 || !result.shipmentIds?.length) return result
+  try {
+    const db = createAdminClient()
+    let query = db.from('shipments')
+      .select('id, carrier_code, service_type, carrier_tracking_number, tracking_number, recipient_name, recipient_address, recipient_zip4, recipient_zip3')
+      .eq('tenant_id', tenantId).in('id', result.shipmentIds)
+    if (clientId) query = query.eq('client_id', clientId)
+    const { data, error } = await query
+    if (error || !data?.length) return result
+    const parcels = await loadShipmentParcelSummaries(db, tenantId, data).catch(() => new Map())
+    const order = new Map(result.shipmentIds.map((id, index) => [id, index]))
+    const rows: CertificateObjectRow[] = [...data].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)).map(row => {
+      const objectCode = [row.carrier_tracking_number, row.tracking_number].map(v => String(v || '').trim().toUpperCase()).find(v => /^[A-Z]{2}\d{9}[A-Z]{2}$/.test(v)) || ''
+      const guia = typeof row.tracking_number === 'string' && row.tracking_number.startsWith('LTK') ? row.tracking_number : null
+      const postal = row.recipient_zip4 ? `${row.recipient_zip4}${row.recipient_zip3 ? `-${row.recipient_zip3}` : ''}` : ''
+      const parcel = parcels.get(row.id)
+      return { objectCode, guia, recipient: row.recipient_name, destination: [postal, row.recipient_address].filter(Boolean).join(' '), volumes: parcel?.volumeCount, weightKg: parcel?.declaredWeightKg }
+    })
+    // CTT returns the original and the duplicate as identical files: stamp each distinct file once.
+    const cache = new Map<string, Promise<string>>()
+    const stamp = (file: string) => { if (!cache.has(file)) cache.set(file, stampCertificateObjectList(file, rows)); return cache.get(file)! }
+    const documents = result.documents ? await Promise.all(result.documents.map(async doc => ({ ...doc, File: await stamp(doc.File) }))) : undefined
+    return { ...result, manifestPdfBase64: await stamp(result.manifestPdfBase64), documents }
+  } catch {
+    return result
+  }
+}
 
 export async function generateCttAcceptanceCertificateAction(shipmentIds: string[]): Promise<ManifestResult> {
   const ctx = await requireUser('Emissão e Controlo de Guias CTT')
@@ -28,7 +60,7 @@ export async function generateCttAcceptanceCertificateAction(shipmentIds: string
         revalidatePath('/app/[storeSlug]/envios', 'page')
       } catch { /* A confirmed carrier result must survive cache refresh failures. */ }
     }
-    return result
+    return await withObjectList(result, ctx.tenant_id, ctx.role === 'client' ? ctx.client_id! : undefined)
   } catch {
     return { success: false, count: 0, error: 'Não foi possível obter o certificado de aceitação CTT. Confirme o resultado com a equipa Ops antes de repetir.' }
   }
@@ -39,7 +71,8 @@ export async function downloadCttAcceptanceCertificateAction(shipmentId: string)
   const ctx = await requireUser('Emissão e Controlo de Guias CTT')
   if (!ctx.tenant_id || (ctx.role === 'client' && !ctx.client_id)) return { success: false, count: 0, error: 'Não foi possível identificar a conta desta sessão.' }
   try {
-    return await getCttAcceptanceCertificate(ctx.tenant_id, [shipmentId], ctx.role === 'client' ? ctx.client_id! : undefined, { allowClose: false, expandBatch: true })
+    const clientId = ctx.role === 'client' ? ctx.client_id! : undefined
+    return await withObjectList(await getCttAcceptanceCertificate(ctx.tenant_id, [shipmentId], clientId, { allowClose: false, expandBatch: true }), ctx.tenant_id, clientId)
   } catch {
     return { success: false, count: 0, error: 'Não foi possível carregar o certificado guardado.' }
   }

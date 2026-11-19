@@ -65,6 +65,7 @@ export async function createShipment(formData: FormData) {
   let computedSellPrice: number
   let computedBuyPrice: number
   let computedFuelAmount = 0
+  let computedFuelRatePct: number | null = null
   let computedBasePrice: number
   let oversize: ReturnType<typeof calculateOversizeSurcharge>
   let computedTierLabel = "Standard"
@@ -106,6 +107,7 @@ export async function createShipment(formData: FormData) {
     computedSellPrice = Number((priceResult.sellPrice + oversize.amount).toFixed(2))
     computedBuyPrice = priceResult.buyPrice
     computedFuelAmount = priceResult.fuelSurchargeAmount || 0
+    computedFuelRatePct = computedFuelAmount > 0 ? priceResult.fuelRatePct ?? null : null
     computedBasePrice = priceResult.basePrice
     computedTierLabel = priceResult.tierLabel || "Standard"
     if (carrierCode === 'ctt' && recipientCountry !== 'PT' && formData.get('ctt_export_type')) {
@@ -162,6 +164,7 @@ export async function createShipment(formData: FormData) {
     height_cm: heightCm,
     base_price: computedBasePrice,
     fuel_tax_amount: computedFuelAmount,
+    fuel_rate_pct: computedFuelRatePct,
     tier_label: computedTierLabel,
     created_at: now,
     updated_at: now,

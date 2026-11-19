@@ -187,15 +187,14 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
     finally { setFeedback(previous => ({ ...previous, labelBusy: false })) }
   }
   // Print tabs must be opened synchronously in the click handler; any await before window.open lets popup blockers reject it.
-  const pendingTabs = React.useRef<{ label: Window | null; certificate: Window | null }>({ label: null, certificate: null })
-  const takeTabs = () => { const tabs = pendingTabs.current; pendingTabs.current = { label: null, certificate: null }; return tabs }
-  const closeTabs = () => { const tabs = takeTabs(); tabs.label?.close(); tabs.certificate?.close() }
+  const pendingTabs = React.useRef<{ label: Window | null }>({ label: null })
+  const takeTabs = () => { const tabs = pendingTabs.current; pendingTabs.current = { label: null }; return tabs }
+  const closeTabs = () => { takeTabs().label?.close() }
   const openTabsForEmission = () => {
     closeTabs()
     if (role !== "client" || quote.requiresQuotation || feedback.created || feedback.quotation || submissionLock.current) return
     const label = readLabelPreference(client.id) === "print" ? window.open("", "_blank") : null
-    const certificate = form.getValues("printCertificate") && !!quote.selected ? window.open("", "_blank") : null
-    pendingTabs.current = { label, certificate }
+    pendingTabs.current = { label }
   }
   const submit = form.handleSubmit(async submitted => {
     if (submissionLock.current || feedback.created || feedback.quotation) { closeTabs(); return }
@@ -212,11 +211,10 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
       // Clients choose between auto-download, auto-print or neither (Conta > Etiquetas). Ops always download.
       const labelPreference = role === "client" ? readLabelPreference(client.id) : "download"
       const createdCarrier = fresh.selected?.carrier ?? null
-      const wantsCertificate = submitted.printCertificate && role === "client" && !fresh.requiresQuotation && !!createdCarrier
-      const { label: printTab, certificate: certificateTab } = takeTabs()
-      const result = await submitShipmentFormAction(payload, client.id, quotationKey.current || undefined).catch(error => { printTab?.close(); certificateTab?.close(); throw error })
+      const { label: printTab } = takeTabs()
+      const result = await submitShipmentFormAction(payload, client.id, quotationKey.current || undefined).catch(error => { printTab?.close(); throw error })
       if (!result.success) {
-        printTab?.close(); certificateTab?.close()
+        printTab?.close()
         const issues = result.fieldErrors
         for (const issue of issues) form.setError(issue.field as FieldPath<ShipmentFormValues> | "root", { type: "server", message: issue.message })
         const first = issues[0]
@@ -230,13 +228,11 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
           city: submitted.recipientCity, country: submitted.recipientCountry, phone: submitted.recipientPhone, email: submitted.recipientEmail }); if (!saved.success) throw new Error("Agenda indisponível") }
         catch { setFeedback(previous => ({ ...previous, warning: [previous.warning, `${isQuotation ? "O pedido foi guardado" : "O envio foi emitido"}, mas não foi possível guardar o destinatário na agenda.`].filter(Boolean).join(" ") })) }
       }
-      if (isQuotation) { printTab?.close(); certificateTab?.close(); return }
+      if (isQuotation) { printTab?.close(); return }
       onCreated?.(result)
       if (labelPreference === "manual") printTab?.close()
       // prepareLabel also fetches the label when the creation response did not include it.
       else if (result.labelBase64 || labelPreference === "print") await prepareLabel(result, labelPreference === "print", printTab)
-      // Always try the certificate when ticked. If the browser blocked the tab, the success screen says so (no download).
-      if (wantsCertificate && createdCarrier) await prepareCertificate(result, createdCarrier, true, certificateTab)
     } catch { closeTabs(); form.setError("root", { message: "Não foi possível confirmar o resultado do pedido. Consulte o histórico antes de repetir a emissão." }); focusField("root") }
     finally { submissionLock.current = false }
   }, errors => {
@@ -270,7 +266,7 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
         {!feedback.created.labelBase64 && !feedback.label && <p className="text-sm text-zinc-500">A etiqueta oficial ainda não foi devolvida. Pode tentar obtê-la sem criar outro envio.</p>}
         <div className="flex flex-wrap gap-3"><button type="button" disabled={busy} onClick={() => void prepareLabel(feedback.created!)} className={primaryButton}>{feedback.labelBusy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <Download size={16} />}{feedback.labelBusy ? "A preparar etiqueta…" : "Descarregar etiqueta"}</button><button type="button" disabled={busy} onClick={() => void prepareLabel(feedback.created!, true)} className={secondaryButton}><Printer size={16} />Imprimir</button>{(feedback.carrier === "correos" || /^[A-Z]{2}\d{9}PT$/.test(feedback.created.guia || "")) && <button type="button" disabled={busy} onClick={() => void prepareCertificate(feedback.created!, feedback.carrier === "correos" ? "correos" : "ctt", printsByDefault)} className={secondaryButton}>{feedback.certificateBusy ? <Loader2 size={16} className="animate-spin motion-reduce:animate-none" /> : <FileCheck2 size={16} />}{feedback.certificateBusy ? "A obter certificado…" : "Certificado de aceitação"}</button>}</div>
         {feedback.certificateError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{feedback.certificateError}</p>}
-        {/^[A-Z]{2}\d{9}PT$/.test(feedback.created.guia || "") && !feedback.certificate && <p className="text-xs leading-relaxed text-zinc-500">O certificado fecha este envio nos CTT num lote próprio. Para juntar vários envios num só certificado, use o histórico. Não feche este envio também no portal CTT.</p>}
+        {/^[A-Z]{2}\d{9}PT$/.test(feedback.created.guia || "") && !feedback.certificate && <p className="text-xs leading-relaxed text-zinc-500">O certificado fecha este envio nos CTT num lote próprio. Para juntar vários envios num só certificado, selecione-os na lista de envios e clique em Gerar certificado. Não feche este envio também no portal CTT.</p>}
         <div className="flex flex-wrap gap-3 border-t border-zinc-100 pt-5"><Link href={historyPath} className={secondaryButton}>Ver no histórico<ArrowRight size={15} /></Link><button type="button" disabled={busy} className={secondaryButton} onClick={() => { form.reset(shipmentDefaults(client)); setFeedback(emptyFeedback); setStep(0) }}><PackagePlus size={16} />Criar outro envio</button></div>
       </div>
     </section> : <FormProvider {...form}>

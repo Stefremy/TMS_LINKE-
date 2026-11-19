@@ -31,6 +31,5 @@ export function ReviewStep({ quote, role, onEdit }: { quote: ShipmentQuote; role
       {quote.activeSpecialServices.some(code => code === "cod" || code === "correos_cod") && <p className="mt-2 text-sm text-zinc-600">Cobrança ao destinatário: {money(values.codValue)}</p>}
       {values.saveToAgenda && <p className="mt-2 text-xs text-zinc-500">O destinatário será guardado na agenda após {quote.requiresQuotation ? "o pedido" : "a emissão"}.</p>}
     </div>
-    {role === "client" && !quote.requiresQuotation && !!quote.selected && <label className="flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50/70 p-3.5 text-sm text-zinc-700"><input type="checkbox" {...form.register("printCertificate")} className="mt-0.5 size-4 accent-emerald-700" /><span><span className="block font-medium text-zinc-900">Imprimir certificado de aceitação</span><span className="block text-xs text-zinc-500">Opcional. Abre o documento para imprimir e entregar ao estafeta na recolha.</span></span></label>}
   </FormSection>
 }

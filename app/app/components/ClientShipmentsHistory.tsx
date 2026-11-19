@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge"
 import { getClientPortalStatsAction, getShipmentLabelAction, createReturnShipmentAction, deleteShipmentAction } from "@/app/actions/shipments"
 import { convertZplToPdfAction } from "@/app/actions/ctt"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
+import { ShipmentLateralDrawer } from "@/app/ops/envios/components/ShipmentLateralDrawer"
+import { ShipmentPriceHover } from "@/components/shipments/ShipmentPriceHover"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
@@ -43,6 +45,7 @@ export function ClientShipmentsHistory() {
   }, [currentClient.id])
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = React.useState<ShipmentRecord | null>(null)
+  const [drawerShipment, setDrawerShipment] = React.useState<ShipmentRecord | null>(null)
   const [supportShipment, setSupportShipment] = React.useState<ShipmentRecord | null>(null)
 
   const resolveLabel = async (rawLabel: string | null | undefined): Promise<string | null> => {
@@ -227,6 +230,19 @@ export function ClientShipmentsHistory() {
           setShipments(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s))
         }}
       />
+      <ShipmentLateralDrawer
+        shipment={drawerShipment}
+        isOpen={Boolean(drawerShipment)}
+        onClose={() => setDrawerShipment(null)}
+        onOpenFullModal={() => { if (drawerShipment) setSelectedShipment(drawerShipment); setDrawerShipment(null) }}
+        onOpenIncidencia={() => { if (drawerShipment) setSupportShipment(drawerShipment); setDrawerShipment(null) }}
+        onUpdateShipment={(updated) => {
+          // Only carrier-confirmed fields change here; keep the row's own status/identity.
+          const patch = { parcel_summary: updated.parcel_summary, sell_price: updated.sell_price }
+          setShipments(prev => prev.map(s => s.id === updated.id ? { ...s, ...patch } : s))
+          setDrawerShipment(current => current && current.id === updated.id ? { ...current, ...patch } : current)
+        }}
+      />
       
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -379,7 +395,7 @@ export function ClientShipmentsHistory() {
                       <div className="min-w-0">
                         <button
                           type="button"
-                          onClick={() => setSelectedShipment(envio)}
+                          onClick={() => setDrawerShipment(envio)}
                           className="font-mono font-bold text-xs text-[var(--accent)] hover:underline truncate text-left block"
                         >
                           {primaryDisplay}
@@ -426,7 +442,7 @@ export function ClientShipmentsHistory() {
                     {/* Bottom Row: Value & Action Buttons */}
                     <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)] text-xs">
                       <div className="font-bold font-mono text-[var(--text-primary)]">
-                        {envio.ops_substatus === "aguarda_emissao_parceiro" ? "Aguarda guia" : envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
+                        {envio.ops_substatus === "aguarda_emissao_parceiro" ? "Aguarda guia" : envio.sell_price ? <ShipmentPriceHover shipmentId={String(envio.id)} sellPrice={envio.sell_price}>{`${Number(envio.sell_price).toFixed(2)}€`}</ShipmentPriceHover> : "0.00€"}
                         {envio.payment_status === "paid" && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/25 text-xs font-sans font-bold">Pago</span>}
                       </div>
 
@@ -510,7 +526,7 @@ export function ClientShipmentsHistory() {
                           <div className="flex flex-col gap-0.5">
                             <button
                               type="button"
-                              onClick={() => setSelectedShipment(envio)}
+                              onClick={() => setDrawerShipment(envio)}
                               className="font-mono font-bold text-[var(--accent)] hover:text-[var(--accent-hover)] hover:underline cursor-pointer text-left transition-colors text-xs flex items-center gap-1.5"
                               title="Clique para ver os detalhes do envio e rastreio interno"
                             >
@@ -556,7 +572,7 @@ export function ClientShipmentsHistory() {
                       })()}
                     </td>
                     <td className="py-3 text-right font-mono font-bold text-[var(--text-primary)]">
-                      {envio.ops_substatus === "aguarda_emissao_parceiro" ? "Aguarda guia" : envio.sell_price ? `${Number(envio.sell_price).toFixed(2)}€` : "0.00€"}
+                      {envio.ops_substatus === "aguarda_emissao_parceiro" ? "Aguarda guia" : envio.sell_price ? <ShipmentPriceHover shipmentId={String(envio.id)} sellPrice={envio.sell_price}>{`${Number(envio.sell_price).toFixed(2)}€`}</ShipmentPriceHover> : "0.00€"}
                       {envio.payment_status === "paid" && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]/25 text-xs font-sans font-bold">Pago</span>}
                     </td>
                     <td className="py-3 text-center relative action-dropdown">

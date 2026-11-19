@@ -32,6 +32,8 @@ export interface PriceResult {
   zoneName: string
   /** Fuel surcharge amount applied */
   fuelSurchargeAmount: number
+  /** Fuel surcharge rate applied, in percent (only when a fuel surcharge was calculated) */
+  fuelRatePct?: number
   /** Name of the Linke service table used */
   tableUsed: string
   /** Whether this result came from the client's specific table or a fallback */
@@ -561,6 +563,7 @@ function calculateFromZone(
     tierLabel,
     zoneName: zone.zone_name,
     fuelSurchargeAmount: fuelAmount,
+    fuelRatePct: Number((fuelPct * 100).toFixed(4)),
     tableUsed: table.name,
     isFallback,
   }

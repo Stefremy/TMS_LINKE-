@@ -83,7 +83,7 @@ function menuHarness(t, dashboard, label, account = {}) {
     '@/components/shipments/ShipmentParcelWeight': { ShipmentParcelWeight: 'span' },
     '@/components/ui/badge': { Badge: 'span' },
     '@/app/ops/entidades/clientes/types': { DEFAULT_CTT_SERVICES_PRICING: [] },
-    '@/app/app/components/ClientShipmentDetailModal': { ClientShipmentDetailModal: 'dialog' },
+    '@/app/app/components/ClientShipmentDetailModal': { ClientShipmentDetailModal: 'dialog' }, '@/app/ops/envios/components/ShipmentLateralDrawer': { ShipmentLateralDrawer: 'aside' }, '@/components/shipments/ShipmentPriceHover': { ShipmentPriceHover: ({ children }) => children },
     '@/app/app/components/ClientTopUpModal': { ClientTopUpModal: 'dialog' },
     '@/lib/carrier-logos': { getCarrierLogo: () => null, getShipmentCarrierLogo: () => null },
     // Mensagens ao utilizador chegam por notificação (lib/notify); qualquer tipo conta como aviso mostrado.
@@ -119,7 +119,8 @@ function menuHarness(t, dashboard, label, account = {}) {
 test('overview: certificate action lives in Ações, then the row shows it was generated and reprints the saved original', async t => {
   const h = menuHarness(t, true, officialPdf, { manifestResponse: { success: true, manifestPdfBase64: officialPdf, documents: [{FileName: 'CertAceitResumo.pdf', File: officialPdf}] } })
   let nodes = await h.ready()
-  assert.equal(nodes.some(n => n.type === 'input' && /^Selecionar envio CTT/.test(n.props['aria-label'] || '')), false)
+  // Open CTT rows can be ticked to close several shipments into one certificate.
+  assert.equal(nodes.some(n => n.type === 'input' && /^Selecionar envio CTT/.test(n.props['aria-label'] || '')), true)
   assert.equal(nodes.some(n => n.type === 'span' && textOf(n) === 'Certificado de aceitação gerado'), false)
   nodes = await h.open()
   await nodes.find(n => n.type === 'button' && textOf(n) === 'Gerar certificado de aceitação').props.onClick()
@@ -201,6 +202,37 @@ test('only open CTT shipments can be closed: history by checked selection, overv
   assert.deepEqual(h.calls.manifests,[[second.id]])
   nodes=await h.ready()
   assert.ok(nodes.some(control('LTK1234567')))
+ }
+})
+
+test('overview: ticking several open CTT shipments closes them together into one certificate',async t=>{
+ const second={...shipment,id:'shipment-b',tracking_number:'LTK-SECOND',carrier_tracking_number:'CE000000002PT'}
+ const correos={...shipment,id:'correos',tracking_number:'CEX-DEMO',carrier_code:'correos',carrier_tracking_number:'1234567890123456'}
+ const h=menuHarness(t,true,officialPdf,{shipments:[shipment,second,correos],manifestResponse:{success:true,manifestPdfBase64:officialPdf}})
+ const box=ref=>n=>n.type==='input'&&n.props['aria-label']===`Selecionar envio CTT ${ref}`
+ let nodes=await h.ready()
+ assert.equal(nodes.some(box('CEX-DEMO')),false)
+ nodes.find(box('LTK1234567')).props.onChange();nodes=await h.ready()
+ nodes.find(box('LTK-SECOND')).props.onChange();nodes=await h.ready()
+ await nodes.find(n=>n.type==='button'&&textOf(n).includes('Gerar certificado de aceitação (2)')).props.onClick()
+ assert.deepEqual(h.calls.manifests.map(ids=>[...ids].sort()),[[shipment.id,second.id].sort()])
+ nodes=await h.ready()
+ assert.equal(nodes.some(box('LTK1234567')),false)
+})
+
+test('client dashboard and history: the guia reference opens the side panel; Ver Completo opens the full detail',async t=>{
+ for(const screen of [true,'history']){
+  const h=menuHarness(t,screen,officialPdf)
+  let nodes=await h.ready()
+  const drawer=()=>nodes.find(n=>n.type==='aside')
+  assert.equal(drawer().props.isOpen,false)
+  nodes.find(n=>n.type==='button'&&textOf(n).includes('LTK1234567')&&/detalhes do envio/.test(n.props.title||'')).props.onClick()
+  nodes=await h.ready()
+  assert.equal(drawer().props.isOpen,true);assert.equal(drawer().props.shipment.id,shipment.id)
+  drawer().props.onOpenFullModal(drawer().props.shipment)
+  nodes=await h.ready()
+  assert.equal(drawer().props.isOpen,false)
+  assert.ok(nodes.some(n=>n.type==='dialog'&&n.props.shipment?.id===shipment.id))
  }
 })
 

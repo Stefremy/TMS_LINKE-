@@ -29,7 +29,7 @@ function chain({ shipments, audit, reply = () => success() }) {
       })
     } }
   } }
-  const actions = createLoader({ http: transport, https: transport, 'fast-xml-parser': { XMLParser }, 'next/cache': { revalidatePath() {} },
+  const actions = createLoader({ 'pdf-lib': require('pdf-lib'), http: transport, https: transport, 'fast-xml-parser': { XMLParser }, 'next/cache': { revalidatePath() {} },
     '@/lib/supabase/server': { createAdminClient: () => db.createAdminClient() },
     '@/lib/services/carriers/credentials': { resolveCttCredentials: async () => ({ auth_id: '55555555-5555-5555-5555-555555555555', client_number: '100032458', contract_number: '300330941', environment: 'production' }) },
     '@/lib/auth/context': { requireUser: async () => ({ tenant_id: T, role: 'employee', client_id: null }) },

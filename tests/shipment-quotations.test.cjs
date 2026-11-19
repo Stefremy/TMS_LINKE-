@@ -56,7 +56,7 @@ test('a closed shipment modal is safe and manual FedEx shows an informational li
   '@/app/actions/shipments':{},'@/app/actions/ctt':{},'@/lib/label-utils':{},'@/lib/official-shipment-label':{},'./ShipmentNotesSection':{ShipmentNotesSection:()=>null},
   '@/lib/carrier-logos':{getCarrierLogo:()=>null,getShipmentCarrierLogo:()=>null},
   '@/components/ui/confirm-dialog':{confirmAction:async()=>true},'@/components/ui/use-dialog-a11y':{useDialogA11y:()=>({})},'@/lib/status-helpers':{getShipmentStatusConfig:()=>({label:'Pendente'})},
-  '@/lib/services/ctt/ctt-types':{},'@/components/shipments/CarrierMeasurementsPanel':{CarrierMeasurementsPanel:()=>null},
+  '@/lib/services/ctt/ctt-types':{},'@/components/shipments/CarrierMeasurementsPanel':{CarrierMeasurementsPanel:()=>null},'@/components/shipments/ShipmentChargeBreakdown':{ShipmentChargeBreakdown:()=>null},
   sonner:{toast:Object.assign(()=>{},{success(){},error(){},info(){},warning(){}})},
  })('app/app/components/ClientShipmentDetailModal.tsx')
  const render=shipment=>renderToStaticMarkup(React.createElement(ClientShipmentDetailModal,{shipment,onClose(){}}))

@@ -46,6 +46,8 @@ import {
 } from "@/app/actions/shipments"
 import { DEFAULT_CTT_SERVICES_PRICING } from "@/app/ops/entidades/clientes/types"
 import { ClientShipmentDetailModal } from "@/app/app/components/ClientShipmentDetailModal"
+import { ShipmentLateralDrawer } from "@/app/ops/envios/components/ShipmentLateralDrawer"
+import { ShipmentPriceHover } from "@/components/shipments/ShipmentPriceHover"
 import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CreditCard } from "lucide-react"
@@ -57,6 +59,7 @@ import { generateCttAcceptanceCertificateAction, downloadCttAcceptanceCertificat
 import { ManifestDocuments } from "@/components/manifest-documents"
 import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
 import { canSelectCttCertificate, hasCttClosure } from "@/lib/services/ctt/certificate-status"
+import { useCttCertificateSelection, CttCertificateCheckbox } from "@/components/shipments/CttCertificateControls"
 import type { ClientMessage, MessagePage } from "@/lib/client-messages/types"
 
 export function ClientDashboard() {
@@ -121,9 +124,11 @@ export function ClientDashboard() {
   const [currentPage, setCurrentPage] = React.useState(1)
   const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null)
   const [selectedShipment, setSelectedShipment] = React.useState<ShipmentRecord | null>(null)
+  const [drawerShipment, setDrawerShipment] = React.useState<ShipmentRecord | null>(null)
   const [generatingManifest, setGeneratingManifest] = React.useState(false)
   const [supportShipment, setSupportShipment] = React.useState<ShipmentRecord | null>(null)
   const [manifestData, setManifestData] = React.useState<{ fileName: string; base64: string; documents?: CTTDocumentData[] } | null>(null)
+  const certificateSelection = useCttCertificateSelection(shipments, currentClient.id)
   const certificateScope = React.useRef<string | null>(currentClient.id)
   React.useEffect(() => {
     certificateScope.current = currentClient.id
@@ -254,9 +259,10 @@ export function ClientDashboard() {
     return filteredShipments.slice(startIndex, startIndex + pageSize)
   }, [filteredShipments, currentPage, pageSize])
 
-  /** One shipment per CTT batch keeps the overview simple; batching stays in the history page. */
-  const handleGenerateManifest = async (id: string) => {
-    const manifestIds = [id]
+  /** Every selected CTT shipment goes into one CTT batch, so a single certificate covers all of them. */
+  const handleGenerateManifest = async (ids: string[]) => {
+    const manifestIds = [...new Set(ids)]
+    if (!manifestIds.length) return
     if (generatingManifest) return
     const requestedScope = currentClient.id
 
@@ -272,6 +278,7 @@ export function ClientDashboard() {
         })
         const closedIds = new Set(res.shipmentIds || manifestIds)
         setShipments(previous => previous.map(shipment => closedIds.has(shipment.id) ? { ...shipment, ops_substatus: "manifesto_fechado" } : shipment))
+        certificateSelection.clear()
         if (res.warning) toast.warning(res.warning)
       } else {
         toast.error(res.error || "Não foi possível obter o certificado de aceitação CTT.")
@@ -368,6 +375,19 @@ export function ClientDashboard() {
         onClose={() => setSelectedShipment(null)} 
         onUpdateShipment={(updated) => {
           setShipments(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s))
+        }}
+      />
+      <ShipmentLateralDrawer
+        shipment={drawerShipment}
+        isOpen={Boolean(drawerShipment)}
+        onClose={() => setDrawerShipment(null)}
+        onOpenFullModal={() => { if (drawerShipment) setSelectedShipment(drawerShipment); setDrawerShipment(null) }}
+        onOpenIncidencia={() => { if (drawerShipment) setSupportShipment(drawerShipment); setDrawerShipment(null) }}
+        onUpdateShipment={(updated) => {
+          // Only carrier-confirmed fields change here; keep the row's own status/identity.
+          const patch = { parcel_summary: updated.parcel_summary, sell_price: updated.sell_price }
+          setShipments(prev => prev.map(s => s.id === updated.id ? { ...s, ...patch } : s))
+          setDrawerShipment(current => current && current.id === updated.id ? { ...current, ...patch } : current)
         }}
       />
       
@@ -763,6 +783,23 @@ export function ClientDashboard() {
           </div>
         </div>
 
+        {/* Bulk CTT acceptance certificate: one CTT batch, one sheet for the driver */}
+        {certificateSelection.selectedIds.length > 0 && (
+          <div role="region" aria-label="Envios selecionados para certificado de aceitação" className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-subtle)] bg-[var(--accent-soft)] px-5 py-3 sm:px-6">
+            <p className="text-xs text-[var(--text-primary)]">
+              <strong>{certificateSelection.selectedIds.length}</strong> {certificateSelection.selectedIds.length === 1 ? "envio CTT selecionado" : "envios CTT selecionados"}
+              <span className="text-[var(--text-secondary)]"> · serão fechados juntos num único certificado de aceitação</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={generatingManifest} onClick={certificateSelection.clear} className="px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:underline disabled:opacity-50">Limpar seleção</button>
+              <button type="button" disabled={generatingManifest} onClick={() => void handleGenerateManifest(certificateSelection.selectedIds)} className="inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">
+                <FileCheck2 className="w-3.5 h-3.5" />
+                {generatingManifest ? "A obter certificado..." : `Gerar certificado de aceitação (${certificateSelection.selectedIds.length})`}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table Content */}
         {filteredShipments.length === 0 ? (
           <div className="p-12 text-center flex flex-col items-center justify-center">
@@ -821,10 +858,12 @@ export function ClientDashboard() {
                   <div key={shipment.id} className="p-3.5 space-y-2.5 hover:bg-[var(--surface-muted)] transition-colors">
                     {/* Top Row: Ref/Tracking + Status */}
                     <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-start gap-1">
+                      <div className="-ml-2 -mt-2.5 shrink-0"><CttCertificateCheckbox shipment={shipment} selection={certificateSelection} busy={generatingManifest} /></div>
                       <div className="min-w-0">
                         <button
                           type="button"
-                          onClick={() => setSelectedShipment(shipment)}
+                          onClick={() => setDrawerShipment(shipment)}
                           className="font-mono font-bold text-xs text-[var(--accent)] hover:underline truncate text-left block"
                         >
                           {primaryDisplay}
@@ -835,6 +874,7 @@ export function ClientDashboard() {
                             <span className="font-semibold text-[var(--text-secondary)]">{secondaryDisplay}</span>
                           </div>
                         )}
+                      </div>
                       </div>
                       <Badge variant={statusCfg.badgeVariant} className="shrink-0 text-xs">
                         {statusCfg.label}
@@ -872,7 +912,7 @@ export function ClientDashboard() {
                     <div className="flex items-center justify-between pt-1 border-t border-[var(--border-subtle)]/60 text-xs">
                       <div className="flex items-baseline gap-2">
                         <span className="font-bold font-mono text-[var(--text-primary)]">
-                          {shipment.sell_price ? `${Number(shipment.sell_price).toFixed(2)}€` : "0.00€"}
+                          {shipment.sell_price ? <ShipmentPriceHover shipmentId={String(shipment.id)} sellPrice={shipment.sell_price}>{`${Number(shipment.sell_price).toFixed(2)}€`}</ShipmentPriceHover> : "0.00€"}
                         </span>
                         <span className="text-xs text-[var(--text-tertiary)]">{dateStr}</span>
                       </div>
@@ -926,7 +966,7 @@ export function ClientDashboard() {
                           <button
                             type="button"
                             disabled={generatingManifest}
-                            onClick={() => hasCttClosure(shipment) ? void downloadSavedCertificate(shipment.id) : void handleGenerateManifest(shipment.id)}
+                            onClick={() => hasCttClosure(shipment) ? void downloadSavedCertificate(shipment.id) : void handleGenerateManifest([shipment.id])}
                             aria-label={`${hasCttClosure(shipment) ? "Descarregar" : "Gerar"} certificado de aceitação do envio ${tracking}`}
                             className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-md border border-[var(--border-subtle)] transition-colors disabled:opacity-50"
                             title={hasCttClosure(shipment) ? "Descarregar certificado de aceitação" : "Gerar certificado de aceitação"}
@@ -946,6 +986,18 @@ export function ClientDashboard() {
               <table className="w-full text-left text-xs text-[var(--text-secondary)]">
               <thead className="bg-[var(--surface-muted)] text-[var(--text-tertiary)] font-bold uppercase tracking-wider text-xs border-b border-[var(--border-subtle)]">
                 <tr>
+                  <th className="w-10 py-3.5 pl-3 pr-0">
+                    {(() => {
+                      const selectable = paginatedShipments.filter(canSelectCttCertificate)
+                      if (!selectable.length) return <span className="sr-only">Selecionar para certificado de aceitação</span>
+                      const allSelected = selectable.every(item => certificateSelection.selectedIds.includes(item.id))
+                      return (
+                        <label className="inline-flex min-h-9 min-w-9 items-center justify-center" title="Selecionar todos os envios CTT por fechar desta página">
+                          <input type="checkbox" checked={allSelected} disabled={generatingManifest} onChange={() => certificateSelection.togglePage(paginatedShipments)} aria-label="Selecionar todos os envios CTT por fechar desta página" className="h-4 w-4 accent-[var(--accent)]" />
+                        </label>
+                      )
+                    })()}
+                  </th>
                   <th className="py-3.5 px-5">Guia / Rastreio</th>
                   <th className="py-3.5 px-5">Serviço / Operador</th>
                   <th className="py-3.5 px-5">Destinatário & Destino</th>
@@ -969,6 +1021,9 @@ export function ClientDashboard() {
 
                   return (
                     <tr key={shipment.id} className={`hover:bg-[var(--surface-muted)] transition-colors ${["anulado", "cancelado"].includes(shipment.status || "") ? "[&>td:not(:last-child)]:opacity-50 [&>td:not(:last-child)]:grayscale" : ""}`}>
+                      <td className="w-10 py-4 pl-3 pr-0 align-middle">
+                        <CttCertificateCheckbox shipment={shipment} selection={certificateSelection} busy={generatingManifest} />
+                      </td>
                       {/* Tracking / Guia */}
                       <td className="py-4 px-5">
                         {(() => {
@@ -996,7 +1051,7 @@ export function ClientDashboard() {
                             <div className="flex flex-col gap-0.5">
                               <button
                                 type="button"
-                                onClick={() => setSelectedShipment(shipment)}
+                                onClick={() => setDrawerShipment(shipment)}
                                 className="font-mono font-bold text-[var(--accent)] hover:text-[var(--accent-hover)] hover:underline text-xs flex items-center gap-1.5 cursor-pointer text-left transition-colors"
                                 title="Clique para ver os detalhes do envio e rastreio interno"
                               >
@@ -1050,7 +1105,7 @@ export function ClientDashboard() {
 
                       {/* Valor */}
                       <td className="py-4 px-5 font-mono font-bold text-[var(--text-primary)]">
-                        {shipment.sell_price ? `${Number(shipment.sell_price).toFixed(2)}€` : "—"}
+                        {shipment.sell_price ? <ShipmentPriceHover shipmentId={String(shipment.id)} sellPrice={shipment.sell_price}>{`${Number(shipment.sell_price).toFixed(2)}€`}</ShipmentPriceHover> : "—"}
                       </td>
 
                       {/* Estado */}
@@ -1115,7 +1170,7 @@ export function ClientDashboard() {
                                   onClick={() => {
                                     setOpenDropdownId(null)
                                     if (hasCttClosure(shipment)) void downloadSavedCertificate(shipment.id)
-                                    else void handleGenerateManifest(shipment.id)
+                                    else void handleGenerateManifest([shipment.id])
                                   }}
                                   className="w-full px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
                                 >
