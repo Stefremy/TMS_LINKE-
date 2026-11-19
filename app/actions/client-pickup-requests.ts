@@ -8,6 +8,27 @@ import { readPortalAccess } from "@/lib/client-portal/suspension"
 import { scheduleCttPickupAction } from "./ctt"
 import { PICKUP_REQUEST_ACTION, PICKUP_REQUEST_PERMISSION, PICKUP_REQUEST_PAGE_SIZE, pickupRequestSchema, type ClientPickupRequest } from "@/lib/client-pickup-requests"
 import { notifyPickupConfirmation } from "@/lib/email/pickup-confirmation"
+import { sendEmail } from "@/lib/email/resend"
+import { pickupRequestStaffHtml } from "@/lib/email/code-templates"
+import { publicUrl } from "@/lib/config/public-origins"
+
+const STAFF_PICKUP_RECIPIENTS = ["Geral@linke.pt", "Cliente@linke.pt"]
+/** Alert the team about a new request. Never fails the request itself. */
+async function notifyStaffNewPickup(request: SavedRequest) {
+  try {
+    const p = request.pickup
+    const result = await sendEmail({
+      to: STAFF_PICKUP_RECIPIENTS, from: "Linke <notificacoes@linke.pt>",
+      subject: `Novo pedido de recolha · ${request.client_name} · ${p.date} ${p.period}`,
+      idempotencyKey: `pickup-request-staff-${request.id}`,
+      html: pickupRequestStaffHtml({ client_name: request.client_name, reference: request.reference,
+        carrier: p.carrier === "ctt_expresso" ? "CTT Expresso" : "Correos Express", date: p.date, period: p.period,
+        volumes: p.volumes, weightKg: p.weightKg, name: p.name, address: p.address, postal: p.postal, city: p.city,
+        contact: p.contact, phone: p.phone, notes: p.notes, url: publicUrl("/ops/envios/recolhas", "ops") }),
+    })
+    if (!result.success) console.error("Staff pickup notification failed:", result.error)
+  } catch (error) { console.error("Staff pickup notification failed:", error) }
+}
 
 type SavedRequest = ClientPickupRequest & { created_by: string; processing_by?: string; completed_by?: string }
 const uuid = (value: unknown): value is string => typeof value === "string" && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value)
@@ -63,6 +84,7 @@ export async function requestClientPickupAction(input: unknown, requestId: strin
       throw new Error("Não foi possível guardar o pedido. Tente novamente com a mesma referência.")
     }
     refresh()
+    await notifyStaffNewPickup(request)
     return { success: true as const, request: publicRequest(request, ctx.role === "client") }
   } catch (error) { return failure(error) }
 }
