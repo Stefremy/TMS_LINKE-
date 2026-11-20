@@ -7,6 +7,8 @@ import { usePostalCodeLookup } from "@/lib/hooks/usePostalCodeLookup"
 import { useRecipientAgenda } from "@/lib/hooks/useRecipientAgenda"
 import { PostalAddressSuggestions } from "@/components/postal-address-suggestions"
 import { FormField, FormSection, inputClass, secondaryButton } from "../fields"
+import { RecipientAgendaPicker } from "../RecipientAgendaPicker"
+import type { Destinatario } from "@/app/ops/entidades/destinatarios/types"
 import type { ShipmentFormValues } from "../schema"
 import type { ShipmentQuote } from "../useShipmentQuote"
 
@@ -26,9 +28,7 @@ export function PartiesStep({ clientId, quote }: { clientId: string; quote: Ship
     form.setValue("recipientCity", info.city, { shouldValidate: true })
     if (!form.getValues("recipientAddress") && info.street) form.setValue("recipientAddress", info.street)
   } })
-  const chooseRecipient = (id: string) => {
-    const recipient = agenda.recipients.find(row => row.id === id)
-    if (!recipient) return
+  const chooseRecipient = (recipient: Destinatario) => {
     const recipientCountry = recipient.country.trim().toUpperCase()
     if (!quote.countries.some(option => option.code === recipientCountry)) {
       form.setError("recipientCountry", { message: "O país deste destinatário não tem serviços autorizados para este cliente." }); return
@@ -58,12 +58,8 @@ export function PartiesStep({ clientId, quote }: { clientId: string; quote: Ship
     </details>
     <FormSection dense title="Destinatário" icon={<MapPin size={16} />}>
       <div className="grid items-end gap-2 sm:grid-cols-2"><FormField compact name="recipientName" label="Nome / empresa" autoComplete="shipping name" /><button type="button" className={`${secondaryButton} min-h-10 w-full px-3 py-2 text-xs sm:w-auto`} aria-expanded={agendaOpen} onClick={() => setAgendaOpen(value => !value)}><BookUser size={15} />Agenda de destinatários</button></div>
-      {agendaOpen && <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-        {agenda.loading ? <p role="status" className="text-sm text-zinc-500">A carregar destinatários…</p> : agenda.error ? <p role="alert" className="text-sm text-red-700">{agenda.error}</p> : <label className="block text-xs font-medium text-zinc-700">Destinatário guardado
-          <select className={`${inputClass.replace("py-2.5", "py-2")} mt-1 min-h-10`} value="" onChange={event => chooseRecipient(event.target.value)}><option value="">Selecionar destinatário…</option>{agenda.recipients.map(row => <option key={row.id} value={row.id}>{row.name} · {row.postal_code} · {row.city}</option>)}</select>
-          {!agenda.recipients.length && <span className="mt-2 block text-xs text-zinc-500">Ainda não existem destinatários nesta agenda.</span>}
-        </label>}
-      </div>}
+      {agendaOpen && <RecipientAgendaPicker recipients={agenda.recipients} loading={agenda.loading} error={agenda.error}
+        allowedCountries={quote.countries.map(option => option.code)} onChoose={chooseRecipient} onClose={() => setAgendaOpen(false)} />}
       <div className="grid gap-2 sm:grid-cols-3"><label className="space-y-1 text-xs font-medium text-zinc-700">País
         <select {...form.register("recipientCountry")} value={country} aria-invalid={!!form.formState.errors.recipientCountry} className={`${inputClass.replace("py-2.5", "py-2")} min-h-11 text-xs sm:min-h-10 sm:text-sm`}
           onChange={event => { form.setValue("recipientCountry", event.target.value, { shouldDirty: true }); form.setValue("recipientPostal", ""); form.setValue("recipientCity", ""); form.setValue("serviceId", ""); form.setValue("islandTransportMode", ""); form.setValue("exportFields", {}); recipientLookup.reset() }}>

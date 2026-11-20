@@ -32,8 +32,7 @@ export default async function FaturacaoConfigPage({ searchParams }: { searchPara
         environment={moloniConfig.environment}
         connections={"connections" in moloniConfig ? moloniConfig.connections : undefined}
         canSwitch={ctx.role === "admin"}
-        clientId={moloniConfig.clientId}
-        redirectUri={moloniConfig.redirectUri}
+        apps={moloniConfig.apps}
       />}
       automationSettings={<div className="space-y-3">
         <RecurringStatementsPanel initialPreview={automationPreview} canManage={ctx.role === "admin"} />

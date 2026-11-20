@@ -13,14 +13,14 @@ interface MoloniEnvironmentSwitchProps {
   environment: Environment
   connections?: { test: ConnectionSummary; live: ConnectionSummary }
   canSwitch: boolean
-  clientId?: string
-  redirectUri?: string
+  /** Moloni application per environment: Teste and Produção may have different client IDs and callbacks. */
+  apps?: Record<"test" | "live", { clientId: string; redirectUri?: string }>
 }
 
 const LABEL: Record<Environment, string> = { test: "Teste", live: "Produção" }
 
 /** Compact toolbar control: Teste | Produção segmented switch, active company and one "Gerir conta" button. */
-export function MoloniEnvironmentSwitch({ environment, connections, canSwitch, clientId, redirectUri }: MoloniEnvironmentSwitchProps) {
+export function MoloniEnvironmentSwitch({ environment, connections, canSwitch, apps }: MoloniEnvironmentSwitchProps) {
   const router = useRouter()
   const [connectFor, setConnectFor] = React.useState<Environment | null>(null)
   const [confirmLive, setConfirmLive] = React.useState(false)
@@ -119,7 +119,7 @@ export function MoloniEnvironmentSwitch({ environment, connections, canSwitch, c
           isConnected: connections?.[connectFor].isConnected,
           companyName: connections?.[connectFor].companyName,
           companyId: connections?.[connectFor].companyId,
-          clientId, redirectUri,
+          clientId: apps?.[connectFor].clientId, redirectUri: apps?.[connectFor].redirectUri,
         } : undefined}
       />
     </div>

@@ -1,0 +1,26 @@
+const {test}=require('node:test')
+const assert=require('node:assert/strict')
+const React=require('react')
+const {renderToStaticMarkup}=require('react-dom/server')
+const {createLoader}=require('./helpers/load-typescript.cjs')
+const load=createLoader({react:React,'react/jsx-runtime':require('react/jsx-runtime'),'lucide-react':require('lucide-react')})
+const {RecipientAgendaPicker}=load('components/shipments/form/RecipientAgendaPicker.tsx')
+const row=(id,name,extra={})=>({id,name,address:'Rua 1',postal_code:'4000-001',city:'Porto',country:'PT',client_name:'Loja',total_shipments:0,last_shipment_date:'',last_tracking_number:'',last_status:'',shipments_history:[],...extra})
+const render=(recipients,extra={})=>renderToStaticMarkup(React.createElement(RecipientAgendaPicker,{recipients,loading:false,error:null,allowedCountries:['PT'],onChoose(){},onClose(){},...extra}))
+const order=html=>[...html.matchAll(/role="option"[^>]*>.*?<p class="truncate text-sm font-semibold[^"]*">([^<]+)/g)].map(m=>m[1])
+
+test('agenda lists most recent recipients first, with contacts, usage and last date',()=>{
+  const html=render([row('a','Ana',{last_shipment_date:'2026-11-01',total_shipments:2}),row('b','Bruno',{last_shipment_date:'2026-11-18',total_shipments:7,phone:'912 345 678',email:'b@x.pt'}),row('c','Carla')])
+  assert.deepEqual(order(html),['Bruno','Ana','Carla'])
+  assert.match(html,/7 envios/);assert.match(html,/18\/11\/2026/);assert.match(html,/912 345 678/);assert.match(html,/b@x.pt/)
+  assert.match(html,/3 contactos/);assert.match(html,/role="listbox"/);assert.match(html,/aria-pressed="true"[^>]*>Recentes/)
+})
+test('recipients in countries without authorized services are shown but cannot be chosen',()=>{
+  const html=render([row('es','Madrid Lda',{country:'ES'})])
+  assert.match(html,/aria-disabled="true"/);assert.match(html,/Sem serviços autorizados/);assert.match(html,/>ES</)
+})
+test('agenda states: loading, error and empty explain themselves',()=>{
+  assert.match(render([],{loading:true}),/A carregar destinatários/)
+  assert.match(render([],{error:'Falhou'}),/role="alert"[^>]*>Falhou/)
+  assert.match(render([]),/Guardar na agenda/)
+})

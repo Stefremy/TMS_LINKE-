@@ -2,7 +2,6 @@ import { NextRequest } from "next/server"
 import { loadFinancialDocument, financialPdfResponse } from "@/lib/services/billing/document-access"
 import { getMoloniClientForDocument } from "@/lib/moloni/connection"
 import { createAdminClient } from "@/lib/supabase/server"
-import { generateCustomInvoicePdfBuffer } from "@/lib/services/billing/custom-invoice-pdf"
 
 export const dynamic = "force-dynamic"
 
@@ -73,38 +72,11 @@ export async function GET(
       }
     }
 
-    const isInline = request.nextUrl.searchParams.get("inline") === "1" || request.nextUrl.searchParams.get("inline") === "true"
-    const disposition = isInline ? "inline" : "attachment"
-    const safeFilename = `${(invoice.invoice_number || "Fatura").replace(/[\/\\]/g, "_")}.pdf`
-
-    // 2. Fallback / Documento interno do sistema: gerar via pdf-lib
-    const pdfBuffer = await generateCustomInvoicePdfBuffer({
-      invoiceNumber: invoice.invoice_number || `FAT-${invoice.id.slice(0, 8)}`,
-      invoiceDate: invoice.invoice_date || new Date().toISOString().split("T")[0],
-      dueDate: invoice.due_date || new Date().toISOString().split("T")[0],
-      paymentTerms: invoice.payment_terms || "Pronto Pagamento",
-      paymentMethod: invoice.payment_method || "Transferência Bancária",
-      notes: invoice.notes || "",
-      client: {
-        name: invoice.client_name || "Cliente Linke",
-        nif: invoice.client_vat || "",
-        address: invoice.client_address || "",
-        postalCode: invoice.client_zip || "",
-        city: invoice.client_city || "Portugal",
-        email: invoice.client_email || "",
-        phone: invoice.client_phone || ""
-      },
-      items: invoice.items || []
-    })
-
-    const headers = new Headers()
-    headers.set("Content-Type", "application/pdf")
-    headers.set("Content-Disposition", `${disposition}; filename="${safeFilename}"`)
-
-    return financialPdfResponse(new Uint8Array(pdfBuffer), {
-      status: 200,
-      headers
-    })
+    // Só o PDF certificado do Moloni é uma fatura. Nunca gerar um documento interno no seu lugar.
+    if (!docId) {
+      return financialPdfResponse("Esta fatura não foi emitida no Moloni, por isso não tem PDF oficial.", { status: 404 })
+    }
+    return financialPdfResponse("O PDF oficial do Moloni está indisponível de momento. Tente novamente dentro de instantes.", { status: 502 })
   } catch {
     console.error("Custom invoice PDF streaming error")
     return financialPdfResponse("Erro ao processar PDF", { status: 500 })

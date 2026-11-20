@@ -1,6 +1,7 @@
 
 import { errorMessage } from "@/lib/errors"
-import { moloniMaturityDateId } from "@/lib/billing/payment-terms"
+import { isMoloniAccessDenied, moloniMaturityDateId } from "@/lib/billing/payment-terms"
+import { moloniAppCredentials, type MoloniAppEnvironment } from "@/lib/moloni/app-credentials"
 
 /**
  * Moloni definitively refused the request (structured error answer, or the request never
@@ -36,23 +37,24 @@ export class MoloniClient {
     this.tenantId = config?.tenantId;
     this.environment = config?.environment;
     this.companyId = config?.companyId || process.env.MOLONI_COMPANY_ID || "";
-    this.developerId = process.env.MOLONI_DEVELOPER_ID || process.env.MOLONI_CLIENT_ID || "518600300";
-    this.clientId = process.env.MOLONI_CLIENT_ID || "518600300";
-    this.clientSecret = process.env.MOLONI_CLIENT_SECRET || "";
+    // Renew with the application of this connection's environment (Teste and Produção may differ).
+    const app = moloniAppCredentials(config?.environment);
+    this.developerId = app.developerId;
+    this.clientId = app.clientId;
+    this.clientSecret = app.clientSecret;
     this.refreshTokenVal = config?.refreshToken || process.env.MOLONI_REFRESH_TOKEN || "";
   }
 
   /**
    * Autenticação via utilizador e password da conta Moloni (grant_type=password)
    */
-  static async loginWithPassword(username: string, password: string): Promise<{
+  static async loginWithPassword(username: string, password: string, environment?: MoloniAppEnvironment): Promise<{
     accessToken: string;
     refreshToken: string;
     expiresIn: number;
     companies: Array<{ company_id: number; name: string; vat: string }>;
   }> {
-    const clientId = process.env.MOLONI_CLIENT_ID || "518600300";
-    const clientSecret = process.env.MOLONI_CLIENT_SECRET || "";
+    const { clientId, clientSecret } = moloniAppCredentials(environment);
     
     if (!clientSecret) throw new Error("Credenciais do Moloni não configuradas.");
     const params = new URLSearchParams({
@@ -83,14 +85,13 @@ export class MoloniClient {
   /**
    * Troca de código de autorização OAuth por tokens (grant_type=authorization_code)
    */
-  static async exchangeAuthCode(code: string, redirectUri: string): Promise<{
+  static async exchangeAuthCode(code: string, redirectUri: string, environment?: MoloniAppEnvironment): Promise<{
     accessToken: string;
     refreshToken: string;
     expiresIn: number;
     companies: Array<{ company_id: number; name: string; vat: string }>;
   }> {
-    const clientId = process.env.MOLONI_CLIENT_ID || "518600300";
-    const clientSecret = process.env.MOLONI_CLIENT_SECRET || "";
+    const { clientId, clientSecret } = moloniAppCredentials(environment);
     
     if (!clientSecret) throw new Error("Credenciais do Moloni não configuradas.");
     const params = new URLSearchParams({
@@ -291,8 +292,21 @@ export class MoloniClient {
   }
 
   async getMaturityDateId() {
-    const dates = await this.request('maturityDates/getAll', {});
-    return Array.isArray(dates) && dates[0]?.maturity_date_id ? dates[0].maturity_date_id : 0;
+    try {
+      const dates = await this.request('maturityDates/getAll', {});
+      return Array.isArray(dates) && dates[0]?.maturity_date_id ? dates[0].maturity_date_id : 0;
+    } catch (error) {
+      // Customers can be created without a default term when the Moloni user lacks this permission.
+      if (isMoloniAccessDenied(error)) return 0;
+      throw error;
+    }
+  }
+
+  /** `maturity_date_id` for a document, omitted when the Moloni user may not read payment terms. */
+  private async maturityField(paymentDays?: number): Promise<{ maturity_date_id?: number }> {
+    if (paymentDays === undefined) return {};
+    const id = await moloniMaturityDateId(this, paymentDays);
+    return id === null ? {} : { maturity_date_id: id };
   }
 
   async getPaymentMethodId() {
@@ -532,9 +546,7 @@ export class MoloniClient {
     const payload: Record<string, unknown> = {
       date: data.date,
       expiration_date: data.expirationDate,
-      ...(data.paymentDays !== undefined
-        ? { maturity_date_id: await moloniMaturityDateId(this, data.paymentDays) }
-        : {}),
+      ...(await this.maturityField(data.paymentDays)),
       document_set_id: data.documentSetId,
       customer_id: data.customerId,
       status: 1, // 1 = Fechado / Certificado AT
@@ -720,9 +732,7 @@ export class MoloniClient {
     const payload: Record<string, unknown> = {
       date: data.date,
       expiration_date: data.expirationDate,
-      ...(data.paymentDays !== undefined
-        ? { maturity_date_id: await moloniMaturityDateId(this, data.paymentDays) }
-        : {}),
+      ...(await this.maturityField(data.paymentDays)),
       document_set_id: data.documentSetId,
       customer_id: data.customerId,
       status: 1, // 1 = Fechado

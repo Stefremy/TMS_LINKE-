@@ -27,9 +27,9 @@ import {
 import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { emitCustomInvoiceAction, CustomInvoiceItemInput } from "@/app/actions/moloni"
 import { addCalendarDays, isDateKey, lisbonDate } from "@/lib/billing/recurring-periods"
+import { validatePortugueseNif } from "@/lib/tax/vies"
 
-const TERM_DAYS: Record<string, number> = { "Pronto Pagamento": 0, "15 dias": 15, "30 dias": 30, "60 dias": 60 }
-const termForDays = (days: number) => Object.keys(TERM_DAYS).find(term => TERM_DAYS[term] === days) || "Personalizado"
+const QUICK_DAYS = [0, 3, 15, 30, 60]
 const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000)
 
 interface Client {
@@ -80,11 +80,13 @@ interface CustomInvoiceHistoryItem {
 export default function FaturaPersonalizadaClient({
   clients = [],
   initialInvoices = [],
-  moloniConfig
+  moloniConfig,
+  defaultPaymentDays = 30
 }: {
   clients: Client[]
   initialInvoices: CustomInvoiceHistoryItem[]
   moloniConfig?: { isConnected: boolean; companyName?: string }
+  defaultPaymentDays?: number
 }) {
   const [invoices, setInvoices] = React.useState<CustomInvoiceHistoryItem[]>(initialInvoices)
   
@@ -103,8 +105,13 @@ export default function FaturaPersonalizadaClient({
   // Dados da Fatura
   const todayStr = lisbonDate()
   const [invoiceDate, setInvoiceDate] = React.useState<string>(todayStr)
-  const [dueDate, setDueDate] = React.useState<string>(todayStr)
-  const [paymentTerms, setPaymentTerms] = React.useState<string>("Pronto Pagamento")
+  // Prazo em dias: começa no prazo da empresa, passa ao da ficha do cliente, e pode ser ajustado aqui.
+  const [paymentDays, setPaymentDays] = React.useState<string>(String(defaultPaymentDays))
+  const [termSource, setTermSource] = React.useState<"empresa" | "cliente" | "manual">("empresa")
+  const daysNum = Number(paymentDays)
+  const daysValid = paymentDays.trim() !== "" && Number.isInteger(daysNum) && daysNum >= 0 && daysNum <= 365
+  const dueDate = daysValid && isDateKey(invoiceDate) ? addCalendarDays(invoiceDate, daysNum) : ""
+  const paymentTerms = !daysValid ? "" : daysNum === 0 ? "Pronto Pagamento" : `${daysNum} dias`
   const [paymentMethod, setPaymentMethod] = React.useState<string>("Transferência Bancária")
   const [notes, setNotes] = React.useState<string>("IBAN Linke: PT50 0033 0000 8765 4321 0987 1 | Millennium BCP")
 
@@ -134,10 +141,16 @@ export default function FaturaPersonalizadaClient({
   // Filtro do histórico
   const [historySearch, setHistorySearch] = React.useState<string>("")
 
+  // NIF português: verificado ao escrever, igual à validação do servidor. Vazio = Consumidor Final.
+  const vatClean = clientVat.replace(/[\s.-]+/g, "").toUpperCase().replace(/^PT/, "")
+  const vatError = vatClean && (clientCountryCode || "PT").toUpperCase() === "PT" && vatClean !== "999999990" && !validatePortugueseNif(vatClean)
+    ? `O NIF ${clientVat.trim()} não é um NIF português válido.` : null
+
   // Quando o utilizador seleciona um cliente da lista
   const handleClientSelect = (clientId: string) => {
     setSelectedClientId(clientId)
     if (!clientId) {
+      setPaymentDays(String(defaultPaymentDays)); setTermSource("empresa")
       return
     }
     const found = clients.find(c => c.id === clientId)
@@ -152,32 +165,20 @@ export default function FaturaPersonalizadaClient({
       setClientEmail(found.billing_email || found.email || "")
       setClientPhone(found.phone || "")
       // O prazo acordado com o cliente (ficha do cliente) define o vencimento por omissão.
-      if (typeof found.payment_due_days === "number" && isDateKey(invoiceDate)) {
-        setPaymentTerms(termForDays(found.payment_due_days))
-        setDueDate(addCalendarDays(invoiceDate, found.payment_due_days))
+      if (typeof found.payment_due_days === "number") {
+        setPaymentDays(String(found.payment_due_days)); setTermSource("cliente")
+      } else {
+        setPaymentDays(String(defaultPaymentDays)); setTermSource("empresa")
       }
     }
   }
 
-  // A data da fatura move o vencimento quando o prazo é em dias.
-  const handleInvoiceDateChange = (value: string) => {
-    setInvoiceDate(value)
-    if (isDateKey(value) && TERM_DAYS[paymentTerms] !== undefined) setDueDate(addCalendarDays(value, TERM_DAYS[paymentTerms]))
-    else if (isDateKey(value) && isDateKey(dueDate) && paymentTerms === "Personalizado" && dueDate < value) setDueDate(value)
-  }
-
-  // Uma data escrita à mão mostra o prazo equivalente, ou "Data Personalizada".
+  // O vencimento é sempre a data da fatura + prazo; escolher uma data converte-a em dias.
   const handleDueDateChange = (value: string) => {
-    setDueDate(value)
-    if (isDateKey(value) && isDateKey(invoiceDate)) setPaymentTerms(termForDays(daysBetween(invoiceDate, value)))
+    if (!isDateKey(value) || !isDateKey(invoiceDate)) return
+    setPaymentDays(String(Math.max(0, daysBetween(invoiceDate, value)))); setTermSource("manual")
   }
-
-  // Atalho de prazos de vencimento
-  const handlePaymentTermsChange = (term: string) => {
-    setPaymentTerms(term)
-    const base = isDateKey(invoiceDate) ? invoiceDate : todayStr
-    if (TERM_DAYS[term] !== undefined) setDueDate(addCalendarDays(base, TERM_DAYS[term]))
-  }
+  const handlePaymentDaysChange = (value: string) => { setPaymentDays(value); setTermSource("manual") }
 
   // Adicionar linha
   const handleAddItem = () => {
@@ -255,6 +256,16 @@ export default function FaturaPersonalizadaClient({
 
     if (!clientName.trim()) {
       setErrorMsg("Por favor indique o nome do cliente a faturar.")
+      return
+    }
+
+    if (vatError) {
+      setErrorMsg(vatError)
+      return
+    }
+
+    if (!daysValid || !dueDate) {
+      setErrorMsg("Indique um prazo de pagamento entre 0 e 365 dias.")
       return
     }
 
@@ -527,8 +538,13 @@ export default function FaturaPersonalizadaClient({
                   placeholder="Ex: 512345678"
                   value={clientVat}
                   onChange={e => setClientVat(e.target.value)}
-                  className="w-full text-xs py-2 px-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md font-mono text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] transition-all"
+                  aria-invalid={Boolean(vatError)}
+                  aria-describedby="custom-invoice-vat-hint"
+                  className={`w-full text-xs py-2 px-3 bg-[var(--surface-muted)] border rounded-md font-mono text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] transition-all ${vatError ? "border-[var(--status-warning)]" : "border-[var(--border-subtle)]"}`}
                 />
+                <p id="custom-invoice-vat-hint" className={`text-[11px] mt-1 ${vatError ? "text-[var(--status-warning)]" : "text-[var(--text-tertiary)]"}`}>
+                  {vatError || (vatClean ? " " : "Vazio = Consumidor Final")}
+                </p>
               </div>
 
               <div className="sm:col-span-2">
@@ -765,26 +781,52 @@ export default function FaturaPersonalizadaClient({
               <input
                 type="date"
                 value={invoiceDate}
-                onChange={e => handleInvoiceDateChange(e.target.value)}
+                onChange={e => setInvoiceDate(e.target.value)}
                 className="w-full text-xs py-2 px-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md font-mono text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">
-                Prazo de Pagamento
+              <label htmlFor="custom-invoice-days" className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">
+                Prazo para pagar (dias)
               </label>
-              <select
-                value={paymentTerms}
-                onChange={e => handlePaymentTermsChange(e.target.value)}
-                className="w-full text-xs py-2 px-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md text-[var(--text-primary)] font-semibold focus:outline-none focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] transition-all cursor-pointer"
-              >
-                <option value="Pronto Pagamento">Pronto Pagamento</option>
-                <option value="15 dias">A 15 dias</option>
-                <option value="30 dias">A 30 dias</option>
-                <option value="60 dias">A 60 dias</option>
-                <option value="Personalizado">Data Personalizada</option>
-              </select>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="custom-invoice-days"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={365}
+                  step={1}
+                  value={paymentDays}
+                  onChange={e => handlePaymentDaysChange(e.target.value)}
+                  aria-invalid={!daysValid}
+                  aria-describedby="custom-invoice-days-hint"
+                  className="w-20 text-xs py-2 px-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md font-mono font-semibold tabular-nums text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] transition-all"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {QUICK_DAYS.map(d => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => handlePaymentDaysChange(String(d))}
+                      aria-pressed={daysValid && daysNum === d}
+                      className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors ${daysValid && daysNum === d
+                        ? "bg-[var(--accent-soft)] text-[var(--accent)] border-[rgba(18,138,71,0.25)]"
+                        : "text-[var(--text-secondary)] border-[var(--border-subtle)] hover:bg-[var(--surface-muted)]"}`}
+                    >
+                      {d === 0 ? "Pronto" : `${d}d`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p id="custom-invoice-days-hint" className="text-[11px] mt-1 text-[var(--text-tertiary)]">
+                {!daysValid
+                  ? <span className="text-[var(--status-warning)]">Indique um número inteiro de 0 a 365 dias.</span>
+                  : termSource === "cliente" ? "Prazo da ficha do cliente — pode ajustar só para esta fatura."
+                  : termSource === "empresa" ? "Prazo por omissão da empresa."
+                  : "Prazo ajustado para esta fatura."}
+              </p>
             </div>
 
             <div>
@@ -795,6 +837,7 @@ export default function FaturaPersonalizadaClient({
                 type="date"
                 value={dueDate}
                 min={invoiceDate}
+                disabled={!daysValid}
                 onChange={e => handleDueDateChange(e.target.value)}
                 className="w-full text-xs py-2 px-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md font-mono text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] transition-all"
               />

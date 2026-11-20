@@ -4,7 +4,7 @@ import { errorMessage } from "@/lib/errors"
 import { MoloniClient } from "@/lib/moloni/moloni-client"
 import { createAdminClient } from "@/lib/supabase/server"
 import { requireEmployee } from "@/lib/auth/context"
-import { moloniRedirectUri } from "@/lib/config/public-origins"
+import { moloniAppRedirectUri } from "@/lib/moloni/app-credentials"
 import { MOLONI_ENVIRONMENT_LABEL, parseMoloniEnvironment, pickMoloniCompany, saveMoloniConnection } from "@/lib/moloni/connection"
 
 const RETURN_PATH = "/ops/configuracao/faturacao"
@@ -21,8 +21,9 @@ export async function handleMoloniOAuthCallback(request: NextRequest) {
   const environment = parseMoloniEnvironment(searchParams.get("state")) || "test"
   try {
     const ctx = await requireEmployee("Faturação & Contas Correntes")
-    const redirectUri = moloniRedirectUri(new URL(request.url).origin)!
-    const { refreshToken, companies } = await MoloniClient.exchangeAuthCode(code, redirectUri)
+    // The code must be exchanged by the same Moloni application, with the same callback, that issued it.
+    const redirectUri = moloniAppRedirectUri(environment, new URL(request.url).origin)!
+    const { refreshToken, companies } = await MoloniClient.exchangeAuthCode(code, redirectUri, environment)
     const db = createAdminClient()
     const company = await pickMoloniCompany(db, ctx.tenant_id, companies || [], environment)
     if (!company) {

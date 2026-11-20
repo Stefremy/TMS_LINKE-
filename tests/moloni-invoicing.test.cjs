@@ -401,7 +401,7 @@ test('custom invoice receipts refuse a Moloni document whose total differs from 
 test('custom invoices send the chosen due date with the matching Moloni payment term, and refuse a due date before the invoice',async()=>{
   const h=invoiceHarness()
   const action=h.load('app/actions/moloni.ts')
-  const base={clientName:'Website Teste',clientVat:'501234567',items:[{title:'Website',qty:1,unitPrice:100,taxRate:23}]}
+  const base={clientName:'Website Teste',clientVat:'501234560',items:[{title:'Website',qty:1,unitPrice:100,taxRate:23}]}
   const ok=await action.emitCustomInvoiceAction({...base,invoiceDate:'2026-11-20',dueDate:'2026-12-20'})
   assert.equal(ok.success,true,ok.error);assert.equal(ok.moloniError,null)
   assert.equal(h.lastInvoicePayload.date,'2026-11-20');assert.equal(h.lastInvoicePayload.expirationDate,'2026-12-20');assert.equal(h.lastInvoicePayload.paymentDays,30)
@@ -419,4 +419,92 @@ test('the deadline adjusted when issuing overrides the client default for that i
  const refused=invoiceHarness({clientDueDays:3})
  const bad=await refused.load('app/actions/moloni.ts').internalEmitInvoice({id:CLIENT,tenant_id:TENANT,nif:'999999990'},[{id:SHIPMENT,status:'pendente',sell_price:3.91,service_type:'Nacional'}],false,true,false,{paymentDays:-2})
  assert.notEqual(bad?.success,true);assert.equal(refused.issued,0)
+})
+
+test('custom invoices refuse an invalid Portuguese NIF before contacting Moloni, and keep no record',async()=>{
+  const h=invoiceHarness()
+  const base={clientName:'Jose de Fora',invoiceDate:'2026-11-20',dueDate:'2026-11-23',items:[{title:'Website',qty:1,unitPrice:1,taxRate:23}]}
+  const bad=await h.load('app/actions/moloni.ts').emitCustomInvoiceAction({...base,clientVat:'2588623469'})
+  assert.equal(bad.success,false);assert.match(bad.error,/NIF 2588623469 não é um NIF português válido/)
+  assert.equal(h.issued,0);assert.equal(h.db.writes.filter(w=>w.table==='audit_log').length,0)
+  const foreign=await h.load('app/actions/moloni.ts').emitCustomInvoiceAction({...base,clientVat:'ESB12345678',clientCountryCode:'ES'})
+  assert.equal(foreign.success,true,foreign.error)
+})
+test('a Moloni failure on a custom invoice keeps no internal invoice and warns to check Moloni before repeating',async()=>{
+  const h=invoiceHarness({failInvoice:true})
+  const res=await h.load('app/actions/moloni.ts').emitCustomInvoiceAction({clientName:'X',clientVat:'501234560',invoiceDate:'2026-11-20',dueDate:'2026-11-23',items:[{title:'Website',qty:1,unitPrice:1,taxRate:23}]})
+  assert.equal(res.success,false);assert.match(res.error,/Confirme no Moloni/)
+  assert.equal(h.db.writes.filter(w=>w.table==='audit_log'&&w.value?.action==='custom_invoice').length,0)
+})
+test('without a Moloni connection custom invoices are refused instead of saved as internal documents',async()=>{
+  const h=invoiceHarness({connected:false})
+  const res=await h.load('app/actions/moloni.ts').emitCustomInvoiceAction({clientName:'X',clientVat:'501234560',invoiceDate:'2026-11-20',dueDate:'2026-11-23',items:[{title:'Website',qty:1,unitPrice:1,taxRate:23}]})
+  assert.equal(res.success,false);assert.match(res.error,/Ligue a conta Moloni/)
+  assert.equal(h.db.writes.filter(w=>w.table==='audit_log'&&w.value?.action==='custom_invoice').length,0)
+})
+
+test('scenario: an external custom invoice is issued with its deadline, listed as outstanding, settled by receipt, then listed as paid',async()=>{
+  const h=invoiceHarness({fiscalDocument:{document_id:123,company_id:42,status:1,customer_id:7,net_value:12.3,taxes_value:2.3,reconciled_value:0}})
+  const action=h.load('app/actions/moloni.ts')
+  const issued=await action.emitCustomInvoiceAction({clientName:'Cliente Externo Website',clientVat:'PT 501 234 560',invoiceDate:'2026-11-20',dueDate:'2026-11-23',paymentTerms:'3 dias',items:[{title:'Website',qty:1,unitPrice:10,taxRate:23}]})
+  assert.equal(issued.success,true,issued.error)
+  assert.equal(h.lastInvoicePayload.paymentDays,3);assert.equal(h.lastInvoicePayload.expirationDate,'2026-11-23')
+  let [listed]=await action.getCustomInvoicesAction()
+  assert.equal(listed.invoice_number,issued.invoiceNumber);assert.equal(listed.client_id,null)
+  assert.equal(listed.client_vat,'501234560','NIF is stored normalized')
+  assert.equal(listed.moloni_document_id,123);assert.equal(listed.outstanding_value,12.3);assert.notEqual(listed.status,'paid')
+  const receipt=await action.emitCustomInvoiceReceiptAction(listed.audit_id,{date:'2026-11-21'})
+  assert.equal(receipt.success,true,receipt.error);assert.equal(h.lastReceiptPayload.value,12.3);assert.equal(h.lastReceiptPayload.date,'2026-11-21')
+  ;[listed]=await action.getCustomInvoicesAction()
+  assert.equal(listed.status,'paid');assert.equal(listed.outstanding_value,0);assert.equal(listed.moloni_receipt_id,321)
+})
+
+test('a Moloni user without access to payment terms still issues the invoice with the right due date, without the term label',async()=>{
+  const {moloniMaturityDateId}=createLoader({})('lib/billing/payment-terms.ts')
+  const denied={request:async endpoint=>{throw new Error(`Moloni API Error [${endpoint}]: Your credentials don't allow access to the method 'getAll' of 'MaturityDates'.`)}}
+  assert.equal(await moloniMaturityDateId(denied,3),null)
+  const insertDenied={request:async endpoint=>{if(endpoint==='maturityDates/getAll')return[];throw new Error("Your credentials don't allow access to the method 'insert' of 'MaturityDates'.")}}
+  assert.equal(await moloniMaturityDateId(insertDenied,3),null)
+  const outage={request:async()=>{throw new Error('Moloni API Error [maturityDates/getAll]: 503 Service Unavailable')}}
+  await assert.rejects(moloniMaturityDateId(outage,3),/503/,'other failures still stop the emission')
+  const requests=[]
+  const h=tokenHarness([connection({access_token:'cached',access_token_expires_at:Date.now()+60000})],async(url,opts)=>{
+    const payload=JSON.parse(opts.body);requests.push({url,payload})
+    if(url.includes('maturityDates/getAll'))return new Response(JSON.stringify({error:"Your credentials don't allow access to the method 'getAll' of 'MaturityDates'."}),{status:403})
+    return new Response(JSON.stringify({valid:1,document_id:123}))
+  })
+  await new h.MoloniClient({companyId:'42'}).createInvoice({customerId:1,date:'2026-11-20',expirationDate:'2026-11-23',paymentDays:3,documentSetId:1,products:[]})
+  const insert=requests.find(r=>r.url.includes('invoices/insert'))
+  assert.ok(insert,'invoice is still issued');assert.equal(insert.payload.expiration_date,'2026-11-23');assert.equal('maturity_date_id' in insert.payload,false)
+})
+
+test('Teste and Produção can use separate Moloni applications: each token is renewed and each code exchanged with its own app and callback',async t=>{
+  const keys=['MOLONI_TEST_CLIENT_ID','MOLONI_TEST_CLIENT_SECRET','MOLONI_TEST_REDIRECT_URI','MOLONI_LIVE_CLIENT_ID','MOLONI_LIVE_CLIENT_SECRET','OPS_ORIGIN']
+  const previous=Object.fromEntries(keys.map(k=>[k,process.env[k]]))
+  t.after(()=>{for(const k of keys){if(previous[k]===undefined)delete process.env[k];else process.env[k]=previous[k]}})
+  Object.assign(process.env,{MOLONI_TEST_CLIENT_ID:'test-app',MOLONI_TEST_CLIENT_SECRET:'test-secret',MOLONI_TEST_REDIRECT_URI:'http://localhost:3000/api/moloni/callback',
+    MOLONI_LIVE_CLIENT_ID:'live-app',MOLONI_LIVE_CLIENT_SECRET:'live-secret',OPS_ORIGIN:'https://tms-linke.vercel.app'})
+  const {moloniAppCredentials,moloniAppRedirectUri}=createLoader({})('lib/moloni/app-credentials.ts')
+  assert.deepEqual(moloniAppCredentials('test'),{clientId:'test-app',clientSecret:'test-secret',developerId:'test-app'})
+  assert.equal(moloniAppCredentials('live').clientSecret,'live-secret')
+  assert.equal(moloniAppRedirectUri('test'),'http://localhost:3000/api/moloni/callback')
+  assert.equal(moloniAppRedirectUri('live'),'https://tms-linke.vercel.app/api/moloni/callback')
+  for(const environment of ['test','live']){
+    const grants=[]
+    const h=tokenHarness([connection({environment})],async url=>{
+      if(url.includes('/grant/'))grants.push(new URL(url).searchParams)
+      return new Response(JSON.stringify(url.includes('/grant/')?{access_token:'a',refresh_token:'r',expires_in:3600}:[]))
+    })
+    await new h.MoloniClient({companyId:'42',tenantId:TENANT,environment}).request('countries/getAll',{})
+    assert.equal(grants[0].get('client_id'),`${environment}-app`);assert.equal(grants[0].get('client_secret'),`${environment}-secret`)
+    grants.length=0
+    await h.MoloniClient.exchangeAuthCode('code',moloniAppRedirectUri(environment),environment)
+    assert.equal(grants[0].get('client_id'),`${environment}-app`);assert.equal(grants[0].get('redirect_uri'),moloniAppRedirectUri(environment))
+  }
+})
+test('without environment-specific variables both environments keep the shared Moloni application',()=>{
+  const {moloniAppCredentials}=createLoader({})('lib/moloni/app-credentials.ts')
+  for(const k of ['MOLONI_TEST_CLIENT_ID','MOLONI_TEST_CLIENT_SECRET','MOLONI_LIVE_CLIENT_ID','MOLONI_LIVE_CLIENT_SECRET'])delete process.env[k]
+  assert.equal(moloniAppCredentials('test').clientId,process.env.MOLONI_CLIENT_ID||'518600300')
+  assert.deepEqual(moloniAppCredentials('live'),moloniAppCredentials('test'))
 })

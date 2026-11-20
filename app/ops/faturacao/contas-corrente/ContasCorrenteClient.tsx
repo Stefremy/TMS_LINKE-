@@ -1166,6 +1166,7 @@ export default function ContasCorrenteClient({
       <MoloniConnectModal 
         isOpen={isMoloniModalOpen}
         onClose={() => setIsMoloniModalOpen(false)}
+        environment={moloniConfig?.environment}
         config={moloniConfig}
       />
 

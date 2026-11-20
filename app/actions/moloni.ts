@@ -19,7 +19,8 @@ import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib
 import { getBillingConfigAction } from "@/app/actions/billing-config"
 import { paymentDueDays } from "@/lib/billing/payment-terms"
 import { addCalendarDays, isDateKey, lisbonDate } from "@/lib/billing/recurring-periods"
-import { moloniRedirectUri } from "@/lib/config/public-origins"
+import { validatePortugueseNif } from "@/lib/tax/vies"
+import { moloniAppCredentials, moloniAppRedirectUri } from "@/lib/moloni/app-credentials"
 import { buildShipmentInvoiceLines } from "@/lib/billing/shipment-invoice-lines"
 import { hydrateShipmentCharges } from "@/lib/services/billing/shipment-charge-snapshots"
 import { canInvoiceShipment } from "@/lib/billing/shipment-eligibility"
@@ -372,8 +373,11 @@ export async function getBillingStatementsAction(clientId?: string) {
  */
 export async function getMoloniConfigAction() {
   const ctx = await requireEmployee("Faturação & Contas Correntes")
-  const redirectUri = moloniRedirectUri()
-  const clientId = process.env.MOLONI_CLIENT_ID || "518600300"
+  // Each environment may use its own Moloni application (client ID + registered callback).
+  const apps = {
+    test: { clientId: moloniAppCredentials("test").clientId, redirectUri: moloniAppRedirectUri("test") },
+    live: { clientId: moloniAppCredentials("live").clientId, redirectUri: moloniAppRedirectUri("live") },
+  }
   const supabase = createAdminClient()
   try {
     const [environment, test, live] = await Promise.all([
@@ -391,11 +395,12 @@ export async function getMoloniConfigAction() {
       companyId: active?.companyId,
       companyName: active?.companyName,
       connections: { test: summary(test), live: summary(live) },
-      redirectUri,
-      clientId,
+      apps,
+      redirectUri: apps[environment].redirectUri,
+      clientId: apps[environment].clientId,
     }
   } catch {
-    return { environment: "test" as const, isConnected: false, redirectUri, clientId }
+    return { environment: "test" as const, isConnected: false, apps, redirectUri: apps.test.redirectUri, clientId: apps.test.clientId }
   }
 }
 
@@ -414,7 +419,7 @@ export async function connectMoloniWithPasswordAction(formData: FormData) {
       return { success: false, error: "Introduza o utilizador/email e password da sua conta Moloni." }
     }
 
-    const { refreshToken, companies } = await MoloniClient.loginWithPassword(username, password)
+    const { refreshToken, companies } = await MoloniClient.loginWithPassword(username, password, environment)
 
     if (!companies || companies.length === 0) {
       return { success: false, error: "Nenhuma empresa associada encontrada nesta conta Moloni." }
@@ -771,6 +776,16 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
       throw new Error("Adicione pelo menos um serviço ou produto à fatura.")
     }
 
+    // NIF: um NIF português errado é recusado antes de qualquer contacto com o Moloni.
+    // Sem NIF a fatura sai a Consumidor Final (999999990).
+    const vat = (payload.clientVat || "").replace(/[\s.-]+/g, "").toUpperCase()
+    const country = (payload.clientCountryCode || "PT").toUpperCase()
+    const ptVat = vat.replace(/^PT/, "")
+    if (vat && country === "PT" && ptVat !== "999999990" && !validatePortugueseNif(ptVat)) {
+      throw new Error(`O NIF ${payload.clientVat} não é um NIF português válido. Corrija-o ou deixe vazio para Consumidor Final.`)
+    }
+    payload = { ...payload, clientVat: country === "PT" ? ptVat : vat }
+
     // Vencimento: a data escolhida é enviada ao Moloni com a condição "X Dias" correspondente,
     // para que a data e o prazo impressos na fatura coincidam.
     const invoiceDate = payload.invoiceDate || lisbonDate()
@@ -839,11 +854,14 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
     let moloniDocumentPdf: string | null = null
     let moloniEmissionError: string | null = null
 
-    // Verificar se Moloni está conectado
+    // Só existe fatura quando o Moloni a certifica: sem ligação ou com recusa nada é guardado,
+    // para não haver documentos internos que pareçam faturas.
     // Novos documentos usam sempre a ligação do ambiente ativo (Teste ou Produção).
     const moloniClientConfig: MoloniConnectionInfo | null = await getActiveMoloniConnection(supabase, ctx.tenant_id)
+    if (!moloniClientConfig) throw new Error("Ligue a conta Moloni antes de emitir faturas.")
 
-    if (moloniClientConfig) {
+    let invoiceSubmitted = false
+    {
       try {
         const moloni = moloniClientFor(moloniClientConfig, ctx.tenant_id)
 
@@ -906,6 +924,7 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
           })
         }
 
+        invoiceSubmitted = true
         const invoiceRes = await moloni.createInvoice({
           customerId: moloniCustomerId,
           date: invoiceDate,
@@ -915,16 +934,22 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
           products: moloniProducts
         })
 
-        moloniDocumentId = invoiceRes.document_id
-        if (moloniDocumentId) {
+        moloniDocumentId = invoiceRes?.document_id || null
+        if (!moloniDocumentId) throw new Error("O Moloni não confirmou o número da fatura.")
+        try {
           moloniDocumentPdf = await moloni.getDocumentPDFLink(moloniDocumentId)
+        } catch (pdfErr) {
+          // A fatura existe; o PDF oficial é obtido de novo quando for descarregado.
+          moloniEmissionError = `Fatura emitida; PDF ainda indisponível (${errorMessage(pdfErr) || "Moloni"}).`
         }
       } catch (mErr) {
-        moloniEmissionError = errorMessage(mErr) || "Erro de comunicação com Moloni"
-        console.warn("Moloni Custom Invoice Emission Warning:", moloniEmissionError)
+        if (moloniDocumentId) throw mErr
+        const reason = errorMessage(mErr) || "Erro de comunicação com Moloni"
+        console.warn("Moloni Custom Invoice Emission Error:", reason)
+        throw new Error(invoiceSubmitted
+          ? `Não foi possível confirmar a fatura no Moloni (${reason}). Confirme no Moloni se foi emitida antes de repetir.`
+          : `O Moloni recusou a fatura: ${reason}`)
       }
-    } else {
-      moloniEmissionError = "Conta Moloni ainda não está ligada."
     }
 
     // 4. Guardar no audit_log do Supabase
@@ -960,6 +985,8 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
     }
 
     const { error: dbErr } = await supabase.from('audit_log').insert({
+      // Same UUID as details.id, so receipts and credit notes resolve the invoice by either.
+      id: invoiceId,
       tenant_id: (await getTenantId()),
       action: "custom_invoice",
       details: invoiceDetails
@@ -967,6 +994,7 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
 
     if (dbErr) {
       console.error("Error saving custom invoice to audit_log:", dbErr)
+      throw new Error(`Fatura emitida no Moloni (documento ${moloniDocumentId}), mas não foi possível registá-la no TMS. Não repita a emissão; contacte o suporte.`)
     }
 
     revalidatePath("/ops/faturacao/personalizada")

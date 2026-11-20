@@ -44,7 +44,7 @@ export async function buildRecurringInvoice(moloni: MoloniClient, client: Recurr
   const paymentDays = paymentDueDays(client.payment_due_days, config.defaultPaymentDays)
   const maturityId = await moloniMaturityDateId(moloni, paymentDays)
   return { customer_id: customer, date, expiration_date: addCalendarDays(date, paymentDays),
-    maturity_date_id: maturityId, document_set_id: series, status: 1,
+    ...(maturityId === null ? {} : { maturity_date_id: maturityId }), document_set_id: series, status: 1,
     your_reference: `TMS-PERIOD-${statement.id}`, notes: `Período de envios: ${periodLabel(statement.period_start, statement.period_end)}`,
     products: products.map(line => ({ product_id: line.productId, name: line.name,
       summary: line.summary, qty: line.qty, price: line.price, discount: 0,

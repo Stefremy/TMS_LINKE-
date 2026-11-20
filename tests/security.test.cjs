@@ -22,6 +22,8 @@ function documentRow(action, owner = CLIENT, tenant = TENANT) {
     client_id: owner, client_name: 'Fixture', total_value: 10, shipments: [],
     client_snapshot: { name: 'Fixture' }, period_start: '2026-10-01', period_end: '2026-10-08', created_at: '2026-10-08',
     moloni_document_pdf: 'https://fixture.invalid/invoice.pdf',
+    // Custom invoices only exist as Moloni-certified documents.
+    ...(action === 'custom_invoice' ? { moloni_document_id: 123 } : {}),
   } }
 }
 function pdfHarness(ctx, rows, failure) {
@@ -1102,4 +1104,13 @@ test('CTT COD for Baleares is rejected before carrier calls and financial writes
   assert.equal(h.credentials.length,0)
   assert.equal(h.db.writes.length,0)
  }
+})
+
+test('custom invoices without a Moloni document never get an internally generated PDF', async () => {
+  const row = documentRow('custom_invoice'); delete row.details.moloni_document_id
+  const h = pdfHarness(financeContext, [row])
+  const response = await h.load('app/api/custom-invoices/[id]/pdf/route.ts').GET(request(), { params: Promise.resolve({ id: UUID }) })
+  assert.equal(response.status, 404)
+  assert.match(await response.text(), /não foi emitida no Moloni/)
+  assert.equal(h.pdfCalls + h.fetchCalls, 0)
 })
