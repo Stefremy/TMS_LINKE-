@@ -155,7 +155,7 @@ export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Client
         // B. Obter dados base do Moloni (Série, Taxa, Artigo Genérico do TMS)
         const billingConfig = await getBillingConfigAction()
         const taxId = await moloni.getTaxId(billingConfig.defaultVatRate || 23)
-        const documentSetId = billingConfig.defaultDocumentSetId || (await moloni.getDocumentSet())
+        const documentSetId = await moloni.resolveDocumentSet(billingConfig.defaultDocumentSetId)
         const productId = await moloni.getGenericProductId(
           taxId,
           billingConfig.articleReference,
@@ -582,7 +582,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     // 5. Obter artigos, taxas e série (respeitando configurações de faturação do TMS)
     const billingConfig = await getBillingConfigAction()
     const taxId = await moloni.getTaxId(billingConfig.defaultVatRate || 23)
-    const documentSetId = billingConfig.defaultDocumentSetId || (await moloni.getDocumentSet())
+    const documentSetId = await moloni.resolveDocumentSet(billingConfig.defaultDocumentSetId)
     const productId = await moloni.getGenericProductId(
       taxId,
       billingConfig.articleReference,
@@ -902,7 +902,7 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
 
         // 2. Preparar Produtos para o Moloni
         const billingConfig = await getBillingConfigAction()
-        const documentSetId = billingConfig.defaultDocumentSetId || (await moloni.getDocumentSet())
+        const documentSetId = await moloni.resolveDocumentSet(billingConfig.defaultDocumentSetId)
         const defaultTaxId = await moloni.getTaxId(billingConfig.defaultVatRate || 23)
         const genericProductId = await moloni.getGenericProductId(
           defaultTaxId,
@@ -946,7 +946,8 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
         if (moloniDocumentId) throw mErr
         const reason = errorMessage(mErr) || "Erro de comunicação com Moloni"
         console.warn("Moloni Custom Invoice Emission Error:", reason)
-        throw new Error(invoiceSubmitted
+        // A validation refusal means Moloni created nothing; only an unanswered insert is uncertain.
+        throw new Error(invoiceSubmitted && !(mErr instanceof MoloniRejectedError)
           ? `Não foi possível confirmar a fatura no Moloni (${reason}). Confirme no Moloni se foi emitida antes de repetir.`
           : `O Moloni recusou a fatura: ${reason}`)
       }

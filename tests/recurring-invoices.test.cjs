@@ -35,6 +35,7 @@ function harness({failInsert=false,failPdf=false,failFinish=false,missingConfig=
   async updateCustomer(id,payload){calls.push({name:"customers/update",payload:{id,...payload}})}
   async getTaxId(rate){assert.equal(rate,23);return 8}
   async getDocumentSet(){return 9}
+  async resolveDocumentSet(preferred){return preferred||this.getDocumentSet()}
   async getGenericProductId(){return 10}
   async getDocumentPDFLink(){if(failPdf)throw Error('PDF unavailable');return 'https://fixture.invalid/invoice.pdf'}
   async request(name,payload){calls.push({name,payload});if(name==='maturityDates/getAll')return [{maturity_date_id:4,days:30}]
@@ -121,7 +122,7 @@ test('manual invoice insertion never retries an uncertain result as a second dra
 
 test('a configured payment deadline absent from Moloni is created without discounts before any invoice insertion',async()=>{
  const h=harness(), requests=[]
- const m={getCustomerByVat:async()=>({customer_id:7}),updateCustomer:async()=>{},getTaxId:async()=>8,getDocumentSet:async()=>9,getGenericProductId:async()=>10,
+ const m={getCustomerByVat:async()=>({customer_id:7}),updateCustomer:async()=>{},getTaxId:async()=>8,getDocumentSet:async()=>9,resolveDocumentSet:async p=>p||9,getGenericProductId:async()=>10,
   request:async(name,payload)=>{requests.push({name,payload});if(name==='maturityDates/getAll')return [];if(name==='maturityDates/insert')return {valid:1,maturity_date_id:55};throw Error('No fiscal insertion in preparation')}}
  const {DEFAULT_BILLING_CONFIG}=createLoader({})('app/actions/billing-config-types.ts')
  const payload=await h.buildRecurringInvoice(m,client,statement,{...DEFAULT_BILLING_CONFIG,defaultPaymentDays:7})
@@ -147,7 +148,7 @@ test('each client invoice uses its own payment deadline independently of a fifte
  const {DEFAULT_BILLING_CONFIG}=createLoader({})('app/actions/billing-config-types.ts')
  const {addCalendarDays}=createLoader({})('lib/billing/recurring-periods.ts')
  for(const days of [0,10,30]){
-  const m={getCustomerByVat:async()=>({customer_id:7}),updateCustomer:async()=>{},getTaxId:async()=>8,getDocumentSet:async()=>9,getGenericProductId:async()=>10,
+  const m={getCustomerByVat:async()=>({customer_id:7}),updateCustomer:async()=>{},getTaxId:async()=>8,getDocumentSet:async()=>9,resolveDocumentSet:async p=>p||9,getGenericProductId:async()=>10,
    request:async(name)=>{assert.equal(name,'maturityDates/getAll');return [{days,maturity_date_id:77}]}}
   const payload=await h.buildRecurringInvoice(m,{...client,payment_terms:'A 15 dias',payment_due_days:days},statement,{...DEFAULT_BILLING_CONFIG,defaultPaymentDays:7})
   assert.equal(payload.expiration_date,addCalendarDays(payload.date,days));assert.equal(payload.maturity_date_id,77)

@@ -34,7 +34,7 @@ export async function buildRecurringInvoice(moloni: MoloniClient, client: Recurr
   const rate = Number(config.defaultVatRate)
   if (!Number.isFinite(rate) || rate <= 0) throw new Error('Configure uma taxa de IVA positiva para a faturação automática.')
   const tax = await moloni.getTaxId(rate)
-  const series = config.defaultDocumentSetId || await moloni.getDocumentSet()
+  const series = await moloni.resolveDocumentSet(config.defaultDocumentSetId)
   const product = await moloni.getGenericProductId(tax, config.articleReference, config.articleDesignation, config.articleSummary)
   if (!tax || !series || !product || !customer) throw new Error('Configuração Moloni incompleta.')
   const products = buildShipmentInvoiceLines(statement.shipments, {

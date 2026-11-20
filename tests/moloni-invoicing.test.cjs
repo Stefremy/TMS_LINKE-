@@ -6,7 +6,7 @@ const TENANT = '11111111-1111-1111-1111-111111111111'
 const CLIENT = '22222222-2222-2222-2222-222222222222'
 const SHIPMENT = '44444444-4444-4444-4444-444444444444'
 const connection = (details = {}) => ({tenant_id: TENANT, action: 'moloni_connection_config', created_at:'2026-10-15', details:{company_id:'42',refresh_token:'saved-refresh',...details}})
-function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false, clientDueDays=undefined, shipmentRows, fiscalDocument, failPriceClaim=false,clientDetails={},failAddressSync=false}={}) {
+function invoiceHarness({rejectInvoice=null,failInvoice=false,failPdf=false,connected=true, existing=[], failArchive=false, clientDueDays=undefined, shipmentRows, fiscalDocument, failPriceClaim=false,clientDetails={},failAddressSync=false}={}) {
   const db = fakeSupabase({clients:[{id:CLIENT,tenant_id:TENANT}],audit_log: [...(connected ? [connection()] : []), ...existing], shipments:shipmentRows || [
     {id:SHIPMENT,client_id:CLIENT,tenant_id:TENANT,sell_price:3.91,service_type:'Nacional'}
   ]}, q=>failArchive&&q.write?.kind==='insert'&&q.write.value.action==='billing_statement'?{message:'unavailable'}:null,{persistInserts:Boolean(fiscalDocument||existing.some(r=>r.action==='credit_note'))})
@@ -17,6 +17,7 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
     if (name === 'claim_weight_safe_billing_shipments') assert.deepEqual(args.p_expected, [{ id: SHIPMENT, price: 3.91 }])
     return { data: null, error: failPriceClaim ? { message: 'Shipment prices changed' } : null }
   }
+  class Rejected extends Error {}
   let issued = 0, lastInvoicePayload, lastReceiptPayload, lastCustomerPayload
   const load = createLoader({
     'node:crypto':require('node:crypto'),
@@ -28,7 +29,7 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
     '@/lib/services/shipments/shipment-fetcher':{SHIPMENT_LIST_COLUMNS:'*'},
     '@/app/actions/billing-config':{getBillingConfigAction:async()=>({defaultVatRate:23})},
     'next/cache':{revalidatePath(){}},
-    '@/lib/moloni/moloni-client':{MoloniRejectedError:class extends Error{},MoloniClient:class {
+    '@/lib/moloni/moloni-client':{MoloniRejectedError:Rejected,MoloniClient:class {
       async request(endpoint,payload){
         assert.equal(endpoint,'documents/getOne')
         if(payload.document_id===321)return{document_id:321,company_id:42,status:1,customer_id:lastReceiptPayload.customerId,
@@ -41,8 +42,9 @@ function invoiceHarness({failInvoice=false,failPdf=false,connected=true, existin
       async updateCustomer(id,payload){lastCustomerPayload=payload;if(failAddressSync)throw Error("Fiscal address sync failed")}
       async getTaxId(){return 1}
       async getDocumentSet(){return 1}
+      async resolveDocumentSet(preferred){return preferred||this.getDocumentSet()}
       async getGenericProductId(){return 1}
-      async createInvoice(payload){lastInvoicePayload=payload;issued++;if(failInvoice)throw new Error('Sessão Moloni expirada');return {document_id:123}}
+      async createInvoice(payload){lastInvoicePayload=payload;if(rejectInvoice)throw new Rejected(rejectInvoice);issued++;if(failInvoice)throw new Error('Sessão Moloni expirada');return {document_id:123}}
       async getDocumentPDFLink(){if(failPdf)throw new Error('PDF unavailable');return 'https://fixture.invalid/invoice.pdf'}
       async getDocumentNumber(){return 'FT 2026/123'}
     }},
@@ -507,4 +509,23 @@ test('without environment-specific variables both environments keep the shared M
   for(const k of ['MOLONI_TEST_CLIENT_ID','MOLONI_TEST_CLIENT_SECRET','MOLONI_LIVE_CLIENT_ID','MOLONI_LIVE_CLIENT_SECRET'])delete process.env[k]
   assert.equal(moloniAppCredentials('test').clientId,process.env.MOLONI_CLIENT_ID||'518600300')
   assert.deepEqual(moloniAppCredentials('live'),moloniAppCredentials('test'))
+})
+
+test('the configured series is checked against the connected company: Teste falls back to its active series, Produção refuses',async()=>{
+  for(const environment of ['test','live']){
+    const requests=[]
+    const h=tokenHarness([connection({access_token:'cached',access_token_expires_at:Date.now()+60000,environment})],async(url,opts)=>{
+      requests.push({url,payload:JSON.parse(opts.body)})
+      return new Response(JSON.stringify(url.includes('documentSets/getAll')?[{document_set_id:982885,active:0},{document_set_id:982890,active:1}]:{}))
+    })
+    const moloni=new h.MoloniClient({companyId:'42',tenantId:TENANT,environment})
+    assert.equal(await moloni.resolveDocumentSet(982885),982885,'a valid configured series is kept')
+    if(environment==='test')assert.equal(await moloni.resolveDocumentSet(111),982890,'Teste uses the active series of the connected company')
+    else await assert.rejects(moloni.resolveDocumentSet(111),/série documental configurada \(111\) não existe/)
+  }
+})
+test('a validation refusal from Moloni says nothing was issued instead of asking to check Moloni',async()=>{
+  const h=invoiceHarness({rejectInvoice:"Moloni API Error [invoices/insert]: : Field 'document_set_id' must be valid."})
+  const res=await h.load('app/actions/moloni.ts').emitCustomInvoiceAction({clientName:'X',clientVat:'501234560',invoiceDate:'2026-11-20',dueDate:'2026-11-23',items:[{title:'W',qty:1,unitPrice:1,taxRate:23}]})
+  assert.equal(res.success,false);assert.match(res.error,/^O Moloni recusou a fatura: .*document_set_id/);assert.doesNotMatch(res.error,/Confirme no Moloni/)
 })

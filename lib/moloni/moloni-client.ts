@@ -266,6 +266,20 @@ export class MoloniClient {
     return activeSet ? activeSet.document_set_id : sets[0]?.document_set_id;
   }
 
+  /**
+   * Series for a new document. Series ids belong to one Moloni company, so the configured one is
+   * checked against the connected company. In Teste a stale series falls back to the company's active
+   * series; in Produção it is an explicit error, so real invoices never land in an unexpected series.
+   */
+  async resolveDocumentSet(preferred?: number | null) {
+    if (!preferred) return this.getDocumentSet();
+    const sets = await this.request('documentSets/getAll', {});
+    const ids = Array.isArray(sets) ? sets.map((s) => Number(s.document_set_id)) : [];
+    if (ids.includes(Number(preferred))) return Number(preferred);
+    if (this.environment !== "live") return this.getDocumentSet();
+    throw new MoloniRejectedError(`A série documental configurada (${preferred}) não existe na empresa Moloni ligada. Escolha a série em Configuração → Faturação.`);
+  }
+
   async getTransportDocumentSet() {
     const sets = await this.request('documentSets/getAll', {});
     if (!Array.isArray(sets) || sets.length === 0) {

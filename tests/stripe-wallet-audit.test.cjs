@@ -269,6 +269,7 @@ function receiptActionHarness(options={}) {
  const calls=[]
  class MoloniFixture {
   async getDocumentSet(){return 8}
+  async resolveDocumentSet(preferred){return preferred||this.getDocumentSet()}
   async getCustomerByVat(){return{customer_id:7}}
   async request(endpoint,payload){
    if(endpoint==='receipts/getAll')return options.delayedSearch?[]:calls.map((_,i)=>({document_id:901+i}))
