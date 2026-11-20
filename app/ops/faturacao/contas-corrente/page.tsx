@@ -4,8 +4,10 @@ import { BillingPlanningPanel } from './BillingPlanningPanel'
 import * as React from "react"
 import { getClientesAction } from "@/app/actions/clientes"
 import { getShipmentsAction } from "@/app/actions/shipments"
-import { getBillingStatementsAction, getMoloniConfigAction } from "@/app/actions/moloni"
+import { getBillingStatementsAction, getCustomInvoicesAction, getMoloniConfigAction } from "@/app/actions/moloni"
+import { CustomInvoicesPanel } from "./CustomInvoicesPanel"
 import ContasCorrenteClient from "./ContasCorrenteClient"
+import { getBillingConfigAction } from "@/app/actions/billing-config"
 import { requirePermission } from '@/lib/auth/context'
 import { recurringPlanningPreview, loadPeriodStatements } from '@/lib/billing/recurring-statements'
 import { billingViewSelection } from '@/lib/billing/view-filters'
@@ -19,13 +21,15 @@ export default async function ContasCorrentePage({ searchParams }: { searchParam
 
   const ctx = await requirePermission('Faturação & Contas Correntes')
   const selection = billingViewSelection(await searchParams || {})
-  const [clients, shipments, statements, moloniConfig, recurring, periodStatements] = await Promise.all([
+  const [clients, shipments, statements, moloniConfig, recurring, periodStatements, customInvoices, billingConfig] = await Promise.all([
     getClientesAction(),
     getShipmentsAction({ includeLabels: false, createdAfter: recentShipmentCutoff() }),
     getBillingStatementsAction(),
     getMoloniConfigAction(),
     recurringPlanningPreview(ctx.tenant_id),
     loadPeriodStatements(ctx.tenant_id),
+    getCustomInvoicesAction(),
+    getBillingConfigAction(),
   ])
 
   const planning = await loadBillingStatistics(clients)
@@ -54,8 +58,10 @@ export default async function ContasCorrentePage({ searchParams }: { searchParam
         shipments={pendingShipments} 
         statements={statements}
         moloniConfig={moloniConfig}
+        defaultPaymentDays={billingConfig.defaultPaymentDays ?? 30}
         periodStatements={periodStatements}
         planningPanel={<BillingPlanningPanel statistics={planning.data} statisticsError={planning.error} recurring={recurring} />}
+        customInvoicesPanel={<CustomInvoicesPanel invoices={customInvoices} moloniConnected={Boolean(moloniConfig?.isConnected)} />}
       />
     </div>
   )

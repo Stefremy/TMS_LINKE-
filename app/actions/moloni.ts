@@ -18,7 +18,7 @@ import { getShipmentsAction } from "@/app/actions/shipments"
 import { getAuthContext, requireEmployee, requireUser, getTenantId } from "@/lib/auth/context"
 import { getBillingConfigAction } from "@/app/actions/billing-config"
 import { paymentDueDays } from "@/lib/billing/payment-terms"
-import { addCalendarDays, lisbonDate } from "@/lib/billing/recurring-periods"
+import { addCalendarDays, isDateKey, lisbonDate } from "@/lib/billing/recurring-periods"
 import { moloniRedirectUri } from "@/lib/config/public-origins"
 import { buildShipmentInvoiceLines } from "@/lib/billing/shipment-invoice-lines"
 import { hydrateShipmentCharges } from "@/lib/services/billing/shipment-charge-snapshots"
@@ -62,7 +62,15 @@ async function releaseClaimOnRejection<T>(emissionId: string | null, insert: () 
 /**
  * Criação da Fatura no Moloni e registo do Extrato Detalhado no TMS.
  */
-export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Cliente, "id">, shipments: ShipmentRecord[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false) {
+/** Opções escolhidas por quem emite; o prazo por omissão vem da ficha do cliente. */
+export type InvoiceIssueOptions = { paymentDays?: number }
+const DEFAULT_PAYMENT_DAYS = 30
+function invoicePaymentDays(options: InvoiceIssueOptions, clientDays: unknown, configDays: unknown) {
+  if (options.paymentDays !== undefined) return paymentDueDays(options.paymentDays, 0)
+  return paymentDueDays(clientDays, configDays === undefined ? DEFAULT_PAYMENT_DAYS : configDays)
+}
+
+export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Cliente, "id">, shipments: ShipmentRecord[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false, options: InvoiceIssueOptions = {}) {
   const ctx = await requireEmployee("Faturação & Contas Correntes")
   const supabase = createAdminClient()
   if (!client?.id || !shipments?.length) throw new Error("Cliente ou envios não encontrados.")
@@ -167,7 +175,7 @@ export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Client
         }
 
         const dateNow = lisbonDate()
-        const paymentDays = paymentDueDays(client.payment_due_days, billingConfig.defaultPaymentDays === undefined ? 30 : billingConfig.defaultPaymentDays)
+        const paymentDays = invoicePaymentDays(options, client.payment_due_days, billingConfig.defaultPaymentDays)
         const expirationDate = addCalendarDays(dateNow, paymentDays)
         invoiceDate = dateNow
         invoiceDueDate = expirationDate
@@ -469,7 +477,7 @@ export async function switchMoloniEnvironmentAction(target: "test" | "live", con
 /**
  * Emite a fatura oficial no Moloni para um extrato previamente criado
  */
-export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string, groupShipments: boolean = true, isProForma: boolean = false) {
+export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: string, groupShipments: boolean = true, isProForma: boolean = false, options: InvoiceIssueOptions = {}) {
   const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
@@ -600,7 +608,7 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
     }
 
     const dateNow = lisbonDate()
-    const paymentDays = paymentDueDays(client.payment_due_days, billingConfig.defaultPaymentDays === undefined ? 30 : billingConfig.defaultPaymentDays)
+    const paymentDays = invoicePaymentDays(options, client.payment_due_days, billingConfig.defaultPaymentDays)
     const expirationDate = addCalendarDays(dateNow, paymentDays)
 
     const emissionId = isProForma ? null : await claimManualInvoiceShipments(stmt.client_id, stmt.shipment_ids || stmt.shipments?.map((s: ShipmentRecord) => s.id) || [])
@@ -763,6 +771,18 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
       throw new Error("Adicione pelo menos um serviço ou produto à fatura.")
     }
 
+    // Vencimento: a data escolhida é enviada ao Moloni com a condição "X Dias" correspondente,
+    // para que a data e o prazo impressos na fatura coincidam.
+    const invoiceDate = payload.invoiceDate || lisbonDate()
+    if (!isDateKey(invoiceDate)) throw new Error("Data da fatura inválida.")
+    const dueDate = payload.dueDate || addCalendarDays(invoiceDate,
+      paymentDueDays(undefined, (await getBillingConfigAction()).defaultPaymentDays ?? 30))
+    if (!isDateKey(dueDate)) throw new Error("Data de vencimento inválida.")
+    const paymentDays = Math.round((Date.parse(`${dueDate}T12:00:00Z`) - Date.parse(`${invoiceDate}T12:00:00Z`)) / 86400000)
+    if (paymentDays < 0) throw new Error("A data de vencimento não pode ser anterior à data da fatura.")
+    paymentDueDays(paymentDays, 0)
+    payload = { ...payload, invoiceDate, dueDate }
+
     const validItems = payload.items.filter(it => Number(it.unitPrice || 0) > 0 && Number(it.qty || 0) > 0)
     if (validItems.length === 0) {
       throw new Error("Pelo menos um serviço deve ter preço superior a 0,00€.")
@@ -886,11 +906,11 @@ export async function emitCustomInvoiceAction(payload: CustomInvoicePayload) {
           })
         }
 
-        const customPaymentDays = typeof billingConfig.defaultPaymentDays === "number" ? billingConfig.defaultPaymentDays : 30
         const invoiceRes = await moloni.createInvoice({
           customerId: moloniCustomerId,
-          date: payload.invoiceDate || new Date().toISOString().split("T")[0],
-          expirationDate: payload.dueDate || new Date(Date.now() + customPaymentDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          date: invoiceDate,
+          expirationDate: dueDate,
+          paymentDays,
           documentSetId: documentSetId,
           products: moloniProducts
         })
@@ -1067,6 +1087,23 @@ export async function emitMoloniReceiptForStatementAction(
   }
 }
 
+/** Liquida uma fatura personalizada (serviços extra), mesmo de quem não é cliente de logística. */
+export async function emitCustomInvoiceReceiptAction(
+  invoiceId: string,
+  opts?: { date?: string; paymentMethodId?: number; notes?: string }
+) {
+  const ctx = await requireEmployee("Faturação & Contas Correntes")
+  try {
+    const { emitInvoiceReceipt } = await import("@/lib/billing/receipts")
+    const result = await emitInvoiceReceipt(createAdminClient(), ctx, "custom_invoice", invoiceId, opts)
+    revalidatePath("/ops/faturacao/contas-corrente")
+    revalidatePath("/ops/faturacao/personalizada")
+    return result
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : "Não foi possível confirmar o recibo." }
+  }
+}
+
 /**
  * Emite a Guia de Transporte Oficial (GT) no Moloni para um envio do Ops
  */
@@ -1223,7 +1260,7 @@ export async function emitMoloniWaybillForShipmentAction(shipmentId: string, not
 /**
  * Criação da Fatura no Moloni (Action para ser chamada a partir da UI)
  */
-export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false) {
+export async function emitInvoiceAction(clientId: string, shipmentIds: string[], skipMoloni: boolean = false, groupShipments: boolean = true, isProForma: boolean = false, options: InvoiceIssueOptions = {}) {
   const ctx = await requireEmployee("Faturação & Contas Correntes")
   try {
     const supabase = createAdminClient()
@@ -1254,7 +1291,7 @@ export async function emitInvoiceAction(clientId: string, shipmentIds: string[],
       throw new Error("Um dos envios já tem fatura Moloni. Atualize a página antes de continuar.")
     }
 
-    return await internalEmitInvoice(client, shipments, skipMoloni, groupShipments, isProForma)
+    return await internalEmitInvoice(client, shipments, skipMoloni, groupShipments, isProForma, options)
   } catch (err) {
     console.error("Emit Invoice Error:", err)
     return { success: false as const, error: errorMessage(err) || "Failed to emit invoice" }

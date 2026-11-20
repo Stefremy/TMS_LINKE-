@@ -26,9 +26,15 @@ import {
 } from "lucide-react"
 import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { emitCustomInvoiceAction, CustomInvoiceItemInput } from "@/app/actions/moloni"
+import { addCalendarDays, isDateKey, lisbonDate } from "@/lib/billing/recurring-periods"
+
+const TERM_DAYS: Record<string, number> = { "Pronto Pagamento": 0, "15 dias": 15, "30 dias": 30, "60 dias": 60 }
+const termForDays = (days: number) => Object.keys(TERM_DAYS).find(term => TERM_DAYS[term] === days) || "Personalizado"
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86400000)
 
 interface Client {
   id: string
+  payment_due_days?: number
   short_name?: string
   legal_name?: string
   nif?: string
@@ -95,7 +101,7 @@ export default function FaturaPersonalizadaClient({
   const [clientPhone, setClientPhone] = React.useState<string>("")
 
   // Dados da Fatura
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = lisbonDate()
   const [invoiceDate, setInvoiceDate] = React.useState<string>(todayStr)
   const [dueDate, setDueDate] = React.useState<string>(todayStr)
   const [paymentTerms, setPaymentTerms] = React.useState<string>("Pronto Pagamento")
@@ -145,25 +151,32 @@ export default function FaturaPersonalizadaClient({
       setClientCountryCode(billing.country_code)
       setClientEmail(found.billing_email || found.email || "")
       setClientPhone(found.phone || "")
+      // O prazo acordado com o cliente (ficha do cliente) define o vencimento por omissão.
+      if (typeof found.payment_due_days === "number" && isDateKey(invoiceDate)) {
+        setPaymentTerms(termForDays(found.payment_due_days))
+        setDueDate(addCalendarDays(invoiceDate, found.payment_due_days))
+      }
     }
+  }
+
+  // A data da fatura move o vencimento quando o prazo é em dias.
+  const handleInvoiceDateChange = (value: string) => {
+    setInvoiceDate(value)
+    if (isDateKey(value) && TERM_DAYS[paymentTerms] !== undefined) setDueDate(addCalendarDays(value, TERM_DAYS[paymentTerms]))
+    else if (isDateKey(value) && isDateKey(dueDate) && paymentTerms === "Personalizado" && dueDate < value) setDueDate(value)
+  }
+
+  // Uma data escrita à mão mostra o prazo equivalente, ou "Data Personalizada".
+  const handleDueDateChange = (value: string) => {
+    setDueDate(value)
+    if (isDateKey(value) && isDateKey(invoiceDate)) setPaymentTerms(termForDays(daysBetween(invoiceDate, value)))
   }
 
   // Atalho de prazos de vencimento
   const handlePaymentTermsChange = (term: string) => {
     setPaymentTerms(term)
-    const base = new Date(invoiceDate || todayStr)
-    if (term === "Pronto Pagamento") {
-      setDueDate(invoiceDate)
-    } else if (term === "15 dias") {
-      base.setDate(base.getDate() + 15)
-      setDueDate(base.toISOString().split("T")[0])
-    } else if (term === "30 dias") {
-      base.setDate(base.getDate() + 30)
-      setDueDate(base.toISOString().split("T")[0])
-    } else if (term === "60 dias") {
-      base.setDate(base.getDate() + 60)
-      setDueDate(base.toISOString().split("T")[0])
-    }
+    const base = isDateKey(invoiceDate) ? invoiceDate : todayStr
+    if (TERM_DAYS[term] !== undefined) setDueDate(addCalendarDays(base, TERM_DAYS[term]))
   }
 
   // Adicionar linha
@@ -752,7 +765,7 @@ export default function FaturaPersonalizadaClient({
               <input
                 type="date"
                 value={invoiceDate}
-                onChange={e => setInvoiceDate(e.target.value)}
+                onChange={e => handleInvoiceDateChange(e.target.value)}
                 className="w-full text-xs py-2 px-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md font-mono text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] transition-all"
               />
             </div>
@@ -781,7 +794,8 @@ export default function FaturaPersonalizadaClient({
               <input
                 type="date"
                 value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
+                min={invoiceDate}
+                onChange={e => handleDueDateChange(e.target.value)}
                 className="w-full text-xs py-2 px-3 bg-[var(--surface-muted)] border border-[var(--border-subtle)] rounded-md font-mono text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] transition-all"
               />
             </div>

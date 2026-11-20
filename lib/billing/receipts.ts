@@ -9,6 +9,8 @@ import { lisbonDate } from './recurring-periods'
 import type { MoloniClient } from '@/lib/moloni/moloni-client'
 
 type Options = { date?: string; paymentMethodId?: number; notes?: string }
+/** Statements come from logistics billing; custom invoices are extra services, possibly for non-clients. */
+export type ReceiptSourceKind = 'billing_statement' | 'custom_invoice'
 type ReceiptOperation = {
   id: string; source_id: string; client_id: string; company: string; invoice: number; customer: number;
   amount: number; date: string; marker: string; state: 'prepared' | 'submitted' | 'confirmed';
@@ -16,16 +18,22 @@ type ReceiptOperation = {
 }
 const pendingMessage = 'O recibo está em curso ou por confirmar no Moloni. Consulte novamente; a criação não será repetida.'
 
-async function source(db: SupabaseClient, tenant: string, id: string) {
-  for (const field of ['id', 'details->>id', 'details->>statement_number']) {
+async function source(db: SupabaseClient, tenant: string, id: string, kind: ReceiptSourceKind = 'billing_statement') {
+  const numberField = kind === 'custom_invoice' ? 'details->>invoice_number' : 'details->>statement_number'
+  for (const field of ['id', 'details->>id', numberField]) {
     // A human-readable statement number must not be sent to the native UUID column.
     if (field === 'id' && !/^[0-9a-f-]{36}$/i.test(id)) continue
     const { data, error } = await db.from('audit_log').select('id,details').eq('tenant_id', tenant)
-      .eq('action', 'billing_statement').eq(field, id).limit(1).maybeSingle()
-    if (error) throw new Error('Não foi possível consultar o extrato.')
+      .eq('action', kind).eq(field, id).limit(1).maybeSingle()
+    if (error) throw new Error(kind === 'custom_invoice' ? 'Não foi possível consultar a fatura.' : 'Não foi possível consultar o extrato.')
     if (data) return data
   }
-  throw new Error('Extrato não encontrado nesta empresa.')
+  throw new Error(kind === 'custom_invoice' ? 'Fatura personalizada não encontrada nesta empresa.' : 'Extrato não encontrado nesta empresa.')
+}
+/** Custom invoices may belong to someone outside the client list; they are then keyed by the invoice itself. */
+function clientKey(kind: ReceiptSourceKind, details: Record<string, unknown>, auditId: string) {
+  const linked = String(details.client_id || '')
+  return linked || (kind === 'custom_invoice' ? `custom:${auditId}` : '')
 }
 async function save(db: SupabaseClient, tenant: string, old: ReceiptOperation, next: ReceiptOperation) {
   const { data, error } = await db.from('audit_log').update({ details: next }).eq('tenant_id', tenant)
@@ -64,15 +72,23 @@ async function recover(moloni: MoloniClient, op: ReceiptOperation) {
 
 export async function emitStatementReceipt(db: SupabaseClient, ctx: AuthContext, statementId: string, opts: Options = {},
   expected?: { client: string; invoice: number }) {
+  return emitInvoiceReceipt(db, ctx, 'billing_statement', statementId, opts, expected)
+}
+
+export async function emitInvoiceReceipt(db: SupabaseClient, ctx: AuthContext, kind: ReceiptSourceKind, sourceId: string,
+  opts: Options = {}, expected?: { client: string; invoice: number }) {
   if (ctx.role !== 'admin' && !(ctx.role === 'employee' && ctx.permissions.some(p =>
     ['Faturação & Contas Correntes','Acesso Total (Super-Admin)'].includes(p)))) throw new Error('Sem permissão para emitir recibos.')
-  const original = await source(db, ctx.tenant_id, statementId), stmt = record(original.details)
-  const invoice = positiveId(stmt.moloni_document_id), client = String(stmt.client_id || '')
+  const original = await source(db, ctx.tenant_id, sourceId, kind), stmt = record(original.details)
+  if (!stmt.moloni_document_id) throw new Error('Emita primeiro a fatura no Moloni antes de emitir o recibo.')
+  const invoice = positiveId(stmt.moloni_document_id), linked = String(stmt.client_id || ''), client = clientKey(kind, stmt, String(original.id))
   if (!client || stmt.is_pro_forma || (expected && (expected.client !== client || expected.invoice !== invoice))) {
     throw new Error('A fatura não corresponde ao cliente e ao extrato indicados.')
   }
-  const { data: owner, error: ownerError } = await db.from('clients').select('id').eq('tenant_id', ctx.tenant_id).eq('id', client).maybeSingle()
-  if (ownerError || !owner) throw new Error('Cliente não encontrado nesta empresa.')
+  if (linked) {
+    const { data: owner, error: ownerError } = await db.from('clients').select('id').eq('tenant_id', ctx.tenant_id).eq('id', linked).maybeSingle()
+    if (ownerError || !owner) throw new Error('Cliente não encontrado nesta empresa.')
+  }
   const { moloni, company } = await creditMoloni(db, ctx.tenant_id, stmt.moloni_company_id ? String(stmt.moloni_company_id) : undefined)
   const id = financialId('receipt', ctx.tenant_id, company, invoice)
   const { data: prior, error: readError } = await db.from('audit_log').select('details').eq('tenant_id', ctx.tenant_id)
@@ -82,13 +98,13 @@ export async function emitStatementReceipt(db: SupabaseClient, ctx: AuthContext,
   if (op && (op.source_id !== original.id || op.client_id !== client || op.company !== company || op.invoice !== invoice)) throw new Error(pendingMessage)
   if ((stmt.moloni_receipt_id || stmt.moloni_receipt_pdf || stmt.status === 'paid') &&
     (!op || op.state !== 'confirmed' || Number(stmt.moloni_receipt_id) !== op.receipt_id)) {
-    throw new Error('Este extrato já tem uma liquidação registada.')
+    throw new Error(kind === 'custom_invoice' ? 'Esta fatura já tem uma liquidação registada.' : 'Este extrato já tem uma liquidação registada.')
   }
   if (!op) {
     await claimInvoiceFinancialLock(db, ctx.tenant_id, company, invoice, id)
     let storeAttempted = false
     try {
-      const notes = (await loadInvoiceCredits(db, ctx.tenant_id, client)).filter(n => n.invoice_document_id === invoice)
+      const notes = (await loadInvoiceCredits(db, ctx.tenant_id, linked || undefined)).filter(n => n.invoice_document_id === invoice)
       if (notes.some(n => !['issued','cancelled'].includes(n.state) || n.company_id !== company)) {
         throw new Error('Confirme a nota de crédito associada antes de emitir recibo.')
       }
@@ -97,8 +113,10 @@ export async function emitStatementReceipt(db: SupabaseClient, ctx: AuthContext,
       if (!['FT','FS'].includes(String(record(fiscal.document_type).saft_code)) || Number(fiscal.exchange_currency_id || 0)) {
         throw new Error('Selecione uma fatura em euros válida para emitir o recibo.')
       }
+      // Statements archive the value before VAT; custom invoices archive the gross total.
       const net = Number(stmt.total_value), gross = Number(fiscal.net_value), tax = Number(fiscal.taxes_value)
-      if (![net,gross,tax].every(Number.isFinite) || Math.abs(Math.round((net + tax) * 100) - Math.round(gross * 100)) > 1) {
+      const expectedGross = kind === 'custom_invoice' ? net : net + tax
+      if (![net,gross,tax].every(Number.isFinite) || Math.abs(Math.round(expectedGross * 100) - Math.round(gross * 100)) > 1) {
         throw new Error('Os valores Moloni não correspondem à fatura TMS. Confirme a associação antes de emitir recibo.')
       }
       const date = opts.date || lisbonDate()
@@ -138,11 +156,11 @@ export async function emitStatementReceipt(db: SupabaseClient, ctx: AuthContext,
   try { pdf = await moloni.getDocumentPDFLink(op.receipt_id!) || pdf } catch { /* Missing PDF is not missing payment. */ }
   op = await save(db, ctx.tenant_id, op, { ...op, pdf, state: 'confirmed' })
   // Re-read the archive so unrelated document updates are not overwritten with an old snapshot.
-  const latest = await source(db, ctx.tenant_id, String(original.id)), details = record(latest.details)
-  if (Number(details.moloni_document_id) !== op.invoice || details.client_id !== op.client_id) throw new Error(pendingMessage)
+  const latest = await source(db, ctx.tenant_id, String(original.id), kind), details = record(latest.details)
+  if (Number(details.moloni_document_id) !== op.invoice || clientKey(kind, details, String(latest.id)) !== op.client_id) throw new Error(pendingMessage)
   const { data: archived, error } = await db.from('audit_log').update({ details: { ...details,
     moloni_receipt_id: op.receipt_id, moloni_receipt_pdf: pdf, status: 'paid' } }).eq('tenant_id', ctx.tenant_id)
-    .eq('action', 'billing_statement').eq('id', op.source_id).eq('details->>moloni_document_id', op.invoice).select('id').maybeSingle()
+    .eq('action', kind).eq('id', op.source_id).eq('details->>moloni_document_id', op.invoice).select('id').maybeSingle()
   if (error || !archived) throw new Error('Recibo confirmado no Moloni; arquivo TMS pendente. Consulte novamente para recuperar, sem emitir outro recibo.')
   await releaseInvoiceFinancialLock(db, ctx.tenant_id, company, invoice, id)
   return { success: true as const, receiptId: op.receipt_id, receiptPdfUrl: pdf, moloniReceiptPdf: pdf }

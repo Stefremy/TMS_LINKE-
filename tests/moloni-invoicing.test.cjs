@@ -70,7 +70,9 @@ test('manual billing page excludes cancelled test fixtures and drafts while keep
     '@/lib/auth/ops-page-access':{requireOpsPageAccess:async()=>{}},
     '@/app/actions/clientes':{getClientesAction:async()=>[]},
     '@/app/actions/shipments':{getShipmentsAction:async()=>shipments},
-    '@/app/actions/moloni':{getBillingStatementsAction:async()=>[],getMoloniConfigAction:async()=>({})},
+    '@/app/actions/moloni':{getBillingStatementsAction:async()=>[],getCustomInvoicesAction:async()=>[],getMoloniConfigAction:async()=>({})},
+    '@/app/actions/billing-config':{getBillingConfigAction:async()=>({defaultPaymentDays:30})},
+    './CustomInvoicesPanel':{CustomInvoicesPanel:()=>null},
     '@/lib/billing/recurring-statements':{recurringPlanningPreview:async()=>[],loadPeriodStatements:async()=>[]},
     './ContasCorrenteClient':{default:()=>null},
     './RecurringStatementsPanel':{RecurringStatementsPanel:()=>null},
@@ -176,7 +178,7 @@ test('Another tenant/company session is never used for authentication',async()=>
 })
 
 test('Each mounted invoice button owns its loading state, from either row and after errors or cancellation',async()=>{
-  const stores=new Map();let frame,resolveAction,rejectAction;const alerts=[],calls=[]
+  const stores=new Map();let frame,resolveAction,rejectAction,confirmIssue=true;const alerts=[],calls=[],issueOptions=[]
   const react={
     useState(initial){const {slots}=frame,i=frame.cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},
     useRef(initial){const {slots}=frame,i=frame.cursor++;return slots[i]||={current:initial}},
@@ -203,7 +205,9 @@ test('Each mounted invoice button owns its loading state, from either row and af
     'lucide-react':new Proxy({},{get:(_,name)=>String(name)}),
     '../notas-credito/components/CreditNoteButton':{CreditNoteButton:()=>null},
     './MoloniConnectModal':{MoloniConnectModal:'modal'},
-    '@/app/actions/moloni':{emitInvoiceAction:clientId=>{calls.push(clientId);return new Promise((resolve,reject)=>{resolveAction=resolve;rejectAction=reject})}},
+    // The issue dialog answers with the chosen deadline, or null when cancelled.
+    './IssueInvoiceDialog':{useIssueInvoiceDialog:()=>({ask:async()=>confirmIssue?3:null,dialog:null})},
+    '@/app/actions/moloni':{emitInvoiceAction:(clientId,_ids,_skip,_group,_proForma,options)=>{calls.push(clientId);issueOptions.push(options);return new Promise((resolve,reject)=>{resolveAction=resolve;rejectAction=reject})}},
   })
   const Component=load('app/ops/faturacao/contas-corrente/ContasCorrenteClient.tsx').default
   const clients=[{id:'a',legal_name:'Store A'},{id:'b',legal_name:'Store B'}]
@@ -232,7 +236,8 @@ test('Each mounted invoice button owns its loading state, from either row and af
     }
     assert.match(alerts[0],/Sessão expirada/)
     assert.match(alerts[1],/confirmar o resultado/)
-    global.confirm=()=>false
+    assert.deepEqual(issueOptions[0],{paymentDays:3})
+    confirmIssue=false
     const before=calls.length
     await buttons()[0].props.onClick({stopPropagation(){}})
     assert.equal(calls.length,before)
@@ -373,4 +378,45 @@ test('custom invoice selection defaults to the persisted fiscal address and sync
  assert.equal(h.lastCustomerPayload.address,'Fiscal Madrid');assert.equal(h.lastCustomerPayload.countryCode,'ES')
  const saved=h.db.writes.find(w=>w.table==='audit_log'&&w.value.action==='custom_invoice').value.details
  assert.equal(saved.client_address,'Fiscal Madrid');assert.equal(saved.client_country_code,'ES')
+})
+
+test('custom invoices for people outside the client list can be settled with a receipt from the conta corrente',async()=>{
+  const AUDIT='0b8c7d2e-1111-4a4a-9b9b-000000000001'
+  const row={id:AUDIT,tenant_id:TENANT,action:'custom_invoice',details:{id:'website-inv',invoice_number:'FAT-P-2026/11-1234',client_id:null,client_name:'Website Teste',moloni_document_id:123,total_value:12.3}}
+  const h=invoiceHarness({existing:[row],
+    fiscalDocument:{document_id:123,company_id:42,status:1,customer_id:7,net_value:12.3,taxes_value:2.3,reconciled_value:0}})
+  const result=await h.load('app/actions/moloni.ts').emitCustomInvoiceReceiptAction('FAT-P-2026/11-1234')
+  assert.equal(result.success,true,result.error);assert.equal(h.lastReceiptPayload.value,12.3);assert.equal(h.lastReceiptPayload.customerId,7)
+  assert.equal(row.details.status,'paid');assert.equal(row.details.moloni_receipt_id,321)
+  // A repeat only re-reads the confirmed operation; it never issues a second receipt.
+  const again=await h.load('app/actions/moloni.ts').emitCustomInvoiceReceiptAction(AUDIT)
+  assert.equal(again.receiptId,321)
+})
+test('custom invoice receipts refuse a Moloni document whose total differs from the TMS invoice',async()=>{
+  const h=invoiceHarness({existing:[{id:'0b8c7d2e-1111-4a4a-9b9b-000000000002',tenant_id:TENANT,action:'custom_invoice',details:{id:'x',invoice_number:'FAT-P-X',moloni_document_id:123,total_value:50}}],
+    fiscalDocument:{document_id:123,company_id:42,status:1,customer_id:7,net_value:12.3,taxes_value:2.3,reconciled_value:0}})
+  const result=await h.load('app/actions/moloni.ts').emitCustomInvoiceReceiptAction('FAT-P-X')
+  assert.equal(result.success,false);assert.match(result.error,/não correspondem/);assert.equal(h.lastReceiptPayload,undefined)
+})
+test('custom invoices send the chosen due date with the matching Moloni payment term, and refuse a due date before the invoice',async()=>{
+  const h=invoiceHarness()
+  const action=h.load('app/actions/moloni.ts')
+  const base={clientName:'Website Teste',clientVat:'501234567',items:[{title:'Website',qty:1,unitPrice:100,taxRate:23}]}
+  const ok=await action.emitCustomInvoiceAction({...base,invoiceDate:'2026-11-20',dueDate:'2026-12-20'})
+  assert.equal(ok.success,true,ok.error);assert.equal(ok.moloniError,null)
+  assert.equal(h.lastInvoicePayload.date,'2026-11-20');assert.equal(h.lastInvoicePayload.expirationDate,'2026-12-20');assert.equal(h.lastInvoicePayload.paymentDays,30)
+  const issued=h.issued
+  const bad=await action.emitCustomInvoiceAction({...base,invoiceDate:'2026-11-20',dueDate:'2026-11-10'})
+  assert.equal(bad.success,false);assert.match(bad.error,/vencimento/);assert.equal(h.issued,issued)
+})
+test('the deadline adjusted when issuing overrides the client default for that invoice only, and invalid values are refused',async()=>{
+ const {addCalendarDays}=createLoader({})('lib/billing/recurring-periods.ts')
+ const h=invoiceHarness({clientDueDays:3})
+ const issue=options=>h.load('app/actions/moloni.ts').internalEmitInvoice({id:CLIENT,tenant_id:TENANT,nif:'999999990'},[{id:SHIPMENT,status:'pendente',sell_price:3.91,service_type:'Nacional'}],false,true,false,options)
+ assert.equal((await issue({paymentDays:7})).success,true)
+ assert.equal(h.lastInvoicePayload.paymentDays,7)
+ assert.equal(h.lastInvoicePayload.expirationDate,addCalendarDays(h.lastInvoicePayload.date,7))
+ const refused=invoiceHarness({clientDueDays:3})
+ const bad=await refused.load('app/actions/moloni.ts').internalEmitInvoice({id:CLIENT,tenant_id:TENANT,nif:'999999990'},[{id:SHIPMENT,status:'pendente',sell_price:3.91,service_type:'Nacional'}],false,true,false,{paymentDays:-2})
+ assert.notEqual(bad?.success,true);assert.equal(refused.issued,0)
 })

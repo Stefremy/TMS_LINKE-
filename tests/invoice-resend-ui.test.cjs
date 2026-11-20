@@ -9,7 +9,7 @@ test('issued unpaid and paid invoices offer resend; opening preloads billing ema
  const jsx=(type,props,key)=>({type,props:props||{},key})
  const empty=()=>null
  const load=createLoader({react:React,'react/jsx-runtime':{jsx,jsxs:jsx},'next/link':{default:'a'},'next/navigation':{useRouter:()=>({refresh(){}})},'lucide-react':new Proxy({},{get:(_,p)=>p}),
-  '../notas-credito/components/CreditNoteButton':{CreditNoteButton:empty},'./InvoiceIssueButton':{InvoiceIssueButton:empty},'./AnimatedDisclosure':{AnimatedDisclosure:empty},'./StoreAvatar':{StoreAvatar:empty},'./PeriodStatementCard':{PeriodStatementCard:empty},'./MoloniConnectModal':{MoloniConnectModal:empty}})
+  '../notas-credito/components/CreditNoteButton':{CreditNoteButton:empty},'./InvoiceIssueButton':{InvoiceIssueButton:empty},'./AnimatedDisclosure':{AnimatedDisclosure:empty},'./StoreAvatar':{StoreAvatar:empty},'./PeriodStatementCard':{PeriodStatementCard:empty},'./MoloniConnectModal':{MoloniConnectModal:empty},'./IssueInvoiceDialog':{useIssueInvoiceDialog:()=>({ask:async()=>null,dialog:null})}})
  const Component=load('app/ops/faturacao/contas-corrente/ContasCorrenteClient.tsx').default
  const client={id:'client-a',short_name:'Loja',legal_name:'Loja',billing_email:'billing@example.invalid',email:'other@example.invalid'}
  const base={client_id:client.id,client_name:'Loja',created_at:'2026-10-28',total_value:10,shipment_ids:[]}

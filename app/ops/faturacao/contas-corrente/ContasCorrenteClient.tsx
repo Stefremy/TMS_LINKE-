@@ -21,6 +21,7 @@ import type { PeriodStatement } from '@/lib/billing/recurring-statements'
 import { billingViewFiltersUrl, type BillingViewSelection } from "@/lib/billing/view-filters"
 import { addCalendarDays } from '@/lib/billing/recurring-periods'
 import { MoloniConnectModal } from "./MoloniConnectModal"
+import { useIssueInvoiceDialog } from "./IssueInvoiceDialog"
 
 export default function ContasCorrenteClient({ 
   clients, 
@@ -29,7 +30,9 @@ export default function ContasCorrenteClient({
   periodStatements = [],
   initialSelection,
   planningPanel,
-  moloniConfig
+  customInvoicesPanel,
+  moloniConfig,
+  defaultPaymentDays = 30
 }: { 
   clients: Cliente[]
   shipments: ShipmentRecord[]
@@ -37,9 +40,15 @@ export default function ContasCorrenteClient({
   periodStatements?: PeriodStatement[]
   initialSelection?: BillingViewSelection
   planningPanel?: React.ReactNode
+  customInvoicesPanel?: React.ReactNode
   moloniConfig?: Awaited<ReturnType<typeof getMoloniConfigAction>>
+  defaultPaymentDays?: number
 }) {
   const router = useRouter()
+  const { ask: askIssue, dialog: issueDialog } = useIssueInvoiceDialog()
+  // Prazo da ficha do cliente; sem prazo próprio usa o prazo por omissão da empresa.
+  const clientPaymentDays = (client?: Partial<Cliente>) =>
+    typeof client?.payment_due_days === "number" ? client.payment_due_days : defaultPaymentDays
 
   // Format Moloni document number: "13" → "FT 2026/13" (or pass through if already formatted)
   const formatFTNumber = (num: string | number | null | undefined): string | null => {
@@ -370,6 +379,8 @@ export default function ContasCorrenteClient({
 
       {planningPanel}
 
+      {customInvoicesPanel}
+
       {/* Aviso de Moloni Desconectado */}
       {!moloniConfig?.isConnected && (
         <div className="p-4 rounded-xl bg-[var(--status-warning-soft)] border border-[rgba(217,119,6,0.25)] text-[var(--text-primary)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
@@ -479,8 +490,16 @@ export default function ContasCorrenteClient({
                             clientName={client.legal_name || client.short_name}
                             disabled={activeCount === 0 || isIssuingInvoice}
                             onIssue={async () => {
-                              const modeStr = groupInvoicesByService ? "Agrupada por Serviço (Fatura Compacta - 1 página)" : "Detalhada (1 linha por envio)"
-                              if (!confirm(`Emitir Fatura Oficial Moloni para ${activeCount} envios selecionados?\n\nTotal: ${totalValue.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€\nModo: ${modeStr}`)) return;
+                              const paymentDays = await askIssue({
+                                clientName: client.legal_name || client.short_name,
+                                paymentDays: clientPaymentDays(client),
+                                details: [
+                                  { label: "Envios", value: String(activeCount) },
+                                  { label: "Total (s/ IVA)", value: `${totalValue.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€` },
+                                  { label: "Modo", value: groupInvoicesByService ? "Agrupada por serviço" : "Detalhada (1 linha por envio)" },
+                                ],
+                              })
+                              if (paymentDays === null) return
                               
                               if (invoiceInFlight.current) return
                               invoiceInFlight.current = true
@@ -488,7 +507,7 @@ export default function ContasCorrenteClient({
                               try {
                                 const activeShipments = shipments.filter(s => !excludedShipmentIds.has(s.id))
                                 const { emitInvoiceAction } = await import("@/app/actions/moloni")
-                                const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, groupInvoicesByService)
+                                const res = await emitInvoiceAction(client.id, activeShipments.map(s => s.id), false, groupInvoicesByService, false, { paymentDays })
                                 if (!res?.success || !res.statementNumber || !res.moloniDocumentId) {
                                   notify.error(`Erro ao emitir fatura: ${res?.error || "O Moloni não confirmou a emissão."}`)
                                   return
@@ -880,12 +899,20 @@ export default function ContasCorrenteClient({
                                                 setIsMoloniModalOpen(true)
                                                 return
                                               }
-                                              const modeStr = groupInvoicesByService ? "Agrupada por Serviço (Fatura Compacta - 1 página)" : "Detalhada (1 linha por envio)"
-                                              const ok = confirm(`Deseja comunicar e emitir a fatura oficial no Moloni para o extrato ${stmt.statement_number}?\n\nModo: ${modeStr}`)
-                                              if (!ok) return
+                                              const stmtClient = clients.find(c => c.id === stmt.client_id)
+                                              const paymentDays = await askIssue({
+                                                clientName: stmtClient?.legal_name || stmtClient?.short_name || stmt.client_name || "Cliente",
+                                                paymentDays: clientPaymentDays(stmtClient),
+                                                details: [
+                                                  { label: "Extrato", value: stmt.statement_number },
+                                                  { label: "Total (s/ IVA)", value: `${Number(stmt.total_value || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€` },
+                                                  { label: "Modo", value: groupInvoicesByService ? "Agrupada por serviço" : "Detalhada (1 linha por envio)" },
+                                                ],
+                                              })
+                                              if (paymentDays === null) return
 
                                               const { emitMoloniInvoiceForStatementAction } = await import("@/app/actions/moloni")
-                                              const res = await emitMoloniInvoiceForStatementAction(stmt.statement_number || stmt.id, groupInvoicesByService)
+                                              const res = await emitMoloniInvoiceForStatementAction(stmt.statement_number || stmt.id, groupInvoicesByService, false, { paymentDays })
                                               if (res.success) {
                                                 const dlUrl = `/api/statements/${encodeURIComponent(stmt.statement_number || stmt.id)}/moloni-pdf`
                                                 try {
@@ -1133,6 +1160,8 @@ export default function ContasCorrenteClient({
           </div>
         </div>
       )}
+
+      {issueDialog}
 
       <MoloniConnectModal 
         isOpen={isMoloniModalOpen}
