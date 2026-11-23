@@ -6,7 +6,7 @@ import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { errorMessage } from "@/lib/errors"
 
 
-import { invoiceBillingAddress, getClientBillingAddress, usesPrincipalBillingAddress } from "@/lib/client-addresses"
+import { invoiceBillingAddress, getClientBillingAddress, usesPrincipalBillingAddress, invoiceRecipient, withInvoiceRecipient } from "@/lib/client-addresses"
 
 import {loadInvoiceCredits, invoiceCreditSummary} from "@/lib/billing/credit-notes/balances"
 import { createAdminClient } from "@/lib/supabase/server"
@@ -77,7 +77,8 @@ export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Client
   if (!client?.id || !shipments?.length) throw new Error("Cliente ou envios não encontrados.")
   const persistedClient = (await getClientesAction(client.id)).find((c) => c.id === client.id)
   if (!persistedClient) throw new Error("Cliente não encontrado nesta empresa.")
-  client = { ...persistedClient, tenant_id: ctx.tenant_id }
+  // NIF e nome da fatura: os da ficha, ou o NIF de faturação definido (ex.: consumidor final).
+  client = withInvoiceRecipient({ ...persistedClient, tenant_id: ctx.tenant_id })
   const billingAddress = invoiceBillingAddress(client)
   const selectedIds = [...new Set(shipments.map((s) => s.id))]
   const { data: authoritativeShipments, error: shipmentError } = await supabase.from('shipments').select(SHIPMENT_LIST_COLUMNS)
@@ -119,7 +120,7 @@ export async function internalEmitInvoice(client: Partial<Cliente> & Pick<Client
         // A. Verificar/Criar Cliente no Moloni
         let moloniCustomerId = null
         if (client.nif) {
-          const moloniCust = await moloni.getCustomerByVat(client.nif)
+          const moloniCust = await moloni.getCustomerByVat(client.nif, client.legal_name || client.short_name)
           if (moloniCust) {
             moloniCustomerId = moloniCust.customer_id
             
@@ -533,7 +534,8 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
 
     // 3. Obter dados do cliente
     const allClients = await getClientesAction()
-    const client: Partial<Cliente> = allClients.find((c) => c.id === stmt.client_id) || {
+    const storedClient = allClients.find((c) => c.id === stmt.client_id)
+    const client: Partial<Cliente> = storedClient ? withInvoiceRecipient(storedClient) : {
       legal_name: stmt.client_name,
       short_name: stmt.client_name,
       nif: "999999990",
@@ -545,8 +547,8 @@ export async function emitMoloniInvoiceForStatementAction(statementIdOrNumber: s
 
     // 4. Verificar ou Criar cliente no Moloni
     let moloniCustomerId = null
-    if (client.nif && client.nif !== "999999990") {
-      const moloniCust = await moloni.getCustomerByVat(client.nif)
+    if (client.nif) {
+      const moloniCust = await moloni.getCustomerByVat(client.nif, client.legal_name || client.short_name || stmt.client_name)
       if (moloniCust) {
         moloniCustomerId = moloniCust.customer_id
 
@@ -1456,8 +1458,8 @@ export async function sendStatementInvoiceEmailAction(params: {
 
         const pdfData = {
           statementNumber: stmt.statement_number,
-          clientName: clientName,
-          clientNif: client?.nif || "",
+          clientName: (client && invoiceRecipient(client).name) || clientName,
+          clientNif: client ? invoiceRecipient(client).nif : "",
           clientAddress: client ? getClientBillingAddress(client).address : "",
           clientCity: client ? getClientBillingAddress(client).city : "",
           clientEmail: targetEmail,

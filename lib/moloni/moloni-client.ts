@@ -404,10 +404,18 @@ export class MoloniClient {
   /**
    * Verifica se o cliente existe pelo NIF
    */
-  async getCustomerByVat(vat: string) {
+  /**
+   * O NIF 999999990 (consumidor final) é partilhado por muitos clientes: só devolve um registo com
+   * o mesmo nome, para nunca alterar a ficha Moloni de outro cliente.
+   */
+  async getCustomerByVat(vat: string, name?: string) {
     try {
       const customers = await this.request("customers/getByVat", { vat });
       if (Array.isArray(customers) && customers.length > 0) {
+        if (vat === "999999990") {
+          const key = (value: unknown) => String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase()
+          return name ? customers.find((customer: { name?: string }) => key(customer.name) === key(name)) || null : null
+        }
         return customers[0];
       }
       return null;

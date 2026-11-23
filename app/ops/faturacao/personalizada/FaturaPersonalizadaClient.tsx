@@ -3,7 +3,7 @@ import { errorMessage } from "@/lib/errors"
 
 
 import { CountrySelect } from "@/components/country-select"
-import { getClientBillingAddress } from "@/lib/client-addresses"
+import { getClientBillingAddress, invoiceRecipient } from "@/lib/client-addresses"
 
 import * as React from "react"
 import {CreditNoteButton} from "../notas-credito/components/CreditNoteButton"
@@ -43,6 +43,8 @@ interface Client {
   country_code?: string
   billing_same_as_pickup?: boolean
   billing_address?: string
+  billing_nif?: string
+  billing_name?: string
   billing_postal_code?: string
   billing_city?: string
   billing_country_code?: string
@@ -155,8 +157,9 @@ export default function FaturaPersonalizadaClient({
     }
     const found = clients.find(c => c.id === clientId)
     if (found) {
-      setClientName(found.legal_name || found.short_name || "")
-      setClientVat(found.nif || "")
+      const recipient = invoiceRecipient(found)
+      setClientName(recipient.name || "")
+      setClientVat(recipient.nif || "")
       const billing = getClientBillingAddress(found)
       setClientAddress(billing.address)
       setClientZip(billing.postal_code)

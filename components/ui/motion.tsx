@@ -51,10 +51,14 @@ export function AnimatedNumber({ value, duration = 450, className, ...format }: 
     if (start === target) return
     from.current = target
     if (frame.current !== null) cancelAnimationFrame(frame.current)
-    if (prefersReducedMotion() || duration <= 0) { setShown(target); return }
-    setChanged(true)
-    const began = performance.now()
+    // State changes happen in animation frames, never synchronously inside the effect.
+    if (prefersReducedMotion() || duration <= 0) {
+      frame.current = requestAnimationFrame(() => { frame.current = null; setShown(target) })
+      return () => { if (frame.current !== null) cancelAnimationFrame(frame.current) }
+    }
+    let began: number | null = null
     const tick = (now: number) => {
+      if (began === null) { began = now; setChanged(true) }
       const t = Math.min(1, (now - began) / duration)
       const eased = 1 - Math.pow(1 - t, 3) // ease-out: rápido no início, assenta no valor
       setShown(t >= 1 ? target : start + (target - start) * eased)

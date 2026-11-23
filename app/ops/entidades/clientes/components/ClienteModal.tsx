@@ -10,7 +10,8 @@ import { resolveClientSpecialFees, validateClientSpecialFees } from "@/lib/prici
 import { importClientServices, importableClientServiceIds, type ClientServiceImportSource } from "@/lib/clients/import-service-pricing"
 import { CLIENT_ACTIVITY_COLORS, clientActivityColor } from "@/lib/clients/activity-color"
 import { CountrySelect } from "@/components/country-select"
-import { normalizeClientBillingFields, usesPrincipalBillingAddress, getClientBillingAddress } from "@/lib/client-addresses"
+import { normalizeClientBillingFields, usesPrincipalBillingAddress, getClientBillingAddress, FINAL_CONSUMER_NIF } from "@/lib/client-addresses"
+import { validatePortugueseNif } from "@/lib/tax/vies"
 import {
   EU_VIES_PORTAL_URL,
   VIES_MEMBER_STATES,
@@ -171,6 +172,13 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
   const [activeZoneByServico, setActiveZoneByServico] = React.useState<Record<string, number>>({})
   const [isEditingCredit, setIsEditingCredit] = React.useState(false)
   const [walletInjection, setWalletInjection] = React.useState("")
+  // Adds the typed amount to the wallet total. An event handler, so it may update the draft revision.
+  const applyInjection = () => {
+    const injection = parseWalletInjection(walletInjection)
+    if (injection === null) return
+    setFormData(prev => ({ ...prev, credit_limit: applyWalletInjection(prev.credit_limit, injection) }))
+    setWalletInjection("")
+  }
   const [importSourceId, setImportSourceId] = React.useState("")
   const [replaceImportedPrices, setReplaceImportedPrices] = React.useState(false)
   const [importNotice, setImportNotice] = React.useState("")
@@ -510,6 +518,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
       validateClientWeightTiers(formData.pricing?.service_weight_tiers)
       paymentDueDays(formData.payment_due_days, NaN)
       validateClientSpecialFees(formData.pricing?.special_services_fees ?? DEFAULT_CLIENT_PRICING.special_services_fees)
+      normalizeClientBillingFields(formData) // NIF de faturação inválido: avisa antes de gravar
       const res = await saveClienteAction({
         ...formData,
         id: initialData?.id || draftId,
@@ -956,6 +965,11 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
     )
   }
 
+
+  // Wallet preview (prepaid clients), computed once per render instead of inside the JSX.
+  const { wasPrepaid, baseLoaded, currentBalance, pending, projected } = walletPreview(initialData, formData.credit_limit)
+  const eur = (v: number) => `${v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+  const injectionValid = parseWalletInjection(walletInjection) !== null
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-stretch sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
       <div className="bg-[var(--surface-bg)] sm:rounded-xl shadow-[var(--shadow-layer)] w-full max-w-5xl h-[100dvh] sm:h-auto sm:max-h-[94dvh] flex flex-col overflow-hidden sm:border border-[var(--border-subtle)]">
@@ -1493,6 +1507,35 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                         className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs text-[var(--text-primary)]" />
                       <p className="mt-1 text-[10px] text-[var(--text-secondary)]">Complete a morada de faturação antes de emitir faturas.</p>
                     </div>
+                    <div className="md:col-span-2 grid grid-cols-1 gap-3 border-t border-[var(--border-subtle)] pt-3 md:grid-cols-2">
+                      <div>
+                        <label htmlFor="billing_nif" className="mb-1 block text-[11px] font-bold text-[var(--text-secondary)]">NIF de faturação</label>
+                        <div className="flex gap-2">
+                          <input id="billing_nif" type="text" inputMode="numeric" maxLength={11} value={formData.billing_nif || ""}
+                            placeholder={formData.nif ? `${formData.nif} (NIF do cliente)` : "NIF do cliente"}
+                            onChange={e => setFormData(prev => ({ ...prev, billing_nif: e.target.value.replace(/[^\dA-Za-z]/g, "") }))}
+                            className="min-w-0 flex-1 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs text-[var(--text-primary)]" />
+                          <button type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, billing_nif: FINAL_CONSUMER_NIF, billing_name: prev.billing_name?.trim() ? prev.billing_name : "Consumidor final" }))}
+                            className={`shrink-0 rounded-md border px-2.5 text-[11px] font-semibold transition-colors ${formData.billing_nif === FINAL_CONSUMER_NIF ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]" : "border-[var(--border-subtle)] bg-[var(--surface-bg)] text-[var(--text-primary)] hover:bg-[var(--surface-muted)]"}`}>
+                            Consumidor final
+                          </button>
+                        </div>
+                        {(() => {
+                          const nif = (formData.billing_nif || "").replace(/^PT/i, "")
+                          if (nif && nif !== FINAL_CONSUMER_NIF && !validatePortugueseNif(nif)) return <p className="mt-1 text-[10px] font-medium text-[var(--status-critical)]">Este NIF não é válido.</p>
+                          return <p className="mt-1 text-[10px] text-[var(--text-secondary)]">{nif === FINAL_CONSUMER_NIF ? "As faturas saem a Consumidor final (999999990)." : nif ? "As faturas saem para este NIF em vez do NIF do cliente." : "Vazio: as faturas usam o NIF do cliente."}</p>
+                        })()}
+                      </div>
+                      <div>
+                        <label htmlFor="billing_name" className="mb-1 block text-[11px] font-bold text-[var(--text-secondary)]">Nome na fatura</label>
+                        <input id="billing_name" type="text" value={formData.billing_name || ""}
+                          placeholder={formData.legal_name || "Nome do cliente"} disabled={!formData.billing_nif}
+                          onChange={e => setFormData(prev => ({ ...prev, billing_name: e.target.value }))}
+                          className="w-full rounded-md border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs text-[var(--text-primary)] disabled:opacity-60" />
+                        <p className="mt-1 text-[10px] text-[var(--text-secondary)]">Só se aplica com outro NIF de faturação.</p>
+                      </div>
+                    </div>
                   </div>
                 )}
               </section>
@@ -1752,18 +1795,8 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                 </div>
                 )}
 
-                {formData.billing_type === "pay_as_you_go" && (() => {
-                  // Em pré-pagamento credit_limit guarda o total carregado na wallet (Stripe + injeções).
-                  const { wasPrepaid, baseLoaded, currentBalance, pending, projected } = walletPreview(initialData, formData.credit_limit)
-                  const eur = (v: number) => `${v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
-                  const injection = parseWalletInjection(walletInjection)
-                  const injectionValid = injection !== null
-                  const applyInjection = () => {
-                    if (injection === null) return
-                    setFormData(prev => ({ ...prev, credit_limit: applyWalletInjection(prev.credit_limit, injection) }))
-                    setWalletInjection("")
-                  }
-                  return (
+                {/* Em pré-pagamento credit_limit guarda o total carregado na wallet (Stripe + injeções). */}
+                {formData.billing_type === "pay_as_you_go" && (
                     <div className="md:col-span-2 p-3 sm:p-4 rounded-lg bg-[var(--accent-soft)] border border-[rgba(18,138,71,0.2)]">
                       <div className="flex items-center justify-between gap-2 mb-3">
                         <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Saldo da wallet</span>
@@ -1819,8 +1852,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                         <p className="mt-1.5 text-[10px] text-[var(--text-tertiary)]">Valores negativos retiram saldo. O ajuste só é aplicado ao clicar em «Gravar Cliente».</p>
                       </div>
                     </div>
-                  )
-                })()}
+                )}
 
                 <div>
                   <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Comercial / Gestor de Conta</label>

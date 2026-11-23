@@ -8,7 +8,7 @@ const input = () => ({ date: new Date(Date.now() + 2 * 86400000).toISOString().s
   volumes: 1, weightKg: 3, heaviestWeightKg: 3, name: 'Armazém A', address: 'Rua A 1', city: 'Porto', postal: '4000-001', contact: 'Ana', phone: '912345678', email: '', notes: 'Campainha do armazém' })
 function harness(options = {}) {
   let role = options.role || 'client', allow = true
-  const tables = { audit_log: [] }, db = fakeSupabase(tables, options.failure, { persistInserts: true }), calls = [], emails = []
+  const tables = { audit_log: [] }, db = fakeSupabase(tables, options.failure, { persistInserts: true }), calls = [], emails = [], staffEmails = []
   const ctx = () => ({ role, tenant_id: T, client_id: role === 'client' ? A : null, user: { id: 'trusted-actor' } })
   const auth = { requireUser: async permission => { if (!allow) throw Error('Forbidden'); assert.equal(permission, 'Pedidos de Recolha & Distribuição'); return ctx() },
     requireEmployee: async permission => { if (!allow || role === 'client') throw Error('Forbidden'); assert.equal(permission, 'Pedidos de Recolha & Distribuição'); return ctx() } }
@@ -16,9 +16,11 @@ function harness(options = {}) {
     './clientes': { getClientesAction: async id => id === A ? [{ id: A, short_name: 'Loja A', is_active: options.active !== false }] : [] },
     '@/lib/client-portal/suspension': { readPortalAccess: async () => ({ suspended: !!options.suspended, blocked: !!options.blocked }) },
     '@/lib/email/pickup-confirmation': { notifyPickupConfirmation: async (db, tenant, request) => { if (request.status !== 'completed') throw Error('Ainda não confirmado'); assert.equal(tables.audit_log.find(row => row.id === request.id).details.status, 'completed'); emails.push(request.id); if (options.emailFailure) throw Error('Fixture email unavailable'); return { skipped: false } } },
+    // Team alert for a new request: recorded, never sent.
+    '@/lib/email/resend': { sendEmail: async message => { staffEmails.push(message); if (options.staffEmailFailure) throw Error('Resend unavailable'); return { success: true } } },
     './ctt': { scheduleCttPickupAction: async booking => { calls.push(booking); if (options.throwCarrier) throw Error('Timeout'); return options.carrierResult || { success: true, pickupNumber: '1519176/26', carrier_name: 'CTT Expresso', carrier_code: 'ctt_expresso' } } },
   })
-  return { api: load('app/actions/client-pickup-requests.ts'), tables, db, calls, emails, staff: () => { role = 'employee' }, deny: () => { allow = false },
+  return { api: load('app/actions/client-pickup-requests.ts'), tables, db, calls, emails, staffEmails, staff: () => { role = 'employee' }, deny: () => { allow = false },
     request: (values = input(), id = ID, client = B) => load('app/actions/client-pickup-requests.ts').requestClientPickupAction(values, id, client) }
 }
 
@@ -169,4 +171,17 @@ test('accepted bookings retain success and the carrier reference if the final re
   assert.equal(result.success, true); assert.equal(result.pickupNumber, '1519176/26'); assert.match(result.request_update_warning, /Marcar efetuado/)
   assert.equal(h.tables.audit_log[0].details.status, 'processing')
   assert.equal((await h.api.scheduleClientPickupRequestAction(ID, {})).success, false); assert.equal(h.calls.length, 1)
+})
+
+test('the team is alerted once per new request, even after double clicks and retries, and an email failure never fails the request', async () => {
+  const h = harness(), values = input()
+  const results = await Promise.all([h.request(values), h.request(values)])
+  assert.ok(results.every(result => result.success))
+  assert.equal((await h.request(values)).success, true)
+  assert.equal(h.staffEmails.length, 1, 'one alert per request')
+  assert.equal(h.staffEmails[0].idempotencyKey, `pickup-request-staff-${ID}`)
+  assert.match(h.staffEmails[0].subject, /Novo pedido de recolha · Loja A/)
+  const failing = harness({ staffEmailFailure: true })
+  const saved = await failing.request()
+  assert.equal(saved.success, true); assert.equal(failing.tables.audit_log.length, 1)
 })

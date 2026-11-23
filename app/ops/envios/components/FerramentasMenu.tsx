@@ -127,7 +127,7 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
       <div className="relative inline-flex items-center" ref={menuRef}>
         <button 
           onClick={() => setIsOpen(!isOpen)}
-          className={`border px-3 py-1.5 rounded text-sm font-semibold shadow-sm transition-colors flex items-center gap-1.5 ${
+          className={`border h-8 px-3 rounded-md text-[13px] font-medium transition-colors flex items-center gap-1.5 ${
             isOpen 
               ? "bg-slate-200 border-slate-400 text-slate-900" 
               : "bg-white border-slate-300 hover:bg-slate-50 text-slate-700"
@@ -135,7 +135,7 @@ export function FerramentasMenu({ selectedShipmentIds, onManifestClosed }: { sel
         >
           <Settings className="w-4 h-4" />
           Ferramentas
-          <ChevronDown className={`w-4 h-4 ml-1 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+          <ChevronDown className={`w-3.5 h-3.5 ml-0.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
         </button>
 
         {isOpen && (

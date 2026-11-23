@@ -4,6 +4,7 @@ import { errorMessage } from "@/lib/errors"
 import { createAdminClient } from "@/lib/supabase/server"
 import { requireClientAccess } from "@/lib/auth/context"
 import { revalidatePath } from "next/cache"
+import { storeFetch } from "@/lib/ecommerce/store-fetch"
 
 export type PlatformType = "woocommerce" | "shopify" | "linke_store" | "prestashop" | "custom_api"
 
@@ -70,7 +71,9 @@ export interface SyncedOrder {
 
 function cleanUrl(url: string): string {
   let cleaned = (url || "").trim()
-  if (!cleaned.startsWith("http://") && !cleaned.startsWith("https://")) {
+  // Store APIs are only called over HTTPS; a typed http:// address is upgraded instead of failing.
+  cleaned = cleaned.replace(/^http:\/\//i, "https://")
+  if (!/^https:\/\//i.test(cleaned)) {
     cleaned = "https://" + cleaned
   }
   return cleaned.replace(/\/+$/, "")
@@ -108,6 +111,46 @@ function sanitizeWooCredentials(ck?: string, cs?: string): { ck: string; cs: str
   return { ck: cleanedCk, cs: cleanedCs }
 }
 
+type StoreCredentials = ClientEcommerceStore["credentials"]
+
+/** Secrets never leave the server: the interface only needs to know which fields are filled in. */
+function maskCredentials(creds: StoreCredentials = {}): StoreCredentials {
+  return {
+    consumer_key: creds.consumer_key ? `${creds.consumer_key.slice(0, 7)}••••••••` : undefined,
+    consumer_secret: creds.consumer_secret ? `cs_••••••••` : undefined,
+    access_token: creds.access_token ? `••••••••${creds.access_token.slice(-4)}` : undefined,
+    api_key: creds.api_key ? `••••••••` : undefined,
+  }
+}
+
+/**
+ * The store with this id, as configured by THIS client. Every lookup by store id goes through here:
+ * a store id alone is not proof of ownership, since all Linke clients share one tenant.
+ * The latest record wins, so a store deleted by its owner is no longer found.
+ */
+async function loadOwnedStore(
+  supabase: ReturnType<typeof createAdminClient>,
+  tenantId: string,
+  clientId: string,
+  storeId: string | undefined
+): Promise<ClientEcommerceStore | null> {
+  if (!storeId || !clientId) return null
+  const { data, error } = await supabase
+    .from("audit_log")
+    .select("action, details, created_at")
+    .eq("tenant_id", tenantId)
+    .in("action", ["client_ecommerce_store", "client_ecommerce_store_deleted"])
+    .eq("details->>id", storeId)
+    .eq("details->>client_id", clientId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error("Não foi possível consultar a loja.")
+  if (!data || data.action !== "client_ecommerce_store") return null
+  const store = data.details as ClientEcommerceStore | null
+  return store && store.id === storeId && store.client_id === clientId ? store : null
+}
+
 /**
  * Obtém as lojas configuradas para o cliente especificado
  */
@@ -141,16 +184,7 @@ export async function getClientStoresAction(clientId: string): Promise<ClientEco
 
       if (details.id && !deletedIds.has(details.id) && !storesMap.has(details.id)) {
         // Mask credentials before returning to UI
-        const creds = details.credentials || {}
-        storesMap.set(details.id, {
-          ...(details as ClientEcommerceStore),
-          credentials: {
-            consumer_key: creds.consumer_key ? `${creds.consumer_key.slice(0, 7)}••••••••` : undefined,
-            consumer_secret: creds.consumer_secret ? `cs_••••••••` : undefined,
-            access_token: creds.access_token ? `••••••••${creds.access_token.slice(-4)}` : undefined,
-            api_key: creds.api_key ? `••••••••` : undefined,
-          },
-        })
+        storesMap.set(details.id, { ...(details as ClientEcommerceStore), credentials: maskCredentials(details.credentials) })
       }
     }
 
@@ -191,18 +225,14 @@ export async function saveClientStoreAction(
   // Se já existir, preservar credenciais existentes caso o utilizador não tenha reintroduzido (campos com ••••)
   const finalCredentials = { ...storePayload.credentials }
   if (storePayload.id) {
-    const { data: existing } = await supabase
-      .from("audit_log")
-      .select("details")
-      .eq("tenant_id", tenantId)
-      .eq("action", "client_ecommerce_store")
-      .eq("details->>id", storeId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    // Editing is only possible on this client's own store; another store id is never reused.
+    let existing: ClientEcommerceStore | null
+    try { existing = await loadOwnedStore(supabase, tenantId, clientId, storeId) }
+    catch { return { success: false, error: "Não foi possível consultar a loja." } }
+    if (!existing) return { success: false, error: "Loja não encontrada." }
 
-    if (existing?.details?.credentials) {
-      const prev = existing.details.credentials
+    if (existing.credentials) {
+      const prev = existing.credentials
       if (!finalCredentials.consumer_key || finalCredentials.consumer_key.includes("••••")) {
         finalCredentials.consumer_key = prev.consumer_key
       }
@@ -250,7 +280,7 @@ export async function saveClientStoreAction(
   }
 
   revalidatePath("/app", "layout")
-  return { success: true, store: record }
+  return { success: true, store: { ...record, credentials: maskCredentials(record.credentials) } }
 }
 
 /**
@@ -299,18 +329,14 @@ export async function testStoreConnectionAction(
 
   // Se o utilizador não editou o campo e tem máscara, obter chaves originais
   if (existingStoreId) {
-    const { data: existing } = await supabase
-      .from("audit_log")
-      .select("details")
-      .eq("tenant_id", ctx.tenant_id)
-      .eq("action", "client_ecommerce_store")
-      .eq("details->>id", existingStoreId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    // Saved secrets are only reused for this client's own store.
+    let existing: ClientEcommerceStore | null
+    try { existing = await loadOwnedStore(supabase, ctx.tenant_id, clientId, existingStoreId) }
+    catch { return { success: false, error: "Não foi possível consultar a loja." } }
+    if (!existing) return { success: false, error: "Loja não encontrada." }
 
-    if (existing?.details?.credentials) {
-      const prev = existing.details.credentials
+    if (existing.credentials) {
+      const prev = existing.credentials
       if (!credentials.consumer_key || credentials.consumer_key.includes("••••")) {
         credentials.consumer_key = prev.consumer_key
       }
@@ -343,7 +369,7 @@ export async function testStoreConnectionAction(
       const basicAuth = Buffer.from(`${ck}:${cs}`).toString("base64")
       let testEndpoint = `${base}/wp-json/wc/v3/system_status`
 
-      let res = await fetch(testEndpoint, {
+      let res = await storeFetch(testEndpoint, {
         method: "GET",
         headers: {
           Authorization: `Basic ${basicAuth}`,
@@ -355,7 +381,7 @@ export async function testStoreConnectionAction(
       // Fallback para query params se basic auth falhar no host do cliente
       if (res.status === 401 || res.status === 404) {
         testEndpoint = `${base}/wp-json/wc/v3/system_status?consumer_key=${encodeURIComponent(ck)}&consumer_secret=${encodeURIComponent(cs)}`
-        res = await fetch(testEndpoint, {
+        res = await storeFetch(testEndpoint, {
           method: "GET",
           headers: { "User-Agent": "LinkeTMS/2.0" },
           cache: "no-store",
@@ -365,7 +391,7 @@ export async function testStoreConnectionAction(
       // Se system_status der 404, tentar listar 1 encomenda para confirmar
       if (res.status === 404) {
         const ordersUrl = `${base}/wp-json/wc/v3/orders?per_page=1&consumer_key=${encodeURIComponent(ck)}&consumer_secret=${encodeURIComponent(cs)}`
-        res = await fetch(ordersUrl, {
+        res = await storeFetch(ordersUrl, {
           method: "GET",
           headers: { "User-Agent": "LinkeTMS/2.0" },
           cache: "no-store",
@@ -408,7 +434,7 @@ export async function testStoreConnectionAction(
       }
 
       const shopUrl = `https://${domain}/admin/api/2024-01/shop.json`
-      const res = await fetch(shopUrl, {
+      const res = await storeFetch(shopUrl, {
         method: "GET",
         headers: {
           "X-Shopify-Access-Token": token,
@@ -447,7 +473,7 @@ export async function testStoreConnectionAction(
       const apiKey = credentials.api_key?.trim() || ""
       const auth = Buffer.from(`${apiKey}:`).toString("base64")
 
-      const res = await fetch(`${base}/api?output_format=JSON`, {
+      const res = await storeFetch(`${base}/api?output_format=JSON`, {
         method: "GET",
         headers: {
           Authorization: `Basic ${auth}`,
@@ -490,21 +516,11 @@ export async function syncStoreOrdersAction(
 
   try {
     // 1. Obter dados da loja
-    const { data: storeLog } = await supabase
-      .from("audit_log")
-      .select("details")
-      .eq("tenant_id", tenantId)
-      .eq("action", "client_ecommerce_store")
-      .eq("details->>id", storeId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (!storeLog?.details) {
+    const store = await loadOwnedStore(supabase, tenantId, clientId, storeId)
+    if (!store) {
       return { success: false, error: "Loja não encontrada." }
     }
 
-    const store = storeLog.details as ClientEcommerceStore
     const { platform, store_url, credentials, name: storeName } = store
     let rawOrders: SyncedOrder[] = []
 
@@ -517,7 +533,7 @@ export async function syncStoreOrdersAction(
       const basicAuth = Buffer.from(`${ck}:${cs}`).toString("base64")
       const endpoint = `${base}/wp-json/wc/v3/orders?status=processing,pending&per_page=50`
 
-      let res = await fetch(endpoint, {
+      let res = await storeFetch(endpoint, {
         headers: {
           Authorization: `Basic ${basicAuth}`,
           "User-Agent": "LinkeTMS/2.0",
@@ -527,7 +543,7 @@ export async function syncStoreOrdersAction(
 
       if (res.status === 401 || res.status === 404) {
         const fallbackUrl = `${base}/wp-json/wc/v3/orders?status=processing,pending&per_page=50&consumer_key=${encodeURIComponent(ck)}&consumer_secret=${encodeURIComponent(cs)}`
-        res = await fetch(fallbackUrl, {
+        res = await storeFetch(fallbackUrl, {
           headers: { "User-Agent": "LinkeTMS/2.0" },
           cache: "no-store",
         })
@@ -646,7 +662,7 @@ export async function syncStoreOrdersAction(
       const token = credentials.access_token?.trim() || ""
 
       const endpoint = `https://${domain}/admin/api/2024-01/orders.json?status=open&fulfillment_status=unfulfilled&limit=50`
-      const res = await fetch(endpoint, {
+      const res = await storeFetch(endpoint, {
         headers: {
           "X-Shopify-Access-Token": token,
           "Content-Type": "application/json",
@@ -869,21 +885,11 @@ export async function updateStoreOrderTrackingAction(
   const supabase = createAdminClient()
 
   try {
-    const { data: storeLog } = await supabase
-      .from("audit_log")
-      .select("details")
-      .eq("tenant_id", ctx.tenant_id)
-      .eq("action", "client_ecommerce_store")
-      .eq("details->>id", storeId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (!storeLog?.details) {
+    const store = await loadOwnedStore(supabase, ctx.tenant_id, clientId, storeId)
+    if (!store) {
       return { success: false, error: "Loja não encontrada." }
     }
 
-    const store = storeLog.details as ClientEcommerceStore
     const { platform, store_url, credentials } = store
 
     if (platform === "woocommerce" || platform === "linke_store") {
@@ -912,7 +918,7 @@ export async function updateStoreOrderTrackingAction(
         ],
       }
 
-      const res = await fetch(`${base}/wp-json/wc/v3/orders/${orderId}`, {
+      const res = await storeFetch(`${base}/wp-json/wc/v3/orders/${orderId}`, {
         method: "PUT",
         headers: {
           Authorization: `Basic ${basicAuth}`,
@@ -933,7 +939,7 @@ export async function updateStoreOrderTrackingAction(
       const token = credentials.access_token?.trim() || ""
 
       // 1. Obter fulfillment orders da encomenda
-      const foRes = await fetch(`https://${domain}/admin/api/2024-01/orders/${orderId}/fulfillment_orders.json`, {
+      const foRes = await storeFetch(`https://${domain}/admin/api/2024-01/orders/${orderId}/fulfillment_orders.json`, {
         headers: { "X-Shopify-Access-Token": token },
         signal: AbortSignal.timeout(7000),
       })
@@ -950,7 +956,7 @@ export async function updateStoreOrderTrackingAction(
       }
 
       // 2. Criar fulfillment com tracking
-      const createFulfillmentRes = await fetch(`https://${domain}/admin/api/2024-01/fulfillments.json`, {
+      const createFulfillmentRes = await storeFetch(`https://${domain}/admin/api/2024-01/fulfillments.json`, {
         method: "POST",
         headers: {
           "X-Shopify-Access-Token": token,

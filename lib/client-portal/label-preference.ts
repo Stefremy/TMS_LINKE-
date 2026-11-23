@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useSyncExternalStore } from "react"
 
 /** What the client portal does with the label right after a shipment is created. */
 export type LabelPreference = "download" | "print" | "manual"
@@ -27,9 +27,27 @@ export function writeLabelPreference(clientId: string, preference: LabelPreferen
   try { window.localStorage.setItem(key(clientId), preference) } catch { /* private mode: keep default */ }
 }
 
+const CHANGE_EVENT = "linke:label-preference"
+// The choice made in this tab, so it holds even when storage is unavailable (private mode).
+const chosenInThisTab = new Map<string, LabelPreference>()
+
+/** Re-render when the preference changes in this tab (custom event) or in another one (storage event). */
+function subscribe(onChange: () => void) {
+  window.addEventListener(CHANGE_EVENT, onChange)
+  // Another tab changed it: its stored value wins over this tab's earlier choice.
+  const onStorage = () => { chosenInThisTab.clear(); onChange() }
+  window.addEventListener("storage", onStorage)
+  return () => { window.removeEventListener(CHANGE_EVENT, onChange); window.removeEventListener("storage", onStorage) }
+}
+
+/** Server render and first client render use the default; the stored choice is read right after. */
 export function useLabelPreference(clientId: string) {
-  const [preference, setPreference] = useState<LabelPreference>(DEFAULT_PREFERENCE)
-  useEffect(() => { setPreference(readLabelPreference(clientId)) }, [clientId])
-  const update = useCallback((next: LabelPreference) => { setPreference(next); writeLabelPreference(clientId, next) }, [clientId])
+  const preference = useSyncExternalStore(subscribe,
+    () => chosenInThisTab.get(clientId) ?? readLabelPreference(clientId), () => DEFAULT_PREFERENCE)
+  const update = useCallback((next: LabelPreference) => {
+    chosenInThisTab.set(clientId, next)
+    writeLabelPreference(clientId, next)
+    window.dispatchEvent(new Event(CHANGE_EVENT))
+  }, [clientId])
   return [preference, update] as const
 }

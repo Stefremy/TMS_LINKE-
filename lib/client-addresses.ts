@@ -1,6 +1,6 @@
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 
-type AddressClient = Pick<Partial<Cliente>, "address" | "postal_code" | "city" | "country_code" | "billing_same_as_pickup" | "billing_address" | "billing_postal_code" | "billing_city" | "billing_country_code">
+type AddressClient = Pick<Partial<Cliente>, "address" | "postal_code" | "city" | "country_code" | "billing_same_as_pickup" | "billing_address" | "billing_postal_code" | "billing_city" | "billing_country_code" | "billing_nif" | "billing_name" | "nif" | "legal_name" | "short_name">
 const clean = (value: unknown): string => typeof value === "string" ? value.trim() : ""
 const country = (value: unknown): string => clean(value).toUpperCase() === "UK" ? "GB" : clean(value).toUpperCase()
 
@@ -18,7 +18,45 @@ export function normalizeClientBillingFields(client: AddressClient) {
     billing_same_as_pickup: usesPrincipalBillingAddress(client),
     billing_address: clean(client.billing_address), billing_postal_code: clean(client.billing_postal_code),
     billing_city: clean(client.billing_city), billing_country_code: country(client.billing_country_code),
+    billing_nif: cleanBillingNif(client.billing_nif), billing_name: clean(client.billing_name),
   }
+}
+
+/** NIF português para "Consumidor final" (faturas sem contribuinte identificado). */
+export const FINAL_CONSUMER_NIF = "999999990"
+
+/** Mesmo algoritmo que validatePortugueseNif (lib/tax/vies.ts); sem imports, porque os scripts de importação carregam este ficheiro diretamente. */
+function validPortugueseNif(nif: string): boolean {
+  if (!/^\d{9}$/.test(nif)) return false
+  if (!["1", "2", "3", "5", "6", "8"].includes(nif[0]) && !["45", "70", "71", "72", "74", "75", "77", "78", "79", "90", "91", "98", "99"].includes(nif.slice(0, 2))) return false
+  const mod = [...nif.slice(0, 8)].reduce((sum, digit, i) => sum + Number(digit) * (9 - i), 0) % 11
+  return Number(nif[8]) === (mod < 2 ? 0 : 11 - mod)
+}
+
+function cleanBillingNif(value: unknown): string {
+  const nif = clean(value).replace(/[\s.-]+/g, "").toUpperCase().replace(/^PT/, "")
+  if (nif && nif !== FINAL_CONSUMER_NIF && !validPortugueseNif(nif)) {
+    throw new Error(`O NIF de faturação ${nif} não é válido. Corrija-o ou use Consumidor final (${FINAL_CONSUMER_NIF}).`)
+  }
+  return nif
+}
+
+/**
+ * Quem aparece na fatura. Com morada de faturação própria, o cliente pode faturar para outro NIF
+ * (por exemplo o cliente final, 999999990); caso contrário usa o NIF e o nome da ficha.
+ */
+export function invoiceRecipient(client: AddressClient) {
+  const ownName = clean(client.legal_name) || clean(client.short_name)
+  const billingNif = usesPrincipalBillingAddress(client) ? "" : clean(client.billing_nif)
+  if (!billingNif) return { nif: clean(client.nif), name: ownName, finalConsumer: clean(client.nif) === FINAL_CONSUMER_NIF }
+  const finalConsumer = billingNif === FINAL_CONSUMER_NIF
+  return { nif: billingNif, name: clean(client.billing_name) || (finalConsumer ? "Consumidor final" : ownName), finalConsumer }
+}
+
+/** A ficha do cliente com o NIF e o nome que a fatura deve usar. */
+export function withInvoiceRecipient<T extends AddressClient>(client: T): T {
+  const recipient = invoiceRecipient(client)
+  return { ...client, nif: recipient.nif, legal_name: recipient.name || client.legal_name }
 }
 
 export function getClientBillingAddress(client: AddressClient) {

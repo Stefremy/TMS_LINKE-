@@ -119,6 +119,9 @@ export interface Cliente {
   billing_postal_code?: string
   billing_city?: string
   billing_country_code?: string
+  /** NIF e nome para faturar a outra entidade (ex.: consumidor final 999999990). Só com morada de faturação própria. */
+  billing_nif?: string
+  billing_name?: string
   email: string
   billing_email?: string
   phone: string

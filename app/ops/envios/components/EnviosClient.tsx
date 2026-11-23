@@ -44,6 +44,7 @@ import { deleteShipmentsBulkAction, syncShipmentTrackingAction } from "@/app/act
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { OnlineOrderIcon } from "@/components/shipments/OnlineOrderIcon"
+import { CountryFlag } from "@/components/shipments/CountryFlag"
 
 interface EnviosClientProps {
   envios: ShipmentListRow[]
@@ -210,23 +211,10 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
   return (
     <div data-expanded={isExpanded} className="tms-shipment-workspace mx-auto flex w-full min-w-0 flex-col gap-3 bg-transparent [--accent:#526B57] [--accent-hover:#435A48] [--accent-active:#3A4F3F] [--accent-soft:#E9EEE8] [--status-success:#526B57] [--status-success-soft:#E9EEE8] [--status-warning:#846C43] [--status-warning-soft:#F2EEE5] [--status-critical:#9A625D] [--status-critical-soft:#F2E8E6] [--status-info:#596F7C] [--status-info-soft:#EBF0F2]">
       
-      {/* View controls */}
-      <div className="flex justify-end shrink-0">
-        <h1 className="sr-only">{viewMode === "envios" ? "Envios" : "Recolhas"}</h1>
-        <button
-          type="button"
-          aria-pressed={isExpanded}
-          onClick={() => setIsExpanded(expanded => !expanded)}
-          title={isExpanded ? "Restaurar vista (Esc)" : "Expandir lista de envios"}
-          className="tms-desktop-only items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3 py-2 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-muted)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
-        >
-          {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          {isExpanded ? "Restaurar vista" : "Expandir vista"}
-        </button>
-      </div>
+      <h1 className="sr-only">{viewMode === "envios" ? "Envios" : "Recolhas"}</h1>
 
       {/* Toolbar Area */}
-      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-3 sm:p-4 flex flex-row flex-wrap items-center justify-between gap-3 shrink-0 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-2.5 py-2 flex flex-row flex-wrap items-center justify-between gap-x-3 gap-y-1.5 shrink-0 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
         
         <div className="flex items-center gap-1.5 flex-wrap">
           <Button
@@ -239,7 +227,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                 router.push('/ops/envios/novo')
               }
             }}
-            className="h-9 px-3.5 text-sm font-medium shadow-none !bg-[#128A47] hover:!bg-[#0E6C37]"
+            className="h-8 px-3 text-[13px] font-medium shadow-none !bg-[#128A47] hover:!bg-[#0E6C37]"
           >
             <Plus className="w-3.5 h-3.5 mr-1" strokeWidth={3} />
             Novo envio
@@ -249,7 +237,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             variant="outline"
             size="sm"
             onClick={() => setViewMode(viewMode === "envios" ? "recolhas" : "envios")}
-            className={`h-9 px-3.5 text-sm font-medium shadow-none ${
+            className={`h-8 px-3 text-[13px] font-medium shadow-none ${
               viewMode === "recolhas" 
                 ? "bg-[var(--surface-dim)] border-[var(--border-strong)] text-[var(--text-primary)]" 
                 : ""
@@ -259,7 +247,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             {viewMode === "envios" ? "Recolhas" : "Envios"}
           </Button>
           
-          <Button variant="outline" size="sm" className="hidden xs:flex h-9 px-3.5 text-sm font-medium shadow-none">
+          <Button variant="outline" size="sm" className="hidden xs:flex h-8 px-3 text-[13px] font-medium shadow-none">
             <MapPin className="w-3.5 h-3.5 mr-1.5" />
             Localizar
           </Button>
@@ -270,7 +258,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
-            className={`h-9 px-3.5 text-sm font-medium shadow-none ${
+            className={`h-8 px-3 text-[13px] font-medium shadow-none ${
               showFilters 
                 ? "bg-[var(--surface-dim)] border-[var(--border-strong)] text-[var(--text-primary)]" 
                 : ""
@@ -283,7 +271,8 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
 
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-[320px]">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="w-full sm:w-[320px]">
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
             <input 
@@ -293,20 +282,31 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
               onChange={(e) => { setSearchQuery(e.target.value); setSearchAutoEnabled(true) }}
               onKeyDown={event => { if (event.key === "Enter" && viewMode === "envios") navigateFilters() }}
               aria-label="Pesquisar envios"
-              className="h-10 w-full pl-9 pr-3 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-colors"
+              className="h-8 w-full pl-9 pr-3 bg-[var(--surface-bg)] border border-[var(--border-strong)] rounded-lg text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-colors"
             />
           </div>
+          </div>
+          <button
+            type="button"
+            aria-pressed={isExpanded}
+            onClick={() => setIsExpanded(expanded => !expanded)}
+            title={isExpanded ? "Restaurar vista (Esc)" : "Expandir lista de envios"}
+            className="tms-desktop-only items-center gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] h-8 shrink-0 px-3 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-muted)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+          >
+            {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            {isExpanded ? "Restaurar vista" : "Expandir vista"}
+          </button>
         </div>
 
         {viewMode === "envios" && (
-          <div role="group" aria-label="Filtrar envios por estado" className="-mx-1 flex w-full max-w-full gap-1 overflow-x-auto px-1 pb-0.5">
+          <div role="group" aria-label="Filtrar envios por estado" className="-mx-2.5 flex w-[calc(100%+1.25rem)] max-w-none gap-0.5 overflow-x-auto border-t border-[var(--border-subtle)] px-2.5 pt-1.5">
             {statusTabs.map((status) => (
               <button
                 key={status}
                 type="button"
                 aria-pressed={statusFilter === status}
                 onClick={() => { setStatusFilter(status); navigateFilters(initialFilters, searchQuery, status) }}
-                className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${statusFilter === status ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"}`}
+                className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${statusFilter === status ? "bg-[var(--accent-soft)] text-[var(--accent)]" : "text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]"}`}
               >
                 {status === "Incidência" ? "Incidências" : status === "Todos" ? "Todos os envios" : status}
               </button>
@@ -508,14 +508,14 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                         <span className="text-[9px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider block">De</span>
                         <p className="font-semibold text-[var(--text-primary)] truncate">{envio.sender?.name || "-"}</p>
                         <p className="text-[10px] text-[var(--text-secondary)] truncate">
-                          {envio.sender?.flag === 'PT' ? '🇵🇹' : '🇪🇸'} {envio.sender?.city || ""}
+                          <CountryFlag code={envio.sender?.flag} /> {envio.sender?.city || ""}
                         </p>
                       </div>
                       <div className="min-w-0">
                         <span className="text-[9px] font-bold text-[var(--text-tertiary)] uppercase tracking-wider block">Para</span>
                         <p className="font-semibold text-[var(--text-primary)] truncate">{envio.recipient?.name || "-"}</p>
                         <p className="text-[10px] text-[var(--text-secondary)] truncate">
-                          {envio.recipient?.flag === 'PT' ? '🇵🇹' : '🇪🇸'} {envio.recipient?.city || ""}
+                          <CountryFlag code={envio.recipient?.flag} /> {envio.recipient?.city || ""}
                         </p>
                       </div>
                     </div>
@@ -566,9 +566,9 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             </div>
 
             {/* ─── DESKTOP TABLE (hidden md:table) ─────────────────────────────── */}
-            <table className="tms-wide-table w-full min-w-[1120px] text-left text-xs whitespace-nowrap pb-32">
+            <table className="tms-wide-table w-full min-w-[1120px] text-left text-[13px] whitespace-nowrap pb-32">
               <thead className="bg-[var(--surface-muted)] sticky top-0 z-10">
-                <tr className="border-b border-[var(--border-subtle)] text-[10px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">
+                <tr className="border-b border-[var(--border-subtle)] text-[11px] text-[var(--text-secondary)] font-semibold uppercase tracking-wider">
                   <th className="px-4 py-2.5 w-10">
                     <input 
                       type="checkbox" 
@@ -581,7 +581,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                   <th className="px-3 py-2.5">TRK</th>
                   <th className="px-3 py-2.5">Remetente</th>
                   <th className="px-3 py-2.5">Destinatário</th>
-                  <th className="px-3 py-2.5">Serviço</th>
+                  <th className="px-3 py-2.5 w-px">Serviço</th>
                   <th className="px-3 py-2.5">Remessa</th>
                   <th className="px-3 py-2.5">Recolha / Entrega</th>
                   <th className="px-3 py-2.5">Estado</th>
@@ -589,7 +589,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                   <th className="px-4 py-2.5 text-right">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--border-subtle)] bg-[var(--surface-bg)] text-[11px]">
+              <tbody className="divide-y divide-[var(--border-subtle)] bg-[var(--surface-bg)] text-[13px]">
                 {filteredEnvios.map((envio, idx) => {
                   const rowId = envio.rawId || envio.rawShipment?.id || envio.trk?.id
                   const isSelected = selectedIds.includes(rowId)
@@ -635,25 +635,25 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                         const target = { ...envio.rawShipment, ...envio, id: envio.rawId || envio.rawShipment.id };
                         setDrawerShipment(target)
                       }}
-                      className="font-mono font-semibold text-[#1D4ED8] hover:text-[#1E40AF] hover:underline flex items-center gap-1 text-xs text-left cursor-pointer transition-colors"
+                      className="font-mono font-semibold text-[#1D4ED8] hover:text-[#1E40AF] hover:underline flex items-center gap-1 text-[13px] text-left cursor-pointer transition-colors"
                       title="Clique para ver os detalhes na barra lateral"
                     >
                       {envio.trk?.id || "N/A"}
                     </button>
                     <OnlineOrderIcon order={envio.onlineOrder} />
                     </div>
-                    <span className="text-[var(--text-tertiary)] text-[10px]">{envio.trk?.date}</span>
+                    <span className="text-[var(--text-tertiary)] text-[12px]">{envio.trk?.date}</span>
                     {envio.trk?.ref && envio.trk.ref !== envio.trk.id && (
-                      <span className="font-mono text-[10px] font-medium text-[var(--text-secondary)] mt-0.5" title="Referência Interna Linke">
+                      <span className="font-mono text-[12px] font-medium text-[var(--text-secondary)] mt-0.5" title="Referência Interna Linke">
                         Ref: {envio.trk.ref}
                       </span>
                     )}
                     {envio.trk?.carrierRef && envio.trk.carrierRef !== envio.trk.id && (
-                      <span className="font-mono text-[10px] font-semibold text-[var(--text-primary)] mt-0.5" title={`Objeto / Rastreio ${envio.trk?.carrierName || "Transportadora"}`}>
+                      <span className="font-mono text-[12px] font-semibold text-[var(--text-primary)] mt-0.5" title={`Objeto / Rastreio ${envio.trk?.carrierName || "Transportadora"}`}>
                         {envio.trk.carrierRef}
                       </span>
                     )}
-                    <span className="inline-block mt-1 px-1.5 py-0.5 bg-[var(--accent)] text-white text-[9px] font-semibold rounded-sm w-fit leading-none uppercase tracking-wide">
+                    <span className="inline-block mt-1 px-1.5 py-0.5 bg-[var(--accent)] text-white text-[10px] font-semibold rounded-sm w-fit leading-none uppercase tracking-wide">
                       {envio.trk?.tag || "A01"}
                     </span>
                   </div>
@@ -661,11 +661,11 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
 
                 {/* Remetente Column */}
                 <td className="px-3 py-3 align-top">
-                  <div className="flex flex-col gap-0.5 max-w-[180px] whitespace-normal">
+                  <div className="flex flex-col gap-0.5 max-w-[240px] whitespace-normal">
                     <span className="font-medium text-[var(--text-primary)] leading-tight mb-1">{envio.sender?.name}</span>
-                    <div className="flex text-[var(--text-tertiary)] text-[10px] leading-tight font-medium">
-                      <span className="mr-1 mt-0.5 shrink-0 text-[9px]">
-                        {envio.sender?.flag === 'PT' ? '🇵🇹' : '🇪🇸'}
+                    <div className="flex text-[var(--text-tertiary)] text-[12px] leading-tight font-medium">
+                      <span className="mr-1 mt-0.5 shrink-0 text-[10px]">
+                        <CountryFlag code={envio.sender?.flag} />
                       </span>
                       <span>{envio.sender?.zip} {envio.sender?.city}{envio.sender?.phone ? `, ${envio.sender.phone}` : ''}</span>
                     </div>
@@ -674,11 +674,11 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
 
                 {/* Destinatário Column */}
                 <td className="px-3 py-3 align-top">
-                  <div className="flex flex-col gap-0.5 max-w-[180px] whitespace-normal">
+                  <div className="flex flex-col gap-0.5 max-w-[240px] whitespace-normal">
                     <span className="font-medium text-[var(--text-primary)] leading-tight mb-1">{envio.recipient?.name}</span>
-                    <div className="flex text-[var(--text-tertiary)] text-[10px] leading-tight font-medium">
-                      <span className="mr-1 mt-0.5 shrink-0 text-[9px]">
-                        {envio.recipient?.flag === 'PT' ? '🇵🇹' : '🇪🇸'}
+                    <div className="flex text-[var(--text-tertiary)] text-[12px] leading-tight font-medium">
+                      <span className="mr-1 mt-0.5 shrink-0 text-[10px]">
+                        <CountryFlag code={envio.recipient?.flag} />
                       </span>
                       <span>{envio.recipient?.zip} {envio.recipient?.city}{envio.recipient?.phone ? `, ${envio.recipient.phone}` : ''}</span>
                     </div>
@@ -690,7 +690,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                   <div className="flex flex-col gap-1.5 items-start">
                     <div className="flex items-center gap-1.5">
                       {getShipmentCarrierLogo(envio.rawShipment) ? (
-                        <div className="w-4 h-4 rounded bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                        <div className="w-5 h-5 rounded bg-white border border-[var(--border-subtle)] p-0.5 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img 
                             src={getShipmentCarrierLogo(envio.rawShipment)} 
@@ -699,9 +699,9 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                           />
                         </div>
                       ) : null}
-                      <span className="font-semibold text-[var(--text-secondary)] text-[10px]">{envio.service?.code}</span>
+                      <span className="font-semibold text-[var(--text-secondary)] text-[12px]">{envio.service?.code}</span>
                     </div>
-                    <span className="px-1.5 py-0.5 rounded-sm text-[9px] font-bold uppercase tracking-wider leading-none bg-[#1D4ED8] text-white">
+                    <span className="px-1.5 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider leading-none bg-[#1D4ED8] text-white">
                       {envio.service?.name}
                     </span>
                   </div>
@@ -709,32 +709,32 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
 
                 {/* Remessa Column */}
                 <td className="px-3 py-3 align-top">
-                  {viewMode === 'envios' ? <ShipmentParcelWeight summary={envio.parcel_summary || envio.rawShipment?.parcel_summary} /> : <div className="flex flex-col gap-0.5">
-                    <span className="font-semibold text-[var(--text-primary)] text-[11px]">{envio.package?.count || "1 Caixa"}</span>
-                    <span className="text-[var(--text-tertiary)] text-[10px] font-medium">{envio.package?.weight || "-"}</span>
+                  {viewMode === 'envios' ? <ShipmentParcelWeight large summary={envio.parcel_summary || envio.rawShipment?.parcel_summary} /> : <div className="flex flex-col gap-0.5">
+                    <span className="font-semibold text-[var(--text-primary)] text-[13px]">{envio.package?.count || "1 Caixa"}</span>
+                    <span className="text-[var(--text-tertiary)] text-[12px] font-medium">{envio.package?.weight || "-"}</span>
                   </div>}
                 </td>
 
                 {/* Collection and delivery dates */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5">
-                    <div className="mb-1 flex items-center gap-1 whitespace-nowrap text-[10px] text-[var(--text-secondary)]" title={envio.pickup ? "Data de recolha confirmada pelo rastreio" : "Ainda não existe confirmação de recolha no rastreio"}>
-                      <Package className="h-3 w-3 shrink-0 text-[var(--text-tertiary)]" />
+                    <div className="mb-1 flex items-center gap-1 whitespace-nowrap text-[12px] text-[var(--text-secondary)]" title={envio.pickup ? "Data de recolha confirmada pelo rastreio" : "Ainda não existe confirmação de recolha no rastreio"}>
+                      <Package className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
                       <span>Recolha:</span>
                       {envio.pickup ? (
                         <span className="font-semibold text-[var(--text-primary)]">{envio.pickup.date} <span className="font-mono font-normal text-[var(--text-secondary)]">{envio.pickup.time}</span></span>
                       ) : <span className="text-[var(--text-tertiary)]">Por confirmar</span>}
                     </div>
-                    <div className="flex items-center gap-1 font-semibold text-[var(--text-primary)] text-[11px]">
-                      <Truck className="w-3 h-3 text-[var(--text-tertiary)]" />
+                    <div className="flex items-center gap-1 font-semibold text-[var(--text-primary)] text-[13px]">
+                      <Truck className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
                       <span>{envio.delivery?.date || "--/--/----"}</span>
                     </div>
                     {envio.delivery?.time && envio.delivery.time !== "--:--" ? (
-                      <span className="text-[var(--status-success)] font-mono font-bold text-[10px] ml-4">
+                      <span className="text-[var(--status-success)] font-mono font-bold text-[12px] ml-4">
                         {envio.delivery.time}
                       </span>
                     ) : (
-                      <span className="text-[var(--text-tertiary)] text-[9px] ml-4 font-medium uppercase tracking-wide">
+                      <span className="text-[var(--text-tertiary)] text-[10px] ml-4 font-medium uppercase tracking-wide">
                         {envio.status?.raw === 'entregue' ? '--:--' : 'Aguardar entrega'}
                       </span>
                     )}
@@ -758,7 +758,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                         </Badge>
                         {isBilled && (
                           <span 
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#EEF0F1] text-[#626B70] border border-[#D7DCDF] shadow-2xs"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#EEF0F1] text-[#626B70] border border-[#D7DCDF] shadow-2xs"
                             title="🔒 Envio Faturado - Eliminação Bloqueada"
                           >
                             <Lock className="w-2.5 h-2.5 text-[#707A80] shrink-0" />
@@ -766,7 +766,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                           </span>
                         )}
                         {envio.status?.subCode && (
-                          <span className="text-[var(--text-tertiary)] font-semibold text-[9px] tracking-wider ml-1 uppercase">
+                          <span className="text-[var(--text-tertiary)] font-semibold text-[10px] tracking-wider ml-1 uppercase">
                             {envio.status?.subCode}
                           </span>
                         )}
@@ -778,11 +778,11 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                 {/* Valor Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-1 items-start">
-                    <span className="font-semibold text-[var(--text-primary)] text-[11px]">{envio.value?.amount || "0,00€"}</span>
-                    <span className={`px-1 py-0.5 rounded text-[9px] font-bold border leading-none tracking-wide ${envio.value?.diffColor ? envio.value.diffColor.replace('bg-green-100', 'bg-[var(--status-success-soft)]').replace('text-green-700', 'text-[var(--status-success)]').replace('border-green-200', 'border-[rgba(18,138,71,0.2)]') : 'text-[var(--text-secondary)] bg-[var(--surface-muted)] border-[var(--border-subtle)]'}`}>
+                    <span className="font-semibold text-[var(--text-primary)] text-[13px]">{envio.value?.amount || "0,00€"}</span>
+                    <span className={`px-1 py-0.5 rounded text-[10px] font-bold border leading-none tracking-wide ${envio.value?.diffColor ? envio.value.diffColor.replace('bg-green-100', 'bg-[var(--status-success-soft)]').replace('text-green-700', 'text-[var(--status-success)]').replace('border-green-200', 'border-[rgba(18,138,71,0.2)]') : 'text-[var(--text-secondary)] bg-[var(--surface-muted)] border-[var(--border-subtle)]'}`}>
                       {envio.value?.diff || "0,00€"}
                     </span>
-                    <span className="text-[var(--text-tertiary)] text-[9px] uppercase font-bold tracking-wider">{envio.value?.ref}</span>
+                    <span className="text-[var(--text-tertiary)] text-[10px] uppercase font-bold tracking-wider">{envio.value?.ref}</span>
                   </div>
                 </td>
 

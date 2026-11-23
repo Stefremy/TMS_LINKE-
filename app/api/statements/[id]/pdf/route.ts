@@ -1,4 +1,4 @@
-import { getClientBillingAddress } from "@/lib/client-addresses"
+import { getClientBillingAddress, invoiceRecipient } from "@/lib/client-addresses"
 import { NextRequest } from "next/server"
 import { loadFinancialDocument, financialPdfResponse } from "@/lib/services/billing/document-access"
 import { getClientesAction } from "@/app/actions/clientes"
@@ -56,8 +56,8 @@ export async function GET(
 
     const pdfBuffer = await generateStatementPdfBuffer({
       statementNumber: details.statement_number || "EXT-0000/00-0000",
-      clientName: client?.legal_name || client?.short_name || details.client_name || "Cliente TMS",
-      clientNif: client?.nif || "",
+      clientName: (client && invoiceRecipient(client).name) || details.client_name || "Cliente TMS",
+      clientNif: client ? invoiceRecipient(client).nif : "",
       clientAddress: client ? getClientBillingAddress(client).address : "",
       clientCity: client ? getClientBillingAddress(client).city : "",
       clientEmail: client?.billing_email || client?.email || "",

@@ -23,6 +23,9 @@ function createLoader(mocks) {
       if (id === 'server-only') return {}
       // Módulos internos do Node sem acesso à rede podem correr a sério (ex.: hashes, UUIDs).
       if (['node:crypto', 'crypto', 'node:util', 'node:buffer'].includes(id)) return require(id)
+      if (id === 'node:net') return require(id)
+      // DNS sem rede: qualquer nome resolve para um endereço público de documentação, salvo mock próprio.
+      if (id === 'node:dns/promises') return { async lookup(_host, options) { const entry = { address: '203.0.113.10', family: 4 }; return options && options.all ? [entry] : entry } }
       // Sem rede nem efeitos: revalidar cache e notificações visuais são no-ops nos testes.
       if (id === 'next/cache') return { revalidatePath() {}, revalidateTag() {}, unstable_cache: fn => fn }
       if (id === 'sonner') return { toast: Object.assign(() => {}, { success() {}, error() {}, info() {}, warning() {}, message() {}, dismiss() {} }) }

@@ -1,4 +1,4 @@
-import { invoiceBillingAddress } from "@/lib/client-addresses"
+import { invoiceBillingAddress, withInvoiceRecipient } from "@/lib/client-addresses"
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { MoloniClient } from '@/lib/moloni/moloni-client'
 import { billingConfigForEnvironment, getActiveMoloniConnection, getMoloniClientForDocument, moloniClientFor, moloniDocumentStamp } from '@/lib/moloni/connection'
@@ -17,16 +17,18 @@ async function moloniForTenant(db: SupabaseClient, tenantId: string) {
   return { connection, moloni: moloniClientFor(connection, tenantId) }
 }
 
-export async function buildRecurringInvoice(moloni: MoloniClient, client: RecurringClient, statement: PeriodStatement, config: BillingConfig) {
+export async function buildRecurringInvoice(moloni: MoloniClient, profile: RecurringClient, statement: PeriodStatement, config: BillingConfig) {
+  const client = withInvoiceRecipient(profile)
   const billing = invoiceBillingAddress(client)
   if (!client.nif || !/^\d{9}$/.test(client.nif) || !billing.address || !billing.city || !billing.postal_code) {
     throw new Error('Complete NIF, morada, localidade e código postal na ficha do cliente.')
   }
   if (!(shipmentTotal(statement.shipments) > 0)) throw new Error('O período não tem um valor positivo para faturar.')
   statement.shipments.forEach(shipmentChargeBreakdown)
-  const existing = await moloni.getCustomerByVat(client.nif)
+  const existing = await moloni.getCustomerByVat(client.nif, client.legal_name || client.short_name || statement.client_name)
   const customerData = { vat: client.nif,
-    number: existing?.number || `TMS-${client.id}`, name: client.legal_name || client.short_name || statement.client_name,
+    // Outro NIF (ex.: consumidor final) é outra ficha Moloni: o número TMS-<id> pertence à ficha do próprio cliente.
+    number: existing?.number || (client.nif === profile.nif ? `TMS-${client.id}` : `C${Date.now()}`), name: client.legal_name || client.short_name || statement.client_name,
     address: billing.address, zipCode: billing.postal_code, city: billing.city,
     countryCode: billing.country_code, email: client.billing_email || client.email }
   const customer = existing?.customer_id || await moloni.createCustomer(customerData)
