@@ -13,16 +13,13 @@ import {
   Plus, 
   Package, 
   MapPin, 
-  Settings, 
   Filter, 
   Search,
   Truck,
   ChevronDown,
-  Edit2,
   FileText,
   Loader2,
   CheckCircle2,
-  AlertCircle,
   Trash2,
   Lock,
   Maximize2,
@@ -653,34 +650,34 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                         {envio.trk.carrierRef}
                       </span>
                     )}
-                    <span className="inline-block mt-1 px-1.5 py-0.5 bg-[var(--accent)] text-white text-[10px] font-semibold rounded-sm w-fit leading-none uppercase tracking-wide">
-                      {envio.trk?.tag || "A01"}
-                    </span>
                   </div>
                 </td>
 
                 {/* Remetente Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5 max-w-[240px] whitespace-normal">
-                    <span className="font-medium text-[var(--text-primary)] leading-tight mb-1">{envio.sender?.name}</span>
-                    <div className="flex text-[var(--text-tertiary)] text-[12px] leading-tight font-medium">
+                    <span className="text-[12px] font-medium text-[var(--text-primary)] leading-tight mb-1">{envio.sender?.name}</span>
+                    <div className="flex text-[var(--text-tertiary)] text-[10px] leading-tight font-medium">
                       <span className="mr-1 mt-0.5 shrink-0 text-[10px]">
                         <CountryFlag code={envio.sender?.flag} />
                       </span>
-                      <span>{envio.sender?.zip} {envio.sender?.city}{envio.sender?.phone ? `, ${envio.sender.phone}` : ''}</span>
+                      <span className="font-mono" title={[envio.sender?.zip, envio.sender?.city].filter(v => v && v !== "N/A").join(" · ") || undefined}>{envio.sender?.zip || "—"}</span>
                     </div>
+                    <span className="inline-block mt-1 px-1.5 py-0.5 bg-[var(--accent)] text-white text-[10px] font-semibold rounded-sm w-fit leading-none uppercase tracking-wide" title="Agência de origem">
+                      {envio.trk?.tag || "A01"}
+                    </span>
                   </div>
                 </td>
 
                 {/* Destinatário Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5 max-w-[240px] whitespace-normal">
-                    <span className="font-medium text-[var(--text-primary)] leading-tight mb-1">{envio.recipient?.name}</span>
-                    <div className="flex text-[var(--text-tertiary)] text-[12px] leading-tight font-medium">
+                    <span className="text-[12px] font-medium text-[var(--text-primary)] leading-tight mb-1">{envio.recipient?.name}</span>
+                    <div className="flex text-[var(--text-tertiary)] text-[10px] leading-tight font-medium">
                       <span className="mr-1 mt-0.5 shrink-0 text-[10px]">
                         <CountryFlag code={envio.recipient?.flag} />
                       </span>
-                      <span>{envio.recipient?.zip} {envio.recipient?.city}{envio.recipient?.phone ? `, ${envio.recipient.phone}` : ''}</span>
+                      <span className="font-mono" title={[envio.recipient?.zip, envio.recipient?.city].filter(v => v && v !== "N/A").join(" · ") || undefined}>{envio.recipient?.zip || "—"}</span>
                     </div>
                   </div>
                 </td>
