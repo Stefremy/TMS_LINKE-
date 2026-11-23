@@ -5,8 +5,13 @@ import { errorMessage } from "@/lib/errors"
 import * as React from "react"
 import { X, Calendar, MapPin, Package, Loader2, CheckCircle2 } from "lucide-react"
 import { scheduleCttPickupAction } from "@/app/actions/ctt"
+import type { Cliente } from "@/app/ops/entidades/clientes/types"
 
-export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => void, clients?: { id: string; name: string; email?: string; address?: string; postal_code?: string; zip_code?: string; city?: string; phone?: string }[] }) {
+type PickupClient = { id: string; name: string; zip_code?: string } & Partial<Pick<Cliente,
+  "email" | "address" | "postal_code" | "city" | "country_code" | "phone" | "pickup_contact_name" | "pickup_mobile_phone"
+>>
+
+export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => void; clients?: PickupClient[] }) {
   const [loading, setLoading] = React.useState(false)
   const [result, setResult] = React.useState<{ Success?: boolean; success?: boolean; PickUpID?: string; message?: string; error?: string } | null>(null)
 
@@ -36,12 +41,13 @@ export function NovaRecolhaModal({ onClose, clients = [] }: { onClose: () => voi
     const client = clients.find(c => c.id === selectedId)
     if (client) {
       setSenderName(client.name || "")
-      setSenderContact(client.name || "") // Defaults to same
+      setSenderContact(client.pickup_contact_name || client.name || "")
       setSenderEmail(client.email || "")
       setSenderAddress(client.address || "")
-      setSenderZip(client.zip_code || "")
+      setSenderZip(client.postal_code || client.zip_code || "")
       setSenderCity(client.city || "")
-      setSenderPhone(client.phone || "")
+      setSenderCountry(client.country_code === "ES" ? "ES" : "PT")
+      setSenderPhone(client.pickup_mobile_phone || client.phone || "")
     }
   }
 

@@ -132,6 +132,8 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
     address: initialData?.address || "",
     postal_code: initialData?.postal_code || "",
     country_code: initialData?.country_code || "PT",
+    pickup_contact_name: initialData?.pickup_contact_name || "",
+    pickup_mobile_phone: initialData?.pickup_mobile_phone || "",
     ...normalizeClientBillingFields(initialData || {}),
     email: initialData?.email || "",
     billing_email: initialData?.billing_email || "",
@@ -223,6 +225,8 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
         address: initialData.address || "",
         postal_code: initialData.postal_code || "",
         country_code: initialData.country_code || "PT",
+        pickup_contact_name: initialData.pickup_contact_name || "",
+        pickup_mobile_phone: initialData.pickup_mobile_phone || "",
         ...normalizeClientBillingFields(initialData),
         email: initialData.email || "",
         billing_email: initialData.billing_email || "",
@@ -1416,6 +1420,28 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
               <div>
                 <h3 className="text-xs font-bold text-[var(--text-primary)]">Morada principal de recolha</h3>
                 <p className="mt-1 text-[11px] text-[var(--text-secondary)]">Usada como remetente nos envios e como local predefinido das recolhas.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="pickup_contact_name" className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Pessoa de contacto para recolhas</label>
+                  <input
+                    id="pickup_contact_name"
+                    type="text"
+                    value={formData.pickup_contact_name || ""}
+                    onChange={e => setFormData(prev => ({ ...prev, pickup_contact_name: e.target.value }))}
+                    className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pickup_mobile_phone" className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Telemóvel para recolhas</label>
+                  <input
+                    id="pickup_mobile_phone"
+                    type="tel"
+                    value={formData.pickup_mobile_phone || ""}
+                    onChange={e => setFormData(prev => ({ ...prev, pickup_mobile_phone: e.target.value }))}
+                    className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">

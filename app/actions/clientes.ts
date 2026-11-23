@@ -362,6 +362,8 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     address: cliente.address?.trim() || "",
     postal_code: cliente.postal_code?.trim() || "",
     country_code: cliente.country_code || "PT",
+    pickup_contact_name: (cliente.pickup_contact_name ?? previous?.details?.pickup_contact_name)?.trim() || "",
+    pickup_mobile_phone: (cliente.pickup_mobile_phone ?? previous?.details?.pickup_mobile_phone)?.trim() || "",
     email: cliente.email?.trim() || "",
     billing_email: cliente.billing_email?.trim() || "",
     ...normalizeClientBillingFields({ ...previous?.details, ...cliente }),
@@ -435,6 +437,8 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
 
   revalidatePath("/ops/entidades/clientes")
   revalidatePath("/ops/clientes")
+  revalidatePath("/ops/envios")
+  revalidatePath("/ops/envios/recolhas")
   revalidatePath("/app", "layout")
   return { success: true, data: fullRecord }
 }

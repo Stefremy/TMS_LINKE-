@@ -27,8 +27,11 @@ export default async function RecolhasPage() {
     address: c.address || "",
     city: c.city || "",
     postal_code: c.postal_code || "",
+    country_code: c.country_code,
     phone: c.phone || "",
     mobile_phone: c.mobile_phone || "",
+    pickup_contact_name: c.pickup_contact_name,
+    pickup_mobile_phone: c.pickup_mobile_phone,
   }))
 
   const mappedConnections = (carrierConnections || []).map((c) => {

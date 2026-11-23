@@ -216,6 +216,22 @@ test('separate billing fields persist and older partial client forms cannot eras
  assert.equal(next.data.billing_address,'Fiscal');assert.equal(next.data.billing_same_as_pickup,false)
 })
 
+test('pickup contact can be saved, preserved on partial updates and explicitly cleared', async () => {
+  const h = harness()
+  const saved = await h.actions.saveClienteAction({ id: A, short_name: 'Store A', manager_name: 'Titular',
+    mobile_phone: '911111111', pickup_contact_name: '  Ana  ', pickup_mobile_phone: '  +351 922222222  ' })
+  const reloaded = (await h.actions.getClientesAction(A))[0]
+  assert.equal(reloaded.pickup_contact_name, 'Ana')
+  assert.equal(reloaded.pickup_mobile_phone, '+351 922222222')
+  assert.equal(reloaded.manager_name, 'Titular')
+  assert.equal(reloaded.mobile_phone, '911111111')
+  assert.equal(saved.success, true)
+
+  const updated = await h.actions.saveClienteAction({ id: A, short_name: 'Edited', pickup_contact_name: '' })
+  assert.equal(updated.data.pickup_contact_name, '')
+  assert.equal(updated.data.pickup_mobile_phone, '+351 922222222')
+})
+
 test('manual identifier color survives saving and reloading a high-volume customer', async () => {
   const h = harness()
   h.tables.audit_log.push({id:'history',tenant_id:TENANT,action:'client_legacy_service_count',created_at:'2026-10-30',

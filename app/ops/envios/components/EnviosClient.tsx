@@ -46,7 +46,7 @@ import { CountryFlag } from "@/components/shipments/CountryFlag"
 interface EnviosClientProps {
   envios: ShipmentListRow[]
   recolhas: ShipmentListRow[]
-  clients: {id:string; name:string}[]
+  clients: NonNullable<React.ComponentProps<typeof NovaRecolhaModal>["clients"]>
   pagination?: {
     page: number
     totalPages: number

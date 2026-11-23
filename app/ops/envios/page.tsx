@@ -4,6 +4,7 @@ import { loadFilteredShipmentPage } from "@/lib/services/shipments/filtered-ship
 import { readShipmentListFilters, readShipmentPageSize } from "@/lib/services/shipments/shipment-list-filters"
 import { requireEmployee } from "@/lib/auth/context"
 import { canHardDeleteShipments } from "@/lib/auth/hard-delete"
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions"
 import { getClientesAction } from "@/app/actions/clientes"
 import { EnviosClient } from "./components/EnviosClient"
 import { loadOnlineOrderLinks, onlineOrderBadges } from "@/lib/ecommerce/online-order-links"
@@ -17,6 +18,7 @@ export default async function EnviosPage(props: { searchParams?: Promise<Record<
 
   const searchParams = await props.searchParams || {}
   const ctx = await requireEmployee()
+  const canManagePickups = hasPermission(ctx, PERMISSIONS.pickups)
   const supabase = createAdminClient()
   const filters = readShipmentListFilters(searchParams)
   
@@ -197,7 +199,18 @@ const mappedRecolhas = recolhas.map((r) => ({
     <EnviosClient 
       envios={mappedEnvios} 
       recolhas={mappedRecolhas}
-      clients={clients.map(c => ({ id: c.id, name: c.short_name || c.legal_name || "Cliente" }))} 
+      clients={clients.map(c => ({
+        id: c.id,
+        name: c.short_name || c.legal_name || "Cliente",
+        ...(canManagePickups ? {
+          address: c.address,
+          postal_code: c.postal_code,
+          city: c.city,
+          country_code: c.country_code,
+          pickup_contact_name: c.pickup_contact_name,
+          pickup_mobile_phone: c.pickup_mobile_phone,
+        } : {}),
+      }))}
       pagination={{
         page: paginatedResult.page,
         totalPages: paginatedResult.totalPages,

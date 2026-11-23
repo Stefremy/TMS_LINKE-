@@ -114,6 +114,8 @@ export interface Cliente {
   address: string
   postal_code: string
   country_code: string
+  pickup_contact_name?: string
+  pickup_mobile_phone?: string
   billing_same_as_pickup?: boolean
   billing_address?: string
   billing_postal_code?: string

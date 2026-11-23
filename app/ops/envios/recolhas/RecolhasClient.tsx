@@ -48,8 +48,11 @@ interface MappedClient {
   address: string
   city: string
   postal_code: string
+  country_code?: string
   phone: string
   mobile_phone?: string
+  pickup_contact_name?: string
+  pickup_mobile_phone?: string
   email?: string
 }
 
@@ -170,13 +173,14 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
     const client = clients.find(c => c.id === clientId)
     if (client) {
       setSenderName(client.name)
-      setSenderContact(client.name)
+      setSenderContact(client.pickup_contact_name || client.name)
       setSenderEmail(client.email || "")
-      setSenderAddress(client.address || senderAddress)
-      setSenderZip(client.postal_code || senderZip)
-      setSenderCity(client.city || senderCity)
-      setSenderPhone(client.phone || "")
-      setSenderMobile(client.mobile_phone || "")
+      setSenderAddress(client.address || "")
+      setSenderZip(client.postal_code || "")
+      setSenderCity(client.city || "")
+      setSenderCountry(client.country_code === "ES" ? "ES" : "PT")
+      setSenderPhone(client.pickup_mobile_phone ? "" : client.phone || "")
+      setSenderMobile(client.pickup_mobile_phone || client.mobile_phone || "")
     }
   }
 

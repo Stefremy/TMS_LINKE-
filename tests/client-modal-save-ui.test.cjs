@@ -110,6 +110,27 @@ test('the client modal saves a separate invoice address and the same-address swi
  assert.equal(h.calls.inputs[1].billing_address,'Nova fiscal')
 })
 
+test('the client modal edits and reloads the pickup contact separately from the account contact', async () => {
+ const client = { id: 'client-a', short_name: 'Loja A', manager_name: 'Titular', mobile_phone: '911111111',
+  pickup_contact_name: 'Ana', pickup_mobile_phone: '922222222' }
+ const h = harness(client)
+ h.response(data => ({ success: true, data }))
+ h.button('Moradas & Faturação').props.onClick()
+ const input = id => h.render().find(node => node.type === 'input' && node.props.id === id)
+ assert.equal(input('pickup_contact_name').props.value, 'Ana')
+ assert.equal(input('pickup_mobile_phone').props.value, '922222222')
+ input('pickup_contact_name').props.onChange({ target: { value: 'Marta' } })
+ input('pickup_mobile_phone').props.onChange({ target: { value: '+351 933333333' } })
+ await h.button('Gravar Cliente').props.onClick()
+ const saved = h.calls.saved[0]
+ assert.equal(saved.manager_name, 'Titular')
+ assert.equal(saved.mobile_phone, '911111111')
+ h.receive(saved)
+ h.render()
+ assert.equal(input('pickup_contact_name').props.value, 'Marta')
+ assert.equal(input('pickup_mobile_phone').props.value, '+351 933333333')
+})
+
 test('the color control can switch from automatic activity colors to a saved manual choice',async()=>{
  const h=harness({id:'client-a',short_name:'Loja A',legacy_service_count:7191,color:'#B45F40',color_mode:'services'})
  const toggle=()=>h.render().find(n=>n.type==='input'&&n.props.type==='checkbox'&&n.props.checked===true)
