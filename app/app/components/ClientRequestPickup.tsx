@@ -4,11 +4,18 @@ import * as React from "react"
 import { CalendarDays, CheckCircle2, Clock, Loader2, RefreshCw, Truck } from "lucide-react"
 import { useClientScope } from "./ClientScope"
 import { requestClientPickupAction, listClientPickupRequestsAction } from "@/app/actions/client-pickup-requests"
-import { CTT_PICKUP_PERIODS, CORREOS_PICKUP_PERIODS, PICKUP_REQUEST_PAGE_SIZE, pickupRequestToday, type PickupRequestPage } from "@/lib/client-pickup-requests"
+import { CTT_PICKUP_PERIODS, CORREOS_PICKUP_PERIODS, PICKUP_REQUEST_PAGE_SIZE, pickupRequestToday, readPickupAddress, type PickupLocation, type PickupRequestPage } from "@/lib/client-pickup-requests"
 import { inputClass, primaryButton, secondaryButton } from "@/components/shipments/form/fields"
+import { ClientPickupLocationAgenda, PickupAddressFields } from "./ClientPickupLocationAgenda"
 
 const emptyPage: PickupRequestPage = { requests: [], total: 0, page: 0 }
-export function ClientRequestPickup({ initialPage = emptyPage, initialError = "" }: { initialPage?: PickupRequestPage; initialError?: string }) {
+export function ClientRequestPickup({ initialPage = emptyPage, initialError = "", initialLocations = [], initialDefaultLocationId = null, agendaError = "" }: {
+  initialPage?: PickupRequestPage
+  initialError?: string
+  initialLocations?: PickupLocation[]
+  initialDefaultLocationId?: string | null
+  agendaError?: string
+}) {
   const { client, isSuspended } = useClientScope()
   const [history, setHistory] = React.useState(initialPage)
   const [error, setError] = React.useState(initialError)
@@ -17,10 +24,23 @@ export function ClientRequestPickup({ initialPage = emptyPage, initialError = ""
   const [volumes, setVolumes] = React.useState(1)
   const [carrier, setCarrier] = React.useState("ctt_expresso")
   const [period, setPeriod] = React.useState("09:00-19:00")
+  const [locations, setLocations] = React.useState(initialLocations)
+  const [preferredLocationId, setPreferredLocationId] = React.useState(initialDefaultLocationId)
+  const [locationOverride, setLocationOverride] = React.useState<string | null>(null)
+  const defaultLocationId = locations.some(location => location.id === preferredLocationId) ? preferredLocationId : null
+  const selectedLocationId = locationOverride ?? defaultLocationId ?? "primary"
   const lock = React.useRef(false)
   const requestId = React.useRef<string | null>(null)
   const today = pickupRequestToday()
   const suspended = isSuspended || client.portal_access_status === "suspended" || client.portal_access_status === "blocked" || client.is_active === false
+  const sortedLocations = React.useMemo(() => [...locations].sort((a, b) => a.label.localeCompare(b.label, "pt-PT")), [locations])
+  const primaryAddress = {
+    name: client.short_name || client.legal_name,
+    contact: client.pickup_contact_name || client.short_name || client.legal_name,
+    address: client.address, postal: client.postal_code, city: client.city,
+    phone: client.pickup_mobile_phone || client.mobile_phone || client.phone, email: client.email,
+  }
+  const pickupAddress = selectedLocationId === "manual" ? undefined : locations.find(location => location.id === selectedLocationId) ?? primaryAddress
   const load = async (page = 0) => {
     if (lock.current) return
     lock.current = true; setBusy(true); setError("")
@@ -42,7 +62,7 @@ export function ClientRequestPickup({ initialPage = emptyPage, initialError = ""
       const weightKg = Number(value("weightKg"))
       const result = await requestClientPickupAction({ date: value("date"), period: value("period"), carrier: value("carrier"),
         volumes, weightKg, heaviestWeightKg: volumes === 1 ? weightKg : Number(value("heaviestWeightKg")),
-        name: value("name"), address: value("address"), postal: value("postal"), city: value("city"), contact: value("contact"), phone: value("phone"), email: value("email"), notes: value("notes"),
+        ...readPickupAddress(data), notes: value("notes"),
       }, requestId.current, client.id)
       if (!result.success) { setError(result.error); return }
       setSent(result.request.reference)
@@ -51,12 +71,19 @@ export function ClientRequestPickup({ initialPage = emptyPage, initialError = ""
     } catch { setError("Não foi possível confirmar o pedido. Atualize o histórico antes de tentar novamente.") }
     finally { lock.current = false; setBusy(false) }
   }
-  const field = (name: string, label: string, type: string, defaultValue: string | number = "", required = true) => <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">{label}<input name={name} type={type} defaultValue={defaultValue} required={required} maxLength={type === "text" ? 200 : undefined} className={inputClass} /></label>
   return <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
     <header><h1 className="flex items-center gap-2 text-xl font-semibold text-[var(--text-primary)]"><Truck size={22} />Pedidos de recolha</h1><p className="mt-2 text-sm text-[var(--text-secondary)]">Envie o pedido à equipa Linke. O agendamento com a transportadora será tratado pela nossa equipa.</p></header>
     {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
     {suspended && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Esta conta não pode criar novos pedidos. Contacte a equipa Linke.</p>}
-    {sent ? <section role="status" className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-5"><h2 className="flex items-center gap-2 font-semibold text-emerald-900"><CheckCircle2 size={18} />Pedido enviado à equipa Linke · {sent}</h2><p className="text-sm text-emerald-900">Estado: Pendente. A equipa irá tratar do agendamento com a transportadora.</p><button type="button" className={secondaryButton} onClick={() => setSent("")}>Novo pedido</button></section> : <form onSubmit={submit} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 sm:p-5">
+    <ClientPickupLocationAgenda clientId={client.id} locations={sortedLocations} defaultLocationId={defaultLocationId}
+      initialError={agendaError} disabled={Boolean(suspended)} onDefaultChanged={setPreferredLocationId}
+      onSaved={location => setLocations(previous => [...previous.filter(row => row.id !== location.id), location])}
+      onRemoved={id => {
+        setLocations(previous => previous.filter(location => location.id !== id))
+        setPreferredLocationId(previous => previous === id ? null : previous)
+        setLocationOverride(previous => previous === id ? null : previous)
+      }} />
+    {sent ? <section role="status" className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-5"><h2 className="flex items-center gap-2 font-semibold text-emerald-900"><CheckCircle2 size={18} />Pedido enviado à equipa Linke · {sent}</h2><p className="text-sm text-emerald-900">Estado: Pendente. A equipa irá tratar do agendamento com a transportadora.</p><button type="button" className={secondaryButton} onClick={() => { setLocationOverride(null); setSent("") }}>Novo pedido</button></section> : <form onSubmit={submit} className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-bg)] p-4 sm:p-5">
       <h2 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">Solicitar recolha</h2>
       <fieldset disabled={busy || suspended} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-3"><label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Data pretendida<input type="date" name="date" min={today} defaultValue={today} required className={inputClass} /></label>
@@ -67,9 +94,18 @@ export function ClientRequestPickup({ initialPage = emptyPage, initialError = ""
           <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Peso total (kg)<input type="number" name="weightKg" min={0.001} max={20000} step={0.001} required className={inputClass} /></label>
           {volumes > 1 && <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Volume mais pesado (kg)<input type="number" name="heaviestWeightKg" min={0.001} max={20000} step={0.001} required className={inputClass} /></label>}
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">{field("name", "Nome / empresa no local", "text", client.short_name || client.legal_name)}{field("contact", "Pessoa de contacto", "text", client.pickup_contact_name || client.short_name || client.legal_name)}</div>
-        {field("address", "Morada de recolha", "text", client.address)}
-        <div className="grid gap-4 sm:grid-cols-2">{field("postal", "Código postal", "text", client.postal_code)}{field("city", "Localidade", "text", client.city)}{field("phone", "Telefone / telemóvel", "tel", client.pickup_mobile_phone || client.mobile_phone || client.phone)}{field("email", "Email (opcional)", "email", client.email, false)}</div>
+        <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">
+          Local de recolha
+          <select name="pickupLocation" value={selectedLocationId} onChange={event => {
+            const id = event.target.value
+            setLocationOverride(id === (defaultLocationId ?? "primary") ? null : id)
+          }} className={inputClass}>
+            <option value="primary">Morada principal de recolha{!defaultLocationId && " (padrão)"}</option>
+            {sortedLocations.map(location => <option key={location.id} value={location.id}>{location.label} · {location.postal} {location.city}{location.id === defaultLocationId && " (padrão)"}</option>)}
+            <option value="manual">Outra morada para este pedido</option>
+          </select>
+        </label>
+        <PickupAddressFields key={JSON.stringify([selectedLocationId, pickupAddress])} values={pickupAddress} />
         <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Observações (opcional)<textarea name="notes" rows={2} maxLength={500} className={inputClass} placeholder="Acesso ao armazém, campainha, instruções úteis…" /></label>
         <p className="text-xs text-[var(--text-secondary)]">A data e o período são preferências, sujeitos a confirmação pela equipa e pela transportadora.</p>
         <button type="submit" className={primaryButton}>{busy ? <Loader2 size={16} className="animate-spin" /> : <CalendarDays size={16} />}Enviar pedido à Linke</button>

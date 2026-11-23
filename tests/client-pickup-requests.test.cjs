@@ -8,7 +8,7 @@ const input = () => ({ date: new Date(Date.now() + 2 * 86400000).toISOString().s
   volumes: 1, weightKg: 3, heaviestWeightKg: 3, name: 'Armazém A', address: 'Rua A 1', city: 'Porto', postal: '4000-001', contact: 'Ana', phone: '912345678', email: '', notes: 'Campainha do armazém' })
 function harness(options = {}) {
   let role = options.role || 'client', allow = true
-  const tables = { audit_log: [] }, db = fakeSupabase(tables, options.failure, { persistInserts: true }), calls = [], emails = [], staffEmails = []
+  const tables = { audit_log: [], clients: [{ id: A, tenant_id: T }] }, db = fakeSupabase(tables, options.failure, { persistInserts: true }), calls = [], emails = [], staffEmails = []
   const ctx = () => ({ role, tenant_id: T, client_id: role === 'client' ? A : null, user: { id: 'trusted-actor' } })
   const auth = { requireUser: async permission => { if (!allow) throw Error('Forbidden'); assert.equal(permission, 'Pedidos de Recolha & Distribuição'); return ctx() },
     requireEmployee: async permission => { if (!allow || role === 'client') throw Error('Forbidden'); assert.equal(permission, 'Pedidos de Recolha & Distribuição'); return ctx() } }
@@ -20,9 +20,83 @@ function harness(options = {}) {
     '@/lib/email/resend': { sendEmail: async message => { staffEmails.push(message); if (options.staffEmailFailure) throw Error('Resend unavailable'); return { success: true } } },
     './ctt': { scheduleCttPickupAction: async booking => { calls.push(booking); if (options.throwCarrier) throw Error('Timeout'); return options.carrierResult || { success: true, pickupNumber: '1519176/26', carrier_name: 'CTT Expresso', carrier_code: 'ctt_expresso' } } },
   })
-  return { api: load('app/actions/client-pickup-requests.ts'), tables, db, calls, emails, staffEmails, staff: () => { role = 'employee' }, deny: () => { allow = false },
+  return { api: load('app/actions/client-pickup-requests.ts'), agenda: load('app/actions/client-pickup-locations.ts'), tables, db, calls, emails, staffEmails, staff: () => { role = 'employee' }, deny: () => { allow = false },
     request: (values = input(), id = ID, client = B) => load('app/actions/client-pickup-requests.ts').requestClientPickupAction(values, id, client) }
 }
+
+const pickupSite = { label: 'Armazém do Porto', name: 'Loja A', address: 'Rua A 1', city: 'Porto',
+  postal: '4000-001', contact: 'Ana', phone: '912345678', email: '' }
+
+test('the pickup agenda saves multiple locations per store and requests keep the original address after an edit or removal', async () => {
+  const h = harness()
+  const { listClientPickupLocationsAction: list, saveClientPickupLocationAction: save, deleteClientPickupLocationAction: remove } = h.agenda
+  const otherSite = { ...pickupSite, label: 'Armazém de Lisboa', address: 'Rua B 2', city: 'Lisboa', postal: '1100-001' }
+  const results = await Promise.all([save(pickupSite, ID, 'create', B), save(pickupSite, ID, 'create', B), save(otherSite, OTHER, 'create', B)])
+  assert.ok(results.every(result => result.success))
+  assert.deepEqual((await list(B)).locations.map(row => row.label).sort(), ['Armazém de Lisboa', 'Armazém do Porto'])
+  assert.ok(h.tables.audit_log.every(row => row.details.client_id === A && row.tenant_id === T))
+
+  const { label, ...pickupAddress } = otherSite
+  const requestId = '66666666-6666-6666-6666-666666666666'
+  assert.equal((await h.request({ ...input(), ...pickupAddress }, requestId)).success, true)
+  assert.equal((await save({ ...otherSite, address: 'Rua Nova' }, OTHER, 'edit')).location.address, 'Rua Nova')
+  assert.equal((await remove(OTHER)).success, true)
+  assert.equal((await remove(OTHER)).success, true)
+  assert.equal((await list()).locations.length, 1)
+  assert.equal((await h.api.listClientPickupRequestsAction()).requests[0].pickup.address, 'Rua B 2')
+})
+
+test('agenda reads and writes stay within the client and tenant, and invalid or suspended writes are rejected', async () => {
+  const h = harness()
+  const { listClientPickupLocationsAction: list, saveClientPickupLocationAction: save, deleteClientPickupLocationAction: remove } = h.agenda
+  h.tables.audit_log.push({ id: ID, tenant_id: T, action: 'client_pickup_location', details: { client_id: B, location: pickupSite } },
+    { id: OTHER, tenant_id: 'foreign-tenant', action: 'client_pickup_location', details: { client_id: A, location: pickupSite } })
+  assert.deepEqual((await list(B)).locations, [])
+  for (const id of [ID, OTHER]) {
+    assert.equal((await save(pickupSite, id, 'edit', B)).success, false)
+    assert.equal((await save(pickupSite, id, 'create', B)).success, false)
+    await remove(id, B)
+  }
+  assert.equal(h.tables.audit_log.length, 2)
+  assert.equal((await save({ ...pickupSite, postal: 'invalido' }, crypto.randomUUID(), 'create')).success, false)
+  h.staff()
+  assert.equal((await save(pickupSite, crypto.randomUUID(), 'create', B)).success, false)
+  h.deny()
+  await assert.rejects(list(A), /Forbidden/)
+  for (const status of [{ suspended: true }, { blocked: true }, { active: false }]) {
+    const inactive = harness(status)
+    assert.equal((await inactive.agenda.saveClientPickupLocationAction(pickupSite, ID, 'create')).success, false)
+    assert.equal(inactive.tables.audit_log.length, 0)
+  }
+})
+
+test('one default pickup location persists per store and falls back to the principal address when removed', async () => {
+  const h = harness()
+  const { listClientPickupLocationsAction: list, saveClientPickupLocationAction: save,
+    deleteClientPickupLocationAction: remove, setDefaultClientPickupLocationAction: setDefault } = h.agenda
+  await save(pickupSite, ID, 'create')
+  await save({ ...pickupSite, label: 'Armazém Sul' }, OTHER, 'create')
+  assert.equal((await list()).defaultLocationId, null)
+  const initialChanges = await Promise.all([setDefault(ID), setDefault(OTHER)])
+  assert.ok(initialChanges.every(result => result.success))
+  assert.equal(h.tables.audit_log.filter(row => row.action === 'client_pickup_location_default').length, 1)
+
+  assert.equal((await setDefault(ID, B)).defaultLocationId, ID)
+  assert.equal((await list(B)).defaultLocationId, ID)
+  h.staff()
+  assert.equal((await list(B)).defaultLocationId, null)
+  assert.equal((await setDefault(ID, B)).success, false)
+  assert.equal((await setDefault(null, A)).success, true)
+  assert.equal((await list(A)).defaultLocationId, null)
+
+  assert.equal((await setDefault(OTHER, A)).success, true)
+  await remove(OTHER, A)
+  assert.equal((await list(A)).defaultLocationId, null)
+  assert.equal((await setDefault(OTHER, A)).success, false)
+  await save(pickupSite, OTHER, 'create', A)
+  h.tables.audit_log.find(row => row.id === OTHER).created_at = '2099-12-01T12:00:00Z'
+  assert.equal((await list(A)).defaultLocationId, null)
+})
 
 test('client creates a real pending Ops request scoped to the session, without carrier, shipment or wallet calls', async () => {
   const h = harness(), result = await h.request()

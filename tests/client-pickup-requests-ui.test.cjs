@@ -12,7 +12,7 @@ const mocks = {
   react: React, 'react/jsx-runtime': require('react/jsx-runtime'), zod: require('zod'), 'lucide-react': require('lucide-react'),
   'next/navigation': { useRouter: () => ({ refresh() {} }), usePathname: () => '/app/fixture/recolhas' },
   'next/link': { __esModule: true, default: ({ children, ...props }) => { delete props.prefetch; return React.createElement('a', props, children) } },
-  '@/app/actions/client-pickup-requests': {}, '@/components/shipments/form/fields': fields,
+  '@/app/actions/client-pickup-requests': {}, '@/app/actions/client-pickup-locations': {}, '@/components/shipments/form/fields': fields,
 }
 const load = createLoader(mocks)
 const { ClientScopeProvider } = load('app/app/components/ClientScope.tsx')
@@ -36,6 +36,17 @@ test('client pickup form prefers the pickup contact details and keeps the store 
   assert.match(html, /name="phone" value="\+351 922222222"/)
 })
 
+test('the saved default address and its contact are prefilled when the client reopens Recolhas', () => {
+  const location = { id: 'south', label: 'Armazém Sul', name: 'Loja Sul', address: 'Rua Sul, 1',
+    postal: '1100-001', city: 'Lisboa', contact: 'Inês', phone: '931234567', email: '' }
+  const html = renderToStaticMarkup(React.createElement(ClientScopeProvider, { value: { client } },
+    React.createElement(ClientRequestPickup, { initialLocations: [location], initialDefaultLocationId: location.id })))
+  assert.match(html, /<option value="south" selected="">Armazém Sul · 1100-001 Lisboa \(padrão\)<\/option>/)
+  assert.match(html, /name="address" value="Rua Sul, 1"/)
+  assert.match(html, /name="contact" value="Inês"/)
+  assert.match(html, /Usar morada principal como padrão/)
+})
+
 test('Ops queue displays all operational request data with prepare and manual-completion actions', () => {
   const { ClientPickupRequestsPanel } = load('app/ops/envios/recolhas/ClientPickupRequestsPanel.tsx')
   const html = renderToStaticMarkup(React.createElement(ClientPickupRequestsPanel, { initialPage: page('pending'), onSchedule() {} }))
@@ -51,6 +62,54 @@ test('pickup requests are discoverable in the shared desktop and mobile client m
 })
 
 const flatten = node => Array.isArray(node) ? node.flatMap(flatten) : node && typeof node === 'object' ? [node, ...flatten(node.props?.children)] : []
+
+test('the portal can select a saved pickup site for each request or use the primary address', () => {
+  const slots = []; let cursor = 0
+  const react = {
+    useState(initial) {
+      const i = cursor++
+      if (!(i in slots)) slots[i] = initial
+      return [slots[i], value => { slots[i] = typeof value === 'function' ? value(slots[i]) : value }]
+    },
+    useRef(initial) { const i = cursor++; return slots[i] ||= { current: initial } },
+    useMemo(fn) { return fn() },
+  }
+  const jsx = (type, props, key) => ({ type, props: props || {}, key })
+  const isolated = createLoader({ ...mocks, react, 'react/jsx-runtime': { jsx, jsxs: jsx },
+    './ClientScope': { useClientScope: () => ({ client }) },
+    './ClientPickupLocationAgenda': { ClientPickupLocationAgenda: 'agenda', PickupAddressFields: 'pickup-address' },
+  })
+  const { ClientRequestPickup } = isolated('app/app/components/ClientRequestPickup.tsx')
+  const north = { id: 'north', label: 'Armazém Norte', name: 'Loja Norte', address: 'Rua Norte, 1', city: 'Braga',
+    postal: '4700-001', contact: 'Ana', phone: '924567890', email: '' }
+  const south = { ...north, id: 'south', label: 'Armazém Sul', address: 'Rua Sul, 1', city: 'Lisboa', postal: '1100-001' }
+  const render = () => { cursor = 0; return flatten(ClientRequestPickup({ initialLocations: [north, south] })) }
+  const select = () => render().find(node => node.props.name === 'pickupLocation')
+  const address = () => render().find(node => node.type === 'pickup-address').props.values
+  const choose = id => select().props.onChange({ target: { value: id } })
+  const agenda = () => render().find(node => node.type === 'agenda').props
+
+  assert.equal(select().props.value, 'primary')
+  assert.equal(address().address, client.address)
+  assert.equal(render().filter(node => node.type === 'option' && ['north', 'south'].includes(node.props.value)).length, 2)
+  choose('north')
+  assert.equal(address(), north)
+  choose('south')
+  assert.equal(address(), south)
+  choose('manual')
+  assert.equal(address(), undefined)
+  agenda().onDefaultChanged(south.id)
+  assert.equal(select().props.value, 'manual')
+
+  choose('south')
+  assert.equal(address(), south)
+  agenda().onDefaultChanged(north.id)
+  assert.equal(address(), north)
+  agenda().onRemoved(north.id)
+  assert.equal(select().props.value, 'primary')
+  assert.equal(address().address, client.address)
+})
+
 test('the Envios pickup modal sends the primary pickup address and contact in the booking', async () => {
   const slots = []; let cursor = 0; const calls = []
   const react = { useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === 'function' ? initial() : initial; return [slots[i], value => { slots[i] = value }] } }

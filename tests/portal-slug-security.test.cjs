@@ -69,6 +69,7 @@ function harness(ctx = client, { adjust, failure } = {}) {
     '../../components/ClientShipmentsHistory': { ClientShipmentsHistory: 'History' },
     '../../components/ClientRequestPickup': { ClientRequestPickup: 'PickupRequests' },
     '@/app/actions/client-pickup-requests': { listClientPickupRequestsAction: async () => ({ success: true, requests: [], total: 0, page: 0 }) },
+    '@/app/actions/client-pickup-locations': { listClientPickupLocationsAction: async () => ({ success: true, locations: [], defaultLocationId: null }) },
     '@/app/ops/entidades/destinatarios/components/DestinatariosClient': { DestinatariosClient: 'Recipients' },
     '../../faturas/FaturasClient': { default: 'Invoices' },
     '../components/ClientPortalShell': { ClientPortalShell: 'Shell' },
