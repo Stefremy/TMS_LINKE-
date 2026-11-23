@@ -1,7 +1,7 @@
 import { requireOpsPageAccess } from "@/lib/auth/ops-page-access"
 import { createAdminClient } from "@/lib/supabase/server"
 import { loadFilteredShipmentPage } from "@/lib/services/shipments/filtered-shipment-list"
-import { readShipmentListFilters } from "@/lib/services/shipments/shipment-list-filters"
+import { readShipmentListFilters, readShipmentPageSize } from "@/lib/services/shipments/shipment-list-filters"
 import { requireEmployee } from "@/lib/auth/context"
 import { canHardDeleteShipments } from "@/lib/auth/hard-delete"
 import { getClientesAction } from "@/app/actions/clientes"
@@ -21,6 +21,7 @@ export default async function EnviosPage(props: { searchParams?: Promise<Record<
   const filters = readShipmentListFilters(searchParams)
   
   const page = parseInt(searchParams.page || "1", 10)
+  const pageSize = readShipmentPageSize(searchParams.pageSize)
   const search = searchParams.search || ""
   const status = searchParams.status || undefined
 
@@ -37,7 +38,7 @@ export default async function EnviosPage(props: { searchParams?: Promise<Record<
 
   // Fetch real data from DB & persistent actions
   const [paginatedResult, recolhasResult, clients] = await Promise.all([
-    loadFilteredShipmentPage({ page, search, status, filters }),
+    loadFilteredShipmentPage({ page, pageSize, search, status, filters }),
     loadRecolhas(),
     getClientesAction()
   ])
@@ -200,7 +201,8 @@ const mappedRecolhas = recolhas.map((r) => ({
       pagination={{
         page: paginatedResult.page,
         totalPages: paginatedResult.totalPages,
-        total: paginatedResult.total
+        total: paginatedResult.total,
+        pageSize: paginatedResult.pageSize
       }}
       filterFacets={paginatedResult.facets}
       initialFilters={filters}

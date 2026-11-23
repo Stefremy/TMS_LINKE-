@@ -6,7 +6,7 @@ import { errorMessage } from "@/lib/errors"
 import { ShipmentParcelWeight } from '@/components/shipments/ShipmentParcelWeight'
 
 import * as React from "react"
-import { EMPTY_SHIPMENT_FILTERS, buildShipmentFilterFacets, matchesShipmentListFilters, shipmentFiltersError, shipmentListQuery, type ShipmentListFilters, type ShipmentFilterFacets } from "@/lib/services/shipments/shipment-list-filters"
+import { EMPTY_SHIPMENT_FILTERS, SHIPMENT_PAGE_SIZES, DEFAULT_SHIPMENT_PAGE_SIZE, buildShipmentFilterFacets, matchesShipmentListFilters, shipmentFiltersError, shipmentListQuery, type ShipmentListFilters, type ShipmentFilterFacets } from "@/lib/services/shipments/shipment-list-filters"
 import { useRouter } from "next/navigation"
 import { useTrackingPolling } from "@/lib/hooks/useTrackingPolling"
 import { 
@@ -51,6 +51,7 @@ interface EnviosClientProps {
     page: number
     totalPages: number
     total: number
+    pageSize?: number
   }
   initialFilters?: ShipmentListFilters
   filterFacets?: ShipmentFilterFacets
@@ -107,13 +108,13 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
     setSelectedIds([])
     setSearchAutoEnabled(false)
     setRequestedSearch(search)
-    router.push(`/ops/envios?${shipmentListQuery(nextFilters, search, status)}`, { scroll: false })
+    router.push(`/ops/envios?${shipmentListQuery(nextFilters, search, status, pagination?.pageSize)}`, { scroll: false })
   }
   React.useEffect(() => {
     if (!searchAutoEnabled || viewMode !== "envios" || searchQuery === (initialSearch || "")) return
     const timer = setTimeout(() => {
       setRequestedSearch(searchQuery)
-      router.push(`/ops/envios?${shipmentListQuery(initialFilters, searchQuery, statusFilter)}`, { scroll: false })
+      router.push(`/ops/envios?${shipmentListQuery(initialFilters, searchQuery, statusFilter, pagination?.pageSize)}`, { scroll: false })
     }, 400)
     return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -809,6 +810,25 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             A mostrar {filteredEnvios.length} de {pagination.total} envios (Página {pagination.page} de {Math.max(1, pagination.totalPages)})
           </span>
           <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)] font-medium">
+              Por página
+              <select
+                aria-label="Envios por página"
+                value={pagination.pageSize || DEFAULT_SHIPMENT_PAGE_SIZE}
+                onChange={event => {
+                  const params = new URLSearchParams(window.location.search)
+                  const size = Number(event.target.value)
+                  if (size === DEFAULT_SHIPMENT_PAGE_SIZE) params.delete("pageSize")
+                  else params.set("pageSize", String(size))
+                  params.delete("page")
+                  setSelectedIds([])
+                  router.push(`?${params.toString()}`, { scroll: false })
+                }}
+                className="h-7 rounded-md border border-[var(--border-strong)] bg-[var(--surface-bg)] px-1.5 text-[11px] text-[var(--text-primary)]"
+              >
+                {SHIPMENT_PAGE_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
+              </select>
+            </label>
             <Button
               variant="outline"
               size="sm"

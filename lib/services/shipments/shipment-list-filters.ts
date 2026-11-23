@@ -88,12 +88,22 @@ export function buildShipmentFilterFacets(rows: FilterableShipment[]): ShipmentF
   return { services: [...new Set(rows.map(row => row.service_type).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, "pt")),
     carriers: [...carriers].map(([value, label]) => ({ value, label })), drivers: [...drivers].map(([value, label]) => ({ value, label })) }
 }
-export function shipmentListQuery(filters: ShipmentListFilters, search: string, status: string): string {
+/** Envios por página na listagem do OPS; 50 é o valor por omissão. */
+export const SHIPMENT_PAGE_SIZES = [50, 100, 150, 200] as const
+export const DEFAULT_SHIPMENT_PAGE_SIZE = 50
+
+export function readShipmentPageSize(raw: unknown): number {
+  const value = Number(raw)
+  return (SHIPMENT_PAGE_SIZES as readonly number[]).includes(value) ? value : DEFAULT_SHIPMENT_PAGE_SIZE
+}
+
+export function shipmentListQuery(filters: ShipmentListFilters, search: string, status: string, pageSize: number = DEFAULT_SHIPMENT_PAGE_SIZE): string {
   const params = new URLSearchParams()
   for (const key of Object.keys(EMPTY_SHIPMENT_FILTERS) as (keyof ShipmentListFilters)[]) {
     if (filters[key] && filters[key] !== EMPTY_SHIPMENT_FILTERS[key]) params.set(key, filters[key])
   }
   if (search.trim()) params.set("search", search.trim())
   if (status && status !== "Todos") params.set("status", status)
+  if (readShipmentPageSize(pageSize) !== DEFAULT_SHIPMENT_PAGE_SIZE) params.set("pageSize", String(readShipmentPageSize(pageSize)))
   return params.toString()
 }
