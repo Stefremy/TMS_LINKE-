@@ -22,6 +22,7 @@ import { DEFAULT_CLIENT_PRICING, SYSTEM_AVAILABLE_WEBSERVICES } from "@/app/ops/
 import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
 import { paymentDueDays } from "@/lib/billing/payment-terms"
 import { normalizeStoreSlug } from "@/lib/client-portal/paths"
+import { CLIENT_CODE_PATTERN, MOTHER_ACCOUNT_CODE, nextClientCode, normalizeClientCode } from "@/lib/clients/client-code"
 
 
 const DEFAULT_CLIENTES: Cliente[] = [
@@ -341,10 +342,28 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     // React masks thrown server errors in production builds.
     return { success: false, error: errorMessage(error) || "Configuração de taxas do cliente inválida." }
   }
+  // Client codes are unique CLxxx values. An existing code (including an old-platform code not yet
+  // standardised) is kept as is; a new or changed code must be free and follow the CL pattern.
+  const previousCode = normalizeClientCode(previous?.details?.code)
+  const requestedCode = normalizeClientCode(cliente.code)
+  let code = requestedCode || previousCode
+  if (!code || code !== previousCode) {
+    const { data: codeRows, error: codeError } = await supabase.from("audit_log").select("code:details->>code, client:details->>id")
+      .eq("tenant_id", ctx.tenant_id).eq("action", "client_data").limit(10000)
+    if (codeError) return { success: false, error: "Não foi possível verificar os códigos de cliente. Tente novamente." }
+    const others = (codeRows || []).filter(row => row.client !== id).map(row => normalizeClientCode(row.code))
+    if (!code) code = nextClientCode(others)
+    else if (!CLIENT_CODE_PATTERN.test(code)) return { success: false, error: "O código de cliente tem de ser CL seguido de números (ex.: CL042). Deixe vazio para atribuir automaticamente." }
+    else if (others.includes(code)) return { success: false, error: `O código ${code} já pertence a outro cliente.` }
+    if (previousCode === MOTHER_ACCOUNT_CODE) return { success: false, error: "O código da conta-mãe (CL001) não pode ser alterado." }
+  }
+  const legacyCode = normalizeClientCode(previous?.details?.legacy_code) || undefined
   const fullRecord: Cliente = {
     id,
     portal_slug: normalizeStoreSlug(slugName),
-    code: cliente.code?.trim().toUpperCase() || `CL${Math.floor(100 + Math.random() * 900)}`,
+    code,
+    ...(legacyCode ? { legacy_code: legacyCode } : {}),
+    ...(previous?.details?.legacy_import ? { legacy_import: previous.details.legacy_import } : {}),
     short_name: cliente.short_name?.trim() || cliente.legal_name?.trim() || "Novo Cliente",
     legal_name: cliente.legal_name?.trim() || cliente.short_name?.trim() || "Novo Cliente, Lda",
     color: cliente.color || "#10b981",

@@ -36,12 +36,12 @@ export async function loadScopedClientProfiles(
     for (const client of clients.data || []) profiles.set(client.id, client)
     const seen = new Set<string>()
     for (const log of logs.data || []) {
-      const d = log.details as (ClientProfile & { legacy_import?: { source_code?: string } }) | null
+      const d = log.details as (ClientProfile & { legacy_code?: string; legacy_import?: { source_code?: string } }) | null
       if (!d?.id || seen.has(d.id) || !profiles.has(d.id)) continue
       profiles.set(d.id, {
         ...profiles.get(d.id), id: d.id, short_name: d.short_name,
         legal_name: d.legal_name, email: d.email, billing_email: d.billing_email, iban: d.iban,
-        code: d.code, legacy_code: d.legacy_import?.source_code,
+        code: d.code, legacy_code: d.legacy_code || d.legacy_import?.source_code,
       })
       seen.add(d.id)
     }

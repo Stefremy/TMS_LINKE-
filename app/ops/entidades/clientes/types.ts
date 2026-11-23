@@ -93,6 +93,9 @@ export interface Cliente {
   id: string
   portal_slug?: string
   code: string
+  /** Código na plataforma antiga (LK0006, 20260038…). Usado em importações e na pesquisa. */
+  legacy_code?: string
+  legacy_import?: { source_code?: string; [key: string]: unknown }
   short_name: string
   legal_name: string
   color: string

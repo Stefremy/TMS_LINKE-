@@ -30,7 +30,7 @@ export function ImportarDestinatariosModal({ onClose, onImported, clients, locke
   const running = progress !== null && !finished
 
   const client = clients.find(c => c.id === clientId)
-  const clientCodes = [client?.code, (client as { legacy_import?: { source_code?: string } } | undefined)?.legacy_import?.source_code]
+  const clientCodes = [client?.code, client?.legacy_code, client?.legacy_import?.source_code]
   const wrongClient = Boolean(plan && client && !recipientFileMatchesClient(plan.fileClientCodes, clientCodes))
 
   const readFile = async (file: File) => {

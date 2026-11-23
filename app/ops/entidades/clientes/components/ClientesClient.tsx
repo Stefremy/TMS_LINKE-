@@ -99,6 +99,7 @@ export function ClientesClient({ initialClientes, initialServicosLinke = [], can
         item.city?.toLowerCase().includes(q) ||
         item.nif?.includes(q) ||
         item.code?.toLowerCase().includes(q) ||
+        item.legacy_code?.toLowerCase().includes(q) ||
         item.email?.toLowerCase().includes(q) ||
         item.phone?.includes(q)
       )

@@ -118,7 +118,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
 
   // Initialize form data with rich pricing and webservices
   const [formData, setFormDataState] = React.useState<Partial<Cliente>>(() => ({
-    code: initialData?.code || `CL${Math.floor(100 + Math.random() * 900)}`,
+    code: initialData?.code || "", // empty: the server assigns the next free CLxxx on save
     short_name: initialData?.short_name || "",
     portal_slug: initialData?.portal_slug || "",
     legal_name: initialData?.legal_name || "",
@@ -1003,7 +1003,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                 </h1>
                 
                 <span className="bg-[var(--surface-muted)] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-[11px] font-mono font-bold px-2 py-0.5 rounded shrink-0">
-                  {formData.code || "CL000"}
+                  {formData.code || "Novo"}
                 </span>
 
                 <span className="hidden sm:inline bg-[#EEF3EF] border border-[#C9D7CD] text-[#315B43] text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0">
@@ -1108,15 +1108,15 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
               </div>}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Código Cliente *</label>
+                  <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">Código Cliente</label>
                   <input
                     type="text"
-                    required
                     value={formData.code || ""}
                     onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                     className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs font-mono font-bold text-[var(--text-primary)] uppercase focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
-                    placeholder="CL001"
+                    placeholder="Automático ao gravar"
                   />
+                  {initialData?.legacy_code && <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">Código antigo: <span className="font-mono">{initialData.legacy_code}</span></p>}
                 </div>
 
                 <div className="md:col-span-2">
