@@ -1,5 +1,5 @@
 import { emailTemplates } from "@/app/ops/configuracao/notificacoes/templates"
-import { clientInvitationHtml, clientRecoveryHtml, invoiceEmailHtml, periodStatementHtml, pickupConfirmationHtml, quotationTrackingHtml } from "./code-templates"
+import { clientInvitationHtml, clientRecoveryHtml, invoiceEmailHtml, periodStatementHtml, pickupCancelledHtml, pickupConfirmationHtml, quotationTrackingHtml } from "./code-templates"
 import { formatEmailHtmlTemplate } from "@/lib/ops-mailbox"
 
 export type EmailTemplateEntry = { id: string; name: string; subject: string; html_content: string; description: string; readonly?: boolean; sender?: string }
@@ -12,8 +12,11 @@ export const emailTemplateCatalog: EmailTemplateEntry[] = [
     ["tracking", "Guia de transporte emitida", "Guia emitida e ligação de acompanhamento do envio.", "Linke | Guia de Transporte Emitida"],
     ["incident", "Incidência na entrega", "Aviso de uma incidência no transporte ou entrega.", "Atenção: Problema na Entrega ⚠️"],
   ].map(([id, name, description, subject]) => ({ id, name, description, subject, html_content: emailTemplates[id] })),
-  { id: "pickup_confirmed", name: "Pedido de recolha do cliente confirmado", description: "Pedido marcado como Efetuado pela equipa Linke. Envio automático ou confirmação manual.", subject: "Linke | Recolha confirmada · PR-EXEMPLO12345", readonly: true, sender: "notificacoes@linke.pt",
-    html_content: pickupConfirmationHtml({ client_name: "Loja de demonstração", reference: "PR-EXEMPLO12345", carrier_reference: "1519176/26", carrier_name: "CTT Expresso", url: `${portal}/app/recolhas` }) },
+  { id: "pickup_confirmed", name: "Pedido de recolha do cliente confirmado", description: "Enviado ao cliente quando a equipa Linke faz o pedido à transportadora. Inclui o dia e o período da recolha (o agendado na transportadora), o local e a data do pedido.", subject: "Linke | Recolha confirmada · PR-EXEMPLO12345", readonly: true, sender: "notificacoes@linke.pt",
+    html_content: pickupConfirmationHtml({ client_name: "Loja de demonstração", reference: "PR-EXEMPLO12345", carrier_reference: "1519176/26", carrier_name: "CTT Expresso", url: `${portal}/app/recolhas`,
+      pickup_when: "25/11/2026 · 09:00 - 19:00", pickup_address: "Rua de Exemplo 1, 4000-001 Porto", requested_at: "23/11/2026, 14:05" }) },
+  { id: "pickup_cancelled", name: "Pedido de recolha do cliente cancelado", description: "Enviado ao cliente quando a equipa Linke cancela um pedido pendente, que não chegou a ser feito à transportadora. Inclui o motivo, se indicado.", subject: "Linke | Pedido de recolha cancelado · PR-EXEMPLO12345", readonly: true, sender: "notificacoes@linke.pt",
+    html_content: pickupCancelledHtml({ client_name: "Loja de demonstração", reference: "PR-EXEMPLO12345", carrier: "CTT Expresso", date: "2026-11-25", period: "09:00-19:00", address: "Rua de Exemplo 1, 4000-001 Porto", reason: "Pedido em duplicado", url: `${portal}/app/recolhas` }) },
   { id: "quotation_tracking", name: "Tracking de envio por cotação", description: "Guia registada num pedido internacional por cotação, incluindo Correos ou FedEx.", subject: "O seu envio está registado · COT-EXEMPLO1234", readonly: true,
     html_content: quotationTrackingHtml({ reference: "COT-EXEMPLO1234", tracking_number: "123456789012", carrier: "Correos Express", url: `${portal}/tracking?trk=COT-EXEMPLO1234` }) },
   { id: "client_invitation", name: "Convite de acesso ao portal", description: "Convite para o cliente definir a palavra-passe. Gerido pelo fluxo de acesso.", subject: "Defina a sua palavra-passe · Área do Cliente Linke", readonly: true,

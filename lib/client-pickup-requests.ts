@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-export { PICKUP_REQUEST_ACTION, PICKUP_REQUEST_PERMISSION } from "./pickup-request-notifications"
+export { PICKUP_REQUEST_ACTION, PICKUP_REQUEST_PERMISSION, formatPickupTimestamp, pickupWhen } from "./pickup-request-notifications"
 export const PICKUP_REQUEST_PAGE_SIZE = 25
 export const CTT_PICKUP_PERIODS = ["09:00-19:00"] as const
 export const CORREOS_PICKUP_PERIODS = ["08:00-10:00", "10:00-13:00", "13:00-16:00", "16:00-19:00", "19:00-22:00"] as const
@@ -44,7 +44,13 @@ export const pickupRequestSchema = z.object({
 export type ClientPickupInput = z.infer<typeof pickupRequestSchema>
 export type ClientPickupRequest = {
   id: string; reference: string; client_id: string; client_name: string
-  status: "pending" | "processing" | "completed"; pickup: ClientPickupInput
+  status: "pending" | "processing" | "completed" | "cancelled"; pickup: ClientPickupInput
   created_at: string; completed_at?: string; carrier_reference?: string; carrier_name?: string
+  cancelled_at?: string; cancel_reason?: string
+  /** Dia e período realmente agendados na transportadora (a equipa pode ajustar o pedido do cliente). */
+  scheduled_date?: string; scheduled_period?: string
 }
+
+export const PICKUP_CANCEL_REASON_MAX = 300
+
 export type PickupRequestPage = { requests: ClientPickupRequest[]; total: number; page: number }

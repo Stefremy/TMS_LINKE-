@@ -6,8 +6,8 @@ import { revalidatePath } from "next/cache"
 import { getClientesAction } from "./clientes"
 import { readPortalAccess } from "@/lib/client-portal/suspension"
 import { scheduleCttPickupAction } from "./ctt"
-import { PICKUP_REQUEST_ACTION, PICKUP_REQUEST_PERMISSION, PICKUP_REQUEST_PAGE_SIZE, pickupRequestSchema, type ClientPickupRequest } from "@/lib/client-pickup-requests"
-import { notifyPickupConfirmation } from "@/lib/email/pickup-confirmation"
+import { PICKUP_REQUEST_ACTION, PICKUP_REQUEST_PERMISSION, PICKUP_REQUEST_PAGE_SIZE, PICKUP_CANCEL_REASON_MAX, pickupRequestSchema, type ClientPickupRequest } from "@/lib/client-pickup-requests"
+import { notifyPickupCancellation, notifyPickupConfirmation } from "@/lib/email/pickup-confirmation"
 import { sendEmail } from "@/lib/email/resend"
 import { pickupRequestStaffHtml } from "@/lib/email/code-templates"
 import { publicUrl } from "@/lib/config/public-origins"
@@ -30,7 +30,7 @@ async function notifyStaffNewPickup(request: SavedRequest) {
   } catch (error) { console.error("Staff pickup notification failed:", error) }
 }
 
-type SavedRequest = ClientPickupRequest & { created_by: string; processing_by?: string; completed_by?: string }
+type SavedRequest = ClientPickupRequest & { created_by: string; processing_by?: string; completed_by?: string; cancelled_by?: string; cancel_email_sent_at?: string }
 const uuid = (value: unknown): value is string => typeof value === "string" && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value)
 const failure = (error: unknown) => ({ success: false as const, error: error instanceof Error ? error.message : "Não foi possível atualizar o pedido de recolha." })
 const samePickup = (saved: ClientPickupRequest["pickup"], input: ClientPickupRequest["pickup"]) => Object.entries(input).every(([key, value]) => saved?.[key as keyof typeof saved] === value)
@@ -39,6 +39,8 @@ const publicRequest = (request: SavedRequest, client = false): ClientPickupReque
   id: request.id, reference: request.reference, client_id: request.client_id, client_name: request.client_name,
   status: client && request.status === "processing" ? "pending" : request.status, pickup: request.pickup,
   created_at: request.created_at, completed_at: request.completed_at, carrier_reference: request.carrier_reference, carrier_name: request.carrier_name,
+  cancelled_at: request.cancelled_at, cancel_reason: request.cancel_reason,
+  scheduled_date: request.scheduled_date, scheduled_period: request.scheduled_period,
 })
 const query = (db: ReturnType<typeof createAdminClient>, ctx: AuthContext) => db.from("audit_log").select("id,details,created_at").eq("tenant_id", ctx.tenant_id).eq("action", PICKUP_REQUEST_ACTION)
 async function confirmationWarning(db: ReturnType<typeof createAdminClient>, ctx: AuthContext, request: SavedRequest) {
@@ -116,13 +118,16 @@ export async function getPendingClientPickupRequestsCountAction() {
 }
 
 /** Staff can record a request already made through the carrier's portal. */
-export async function completeClientPickupRequestAction(id: string, reference: string, carrierName: string) {
+export async function completeClientPickupRequestAction(id: string, reference: string, carrierName: string, schedule?: { date?: string; period?: string }) {
   const ctx = await requireEmployee(PICKUP_REQUEST_PERMISSION)
   try {
     if (typeof reference !== "string" || !/^[A-Za-z0-9][A-Za-z0-9./_-]{0,79}$/.test(reference.trim()) || !["CTT Expresso", "Correos Express"].includes(carrierName)) throw new Error("Indique a transportadora e a referência de recolha confirmada.")
+    const scheduledDate = typeof schedule?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(schedule.date) ? schedule.date : undefined
+    const scheduledPeriod = typeof schedule?.period === "string" && /^\d{2}:\d{2}-\d{2}:\d{2}$/.test(schedule.period) ? schedule.period : undefined
     const db = createAdminClient(), request = await readRequest(db, ctx, id)
     if (request.status === "completed") return { success: true as const, request: publicRequest(request), email_warning: await confirmationWarning(db, ctx, request) }
-    const next: SavedRequest = { ...request, status: "completed", carrier_reference: reference.trim(), carrier_name: carrierName, completed_at: new Date().toISOString(), completed_by: ctx.user.id }
+    const next: SavedRequest = { ...request, status: "completed", carrier_reference: reference.trim(), carrier_name: carrierName, completed_at: new Date().toISOString(), completed_by: ctx.user.id,
+      ...(scheduledDate ? { scheduled_date: scheduledDate } : {}), ...(scheduledPeriod ? { scheduled_period: scheduledPeriod } : {}) }
     const saved = await db.from("audit_log").update({ details: next }).eq("tenant_id", ctx.tenant_id).eq("action", PICKUP_REQUEST_ACTION).eq("id", id).eq("details->>status", request.status).select("id").maybeSingle()
     if (saved.error || !saved.data) throw new Error("O pedido foi atualizado por outro operador ou não foi possível guardar. Atualize a lista.")
     refresh()
@@ -144,8 +149,8 @@ export async function scheduleClientPickupRequestAction(id: string, input: Param
     // before recording its reference; retrying must never create two bookings.
     const result = await scheduleCttPickupAction({ ...input, client_id: request.client_id, client_request_id: id })
     if (!result.success || !("pickupNumber" in result) || !result.pickupNumber) return { success: false as const, error: `${result.error || "Não foi confirmada uma referência."} Confirme o resultado na transportadora antes de repetir; o pedido mantém-se em tratamento.` }
-    const completed = await completeClientPickupRequestAction(id, result.pickupNumber, result.carrier_name)
-    return { ...result, ...(completed.success ? { notification_warning: completed.email_warning } : { request_update_warning: `A recolha foi aceite (${result.pickupNumber}), mas o estado do pedido não foi guardado. Use «Marcar efetuado» com esta referência.` }) }
+    const completed = await completeClientPickupRequestAction(id, result.pickupNumber, result.carrier_name, { date: input.date, period: `${input.startHour}-${input.endHour}` })
+    return { ...result, ...(completed.success ? { notification_warning: completed.email_warning } : { request_update_warning: `A recolha foi aceite (${result.pickupNumber}), mas o estado do pedido não foi guardado. Em Pedidos dos clientes, use «Registar referência» com esta referência.` }) }
   } catch (error) { return failure(error) }
 }
 
@@ -171,5 +176,39 @@ export async function reopenClientPickupRequestAction(id: string, confirmedNoBoo
     if (saved.error || !saved.data) throw new Error("Não foi possível repor o pedido. Atualize a lista.")
     refresh()
     return { success: true as const }
+  } catch (error) { return failure(error) }
+}
+
+/**
+ * Cancel a request that was never sent to the carrier. Only pending requests: a request "in treatment"
+ * may already exist at the carrier and must be verified (and reopened) first. The client is emailed;
+ * an email failure never undoes the cancellation and can be retried by cancelling again.
+ */
+export async function cancelClientPickupRequestAction(id: string, reason: string = "") {
+  const ctx = await requireEmployee(PICKUP_REQUEST_PERMISSION)
+  try {
+    if (typeof reason !== "string") throw new Error("Motivo inválido.")
+    const cleanReason = reason.replace(/\s+/g, " ").trim()
+    if (cleanReason.length > PICKUP_CANCEL_REASON_MAX) throw new Error(`O motivo pode ter no máximo ${PICKUP_CANCEL_REASON_MAX} caracteres.`)
+    const db = createAdminClient()
+    let request = await readRequest(db, ctx, id)
+    if (request.status === "completed") throw new Error("Este pedido já foi feito à transportadora e não pode ser cancelado aqui. Cancele a recolha na transportadora.")
+    if (request.status === "processing") throw new Error("Este pedido está em tratamento. Confirme na transportadora que não foi criada nenhuma recolha e reponha-o como pendente antes de cancelar.")
+    if (request.status !== "cancelled") {
+      const next: SavedRequest = { ...request, status: "cancelled", cancelled_at: new Date().toISOString(), cancelled_by: ctx.user.id, ...(cleanReason ? { cancel_reason: cleanReason } : {}) }
+      const saved = await db.from("audit_log").update({ details: next }).eq("tenant_id", ctx.tenant_id).eq("action", PICKUP_REQUEST_ACTION).eq("id", id).eq("details->>status", "pending").select("id").maybeSingle()
+      if (saved.error || !saved.data) throw new Error("O pedido foi atualizado por outro operador. Atualize a lista.")
+      request = next
+      refresh()
+    }
+    if (request.cancel_email_sent_at) return { success: true as const, request: publicRequest(request) }
+    try {
+      await notifyPickupCancellation(db, ctx.tenant_id, publicRequest(request))
+      const sent: SavedRequest = { ...request, cancel_email_sent_at: new Date().toISOString() }
+      await db.from("audit_log").update({ details: sent }).eq("tenant_id", ctx.tenant_id).eq("action", PICKUP_REQUEST_ACTION).eq("id", id).eq("details->>status", "cancelled")
+      return { success: true as const, request: publicRequest(sent) }
+    } catch (error) {
+      return { success: true as const, request: publicRequest(request), email_warning: `Pedido cancelado, mas o email ao cliente não foi enviado: ${error instanceof Error ? error.message : "erro desconhecido"} Pode reenviar com «Reenviar email de cancelamento».` }
+    }
   } catch (error) { return failure(error) }
 }

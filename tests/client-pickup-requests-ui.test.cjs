@@ -47,12 +47,14 @@ test('the saved default address and its contact are prefilled when the client re
   assert.match(html, /Usar morada principal como padrão/)
 })
 
-test('Ops queue displays all operational request data with prepare and manual-completion actions', () => {
+test('Ops queue: pending requests can be prepared or cancelled; only a request in treatment can record a carrier reference', () => {
   const { ClientPickupRequestsPanel } = load('app/ops/envios/recolhas/ClientPickupRequestsPanel.tsx')
   const html = renderToStaticMarkup(React.createElement(ClientPickupRequestsPanel, { initialPage: page('pending'), onSchedule() {} }))
-  for (const text of ['Pedidos dos clientes (1)', 'Preparar recolha', 'Marcar efetuado', 'Referência confirmada', 'Porta das traseiras', '912345678']) assert.ok(html.includes(text), text)
+  for (const text of ['Pedidos dos clientes (1)', 'Preparar recolha', 'Cancelar pedido', 'Porta das traseiras', '912345678']) assert.ok(html.includes(text), text)
+  for (const text of ['Marcar efetuado', 'Registar referência', 'Referência confirmada']) assert.ok(!html.includes(text), text)
   const claimed = renderToStaticMarkup(React.createElement(ClientPickupRequestsPanel, { initialPage: page('processing'), onSchedule() {} }))
-  assert.match(claimed, /Em tratamento/); assert.match(claimed, /Repor pendente após verificação/); assert.doesNotMatch(claimed, /Preparar recolha/)
+  assert.match(claimed, /Em tratamento/); assert.match(claimed, /Repor pendente após verificação/); assert.match(claimed, /Registar referência/); assert.match(claimed, /Referência confirmada/)
+  assert.doesNotMatch(claimed, /Preparar recolha/); assert.doesNotMatch(claimed, /Cancelar pedido/)
 })
 
 test('pickup requests are discoverable in the shared desktop and mobile client menu', () => {

@@ -80,3 +80,50 @@ test('uncertain attempts outside the provider deduplication window require recon
   await assert.rejects(h.send(), /verificação no provedor/)
   assert.equal(h.calls.length, 1); assert.equal(h.deliveries.length, 1)
 })
+
+
+// ── Cancelamento e data do pedido ──
+function cancelHarness(options = {}) {
+  const tables = { audit_log: options.noEmail ? [] : [{ id: 'profile', tenant_id: T, action: 'client_data', details: { id: C, email: 'registered@example.invalid' } }] }
+  const db = fakeSupabase(tables), sent = []
+  const load = createLoader({
+    './resend': { sendEmail: async email => { sent.push(email); return options.fail ? { success: false, error: 'down' } : { success: true, data: { id: 'x' } } } },
+    '@/lib/config/public-origins': { publicUrl: path => `https://portal.example.invalid${path}` },
+  })
+  return { sent, cancel: value => load('lib/email/pickup-confirmation.ts').notifyPickupCancellation(db.client, T, value) }
+}
+const cancelled = { ...request, status: 'cancelled', carrier_reference: undefined, carrier_name: undefined, cancel_reason: 'Duplicado <script>',
+  pickup: { date: '2026-11-25', period: '09:00-19:00', carrier: 'ctt_expresso', address: 'Rua A 1', postal: '4000-001', city: 'Porto', email: 'untrusted-form@example.invalid' } }
+
+test('cancellation email goes to the registered contact once per request, says it was not sent to the carrier, and escapes client text', async () => {
+  const h = cancelHarness()
+  await h.cancel(cancelled)
+  assert.equal(h.sent.length, 1)
+  const [email] = h.sent
+  assert.equal(email.to, 'registered@example.invalid'); assert.equal(email.from, 'Linke <notificacoes@linke.pt>')
+  assert.equal(email.subject, 'Linke | Pedido de recolha cancelado · PR-444444444444')
+  assert.equal(email.idempotencyKey, `pickup-cancelled-${ID}`)
+  for (const text of ['Pedido de recolha cancelado', 'não foi pedido à transportadora', '25/11/2026 · 09:00 - 19:00', 'CTT Expresso', 'Rua A 1, 4000-001 Porto', 'Cancelado', 'https://portal.example.invalid/app/recolhas']) assert.ok(email.html.includes(text), text)
+  assert.ok(email.html.includes('Loja &lt;A &amp; B&gt;')); assert.ok(email.html.includes('Duplicado &lt;script&gt;')); assert.ok(!email.html.includes('<script>'))
+})
+
+test('cancellation email is refused for requests that are not cancelled, missing contacts and provider failures', async () => {
+  await assert.rejects(cancelHarness().cancel({ ...cancelled, status: 'pending' }), /não está cancelado/)
+  await assert.rejects(cancelHarness({ noEmail: true }).cancel(cancelled), /email de contacto válido/)
+  await assert.rejects(cancelHarness({ fail: true }).cancel(cancelled), /Não foi possível enviar/)
+})
+
+test('the confirmation email shows when the pickup was requested from the carrier', async () => {
+  const h = harness()
+  await h.send({ ...request, completed_at: '2026-11-23T14:05:00Z' })
+  assert.match(h.deliveries[0].html, /Pedido à transportadora em:<\/strong> 23\/11\/2026, 14:05/)
+})
+
+test('the confirmation email shows the pickup day and place, preferring the date booked at the carrier', async () => {
+  const pickup = { date: '2026-11-25', period: '09:00-19:00', address: 'Rua A 1', postal: '4000-001', city: 'Porto' }
+  const requested = harness(); await requested.send({ ...request, pickup })
+  assert.match(requested.deliveries[0].html, /Data da recolha:<\/strong> 25\/11\/2026 · 09:00 - 19:00/)
+  assert.match(requested.deliveries[0].html, /Local de recolha:<\/strong> Rua A 1, 4000-001 Porto/)
+  const rebooked = harness(); await rebooked.send({ ...request, pickup, scheduled_date: '2026-12-01', scheduled_period: '10:00-13:00' })
+  assert.match(rebooked.deliveries[0].html, /Data da recolha:<\/strong> 01\/12\/2026 · 10:00 - 13:00/)
+})

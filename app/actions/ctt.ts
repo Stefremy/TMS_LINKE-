@@ -646,8 +646,8 @@ export async function scheduleCttPickupAction(input: {
       const { storedEmailTemplate } = await import("@/lib/email/stored-template")
       
       const html = compileTemplate(await storedEmailTemplate(supabase, "pickup_scheduled"), {
-        date: input.date,
-        time_period: `${input.startHour}h - ${input.endHour}h`,
+        date: /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date.split("-").reverse().join("/") : input.date,
+        time_period: `${input.startHour.replace(/h$/, "")} - ${input.endHour.replace(/h$/, "")}`,
         address: `${input.sender.address}, ${input.sender.zip} ${input.sender.city}`,
         volumes: input.volumes,
         tracking_url: publicUrl("/app/recolhas", "portal")

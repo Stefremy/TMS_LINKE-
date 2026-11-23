@@ -8,19 +8,20 @@ const input = () => ({ date: new Date(Date.now() + 2 * 86400000).toISOString().s
   volumes: 1, weightKg: 3, heaviestWeightKg: 3, name: 'Armazém A', address: 'Rua A 1', city: 'Porto', postal: '4000-001', contact: 'Ana', phone: '912345678', email: '', notes: 'Campainha do armazém' })
 function harness(options = {}) {
   let role = options.role || 'client', allow = true
-  const tables = { audit_log: [], clients: [{ id: A, tenant_id: T }] }, db = fakeSupabase(tables, options.failure, { persistInserts: true }), calls = [], emails = [], staffEmails = []
+  const tables = { audit_log: [], clients: [{ id: A, tenant_id: T }] }, db = fakeSupabase(tables, options.failure, { persistInserts: true }), calls = [], emails = [], staffEmails = [], cancelEmails = []
   const ctx = () => ({ role, tenant_id: T, client_id: role === 'client' ? A : null, user: { id: 'trusted-actor' } })
   const auth = { requireUser: async permission => { if (!allow) throw Error('Forbidden'); assert.equal(permission, 'Pedidos de Recolha & Distribuição'); return ctx() },
     requireEmployee: async permission => { if (!allow || role === 'client') throw Error('Forbidden'); assert.equal(permission, 'Pedidos de Recolha & Distribuição'); return ctx() } }
   const load = createLoader({ zod: require('zod'), '@/lib/auth/context': auth, '@/lib/supabase/server': { createAdminClient: () => db.client },
     './clientes': { getClientesAction: async id => id === A ? [{ id: A, short_name: 'Loja A', is_active: options.active !== false }] : [] },
     '@/lib/client-portal/suspension': { readPortalAccess: async () => ({ suspended: !!options.suspended, blocked: !!options.blocked }) },
-    '@/lib/email/pickup-confirmation': { notifyPickupConfirmation: async (db, tenant, request) => { if (request.status !== 'completed') throw Error('Ainda não confirmado'); assert.equal(tables.audit_log.find(row => row.id === request.id).details.status, 'completed'); emails.push(request.id); if (options.emailFailure) throw Error('Fixture email unavailable'); return { skipped: false } } },
+    '@/lib/email/pickup-confirmation': { notifyPickupConfirmation: async (db, tenant, request) => { if (request.status !== 'completed') throw Error('Ainda não confirmado'); assert.equal(tables.audit_log.find(row => row.id === request.id).details.status, 'completed'); emails.push(request.id); if (options.emailFailure) throw Error('Fixture email unavailable'); return { skipped: false } },
+      notifyPickupCancellation: async (db, tenant, request) => { assert.equal(request.status, 'cancelled'); assert.equal(tables.audit_log.find(row => row.id === request.id).details.status, 'cancelled'); cancelEmails.push(request); if (options.cancelEmailFailure && !options.cancelEmailFailure.recovered) throw Error('Resend unavailable') } },
     // Team alert for a new request: recorded, never sent.
     '@/lib/email/resend': { sendEmail: async message => { staffEmails.push(message); if (options.staffEmailFailure) throw Error('Resend unavailable'); return { success: true } } },
     './ctt': { scheduleCttPickupAction: async booking => { calls.push(booking); if (options.throwCarrier) throw Error('Timeout'); return options.carrierResult || { success: true, pickupNumber: '1519176/26', carrier_name: 'CTT Expresso', carrier_code: 'ctt_expresso' } } },
   })
-  return { api: load('app/actions/client-pickup-requests.ts'), agenda: load('app/actions/client-pickup-locations.ts'), tables, db, calls, emails, staffEmails, staff: () => { role = 'employee' }, deny: () => { allow = false },
+  return { cancelEmails, api: load('app/actions/client-pickup-requests.ts'), agenda: load('app/actions/client-pickup-locations.ts'), tables, db, calls, emails, staffEmails, staff: () => { role = 'employee' }, deny: () => { allow = false },
     request: (values = input(), id = ID, client = B) => load('app/actions/client-pickup-requests.ts').requestClientPickupAction(values, id, client) }
 }
 
@@ -242,7 +243,7 @@ test('accepted bookings retain success and the carrier reference if the final re
   const h = harness({ failure: q => q.write?.value?.details?.status === 'completed' ? { message: 'Fixture final write failure' } : null })
   await h.request(); h.staff()
   const result = await h.api.scheduleClientPickupRequestAction(ID, {})
-  assert.equal(result.success, true); assert.equal(result.pickupNumber, '1519176/26'); assert.match(result.request_update_warning, /Marcar efetuado/)
+  assert.equal(result.success, true); assert.equal(result.pickupNumber, '1519176/26'); assert.match(result.request_update_warning, /Registar referência/)
   assert.equal(h.tables.audit_log[0].details.status, 'processing')
   assert.equal((await h.api.scheduleClientPickupRequestAction(ID, {})).success, false); assert.equal(h.calls.length, 1)
 })
@@ -258,4 +259,75 @@ test('the team is alerted once per new request, even after double clicks and ret
   const failing = harness({ staffEmailFailure: true })
   const saved = await failing.request()
   assert.equal(saved.success, true); assert.equal(failing.tables.audit_log.length, 1)
+})
+
+// ── Cancelamento: só pedidos pendentes, nunca chama a transportadora, avisa o cliente uma vez ──
+test('staff cancels a pending request: the client sees "cancelled", gets one email, and it leaves the pending queue', async () => {
+  const h = harness(); assert.equal((await h.request()).success, true)
+  h.staff()
+  const result = await h.api.cancelClientPickupRequestAction(ID, '  pedido   em duplicado ')
+  assert.equal(result.success, true, result.error); assert.equal(result.email_warning, undefined)
+  assert.equal(result.request.status, 'cancelled'); assert.equal(result.request.cancel_reason, 'pedido em duplicado'); assert.ok(result.request.cancelled_at)
+  assert.equal(h.cancelEmails.length, 1); assert.equal(h.cancelEmails[0].cancel_reason, 'pedido em duplicado')
+  assert.equal(h.calls.length, 0, 'the carrier is never called')
+  assert.equal((await h.api.listClientPickupRequestsAction({ pendingOnly: true })).total, 0)
+  assert.equal(await h.api.getPendingClientPickupRequestsCountAction(), 0)
+  const again = await h.api.cancelClientPickupRequestAction(ID)
+  assert.equal(again.success, true); assert.equal(h.cancelEmails.length, 1, 'repeating the cancel never emails twice')
+  const client = harness(); client.tables.audit_log.push(...h.tables.audit_log)
+  const seen = (await client.api.listClientPickupRequestsAction()).requests[0]
+  assert.equal(seen.status, 'cancelled'); assert.equal(seen.cancel_reason, 'pedido em duplicado')
+})
+
+test('clients cannot cancel, and requests already in treatment or completed cannot be cancelled', async () => {
+  const h = harness(); await h.request()
+  await assert.rejects(h.api.cancelClientPickupRequestAction(ID), /Forbidden/)
+  h.staff()
+  const row = h.tables.audit_log.find(r => r.id === ID)
+  for (const [status, message] of [['processing', /em tratamento/], ['completed', /já foi feito à transportadora/]]) {
+    row.details = { ...row.details, status }
+    const result = await h.api.cancelClientPickupRequestAction(ID)
+    assert.equal(result.success, false); assert.match(result.error, message); assert.equal(row.details.status, status)
+  }
+  assert.equal(h.cancelEmails.length, 0); assert.equal(h.calls.length, 0)
+  row.details = { ...row.details, status: 'pending' }
+  assert.equal((await h.api.cancelClientPickupRequestAction(ID, 'x'.repeat(301))).success, false)
+  assert.equal(row.details.status, 'pending')
+})
+
+test('two operators cancelling at once cancel once and email once', async () => {
+  const h = harness(); await h.request(); h.staff()
+  const results = await Promise.all([h.api.cancelClientPickupRequestAction(ID), h.api.cancelClientPickupRequestAction(ID)])
+  assert.ok(results.some(r => r.success))
+  assert.equal(h.cancelEmails.length, 1)
+  assert.equal(h.tables.audit_log.find(r => r.id === ID).details.status, 'cancelled')
+})
+
+test('a failed cancellation email keeps the request cancelled and can be resent', async () => {
+  const failure = { recovered: false }
+  const h = harness({ cancelEmailFailure: failure }); await h.request(); h.staff()
+  const first = await h.api.cancelClientPickupRequestAction(ID, 'cliente desistiu')
+  assert.equal(first.success, true); assert.match(first.email_warning, /Pedido cancelado, mas o email/)
+  assert.equal(h.tables.audit_log.find(r => r.id === ID).details.status, 'cancelled')
+  failure.recovered = true
+  const retry = await h.api.cancelClientPickupRequestAction(ID)
+  assert.equal(retry.success, true); assert.equal(retry.email_warning, undefined)
+  assert.equal(h.cancelEmails.length, 2); assert.equal(h.tables.audit_log.find(r => r.id === ID).details.cancel_reason, 'cliente desistiu')
+})
+
+test('the date the team actually books at the carrier is stored and used in the confirmation; manual registration keeps the requested date', async () => {
+  const h = harness(); await h.request(); h.staff()
+  const booked = await h.api.scheduleClientPickupRequestAction(ID, { date: '2026-12-01', startHour: '10:00', endHour: '13:00' })
+  assert.equal(booked.success, true, booked.error)
+  const saved = h.tables.audit_log.find(r => r.id === ID).details
+  assert.equal(saved.scheduled_date, '2026-12-01'); assert.equal(saved.scheduled_period, '10:00-13:00')
+  assert.equal(h.calls[0].date, '2026-12-01')
+  const seen = (await h.api.listClientPickupRequestsAction()).requests[0]
+  assert.equal(seen.scheduled_date, '2026-12-01'); assert.equal(seen.scheduled_period, '10:00-13:00')
+
+  const manual = harness(); await manual.request(); manual.staff()
+  manual.tables.audit_log.find(r => r.id === ID).details.status = 'processing'
+  assert.equal((await manual.api.completeClientPickupRequestAction(ID, 'REF1', 'CTT Expresso', { date: 'amanhã', period: '<b>' })).success, true)
+  const kept = manual.tables.audit_log.find(r => r.id === ID).details
+  assert.equal(kept.scheduled_date, undefined); assert.equal(kept.scheduled_period, undefined, 'malformed schedule values are ignored')
 })

@@ -1,8 +1,9 @@
 import "server-only"
-import { pickupConfirmationHtml } from "./code-templates"
+import { pickupCancelledHtml, pickupConfirmationHtml } from "./code-templates"
 import { createHash } from "node:crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { ClientPickupRequest } from "@/lib/client-pickup-requests"
+import { formatPickupTimestamp, pickupWhen } from "@/lib/pickup-request-notifications"
 import { sendEmail } from "./resend"
 import { publicUrl } from "@/lib/config/public-origins"
 
@@ -31,7 +32,9 @@ export async function notifyPickupConfirmation(db: SupabaseClient, tenant: strin
     email = { request_id: request.id, client_id: request.client_id, status: "pending", created_at: new Date().toISOString(),
       to: recipient.trim(), from: "Linke <notificacoes@linke.pt>", subject: `Linke | Recolha confirmada · ${request.reference}`,
       idempotencyKey: `pickup-confirmation-${id}`,
-      html: pickupConfirmationHtml({client_name:request.client_name,reference:request.reference,carrier_reference:request.carrier_reference!,carrier_name:request.carrier_name!,url}) }
+      html: pickupConfirmationHtml({client_name:request.client_name,reference:request.reference,carrier_reference:request.carrier_reference!,carrier_name:request.carrier_name!,url,requested_at:formatPickupTimestamp(request.completed_at),
+        ...(request.pickup?.date ? { pickup_when: pickupWhen(request).label } : {}),
+        ...(request.pickup?.address ? { pickup_address: `${request.pickup.address}, ${request.pickup.postal} ${request.pickup.city}` } : {})}) }
     const saved = await db.from("audit_log").insert({ id, tenant_id: tenant, action: ACTION, details: email })
     if (saved.error) {
       if (saved.error.code !== "23505") throw new Error("Não foi possível preparar o email de confirmação.")
@@ -53,4 +56,21 @@ export async function notifyPickupConfirmation(db: SupabaseClient, tenant: strin
     .eq("tenant_id", tenant).eq("action", ACTION).eq("id", id).select("id").maybeSingle()
   if (sent.error || !sent.data) throw new Error("O provedor aceitou o email, mas o registo local falhou. Confirme o envio antes de repetir.")
   return { skipped: false }
+}
+
+/** Tells the client their request was cancelled (it was never sent to the carrier). Same email address as the confirmation. */
+export async function notifyPickupCancellation(db: SupabaseClient, tenant: string, request: ClientPickupRequest) {
+  if (request.status !== "cancelled") throw new Error("O pedido não está cancelado.")
+  const profile = await db.from("audit_log").select("details").eq("tenant_id", tenant).eq("action", "client_data").eq("details->>id", request.client_id)
+    .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle()
+  const recipient = profile.data?.details?.email
+  if (profile.error || typeof recipient !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.trim())) throw new Error("O cliente não tem um email de contacto válido na ficha.")
+  const p = request.pickup
+  const result = await sendEmail({
+    to: recipient.trim(), from: "Linke <notificacoes@linke.pt>", subject: `Linke | Pedido de recolha cancelado · ${request.reference}`,
+    idempotencyKey: `pickup-cancelled-${request.id}`,
+    html: pickupCancelledHtml({ client_name: request.client_name, reference: request.reference, carrier: p.carrier === "ctt_expresso" ? "CTT Expresso" : "Correos Express",
+      date: p.date, period: p.period, address: `${p.address}, ${p.postal} ${p.city}`, reason: request.cancel_reason, url: publicUrl("/app/recolhas", "portal") }),
+  })
+  if (!result.success) throw new Error("Não foi possível enviar o email de cancelamento ao cliente.")
 }

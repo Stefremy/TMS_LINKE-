@@ -15,15 +15,21 @@ function harness(role = 'admin', rows = [], failure) {
 
 test('catalog lists every delivery model without seed data and renders code templates with fictional samples', async () => {
   const h = harness(), templates = await h.getEmailTemplates()
-  assert.equal(templates.length, 12)
-  for (const id of ['pickup_scheduled','pickup_confirmed','low_balance','tracking','in_transit','incident','quotation_tracking','client_invitation','client_recovery','billing_invoice','period_statement','mail_composer']) {
+  assert.equal(templates.length, 13)
+  for (const id of ['pickup_scheduled','pickup_confirmed','pickup_cancelled','low_balance','tracking','in_transit','incident','quotation_tracking','client_invitation','client_recovery','billing_invoice','period_statement','mail_composer']) {
     const row = templates.find(t => t.id === id)
     assert.ok(row?.html_content, id)
   }
   const pickup = templates.find(t => t.id === 'pickup_confirmed')
   assert.match(pickup.html_content, /Estado do pedido:<\/strong> Efetuado/)
+  assert.match(pickup.html_content, /Data da recolha:<\/strong> 25\/11\/2026 · 09:00 - 19:00/)
+  assert.match(pickup.html_content, /Local de recolha:<\/strong>/); assert.match(pickup.html_content, /Pedido à transportadora em:<\/strong>/)
   assert.equal(pickup.sender, 'notificacoes@linke.pt')
   assert.equal(pickup.readonly, true)
+  const cancelled = templates.find(t => t.id === 'pickup_cancelled')
+  assert.equal(cancelled.name, 'Pedido de recolha do cliente cancelado'); assert.equal(cancelled.sender, 'notificacoes@linke.pt'); assert.equal(cancelled.readonly, true)
+  assert.equal(cancelled.subject, 'Linke | Pedido de recolha cancelado · PR-EXEMPLO12345')
+  for (const text of ['Pedido de recolha cancelado', 'não foi pedido à transportadora', 'Estado do pedido:</strong> Cancelado', 'Motivo:</strong> Pedido em duplicado']) assert.ok(cancelled.html_content.includes(text), text)
   for (const id of ['client_invitation','client_recovery']) {
     assert.match(templates.find(t => t.id === id).html_content, /example.invalid/)
     assert.doesNotMatch(templates.find(t => t.id === id).html_content, /token_hash=/)
