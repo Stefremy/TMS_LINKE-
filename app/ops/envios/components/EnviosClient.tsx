@@ -43,6 +43,7 @@ import { closeCttShipmentsAction } from "@/app/actions/ctt"
 import { deleteShipmentsBulkAction, syncShipmentTrackingAction } from "@/app/actions/shipments"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { OnlineOrderIcon } from "@/components/shipments/OnlineOrderIcon"
 
 interface EnviosClientProps {
   envios: ShipmentListRow[]
@@ -483,6 +484,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                         >
                           {envio.trk?.id || "N/A"}
                         </button>
+                        <OnlineOrderIcon order={envio.onlineOrder} />
                         <span className="px-1.5 py-0.2 bg-[var(--accent)] text-white text-[8px] font-bold rounded uppercase">
                           {envio.trk?.tag || "A01"}
                         </span>
@@ -625,6 +627,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                 {/* TRK Column */}
                 <td className="px-3 py-3 align-top">
                   <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5">
                     <button 
                       type="button"
                       onClick={(e) => {
@@ -637,6 +640,8 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                     >
                       {envio.trk?.id || "N/A"}
                     </button>
+                    <OnlineOrderIcon order={envio.onlineOrder} />
+                    </div>
                     <span className="text-[var(--text-tertiary)] text-[10px]">{envio.trk?.date}</span>
                     {envio.trk?.ref && envio.trk.ref !== envio.trk.id && (
                       <span className="font-mono text-[10px] font-medium text-[var(--text-secondary)] mt-0.5" title="Referência Interna Linke">

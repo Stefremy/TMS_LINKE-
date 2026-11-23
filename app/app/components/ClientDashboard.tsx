@@ -53,6 +53,8 @@ import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CreditCard } from "lucide-react"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 import { useClientScope } from "./ClientScope"
+import { useOnlineOrderBadges } from "./useOnlineOrderBadges"
+import { OnlineOrderIcon } from "@/components/shipments/OnlineOrderIcon"
 import { ClientSupportRequestDialog, shipmentSupportPrefill } from "./ClientSupportRequest"
 import { useClientMessageCounter } from "./ClientMessages"
 import { generateCttAcceptanceCertificateAction, downloadCttAcceptanceCertificateAction } from "@/app/actions/shipment-manifests"
@@ -64,6 +66,8 @@ import type { ClientMessage, MessagePage } from "@/lib/client-messages/types"
 
 export function ClientDashboard() {
   const { client: currentClient, basePath } = useClientScope()
+  // Shipments created from imported web-store orders get a cart icon.
+  const onlineOrderFor = useOnlineOrderBadges(currentClient.id)
   const messageCounter = useClientMessageCounter()
   const [unreadNotices, setUnreadNotices] = React.useState<ClientMessage[]>([])
   const [unreadNoticesTotal, setUnreadNoticesTotal] = React.useState(0)
@@ -864,9 +868,10 @@ export function ClientDashboard() {
                         <button
                           type="button"
                           onClick={() => setDrawerShipment(shipment)}
-                          className="font-mono font-bold text-xs text-[var(--accent)] hover:underline truncate text-left block"
+                          className="font-mono font-bold text-xs text-[var(--accent)] hover:underline truncate text-left flex items-center gap-1.5"
                         >
-                          {primaryDisplay}
+                          <span className="truncate">{primaryDisplay}</span>
+                          <OnlineOrderIcon order={onlineOrderFor(shipment)} />
                         </button>
                         {secondaryDisplay && (
                           <div className="font-mono text-xs text-[var(--text-tertiary)] truncate">
@@ -1056,6 +1061,7 @@ export function ClientDashboard() {
                                 title="Clique para ver os detalhes do envio e rastreio interno"
                               >
                                 <span>{primaryDisplay}</span>
+                                <OnlineOrderIcon order={onlineOrderFor(shipment)} />
                               </button>
                               {secondaryDisplay && (
                                 <div className="flex items-center gap-1 font-mono text-xs font-semibold text-[var(--text-secondary)] mt-0.5" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Objeto / Guia CTT Expresso"}>

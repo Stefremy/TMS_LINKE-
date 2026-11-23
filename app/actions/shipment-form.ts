@@ -98,10 +98,10 @@ async function submitShipment(input: unknown, clientId: string | undefined, quot
 
   // Auto-fulfill order in connected ecommerce store if reference is provided (awaited so serverless never drops it)
   let ecommerceWarning: string | null = null
-  if (result.success && result.guia && values.observations && effectiveClientId) {
-    const match = values.observations.match(/(?:encomenda\s*#?|#)(\w+)/i)
-    if (match && match[1]) {
-      const orderRef = match[1]
+  // Only an explicit "Encomenda <n>" in the notes links the shipment to a store order (imported orders put it first).
+  const orderRef = values.observations?.match(/(?:encomenda\s*#?|#)([\w-]+)/i)?.[1]
+  if (result.success && result.guia && orderRef && effectiveClientId) {
+    {
       try {
         const { syncStoreOrderForEmittedShipmentAction } = await import("@/app/actions/client-ecommerce")
         const syncRes = await syncStoreOrderForEmittedShipmentAction(effectiveClientId, {

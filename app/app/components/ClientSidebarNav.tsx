@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, FileText, Search, Plus, UserCheck, CreditCard, Inbox, MapPin, Banknote, Plane, ShoppingBag, CalendarDays } from "lucide-react"
+import { Home, FileText, Search, Plus, UserCheck, CreditCard, Inbox, MapPin, Banknote, Plane, ShoppingBag, ShoppingCart, CalendarDays } from "lucide-react"
 import { useClientScope } from "./ClientScope"
 import { ClientMessageBell } from "./ClientMessages"
 
@@ -23,6 +23,7 @@ function clientNavSections(basePath: string) {
         { href: `${basePath}/envios`, label: "Histórico & Envios", icon: Search },
         { href: `${basePath}/destinatarios`, label: "Destinatários", icon: UserCheck },
         { href: `${basePath}/recolhas`, label: "Pedir recolha", icon: CalendarDays },
+        { href: `${basePath}/encomendas-web`, label: "Encomendas Web", icon: ShoppingCart },
         { href: `${basePath}/cotacoes`, label: "Envio aéreo internacional", icon: Plane },
       ],
     },

@@ -46,6 +46,14 @@ export interface SyncedOrder {
   shipping_city: string
   shipping_postal: string
   shipping_country: string
+  /** Company on the delivery address, when the customer filled it in. */
+  customer_company?: string
+  /** District / state, informative only (not used by CTT). */
+  shipping_province?: string
+  /** Note left by the customer at checkout (delivery instructions). */
+  customer_note?: string
+  /** Total weight declared by the store, in kg; absent when the store does not send it. */
+  total_weight_kg?: number
   payment_method: string
   is_cod: boolean
   cod_amount: number
@@ -535,9 +543,11 @@ export async function syncStoreOrdersAction(
         last_name?: string
         email?: string
         phone?: string
+        company?: string
         address_1?: string
         address_2?: string
         city?: string
+        state?: string
         postcode?: string
         country?: string
       }
@@ -559,6 +569,7 @@ export async function syncStoreOrdersAction(
         customer_email?: string
         payment_method?: string
         payment_method_title?: string
+        customer_note?: string
         shipping?: WooAddress
         billing?: WooAddress
         line_items?: WooLineItemRaw[]
@@ -611,10 +622,16 @@ export async function syncStoreOrdersAction(
             customer_name: name,
             customer_email: billing.email || order.customer_email || "",
             customer_phone: shipping.phone || billing.phone || "",
-            shipping_address: [shipping.address_1, shipping.address_2].filter(Boolean).join(", ") || billing.address_1 || "",
-            shipping_city: shipping.city || billing.city || "",
-            shipping_postal: shipping.postcode || billing.postcode || "",
-            shipping_country: shipping.country || billing.country || "PT",
+            // A delivery address is used as a whole; billing only fills in when no delivery address was given.
+            shipping_address: (shipping.address_1
+              ? [shipping.address_1, shipping.address_2]
+              : [billing.address_1, billing.address_2]).filter(Boolean).join(", "),
+            shipping_city: (shipping.address_1 ? shipping.city : billing.city) || shipping.city || billing.city || "",
+            shipping_postal: (shipping.address_1 ? shipping.postcode : billing.postcode) || shipping.postcode || billing.postcode || "",
+            shipping_country: (shipping.address_1 ? shipping.country : billing.country) || shipping.country || billing.country || "PT",
+            customer_company: (shipping.address_1 ? shipping.company : billing.company) || shipping.company || billing.company || "",
+            shipping_province: (shipping.address_1 ? shipping.state : billing.state) || "",
+            customer_note: (order.customer_note || "").trim(),
             payment_method: order.payment_method_title || order.payment_method || "Online",
             is_cod: isCod,
             cod_amount: isCod ? parseFloat(String(order.total || 0)) : 0,
@@ -646,9 +663,11 @@ export async function syncStoreOrdersAction(
         last_name?: string
         email?: string
         phone?: string
+        company?: string
         address1?: string
         address2?: string
         city?: string
+        province?: string
         zip?: string
         country_code?: string
       }
@@ -659,6 +678,7 @@ export async function syncStoreOrdersAction(
         quantity?: number
         price?: string | number
         sku?: string
+        grams?: number
       }
       interface ShopifyOrderRaw {
         id: string | number
@@ -669,6 +689,9 @@ export async function syncStoreOrdersAction(
         total_price?: string | number
         currency?: string
         email?: string
+        phone?: string
+        note?: string
+        total_weight?: number
         gateway?: string
         payment_gateway_names?: string[]
         shipping_address?: ShopifyPersonAddress
@@ -714,11 +737,20 @@ export async function syncStoreOrdersAction(
           currency: order.currency || "EUR",
           customer_name: name,
           customer_email: order.email || customer.email || "",
-          customer_phone: shipping.phone || customer.phone || "",
+          customer_phone: shipping.phone || order.phone || order.billing_address?.phone || customer.phone || "",
           shipping_address: [shipping.address1, shipping.address2].filter(Boolean).join(", ") || "",
           shipping_city: shipping.city || "",
           shipping_postal: shipping.zip || "",
           shipping_country: shipping.country_code || "PT",
+          customer_company: shipping.company || "",
+          shipping_province: shipping.province || "",
+          customer_note: (order.note || "").trim(),
+          // Shopify reports grams; line items carry per-unit grams when the order total is missing.
+          total_weight_kg: (() => {
+            const grams = Number(order.total_weight) > 0 ? Number(order.total_weight)
+              : (order.line_items || []).reduce((sum, li) => sum + (Number(li.grams) || 0) * (li.quantity || 1), 0)
+            return grams > 0 ? Math.round(grams) / 1000 : undefined
+          })(),
           payment_method: (order.payment_gateway_names || []).join(", ") || "Shopify Payments",
           is_cod: isCod,
           cod_amount: isCod ? parseFloat(String(order.total_price || 0)) : 0,
@@ -802,6 +834,19 @@ export async function getClientSyncedOrdersAction(
         seenStores.add(sId)
         allOrders.push(...details.orders)
       }
+    }
+
+    // A guia emitted in the TMS is recorded immediately; the store snapshot only learns it on the next sync.
+    try {
+      const { loadOnlineOrderLinks } = await import("@/lib/ecommerce/online-order-links")
+      const links = await loadOnlineOrderLinks(supabase, ctx.tenant_id, { clientId })
+      const emitted = new Map(links.map(link => [`${link.store_id}|${link.order_id}`, link.tracking_code || link.shipment_id]))
+      for (const order of allOrders) {
+        const tracking = emitted.get(`${order.store_id}|${order.id}`)
+        if (tracking && !order.tracking_number) Object.assign(order, { tracking_number: tracking, shipment_created: true })
+      }
+    } catch (err) {
+      console.warn("Não foi possível cruzar encomendas com guias emitidas:", errorMessage(err))
     }
 
     return allOrders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -970,6 +1015,17 @@ async function writeFulfillmentSyncAudit(
     })
   } catch (err) {
     console.warn("Falha ao registar estado de sincronização e-commerce:", errorMessage(err))
+  }
+}
+
+/** Shipments of this client created from an imported web-store order, keyed by shipment id and tracking code. */
+export async function getClientOnlineOrderBadgesAction(clientId: string) {
+  const ctx = await requireClientAccess(clientId)
+  try {
+    const { loadOnlineOrderLinks, onlineOrderBadges } = await import("@/lib/ecommerce/online-order-links")
+    return onlineOrderBadges(await loadOnlineOrderLinks(createAdminClient(), ctx.tenant_id, { clientId }))
+  } catch {
+    return {}
   }
 }
 

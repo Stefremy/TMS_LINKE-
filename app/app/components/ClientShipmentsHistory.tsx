@@ -20,6 +20,8 @@ import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { useClientScope } from "./ClientScope"
+import { OnlineOrderIcon } from "@/components/shipments/OnlineOrderIcon"
+import { useOnlineOrderBadges } from "./useOnlineOrderBadges"
 import { ClientSupportRequestDialog, shipmentSupportPrefill } from "./ClientSupportRequest"
 import { useTrackingPolling } from "@/lib/hooks/useTrackingPolling"
 import { generateCttAcceptanceCertificateAction, downloadCttAcceptanceCertificateAction } from "@/app/actions/shipment-manifests"
@@ -93,6 +95,9 @@ export function ClientShipmentsHistory() {
     setGeneratingManifest(false)
     setManifestData(null)
   }
+
+  // Shipments created from imported web-store orders get a cart icon.
+  const onlineOrderFor = useOnlineOrderBadges(currentClient.id)
 
   React.useEffect(() => {
     let active = true
@@ -396,9 +401,10 @@ export function ClientShipmentsHistory() {
                         <button
                           type="button"
                           onClick={() => setDrawerShipment(envio)}
-                          className="font-mono font-bold text-xs text-[var(--accent)] hover:underline truncate text-left block"
+                          className="font-mono font-bold text-xs text-[var(--accent)] hover:underline truncate text-left flex items-center gap-1.5"
                         >
-                          {primaryDisplay}
+                          <span className="truncate">{primaryDisplay}</span>
+                          <OnlineOrderIcon order={onlineOrderFor(envio)} />
                         </button>
                         {secondaryDisplay && (
                           <div className="font-mono text-xs text-[var(--text-tertiary)] truncate">
@@ -531,6 +537,7 @@ export function ClientShipmentsHistory() {
                               title="Clique para ver os detalhes do envio e rastreio interno"
                             >
                               <span>{primaryDisplay}</span>
+                              <OnlineOrderIcon order={onlineOrderFor(envio)} />
                             </button>
                             {secondaryDisplay && (
                               <div className="flex items-center gap-1 font-mono text-xs font-semibold text-[var(--text-secondary)] mt-0.5" title={isCorreos ? "Expedición / Rastreio Correos Express" : "Objeto / Guia CTT Expresso"}>

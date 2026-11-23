@@ -120,6 +120,8 @@ export interface ShipmentListRow {
   rawShipment: ShipmentRecord
   billing_statement_id?: string | null
   parcel_summary?: ParcelSummary | null
+  /** Set when the shipment was created from an imported web-store order. */
+  onlineOrder?: { order_number: string; store_name: string } | null
   trk: { id: string; date: string; ref?: string | null; carrierRef?: string; carrierName?: string; tag: string }
   sender: { name: string; flag: string; zip: string; city: string; phone: string }
   recipient: { name: string; flag: string; zip: string; city: string; phone: string }

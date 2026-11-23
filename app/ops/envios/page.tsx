@@ -6,6 +6,7 @@ import { requireEmployee } from "@/lib/auth/context"
 import { canHardDeleteShipments } from "@/lib/auth/hard-delete"
 import { getClientesAction } from "@/app/actions/clientes"
 import { EnviosClient } from "./components/EnviosClient"
+import { loadOnlineOrderLinks, onlineOrderBadges } from "@/lib/ecommerce/online-order-links"
 
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { pickupDateDisplay } from "@/lib/services/shipments/shipment-pickup-dates"
@@ -45,6 +46,11 @@ export default async function EnviosPage(props: { searchParams?: Promise<Record<
 
   const recolhas = recolhasResult.data || []
 
+  // Shipments created from imported web-store orders get a marker in the list.
+  const onlineOrders = await loadOnlineOrderLinks(supabase, ctx.tenant_id, {
+    shipmentKeys: paginatedResult.data.flatMap((s) => [s.id, s.tracking_number, s.carrier_tracking_number].filter(Boolean) as string[]),
+  }).then(onlineOrderBadges).catch(() => ({} as ReturnType<typeof onlineOrderBadges>))
+
   // Map to the shape expected by EnviosClient (formerly mock data)
   const mappedEnvios = paginatedResult.data.map((s) => {
     const statusCfg = getShipmentStatusConfig(s.status)
@@ -80,6 +86,7 @@ export default async function EnviosPage(props: { searchParams?: Promise<Record<
     return {
       rawId: s.id,
       rawShipment: s,
+      onlineOrder: onlineOrders[s.id] || (s.tracking_number ? onlineOrders[s.tracking_number] : undefined) || null,
       parcel_summary: s.parcel_summary,
       billing_statement_id: s.billing_statement_id,
       trk: { 
