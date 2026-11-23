@@ -9,6 +9,9 @@ type ClientProfile = {
   email?: string
   billing_email?: string
   iban?: string
+  /** Código do cliente e, se importado, o código da plataforma antiga. */
+  code?: string
+  legacy_code?: string
 }
 
 /** Persisted client identities only: never use demo records for ownership or bank details. */
@@ -33,11 +36,12 @@ export async function loadScopedClientProfiles(
     for (const client of clients.data || []) profiles.set(client.id, client)
     const seen = new Set<string>()
     for (const log of logs.data || []) {
-      const d = log.details as ClientProfile | null
+      const d = log.details as (ClientProfile & { legacy_import?: { source_code?: string } }) | null
       if (!d?.id || seen.has(d.id) || !profiles.has(d.id)) continue
       profiles.set(d.id, {
         ...profiles.get(d.id), id: d.id, short_name: d.short_name,
         legal_name: d.legal_name, email: d.email, billing_email: d.billing_email, iban: d.iban,
+        code: d.code, legacy_code: d.legacy_import?.source_code,
       })
       seen.add(d.id)
     }

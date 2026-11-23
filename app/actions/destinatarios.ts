@@ -6,6 +6,22 @@ import { Destinatario } from "@/app/ops/entidades/destinatarios/types"
 import { requireUser } from "@/lib/auth/context"
 import { loadScopedClientProfiles } from "@/lib/services/clients/scoped-client-profiles"
 import { lookupPostalCode } from "@/lib/services/geo/postal-code.service"
+import { RECIPIENT_IMPORT_BATCH, recipientFileMatchesClient, recipientImportKey, type ImportedRecipient } from "@/lib/recipients/legacy-import"
+
+/** Saved agenda records, in pages: Supabase returns at most 1000 rows per request. */
+async function loadSavedRecipients(supabase: ReturnType<typeof createAdminClient>, tenantId: string, clientId: string | undefined | null, max: number, columns = "id, details, created_at") {
+  const rows: { id: string; details: Record<string, unknown> | null; created_at: string }[] = []
+  for (let from = 0; from < max; from += 1000) {
+    let query = supabase.from("audit_log").select(columns).eq("tenant_id", tenantId).eq("action", "saved_recipient")
+      .order("created_at", { ascending: false }).order("id", { ascending: true }).range(from, Math.min(from + 999, max - 1))
+    if (clientId) query = query.eq("details->>client_id", clientId)
+    const { data, error } = await query
+    if (error) throw new Error(error.message)
+    rows.push(...((data || []) as unknown as typeof rows))
+    if (!data || data.length < 1000) break
+  }
+  return rows
+}
 
 async function requireRecipientAccess() {
   const ctx = await requireUser()
@@ -30,21 +46,12 @@ export async function getDestinatariosAction(targetClientId?: string): Promise<D
     const effectiveClientId = ctx.role === "client" ? ctx.client_id : targetClientId
 
     // 2. Obter destinatários guardados explicitamente na agenda (audit_log: saved_recipient)
-    let savedQuery = supabase
-      .from("audit_log")
-      .select("id, details, created_at")
-      .eq("tenant_id", tenantId)
-      .eq("action", "saved_recipient")
-      .order("created_at", { ascending: false })
-      .limit(1000)
-
-    if (effectiveClientId) {
-      savedQuery = savedQuery.eq("details->>client_id", effectiveClientId)
-    }
-
-    const { data: savedLogs, error: savedErr } = await savedQuery
-    if (savedErr) {
-      console.warn("Could not query saved recipients from audit_log:", savedErr.message)
+    // Uma loja pode ter milhares de moradas importadas; a vista de todas as lojas fica limitada.
+    let savedLogs: { id: string; details: Record<string, unknown> | null; created_at: string }[] = []
+    try {
+      savedLogs = await loadSavedRecipients(supabase, tenantId, effectiveClientId, effectiveClientId ? 20000 : 5000)
+    } catch (savedErr) {
+      console.warn("Could not query saved recipients from audit_log:", savedErr instanceof Error ? savedErr.message : savedErr)
     }
 
     // 3. Obter envios do histórico para agregação de expedições
@@ -379,4 +386,76 @@ export async function deleteDestinatarioAction(id: string): Promise<{ success: b
     console.error("[deleteDestinatarioAction] Erro ao eliminar:", err)
     return { success: false, error: "Erro ao eliminar destinatário." }
   }
+}
+
+/**
+ * Importa destinatários de um ficheiro da plataforma antiga para a agenda de um cliente.
+ * Chamado em lotes pelo browser; ignora moradas que o cliente já tem guardadas.
+ */
+export async function importDestinatariosAction(
+  targetClientId: string,
+  recipients: ImportedRecipient[],
+  fileClientCodes: string[] = []
+): Promise<{ success: boolean; imported?: number; skipped?: number; error?: string }> {
+  const ctx = await requireRecipientAccess()
+  try {
+    const clientId = ctx.role === "client" ? ctx.client_id! : targetClientId
+    if (typeof clientId !== "string" || !clientId) return { success: false, error: "Escolha o cliente." }
+    if (!Array.isArray(recipients) || recipients.length > RECIPIENT_IMPORT_BATCH) return { success: false, error: "Pedido inválido." }
+    if (!Array.isArray(fileClientCodes) || fileClientCodes.some(code => typeof code !== "string")) return { success: false, error: "Pedido inválido." }
+
+    const supabase = createAdminClient()
+    const tenantId = ctx.tenant_id
+    const client = (await loadScopedClientProfiles(supabase, tenantId, [clientId])).get(clientId)
+    if (!client) return { success: false, error: "Cliente não disponível." }
+    if (!recipientFileMatchesClient(fileClientCodes.map(code => code.trim().toUpperCase()), [client.code, client.legacy_code])) {
+      return { success: false, error: `Este ficheiro é do cliente ${fileClientCodes.join(", ")} e não de ${client.code || "esta loja"}.` }
+    }
+
+    const str = (value: unknown, max: number) => typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : ""
+    const clean = recipients.map(r => ({
+      name: str(r?.name, 120), address: str(r?.address, 250), postal_code: str(r?.postal_code, 20),
+      city: str(r?.city, 80), country: /^[A-Z]{2}$/.test(str(r?.country, 2)) ? str(r?.country, 2) : "PT",
+      phone: str(r?.phone, 20) || undefined, email: str(r?.email, 120) || undefined,
+      observations: str(r?.observations, 250) || undefined, legacy_code: str(r?.legacy_code, 40) || undefined,
+    })).filter(r => r.name && r.address && r.postal_code)
+
+    const existing = await loadSavedRecipients(supabase, tenantId, clientId, 20000, "id, created_at, name:details->>name, postal_code:details->>postal_code, address:details->>address")
+    const field = (row: Record<string, unknown>, key: string) => String(row[key] ?? (row.details as Record<string, unknown> | null)?.[key] ?? "")
+    const seen = new Set(existing.map(row => recipientImportKey({
+      name: field(row, "name"), postal_code: field(row, "postal_code"), address: field(row, "address"),
+    })))
+    const clientName = client.short_name || client.legal_name || client.name || "Cliente Linke"
+    const now = new Date().toISOString()
+    const rows = []
+    for (const r of clean) {
+      const key = recipientImportKey(r)
+      if (seen.has(key)) continue
+      seen.add(key)
+      const details: Destinatario & { source: string; legacy_code?: string } = {
+        id: crypto.randomUUID(), ...r, client_id: clientId, client_name: clientName, is_saved: true,
+        created_at: now, created_by_role: ctx.role === "client" ? "client" : "employee",
+        total_shipments: 0, last_shipment_date: now, last_tracking_number: "—", last_status: "Guardado na Agenda",
+        shipments_history: [], source: "legacy_import",
+      }
+      rows.push({ tenant_id: tenantId, action: "saved_recipient", details })
+    }
+    if (rows.length) {
+      const { error } = await supabase.from("audit_log").insert(rows)
+      if (error) throw new Error(error.message)
+    }
+    return { success: true, imported: rows.length, skipped: recipients.length - rows.length }
+  } catch (err: unknown) {
+    console.error("[importDestinatariosAction] Erro ao importar destinatários:", err)
+    return { success: false, error: "Erro ao importar destinatários." }
+  }
+}
+
+/** Depois de todos os lotes: atualiza as páginas que usam a agenda. */
+export async function finishDestinatariosImportAction(): Promise<void> {
+  await requireRecipientAccess()
+  revalidatePath("/ops/entidades/destinatarios")
+  revalidatePath("/app/[storeSlug]/destinatarios", "page")
+  revalidatePath("/app/[storeSlug]/criar-guia", "page")
+  revalidatePath("/ops/envios/novo")
 }

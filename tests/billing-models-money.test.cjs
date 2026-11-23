@@ -136,37 +136,35 @@ describe('injetar saldo', () => {
 describe('pré-pagamento: saldo da wallet', () => {
   const ship = (sell_price, extra = {}) => ({ sell_price, status: 'entregue', ...extra })
 
-  test('descoberto de −2,00 € aplicado ao cêntimo', () => {
-    assert.equal(balance.PAY_AS_YOU_GO_OVERDRAFT_LIMIT, -2)
-    assert.equal(balance.payAsYouGoRefusal(1, 3), null)          // fica em −2,00 €
-    assert.notEqual(balance.payAsYouGoRefusal(1, 3.01), null)    // ficaria em −2,01 €
-    assert.equal(balance.payAsYouGoRefusal(0, 2), null)
-    assert.notEqual(balance.payAsYouGoRefusal(0, 2.01), null)
-    assert.equal(balance.payAsYouGoRefusal(-2, 0), null)
-    assert.notEqual(balance.payAsYouGoRefusal(-2, 0.01), null)
-    assert.notEqual(balance.payAsYouGoRefusal(-1.99, 0.02), null)
-    assert.equal(balance.payAsYouGoRefusal(-1.99, 0.01), null)
+  test('sem descoberto: o saldo nunca fica negativo, ao cêntimo', () => {
+    assert.equal(balance.PAY_AS_YOU_GO_OVERDRAFT_LIMIT, 0)
+    assert.equal(balance.payAsYouGoRefusal(1, 1), null)          // fica em 0,00 €
+    assert.notEqual(balance.payAsYouGoRefusal(1, 1.01), null)    // ficaria em −0,01 €
+    assert.notEqual(balance.payAsYouGoRefusal(0, 0.01), null)
+    assert.equal(balance.payAsYouGoRefusal(0, 0), null)
+    assert.notEqual(balance.payAsYouGoRefusal(-0.5, 0.01), null) // saldo antigo negativo não cria mais envios
+    assert.equal(balance.payAsYouGoRefusal(4.12, 4.12), null)
   })
 
   test('arredondamentos de vírgula flutuante nunca deixam passar nem bloqueiam por engano', () => {
-    assert.equal(balance.payAsYouGoRefusal(0.1 + 0.2, 2.3), null)  // 0,30 − 2,30 = −2,00 exato
-    assert.equal(balance.payAsYouGoRefusal(1.1, 3.1), null)
-    assert.notEqual(balance.payAsYouGoRefusal(1.1, 3.11), null)
+    assert.equal(balance.payAsYouGoRefusal(0.1 + 0.2, 0.3), null)  // 0,30 − 0,30 = 0,00 exato
+    assert.equal(balance.payAsYouGoRefusal(1.1, 1.1), null)
+    assert.notEqual(balance.payAsYouGoRefusal(1.1, 1.11), null)
   })
 
-  test('aleatório: recusa se e só se o saldo final ficar abaixo de −2,00 €', () => {
+  test('aleatório: recusa se e só se o saldo final ficar negativo', () => {
     const r = rng(7)
     for (let i = 0; i < 5000; i++) {
       const bal = Math.round((r() * 40 - 10) * 100) / 100
       const cost = money(r)
-      const allowed = cents(bal) - cents(cost) >= -200
+      const allowed = cents(bal) - cents(cost) >= 0
       assert.equal(balance.payAsYouGoRefusal(bal, cost) === null, allowed, `saldo ${bal} custo ${cost}`)
     }
   })
 
   test('mensagem de recusa diz ao cliente o custo, o saldo e o limite', () => {
     const msg = balance.payAsYouGoRefusal(1.5, 10)
-    assert.match(msg, /Saldo Insuficiente/); assert.match(msg, /10\.00€/); assert.match(msg, /1\.50€/); assert.match(msg, /-2,00€/)
+    assert.equal(msg, 'Saldo insuficiente para criar este envio. O envio custa 10,00 € e o seu saldo é de 1,50 €. Faltam 8,50 €. Carregue saldo para continuar.')
   })
 
   test('saldo = carregado − envios; anulados em qualquer grafia não descontam', () => {

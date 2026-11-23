@@ -5,6 +5,7 @@ import { errorMessage } from "@/lib/errors"
 import { createAdminClient } from "@/lib/supabase/server"
 import { requireUser } from "@/lib/auth/context"
 import { checkoutReturnOrigin } from "@/lib/config/public-origins"
+import { MIN_TOP_UP_EUR } from "@/lib/billing/client-limit"
 
 async function getStripe() {
   const StripeModule = await import("stripe")
@@ -26,8 +27,8 @@ export async function createTopUpCheckoutSession(clientId: string, amountEuro: n
 
     const cents = Math.round(amountEuro * 100)
     if (typeof amountEuro !== "number" || !Number.isFinite(amountEuro) || !Number.isSafeInteger(cents)
-      || cents < 100 || Math.abs(amountEuro * 100 - cents) > 1e-7) {
-      throw new Error("Indique um montante válido de pelo menos 1€, com no máximo duas casas decimais.")
+      || cents < MIN_TOP_UP_EUR * 100 || Math.abs(amountEuro * 100 - cents) > 1e-7) {
+      throw new Error(`O carregamento mínimo é de ${MIN_TOP_UP_EUR}€. Indique um montante com no máximo duas casas decimais.`)
     }
     const supabase = createAdminClient()
 

@@ -47,7 +47,7 @@ const closed = (inv: CustomInvoiceRow) => isPaid(inv) || fullyCredited(inv)
 /** Extra-service invoices (websites, consulting…) settled from the same conta corrente as logistics. */
 export function CustomInvoicesPanel({ invoices, moloniConnected }: { invoices: CustomInvoiceRow[]; moloniConnected: boolean }) {
   const router = useRouter()
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState<Filter>('open')
   const [search, setSearch] = useState('')
   const [target, setTarget] = useState<CustomInvoiceRow | null>(null)

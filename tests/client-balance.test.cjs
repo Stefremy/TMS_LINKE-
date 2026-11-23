@@ -34,10 +34,10 @@ test('pay as you go: a statement marked paid does not itself refund prepaid ship
   assert.equal(b.payAsYouGoSpent([ship(5, 's')], [{ id: 's', status: 'paid' }]), 5)
 })
 
-test('pay as you go: overdraft limit of -2.00€ is enforced exactly', () => {
-  assert.equal(b.payAsYouGoRefusal(1, 3), null)
-  assert.equal(b.payAsYouGoRefusal(1, 3.01) !== null, true)
-  assert.match(b.payAsYouGoRefusal(0, 5), /Saldo Insuficiente/)
+test('pay as you go: no overdraft, the balance can reach exactly 0.00€ but never below', () => {
+  assert.equal(b.payAsYouGoRefusal(1, 1), null)
+  assert.equal(b.payAsYouGoRefusal(1, 1.01) !== null, true)
+  assert.match(b.payAsYouGoRefusal(0, 5), /Saldo insuficiente/)
 })
 
 test('conta corrente: owed = pending shipments + unpaid issued statements; paid statements and cancelled shipments excluded', () => {

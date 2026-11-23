@@ -529,3 +529,14 @@ test('a validation refusal from Moloni says nothing was issued instead of asking
   const res=await h.load('app/actions/moloni.ts').emitCustomInvoiceAction({clientName:'X',clientVat:'501234560',invoiceDate:'2026-11-20',dueDate:'2026-11-23',items:[{title:'W',qty:1,unitPrice:1,taxRate:23}]})
   assert.equal(res.success,false);assert.match(res.error,/^O Moloni recusou a fatura: .*document_set_id/);assert.doesNotMatch(res.error,/Confirme no Moloni/)
 })
+
+test('pay as you go: shipments paid by the wallet are never invoiced; shipments from before the switch still are', async () => {
+  const payg = { billing_type: 'pay_as_you_go', pay_as_you_go_since: '2026-11-09T00:00:00Z' }
+  const prepaid = invoiceHarness({ clientDetails: payg, shipmentRows: [{ id: SHIPMENT, tenant_id: TENANT, client_id: CLIENT, status: 'entregue', sell_price: 3.91, created_at: '2026-11-10T10:00:00Z' }] })
+  await assert.rejects(prepaid.emit('entregue'), /pré-pagamento são pagos pela wallet/)
+  assert.equal(prepaid.claims, 0); assert.equal(prepaid.issued, 0); assert.equal(prepaid.db.writes.length, 0)
+
+  const before = invoiceHarness({ clientDetails: payg, shipmentRows: [{ id: SHIPMENT, tenant_id: TENANT, client_id: CLIENT, status: 'entregue', sell_price: 3.91, created_at: '2026-11-01T10:00:00Z' }] })
+  const result = await before.emit('entregue')
+  assert.equal(result.success, true, result.error); assert.equal(before.issued, 1)
+})

@@ -18,6 +18,9 @@ export async function POST(req: Request) {
     const failed = event.type === "checkout.session.async_payment_failed"
     if (!paid && !failed) return NextResponse.json({ received: true })
     const session = event.data.object as Stripe.Checkout.Session
+    // The Stripe account is shared with other Linke shops. Their checkouts carry no TMS top-up
+    // binding: acknowledge them so Stripe does not retry or disable this endpoint, and touch nothing.
+    if (!session.metadata?.transaction_id && !session.client_reference_id) return NextResponse.json({ received: true, ignored: "not_a_tms_top_up" })
     if (paid && session.payment_status !== "paid") return NextResponse.json({ received: true, status: "awaiting_payment" })
     const transactionId = session.metadata?.transaction_id
     const clientId = session.metadata?.client_id

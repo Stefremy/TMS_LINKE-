@@ -51,6 +51,7 @@ import { ShipmentPriceHover } from "@/components/shipments/ShipmentPriceHover"
 import { getShipmentCarrierLogo } from "@/lib/carrier-logos"
 import { getShipmentStatusConfig } from "@/lib/status-helpers"
 import { CreditCard } from "lucide-react"
+import { PAY_AS_YOU_GO_OVERDRAFT_LIMIT } from "@/lib/billing/client-balance"
 import { ClientTopUpModal } from "@/app/app/components/ClientTopUpModal"
 import { useClientScope } from "./ClientScope"
 import { useOnlineOrderBadges } from "./useOnlineOrderBadges"
@@ -359,7 +360,7 @@ export function ClientDashboard() {
   // Real credit calculation
   // Só pré-pagamento tem saldo. Em conta corrente o cliente vê apenas o que tem por liquidar.
   const availableCredit = stats.walletBalance !== undefined ? stats.walletBalance : (currentClient?.credit_limit ?? 0) - stats.totalRevenue
-  const isWalletBlocked = currentClient?.billing_type === 'pay_as_you_go' && availableCredit <= -2
+  const isWalletBlocked = currentClient?.billing_type === 'pay_as_you_go' && availableCredit <= PAY_AS_YOU_GO_OVERDRAFT_LIMIT
 
   if (statsError) return (
     <div className="p-8 text-sm text-[var(--text-secondary)]" role="status">
@@ -442,7 +443,7 @@ export function ClientDashboard() {
             <button
               type="button"
               onClick={() => {
-                toast.error("Conta bloqueada: o saldo atingiu o limite de descoberto permitido (-2,00 €). Carregue saldo para voltar a criar envios.")
+                toast.error("Sem saldo disponível. Carregue saldo para voltar a criar envios.")
                 setIsTopUpOpen(true)
               }}
               className="px-4 py-2.5 bg-[var(--surface-dim)] text-[var(--text-tertiary)] border border-[var(--border-strong)] rounded-lg text-xs font-semibold flex items-center gap-2 cursor-not-allowed shadow-2xs"
@@ -669,7 +670,7 @@ export function ClientDashboard() {
               </div>
               <p className="mt-2 text-xs text-[var(--text-tertiary)] truncate">
                 {currentClient?.billing_type === 'pay_as_you_go'
-                  ? (availableCredit <= -2.0 ? "Limite de descoberto atingido (-2.00€)" : "Descoberto até -2.00€ permitido")
+                  ? (availableCredit <= PAY_AS_YOU_GO_OVERDRAFT_LIMIT ? "Sem saldo: carregue para criar envios" : "Os envios são descontados deste saldo")
                   : "Envios por faturar e faturas por pagar"}
               </p>
             </div>
@@ -693,7 +694,7 @@ export function ClientDashboard() {
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
             <span className="text-xs text-[var(--text-secondary)]">Estado da Conta</span>
             <span className={`text-xs font-bold px-2 py-0.5 rounded ${isWalletBlocked ? 'bg-[var(--status-critical-soft)] text-[var(--status-critical)]' : 'bg-[var(--accent-soft)] text-[var(--accent)]'}`}>
-              {isWalletBlocked ? 'Bloqueada (-2€)' : 'Ativa / Regular'}
+              {isWalletBlocked ? 'Bloqueada (sem saldo)' : 'Ativa / Regular'}
             </span>
           </div>
         </div>

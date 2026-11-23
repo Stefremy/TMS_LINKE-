@@ -30,7 +30,8 @@ export type BalanceStatement = {
   total_value?: unknown
 }
 
-export const PAY_AS_YOU_GO_OVERDRAFT_LIMIT = -2
+/** Sem descoberto: o saldo nunca pode ficar negativo (o mesmo valor está na função SQL reserve_shipment_wallet). */
+export const PAY_AS_YOU_GO_OVERDRAFT_LIMIT = 0
 
 const money = (value: unknown) => {
   const n = Number(value)
@@ -81,12 +82,16 @@ export function isPrepaidShipment(
   return Date.parse(shipment.created_at) >= start
 }
 
+/** Valor em euros no formato português: 4,12 € */
+export const formatEuro = (value: number) => `${value.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+
 /** Returns null when the new shipment is allowed, otherwise the user-facing refusal. */
 export function payAsYouGoRefusal(balance: number, shipmentCost: number): string | null {
   const cost = Number(shipmentCost.toFixed(2))
   const projected = Number((balance - cost).toFixed(2))
   if (projected >= PAY_AS_YOU_GO_OVERDRAFT_LIMIT) return null
-  return `Saldo Insuficiente: Este envio tem o custo de ${cost.toFixed(2)}€, mas o seu saldo atual é de ${balance.toFixed(2)}€. O limite máximo de descoberto autorizado é de -2,00€ (o saldo ficaria em ${projected.toFixed(2)}€). Por favor, efetue um carregamento para continuar.`
+  const missing = Number((PAY_AS_YOU_GO_OVERDRAFT_LIMIT - projected).toFixed(2))
+  return `Saldo insuficiente para criar este envio. O envio custa ${formatEuro(cost)} e o seu saldo é de ${formatEuro(balance)}. Faltam ${formatEuro(missing)}. Carregue saldo para continuar.`
 }
 
 // ───────────────────────── CONTA CORRENTE (invoiced) ─────────────────────────

@@ -21,11 +21,13 @@ import {
   Edit2,
   Trash2,
   BookmarkCheck,
+  FileSpreadsheet,
 } from "lucide-react"
 import { RefreshIcon } from "@/components/ui/refresh-icon"
 import { Destinatario } from "../types"
 import { DestinatarioDetailsModal } from "./DestinatarioDetailsModal"
 import { NovoDestinatarioModal } from "./NovoDestinatarioModal"
+import { ImportarDestinatariosModal } from "./ImportarDestinatariosModal"
 import { getDestinatariosAction, deleteDestinatarioAction } from "@/app/actions/destinatarios"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { Button } from "@/components/ui/button"
@@ -56,6 +58,7 @@ export function DestinatariosClient({
 
   const [editingDest, setEditingDest] = React.useState<Destinatario | null>(null)
   const [isNovoModalOpen, setIsNovoModalOpen] = React.useState(false)
+  const [isImportOpen, setIsImportOpen] = React.useState(false)
 
   // Pagination
   const [currentPage, setCurrentPage] = React.useState(1)
@@ -320,6 +323,15 @@ export function DestinatariosClient({
         </div>
 
         <div className="flex items-center gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setIsImportOpen(true)}
+            className="px-3.5 py-1.5 h-auto text-xs font-semibold shadow-xs"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />
+            Importar Excel
+          </Button>
           <Button
             size="sm"
             onClick={handleOpenNewModal}
@@ -736,6 +748,16 @@ export function DestinatariosClient({
         onClose={() => setIsDetailsModalOpen(false)}
         destinatario={selectedDest}
       />
+
+      {isImportOpen && (
+        <ImportarDestinatariosModal
+          onClose={() => setIsImportOpen(false)}
+          onImported={() => { void handleRefresh() }}
+          clients={clients}
+          lockedClientId={lockedClientId}
+          defaultClientId={clientFilter !== "todos" ? clientFilter : undefined}
+        />
+      )}
 
       {/* Novo / Editar Destinatário Modal */}
       <NovoDestinatarioModal

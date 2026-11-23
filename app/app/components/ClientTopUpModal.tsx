@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { MIN_TOP_UP_EUR } from "@/lib/billing/client-limit"
 import { CreditCard, X, AlertCircle, ShieldCheck } from "lucide-react"
 import { useDialogA11y } from "@/components/ui/use-dialog-a11y"
 import { useOptionalClientScope } from "./ClientScope"
@@ -28,8 +29,8 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
 
   const handleCheckout = async () => {
     const val = Number(amount)
-    if (val < 1) {
-      setError("O valor mínimo é 1€.")
+    if (!Number.isFinite(val) || val < MIN_TOP_UP_EUR) {
+      setError(`O carregamento mínimo é de ${MIN_TOP_UP_EUR}€.`)
       return
     }
 
@@ -120,7 +121,7 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
           {/* Custom Amount */}
           <div>
             <label className="block text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-2">
-              Ou introduza outro montante (€)
+              Ou introduza outro montante (€) · mínimo {MIN_TOP_UP_EUR}€
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -128,7 +129,7 @@ export function ClientTopUpModal({ isOpen, onClose, clientId }: ClientTopUpModal
               </div>
               <input
                 type="number"
-                min="1"
+                min={MIN_TOP_UP_EUR}
                 step="1"
                 value={amount}
                 onChange={(e) => setAmount(Number(e.target.value) || "")}

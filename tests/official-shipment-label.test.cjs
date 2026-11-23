@@ -150,12 +150,12 @@ test('dashboard: conta corrente and legacy invoiced accounts never inherit a pre
   }
 })
 
-test('dashboard: prepaid status and new-shipment button agree at the minus-two-euro boundary', async t => {
-  for (const [walletBalance, blocked] of [[-2.01, true], [-2, true], [-1.99, false], [0, false]]) {
+test('dashboard: prepaid status and new-shipment button agree at the zero-balance boundary', async t => {
+  for (const [walletBalance, blocked] of [[-0.01, true], [0, true], [0.01, false], [5, false]]) {
     const nodes = await menuHarness(t, true, officialPdf, { billingType: 'pay_as_you_go', walletBalance }).ready()
     const status = nodes.find(n => n.type === 'div' && n.props.children?.some?.(child => textOf(child) === 'Estado da Conta'))
     assert.ok(status)
-    assert.equal(textOf(status).includes('Bloqueada (-2€)'), blocked)
+    assert.equal(textOf(status).includes('Bloqueada (sem saldo)'), blocked)
     assert.equal(nodes.some(n => n.type === 'button' && textOf(n).includes('Novo Envio (Bloqueado)')), blocked)
   }
 })

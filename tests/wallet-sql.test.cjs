@@ -169,3 +169,14 @@ test('SQL: browser roles cannot read or reset payment fulfillment records direct
  }
  assert.ok((await tx()).credited_at);assert.equal((await snapshot()).credit,20)
 })
+
+test('SQL 20261123150000: after the no-overdraft migration the wallet stops at exactly 0,00€', async () => {
+  await db.exec(fs.readFileSync('supabase/migrations/20261123150000_wallet_no_overdraft.sql', 'utf8'))
+  await reset({ credit: 1 })
+  const refused = (await reserve(S1, 1.01)).rows[0].result
+  assert.equal(refused.reserved, false); assert.equal(refused.refused, true); assert.equal((await snapshot()).balance, 1)
+  assert.equal((await reserve(S2, 1)).rows[0].result.reserved, true); assert.equal((await snapshot()).balance, 0)
+  assert.equal((await reserve('77777777-7777-4777-8777-777777777777', 0.01)).rows[0].result.refused, true, 'no shipment once the wallet is at 0,00€')
+  const grants = await db.query("SELECT has_function_privilege('authenticated','public.reserve_shipment_wallet(uuid,uuid,uuid,numeric,text)','EXECUTE') a, has_function_privilege('service_role','public.reserve_shipment_wallet(uuid,uuid,uuid,numeric,text)','EXECUTE') s")
+  assert.deepEqual(grants.rows[0], { a: false, s: true })
+})

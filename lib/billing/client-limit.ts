@@ -11,6 +11,8 @@ export type BillingType = "conta_corrente" | "pay_as_you_go"
 
 export const DEFAULT_CURRENT_ACCOUNT_LIMIT = 5000
 export const MAX_WALLET_INJECTION = 100000
+/** Carregamento mínimo da wallet pelo cliente (Stripe: cartão, MB WAY, Multibanco). */
+export const MIN_TOP_UP_EUR = 5
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 

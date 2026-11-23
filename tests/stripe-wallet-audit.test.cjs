@@ -182,15 +182,15 @@ test('SW07: issuing a receipt for already prepaid shipments does not replenish w
  assert.equal(after,before,'a receipt alone is not a new top-up')
 })
 
-function shipmentHarness() {
- const tables={shipments:[],audit_log:[{id:'wallet-profile',tenant_id:TENANT,action:'client_data',details:{id:A,billing_type:'pay_as_you_go',credit_limit:1}}],packages:[]},db=fakeSupabase(tables,undefined,{persistInserts:true})
+function shipmentHarness(credit=1) {
+ const tables={shipments:[],audit_log:[{id:'wallet-profile',tenant_id:TENANT,action:'client_data',details:{id:A,billing_type:'pay_as_you_go',credit_limit:credit}}],packages:[]},db=fakeSupabase(tables,undefined,{persistInserts:true})
  db.client.rpc=async(name,p)=>{
   const reservations=tables.wallet_reservations ||= []
   if(name==='reserve_shipment_wallet') {
    const persisted=tables.shipments.reduce((n,s)=>n+s.sell_price,0)
    const held=reservations.filter(r=>r.state!=='released'&&!tables.shipments.some(s=>s.id===r.shipment_id)).reduce((n,r)=>n+r.amount,0)
-   const balance=1-persisted-held
-   if(balance-p.p_amount < -2)return{data:{refused:true,balance},error:null}
+   const balance=credit-persisted-held
+   if(balance-p.p_amount < balances.PAY_AS_YOU_GO_OVERDRAFT_LIMIT)return{data:{refused:true,balance},error:null}
    reservations.push({shipment_id:p.p_shipment,amount:p.p_amount,state:'reserved'})
    return{data:{reserved:true},error:null}
   }
@@ -207,20 +207,26 @@ function shipmentHarness() {
   '@/lib/client-portal/suspension':{readPortalAccess:async()=>({suspended:false,blocked:false})},
   '@/lib/pricing/calculate-shipment-price':{...createLoader({})('lib/pricing/calculate-shipment-price.ts'),resolveZoneCode:()=> 'PT-CONT',calculateShipmentPrice:()=>({sellPrice:3,buyPrice:2,basePrice:3,fuelSurchargeAmount:0,tierLabel:'Fixture'})},
   '@/lib/pricing/shipment-pricing-context':{validateShipmentPricingInput(){},ShipmentPricingError:PricingError,ShipmentPricingUnavailableError:PricingError,
-   loadShipmentPricingContext:async()=>({client:{id:A,tenant_id:TENANT,billing_type:'pay_as_you_go',credit_limit:1},service:{id:'fixture-service',name:'Fixture service',carrier_group:'ctt',fuel_surcharge_pct:0,zones:[{zone_code:'PT-CONT',zone_name:'Continente',tiers:[]}]}})},
+   loadShipmentPricingContext:async()=>({client:{id:A,tenant_id:TENANT,billing_type:'pay_as_you_go',credit_limit:credit},service:{id:'fixture-service',name:'Fixture service',carrier_group:'ctt',fuel_surcharge_pct:0,zones:[{zone_code:'PT-CONT',zone_name:'Continente',tiers:[]}]}})},
   '@/lib/services/carriers/credentials':{},'@/lib/services/carriers/ctt-provider':{},'@/lib/label-utils':{},
  })
  const create=()=>{const form=new FormData();form.set('weight_kg','1');form.set('length_cm','30');form.set('width_cm','20');form.set('height_cm','10');return load('lib/services/shipments/shipment-creator.ts').createShipment(form)}
  return{tables,create}
 }
-test('CONTROL: one draft costing 3 EUR can use a 1 EUR wallet down to the allowed -2 EUR',async()=>{
- const h=shipmentHarness();assert.equal((await h.create()).success,true)
- assert.equal(h.tables.shipments.length,1);assert.equal(balances.payAsYouGoBalance(1,h.tables.shipments,[]),-2)
+test('CONTROL: a 3 EUR shipment uses a 3 EUR wallet down to exactly 0 EUR (no overdraft)',async()=>{
+ const h=shipmentHarness(3);assert.equal((await h.create()).success,true)
+ assert.equal(h.tables.shipments.length,1);assert.equal(balances.payAsYouGoBalance(3,h.tables.shipments,[]),0)
+})
+test('NO OVERDRAFT: a client with 1 EUR creating a 3 EUR shipment is refused with a clear message and nothing is created',async()=>{
+ const h=shipmentHarness(1),result=await h.create()
+ assert.equal(result.success,false)
+ assert.equal(result.error,'Saldo insuficiente para criar este envio. O envio custa 3,00 € e o seu saldo é de 1,00 €. Faltam 2,00 €. Carregue saldo para continuar.')
+ assert.equal(h.tables.shipments.length,0)
 })
 test('SW08: simultaneous draft creation must reserve credit so the combined balance cannot exceed the overdraft',async()=>{
  const h=shipmentHarness(),results=await Promise.all([h.create(),h.create()])
  assert.ok(results.filter(r=>r.success).length<=1,'both requests read the same 1 EUR balance and each accepted a 3 EUR draft')
- assert.ok(balances.payAsYouGoBalance(1,h.tables.shipments,[])>=-2)
+ assert.ok(balances.payAsYouGoBalance(1,h.tables.shipments,[])>=balances.PAY_AS_YOU_GO_OVERDRAFT_LIMIT)
 })
 
 function receiptProviderHarness({lostResponse=false}={}) {
@@ -410,4 +416,73 @@ test('RECEIPT: legacy RC receipts remain recognizable without allowing invoices 
  assert.equal((await invoice.emit()).success,false)
  assert.equal(invoice.calls.length,1)
  assert.ok(invoice.tables.audit_log.some(r=>r.action==='invoice_financial_lock'))
+})
+
+// ── Métodos de pagamento: o saldo só entra quando o Stripe confirma o dinheiro recebido ──
+const voucher = { payment_status: 'unpaid' } // Multibanco/MB WAY: checkout concluído = referência gerada, ainda sem dinheiro
+test('MULTIBANCO: generating the reference (and repeated deliveries of it) never credits the wallet', async () => {
+ const h = harness()
+ for (const id of ['evt_mb_ref', 'evt_mb_ref', 'evt_mb_ref_retry']) {
+  assert.equal((await h.deliver(h.event('checkout.session.completed', voucher, id))).status, 200)
+ }
+ assert.equal(h.balance(), 0); assert.equal(h.tx().status, 'pending'); assert.equal(h.calls.rpc.length, 0)
+ await h.deliver(h.event('checkout.session.async_payment_succeeded', {}, 'evt_mb_paid'))
+ assert.equal(h.balance(), 10, 'credited only when the customer pays the reference'); assert.equal(h.tx().status, 'paid')
+})
+test('MULTIBANCO: an expired/unpaid reference is marked failed and credits nothing', async () => {
+ const h = harness()
+ await h.deliver(h.event('checkout.session.completed', voucher, 'evt_mb_ref'))
+ assert.equal((await h.deliver(h.event('checkout.session.async_payment_failed', voucher, 'evt_mb_expired'))).status, 200)
+ assert.equal(h.tx().status, 'failed'); assert.equal(h.balance(), 0); assert.equal(h.calls.rpc.length, 0)
+})
+test('MB WAY: waiting for approval in the app credits nothing; approval credits once', async () => {
+ const h = harness()
+ await h.deliver(h.event('checkout.session.completed', voucher, 'evt_mbway_pending'))
+ assert.equal(h.balance(), 0)
+ await h.deliver(h.event('checkout.session.async_payment_succeeded', {}, 'evt_mbway_ok'))
+ await h.deliver(h.event('checkout.session.async_payment_succeeded', {}, 'evt_mbway_ok'))
+ assert.equal(h.balance(), 10); assert.equal(h.calls.rpc.length, 1)
+})
+test('MB WAY: a refused or timed-out approval credits nothing', async () => {
+ const h = harness()
+ await h.deliver(h.event('checkout.session.completed', voucher, 'evt_mbway_pending'))
+ await h.deliver(h.event('checkout.session.async_payment_failed', voucher, 'evt_mbway_refused'))
+ assert.equal(h.balance(), 0); assert.equal(h.tx().status, 'failed')
+})
+test('CARD: a paid checkout credits immediately and exactly once', async () => {
+ const h = harness()
+ await h.deliver(h.event('checkout.session.completed', { payment_status: 'paid' }, 'evt_card'))
+ await h.deliver(h.event('checkout.session.completed', { payment_status: 'paid' }, 'evt_card'))
+ assert.equal(h.balance(), 10); assert.equal(h.calls.rpc.length, 1)
+})
+test('no money, no credit: other statuses, other event types and amount mismatches never credit', async () => {
+ const cases = [
+  ['checkout.session.completed', { payment_status: 'no_payment_required' }],
+  ['checkout.session.async_payment_succeeded', { payment_status: 'unpaid' }],
+  ['payment_intent.succeeded', {}],
+  ['checkout.session.expired', { payment_status: 'unpaid' }],
+  ['checkout.session.completed', { amount_total: 2000 }],
+  ['checkout.session.completed', { currency: 'usd' }],
+ ]
+ for (const [type, patch] of cases) {
+  const h = harness(); await h.deliver(h.event(type, patch, `evt_${type}`))
+  assert.equal(h.balance(), 0, `${type} ${JSON.stringify(patch)}`); assert.equal(h.calls.rpc.length, 0)
+ }
+})
+test('SHARED ACCOUNT: another shop\'s checkout is acknowledged without database access; a TMS session with a broken binding is still refused', async () => {
+ const h = harness()
+ const foreign = h.event('checkout.session.completed', { metadata: { order_id: 'kazi-123' }, client_reference_id: null }, 'evt_other_shop')
+ const res = await h.deliver(foreign)
+ assert.equal(res.status, 200); assert.equal((await res.json()).ignored, 'not_a_tms_top_up')
+ assert.equal(h.db.writes.length, 0); assert.equal(h.calls.rpc.length, 0); assert.equal(h.balance(), 0)
+ const tampered = h.event('checkout.session.completed', { metadata: { transaction_id: 'tx-other', client_id: 'x', tenant_id: 'y' } }, 'evt_bad_binding')
+ assert.equal((await h.deliver(tampered)).status, 400); assert.equal(h.balance(), 0)
+})
+test('MINIMUM: top-ups below 5€ are refused before any transaction or Stripe call; 5€ is accepted', async () => {
+ for (const amount of [1, 4.99]) {
+  const h = harness(), result = await h.checkout(amount)
+  assert.equal(result.success, false); assert.match(result.error, /mínimo é de 5€/)
+  assert.equal(h.db.writes.length, 0); assert.equal(h.calls.checkout.length, 0)
+ }
+ const ok = harness(); assert.equal((await ok.checkout(5)).success, true); assert.equal(ok.calls.checkout.length, 1)
 })
