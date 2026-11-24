@@ -38,7 +38,9 @@ async function handle(request: Request, route: RouteContext, refresh: boolean) {
         adjustment = await reconcileCarrierWeight(db, shipment.tenant_id, shipment.id)
       }
     }
-    return reply({ ...await readShipmentMeasurements(db, shipment), ...(adjustment ? { weightAdjustment: adjustment } : {}) })
+    const summary = await readShipmentMeasurements(db, shipment)
+    // A recorded adjustment (with its full comparison) wins over this refresh's status message.
+    return reply({ ...summary, ...(!summary.weightAdjustment && adjustment ? { weightAdjustment: adjustment } : {}) })
   } catch {
     return reply({ error: 'Não foi possível carregar as medições. Tente novamente.' }, 503)
   }

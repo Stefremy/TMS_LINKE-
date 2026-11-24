@@ -165,3 +165,30 @@ test('client tier validation, additional kilograms, legacy migration and preview
  assert.equal(stripped['svc::PT-CONT'][0].cost_price,undefined)
  assert.deepEqual(base.map(t=>t.weight_max),[10,999])
 })
+
+const islandService={...service,zones:[...service.zones,{zone_code:'PT-ILHAS',zone_name:'Ilhas',tiers:[tier(2,4,2),tier(5,6,4),tier(10,9,6),tier(20,12,9)]}]}
+const islandBasis=()=>pure.captureWeightPricingBasis({},islandService,'PT','9000-001',{volumetricWeightKg:2,volumetricDivisor:3000})
+test('carrier dimensions: unknown units are never guessed; mainland and non-volumetric tariffs are ignored',()=>{
+ assert.equal(pure.lengthInCm({value:400,unit:null}),null)
+ assert.equal(pure.lengthInCm({value:400,unit:null},'mm'),40)
+ assert.equal(pure.lengthInCm({value:40,unit:'cm'}),40)
+ const dims={length:{value:40,unit:'cm'},width:{value:30,unit:'cm'},height:{value:30,unit:'cm'}}
+ assert.equal(pure.carrierVolumetricKg(dims,islandBasis()),12)
+ assert.equal(pure.carrierVolumetricKg(dims,basis()),null)
+ assert.equal(pure.carrierVolumetricKg(dims,pure.captureWeightPricingBasis({},islandService,'PT','9000-001')),null)
+ assert.equal(pure.carrierVolumetricKg({...dims,height:undefined},islandBasis()),null)
+})
+test('islands: a box larger than declared moves the tier by the volumetric weight measured by the carrier',async()=>{
+ const old=process.env.CTT_MEASURED_DIMENSION_UNIT;process.env.CTT_MEASURED_DIMENSION_UNIT='cm'
+ try{
+  const h=worker({mutate:t=>{t.audit_log[0].details.weight_pricing_basis=islandBasis();t.audit_log[0].details.billing_weight_kg=2
+   t.audit_log[1].details.measurements={source:'ctt_events_v3',weight:{value:1000,unit:null},length:{value:40,unit:null},width:{value:30,unit:null},height:{value:30,unit:null}}}})
+  const r=await h.run()
+  assert.equal(r.status,'adjusted');assert.equal(r.chargedBy,'volumetric');assert.equal(r.weightKg,12);assert.equal(r.price,14.7)
+  assert.equal(h.calls[0].args.p_plan.chargedBy,'volumetric');assert.equal(h.calls[0].args.p_plan.carrierRealKg,1)
+  delete process.env.CTT_MEASURED_DIMENSION_UNIT
+  const blocked=worker({mutate:t=>{t.audit_log[0].details.weight_pricing_basis=islandBasis();t.audit_log[0].details.billing_weight_kg=2
+   t.audit_log[1].details.measurements={source:'ctt_events_v3',weight:{value:1000,unit:null},length:{value:40,unit:null},width:{value:30,unit:null},height:{value:30,unit:null}}}})
+  assert.equal((await blocked.run()).status,'unchanged');assert.equal(blocked.calls.length,0)
+ }finally{if(old===undefined)delete process.env.CTT_MEASURED_DIMENSION_UNIT;else process.env.CTT_MEASURED_DIMENSION_UNIT=old}
+})

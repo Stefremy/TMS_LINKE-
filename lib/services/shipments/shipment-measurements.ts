@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { positiveMeasurement, type ShipmentMeasurementsSummary } from '../tracking/carrier-measurements'
 import { CARRIER_MEASUREMENTS_ACTION } from '../tracking/carrier-measurements-store'
 import { isCorreosShipment } from './shipment-utils'
+import { resolveShipmentTaxRate } from '@/lib/billing/shipment-invoice-lines'
 
 type Scope = { role: string | null; tenant_id: string | null; client_id?: string | null }
 export type MeasurementShipment = { id: string; tenant_id: string; client_id: string; carrier_code?: string; service_type?: string; carrier_tracking_number?: string; tracking_number?: string; ctt_object_id?: string }
@@ -28,8 +29,8 @@ export async function authorizeMeasurementShipment(db: SupabaseClient, ctx: Scop
 }
 
 export async function readShipmentMeasurements(db: SupabaseClient, shipment: MeasurementShipment): Promise<ShipmentMeasurementsSummary> {
-  const [audit, packages, measurements, adjustments] = await Promise.all([
-    db.from('audit_log').select('billingWeight:details->billing_weight_kg,weight:details->weight_kg,length:details->length_cm,width:details->width_cm,height:details->height_cm')
+  const [audit, packages, measurements, adjustments, reservation] = await Promise.all([
+    db.from('audit_log').select('billingWeight:details->billing_weight_kg,weight:details->weight_kg,length:details->length_cm,width:details->width_cm,height:details->height_cm,service_type:details->>service_type,recipient_country:details->>recipient_country,recipient_zip4:details->>recipient_zip4,recipient_zip3:details->>recipient_zip3,island_transport_mode:details->>island_transport_mode,vat_pct:details->pricing_snapshot->vatPct')
       .eq('tenant_id', shipment.tenant_id).eq('action', 'shipment_data').eq('details->>id', shipment.id)
       .order('created_at', { ascending: false }).limit(1).maybeSingle(),
     db.from('packages').select('weight_g,dimensions').eq('tenant_id', shipment.tenant_id).eq('shipment_id', shipment.id).limit(100),
@@ -37,6 +38,7 @@ export async function readShipmentMeasurements(db: SupabaseClient, shipment: Mea
       .eq('details->>shipment_id', shipment.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     db.from('audit_log').select('details').eq('tenant_id', shipment.tenant_id).eq('action', 'shipment_weight_adjustment')
       .eq('details->>shipment_id', shipment.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    db.from('wallet_reservations').select('vat_pct,state').eq('tenant_id', shipment.tenant_id).eq('shipment_id', shipment.id).maybeSingle(),
   ])
   if (audit.error || packages.error || measurements.error || adjustments.error) throw new Error('Não foi possível carregar as medições do envio.')
   const packageWeights = (packages.data || []).map(row => positiveMeasurement(row.weight_g))
@@ -45,13 +47,23 @@ export async function readShipmentMeasurements(db: SupabaseClient, shipment: Mea
   const carrier = isCorreosShipment(shipment) ? 'correos' : 'ctt'
   const dimensions = packages.data?.length === 1 ? packages.data[0].dimensions : null
   const saved = measurements.data?.details
+  // Prepaid wallet debits use the rate stored on the reservation; invoices use the destination rule.
+  const wallet = !reservation.error && reservation.data && reservation.data.state !== 'released' && reservation.data.vat_pct != null ? reservation.data : null
+  const snapshotVat = Number(audit.data?.vat_pct)
+  const vatPct = wallet ? Number(wallet.vat_pct) : resolveShipmentTaxRate({
+    ...(audit.data || {}), id: shipment.id, service_type: audit.data?.service_type ?? shipment.service_type,
+    vat_pct: Number.isFinite(snapshotVat) && audit.data?.vat_pct != null ? snapshotVat : null,
+  }).vatRate
+  const adjusted = adjustments.data?.details
   return {
     carrier,
     billingWeightKg: positiveMeasurement(audit.data?.billingWeight),
     ...(adjustments.data?.details ? { weightAdjustment: {
-      status: 'adjusted' as const, message: 'Escalão ajustado automaticamente ao peso da transportadora.',
+      status: 'adjusted' as const, message: adjusted?.chargedBy === 'volumetric' ? 'Escalão ajustado ao peso volumétrico medido pela transportadora.' : 'Escalão ajustado automaticamente ao peso da transportadora.',
       weightKg: adjustments.data.details.weightKg, previousWeightKg: adjustments.data.details.previousWeightKg,
       price: adjustments.data.details.price, previousPrice: adjustments.data.details.previousPrice, difference: adjustments.data.details.difference,
+      previousTier: adjusted?.previousTier ?? null, tier: adjusted?.tier ?? null, vatPct, prepaid: Boolean(wallet),
+      chargedBy: adjusted?.chargedBy === 'volumetric' ? 'volumetric' as const : 'real' as const,
     } } : {}),
     declared: {
       weightKg: positiveMeasurement(audit.data?.weight) ?? (grams !== null ? grams / 1000 : null),

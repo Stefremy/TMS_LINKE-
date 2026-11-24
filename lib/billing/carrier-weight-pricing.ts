@@ -11,6 +11,10 @@ export type WeightPricingBasis = {
 export type WeightAdjustmentResult = {
   status: 'disabled' | 'review_required' | 'unchanged' | 'adjusted' | 'locked' | 'unavailable'
   message: string; previousWeightKg?: number; weightKg?: number; previousPrice?: number; price?: number; difference?: number
+  /** Tier labels before/after, the shipment VAT rate and whether the difference came out of the prepaid wallet. */
+  previousTier?: string | null; tier?: string | null; vatPct?: number; prepaid?: boolean
+  /** Which carrier reading set the charged weight. */
+  chargedBy?: 'real' | 'volumetric'
 }
 
 /** Freeze only the selected tariff zone, overrides and fuel rate, never credentials or personal data. */
@@ -36,6 +40,30 @@ export function weightInKg(reading: CarrierReading | undefined, cttUnit?: string
   const kg = unit === 'kg' ? reading.value : unit === 'g' ? reading.value / 1000 : null
   return kg !== null && Number.isFinite(kg) && kg > 0 ? kg : null
 }
+/** Carrier dimension in cm. Unknown units are never guessed (same rule as weights). */
+export function lengthInCm(reading: CarrierReading | undefined, configuredUnit?: string): number | null {
+  if (!reading || !Number.isFinite(reading.value) || reading.value <= 0) return null
+  const unit = reading.unit ?? configuredUnit
+  const cm = unit === 'cm' ? reading.value : unit === 'mm' ? reading.value / 10 : unit === 'm' ? reading.value * 100 : null
+  return cm !== null && Number.isFinite(cm) && cm > 0 ? cm : null
+}
+
+/**
+ * Volumetric weight from the dimensions the carrier measured, with the divisor frozen when the shipment
+ * was priced. Only where the original tariff already charged volumetric weight and never on PT-CONT
+ * (carriers do not measure mainland parcels). Returns null when it cannot be established safely.
+ */
+export function carrierVolumetricKg(measured: { length?: CarrierReading; width?: CarrierReading; height?: CarrierReading } | null | undefined,
+  basis: WeightPricingBasis | undefined, configuredUnit?: string): number | null {
+  const divisor = basis?.volumetricDivisor
+  const zone = basis?.service?.zones?.[0]?.zone_code
+  if (!divisor || !Number.isFinite(divisor) || divisor <= 0 || !zone || zone === 'PT-CONT') return null
+  const dims = [measured?.length, measured?.width, measured?.height].map(reading => lengthInCm(reading, configuredUnit))
+  if (dims.some(value => value === null)) return null
+  const kg = Math.round(dims[0]! * dims[1]! * dims[2]! / divisor * 1000) / 1000
+  return Number.isFinite(kg) && kg > 0 ? kg : null
+}
+
 const cents = (value: unknown) => {
   if (typeof value !== 'number' && typeof value !== 'string' || String(value).trim() === '') throw new Error('Preço anterior inválido.')
   const n = Number(value), c = Math.round(n * 100)

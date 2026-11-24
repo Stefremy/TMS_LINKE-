@@ -1,7 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { latestCarrierReadings, type SavedCarrierMeasurements } from '@/lib/services/tracking/carrier-measurements'
-import { planWeightAdjustment, weightInKg, type WeightAdjustmentResult, type WeightPricingBasis } from './carrier-weight-pricing'
+import { carrierVolumetricKg, planWeightAdjustment, weightInKg, type WeightAdjustmentResult, type WeightPricingBasis } from './carrier-weight-pricing'
 
 /** Internal only: references and owners are reloaded from the tenant's native shipment. */
 export async function reconcileCarrierWeight(db: SupabaseClient, tenant: string, shipmentId: string): Promise<WeightAdjustmentResult> {
@@ -23,23 +23,32 @@ export async function reconcileCarrierWeight(db: SupabaseClient, tenant: string,
     if (!saved || saved.shipment_id !== shipmentId || saved.carrier !== row.carrier_code ||
         saved.measurements.source !== (saved.carrier === 'ctt' ? 'ctt_events_v3' : 'correos_tracking')) return { status: 'unchanged', message: 'Sem peso da transportadora disponível.' }
     const measured = latestCarrierReadings([saved])
-    const kg = weightInKg(measured?.weight, saved.carrier === 'ctt' ? process.env.CTT_MEASURED_WEIGHT_UNIT : undefined)
-    if (kg === null) return { status: 'review_required', message: 'Confirme a unidade do peso CTT antes de ativar a conversão automática.' }
     if (Number(details.package_count ?? 1) > 1) return { status: 'review_required', message: 'Envio com vários volumes: confirme se o peso comunicado é o total antes de ajustar.' }
     const basis = details.weight_pricing_basis as unknown as WeightPricingBasis | undefined
     if (!basis) return { status: 'review_required', message: 'Envio anterior ao registo da tarifa original; requer revisão no OPS.' }
+    const realKg = weightInKg(measured?.weight, saved.carrier === 'ctt' ? process.env.CTT_MEASURED_WEIGHT_UNIT : undefined)
+    // Islands/international: dimensions measured by the carrier also count, like the declared ones did at creation.
+    const volumetricKg = carrierVolumetricKg(measured, basis,
+      saved.carrier === 'ctt' ? process.env.CTT_MEASURED_DIMENSION_UNIT : process.env.CORREOS_MEASURED_DIMENSION_UNIT)
+    if (realKg === null && volumetricKg === null) return { status: 'review_required', message: 'Confirme a unidade do peso CTT antes de ativar a conversão automática.' }
+    const chargedBy: 'real' | 'volumetric' = volumetricKg !== null && volumetricKg > (realKg ?? 0) ? 'volumetric' : 'real'
+    const kg = Math.max(realKg ?? 0, volumetricKg ?? 0)
     const plan = planWeightAdjustment({ basis, previousWeightKg: Number(details.billing_weight_kg ?? details.weight_kg), weightKg: kg,
       sellPrice: row.sell_price, buyPrice: row.buy_price, basePrice: details.base_price, fuelAmount: details.fuel_tax_amount,
       specialAmount: details.special_fees_amount ?? 0 })
     if (!plan) return { status: 'unchanged', message: 'O peso comunicado não aumenta o preço do envio.' }
+    const recorded = { ...plan, chargedBy, ...(volumetricKg !== null ? { carrierVolumetricKg: volumetricKg } : {}), ...(realKg !== null ? { carrierRealKg: realKg } : {}) }
     const { data, error } = await db.rpc('apply_carrier_weight_adjustment', {
       p_tenant: tenant, p_client: row.client_id, p_shipment: shipmentId,
       p_snapshot: snapshot.data!.id, p_measurement: observation.data!.id, p_expected_price: Number(row.sell_price),
-      p_expected_buy: Number(row.buy_price), p_plan: plan,
+      p_expected_buy: Number(row.buy_price), p_plan: recorded,
     })
     if (error) throw new Error('Ajuste não aplicado. Confirme a migração e o estado de faturação no OPS.')
     if (data?.status !== 'adjusted') return { status: data?.status === 'locked' ? 'locked' : 'unchanged', message: 'Preço preservado; o envio foi faturado ou alterado durante a consulta.' }
-    return { status: 'adjusted', message: 'Escalão e preço ajustados automaticamente ao peso da transportadora.',
+    return { status: 'adjusted', chargedBy, message: chargedBy === 'volumetric'
+        ? 'Escalão e preço ajustados ao peso volumétrico das dimensões medidas pela transportadora.'
+        : 'Escalão e preço ajustados automaticamente ao peso da transportadora.',
+      previousTier: plan.previousTier, tier: plan.tier,
       previousWeightKg: plan.previousWeightKg, weightKg: plan.weightKg, previousPrice: plan.previousPrice, price: plan.price, difference: plan.difference }
   } catch (error) {
     return { status: 'unavailable', message: error instanceof Error ? error.message : 'Não foi possível ajustar o peso.' }
