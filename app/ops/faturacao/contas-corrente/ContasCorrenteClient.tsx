@@ -11,7 +11,7 @@ import * as React from "react"
 import {CreditNoteButton} from "../notas-credito/components/CreditNoteButton"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Building, FolderOpen, FileText, ChevronDown, ChevronRight, Euro, Plug, ReceiptText, Loader2, AlertCircle, Download, Calendar, Package, CheckCircle2, X, Mail, Send } from "lucide-react"
+import { Trash2, Building, FolderOpen, FileText, ChevronDown, ChevronRight, Euro, Plug, ReceiptText, Loader2, AlertCircle, Download, Calendar, Package, CheckCircle2, X, Mail, Send } from "lucide-react"
 import { groupInvoiceArchive, isInvoicePaid } from "@/lib/billing/invoice-archive"
 import { InvoiceIssueButton } from "./InvoiceIssueButton"
 import { AnimatedDisclosure } from "./AnimatedDisclosure"
@@ -32,7 +32,8 @@ export default function ContasCorrenteClient({
   planningPanel,
   customInvoicesPanel,
   moloniConfig,
-  defaultPaymentDays = 30
+  defaultPaymentDays = 30,
+  canDeleteTests = false
 }: { 
   clients: Cliente[]
   shipments: ShipmentRecord[]
@@ -43,6 +44,7 @@ export default function ContasCorrenteClient({
   customInvoicesPanel?: React.ReactNode
   moloniConfig?: Awaited<ReturnType<typeof getMoloniConfigAction>>
   defaultPaymentDays?: number
+  canDeleteTests?: boolean
 }) {
   const router = useRouter()
   const { ask: askIssue, dialog: issueDialog } = useIssueInvoiceDialog()
@@ -1046,6 +1048,28 @@ export default function ContasCorrenteClient({
                                         <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4 text-[var(--text-tertiary)]" />
                                         Ver Extrato TMS Interno
                                       </a>
+
+                                      {/* Limpeza de testes: sem fatura ou fatura do Moloni de teste. */}
+                                      {canDeleteTests && (!stmt.moloni_document_id || stmt.moloni_environment === 'test') && (
+                                        <button
+                                          type="button"
+                                          onClick={async (e) => {
+                                            e.stopPropagation()
+                                            setOpenActionMenuId(null)
+                                            const label = stmt.moloni_document_number ? `${stmt.statement_number} (${formatFTNumber(stmt.moloni_document_number)}, Moloni de teste)` : stmt.statement_number
+                                            if (!window.confirm(`Eliminar definitivamente ${label} e os seus ${stmt.shipments_count || stmt.shipment_ids?.length || 0} envios?\n\nDeixam de contar em receitas, margens e estatísticas. Esta ação não pode ser desfeita.`)) return
+                                            const { deleteTestStatementAction } = await import("@/app/actions/test-cleanup")
+                                            const res = await deleteTestStatementAction(stmt.statement_number)
+                                            if (!res.success) { notify.error(res.error); return }
+                                            notify.success(`${stmt.statement_number} eliminado (${res.shipmentsDeleted} envios).`)
+                                            router.refresh()
+                                          }}
+                                          className="w-full flex items-center gap-2 px-3.5 py-2 text-left text-xs font-semibold text-[var(--status-critical)] hover:bg-[var(--status-critical-soft)] border-t border-[var(--border-subtle)] mt-1 pt-2 transition-colors"
+                                        >
+                                          <Trash2 aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
+                                          Eliminar (teste)
+                                        </button>
+                                      )}
                                     </div>
                                   </>
                                 )}

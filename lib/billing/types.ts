@@ -28,6 +28,7 @@ export interface BillingStatement {
   shipment_ids?: string[]
   items?: CustomInvoiceItemInput[]
   moloni_document_id?: number | null
+  moloni_environment?: string | null
   moloni_document_number?: string | null
   moloni_document_pdf?: string | null
   moloni_receipt_id?: number | string | null

@@ -13,6 +13,7 @@ import { recurringPlanningPreview, loadPeriodStatements } from '@/lib/billing/re
 import { billingViewSelection } from '@/lib/billing/view-filters'
 import { canInvoiceShipment } from '@/lib/billing/shipment-eligibility'
 import { isPrepaidShipment } from '@/lib/billing/client-balance'
+import { canHardDeleteShipments } from '@/lib/auth/hard-delete'
 
 export const dynamic = "force-dynamic"
 
@@ -60,6 +61,7 @@ export default async function ContasCorrentePage({ searchParams }: { searchParam
         moloniConfig={moloniConfig}
         defaultPaymentDays={billingConfig.defaultPaymentDays ?? 30}
         periodStatements={periodStatements}
+        canDeleteTests={canHardDeleteShipments(ctx)}
         planningPanel={<BillingPlanningPanel statistics={planning.data} statisticsError={planning.error} recurring={recurring} />}
         customInvoicesPanel={<CustomInvoicesPanel invoices={customInvoices} moloniConnected={Boolean(moloniConfig?.isConnected)} />}
       />
