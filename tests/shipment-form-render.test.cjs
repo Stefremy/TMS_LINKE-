@@ -38,11 +38,9 @@ test('island and foreign destinations retain all three measurement fields, inclu
   assert.match(html,/Volumes e medidas/)
  }
 })
-test('ops renders the same form with a collapsed internal panel, while archived forms remain available',()=>{
+test('ops renders the same form with a collapsed internal panel',()=>{
  const html=render('ops')
  assert.match(html,/Apenas Ops/);assert.match(html,/name="internalNotes"/);assert.match(html,/name="carrierOverride"/);assert.doesNotMatch(html,/name="manualPrice"/)
- const fs=require('node:fs')
- for(const file of ['app/app/components/LegacyClientCreateGuia.tsx','app/ops/envios/novo/LegacyNovoEnvioPageClient.tsx']) assert.ok(fs.existsSync(file))
 })
 test('the client portal never exposes ops controls, including staff previews with a requested ops role',()=>{
  portalScope={client,isEmployee:true,basePath:'/app/fixture'}

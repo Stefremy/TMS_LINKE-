@@ -923,7 +923,8 @@ test('wallet carrier emission: confirmed acceptance keeps a recoverable result e
  assert.equal(h.providerCalls.length,1);assert.equal(h.tables.wallet_reservations[0].state,'consumed')
  assert.equal(h.tables.wallet_reservations[0].result.carrier_tracking_number,'DD123456789PT')
  assert.equal(h.tables.wallet_reservations[0].result.shipment.sell_price,9)
- assert.ok(result.dbWarning)
+ assert.match(result.dbWarning,/Não volte a criar este envio/)
+ assert.doesNotMatch(result.dbWarning,/Fixture write failure/)
 })
 
 for (const carrier of ['CTT','Correos']) {

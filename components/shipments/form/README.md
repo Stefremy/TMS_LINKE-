@@ -4,8 +4,8 @@
 
 1. Contrato e cotações: `components/shipments/form/schema.ts`, `useShipmentQuote.ts`; testes `shipment-form-schema` e `shipment-form-quote`.
 2. Interface: `ShipmentForm.tsx`, `ShipmentSummary.tsx`, `fields.tsx`, `steps/{Parties,Parcel,Service,Review}Step.tsx`, `ops/OpsOverridesPanel.tsx`.
-3. Portal cliente: preservar `LegacyClientCreateGuia.tsx`; tornar `ClientCreateGuia.tsx` num wrapper do formulário partilhado.
-4. Operações: preservar `LegacyNovoEnvioPageClient.tsx`; tornar `NovoEnvioPageClient.tsx` num seletor de cliente e wrapper do formulário partilhado.
+3. Portal cliente: Tornar `ClientCreateGuia.tsx` num wrapper do formulário partilhado.
+4. Operações: Tornar `NovoEnvioPageClient.tsx` num seletor de cliente e wrapper do formulário partilhado.
 5. Servidor: `app/actions/shipment-form.ts` valida os campos e chama `emitClientGuiaAction`. `shipment-form-authorization.ts` rejeita campos Ops enviados por clientes, incluindo chamadas diretas à ação existente. Notas internas ficam num registo de auditoria separado dos dados públicos do envio.
 
 ## Condições mantidas

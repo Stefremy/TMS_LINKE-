@@ -243,3 +243,11 @@ test('ops cannot raise a quotation from the new shipment form; requests come fro
  const ops=getShipmentQuote({...input,role:'ops'})
  assert.equal(ops.isBlocked,true);assert.match(ops.blockedReason,/cliente no portal/)
 })
+test('island dimensions move a maritime shipment to the volumetric weight tier (EMSF057 divides by 3000)',()=>{
+ const sea={...service,id:'sea',name:'CTT Marítimo',webservice_service_code:'EMSF057.01',fuel_surcharge_pct:0,allowed_zones:['PT-ILHAS'],
+  zones:[{zone_code:'PT-ILHAS',tiers:[10,15,30,40].map(kg=>({...tier,id:String(kg),label:`Até ${kg} kg`,weight_max:kg,sell_price:kg}))}]}
+ const at=(l,w,h)=>quote({recipientPostal:'9000-001',islandTransportMode:'sea',serviceId:'sea',weightKg:1,lengthCm:l,widthCm:w,heightCm:h},{assigned_linke_service_ids:['sea'],pricing:{standard_fuel_surcharge_pct:0,special_services_fees:[]}},[sea]).quote.basePrice
+ assert.equal(at(20,20,20),10) // 2,67 kg volumetric
+ assert.equal(at(40,30,30),15) // 12 kg volumetric
+ assert.equal(at(50,40,30),30) // 20 kg volumetric
+})

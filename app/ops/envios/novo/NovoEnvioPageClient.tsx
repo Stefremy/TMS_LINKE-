@@ -6,7 +6,7 @@ import type { ServicoLinke } from "@/app/ops/configuracao/servicos/types"
 import { ShipmentForm } from "@/components/shipments/form/ShipmentForm"
 import { inputClass } from "@/components/shipments/form/fields"
 
-/** The previous operational form remains in LegacyNovoEnvioPageClient until approval. */
+/** The previous operational form was removed. */
 export function NovoEnvioPageClient({ clients, servicosLinke = [] }: { clients: Cliente[]; servicosLinke?: ServicoLinke[] }) {
   const availableClients = useMemo(() => {
     const operational = clients.filter(client => (client.short_name || client.legal_name || "").toLowerCase().includes("go linke"))

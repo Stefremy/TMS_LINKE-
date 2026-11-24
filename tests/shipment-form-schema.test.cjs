@@ -35,3 +35,7 @@ test('schema preserves optional export fields across steps and validates email s
  assert.deepEqual(shipmentFormSchema.parse(data).exportFields,data.exportFields)
  assert.equal(shipmentFormSchema.safeParse({...data,recipientEmail:'invalid'}).success,false)
 })
+test('sender defaults use the pickup address even when the client has a separate fiscal address',()=>{
+ const d=shipmentDefaults({short_name:'Loja',address:'Armazém de recolha',postal_code:'4800-019',city:'Guimarães',billing_same_as_pickup:false,billing_address:'Sede fiscal',billing_postal_code:'4000-001',billing_city:'Porto'})
+ assert.deepEqual([d.senderAddress,d.senderPostal,d.senderCity],['Armazém de recolha','4800-019','Guimarães'])
+})

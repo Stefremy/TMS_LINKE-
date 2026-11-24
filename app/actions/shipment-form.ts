@@ -127,6 +127,6 @@ async function submitShipment(input: unknown, clientId: string | undefined, quot
       if (saved.error) notesWarning = "O envio foi emitido, mas não foi possível guardar as notas internas. Não repita a emissão."
     } catch { notesWarning = "O envio foi emitido, mas não foi possível guardar as notas internas. Não repita a emissão." }
   }
-  return { ...result, success: true as const, kind: "shipment" as const, dbWarning: notesWarning || ecommerceWarning || result.dbWarning }
+  return { ...result, success: true as const, kind: "shipment" as const, dbWarning: [result.dbWarning, notesWarning, ecommerceWarning].filter(Boolean).join(" ") || null }
 }
 export type ShipmentFormResult = Extract<Awaited<ReturnType<typeof submitShipmentFormAction>>, { success: true; kind: "shipment" }>

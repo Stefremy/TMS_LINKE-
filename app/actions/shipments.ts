@@ -668,7 +668,7 @@ export async function emitClientGuiaAction(data: {
 
       if (error) {
         console.warn("DB shipments insert note:", error.message)
-        dbErrorMessage = error.message
+        dbErrorMessage = 'O envio foi aceite pela transportadora, mas a gravação no histórico ficou por confirmar. Não volte a criar este envio; confirme o registo no histórico ou contacte o suporte.'
       }
       
       // Dual-write to audit_log to persist full JSON including labelBase64
@@ -689,7 +689,7 @@ export async function emitClientGuiaAction(data: {
       })
     } catch (err) {
       console.warn("Error inserting into DB:", errorMessage(err))
-      if (!dbErrorMessage) dbErrorMessage = errorMessage(err) || "Unknown DB Error"
+      if (!dbErrorMessage) dbErrorMessage = 'O envio foi aceite pela transportadora, mas a gravação no histórico ficou por confirmar. Não volte a criar este envio; confirme o registo no histórico ou contacte o suporte.'
     }
 
     // Insert package record

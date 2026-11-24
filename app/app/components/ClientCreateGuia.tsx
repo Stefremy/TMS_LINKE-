@@ -6,7 +6,7 @@ import { ShipmentForm } from "@/components/shipments/form/ShipmentForm"
 import { useClientScope } from "./ClientScope"
 import { shipmentPrefillFromParams } from "@/lib/ecommerce/order-shipment-prefill"
 
-/** The previous flow is retained in LegacyClientCreateGuia until both roles are approved. */
+/** The previous flow was removed. */
 export function ClientCreateGuia() {
   const { client } = useClientScope()
   const searchParams = useSearchParams()
