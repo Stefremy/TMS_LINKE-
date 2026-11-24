@@ -486,6 +486,20 @@ export default function ContasCorrenteClient({
                     <div className="tms-billing-actions flex items-center justify-end gap-2">
                       {shipments.length > 0 ? (
                         <>
+                          <button
+                            type="button"
+                            disabled={activeCount === 0}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const ids = shipments.filter(s => !excludedShipmentIds.has(s.id)).map(s => s.id)
+                              window.open(`/api/statements/preview-pdf?client=${encodeURIComponent(client.id)}&ids=${ids.join(",")}`, "_blank", "noopener")
+                            }}
+                            title="Extrato TMS detalhado dos envios selecionados, sem emitir fatura"
+                            className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-strong)] font-medium text-xs rounded-md shadow-2xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <FileText aria-hidden="true" strokeWidth={1.75} className="w-4 h-4" />
+                            Extrato
+                          </button>
                           <InvoiceIssueButton
                             clientName={client.legal_name || client.short_name}
                             disabled={activeCount === 0 || isIssuingInvoice}

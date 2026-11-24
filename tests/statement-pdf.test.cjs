@@ -80,4 +80,6 @@ test('VAT follows each shipment like the Moloni invoice: islands/international e
   assert.ok(h.draws.some(d => d.text === '2,30 EUR'))
   assert.ok(h.draws.some(d => d.text === '22,30 EUR'))
   assert.ok(!h.draws.some(d => d.text === '4,60 EUR'))
+  assert.ok(h.draws.some(d => d.text === 'IVA 23%: 2,30 EUR  |  c/ IVA: 12,30 EUR'))
+  assert.ok(h.draws.some(d => d.text === 'Isento de IVA  |  c/ IVA: 10,00 EUR'))
 })

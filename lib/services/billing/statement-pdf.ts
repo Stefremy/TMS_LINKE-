@@ -37,6 +37,8 @@ export interface BillingStatementPdfData {
   clientEmail?: string
   dateStr?: string
   periodLabel?: string
+  /** Pre-invoice preview: marked as not being an invoice. */
+  draft?: boolean
   totalValue: number
   shipments: BillingStatementPdfShipment[]
 }
@@ -81,6 +83,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
   // Breakdown normalization for every shipment
   const items = shipments.map((s, idx) => {
     const sellPrice = Number(s.sell_price || 0)
+    const { vatRate } = resolveShipmentTaxRate({ ...s, id: s.id || '' })
     const specialFees = Number(s.special_fees_amount || 0)
     let basePrice = s.base_price != null ? Number(s.base_price) : 0
     let fuelTax = s.fuel_tax_amount != null ? Number(s.fuel_tax_amount) : 0
@@ -143,7 +146,10 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
       hasFuel: !isPeriodStatement || s.fuel_tax_amount != null,
       hasSpecial: !isPeriodStatement || s.special_fees_amount != null,
       specialDetails,
-      sellPrice
+      sellPrice,
+      // Same rule as the Moloni invoice: 23% PT-CONT, islands/international exempt.
+      vatRate,
+      vatAmount: Math.round(Math.round(sellPrice * 100) * vatRate / 100) / 100,
     }
   })
 
@@ -152,15 +158,10 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
   const totalFuel = Math.round(items.reduce((sum, item) => sum + item.fuelTax, 0) * 100) / 100
   const totalSpecial = Math.round(items.reduce((sum, item) => sum + item.specialFees, 0) * 100) / 100
   const subtotalNet = Number(data.totalValue || (totalBase + totalFuel + totalSpecial))
-  // Same rule as the Moloni invoice: 23% PT-CONT, islands/international exempt — never a flat 23% on everything.
-  const netByRate = new Map<number, number>()
-  for (const shipment of data.shipments || []) {
-    const { vatRate } = resolveShipmentTaxRate({ ...shipment, id: shipment.id || '' })
-    netByRate.set(vatRate, (netByRate.get(vatRate) || 0) + (Number(shipment.sell_price) || 0))
-  }
-  if (!netByRate.size) netByRate.set(23, subtotalNet)
-  const iva = Math.round([...netByRate].reduce((sum, [rate, net]) => sum + Math.round(net * rate) / 100, 0) * 100) / 100
-  const rates = [...netByRate.keys()].sort((a, b) => b - a)
+  // Total VAT is the sum of the per-shipment VAT shown on each line, so the client can check it.
+  const iva = Math.round(items.reduce((sum, item) => sum + Math.round(item.vatAmount * 100), 0)) / 100
+  const rates = [...new Set(items.map(item => item.vatRate))].sort((a, b) => b - a)
+  if (!rates.length) rates.push(23)
   const ivaLabel = rates.every(r => r === 0) ? "IVA (isento):" : `IVA (${rates.map(r => r === 0 ? "isento" : `${r}%`).join(" / ")}):`
   const totalWithIva = Math.round((subtotalNet + iva) * 100) / 100
 
@@ -240,7 +241,9 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
 
     page.drawText("TOTAL ENVIOS:", { x: 35, y: 720, size: 8, font: fontBold, color: c(0.35, 0.40, 0.48) })
     page.drawText(`${totalShipments} objeto(s)`, { x: 110, y: 720, size: 8.5, font: fontBold, color: c(0.06, 0.09, 0.16) })
-    if (data.periodLabel) {
+    if (data.draft) {
+      page.drawText("PRE-VISUALIZACAO - NAO E FATURA. Valores sujeitos a confirmacao na fatura oficial.", { x: 35, y: 691, size: 7.5, font: fontBold, color: c(0.70, 0.35, 0.02) })
+    } else if (data.periodLabel) {
       page.drawText(`PERIODO: ${safeStr(data.periodLabel)}`, { x: 35, y: 691, size: 7.5, font: fontBold, color: c(0.06, 0.40, 0.22) })
     }
 
@@ -426,10 +429,16 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
     currentPage.drawText(fitText(service, 130, 7), { x: 96, y: line2Y, size: 7, font: fontNormal, color: c(0.40, 0.44, 0.50) })
     currentPage.drawText(fitText(item.recipientName, 98, 7.5), { x: 236, y: line1Y, size: 7.5, font: fontNormal, color: c(0.12, 0.15, 0.20) })
     if (item.recipientCity) currentPage.drawText(fitText(item.recipientCity, 98, 7), { x: 236, y: line2Y, size: 7, font: fontNormal, color: c(0.40, 0.44, 0.50) })
-    drawRightText(currentPage, item.hasBase ? fmtCurrency(item.basePrice) : "-", 395, midY, 7.5, fontNormal, c(0.15, 0.18, 0.22))
-    drawRightText(currentPage, item.hasFuel ? fmtCurrency(item.fuelTax) : "-", 450, midY, 7.5, fontNormal, c(0.15, 0.18, 0.22))
-    drawRightText(currentPage, item.specialFees > 0 ? fmtCurrency(item.specialFees) : "-", 502, midY, 7.5, fontBold, c(0.15, 0.18, 0.22))
-    drawRightText(currentPage, fmtCurrency(item.sellPrice), 562, midY, 8, fontBold, c(0.06, 0.09, 0.16))
+    drawRightText(currentPage, item.hasBase ? fmtCurrency(item.basePrice) : "-", 395, isPeriodStatement ? midY : line1Y, 7.5, fontNormal, c(0.15, 0.18, 0.22))
+    drawRightText(currentPage, item.hasFuel ? fmtCurrency(item.fuelTax) : "-", 450, isPeriodStatement ? midY : line1Y, 7.5, fontNormal, c(0.15, 0.18, 0.22))
+    drawRightText(currentPage, item.specialFees > 0 ? fmtCurrency(item.specialFees) : "-", 502, isPeriodStatement ? midY : line1Y, 7.5, fontBold, c(0.15, 0.18, 0.22))
+    drawRightText(currentPage, fmtCurrency(item.sellPrice), 562, isPeriodStatement ? midY : line1Y, 8, fontBold, c(0.06, 0.09, 0.16))
+    if (!isPeriodStatement) {
+      const vatText = item.vatRate > 0
+        ? `IVA ${item.vatRate}%: ${fmtCurrency(item.vatAmount)}  |  c/ IVA: ${fmtCurrency(item.sellPrice + item.vatAmount)}`
+        : `Isento de IVA  |  c/ IVA: ${fmtCurrency(item.sellPrice)}`
+      drawRightText(currentPage, vatText, 562, line2Y, 6.5, fontNormal, c(0.40, 0.44, 0.50))
+    }
     currentY = rowBottom
     if (detailRows.length) {
       drawDetailsHeading(item.tracking, false)
