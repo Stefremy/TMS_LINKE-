@@ -676,7 +676,7 @@ export default function ContasCorrenteClient({
                               </div>
                               <div className="flex items-center gap-3">
                                 <span className="text-xs font-black text-[var(--text-primary)] font-mono">
-                                  {Number(stmt.outstanding_value ?? stmt.total_value ?? 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€
+                                  {Number(stmt.outstanding_value ?? stmt.total_value ?? 0).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ <span className="font-normal text-[var(--text-tertiary)]">s/ IVA</span>
                                 </span>
                                 {renderResendInvoiceButton(stmt)}
                                 {stmt.moloni_document_id && !stmt.is_pro_forma && !stmt.moloni_receipt_pdf && !stmt.moloni_receipt_id && stmt.status !== 'paid' && (

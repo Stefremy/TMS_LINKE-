@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage, type PDFImage, type PDFFont, type Color } from 'pdf-lib'
 import * as fs from 'fs'
 import * as path from 'path'
+import { resolveShipmentTaxRate } from '@/lib/billing/shipment-invoice-lines'
 
 export interface BillingStatementPdfShipment {
   id: string
@@ -18,6 +19,13 @@ export interface BillingStatementPdfShipment {
   fuel_rate_pct?: number
   special_fees_amount?: number
   special_fees_description?: string
+  // Destination fields used by the Moloni invoice to pick each shipment's VAT rate.
+  recipient_country?: string | null
+  recipient_zip4?: string | null
+  recipient_zip3?: string | null
+  recipient_postal?: string | null
+  island_transport_mode?: string | null
+  vat_pct?: number | null
 }
 
 export interface BillingStatementPdfData {
@@ -144,7 +152,16 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
   const totalFuel = Math.round(items.reduce((sum, item) => sum + item.fuelTax, 0) * 100) / 100
   const totalSpecial = Math.round(items.reduce((sum, item) => sum + item.specialFees, 0) * 100) / 100
   const subtotalNet = Number(data.totalValue || (totalBase + totalFuel + totalSpecial))
-  const iva = Math.round(subtotalNet * 0.23 * 100) / 100
+  // Same rule as the Moloni invoice: 23% PT-CONT, islands/international exempt — never a flat 23% on everything.
+  const netByRate = new Map<number, number>()
+  for (const shipment of data.shipments || []) {
+    const { vatRate } = resolveShipmentTaxRate({ ...shipment, id: shipment.id || '' })
+    netByRate.set(vatRate, (netByRate.get(vatRate) || 0) + (Number(shipment.sell_price) || 0))
+  }
+  if (!netByRate.size) netByRate.set(23, subtotalNet)
+  const iva = Math.round([...netByRate].reduce((sum, [rate, net]) => sum + Math.round(net * rate) / 100, 0) * 100) / 100
+  const rates = [...netByRate.keys()].sort((a, b) => b - a)
+  const ivaLabel = rates.every(r => r === 0) ? "IVA (isento):" : `IVA (${rates.map(r => r === 0 ? "isento" : `${r}%`).join(" / ")}):`
   const totalWithIva = Math.round((subtotalNet + iva) * 100) / 100
 
   // Page geometry
@@ -314,7 +331,7 @@ export async function generateStatementPdfBuffer(data: BillingStatementPdfData):
     drawRightText(page, fmtCurrency(subtotalNet), 558, rTotY1, 8.5, fontBold, c(0.06, 0.09, 0.16))
 
     const rTotY2 = bottomY + 47
-    page.drawText(isPeriodStatement ? "Impostos conforme a fatura oficial." : "IVA (23%):", { x: 332, y: rTotY2, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
+    page.drawText(isPeriodStatement ? "Impostos conforme a fatura oficial." : ivaLabel, { x: 332, y: rTotY2, size: 8, font: fontNormal, color: c(0.30, 0.35, 0.42) })
     if (!isPeriodStatement) drawRightText(page, fmtCurrency(iva), 558, rTotY2, 8.5, fontBold, c(0.06, 0.09, 0.16))
 
     // Dark Bottom Banner

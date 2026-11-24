@@ -70,3 +70,14 @@ test('unreconciled legacy supplement data never prints invented item prices', as
   assert.ok(h.draws.some(d=>d.text==='3,30 EUR'))
   assert.equal(h.draws.some(d=>d.text==='999,00 EUR'),false)
 })
+
+test('VAT follows each shipment like the Moloni invoice: islands/international exempt, never a flat 23%', async () => {
+  const h = harness()
+  const cont = { ...shipment([]), id: 'cont', special_fees_amount: 0, special_fees_description: '', base_price: 10, fuel_tax_amount: 0, sell_price: 10, recipient_country: 'PT', recipient_zip4: '4000', recipient_zip3: '001' }
+  const madeira = { ...cont, id: 'mad', tracking_number: 'TESTE-002', recipient_zip4: '9000', recipient_zip3: '001' }
+  await h.generate([cont, madeira])
+  assert.ok(h.draws.some(d => d.text === 'IVA (23% / isento):'))
+  assert.ok(h.draws.some(d => d.text === '2,30 EUR'))
+  assert.ok(h.draws.some(d => d.text === '22,30 EUR'))
+  assert.ok(!h.draws.some(d => d.text === '4,60 EUR'))
+})
