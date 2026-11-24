@@ -5,7 +5,12 @@ import { payAsYouGoRefusal } from './client-balance'
 export type WalletReservation = { tenant: string; client: string; shipment: string; reserved: boolean; balanceBefore?: number; kind?: 'credit_limit' }
 
 /** Only the server-calculated selling total can enter this service. SQL serializes by client. */
-export async function reserveWallet(db: SupabaseClient, tenant: string, client: string, shipment: string, amount: number, reference: string) {
+/**
+ * `amount` is the selling total without VAT. The wallet holds VAT-inclusive money (Stripe top-ups), so
+ * pay-as-you-go reservations debit amount × (1 + vatPct/100); SQL stores the rate and applies it to the
+ * shipment's sell_price from then on (carrier weight adjustments included).
+ */
+export async function reserveWallet(db: SupabaseClient, tenant: string, client: string, shipment: string, amount: number, reference: string, vatPct: number) {
   if (!Number.isFinite(amount) || amount < 0) throw new Error('Não foi possível validar o custo do envio.')
   const { data: profile, error: profileError } = await db.from('audit_log').select('details')
     .eq('tenant_id', tenant).eq('action', 'client_data').eq('details->>id', client)
@@ -23,25 +28,19 @@ export async function reserveWallet(db: SupabaseClient, tenant: string, client: 
     if (credit.refused) throw new Error('Não foi possível criar o envio: a conta tem valores por regularizar. Contacte geral@linke.pt.')
     return { tenant, client, shipment, reserved: credit.reserved === true, balanceBefore: Number(credit.balance), kind: 'credit_limit' } satisfies WalletReservation
   }
+  if (!Number.isFinite(vatPct) || vatPct < 0 || vatPct > 100) throw new Error('Não foi possível validar o IVA do envio.')
   const { data, error } = await db.rpc('reserve_shipment_wallet', {
-    p_tenant: tenant, p_client: client, p_shipment: shipment, p_amount: amount, p_reference: reference,
+    p_tenant: tenant, p_client: client, p_shipment: shipment, p_amount: amount, p_reference: reference, p_vat_pct: vatPct,
   })
   if (error) {
     if (error.code === 'PGRST202') {
-      const { loadClientShipmentsForBalance, loadClientStatementsForBalance, payAsYouGoBalance } = await import('./client-balance')
-      const [shipments, statements] = await Promise.all([
-        loadClientShipmentsForBalance(db, tenant, client),
-        loadClientStatementsForBalance(db, tenant, client)
-      ])
-      const balance = payAsYouGoBalance(profile?.details?.credit_limit, shipments, statements, profile?.details?.pay_as_you_go_since)
-      const refusal = payAsYouGoRefusal(balance, amount)
-      if (refusal) throw new Error(refusal)
-      return { tenant, client, shipment, reserved: true, balanceBefore: balance } satisfies WalletReservation
+      throw new Error('Falta aplicar a migração do IVA na wallet no Supabase (20261124120000_wallet_debit_with_vat.sql).')
     }
     throw new Error('Não foi possível reservar o saldo. Confirme a configuração da wallet antes de repetir.')
   }
   if (!data) throw new Error('Não foi possível reservar o saldo. Confirme a configuração da wallet antes de repetir.')
-  if (data.refused) throw new Error(payAsYouGoRefusal(Number(data.balance), amount) || 'Saldo insuficiente.')
+  const gross = Number(data.amount ?? amount)
+  if (data.refused) throw new Error(payAsYouGoRefusal(Number(data.balance), gross) || 'Saldo insuficiente.')
   return { tenant, client, shipment, reserved: data.reserved === true, balanceBefore: data.balance == null ? undefined : Number(data.balance) } satisfies WalletReservation
 }
 

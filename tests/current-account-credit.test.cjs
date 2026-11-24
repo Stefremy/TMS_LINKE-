@@ -98,6 +98,6 @@ test('server uses credit reservations only when opted in; missing migration bloc
   assert.deepEqual(calls,['reserve_current_account_credit'])
   profile={billing_type:'pay_as_you_go',credit_limit:10,credit_limit_enabled:false}
   db.rpc=async name=>{calls.push(name);return {data:{reserved:true,balance:10},error:null}}
-  assert.equal((await reserveWallet(db,T,C,S,1,'test')).reserved,true)
+  assert.equal((await reserveWallet(db,T,C,S,1,'test',23)).reserved,true)
   assert.equal(calls.at(-1),'reserve_shipment_wallet')
 })

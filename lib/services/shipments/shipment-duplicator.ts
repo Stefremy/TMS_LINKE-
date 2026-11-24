@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/errors"
 import { isValidUuid } from "@/lib/services/shipments/shipment-utils"
 import { reserveWallet, transitionWallet, type WalletReservation } from "@/lib/billing/wallet"
+import { resolveShipmentTaxRate, type InvoiceShipment } from "@/lib/billing/shipment-invoice-lines"
 
 /** Fields that belong to one specific emission and must never be copied to the duplicate. */
 const PER_EMISSION_FIELDS = [
@@ -130,7 +131,10 @@ export async function duplicateShipment(shipmentId: string, options: { clientRef
 
     const sellPrice = Number(shipment.sell_price || 0)
     if (sellPrice > 0) {
-      reservation = await reserveWallet(supabase, ctx.tenant_id, shipment.client_id, newId, sellPrice, newTracking)
+      // Same destination as the original, so the same VAT rate the original was priced with.
+      const snapshotVat = Number((saved.pricing_snapshot as { vatPct?: unknown } | undefined)?.vatPct)
+      const { vatRate } = resolveShipmentTaxRate({ ...(saved as unknown as InvoiceShipment), id: newId, vat_pct: Number.isFinite(snapshotVat) ? snapshotVat : null })
+      reservation = await reserveWallet(supabase, ctx.tenant_id, shipment.client_id, newId, sellPrice, newTracking, vatRate)
     }
 
     const native = await supabase.from("shipments").insert({

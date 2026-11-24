@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
 import { captureWeightPricingBasis, type WeightPricingBasis } from "@/lib/billing/carrier-weight-pricing"
-import { calculateShipmentPrice, isCttMultiVolumeService } from "@/lib/pricing/calculate-shipment-price"
+import { calculateShipmentPrice, isCttMultiVolumeService, resolveServiceZoneCode } from "@/lib/pricing/calculate-shipment-price"
 import { calculateChargeableWeight } from "@/lib/pricing/chargeable-weight"
 import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
 import { resolveCttCredentials } from "@/lib/services/carriers/credentials"
@@ -13,7 +13,7 @@ import { convertZplToPdfBase64 } from "@/lib/label-utils"
 import { requiresCorreosQuotation } from "@/lib/services/correos/shipment-policy"
 import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
 import { positiveMeasurement } from "../tracking/carrier-measurements"
-import { resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
+import { resolveServiceCarrier, resolveShipmentVatPct } from "@/lib/pricing/calculate-shipment-quote"
 import { readCttExportForm, type CttExportDetails } from "../ctt/export-details"
 import { getCttRecipientContactError } from "../ctt/recipient-contact"
 import type { CTTCompleteShipmentOutput } from "../ctt/ctt-types"
@@ -114,7 +114,8 @@ export async function createShipment(formData: FormData) {
       cttExportDetails = readCttExportForm(formData)
     }
 
-    reservation = await reserveWallet(supabase, ctx.tenant_id, matchedClient.id, shipmentId, computedSellPrice, trackingNumber)
+    const vatPct = resolveShipmentVatPct(resolveServiceZoneCode(service, recipientCountry, recipient_zip))
+    reservation = await reserveWallet(supabase, ctx.tenant_id, matchedClient.id, shipmentId, computedSellPrice, trackingNumber, vatPct)
 
   } catch (pricingErr) {
     return { success: false, error: pricingErr instanceof ShipmentPricingError || pricingErr instanceof ShipmentPricingUnavailableError

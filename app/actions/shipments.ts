@@ -14,9 +14,9 @@ import { revalidatePath } from "next/cache"
 import { after as runAfterResponse } from "next/server"
 import { randomInt } from "node:crypto"
 import { captureWeightPricingBasis, type WeightPricingBasis } from "@/lib/billing/carrier-weight-pricing"
-import { calculateShipmentPrice, isCttMultiVolumeService } from "@/lib/pricing/calculate-shipment-price"
+import { calculateShipmentPrice, isCttMultiVolumeService, resolveServiceZoneCode } from "@/lib/pricing/calculate-shipment-price"
 import { calculateChargeableWeight } from "@/lib/pricing/chargeable-weight"
-import { calculateShipmentSpecialFees, resolveServiceCarrier } from "@/lib/pricing/calculate-shipment-quote"
+import { calculateShipmentSpecialFees, resolveServiceCarrier, resolveShipmentVatPct } from "@/lib/pricing/calculate-shipment-quote"
 import { loadShipmentPricingContext, validateShipmentPricingInput, ShipmentPricingError, ShipmentPricingUnavailableError } from "@/lib/pricing/shipment-pricing-context"
 import { hasOmittedParcelDimensions } from "@/lib/services/shipments/parcel-dimensions"
 import { getAuthContext, requireUser, requireEmployee, requireClientAccess, getTenantId } from "@/lib/auth/context"
@@ -311,6 +311,7 @@ export async function emitClientGuiaAction(data: {
     let computedFuelAmount = 0
     let computedFuelRatePct: number | null = null
     let computedBasePrice: number
+    let computedVatPct: number
     let computedSpecialDesc: string | null = null
     let weightPricingBasis: WeightPricingBasis
     let matchedClient: Partial<Cliente> = {}
@@ -374,6 +375,8 @@ export async function emitClientGuiaAction(data: {
       computedFuelAmount = priceResult.fuelSurchargeAmount
       computedFuelRatePct = computedFuelAmount > 0 ? priceResult.fuelRatePct ?? null : null
       computedBasePrice = priceResult.basePrice
+      // Same rate as the checkout summary: the wallet is debited the VAT-inclusive total.
+      computedVatPct = resolveShipmentVatPct(resolveServiceZoneCode(chosenService, recipientCountry, recipientPostal))
       const specials = calculateShipmentSpecialFees(computedSellPrice, matchedClient, carrierCode,
         data.selectedSpecialServices, data.codValue, { country: recipientCountry, postal: recipientPostal })
       const oversize = calculateOversizeSurcharge(chosenService, recipientCountry, data.weightKg, data, recipientPostal)
@@ -439,7 +442,7 @@ export async function emitClientGuiaAction(data: {
       updated_at: now,
     }
 
-    reservation = await reserveWallet(supabase, ctx.tenant_id, matchedClient.id!, shipmentId, computedSellPrice, trackingNumber)
+    reservation = await reserveWallet(supabase, ctx.tenant_id, matchedClient.id!, shipmentId, computedSellPrice, trackingNumber, computedVatPct)
     shipmentData.billing_type = reservation.reserved && reservation.kind !== 'credit_limit' ? 'pay_as_you_go' : 'conta_corrente'
 
     // ─── STEP 1: Call carrier API — only write to DB if carrier accepts ──────────

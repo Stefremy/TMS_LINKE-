@@ -326,8 +326,20 @@ describe('reserva de dinheiro antes de criar o envio', () => {
 
   test('pré-pagamento usa sempre a wallet, nunca o limite de conta corrente', async () => {
     const db = fakeDb(profile({ billing_type: 'pay_as_you_go', credit_limit: 0, credit_limit_enabled: true }), { data: { reserved: true, balance: 0 }, error: null })
-    await reserveWallet(db, T, C, S, 1, 'x')
+    await reserveWallet(db, T, C, S, 1, 'x', 23)
     assert.deepEqual(db.calls.map(c => c.name), ['reserve_shipment_wallet'])
+  })
+
+  test('pré-pagamento: a wallet desconta o total COM IVA (envia a taxa do envio; recusa mostra o valor c/ IVA)', async () => {
+    const ok = fakeDb(profile({ billing_type: 'pay_as_you_go' }), { data: { reserved: true, balance: 5, amount: 4.17 }, error: null })
+    await reserveWallet(ok, T, C, S, 3.39, 'x', 23)
+    assert.equal(ok.calls[0].params.p_amount, 3.39); assert.equal(ok.calls[0].params.p_vat_pct, 23)
+    const refused = fakeDb(profile({ billing_type: 'pay_as_you_go' }), { data: { refused: true, balance: 4, amount: 4.17 }, error: null })
+    await assert.rejects(reserveWallet(refused, T, C, S, 3.39, 'x', 23), err => { assert.match(err.message, /custa 4,17/); return true })
+    for (const vat of [undefined, NaN, -1, 101]) {
+      const db = fakeDb(profile({ billing_type: 'pay_as_you_go' }), null)
+      await assert.rejects(reserveWallet(db, T, C, S, 3.39, 'x', vat), /IVA do envio/); assert.equal(db.calls.length, 0)
+    }
   })
 
   test('ficha do cliente ilegível ou inexistente bloqueia o envio', async () => {
