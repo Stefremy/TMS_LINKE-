@@ -82,7 +82,7 @@ test('client dashboard and history expose only CTT certificate controls and use 
  for(const file of ['app/app/components/ClientDashboard.tsx','app/app/components/ClientShipmentsHistory.tsx']){
   const source=fs.readFileSync(file,'utf8')
   const bulk=file.endsWith('ClientShipmentsHistory.tsx')
-  assert.match(source,bulk?/CttCertificateStatus/:/Certificado de aceitação gerado/)
+  assert.match(source,bulk?/CttCertificateStatus/:/Certificado Gerado/)
   assert.match(source,/generateCttAcceptanceCertificateAction\(manifestIds\)/)
   assert.match(source,/Documento oficial CTT/)
   // Both lists let clients select several CTT shipments and close them in one batch (one certificate).

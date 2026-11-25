@@ -58,7 +58,7 @@ export function CttCertificateStatus({ shipment, busy, onDownload, onGenerate }:
   if (!isCttShipment(shipment)) return null
   return <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
     {hasCttClosure(shipment) ? <>
-      <span className="rounded border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 font-semibold text-[var(--accent)]">Fechado nos CTT</span>
+      <span className="rounded border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 font-semibold text-[var(--accent)]">Certificado Gerado</span>
       {canDownloadCttCertificate(shipment) && <button type="button" disabled={busy} onClick={() => onDownload(shipment.id)} className="font-semibold text-[var(--accent)] underline underline-offset-2 disabled:opacity-50">Certificado do lote</button>}
     </> : onGenerate && canSelectCttCertificate(shipment)
       ? <button type="button" disabled={busy} onClick={() => onGenerate(shipment.id)} aria-label={`Gerar certificado CTT do envio ${shipment.tracking_number || shipment.id}`} className="font-semibold text-[var(--accent)] underline underline-offset-2 disabled:opacity-50">Gerar certificado</button>

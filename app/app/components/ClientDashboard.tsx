@@ -912,7 +912,7 @@ export function ClientDashboard() {
                       </div>
                     </div>
 
-                    {hasCttClosure(shipment) && <span className="mt-1 inline-flex w-fit items-center gap-1 rounded border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent)]"><FileCheck2 className="w-3 h-3" />Certificado de aceitação gerado</span>}
+                    {hasCttClosure(shipment) && <span className="mt-1 inline-flex w-fit items-center gap-1 rounded border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent)]"><FileCheck2 className="w-3 h-3" />Certificado Gerado</span>}
                     <ShipmentParcelWeight summary={shipment.parcel_summary} />
 
                     {/* Bottom Row: Date, Price & Quick Actions */}
@@ -1074,7 +1074,7 @@ export function ClientDashboard() {
                             </div>
                           )
                         })()}
-                      {hasCttClosure(shipment) && <span className="mt-1 inline-flex w-fit items-center gap-1 rounded border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent)]"><FileCheck2 className="w-3 h-3" />Certificado de aceitação gerado</span>}
+                      {hasCttClosure(shipment) && <span className="mt-1 inline-flex w-fit items-center gap-1 rounded border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--accent)]"><FileCheck2 className="w-3 h-3" />Certificado Gerado</span>}
                       </td>
 
                       {/* Service Type */}
