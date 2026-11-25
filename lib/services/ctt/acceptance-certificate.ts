@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { closeCttManifest, type ManifestResult } from './close-manifest'
 import type { CTTDocumentData } from './ctt-types'
+import { isCttClosedRow } from './certificate-status'
 
 const validPdf = (doc: CTTDocumentData) => typeof doc?.File === 'string' && Buffer.from(doc.File, 'base64').subarray(0, 5).toString() === '%PDF-'
 const resultFor = (documents: CTTDocumentData[], shipmentIds: string[], manifestReference?: string): ManifestResult => ({ success: true, count: shipmentIds.length, shipmentIds, reused: true, manifestReference, documents, manifestPdfBase64: documents[0].File })
@@ -10,12 +11,13 @@ export async function getCttAcceptanceCertificate(tenantId: string, shipmentIds?
   const fail = (error: string): ManifestResult => ({ success: false, count: 0, error })
   if (!tenantId || !Array.isArray(shipmentIds) || !shipmentIds.length || shipmentIds.length > 100 || shipmentIds.some(id => typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) return fail('Selecione entre 1 e 100 envios CTT para obter o certificado de aceitação.')
   const ids = [...new Set(shipmentIds)], db = createAdminClient()
-  let query = db.from('shipments').select('id, status, carrier_code, ops_substatus').eq('tenant_id', tenantId).in('id', ids)
+  let query = db.from('shipments').select('id, status, carrier_code, ops_substatus, ctt_closed_at').eq('tenant_id', tenantId).in('id', ids)
   if (clientId) query = query.eq('client_id', clientId)
   const { data: rows, error } = await query
   if (error || !rows || rows.length !== ids.length) return fail('Não foi possível consultar todos os envios nesta conta.')
   if (rows.some(row => !['ctt', 'ctt_expresso'].includes(String(row.carrier_code || '').toLowerCase()))) return fail('O certificado de aceitação está disponível apenas para envios CTT. Retire os envios Correos da seleção.')
   if (rows.some(row => ['rascunho', 'aguarda_correcao', 'cancelado'].includes(row.status))) return fail('A seleção contém envios sem emissão válida ou cancelados.')
+  if (options.allowClose === false && rows.some(row => row.status !== 'pendente')) return fail('O envio já foi recolhido pelos CTT: o certificado de aceitação deixou de estar disponível.')
 
   // Exact-batch coverage prevents exposing a certificate containing other stores' objects.
   const { data: archives, error: archiveError } = await db.from('audit_log').select('details')
@@ -65,7 +67,7 @@ export async function getCttAcceptanceCertificate(tenantId: string, shipmentIds?
     const docs = [...new Map(ids.flatMap(id => byShipment.get(id)!).map(doc => [doc.File, doc])).values()]
     return resultFor(docs, ids)
   }
-  if (savedIds.length || rows.some(row => ['manifesto_fechado', 'expedido'].includes(row.ops_substatus || ''))) return fail('A seleção inclui envios já fechados sem um certificado comum guardado. Peça à equipa Ops para recuperar os certificados originais; não repita o fecho destes envios.')
+  if (savedIds.length || rows.some(isCttClosedRow)) return fail('A seleção inclui envios já fechados sem um certificado comum guardado. Peça à equipa Ops para recuperar os certificados originais; não repita o fecho destes envios.')
   if (options.allowClose === false) return fail('O certificado deste envio não está guardado. Peça à equipa Ops para recuperar o original junto dos CTT.')
   const closed = await closeCttManifest(tenantId, ids, clientId)
   if (!closed.success && /not found or already closed/i.test(closed.error || '')) return fail('Os CTT indicam que um objeto não foi encontrado ou já foi fechado. Não foi obtido um certificado oficial. A equipa Ops deve confirmar a ligação de emissão e recuperar o certificado no portal CTT se o lote já estiver fechado.' + (closed.error ? ` Resposta CTT: ${closed.error.replace(/\. Verifique os envios[\s\S]*$/, '').slice(0, 400)}` : ''))

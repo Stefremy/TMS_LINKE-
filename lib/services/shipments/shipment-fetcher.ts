@@ -12,7 +12,7 @@ import type { ParcelSummary } from './parcel-summary'
 
 // Native columns only. Display aliases (reference, carrier_name, ctt_object_id) are derived
 // below; optional pricing/label snapshots are stored separately in audit_log.
-export const SHIPMENT_LIST_COLUMNS = "id, tenant_id, client_id, tracking_number, carrier_tracking_number, carrier_code, sender_name, sender_address, sender_zip3, sender_zip4, sender_phone, recipient_name, recipient_address, recipient_zip3, recipient_zip4, recipient_phone, recipient_email, service_type, buy_price, sell_price, billing_statement_id, status, ops_substatus, created_at, updated_at"
+export const SHIPMENT_LIST_COLUMNS = "id, tenant_id, client_id, tracking_number, carrier_tracking_number, carrier_code, sender_name, sender_address, sender_zip3, sender_zip4, sender_phone, recipient_name, recipient_address, recipient_zip3, recipient_zip4, recipient_phone, recipient_email, service_type, buy_price, sell_price, billing_statement_id, status, ops_substatus, ctt_closed_at, created_at, updated_at"
 
 /**
  * Fetches shipments from the DB shipments table without downloading heavy base64 label blobs unless requested.

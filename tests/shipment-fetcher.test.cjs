@@ -7,7 +7,7 @@ const TENANT='11111111-1111-1111-1111-111111111111',OTHER_TENANT='99999999-9999-
 const A='22222222-2222-2222-2222-222222222222',B='33333333-3333-3333-3333-333333333333'
 // Native table columns confirmed through read-only Supabase OpenAPI metadata.
 // A schema-aware fixture reproduces the real 42703 error that permissive mocks miss.
-const nativeColumns=new Set('id tenant_id client_id tracking_number status ops_substatus sender_name sender_address sender_zip3 sender_zip4 recipient_name recipient_address recipient_zip3 recipient_zip4 service_type buy_price sell_price created_at updated_at carrier_tracking_number carrier_code billing_statement_id recipient_email recipient_phone sender_phone'.split(' '))
+const nativeColumns=new Set('id tenant_id client_id tracking_number status ops_substatus sender_name sender_address sender_zip3 sender_zip4 recipient_name recipient_address recipient_zip3 recipient_zip4 service_type buy_price sell_price created_at updated_at carrier_tracking_number carrier_code billing_statement_id recipient_email recipient_phone sender_phone ctt_closed_at'.split(' '))
 const row=(id,client=A,tenant=TENANT)=>({id,tenant_id:tenant,client_id:client,tracking_number:`LTK${id}`,
   carrier_tracking_number:'EQ000000001PT',carrier_code:'ctt',status:'entrada_rede',created_at:'2026-10-22T10:00:00Z',
   sender_name:'Fixture sender',sender_zip4:'4800',sender_zip3:'001',recipient_name:'Fixture recipient',

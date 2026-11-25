@@ -46,8 +46,8 @@ export async function generateCttAcceptanceCertificateAction(shipmentIds: string
     if (result.success) {
       if (result.reused && result.shipmentIds?.length) {
         try {
-          let update = createAdminClient().from('shipments').update({ ops_substatus: 'manifesto_fechado' })
-            .eq('tenant_id', ctx.tenant_id).in('id', result.shipmentIds).eq('status', 'pendente').is('ops_substatus', null)
+          let update = createAdminClient().from('shipments').update({ ctt_closed_at: new Date().toISOString() })
+            .eq('tenant_id', ctx.tenant_id).in('id', result.shipmentIds).is('ctt_closed_at', null)
           if (ctx.role === 'client') update = update.eq('client_id', ctx.client_id!)
           const { error } = await update
           if (error) throw error

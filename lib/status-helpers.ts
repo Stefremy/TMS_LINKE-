@@ -5,6 +5,12 @@ export interface StatusConfig {
   badgeVariant: 'default' | 'success' | 'warning' | 'danger' | 'neutral' | 'info' | 'purple'
 }
 
+const DELIVERED_STATUSES = ["entregue", "entregue_pudo", "entregue_em_pudo"]
+
+export function isDeliveredStatus(rawStatus: unknown): boolean {
+  return DELIVERED_STATUSES.includes(String(rawStatus || "").toLowerCase().replace(/[\s-]+/g, "_"))
+}
+
 export function getShipmentStatusConfig(rawStatus: unknown): StatusConfig {
   const status = typeof rawStatus === 'string' ? rawStatus : String(rawStatus || "")
   const norm = status.toLowerCase().replace(/[\s-]+/g, "_")

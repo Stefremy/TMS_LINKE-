@@ -28,5 +28,9 @@ test('closure filters distinguish CTT paperwork from transport status and exclud
  assert.equal(hasCttClosure(closed),true);assert.equal(closed.status,'pendente')
  assert.equal(matchesCttCertificateFilter(closed,'closed'),true);assert.equal(matchesCttCertificateFilter(closed,'open'),false)
  assert.equal(matchesCttCertificateFilter(row('new'),'open'),true)
+ // Tracking overwrites ops_substatus with the CTT event code; the dedicated column must keep the closure.
+ const tracked=row('tracked',{ops_substatus:'emo',ctt_closed_at:'2026-11-19T15:41:00Z'})
+ assert.equal(hasCttClosure(tracked),true);assert.equal(matchesCttCertificateFilter(tracked,'open'),false)
+ assert.equal(hasCttClosure(row('emo-only',{ops_substatus:'emo'})),false)
  assert.equal(matchesCttCertificateFilter(row('correos',{carrier_code:'correos'}),'closed'),false)
 })

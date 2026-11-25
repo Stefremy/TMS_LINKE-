@@ -20,7 +20,7 @@ test('exact archived batch returns every original certificate byte-for-byte with
  const docs=[doc,{FileName:'CertAceitResumo_2.pdf',File:Buffer.from('%PDF-1.4\nSECOND ORIGINAL').toString('base64')}]
  const h=harness({audit:[archive([A],{carrier_documents:docs})]})
  const r=await h.action([A]);assert.equal(r.success,true);assert.equal(r.manifestPdfBase64,PDF);assert.deepEqual(r.documents,docs)
- assert.equal(h.closes.length,0);assert.equal(h.db.writes.filter(w=>w.table==='shipments')[0].value.ops_substatus,'manifesto_fechado')
+ assert.equal(h.closes.length,0);assert.ok(h.db.writes.filter(w=>w.table==='shipments')[0].value.ctt_closed_at)
  assert.ok(h.db.queries.every(q=>q.filters.some(f=>f.field==='tenant_id'&&f.value===T)))
  assert.ok(h.db.queries[0].filters.some(f=>f.field==='client_id'&&f.value===C))
 })
@@ -101,4 +101,8 @@ test('reprinting a row returns its complete own-store batch and never closes shi
  const foreign=harness({rows:[row(),row(B,{client_id:B})],audit:[archive([A,B])]})
  assert.equal((await foreign.download(A)).success,false);assert.equal(foreign.closes.length,0)
  const notClosed=harness();assert.equal((await notClosed.download(A)).success,false);assert.equal(notClosed.closes.length,0)
+})
+test('a picked-up shipment can no longer reprint its acceptance certificate',async()=>{
+ const h=harness({rows:[row(A,{status:'em_transito'})],audit:[archive([A])]})
+ const r=await h.download(A);assert.equal(r.success,false);assert.match(r.error,/recolhido/);assert.equal(h.closes.length,0)
 })

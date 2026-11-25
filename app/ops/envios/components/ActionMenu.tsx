@@ -32,6 +32,7 @@ import { convertZplToPdfAction, syncCttTrackingAction } from "@/app/actions/ctt"
 import { printCttLabel, downloadCttLabel } from "@/lib/label-utils"
 import { fetchOfficialShipmentLabel } from "@/lib/official-shipment-label"
 import { DuplicateShipmentModal } from "./DuplicateShipmentModal"
+import { isDeliveredStatus } from "@/lib/status-helpers"
 
 interface ActionMenuProps {
   shipment?: ShipmentRecord
@@ -73,9 +74,11 @@ export function ActionMenu({
     shipment?.invoiced
   )
 
-  const isVoided = ["anulado", "cancelado"].includes(
-    String(shipment?.rawShipment?.status ?? shipment?.status ?? "").toLowerCase()
-  )
+  const rawStatus = String(shipment?.rawShipment?.status ?? shipment?.status ?? "").toLowerCase()
+  const isVoided = ["anulado", "cancelado"].includes(rawStatus)
+  const isDelivered = isDeliveredStatus(rawStatus)
+  // Mesma regra do servidor (shipment-deleter): só antes do primeiro scan da transportadora.
+  const canVoid = ["pendente", "rascunho"].includes(rawStatus)
 
   // Rascunho ainda não emitido: pode ser enviado à transportadora (CTT ou Correos).
   const isEmittableDraft = ["rascunho", "draft"].includes(String(shipment?.status || "").toLowerCase()) &&
@@ -378,7 +381,9 @@ export function ActionMenu({
                 setIsOpen(false)
                 setIsDuplicateOpen(true)
               }}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-teal-50 rounded-lg text-xs text-teal-800 font-semibold transition-colors cursor-pointer"
+              disabled={isDelivered}
+              title={isDelivered ? "Envio entregue: não é possível duplicar." : undefined}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-teal-50 rounded-lg text-xs text-teal-800 font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             >
               <Copy className="w-4 h-4 text-[#007F8B]" />
               <span>Duplicar Envio</span>
@@ -388,8 +393,9 @@ export function ActionMenu({
             <button 
               type="button"
               onClick={handleCreateReturn}
-              disabled={isCreatingReturn || isVoided}
-              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-amber-50 rounded-lg text-xs text-amber-800 font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-0.5"
+              disabled={isCreatingReturn || isVoided || isDelivered}
+              title={isDelivered ? "Envio entregue: não é possível criar devolução." : undefined}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-amber-50 rounded-lg text-xs text-amber-800 font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent mt-0.5"
             >
               {isCreatingReturn ? (
                 <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
@@ -417,8 +423,9 @@ export function ActionMenu({
               <button 
                 type="button"
                 onClick={handleDelete}
-                disabled={isDeleting}
-                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-red-50 rounded-lg text-xs text-red-700 font-semibold transition-colors cursor-pointer disabled:opacity-50 mt-0.5"
+                disabled={isDeleting || !canVoid}
+                title={canVoid ? undefined : "Só é possível anular antes da recolha / primeiro scan da transportadora."}
+                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-red-50 rounded-lg text-xs text-red-700 font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent mt-0.5"
               >
                 {isDeleting ? (
                   <Loader2 className="w-4 h-4 text-red-600 animate-spin" />

@@ -89,7 +89,7 @@ function menuHarness(t, dashboard, label, account = {}) {
     '@/lib/carrier-logos': { getCarrierLogo: () => null, getShipmentCarrierLogo: () => null },
     // Mensagens ao utilizador chegam por notificação (lib/notify); qualquer tipo conta como aviso mostrado.
     sonner: { toast: Object.assign(m => calls.alerts.push(m), { error: m => calls.alerts.push(m), warning: m => calls.alerts.push(m), info: m => calls.alerts.push(m), success: m => calls.alerts.push(m) }) },
-    '@/lib/status-helpers': { getShipmentStatusConfig: () => ({ label: 'Pendente', badgeVariant: 'warning' }) },
+    '@/lib/status-helpers': { getShipmentStatusConfig: () => ({ label: 'Pendente', badgeVariant: 'warning' }), isDeliveredStatus: () => false },
     './ClientSupportRequest': { ClientSupportRequestDialog: 'dialog', shipmentSupportPrefill: () => ({}) },
     './ClientScope': { useClientScope: () => ({ client: { id: account.clientId || 'client-a', short_name: 'Fixture', pricing: {}, billing_type: account.billingType }, basePath: '/app/fixture' }) },
     './ClientMessages': { useClientMessageCounter: () => ({ unreadCount: 0, refresh: async () => {} }) },

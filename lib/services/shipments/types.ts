@@ -41,6 +41,7 @@ export interface ShipmentRecord {
   recipient_phone?: string
   recipient_email?: string
   ops_substatus?: string
+  ctt_closed_at?: string | null
   sell_price?: number
   buy_price?: number
   base_price?: number

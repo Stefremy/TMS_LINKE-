@@ -6,6 +6,7 @@ import { errorMessage } from "@/lib/errors"
 import { isValidUuid } from "@/lib/services/shipments/shipment-utils"
 import { reserveWallet, transitionWallet, type WalletReservation } from "@/lib/billing/wallet"
 import { resolveShipmentTaxRate, type InvoiceShipment } from "@/lib/billing/shipment-invoice-lines"
+import { isDeliveredStatus } from "@/lib/status-helpers"
 
 /** Fields that belong to one specific emission and must never be copied to the duplicate. */
 const PER_EMISSION_FIELDS = [
@@ -113,6 +114,7 @@ export async function duplicateShipment(shipmentId: string, options: { clientRef
     const original = await loadOriginal(shipmentId, ctx.tenant_id)
     if (!original) return { success: false as const, error: "Envio original não encontrado." }
     const { shipment, saved, packages } = original
+    if (isDeliveredStatus(shipment.status)) return { success: false as const, error: "Envio entregue: não é possível duplicar." }
 
     const newId = crypto.randomUUID()
     const newTracking = `LTK${randomInt(1_000_000, 10_000_000)}`

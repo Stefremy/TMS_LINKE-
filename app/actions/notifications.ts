@@ -14,6 +14,7 @@ import { QUOTATION_ACTION } from "@/lib/shipments/quotations/types";
 import { PICKUP_REQUEST_ACTION } from "@/lib/pickup-request-notifications";
 import { canSendClientMessages } from "@/lib/client-messages/types";
 import { supportCategoryLabel } from "@/lib/support-requests/types";
+import { isCttClosedRow } from "@/lib/services/ctt/certificate-status";
 
 export interface OperationalNotification {
   id: string;
@@ -47,7 +48,7 @@ export async function getOperationalNotificationsAction(): Promise<
     const supabase = createAdminClient();
 
     let pendingQuery = supabase.from("shipments")
-      .select("id, created_at, ops_substatus").eq("tenant_id", ctx.tenant_id)
+      .select("id, created_at, ops_substatus, ctt_closed_at").eq("tenant_id", ctx.tenant_id)
       .eq("status", "pendente").in("carrier_code", ["ctt", "ctt_expresso"])
     if (await supportsDatabaseFeature(supabase, "shipments.ctt_manifest_pdf"))
       pendingQuery = pendingQuery.is("ctt_manifest_pdf", null)
@@ -73,8 +74,7 @@ export async function getOperationalNotificationsAction(): Promise<
     ]);
 
     const pendingShipments = pendingRows?.filter(
-      (s: { ops_substatus?: string }) =>
-        !["manifesto_fechado", "expedido"].includes(s.ops_substatus || ""),
+      (s: { ops_substatus?: string; ctt_closed_at?: string | null }) => !isCttClosedRow(s),
     );
     // Manifest closure and physical shipment status are independent.
     if (pendingShipments && pendingShipments.length > 0) {

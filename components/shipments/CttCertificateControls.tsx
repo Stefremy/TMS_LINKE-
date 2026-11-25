@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import type { ShipmentRecord } from '@/lib/services/shipments/types'
-import { canSelectCttCertificate, hasCttClosure, isCttShipment, type CttCertificateFilter } from '@/lib/services/ctt/certificate-status'
+import { canDownloadCttCertificate, canSelectCttCertificate, hasCttClosure, isCttShipment, type CttCertificateFilter } from '@/lib/services/ctt/certificate-status'
 
 /** Selection survives paging, is reconciled against refreshed rows and belongs to one store. */
 export function useCttCertificateSelection(shipments: ShipmentRecord[], scope: string) {
@@ -59,7 +59,7 @@ export function CttCertificateStatus({ shipment, busy, onDownload, onGenerate }:
   return <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
     {hasCttClosure(shipment) ? <>
       <span className="rounded border border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-0.5 font-semibold text-[var(--accent)]">Fechado nos CTT</span>
-      <button type="button" disabled={busy} onClick={() => onDownload(shipment.id)} className="font-semibold text-[var(--accent)] underline underline-offset-2 disabled:opacity-50">Certificado do lote</button>
+      {canDownloadCttCertificate(shipment) && <button type="button" disabled={busy} onClick={() => onDownload(shipment.id)} className="font-semibold text-[var(--accent)] underline underline-offset-2 disabled:opacity-50">Certificado do lote</button>}
     </> : onGenerate && canSelectCttCertificate(shipment)
       ? <button type="button" disabled={busy} onClick={() => onGenerate(shipment.id)} aria-label={`Gerar certificado CTT do envio ${shipment.tracking_number || shipment.id}`} className="font-semibold text-[var(--accent)] underline underline-offset-2 disabled:opacity-50">Gerar certificado</button>
       : <span className="text-[var(--text-secondary)]">Sem fecho CTT registado</span>}

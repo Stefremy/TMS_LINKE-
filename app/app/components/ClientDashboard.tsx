@@ -61,7 +61,7 @@ import { useClientMessageCounter } from "./ClientMessages"
 import { generateCttAcceptanceCertificateAction, downloadCttAcceptanceCertificateAction } from "@/app/actions/shipment-manifests"
 import { ManifestDocuments } from "@/components/manifest-documents"
 import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
-import { canSelectCttCertificate, hasCttClosure } from "@/lib/services/ctt/certificate-status"
+import { canSelectCttCertificate, canDownloadCttCertificate, hasCttClosure } from "@/lib/services/ctt/certificate-status"
 import { useCttCertificateSelection, CttCertificateCheckbox } from "@/components/shipments/CttCertificateControls"
 import type { ClientMessage, MessagePage } from "@/lib/client-messages/types"
 import { PageSizeSelect } from "./PageSizeSelect"
@@ -283,7 +283,7 @@ export function ClientDashboard() {
           documents: res.documents
         })
         const closedIds = new Set(res.shipmentIds || manifestIds)
-        setShipments(previous => previous.map(shipment => closedIds.has(shipment.id) ? { ...shipment, ops_substatus: "manifesto_fechado" } : shipment))
+        setShipments(previous => previous.map(shipment => closedIds.has(shipment.id) ? { ...shipment, ctt_closed_at: new Date().toISOString() } : shipment))
         certificateSelection.clear()
         if (res.warning) toast.warning(res.warning)
       } else {
@@ -969,7 +969,7 @@ export function ClientDashboard() {
                         >
                           <LifeBuoy className="w-3.5 h-3.5" />
                         </button>
-                        {(canSelectCttCertificate(shipment) || hasCttClosure(shipment)) && (
+                        {(canSelectCttCertificate(shipment) || canDownloadCttCertificate(shipment)) && (
                           <button
                             type="button"
                             disabled={generatingManifest}
@@ -1171,7 +1171,7 @@ export function ClientDashboard() {
                                 <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
                                 <span>Descarregar PDF</span>
                               </button>
-                              {(canSelectCttCertificate(shipment) || hasCttClosure(shipment)) && (
+                              {(canSelectCttCertificate(shipment) || canDownloadCttCertificate(shipment)) && (
                                 <button
                                   type="button"
                                   disabled={generatingManifest}

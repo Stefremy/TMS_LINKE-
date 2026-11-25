@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { resolveCttCredentials } from '@/lib/services/carriers/credentials'
 import { CTTShipmentService } from './ctt-shipment.service'
 import type { CTTDocumentData, CTTShipment2Close } from './ctt-types'
+import { isCttClosedRow } from './certificate-status'
 
 export interface ManifestResult {
   success: boolean
@@ -24,6 +25,7 @@ interface ManifestShipment {
   tracking_number?: string
   ctt_manifest_pdf?: string
   ops_substatus?: string
+  ctt_closed_at?: string | null
   volumes_count?: number
   service_type?: string
 }
@@ -46,7 +48,7 @@ export async function closeCttManifest(tenantId: string, shipmentIds?: string[],
   const ids = [...new Set(shipmentIds)]
   const supabase = createAdminClient()
   let query = supabase.from('shipments')
-    .select('id, status, carrier_code, carrier_tracking_number, tracking_number, ops_substatus, service_type')
+    .select('id, status, carrier_code, carrier_tracking_number, tracking_number, ops_substatus, ctt_closed_at, service_type')
     .eq('tenant_id', tenantId).in('id', ids)
   if (clientId) query = query.eq('client_id', clientId)
   const { data: rows, error } = await query
@@ -59,7 +61,7 @@ export async function closeCttManifest(tenantId: string, shipmentIds?: string[],
   if (shipments.some(s => ['rascunho', 'aguarda_correcao', 'cancelado', 'entregue', 'devolvido'].includes(s.status))) {
     return fail('A seleção contém envios em estados que não permitem o fecho de manifesto.')
   }
-  if (shipments.some(s => s.ctt_manifest_pdf || ['manifesto_fechado', 'expedido'].includes(s.ops_substatus || ''))) {
+  if (shipments.some(s => s.ctt_manifest_pdf || isCttClosedRow(s))) {
     return fail('A seleção contém envios com manifesto já fechado. Retire-os da seleção para evitar repetir o fecho.')
   }
   const trackingNumbers = shipments.map(s => [s.carrier_tracking_number, s.ctt_object_id, s.tracking_number]
@@ -135,11 +137,12 @@ export async function closeCttManifest(tenantId: string, shipmentIds?: string[],
     let { data: saved, error: saveError } = await supabase.from('shipments').update({
       ctt_manifest_pdf: manifestPdfBase64 || null,
       ops_substatus: 'manifesto_fechado',
+      ctt_closed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('tenant_id', tenantId).in('id', ids).select('id')
     // Some installations archive PDFs only in audit_log. Still persist the closure flag.
     if (saveError && /ctt_manifest_pdf/i.test(saveError.message || '') && ['42703', 'PGRST204'].includes(saveError.code || '')) {
-      const fallback = await supabase.from('shipments').update({ ops_substatus: 'manifesto_fechado', updated_at: new Date().toISOString() })
+      const fallback = await supabase.from('shipments').update({ ops_substatus: 'manifesto_fechado', ctt_closed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq('tenant_id', tenantId).in('id', ids).select('id')
       saved = fallback.data
       saveError = fallback.error

@@ -173,7 +173,7 @@ export function ClientShipmentsHistory() {
           documents: res.documents
         })
         const closedIds = new Set(res.shipmentIds || manifestIds)
-        setShipments(previous => previous.map(shipment => closedIds.has(shipment.id) ? { ...shipment, ops_substatus: "manifesto_fechado" } : shipment))
+        setShipments(previous => previous.map(shipment => closedIds.has(shipment.id) ? { ...shipment, ctt_closed_at: new Date().toISOString() } : shipment))
         certificateSelection.clear()
         if (res.warning) toast.warning(res.warning)
       } else {

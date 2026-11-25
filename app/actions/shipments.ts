@@ -61,6 +61,7 @@ import { currentAccountOutstanding, payAsYouGoSpent, payAsYouGoBalance, isPrepai
 import { reserveWallet, transitionWallet, walletSnapshot, type WalletReservation } from "@/lib/billing/wallet"
 import { deleteShipment, deleteShipmentsBulk, hardDeleteShipment } from "@/lib/services/shipments/shipment-deleter"
 import { duplicateShipment, previewShipmentDuplicate } from "@/lib/services/shipments/shipment-duplicator"
+import { isDeliveredStatus } from "@/lib/status-helpers"
 
 export async function createShipmentAction(formData: FormData) {
   return createShipment(formData)
@@ -1275,6 +1276,10 @@ export async function createReturnShipmentAction(originalShipmentId: string, rea
 
     if (["anulado", "cancelado"].includes(String(original.status || "").toLowerCase())) {
       return { success: false, error: "Envio anulado: não é possível criar devolução." }
+    }
+
+    if (isDeliveredStatus(original.status)) {
+      return { success: false, error: "Envio entregue: não é possível criar devolução." }
     }
 
     const newShipmentId = crypto.randomUUID()
