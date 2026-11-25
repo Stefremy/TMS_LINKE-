@@ -37,6 +37,8 @@
 
 @media (min-width: 1024px) {
   .row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* Só dois widgets (ex.: cabeçalho do portal do cliente). */
+  .row.pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (min-width: 1536px) {

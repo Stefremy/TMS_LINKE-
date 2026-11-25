@@ -65,6 +65,10 @@ import { canSelectCttCertificate, canDownloadCttCertificate, hasCttClosure } fro
 import { useCttCertificateSelection, CttCertificateCheckbox } from "@/components/shipments/CttCertificateControls"
 import type { ClientMessage, MessagePage } from "@/lib/client-messages/types"
 import { PageSizeSelect } from "./PageSizeSelect"
+import { clientGreeting } from "@/lib/greeting"
+import { LocalWeather } from "@/app/ops/components/LocalWeather"
+import { HeaderClockDate } from "@/app/ops/components/HeaderClockDate"
+import headerWidgetStyles from "@/app/ops/components/HeaderWidgetsRow.module.css"
 
 export function ClientDashboard() {
   const { client: currentClient, basePath } = useClientScope()
@@ -398,9 +402,9 @@ export function ClientDashboard() {
       />
       
       {/* Top Welcome & Client Header Banner */}
-      <div className="bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <div className="bg-[var(--surface-bg)] rounded-lg border border-[var(--border-subtle)] p-6 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-6">
 
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-subtle)] flex items-center gap-1.5 shadow-2xs">
               <Building2 className="w-3.5 h-3.5 text-[var(--accent)]" />
@@ -420,7 +424,8 @@ export function ClientDashboard() {
           </div>
 
           <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-            {currentClient?.legal_name || currentClient?.short_name || "Portal de Envios do Cliente"}
+            {/* Hora de Lisboa no servidor e no browser; um minuto de diferença na fronteira não deve partir a hidratação. */}
+            <span suppressHydrationWarning>{clientGreeting()}</span>, {currentClient?.legal_name || currentClient?.short_name || "bem-vindo ao Portal de Envios"}
           </h1>
 
           <p className="text-xs sm:text-sm text-[var(--text-secondary)] max-w-2xl leading-relaxed">
@@ -428,7 +433,14 @@ export function ClientDashboard() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+        <div className="flex flex-col md:flex-row md:items-center gap-3 shrink-0">
+          {/* Tempo da sede + data/hora. O calendário de Ops não entra aqui: tem eventos internos da equipa. */}
+          <div className={`${headerWidgetStyles.row} ${headerWidgetStyles.pair} w-full md:w-[440px]`}>
+            <LocalWeather defaultCity={currentClient?.city || undefined} storageKey="tms_portal_weather_location" />
+            <HeaderClockDate />
+          </div>
+
+        <div className="flex flex-row md:flex-col items-stretch gap-2 [&>*]:justify-center">
           {currentClient?.billing_type === 'pay_as_you_go' ? (
             <button
               type="button"
@@ -461,6 +473,7 @@ export function ClientDashboard() {
               <span>Novo Envio</span>
             </Link>
           )}
+        </div>
         </div>
       </div>
 

@@ -72,8 +72,10 @@ function isWeatherLocation(value: unknown): value is WeatherLocation {
     location.longitude >= -180 && location.longitude <= 180
 }
 
-export function LocalWeather() {
+/** defaultCity: localidade inicial (ex.: sede do cliente) quando o browser ainda não guardou nenhuma escolha. */
+export function LocalWeather({ defaultCity, storageKey = LOCATION_STORAGE_KEY }: { defaultCity?: string; storageKey?: string } = {}) {
   const [location, setLocation] = useState<WeatherLocation>(DEFAULT_LOCATION)
+  const [resolving, setResolving] = useState(Boolean(defaultCity))
   const [weather, setWeather] = useState<LocalWeatherData | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -83,20 +85,32 @@ export function LocalWeather() {
   const [searchMessage, setSearchMessage] = useState("")
 
   useEffect(() => {
-    const savedLocation = window.localStorage.getItem(LOCATION_STORAGE_KEY)
-    if (!savedLocation) return
-
+    let active = true
+    const savedLocation = window.localStorage.getItem(storageKey)
     try {
-      const parsed: unknown = JSON.parse(savedLocation)
+      const parsed: unknown = savedLocation ? JSON.parse(savedLocation) : null
       if (isWeatherLocation(parsed)) {
-        window.setTimeout(() => setLocation(parsed), 0)
+        window.setTimeout(() => { setLocation(parsed); setResolving(false) }, 0)
+        return
       }
     } catch {
-      window.localStorage.removeItem(LOCATION_STORAGE_KEY)
+      window.localStorage.removeItem(storageKey)
     }
-  }, [])
+    if (!defaultCity) return
+
+    fetch(`/api/weather/locations?q=${encodeURIComponent(defaultCity)}`)
+      .then(response => response.ok ? response.json() : null)
+      .then(data => {
+        const match = Array.isArray(data?.locations) ? data.locations.find(isWeatherLocation) : null
+        if (active && match) setLocation(match)
+      })
+      .catch(() => { /* Sem geocodificação fica a localidade por omissão. */ })
+      .finally(() => { if (active) setResolving(false) })
+    return () => { active = false }
+  }, [defaultCity, storageKey])
 
   useEffect(() => {
+    if (resolving) return
     let active = true
     const loadWeather = async () => {
       const params = new URLSearchParams({
@@ -123,7 +137,7 @@ export function LocalWeather() {
       active = false
       window.clearInterval(interval)
     }
-  }, [location])
+  }, [location, resolving])
 
   const condition = weather ? getWeatherDescription(weather.symbolCode) : null
   const WeatherIcon = condition?.Icon || Thermometer
@@ -131,7 +145,7 @@ export function LocalWeather() {
 
   const chooseLocation = (nextLocation: WeatherLocation) => {
     setLocation(nextLocation)
-    window.localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(nextLocation))
+    window.localStorage.setItem(storageKey, JSON.stringify(nextLocation))
     setQuery("")
     setResults([])
     setSearchComplete(false)
@@ -180,7 +194,7 @@ export function LocalWeather() {
           <span className={styles.temperature}>
             {weather ? `${Math.round(weather.temperature)}°C` : "--°C"}
           </span>
-          <span className={styles.location}>{weather?.location || location.name}</span>
+          <span className={styles.location}>{weather?.location || (resolving ? defaultCity : location.name)}</span>
           <span className={styles.condition} data-widget-extra>{condition?.label || "A obter tempo…"}</span>
         </span>
         <ChevronDown className={`${styles.chevron} ${isOpen ? "rotate-180" : ""}`} aria-hidden="true" />
