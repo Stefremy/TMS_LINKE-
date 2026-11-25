@@ -29,6 +29,7 @@ import { ManifestDocuments } from "@/components/manifest-documents"
 import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
 import { useCttCertificateSelection, CttCertificateToolbar, CttCertificateCheckbox, CttCertificateStatus } from "@/components/shipments/CttCertificateControls"
 import { matchesCttCertificateFilter } from "@/lib/services/ctt/certificate-status"
+import { PageSizeSelect } from "./PageSizeSelect"
 
 export function ClientShipmentsHistory() {
   const { client: currentClient, basePath } = useClientScope()
@@ -138,8 +139,7 @@ export function ClientShipmentsHistory() {
     })
   }, [shipments, searchTerm, statusFilter, certificateSelection.filter])
 
-  // Pagination (15 por página)
-  const pageSize = 15
+  const [pageSize, setPageSize] = React.useState(15)
   const [currentPage, setCurrentPage] = React.useState(1)
 
   // Reiniciar página quando os filtros ou pesquisa mudam
@@ -664,7 +664,6 @@ export function ClientShipmentsHistory() {
             </table>
           </div>
 
-          {/* Pagination Footer (15 por página) */}
           {filteredShipments.length > 0 && (
             <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-4 text-xs text-[var(--text-secondary)]">
               <div>
@@ -672,6 +671,7 @@ export function ClientShipmentsHistory() {
               </div>
 
               <div className="flex items-center gap-2">
+                <PageSizeSelect value={pageSize} onChange={size => { setPageSize(size); setCurrentPage(1) }} />
                 <button
                   type="button"
                   onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}

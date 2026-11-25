@@ -64,6 +64,7 @@ import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
 import { canSelectCttCertificate, hasCttClosure } from "@/lib/services/ctt/certificate-status"
 import { useCttCertificateSelection, CttCertificateCheckbox } from "@/components/shipments/CttCertificateControls"
 import type { ClientMessage, MessagePage } from "@/lib/client-messages/types"
+import { PageSizeSelect } from "./PageSizeSelect"
 
 export function ClientDashboard() {
   const { client: currentClient, basePath } = useClientScope()
@@ -141,7 +142,7 @@ export function ClientDashboard() {
   }, [currentClient.id])
   const [isTopUpOpen, setIsTopUpOpen] = React.useState(false)
 
-  const pageSize = 15
+  const [pageSize, setPageSize] = React.useState(15)
 
   // Use URL params for top-up status feedback
   React.useEffect(() => {
@@ -1229,7 +1230,6 @@ export function ClientDashboard() {
         </div>
       )}
 
-        {/* Pagination Footer (15 per page) */}
         {filteredShipments.length > 0 && (
           <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-4 text-xs text-[var(--text-secondary)]">
             <div>
@@ -1237,6 +1237,7 @@ export function ClientDashboard() {
             </div>
 
             <div className="flex items-center gap-2">
+              <PageSizeSelect value={pageSize} onChange={size => { setPageSize(size); setCurrentPage(1) }} />
               <button
                 onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
                 disabled={currentPage === 1}

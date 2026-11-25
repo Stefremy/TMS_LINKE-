@@ -8,6 +8,7 @@ import { Banknote, RefreshCw } from 'lucide-react'
 import { useClientScope } from './ClientScope'
 import { filterClientCodRows, deliveredClientCodRows, summarizeClientCod, currentCodMonth } from '@/lib/services/reembolsos/client-cod'
 import type { ClientCodPageData } from '@/lib/services/reembolsos/client-cod-payout'
+import { PageSizeSelect } from './PageSizeSelect'
 import { solicitarReembolsoAction } from '@/app/actions/client-reembolsos'
 import { lisbonDate } from '@/lib/billing/recurring-periods'
 import { getShipmentStatusConfig } from '@/lib/status-helpers'
@@ -23,6 +24,7 @@ export function ClientReembolsos({ overview, error }: { overview: ClientCodPageD
   const [period,setPeriod] = useState(() => currentCodMonth(lisbonDate()))
   const [search,setSearch] = useState('')
   const [page,setPage] = useState(1)
+  const [pageSize,setPageSize] = useState(20)
   const [requesting,setRequesting] = useState(false)
   const [feedback,setFeedback] = useState('')
   const [requestError,setRequestError] = useState(false)
@@ -39,8 +41,8 @@ export function ClientReembolsos({ overview, error }: { overview: ClientCodPageD
   }
   const filtered = useMemo(() => filterClientCodRows(deliveredClientCodRows(data?.rows || []),{state:'all',search,from:period.from,to:period.to}), [data,search,period])
   const summary = useMemo(() => summarizeClientCod(filtered),[filtered])
-  const pages = Math.max(1,Math.ceil(filtered.length/20)), current = Math.min(page,pages)
-  const visible = filtered.slice((current-1)*20,current*20)
+  const pages = Math.max(1,Math.ceil(filtered.length/pageSize)), current = Math.min(page,pages)
+  const visible = filtered.slice((current-1)*pageSize,current*pageSize)
   async function requestPayout() {
     if(inFlight.current || !data || !selectedRows.length) return
     inFlight.current=true;setRequesting(true);setFeedback('');setRequestError(false)
@@ -76,7 +78,7 @@ export function ClientReembolsos({ overview, error }: { overview: ClientCodPageD
         <div className="overflow-x-auto rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)]"><table className="w-full text-left text-xs"><thead className="bg-[var(--surface-muted)] text-[var(--text-secondary)]"><tr><th className="p-3">Guia</th><th className="p-3">Data do envio</th><th className="p-3 text-right">Valor à cobrança</th><th className="p-3">Estado do envio</th></tr></thead><tbody className="divide-y divide-[var(--border-subtle)]">
           {visible.map(row=><tr key={row.id}><td className="p-3"><Link href={`${basePath}/tracking?search=${encodeURIComponent(row.tracking)}`} className="font-mono font-semibold text-[var(--accent)]">{row.tracking}</Link></td><td className="p-3">{day(row.date)}</td><td className="p-3 text-right tabular-nums">{money(row.requestedCents)}</td><td className="p-3">{getShipmentStatusConfig(row.shipmentStatus).label}</td></tr>)}
           {!visible.length&&<tr><td colSpan={4} className="p-8 text-center text-[var(--text-secondary)]">Sem envios à cobrança entregues neste período.</td></tr>}
-        </tbody></table><div className="flex justify-between border-t border-[var(--border-subtle)] p-3 text-[11px] text-[var(--text-secondary)]"><span>{filtered.length} envios · Página {current} de {pages}</span><div className="flex gap-3"><button disabled={current===1} onClick={()=>setPage(current-1)} className="disabled:opacity-40">Anterior</button><button disabled={current===pages} onClick={()=>setPage(current+1)} className="disabled:opacity-40">Próxima</button></div></div></div>
+        </tbody></table><div className="flex justify-between border-t border-[var(--border-subtle)] p-3 text-[11px] text-[var(--text-secondary)]"><span>{filtered.length} envios · Página {current} de {pages}</span><div className="flex items-center gap-3"><PageSizeSelect value={pageSize} sizes={[20, 50, 100, 150, 200]} onChange={size=>{setPageSize(size);setPage(1)}} /><button disabled={current===1} onClick={()=>setPage(current-1)} className="disabled:opacity-40">Anterior</button><button disabled={current===pages} onClick={()=>setPage(current+1)} className="disabled:opacity-40">Próxima</button></div></div></div>
         <p className="text-[11px] text-[var(--text-secondary)]">Os envios aparecem aqui apenas após ficarem entregues. As datas filtram a data de criação do envio. O valor só fica disponível em «A receber» após o cruzamento do extrato CTT.</p>
         {summary.missingRequested>0&&<p className="text-[11px] text-[#936A32]">{summary.missingRequested} envio(s) sem valor solicitado registado.</p>}
       </section> : <section role="tabpanel" id="cod-receivable" aria-labelledby="cod-receivable-tab" className="space-y-3">
