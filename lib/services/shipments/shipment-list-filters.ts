@@ -19,6 +19,7 @@ export type FilterableShipment = {
   service_type?: string; carrier_code?: string; carrier_name?: string; carrier_tracking_number?: string | null | null
   tracking_number?: string | null; reference?: string | null; sender_name?: string; recipient_name?: string
   recipient_address?: string; recipient_country?: string; recipient_postal?: string
+  recipient_phone?: string | null; sender_phone?: string | null
   recipient_zip4?: string; recipient_zip3?: string; status?: string; sell_price?: number | string
   is_return?: boolean | string; isReturn?: boolean | string; driver_id?: string; driver_name?: string
 }
@@ -75,8 +76,16 @@ export function matchesShipmentListFilters(row: FilterableShipment, filters: Shi
     if (current !== target) return false
   }
   const query = normalizeFilterText(search)
+  if (query && matchesPhone(query, [row.recipient_phone, row.sender_phone])) return true
   return !query || [row.tracking_number, row.carrier_tracking_number, row.reference, row.sender_name, row.recipient_name, row.recipient_address, row.recipient_postal, row.service_type, label, row.sell_price]
     .some(value => normalizeFilterText(value).includes(query))
+}
+// Telefones: compara só dígitos e ignora o indicativo +351/00351, para "912 345 678" e "+351912345678" coincidirem.
+const phoneDigits = (value: unknown) => String(value ?? "").replace(/\D/g, "").replace(/^(?:00)?351(?=\d{9}$)/, "")
+function matchesPhone(query: string, phones: unknown[]): boolean {
+  if (/[a-z]/.test(query)) return false
+  const digits = phoneDigits(query)
+  return digits.length >= 6 && phones.some(phone => phoneDigits(phone).includes(digits))
 }
 export function buildShipmentFilterFacets(rows: FilterableShipment[]): ShipmentFilterFacets {
   const carriers = new Map<string, string>(), drivers = new Map<string, string>()

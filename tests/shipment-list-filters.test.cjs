@@ -91,3 +91,10 @@ test('legacy Correos shipments use the same carrier identity as the displayed li
   assert.equal(match({...row,...legacy},{...empty,carrier:'ctt'}),false)
  }
 })
+test('search finds recipient and sender phones regardless of spaces or the +351 prefix',()=>{
+ const phoned={...row,recipient_phone:'+351 912 345 678',sender_phone:'253000111'}
+ for(const q of ['912345678','912 345 678','+351912345678','00351 912345678','345678','253 000 111'])assert.equal(match(phoned,empty,q),true,q)
+ for(const q of ['913345678','4567','abc912345678'])assert.equal(match(phoned,empty,q),false,q)
+ assert.equal(match({...phoned,recipient_phone:'912345678'},empty,'+351 912 345 678'),true)
+ assert.equal(match(phoned,empty,'912345678','Entregue'),false) // os outros filtros continuam a aplicar-se
+})

@@ -275,7 +275,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] pointer-events-none" />
             <input 
               type="text" 
-              placeholder="Pesquisar guia, cliente ou destino"
+              placeholder="Pesquisar guia, cliente, destino ou telefone"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setSearchAutoEnabled(true) }}
               onKeyDown={event => { if (event.key === "Enter" && viewMode === "envios") navigateFilters() }}

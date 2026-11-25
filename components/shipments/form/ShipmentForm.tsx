@@ -39,6 +39,31 @@ type Props = {
 type Feedback = { created: ShipmentFormResult | null; quotation: { id: string; reference: string } | null; label: string | null; labelError: string; warning: string; labelBusy: boolean; certificate: string | null; certificateBusy: boolean; certificateError: string; carrier: "ctt" | "correos" | null }
 const SERVICE_STEP = stepForField("serviceId")
 const REVIEW_STEP = SHIPMENT_STEPS.length - 1
+// Separador de impressão aberto no clique: mostra progresso em vez de uma página em branco enquanto a guia é emitida.
+function showPrintTabLoading(tab: Window) {
+  try {
+    const doc = tab.document
+    doc.title = "A preparar etiqueta…"
+    doc.body.style.cssText = "margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#3f3f46;background:#fafafa"
+    const box = doc.createElement("div")
+    box.setAttribute("role", "status")
+    box.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center"
+    const spinner = doc.createElement("div")
+    spinner.style.cssText = "width:28px;height:28px;border:3px solid #d4d4d8;border-top-color:#047857;border-radius:50%;animation:spin .8s linear infinite"
+    const style = doc.createElement("style")
+    style.textContent = "@keyframes spin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){div{animation:none!important}}"
+    const text = doc.createElement("p")
+    text.style.cssText = "margin:0;font-size:15px;font-weight:600"
+    text.textContent = "A emitir a guia e a preparar a etiqueta…"
+    const hint = doc.createElement("p")
+    hint.style.cssText = "margin:0;font-size:13px;color:#71717a"
+    hint.textContent = "A impressão abre automaticamente. Não feche este separador."
+    box.append(spinner, text, hint)
+    doc.head.append(style)
+    doc.body.append(box)
+  } catch { /* O separador continua a funcionar mesmo sem a mensagem. */ }
+}
+
 const emptyFeedback: Feedback = { created: null, quotation: null, label: null, labelError: "", warning: "", labelBusy: false, certificate: null, certificateBusy: false, certificateError: "", carrier: null }
 
 export function ShipmentForm({ role: requestedRole, client, initialValues, onCreated, services: providedServices, hideQuotationServices = false }: Props) {
@@ -194,6 +219,7 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
     closeTabs()
     if (role !== "client" || quote.requiresQuotation || feedback.created || feedback.quotation || submissionLock.current) return
     const label = readLabelPreference(client.id) === "print" ? window.open("", "_blank") : null
+    if (label) showPrintTabLoading(label)
     pendingTabs.current = { label }
   }
   const submit = form.handleSubmit(async submitted => {
@@ -223,16 +249,19 @@ export function ShipmentForm({ role: requestedRole, client, initialValues, onCre
       }
       const isQuotation = result.kind === "quotation"
       setFeedback({ ...emptyFeedback, carrier: createdCarrier, created: isQuotation ? null : result, quotation: isQuotation ? result.quotation : null, warning: result.dbWarning || "" })
-      if (submitted.saveToAgenda) {
+      // A agenda é guardada depois de abrir a etiqueta: não deve atrasar a impressão.
+      const saveAgenda = async () => {
+        if (!submitted.saveToAgenda) return
         try { const saved = await saveDestinatarioAction({ client_id: client.id, name: submitted.recipientName, address: submitted.recipientAddress, postal_code: submitted.recipientPostal,
           city: submitted.recipientCity, country: submitted.recipientCountry, phone: submitted.recipientPhone, email: submitted.recipientEmail }); if (!saved.success) throw new Error("Agenda indisponível") }
         catch { setFeedback(previous => ({ ...previous, warning: [previous.warning, `${isQuotation ? "O pedido foi guardado" : "O envio foi emitido"}, mas não foi possível guardar o destinatário na agenda.`].filter(Boolean).join(" ") })) }
       }
-      if (isQuotation) { printTab?.close(); return }
+      if (isQuotation) { printTab?.close(); await saveAgenda(); return }
       onCreated?.(result)
       if (labelPreference === "manual") printTab?.close()
       // prepareLabel also fetches the label when the creation response did not include it.
       else if (result.labelBase64 || labelPreference === "print") await prepareLabel(result, labelPreference === "print", printTab)
+      await saveAgenda()
     } catch { closeTabs(); form.setError("root", { message: "Não foi possível confirmar o resultado do pedido. Consulte o histórico antes de repetir a emissão." }); focusField("root") }
     finally { submissionLock.current = false }
   }, errors => {
