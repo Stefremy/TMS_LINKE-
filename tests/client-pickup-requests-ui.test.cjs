@@ -23,7 +23,7 @@ test('client pickup page uses real store data, offers requests only and distingu
   for (const status of ['pending', 'completed']) {
     const html = renderToStaticMarkup(React.createElement(ClientScopeProvider, { value: { client, basePath: '/app/fixture', isEmployee: false } }, React.createElement(ClientRequestPickup, { initialPage: page(status) })))
     for (const text of ['Enviar pedido à Linke', 'Rua do Armazém 1', '4000-001', 'PR-444444444444', 'não confirma o levantamento da mercadoria']) assert.ok(html.includes(text), text)
-    assert.match(html, status === 'completed' ? /Efetuado<\/span>/ : /Pendente<\/span>/)
+    assert.match(html, status === 'completed' ? /Pedido aceite<\/span>/ : /Pendente<\/span>/)
     assert.doesNotMatch(html, /O estafeta CTT passará|Confirmar Pedido de Recolha CTT|REC-CTT-/)
   }
 })

@@ -127,20 +127,6 @@ export async function syncGmailImap(
   }
 
   const admin = createAdminClient()
-  const { data: existingRows } = await admin
-    .from("audit_log")
-    .select("details")
-    .eq("tenant_id", tenantId)
-    .eq("action", "ops_mailbox_message")
-    .order("created_at", { ascending: false })
-    .limit(2000)
-
-  const existingIds = new Set<string>(
-    (existingRows || [])
-      .map((r: { details?: { id?: string } | null }) => r.details?.id)
-      .filter((id: unknown): id is string => typeof id === "string")
-  )
-
   const client = new ImapFlow({
     host: creds.host,
     port: creds.port,
@@ -171,6 +157,18 @@ export async function syncGmailImap(
 
   const buildMsgId = (boxKey: string, uid: number) =>
     boxKey === "inbox" ? `${creds.idPrefix}-${uid}` : `${creds.idPrefix}-${boxKey}-${uid}`
+
+  // Ask only about the emails Gmail just listed (reading every stored id times out).
+  // A failed check aborts the sync, otherwise the same emails get imported again.
+  const dropStored = async (boxKey: string, uids: number[]) => {
+    if (uids.length === 0) return uids
+    const { data, error } = await admin.from("audit_log").select("mid:details->>id")
+      .eq("tenant_id", tenantId).eq("action", "ops_mailbox_message")
+      .in("details->>id", uids.map((uid) => buildMsgId(boxKey, uid)))
+    if (error) throw new Error(error.message)
+    const stored = new Set((data || []).map((r) => r.mid))
+    return uids.filter((uid) => !stored.has(buildMsgId(boxKey, uid)))
+  }
 
   try {
     await client.connect()
@@ -234,18 +232,16 @@ export async function syncGmailImap(
 
           if (Array.isArray(matchedUids) && matchedUids.length > 0) {
             const slice = matchedUids.slice(-fetchLimit)
-            targetUids = slice.filter((uid) => !existingIds.has(buildMsgId(boxKey, uid)))
+            targetUids = await dropStored(boxKey, slice)
           }
         } else {
           const endSeq = Math.max(1, totalMessages - offset)
           const startSeq = Math.max(1, endSeq - fetchLimit + 1)
           if (endSeq >= 1 && startSeq <= endSeq) {
             const range = `${startSeq}:${endSeq}`
-            for await (const meta of client.fetch(range, { uid: true })) {
-              if (!existingIds.has(buildMsgId(boxKey, meta.uid))) {
-                targetUids.push(meta.uid)
-              }
-            }
+            const listed: number[] = []
+            for await (const meta of client.fetch(range, { uid: true })) listed.push(meta.uid)
+            targetUids = await dropStored(boxKey, listed)
           }
         }
 
@@ -290,11 +286,12 @@ export async function syncGmailImap(
     created_at: string
   }[] = []
 
+  const queued = new Set<string>()
   for (const item of rawMessages) {
     try {
       const messageId = buildMsgId(item.boxKey, item.uid)
-      if (existingIds.has(messageId)) continue
-      existingIds.add(messageId)
+      if (queued.has(messageId)) continue
+      queued.add(messageId)
 
       const parsed = (await simpleParser(item.source)) as ParsedMail
       const fromAddr = parsed.from?.value?.[0]

@@ -237,3 +237,24 @@ test('colaborador mailbox permissions restrict visible email accounts and enforc
   )
 })
 
+
+test('listMailboxMessages reads past 1000 rows, drops duplicate imports and keeps HTML only on recent mail', async () => {
+  const rows = Array.from({ length: 1100 }, (_, i) => {
+    const n = i % 550 // every email stored twice
+    const at = new Date(Date.UTC(2026, 0, 1, 0, n)).toISOString()
+    return {
+      id: `row-${i}`,
+      tenant_id: TENANT,
+      action: 'ops_mailbox_message',
+      details: { id: `m-${n}`, account: 'geral@linke.pt', folder: 'inbox', subject: `S${n}`, bodyText: 'texto', bodyHtml: '<p>x</p>', createdAt: at },
+      created_at: at,
+    }
+  })
+  const { server } = createMailHarness({ rows })
+  const { messages } = await server.listMailboxMessages(await server.mailboxContext(), 'geral@linke.pt')
+
+  assert.equal(messages.length, 550)
+  assert.equal(messages[0].id, 'm-549')
+  assert.equal(messages.filter((m) => m.bodyHtml).length, 50)
+  assert.equal(messages.at(-1).bodyText, 'texto')
+})

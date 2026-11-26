@@ -30,10 +30,13 @@ import type { CTTDocumentData } from "@/lib/services/ctt/ctt-types"
 import { useCttCertificateSelection, CttCertificateToolbar, CttCertificateCheckbox, CttCertificateStatus } from "@/components/shipments/CttCertificateControls"
 import { matchesCttCertificateFilter } from "@/lib/services/ctt/certificate-status"
 import { PageSizeSelect } from "./PageSizeSelect"
+import { getLegacyShipmentsAction } from "@/app/actions/legacy-shipments"
+import { isLegacy, legacySearchText, legacyStatusFilter, LegacyCard, LegacyTableRow, type LegacyRow } from "./ClientLegacyShipments"
 
 export function ClientShipmentsHistory() {
   const { client: currentClient, basePath } = useClientScope()
   const [shipments, setShipments] = React.useState<ShipmentRecord[]>([])
+  const [legacyRows, setLegacyRows] = React.useState<LegacyRow[]>([])
   const [searchTerm, setSearchTerm] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("todos")
   const [loading, setLoading] = React.useState(true)
@@ -111,6 +114,9 @@ export function ClientShipmentsHistory() {
       if (!res) setLoadError(true)
       setLoading(false)
     }).catch(() => { if (active) { setLoadError(true); setLoading(false) } })
+    getLegacyShipmentsAction(currentClient.id).then(rows => {
+      if (active) setLegacyRows(rows.map(r => ({ ...r, legacy: true as const })))
+    }).catch(() => { if (active) toast.error("Não foi possível carregar os envios do sistema antigo.") })
     return () => { active = false }
   }, [currentClient.id, currentClient.short_name])
 
@@ -139,6 +145,15 @@ export function ClientShipmentsHistory() {
     })
   }, [shipments, searchTerm, statusFilter, certificateSelection.filter])
 
+  // Old-platform rows join the list by date; they never take part in CTT certificate filters.
+  const filteredRows = React.useMemo(() => {
+    const q = searchTerm.toLowerCase().trim()
+    const legacy = certificateSelection.filter && certificateSelection.filter !== "all" ? [] : legacyRows.filter(r =>
+      (!q || legacySearchText(r).includes(q)) && (statusFilter === "todos" || legacyStatusFilter(r) === statusFilter))
+    const time = (row: ShipmentRecord | LegacyRow) => Date.parse((isLegacy(row) ? row.shipped_at : row.created_at) || "") || 0
+    return [...filteredShipments, ...legacy].sort((a, b) => time(b) - time(a))
+  }, [filteredShipments, legacyRows, searchTerm, statusFilter, certificateSelection.filter])
+
   const [pageSize, setPageSize] = React.useState(15)
   const [currentPage, setCurrentPage] = React.useState(1)
 
@@ -151,11 +166,12 @@ export function ClientShipmentsHistory() {
   
   }
 
-  const totalPages = Math.ceil(filteredShipments.length / pageSize) || 1
-  const paginatedShipments = React.useMemo(() => {
+  const totalPages = Math.ceil(filteredRows.length / pageSize) || 1
+  const paginatedRows = React.useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize
-    return filteredShipments.slice(startIndex, startIndex + pageSize)
-  }, [filteredShipments, currentPage, pageSize])
+    return filteredRows.slice(startIndex, startIndex + pageSize)
+  }, [filteredRows, currentPage, pageSize])
+  const paginatedShipments = React.useMemo(() => paginatedRows.filter((row): row is ShipmentRecord => !isLegacy(row)), [paginatedRows])
 
   const handleGenerateManifest = async () => {
     const manifestIds = [...certificateSelection.selectedIds]
@@ -349,7 +365,7 @@ export function ClientShipmentsHistory() {
       {/* Shipments List Table / Clean State */}
       <div className="bg-[var(--surface-bg)] rounded-2xl sm:rounded-3xl shadow-sm border border-[var(--border-strong)] p-3.5 sm:p-6">
         <div className="mb-4 border-b border-[var(--border-subtle)] pb-3"><CttCertificateToolbar selection={certificateSelection} page={paginatedShipments} busy={generatingManifest} onGenerate={handleGenerateManifest} /></div>
-        {filteredShipments.length === 0 ? (
+        {filteredRows.length === 0 ? (
           <div className="py-12 px-4 text-center bg-[var(--surface-muted)] rounded-2xl border border-dashed border-[var(--border-strong)]">
             <Package className="w-10 h-10 text-[var(--text-tertiary)] mx-auto mb-3" />
             <p className="text-sm font-bold text-[var(--text-secondary)]">Nenhum envio a apresentar</p>
@@ -368,7 +384,8 @@ export function ClientShipmentsHistory() {
           <div>
             {/* ─── MOBILE CARDS VIEW (md:hidden) ─── */}
             <div className="tms-compact-list divide-y divide-[var(--border-subtle)]">
-              {paginatedShipments.map((envio) => {
+              {paginatedRows.map((envio) => {
+                if (isLegacy(envio)) return <LegacyCard key={envio.id} r={envio} />
                 const linkeRef =
                   (envio.reference?.startsWith("LTK") ? envio.reference : null) ||
                   (envio.tracking_number?.startsWith("LTK") ? envio.tracking_number : null) ||
@@ -503,7 +520,7 @@ export function ClientShipmentsHistory() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-subtle)]">
-                {paginatedShipments.map((envio) => (
+                {paginatedRows.map((envio) => isLegacy(envio) ? <LegacyTableRow key={envio.id} r={envio} /> : (
                   <tr key={envio.id} className={`hover:bg-[var(--surface-muted)] ${["anulado", "cancelado"].includes(envio.status || "") ? "[&>td:not(:last-child)]:opacity-50 [&>td:not(:last-child)]:grayscale" : ""}`}>
                       <td className="px-2"><CttCertificateCheckbox shipment={envio} selection={certificateSelection} busy={generatingManifest} /></td>
                     <td className="py-3">
@@ -664,10 +681,10 @@ export function ClientShipmentsHistory() {
             </table>
           </div>
 
-          {filteredShipments.length > 0 && (
+          {filteredRows.length > 0 && (
             <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-muted)] flex flex-wrap items-center justify-between gap-4 text-xs text-[var(--text-secondary)]">
               <div>
-                A mostrar <strong className="text-[var(--text-primary)]">{Math.min((currentPage - 1) * pageSize + 1, filteredShipments.length)}</strong> a <strong className="text-[var(--text-primary)]">{Math.min(currentPage * pageSize, filteredShipments.length)}</strong> de <strong className="text-[var(--text-primary)]">{filteredShipments.length}</strong> envios
+                A mostrar <strong className="text-[var(--text-primary)]">{Math.min((currentPage - 1) * pageSize + 1, filteredRows.length)}</strong> a <strong className="text-[var(--text-primary)]">{Math.min(currentPage * pageSize, filteredRows.length)}</strong> de <strong className="text-[var(--text-primary)]">{filteredRows.length}</strong> envios
               </div>
 
               <div className="flex items-center gap-2">

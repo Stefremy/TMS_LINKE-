@@ -76,6 +76,7 @@ function menuHarness(t, dashboard, label, account = {}) {
     },
     '@/app/actions/ctt': {},
     '@/app/actions/shipment-manifests': { downloadCttAcceptanceCertificateAction: async id => { calls.reprints.push(id); return account.manifestResponse || {success:false,error:'Fixture missing PDF'} }, generateCttAcceptanceCertificateAction: async ids => { calls.manifests.push(ids); return account.manifestResponse || { success: false, error: 'Fixture: no manifest generated during label tests' } } },
+    '@/app/actions/legacy-shipments': { getLegacyShipmentsAction: async () => [] },
     '@/lib/label-utils': {
       downloadCttLabel: async (...args) => { calls.downloads.push(args); return true },
       printCttLabel: (...args) => { calls.prints.push(args); return true },

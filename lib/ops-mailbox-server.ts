@@ -91,6 +91,45 @@ type StoredMutation = {
   updatedAt: string
 }
 
+// Only the newest emails of each account carry HTML (it can hold MBs of inline images); older ones show as text.
+const HTML_MESSAGES_PER_ACCOUNT = 50
+
+type AuditRow = { action: string; details: unknown; created_at: string }
+
+// shortcut: reads every stored email on each load; store bodies in their own table when this gets slow.
+async function loadMailboxRows(tenantId: string): Promise<AuditRow[]> {
+  const admin = createAdminClient()
+  // Small pages for emails: all bodies in one query exceed the database statement timeout.
+  const read = async (action: string, pageSize: number, keep: (row: AuditRow) => void) => {
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await admin.from("audit_log").select("action, details, created_at")
+        .eq("tenant_id", tenantId).eq("action", action) // eq, not in(): in() sorts every body
+        .order("created_at", { ascending: false }).order("id", { ascending: false })
+        .range(from, from + pageSize - 1)
+      // An empty mailbox must never hide a failed query.
+      if (error) throw new MailError("Não foi possível carregar os emails.", 503)
+      for (const row of (data || []) as AuditRow[]) keep(row)
+      if (!data || data.length < pageSize) return
+    }
+  }
+
+  const rows: AuditRow[] = []
+  const seen = new Set<string>()
+  const perAccount = new Map<string, number>()
+  await read(ACTION_MESSAGE, 50, (row) => {
+    const msg = row.details as Partial<MailMessage> | null
+    if (!msg?.id || seen.has(msg.id)) return
+    seen.add(msg.id)
+    const account = normalizeMailAccount(msg.account)
+    const count = (perAccount.get(account) || 0) + 1
+    perAccount.set(account, count)
+    if (count > HTML_MESSAGES_PER_ACCOUNT) delete msg.bodyHtml
+    rows.push(row)
+  })
+  for (const action of [ACTION_MUTATION, "tracking_email_sent"]) await read(action, 1000, (row) => rows.push(row))
+  return rows.reverse().sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))
+}
+
 export async function listMailboxMessages(
   context: AuthContext,
   requestedAccount?: string | null
@@ -100,15 +139,7 @@ export async function listMailboxMessages(
   const account = allowedAccounts.includes(requested)
     ? requested
     : allowedAccounts[0] || "geral@linke.pt"
-  const admin = createAdminClient()
-
-  const { data: rows } = await admin
-    .from("audit_log")
-    .select("action, details, created_at")
-    .eq("tenant_id", context.tenant_id)
-    .in("action", [ACTION_MESSAGE, ACTION_MUTATION, "tracking_email_sent"])
-    .order("created_at", { ascending: true })
-    .limit(2500)
+  const rows = await loadMailboxRows(context.tenant_id)
 
   const messageMap = new Map<string, MailMessage>()
   const deletedIds = new Set<string>()
