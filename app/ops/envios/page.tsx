@@ -112,7 +112,7 @@ export default async function EnviosPage(props: { searchParams?: Promise<Record<
         flag: "PT", 
         zip: (s.recipient_zip4 && s.recipient_zip3) ? `${s.recipient_zip4}-${s.recipient_zip3}` : (s.recipient_zip4 || s.recipient_zip3 || ""), 
         city: s.recipient_address || "N/A", 
-        phone: "" 
+        phone: s.recipient_phone || "" 
       },
     service: { 
       code: s.service_type || "N/A", 

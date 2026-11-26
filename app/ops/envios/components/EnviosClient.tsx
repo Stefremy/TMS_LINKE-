@@ -679,6 +679,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
                         <CountryFlag code={envio.recipient?.flag} />
                       </span>
                       <span className="font-mono" title={[envio.recipient?.zip, envio.recipient?.city].filter(v => v && v !== "N/A").join(" · ") || undefined}>{envio.recipient?.zip || "—"}</span>
+                      {envio.recipient?.phone && <span className="font-mono ml-2">{envio.recipient.phone}</span>}
                     </div>
                   </div>
                 </td>
