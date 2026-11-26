@@ -512,3 +512,10 @@ for(const mode of ['client','standard']) test(`${mode} supplement editor has thr
  nodes=render()
  assert.equal(nodes.filter(n=>n.type==='input'&&String(n.props['aria-label']).includes('· Espanha — Ilhas Baleares')).length,2)
 })
+
+test('client custom fuel surcharge overrides the tenant standard, otherwise the standard wins',()=>{
+ const fuel=pricing=>withStandardSpecialFees({pricing},defaults,13.9).pricing.standard_fuel_surcharge_pct
+ assert.equal(fuel({fuel_surcharge_pct:9}),13.9)
+ assert.equal(fuel({fuel_surcharge_pct:9,fuel_surcharge_custom:true}),9)
+ assert.equal(fuel({fuel_surcharge_pct:0,fuel_surcharge_custom:true}),0)
+})

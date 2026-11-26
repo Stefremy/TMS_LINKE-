@@ -39,7 +39,7 @@ export function resolveClientSpecialFees(configured?: ClientSpecialServiceFee[],
 }
 
 export function withStandardSpecialFees<T extends Partial<Cliente>>(client: T, standards: ClientSpecialServiceFee[], fuelSurchargePct?: number) {
-  return { ...client, pricing: { ...client.pricing, standard_fuel_surcharge_pct: fuelSurchargePct,
+  return { ...client, pricing: { ...client.pricing, standard_fuel_surcharge_pct: client.pricing?.fuel_surcharge_custom ? client.pricing.fuel_surcharge_pct : fuelSurchargePct,
     special_services_fees: resolveClientSpecialFees(client.pricing?.special_services_fees, standards) } } as T
 }
 

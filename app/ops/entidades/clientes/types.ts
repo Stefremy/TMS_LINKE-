@@ -59,6 +59,8 @@ export interface ClientPricingConfig {
   service_weight_tiers?: ClientWeightTierMap
   table_name: string
   fuel_surcharge_pct: number
+  /** True when this client negotiated its own fuel % instead of the tenant standard. */
+  fuel_surcharge_custom?: boolean
   /** Effective tenant standard, supplied by the server on each read. */
   standard_fuel_surcharge_pct?: number
   discount_pct?: number

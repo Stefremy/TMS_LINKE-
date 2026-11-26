@@ -269,6 +269,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
   
   }
 
+  const fuelIsCustom = formData.pricing?.fuel_surcharge_custom === true
   const handlePricingConfigChange = <K extends keyof ClientPricingConfig>(field: K, value: ClientPricingConfig[K]) => {
     setFormData((prev) => {
       const currentPricing = prev.pricing || DEFAULT_CLIENT_PRICING
@@ -1921,7 +1922,7 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                 </div>
                 <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-bg)] px-3.5 py-3">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">Combustível</p>
-                  <p className="mt-1 text-xs font-semibold text-[var(--text-primary)]">{standardFuelSurchargePct ?? formData.pricing?.fuel_surcharge_pct ?? DEFAULT_CLIENT_PRICING.fuel_surcharge_pct}%{standardFuelSurchargePct !== undefined ? " · Standard" : ""}</p>
+                  <p className="mt-1 text-xs font-semibold text-[var(--text-primary)]">{(fuelIsCustom ? undefined : standardFuelSurchargePct) ?? formData.pricing?.fuel_surcharge_pct ?? DEFAULT_CLIENT_PRICING.fuel_surcharge_pct}%{fuelIsCustom ? " · Personalizada" : standardFuelSurchargePct !== undefined ? " · Standard" : ""}</p>
                 </div>
               </div>
 
@@ -2152,14 +2153,30 @@ export function ClienteModal({ initialData, servicosLinke = EMPTY_SERVICES, sour
                         <input
                           type="number"
                           step="0.1"
-                          value={standardFuelSurchargePct ?? formData.pricing?.fuel_surcharge_pct ?? 12.5}
-                          readOnly={standardFuelSurchargePct !== undefined}
+                          min="0"
+                          max="100"
+                          aria-label="Taxa de combustível (%)"
+                          value={!fuelIsCustom && standardFuelSurchargePct !== undefined ? standardFuelSurchargePct : formData.pricing?.fuel_surcharge_pct ?? 12.5}
+                          readOnly={!fuelIsCustom && standardFuelSurchargePct !== undefined}
                           onChange={(e) => handlePricingConfigChange("fuel_surcharge_pct", parseFloat(e.target.value) || 0)}
                           className="w-full border border-[var(--border-subtle)] bg-[var(--surface-muted)] rounded-md px-3 py-2 text-xs font-mono font-bold text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--border-strong)] focus:bg-[var(--surface-bg)] focus:outline-none transition-all"
                         />
                         <span className="text-xs font-bold text-[var(--text-secondary)]">%</span>
                       </div>
-                      <p className="text-[10px] text-[var(--text-tertiary)] mt-0.5">{standardFuelSurchargePct !== undefined ? "Standard aplicado a todos os clientes." : "Calculada sobre o frete base de cada envio."}</p>
+                      {standardFuelSurchargePct !== undefined && (
+                        <label className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-secondary)] cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={fuelIsCustom}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, pricing: { ...(prev.pricing || DEFAULT_CLIENT_PRICING),
+                              fuel_surcharge_custom: e.target.checked,
+                              // Start the custom value from the current standard so nothing jumps.
+                              ...(e.target.checked ? { fuel_surcharge_pct: standardFuelSurchargePct } : {}) } }))}
+                          />
+                          Taxa personalizada para este cliente
+                        </label>
+                      )}
+                      <p className="text-[10px] text-[var(--text-tertiary)] mt-0.5">{fuelIsCustom ? `Personalizada (standard: ${standardFuelSurchargePct ?? "—"}%).` : standardFuelSurchargePct !== undefined ? "Standard aplicado a todos os clientes." : "Calculada sobre o frete base de cada envio."}</p>
                       <a href="/ops/configuracao/combustivel" target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] font-semibold text-[var(--accent)]">Configurar combustível standard →</a>
                     </div>
 

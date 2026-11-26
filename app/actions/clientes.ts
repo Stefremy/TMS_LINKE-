@@ -410,6 +410,7 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     pricing: { ...DEFAULT_CLIENT_PRICING, ...previous?.details?.pricing, ...cliente.pricing,
       service_tier_order: validateClientTierOrder(cliente.pricing?.service_tier_order ?? previous?.details?.pricing?.service_tier_order),
       service_weight_tiers: validateClientWeightTiers(cliente.pricing?.service_weight_tiers ?? previous?.details?.pricing?.service_weight_tiers),
+      fuel_surcharge_custom: (cliente.pricing ? cliente.pricing.fuel_surcharge_custom : previous?.details?.pricing?.fuel_surcharge_custom) === true,
       special_services_fees: specialFees },
     allowed_webservices: cliente.allowed_webservices || SYSTEM_AVAILABLE_WEBSERVICES.slice(0, 3),
     custom_tier_overrides: cliente.custom_tier_overrides || {},
@@ -419,6 +420,10 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
     (fullRecord.billing_type !== 'pay_as_you_go' && fullRecord.credit_limit_enabled &&
       (!Number.isFinite(fullRecord.credit_limit) || fullRecord.credit_limit! < 0))) {
     throw new Error('Indique um limite de faturação válido, igual ou superior a zero.')
+  }
+  const fuelPct = fullRecord.pricing?.fuel_surcharge_pct
+  if (fullRecord.pricing?.fuel_surcharge_custom && (typeof fuelPct !== 'number' || !Number.isFinite(fuelPct) || fuelPct < 0 || fuelPct > 100)) {
+    throw new Error('Indique uma taxa de combustível entre 0 e 100%.')
   }
 
   // Check every write before the UI can invite a client to a supposedly saved store.
