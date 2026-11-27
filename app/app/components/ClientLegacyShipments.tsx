@@ -8,6 +8,7 @@ const STATUS: Record<string, { label: string; filter: string }> = {
   Delivered: { label: "Entregue", filter: "entregue" },
   Returned: { label: "Devolvido", filter: "devolvido" },
   "Picked Up": { label: "Recolhido", filter: "em transito" },
+  "In Distribution": { label: "Em distribuição", filter: "em transito" },
 }
 const date = (value: string | null) => value ? new Date(value).toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" }) : "—"
 const statusLabel = (r: LegacyRow) => STATUS[r.status || ""]?.label || r.status || "—"

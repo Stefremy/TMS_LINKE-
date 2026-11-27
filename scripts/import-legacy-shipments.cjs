@@ -59,7 +59,11 @@ async function main() {
   if (error || !client) throw Error('Cliente não encontrado.')
   const sheet = XLSX.readFile(file).Sheets.Listagem
   if (!sheet) throw Error('Folha "Listagem" não encontrada.')
-  const rows = mapRows(XLSX.utils.sheet_to_json(sheet, { defval: '' }), client, path.basename(file)).slice(0, limit)
+  const all = mapRows(XLSX.utils.sheet_to_json(sheet, { defval: '' }), client, path.basename(file))
+  // The old platform also exports empty shells (no date, status or recipient): nothing to show the client.
+  const filled = all.filter(r => r.shipped_at || r.status || r.recipient_name)
+  if (filled.length < all.length) console.log(`${all.length - filled.length} linhas vazias ignoradas`)
+  const rows = filled.slice(0, limit)
   console.log(`${rows.length} envios para ${client.name}${apply ? '' : ' (simulação, usar --apply para gravar)'}`)
   console.log(rows[0])
   if (!apply) return
