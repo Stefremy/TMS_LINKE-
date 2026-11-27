@@ -1,6 +1,37 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { createAdminClient } from "@/lib/supabase/server"
+import { sendEmail } from "@/lib/email/resend"
+
+const TOPUP_NOTIFY_TO = "geral@linke.pt"
+const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!)
+
+/** Team alert for a credited top-up. Never fails the webhook; the idempotency key stops duplicates on Stripe retries. */
+async function notifyTopUp(db: ReturnType<typeof createAdminClient>, tx: { id: string; client_id: string; tenant_id: string }, session: Stripe.Checkout.Session) {
+  try {
+    const { data: client } = await db.from("clients").select("name").eq("id", tx.client_id).eq("tenant_id", tx.tenant_id).maybeSingle()
+    const name = client?.name || tx.client_id
+    const amount = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(session.amount_total! / 100)
+    const payer = session.customer_details?.email || ""
+    const result = await sendEmail({
+      to: TOPUP_NOTIFY_TO,
+      subject: `Carregamento Stripe: ${amount} — ${name}`,
+      idempotencyKey: `stripe-topup-${tx.id}`,
+      html: `<p>Novo carregamento de saldo via Stripe.</p>
+<ul>
+  <li><strong>Cliente:</strong> ${esc(name)}</li>
+  <li><strong>Valor:</strong> ${esc(amount)}</li>
+  ${payer ? `<li><strong>Email do pagador:</strong> ${esc(payer)}</li>` : ""}
+  <li><strong>Data:</strong> ${esc(new Date().toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" }))}</li>
+  <li><strong>Sessão Stripe:</strong> ${esc(session.id)}</li>
+</ul>
+<p>O saldo do cliente já foi creditado no TMS.</p>`,
+    })
+    if (!result.success) console.warn("Stripe top-up email not sent:", tx.id)
+  } catch (err) {
+    console.warn("Stripe top-up email failed:", tx.id, err instanceof Error ? err.message : err)
+  }
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_dummy")
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
@@ -51,6 +82,7 @@ export async function POST(req: Request) {
         p_client: tx.client_id, p_session: session.id, p_cents: session.amount_total, p_event: event.id })
       if (error || !["credited", "already_credited", "legacy_reconciliation_required"].includes(data)) throw new Error("Payment fulfillment pending")
       if (data === "legacy_reconciliation_required") return NextResponse.json({ received: true, status: data })
+      await notifyTopUp(db, tx, session)
     }
     return NextResponse.json({ received: true })
   } catch {

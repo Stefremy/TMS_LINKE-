@@ -42,12 +42,14 @@ function harness(options={}) {
    return{id:'cs_test_local_checkout',url:'https://fixture.invalid/checkout'}
   }}}
  }
+ const emails=[]
  const ctx=options.ctx||{user:{id:'client-a'},role:'client',tenant_id:TENANT,client_id:A,permissions:[]}
  const load=createLoader({stripe:StripeFixture,'next/server':{NextResponse:{json:(body,init)=>Response.json(body,init)}},
   '@/lib/supabase/server':{createAdminClient:()=>db.createAdminClient()},'@/lib/auth/context':{requireUser:async()=>ctx},
   'next/headers':{headers:async()=>new Headers({origin:'https://fixture.invalid'})},
   '@/lib/config/public-origins':{checkoutReturnOrigin:()=> 'https://fixture.invalid'},
   '@/lib/client-portal/access':{getPortalDestination:async()=>'/app/fixture-a'},
+  '@/lib/email/resend':{sendEmail:async email=>{emails.push(email);if(options.emailFails)throw Error('Fixture email down');return{success:true}}},
  })
  const previous=process.env.STRIPE_WEBHOOK_SECRET;process.env.STRIPE_WEBHOOK_SECRET=SECRET
  let post
@@ -58,7 +60,7 @@ function harness(options={}) {
   const signed=JSON.stringify(value),header=verifier.webhooks.generateTestHeaderString({payload:signed,secret:options.wrongSecret?'whsec_wrong_fixture':SECRET,timestamp:options.timestamp||Math.floor(Date.now()/1000)})
   return post(new Request('https://fixture.invalid/api/webhooks/stripe',{method:'POST',headers:options.noSignature?{}:{'stripe-signature':header},body:options.tamper?signed+' ':signed}))
  }
- return{tables,db,calls,event,deliver,setCreditFailure:v=>{failCredit=v},checkout:(amount,id=A)=>load('app/actions/stripe.ts').createTopUpCheckoutSession(id,amount),balance:(id=A)=>tables.audit_log.find(r=>r.details.id===id)?.details.credit_limit||0,tx:()=>tables.client_transactions.find(r=>r.id===TX)}
+ return{tables,db,calls,emails,event,deliver,setCreditFailure:v=>{failCredit=v},checkout:(amount,id=A)=>load('app/actions/stripe.ts').createTopUpCheckoutSession(id,amount),balance:(id=A)=>tables.audit_log.find(r=>r.details.id===id)?.details.credit_limit||0,tx:()=>tables.client_transactions.find(r=>r.id===TX)}
 }
 
 test('CONTROL: a correctly signed paid EUR checkout credits the transaction once',async()=>{
@@ -71,6 +73,14 @@ for(const [name,options]of [['missing signature',{noSignature:true}],['wrong sig
   assert.equal(h.db.adminClients,0);assert.equal(h.db.writes.length,0);assert.equal(h.calls.rpc.length,0)
  })
 }
+test('a credited top-up emails geral@linke.pt once per transaction; a failed email never fails the webhook',async()=>{
+ const h=harness();await h.deliver();await h.deliver(h.event('checkout.session.completed',{},'evt_local_retry'))
+ assert.equal(h.emails.length,2,'retries may call again; Resend dedupes by idempotency key')
+ assert.ok(h.emails.every(e=>e.to==='geral@linke.pt'&&e.idempotencyKey===`stripe-topup-${TX}`))
+ assert.match(h.emails[0].subject,/10,00/)
+ const failing=harness({emailFails:true});assert.equal((await failing.deliver()).status,200);assert.equal(failing.balance(),10)
+ const failed=harness();await failed.deliver(failed.event('checkout.session.async_payment_failed'));assert.equal(failed.emails.length,0)
+})
 test('CONTROL: unpaid completion waits; asynchronous payment success credits once',async()=>{
  const h=harness();assert.equal((await h.deliver(h.event('checkout.session.completed',{payment_status:'unpaid'}))).status,200)
  assert.equal(h.tx().status,'pending');assert.equal(h.balance(),0)
