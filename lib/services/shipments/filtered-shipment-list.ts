@@ -9,8 +9,7 @@ import { buildShipmentFilterFacets, EMPTY_SHIPMENT_FILTERS, matchesShipmentListF
 
 type ListRow = ShipmentRecord & { tenant_id: string }
 type Metadata = Pick<FilterableShipment, "recipient_country" | "recipient_postal" | "is_return" | "isReturn" | "driver_id" | "driver_name">
-type MetadataRow = Metadata & { shipment_id?: string; details?: Metadata & { id?: string } }
-const METADATA_COLUMNS = "shipment_id:details->>id,recipient_country:details->>recipient_country,recipient_postal:details->>recipient_postal,is_return:details->is_return,isReturn:details->isReturn,driver_id:details->>driver_id,driver_name:details->>driver_name"
+type MetadataRow = Metadata & { shipment_id: string }
 
 /** Filter before pagination; read native scalar columns and projected metadata, never label blobs. */
 export async function loadFilteredShipmentPage(options: { page?: number; pageSize?: number; filters?: ShipmentListFilters; search?: string; status?: string } = {}) {
@@ -27,26 +26,16 @@ export async function loadFilteredShipmentPage(options: { page?: number; pageSiz
     rows.push(...(data || []) as ListRow[])
     if (!data || data.length < 1000) break
   }
-  // Latest authorized snapshot per shipment; JSON projection excludes PDFs/ZPL and credentials.
+  // Latest authorized snapshot per shipment; the database function returns only these fields (no PDFs/ZPL or credentials).
   for (let start = 0; start < rows.length; start += 200) {
-    const ids = rows.slice(start, start + 200).map(row => row.id)
-    const allowed = new Set(ids), snapshots = new Map<string, Metadata>()
-    for (let offset = 0; ; offset += 1000) {
-      const { data, error } = await db.from("audit_log").select(METADATA_COLUMNS)
-        .eq("tenant_id", ctx.tenant_id).eq("action", "shipment_data").in("details->>id", ids)
-        .order("created_at", { ascending: false }).order("id").range(offset, offset + 999)
-      if (error) throw new Error("Não foi possível carregar os dados de destino e tipo dos envios.")
-      for (const item of (data || []) as MetadataRow[]) {
-        const id = item.shipment_id || item.details?.id
-        if (!id || !allowed.has(id) || snapshots.has(id)) continue
-        const source = item.details || item
-        snapshots.set(id, { recipient_country: source.recipient_country, recipient_postal: source.recipient_postal,
-          is_return: source.is_return, isReturn: source.isReturn, driver_id: source.driver_id, driver_name: source.driver_name })
-      }
-      if (!data || data.length < 1000) break
+    const batch = rows.slice(start, start + 200)
+    const { data, error } = await db.rpc("shipment_list_metadata", { p_tenant: ctx.tenant_id, p_ids: batch.map(row => row.id) })
+    if (error) throw new Error("Não foi possível carregar os dados de destino e tipo dos envios.")
+    const snapshots = new Map(((data || []) as MetadataRow[]).map(item => [item.shipment_id, item]))
+    for (const row of batch) {
+      Object.assign(row, Object.fromEntries(Object.entries(snapshots.get(row.id) || {})
+        .filter(([key, value]) => key !== "shipment_id" && value !== undefined && value !== null)))
     }
-    for (const row of rows.slice(start, start + 200)) Object.assign(row,
-      Object.fromEntries(Object.entries(snapshots.get(row.id) || {}).filter(([, value]) => value !== undefined && value !== null)))
   }
   const facets = buildShipmentFilterFacets(rows)
   let candidates = rows.filter(row => matchesShipmentListFilters(row, { ...filters, dateFrom: "", dateTo: "" }, options.search, options.status))

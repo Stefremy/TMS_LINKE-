@@ -142,6 +142,17 @@ function fakeSupabase(tables, failure, options = {}) {
       if (row) Object.assign(row, { state: p.p_to, result: p.p_result })
       return { data: Boolean(row), error: null }
     }
+    if (name === 'shipment_list_metadata') {
+      // Contract only; the real SQL is executed in shipment-list-metadata-sql.test.cjs.
+      const read = await from('audit_log').select('details,created_at').eq('tenant_id', p.p_tenant).eq('action', 'shipment_data')
+        .in('details->>id', p.p_ids).order('created_at', { ascending: false })
+      if (read.error) return read
+      const latest = new Map()
+      for (const { details } of read.data) if (!latest.has(details.id)) latest.set(details.id, details)
+      return { data: [...latest].map(([shipment_id, d]) => ({ shipment_id, recipient_country: d.recipient_country ?? null,
+        recipient_postal: d.recipient_postal ?? null, is_return: d.is_return ?? null, isReturn: d.isReturn ?? null,
+        driver_id: d.driver_id ?? null, driver_name: d.driver_name ?? null })), error: null }
+    }
     throw new Error(`Unmocked RPC: ${name}`)
   }
   const client = { from, rpc }
