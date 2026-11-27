@@ -33,6 +33,11 @@ export interface CorreosPickupOutput {
   rawResponse?: unknown
 }
 
+const PROD_CUTOFF_ENDPOINT = "https://www.cexpr.es/wspsc/apiRestGrabacionRecogidaEnviok8s/json/horaCorte"
+const TEST_CUTOFF_ENDPOINT = "https://www.test.cexpr.es/wspsc/apiRestGrabacionRecogidaEnviok8s/json/horaCorte"
+
+export type CorreosCutoff = { success: true; cutoff: string; lastCall: string | null } | { success: false; error: string }
+
 export class CorreosPickupService {
   private client: CorreosRestClient
 
@@ -54,6 +59,21 @@ export class CorreosPickupService {
     const month = String(d.getMonth() + 1).padStart(2, "0")
     const year = d.getFullYear()
     return `${day}${month}${year}`
+  }
+
+  /** Same-day pickup cut-off for a postal code (DC_SP_WS_GrabacionRecogidaRest §4.4 consultarHoraCorte). */
+  async getCutoff(creds: CorreosCredentials, postalCode: string, country: string): Promise<CorreosCutoff> {
+    const endpoint = creds.environment === "production" ? PROD_CUTOFF_ENDPOINT : TEST_CUTOFF_ENDPOINT
+    try {
+      const response = await this.client.request<{ horaCorte?: string | null; ultimaLlamada?: string | null; codError?: number; mensError?: string | null }>(
+        endpoint, creds, { strCP: postalCode, strPais: country.toUpperCase() }, 8000)
+      const valid = (v?: string | null) => typeof v === "string" && /^\d{2}:\d{2}$/.test(v) ? v : null
+      const cutoff = valid(response?.horaCorte)
+      if (cutoff) return { success: true, cutoff, lastCall: valid(response?.ultimaLlamada) }
+      return { success: false, error: response?.mensError || "A Correos não devolveu a hora-limite para este código postal." }
+    } catch (err) {
+      return { success: false, error: `Não foi possível consultar a Correos Express: ${errorMessage(err)}` }
+    }
   }
 
   async createPickup(

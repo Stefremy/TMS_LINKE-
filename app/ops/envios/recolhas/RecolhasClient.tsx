@@ -32,6 +32,7 @@ import type { CTTPickupRequester } from "@/lib/services/ctt/ctt-types"
 import { formatPickupRequestTime, type PickupSummary } from "@/lib/pickup-management"
 import { PickupDetailsDialog, PickupSearchPanel } from "./PickupManagement"
 import { PickupCutoffNotice } from "./PickupCutoffNotice"
+import { CorreosCutoffNotice } from "./CorreosCutoffNotice"
 import { PickupStatus } from "./PickupStatus"
 import { useRouter } from "next/navigation"
 import type { ClientPickupRequest, PickupRequestPage } from "@/lib/client-pickup-requests"
@@ -1214,6 +1215,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
 
                 {/* Submit Bar */}
                 {isCttActive && <PickupCutoffNotice postalCode={senderZip} country={senderCountry} destination={destination} date={date} period={period} />}
+                {!isCttActive && <CorreosCutoffNotice connectionId={selectedCarrier?.id || selectedCarrierId} postalCode={senderZip} country={senderCountry} date={date} />}
                 <div className="flex items-center justify-between pt-3 border-t border-[var(--border-subtle)]">
                   <button
                     type="button"

@@ -145,7 +145,7 @@ test('Ops prefills new bookings from the profile and uses the submitted contact 
     '@/app/actions/ctt': { scheduleCttPickupAction: () => { throw Error('Client requests must use guarded scheduling') } },
     '@/app/actions/client-pickup-requests': { scheduleClientPickupRequestAction: async (...args) => { calls.push(args); return { success: true, pickupNumber: 'CEX-FIXTURE', carrier_name: 'Correos Express' } } },
     './PickupManagement': { PickupDetailsDialog: () => null, PickupSearchPanel: () => null },
-    './PickupCutoffNotice': { PickupCutoffNotice: () => null }, './PickupStatus': { PickupStatus: () => null },
+    './PickupCutoffNotice': { PickupCutoffNotice: () => null }, './CorreosCutoffNotice': { CorreosCutoffNotice: () => null }, './PickupStatus': { PickupStatus: () => null },
     './ClientPickupRequestsPanel': { ClientPickupRequestsPanel: function Requests() {} },
     '@/components/ui/popover': { Popover: () => null, PopoverContent: () => null, PopoverTrigger: () => null },
   })

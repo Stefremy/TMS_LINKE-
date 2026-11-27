@@ -46,8 +46,7 @@ function uiLoad() {
     'next/link': { __esModule: true, default: ({ children, ...props }) => { delete props.prefetch; return React.createElement('a', props, children) } },
     'next/image': { __esModule: true, default: props => { const p = { ...props }; delete p.priority; return React.createElement('img', p) } },
     'next/navigation': { usePathname: () => '/ops' },
-    '@/components/shipments/quotations/useQuotationUnread': { useQuotationUnread: enabled => enabled ? 2 : 0 },
-    '@/components/pickups/usePickupRequestCount': { usePickupRequestCount: enabled => enabled ? 3 : 0 },
+    '@/components/ops/useOpsNavCounts': { useOpsNavCounts: e => ({ quotes: e.quotes ? 2 : 0, pickups: e.pickups ? 3 : 0, support: e.support ? 1 : 0 }) },
   })
 }
 
@@ -69,28 +68,36 @@ test('Recolhas has a red pending badge in expanded, collapsed and mobile navigat
   assert.match(renderToStaticMarkup(React.createElement(PickupRequestBadge, { count: 105 })), />99\+<\/span>/)
 })
 
-test('the pending poll pauses in hidden tabs, queues refreshes without concurrent calls, and discards stale responses after completion', async t => {
+test('one sidebar poll for all badges: pauses in hidden tabs, never runs twice at once, discards stale answers and keeps counts on failure', async t => {
   const previous = { document: global.document, window: global.window }
   t.after(() => Object.assign(global, previous))
-  const effects = [], updates = [], tasks = [], resolvers = [], events = [], listeners = {}
-  let calls = 0, interval, cleared = false
+  const effects = [], updates = [], resolvers = [], urls = [], events = [], listeners = {}
+  let interval, cleared = false
   global.document = { visibilityState: 'hidden', addEventListener: (name, fn) => { listeners[name] = fn }, removeEventListener: name => { delete listeners[name] } }
-  global.window = { addEventListener: (name, fn) => { listeners[name] = fn }, removeEventListener: name => { delete listeners[name] }, dispatchEvent: event => events.push(event.type), setInterval: (fn, ms) => { assert.equal(ms, 30000); interval = fn; return 1 }, clearInterval: () => { cleared = true } }
-  const load = createLoader({ react: { useState: () => [0, value => updates.push(value)], useEffect: fn => effects.push(fn), startTransition: fn => tasks.push(fn()) },
-    '@/app/actions/client-pickup-requests': { getPendingClientPickupRequestsCountAction: async () => { calls++; return new Promise(resolve => resolvers.push(resolve)) } },
-  })
-  const { usePickupRequestCount } = load('components/pickups/usePickupRequestCount.ts')
-  usePickupRequestCount(true); const cleanup = effects[0]()
-  assert.equal(calls, 0)
-  document.visibilityState = 'visible'; listeners.visibilitychange(); await new Promise(resolve => setImmediate(resolve)); assert.equal(calls, 1)
-  listeners[constants.PICKUP_REQUESTS_CHANGED_EVENT](); assert.equal(calls, 1)
-  resolvers[0](5); await new Promise(resolve => setImmediate(resolve))
-  assert.deepEqual(updates, []); assert.equal(calls, 2)
-  resolvers[1](2); await Promise.all(tasks)
-  assert.deepEqual(updates, [2])
-  interval(); await new Promise(resolve => setImmediate(resolve)); resolvers[2](0); await Promise.all(tasks)
-  assert.deepEqual(updates, [2, 0]); assert.ok(events.includes(constants.OPERATIONAL_NOTIFICATIONS_CHANGED_EVENT))
-  document.visibilityState = 'hidden'; interval(); assert.equal(calls, 3)
+  global.window = { addEventListener: (name, fn) => { listeners[name] = fn }, removeEventListener: name => { delete listeners[name] }, dispatchEvent: event => events.push(event.type), setInterval: (fn, ms) => { assert.equal(ms, 60000); interval = fn; return 1 }, clearInterval: () => { cleared = true } }
+  const fetch = async url => { urls.push(url); return new Promise(resolve => resolvers.push(body => resolve({ ok: true, json: async () => body }))) }
+  let state = { quotes: 0, pickups: 0, support: 0 }
+  const load = createLoader({ fetch, react: { useState: () => [state, fn => { state = typeof fn === 'function' ? fn(state) : fn; updates.push(state) }], useEffect: fn => effects.push(fn) } })
+  const { useOpsNavCounts } = load('components/ops/useOpsNavCounts.ts')
+  const support = createLoader({})('lib/support-requests/types.ts'), quotes = createLoader({})('lib/shipments/quotations/types.ts')
+  assert.deepEqual(useOpsNavCounts({ quotes: true, pickups: true, support: false }), { quotes: 0, pickups: 0, support: 0 })
+  const cleanup = effects[0]()
+  const tick = () => new Promise(resolve => setImmediate(resolve))
+  assert.equal(urls.length, 0, 'hidden tabs do not poll')
+  document.visibilityState = 'visible'; listeners.visibilitychange(); await tick()
+  assert.deepEqual(urls, ['/api/ops/nav-counts?want=quotes,pickups'], 'one request; a badge the user cannot see is not asked for')
+  listeners.focus(); assert.equal(urls.length, 1, 'no concurrent request')
+  listeners[constants.PICKUP_REQUESTS_CHANGED_EVENT](); assert.equal(urls.length, 1)
+  resolvers[0]({ quotes: 4, pickups: 5, support: null }); await tick(); await tick()
+  assert.deepEqual(updates, [], 'an answer older than a change event is discarded'); assert.equal(urls.length, 2)
+  resolvers[1]({ quotes: 4, pickups: 2, support: null }); await tick(); await tick()
+  assert.deepEqual(state, { quotes: 4, pickups: 2, support: 0 })
+  listeners[quotes.QUOTATION_UNREAD_EVENT]({ detail: { count: 1 } }); assert.equal(state.quotes, 1)
+  interval(); await tick(); resolvers[2]({ quotes: null, pickups: 0, support: null }); await tick(); await tick()
+  assert.deepEqual(state, { quotes: 1, pickups: 0, support: 0 }, 'a failed count keeps the last value')
+  assert.ok(events.includes(constants.OPERATIONAL_NOTIFICATIONS_CHANGED_EVENT), 'a pickup change refreshes the notification bell')
+  assert.ok(support.SUPPORT_REQUESTS_CHANGED_EVENT in listeners)
+  document.visibilityState = 'hidden'; interval(); assert.equal(urls.length, 3)
   cleanup(); assert.equal(cleared, true); assert.deepEqual(Object.keys(listeners), [])
 })
 

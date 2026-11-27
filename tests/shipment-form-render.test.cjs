@@ -167,25 +167,3 @@ test('only a displayed Ops request is marked read, then refreshes the badge; fai
  }
 })
 
-test('the unread poll pauses in hidden tabs, avoids duplicate requests and cannot overwrite a newer read event',async t=>{
- const previous={window:global.window,document:global.document}
- t.after(()=>{global.window=previous.window;global.document=previous.document})
- const listeners={},effects=[],tasks=[],updates=[]
- let timer,cleared=false,resolveCount,calls=0
- global.document={visibilityState:'visible',addEventListener:(name,fn)=>{listeners[name]=fn},removeEventListener:name=>{delete listeners[name]}}
- global.window={setInterval:(fn,ms)=>{assert.equal(ms,30000);timer=fn;return 1},clearInterval:()=>{cleared=true},addEventListener:(name,fn)=>{listeners[name]=fn},removeEventListener:name=>{delete listeners[name]}}
- const uiLoad=createLoader({react:{useState:()=>[0,value=>updates.push(value)],useEffect:fn=>effects.push(fn),startTransition:fn=>tasks.push(fn())},
-  '@/app/actions/shipment-quotations':{getUnreadShipmentQuotationsAction:async()=>{calls++;return new Promise(resolve=>{resolveCount=resolve})}},
- })
- const {useQuotationUnread}=uiLoad('components/shipments/quotations/useQuotationUnread.ts')
- const {QUOTATION_UNREAD_EVENT}=uiLoad('lib/shipments/quotations/types.ts')
- assert.equal(useQuotationUnread(true),0)
- const cleanup=effects[0]()
- await new Promise(resolve=>setImmediate(resolve))
- listeners.focus();assert.equal(calls,1,'a focus event cannot start a second poll while one is running')
- listeners[QUOTATION_UNREAD_EVENT]({detail:{count:2}})
- resolveCount(7);await Promise.all(tasks)
- assert.deepEqual(updates,[2],'the old poll must not overwrite the count returned by marking a request read')
- document.visibilityState='hidden';timer();assert.equal(calls,1)
- cleanup();assert.equal(cleared,true);assert.deepEqual(Object.keys(listeners),[])
-})

@@ -44,3 +44,13 @@ test('Correos pickup: a KO answer is a failure with the Correos message, never a
  assert.equal(result.pickupNumber,undefined)
  assert.equal(result.error,'Correos Express (117): NO EXISTE EL CODIGO POSTAL: 4000-123')
 })
+
+test('Correos cut-off: documented horaCorte endpoint and fields; a not-found answer is an error, not a time',async()=>{
+ const ok=harness({horaCorte:'11:00',ultimaLlamada:'18:00',codError:0,mensError:null})
+ assert.deepEqual(await ok.service.getCutoff(creds,'4505-515','pt'),{success:true,cutoff:'11:00',lastCall:'18:00'})
+ assert.equal(ok.requests[0].url,'https://www.test.cexpr.es/wspsc/apiRestGrabacionRecogidaEnviok8s/json/horaCorte')
+ assert.deepEqual(ok.requests[0].body,{strCP:'4505-515',strPais:'PT'})
+ const ko=harness({horaCorte:null,ultimaLlamada:null,codError:1,mensError:'NO SE HA ENCONTRADO NINGUN REGISTRO PARA EL CÓDIGO POSTAL: '})
+ const r=await ko.service.getCutoff(creds,'4505-515','PT')
+ assert.equal(r.success,false);assert.match(r.error,/NO SE HA ENCONTRADO/)
+})

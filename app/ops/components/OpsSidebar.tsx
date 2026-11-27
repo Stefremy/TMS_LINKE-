@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useOpsNavCounts } from "@/components/ops/useOpsNavCounts"
 import { MobileDrawer } from "@/components/ui/mobile-drawer"
 import Link from "next/link"
 import Image from "next/image"
@@ -21,19 +22,18 @@ import { canAccessOpsRoute, type PermissionContext } from "@/lib/auth/permission
 import { SidebarNav } from "./SidebarNav"
 import styles from "./SidebarPattern.module.css"
 import { APP_VERSION } from "@/lib/config/version"
-import { useQuotationUnread } from "@/components/shipments/quotations/useQuotationUnread"
 import { QuotationUnreadBadge } from "@/components/shipments/quotations/QuotationUnreadBadge"
-import { usePickupRequestCount } from "@/components/pickups/usePickupRequestCount"
 import { PickupRequestBadge } from "@/components/pickups/PickupRequestBadge"
-import { useSupportRequestCount } from "@/components/support/useSupportRequestCount"
 
 export function OpsSidebar({ canAccessDocuments = false, canSendMessages = false, access }: { canAccessDocuments?: boolean; canSendMessages?: boolean; access?: PermissionContext }) {
   const [isCollapsed, setIsCollapsed] = React.useState(false)
   const [isMobileOpen, setIsMobileOpen] = React.useState(false)
   const pathname = usePathname()
-  const quotationUnreadCount = useQuotationUnread(canAccessOpsRoute(access, "/ops/envios/cotacoes"))
-  const pickupRequestCount = usePickupRequestCount(canAccessOpsRoute(access, "/ops/envios/recolhas"))
-  const supportRequestCount = useSupportRequestCount(canSendMessages && canAccessOpsRoute(access, "/ops/mensagens"))
+  const { quotes: quotationUnreadCount, pickups: pickupRequestCount, support: supportRequestCount } = useOpsNavCounts({
+    quotes: canAccessOpsRoute(access, "/ops/envios/cotacoes"),
+    pickups: canAccessOpsRoute(access, "/ops/envios/recolhas"),
+    support: canSendMessages && canAccessOpsRoute(access, "/ops/mensagens"),
+  })
   const navigationAlerts = quotationUnreadCount + pickupRequestCount + supportRequestCount
 
   // Auto-close mobile drawer whenever route changes

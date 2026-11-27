@@ -209,3 +209,24 @@ export async function emitCorreosShipmentAction(shipmentInput: {
     }
   }
 }
+
+// shortcut: per-instance cache; cut-offs change rarely, so 6 h is enough until a shared cache exists.
+const correosCutoffCache = new Map<string, { at: number; value: import("@/lib/services/correos").CorreosCutoff }>()
+
+/** Correos same-day pickup cut-off for the pickup address, for the Recolhas form. */
+export async function getCorreosPickupCutoffAction(connectionId: string | undefined, postalCode: string, country: string) {
+  await requireEmployee("Pedidos de Recolha & Distribuição")
+  const cc = String(country || "PT").toUpperCase()
+  const digits = String(postalCode || "").replace(/\D/g, "")
+  if (!/^[A-Z]{2}$/.test(cc) || !(cc === "PT" ? digits.length === 7 : /^[A-Z0-9 -]{3,10}$/i.test(postalCode || ""))) {
+    return { success: false as const, error: "Código postal inválido." }
+  }
+  const cp = cc === "PT" ? `${digits.slice(0, 4)}-${digits.slice(4)}` : postalCode.trim()
+  const key = `${connectionId || "default"}|${cc}|${cp}`
+  const hit = correosCutoffCache.get(key)
+  if (hit && Date.now() - hit.at < 6 * 3600_000) return hit.value
+  const { CorreosPickupService } = await import("@/lib/services/correos")
+  const value = await new CorreosPickupService().getCutoff(await resolveCorreosCredentials(connectionId), cp, cc)
+  if (value.success) correosCutoffCache.set(key, { at: Date.now(), value })
+  return value
+}
