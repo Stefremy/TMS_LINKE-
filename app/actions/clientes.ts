@@ -17,6 +17,7 @@ import { normalizeClientBillingFields } from "@/lib/client-addresses"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase/server"
+import { storeClientLogo } from "@/lib/client-logo"
 import type { Cliente } from "@/app/ops/entidades/clientes/types"
 import { DEFAULT_CLIENT_PRICING, SYSTEM_AVAILABLE_WEBSERVICES } from "@/app/ops/entidades/clientes/types"
 import { getAuthContext, requireUser, requireEmployee, getTenantId } from "@/lib/auth/context"
@@ -425,6 +426,8 @@ export async function saveClienteAction(cliente: Partial<Cliente>) {
   if (fullRecord.pricing?.fuel_surcharge_custom && (typeof fuelPct !== 'number' || !Number.isFinite(fuelPct) || fuelPct < 0 || fuelPct > 100)) {
     throw new Error('Indique uma taxa de combustível entre 0 e 100%.')
   }
+  // Keep logos out of the client record: it is loaded on most Ops pages.
+  if (fullRecord.logo_url) fullRecord.logo_url = await storeClientLogo(supabase, ctx.tenant_id, id, fullRecord.logo_url)
 
   // Check every write before the UI can invite a client to a supposedly saved store.
   const registryWrite = registered

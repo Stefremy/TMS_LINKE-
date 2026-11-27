@@ -253,3 +253,18 @@ export function getSeededMailboxMessages(nowIso = "2026-11-04T09:30:00.000Z"): M
   return []
 }
 
+
+export const MAIL_MESSAGE_ACTION = "ops_mailbox_message"
+export const MAIL_BODY_ACTION = "ops_mailbox_body"
+
+/**
+ * audit_log rows for one email. The HTML (often MBs of inline images) gets its own row, so
+ * listing the mailbox never reads it; it is loaded only when the email is opened.
+ */
+export function mailAuditRows<T extends object>(base: T, message: MailMessage) {
+  const { bodyHtml, ...light } = message
+  return [
+    { ...base, action: MAIL_MESSAGE_ACTION, details: light },
+    ...(bodyHtml ? [{ ...base, action: MAIL_BODY_ACTION, details: { id: message.id, html: bodyHtml } }] : []),
+  ]
+}

@@ -18,7 +18,7 @@ export default async function ClientesFaturacaoPage() {
 
   return (
     <FaturaPersonalizadaClient
-      clients={clients}
+      clients={clients.map(c => ({ ...c, pricing: undefined }))}
       initialInvoices={initialInvoices}
       moloniConfig={moloniConfig}
       defaultPaymentDays={billingConfig.defaultPaymentDays ?? 30}

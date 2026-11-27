@@ -98,7 +98,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
   const submissionLock = React.useRef(false)
   const [updatedPickups, setUpdatedPickups] = React.useState<Record<string, PickupSummary>>({})
   const recolhas = initialRecolhas.map(row => updatedPickups[row.id] || row)
-  const [view, setView] = React.useState<"list" | "search" | "form" | "requests">(clientRequests.total ? "requests" : "list")
+  const [view, setView] = React.useState<"list" | "search" | "form" | "requests">("requests")
   const [openedPickup, setOpenedPickup] = React.useState<PickupSummary | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [result, setResult] = React.useState<{

@@ -4,6 +4,7 @@ import { simpleParser, type ParsedMail } from "mailparser"
 import { createAdminClient } from "@/lib/supabase/server"
 import {
   buildMailSnippet,
+  mailAuditRows,
   normalizeMailAccount,
   type MailAccountId,
   type MailFolder,
@@ -278,13 +279,7 @@ export async function syncGmailImap(
     }
   }
 
-  const rowsToInsert: {
-    tenant_id: string
-    user_id: null
-    action: string
-    details: MailMessage
-    created_at: string
-  }[] = []
+  const rowsToInsert: ReturnType<typeof mailAuditRows<{ tenant_id: string; user_id: null; created_at: string }>> = []
 
   const queued = new Set<string>()
   for (const item of rawMessages) {
@@ -363,13 +358,7 @@ export async function syncGmailImap(
         deliveryStatus: isSentByLinke ? "sent" : "received",
       }
 
-      rowsToInsert.push({
-        tenant_id: tenantId,
-        user_id: null,
-        action: "ops_mailbox_message",
-        details: messageRecord,
-        created_at: dateIso,
-      })
+      rowsToInsert.push(...mailAuditRows({ tenant_id: tenantId, user_id: null, created_at: dateIso }, messageRecord))
     } catch (msgErr) {
       errors.push(msgErr instanceof Error ? msgErr.message : "Erro ao processar mensagem")
     }
@@ -380,7 +369,7 @@ export async function syncGmailImap(
     if (insertErr) {
       errors.push(insertErr.message)
     } else {
-      synced = rowsToInsert.length
+      synced = rowsToInsert.filter(row => row.action === "ops_mailbox_message").length
     }
   }
 

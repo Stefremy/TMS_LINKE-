@@ -12,6 +12,7 @@ test('shipment view expands, restores with Escape and removes its keyboard liste
   const react={
     useState(initial){const index=cursor++;if(!(index in slots))slots[index]=initial;return[slots[index],value=>{slots[index]=typeof value==='function'?value(slots[index]):value}]},
     useMemo:callback=>callback(),
+    useTransition:()=>[false,fn=>fn()],
     useEffect(callback,values){const index=cursor++;if(!deps[index]||values.some((value,i)=>!Object.is(value,deps[index][i]))){deps[index]=values;effects.push(()=>{cleanups[index]?.();cleanups[index]=callback()})}},
   }
   const load=createLoader({react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},

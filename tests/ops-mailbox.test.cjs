@@ -238,7 +238,7 @@ test('colaborador mailbox permissions restrict visible email accounts and enforc
 })
 
 
-test('listMailboxMessages reads past 1000 rows, drops duplicate imports and keeps HTML only on recent mail', async () => {
+test('listMailboxMessages reads past 1000 rows, drops duplicate imports and never ships HTML in the list', async () => {
   const rows = Array.from({ length: 1100 }, (_, i) => {
     const n = i % 550 // every email stored twice
     const at = new Date(Date.UTC(2026, 0, 1, 0, n)).toISOString()
@@ -255,6 +255,23 @@ test('listMailboxMessages reads past 1000 rows, drops duplicate imports and keep
 
   assert.equal(messages.length, 550)
   assert.equal(messages[0].id, 'm-549')
-  assert.equal(messages.filter((m) => m.bodyHtml).length, 50)
+  assert.equal(messages.filter((m) => m.bodyHtml).length, 0)
   assert.equal(messages.at(-1).bodyText, 'texto')
+})
+
+test('HTML is stored in its own row and served per email only to mailboxes the user may read', async () => {
+  const rows = [{ tenant_id: TENANT, action: 'ops_mailbox_message', created_at: '2026-01-01T00:00:00.000Z',
+    details: { id: 'old-1', account: 'geral@linke.pt', subject: 'Antigo', bodyText: 't', bodyHtml: '<p>legacy</p>' } }]
+  const { server } = createMailHarness({ rows })
+  const { PERMISSIONS } = createLoader({})('lib/auth/permissions.ts')
+  const admin = { user: { id: 'admin-1', email: 'stefano.remy@gmail.com' }, role: 'admin', tenant_id: TENANT, permissions: [PERMISSIONS.all] }
+  const clientesOnly = { user: { id: 'staff-2', email: 'operador@linke.pt' }, role: 'employee', tenant_id: TENANT, permissions: [PERMISSIONS.mailClientes] }
+  const sent = await server.composeOrSaveMail(admin, { account: 'geral@linke.pt', toEmail: 'c@cliente.pt', subject: 'Olá', bodyText: 'Mensagem' })
+  const stored = rows.filter((r) => r.details?.id === sent.id)
+  assert.deepEqual(stored.map((r) => r.action).sort(), ['ops_mailbox_body', 'ops_mailbox_message'])
+  assert.equal(stored.find((r) => r.action === 'ops_mailbox_message').details.bodyHtml, undefined)
+  assert.match(await server.getMailBody(admin, sent.id), /Mensagem/)
+  assert.equal(await server.getMailBody(admin, 'old-1'), '<p>legacy</p>', 'rows not yet migrated still work')
+  await assert.rejects(server.getMailBody(admin, 'missing'), /não encontrado/)
+  await assert.rejects(server.getMailBody(clientesOnly, sent.id), /não encontrado/)
 })

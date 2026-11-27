@@ -7,6 +7,8 @@ import { sendEmail, getReceivedEmailContent } from "@/lib/email/resend"
 import {
   buildMailSnippet,
   formatEmailHtmlTemplate,
+  MAIL_BODY_ACTION,
+  mailAuditRows,
   getSeededMailboxMessages,
   MAIL_ACCOUNTS,
   MAIL_LABELS,
@@ -91,12 +93,9 @@ type StoredMutation = {
   updatedAt: string
 }
 
-// Only the newest emails of each account carry HTML (it can hold MBs of inline images); older ones show as text.
-const HTML_MESSAGES_PER_ACCOUNT = 50
-
 type AuditRow = { action: string; details: unknown; created_at: string }
 
-// shortcut: reads every stored email on each load; store bodies in their own table when this gets slow.
+// HTML bodies live in separate ops_mailbox_body rows (see mailAuditRows) and are fetched per email.
 async function loadMailboxRows(tenantId: string): Promise<AuditRow[]> {
   const admin = createAdminClient()
   // Small pages for emails: all bodies in one query exceed the database statement timeout.
@@ -115,15 +114,12 @@ async function loadMailboxRows(tenantId: string): Promise<AuditRow[]> {
 
   const rows: AuditRow[] = []
   const seen = new Set<string>()
-  const perAccount = new Map<string, number>()
+  // shortcut: page size 50 because rows not yet migrated still carry their HTML; raise to 500 after the migration.
   await read(ACTION_MESSAGE, 50, (row) => {
     const msg = row.details as Partial<MailMessage> | null
     if (!msg?.id || seen.has(msg.id)) return
     seen.add(msg.id)
-    const account = normalizeMailAccount(msg.account)
-    const count = (perAccount.get(account) || 0) + 1
-    perAccount.set(account, count)
-    if (count > HTML_MESSAGES_PER_ACCOUNT) delete msg.bodyHtml
+    delete msg.bodyHtml // loaded on demand by getMailBody
     rows.push(row)
   })
   for (const action of [ACTION_MUTATION, "tracking_email_sent"]) await read(action, 1000, (row) => rows.push(row))
@@ -265,6 +261,23 @@ export async function listMailboxMessages(
   }
 }
 
+/** HTML of one email, only if it belongs to a mailbox this user may read. Null when it has none. */
+export async function getMailBody(context: AuthContext, id: string): Promise<string | null> {
+  if (typeof id !== "string" || !id || id.length > 200) throw new MailError("Email inválido.", 400)
+  const admin = createAdminClient()
+  const { data: msg, error } = await admin.from("audit_log").select("account:details->>account, legacyHtml:details->>bodyHtml")
+    .eq("tenant_id", context.tenant_id).eq("action", ACTION_MESSAGE).eq("details->>id", id)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle()
+  if (error) throw new MailError("Não foi possível carregar o email.", 503)
+  if (!msg || !getAllowedMailAccounts(context).includes(normalizeMailAccount(msg.account))) throw new MailError("Email não encontrado.", 404)
+  if (msg.legacyHtml) return msg.legacyHtml // not migrated yet
+  const { data: body, error: bodyError } = await admin.from("audit_log").select("html:details->>html")
+    .eq("tenant_id", context.tenant_id).eq("action", MAIL_BODY_ACTION).eq("details->>id", id)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle()
+  if (bodyError) throw new MailError("Não foi possível carregar o email.", 503)
+  return body?.html ?? null
+}
+
 export async function composeOrSaveMail(
   context: AuthContext,
   input: MailComposeInput
@@ -371,12 +384,7 @@ export async function composeOrSaveMail(
   }
 
   const admin = createAdminClient()
-  const { error } = await admin.from("audit_log").insert({
-    tenant_id: context.tenant_id,
-    user_id: context.user.id,
-    action: ACTION_MESSAGE,
-    details: message,
-  })
+  const { error } = await admin.from("audit_log").insert(mailAuditRows({ tenant_id: context.tenant_id, user_id: context.user.id }, message))
 
   if (error) {
     throw new MailError("Não foi possível guardar o email na Caixa de Correio.", 500)
@@ -522,13 +530,8 @@ export async function recordInboundEmailWebhook(payload: Record<string, unknown>
   // The primary key makes concurrent retries atomic without a new migration.
   const hash = createHash("sha256").update(`resend-inbound:${tenantId}:${emailId}`).digest("hex")
   const rowId = `${hash.slice(0,8)}-${hash.slice(8,12)}-5${hash.slice(13,16)}-a${hash.slice(17,20)}-${hash.slice(20,32)}`
-  const { error } = await admin.from("audit_log").insert({
-    id: rowId,
-    tenant_id: tenantId,
-    user_id: null,
-    action: ACTION_MESSAGE,
-    details: message,
-  })
+  const [messageRow, ...bodyRows] = mailAuditRows({ tenant_id: tenantId, user_id: null }, message)
+  const { error } = await admin.from("audit_log").insert([{ ...messageRow, id: rowId }, ...bodyRows])
   if (error?.code === "23505") {
     const saved = await findExisting()
     if (saved) return saved

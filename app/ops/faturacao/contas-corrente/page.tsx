@@ -55,7 +55,7 @@ export default async function ContasCorrentePage({ searchParams }: { searchParam
       <ContasCorrenteClient
         key={`${selection.startDate}:${selection.endDate}:${selection.grouping}`}
         initialSelection={selection}
-        clients={clients} 
+        clients={clients.map(c => ({ ...c, pricing: undefined }))}
         shipments={pendingShipments} 
         statements={statements}
         moloniConfig={moloniConfig}

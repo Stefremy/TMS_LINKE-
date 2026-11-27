@@ -8,6 +8,7 @@ import {
 } from "@/lib/ops-mailbox"
 import {
   composeOrSaveMail,
+  getMailBody,
   listMailboxMessages,
   mailboxContext,
   mutateMailMessages,
@@ -35,6 +36,8 @@ export async function GET(request: Request) {
   try {
     const context = await mailboxContext()
     const params = new URL(request.url).searchParams
+    const bodyId = params.get("body")
+    if (bodyId !== null) return NextResponse.json({ bodyHtml: await getMailBody(context, bodyId) }, { headers })
     const account = params.get("account")
     const data = await listMailboxMessages(context, account)
     return NextResponse.json(data, { headers })

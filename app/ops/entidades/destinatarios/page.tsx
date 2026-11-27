@@ -16,7 +16,7 @@ export default async function DestinatariosPage() {
   return (
     <DestinatariosClient
       initialDestinatarios={destinatarios || []}
-      clients={clientes || []}
+      clients={(clientes || []).map(c => ({ ...c, pricing: undefined }))}
     />
   )
 }

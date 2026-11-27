@@ -308,6 +308,22 @@ export function MailboxClient({
     [accountMessages, filteredMessages, selectedId]
   )
 
+  // HTML bodies are not in the list (they are MBs); fetch the one being read. null = no HTML.
+  const [bodies, setBodies] = React.useState<Record<string, string | null>>({})
+  const selectedHtml = selectedMessage ? selectedMessage.bodyHtml ?? bodies[selectedMessage.id] : undefined
+  const pendingBodyId = selectedMessage && !selectedMessage.bodyHtml && !(selectedMessage.id in bodies) ? selectedMessage.id : null
+  React.useEffect(() => {
+    if (!pendingBodyId) return
+    let cancelled = false
+    fetch(`/api/ops/mail?body=${encodeURIComponent(pendingBodyId)}`, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : { bodyHtml: null }))
+      .catch(() => ({ bodyHtml: null }))
+      .then((data: { bodyHtml?: string | null }) => {
+        if (!cancelled) setBodies((prev) => ({ ...prev, [pendingBodyId]: data.bodyHtml ?? null }))
+      })
+    return () => { cancelled = true }
+  }, [pendingBodyId])
+
   const [observedInputs1, setObservedInputs1] = React.useState<readonly unknown[] | null>(null)
   if (observedInputs1 === null || !Object.is(observedInputs1[0], selectedMessage)) {
     setObservedInputs1([selectedMessage])
@@ -1629,7 +1645,7 @@ export function MailboxClient({
 
               {/* Message Body Area */}
               <div className="flex-1 overflow-y-auto px-6 py-5">
-                {selectedMessage.bodyHtml && (
+                {selectedHtml && (
                   <div className="mb-3 flex items-center justify-end">
                     <button
                       type="button"
@@ -1641,7 +1657,7 @@ export function MailboxClient({
                   </div>
                 )}
 
-                {selectedMessage.bodyHtml && !viewPlainText ? (
+                {selectedHtml && !viewPlainText ? (
                   <iframe
                     key={selectedMessage.id}
                     title={selectedMessage.subject || "Conteúdo do email"}
@@ -1658,7 +1674,7 @@ export function MailboxClient({
                         // ignore cross-origin if any
                       }
                     }}
-                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"/><base target="_blank"/><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.6;color:#0f172a;margin:0;padding:4px;overflow-wrap:break-word;background:transparent;}img{max-width:100%;height:auto;}table{max-width:100%!important;}a{color:#16a34a;}</style></head><body>${selectedMessage.bodyHtml}</body></html>`}
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"/><base target="_blank"/><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.6;color:#0f172a;margin:0;padding:4px;overflow-wrap:break-word;background:transparent;}img{max-width:100%;height:auto;}table{max-width:100%!important;}a{color:#16a34a;}</style></head><body>${selectedHtml}</body></html>`}
                     className="w-full rounded-lg border-0 bg-white"
                   />
                 ) : (

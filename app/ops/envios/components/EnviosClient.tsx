@@ -127,6 +127,7 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
     .map(e => e.rawId || e.rawShipment?.id)
     .filter(Boolean) as string[], [envios])
   useTrackingPolling(activeIds, () => router.refresh())
+  const [isRefreshing, startRefresh] = React.useTransition()
 
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -266,6 +267,16 @@ export function EnviosClient({ envios, recolhas, clients, pagination, initialSea
             Filtrar
             <ChevronDown className={`w-3 h-3 ml-0.5 transition-transform ${showFilters ? "rotate-180" : ""}`} />
           </Button>
+          <button
+            type="button"
+            onClick={() => startRefresh(() => router.refresh())}
+            disabled={isRefreshing}
+            title="Carregar envios novos"
+            className="inline-flex h-8 items-center rounded-md bg-[var(--status-info)] px-3 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--status-info)] focus:ring-offset-1"
+          >
+            <RefreshIcon className={`w-3.5 h-3.5 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
+            {isRefreshing ? "A atualizar…" : "Atualizar envios"}
+          </button>
 
         </div>
 

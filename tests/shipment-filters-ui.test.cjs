@@ -9,7 +9,7 @@ function harness(t){
  const oldWindow=global.window;global.window={location:{search:'?service=DD&context=islands&page=3'},addEventListener(){},removeEventListener(){}}
  t.after(()=>{cleanups.forEach(fn=>fn?.());global.window=oldWindow})
  const routes=[]
- const react={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=initial;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useMemo:fn=>fn(),useEffect(fn,values){const i=cursor++;if(!deps[i]||values.some((v,n)=>!Object.is(v,deps[i][n]))){deps[i]=values;effects.push(()=>{cleanups[i]?.();cleanups[i]=fn()})}}}
+ const react={useState(initial){const i=cursor++;if(!(i in slots))slots[i]=initial;return[slots[i],v=>{slots[i]=typeof v==='function'?v(slots[i]):v}]},useMemo:fn=>fn(),useTransition:()=>[false,fn=>fn()],useEffect(fn,values){const i=cursor++;if(!deps[i]||values.some((v,n)=>!Object.is(v,deps[i][n]))){deps[i]=values;effects.push(()=>{cleanups[i]?.();cleanups[i]=fn()})}}}
  const jsx=(type,props)=>({type,props:props||{}})
  const load=createLoader({react,'react/jsx-runtime':{jsx,jsxs:jsx,Fragment:'fragment'},'next/navigation':{useRouter:()=>({push:(url)=>routes.push(url),refresh(){}})},'lucide-react':new Proxy({},{get:(_,p)=>p}),
   '@/lib/hooks/useTrackingPolling':{useTrackingPolling(){}},'@/components/shipments/ShipmentParcelWeight':{},'@/components/ui/refresh-icon':{},'./ActionMenu':{},'./FerramentasMenu':{},'./NovaRecolhaModal':{},'./ManifestModal':{},'./ShipmentLateralDrawer':{},'@/app/app/components/ClientShipmentDetailModal':{},'@/lib/carrier-logos':{},'@/app/actions/ctt':{},'@/app/actions/shipments':{},'@/components/ui/button':{Button:'button'},'@/components/ui/badge':{}})
