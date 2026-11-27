@@ -67,6 +67,7 @@ export interface PickupInput {
   biggestParcelDimensionsCm?: { length: number; width: number; height: number }
   sender: Address
   observations?: string
+  transportDocument?: boolean
 }
 
 export interface PickupResult {

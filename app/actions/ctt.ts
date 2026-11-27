@@ -489,6 +489,7 @@ export async function scheduleCttPickupAction(input: {
   biggestParcelDimensionsCm?: { length: number; width: number; height: number }
   sender: { name: string; contact?: string; address: string; country?: string; zip: string; city: string; phone: string; mobilePhone?: string; email?: string }
   observations?: string
+  transportDocument?: boolean
 }) {
   const actor = await requireEmployee("Pedidos de Recolha & Distribuição")
   const requestedAt = new Date().toISOString()
@@ -538,7 +539,8 @@ export async function scheduleCttPickupAction(input: {
         weightKg: input.weightKg,
         heaviestWeightKg,
         sender: input.sender,
-        observations: input.observations,
+        // Correos has no transport-document flag, so it travels as text.
+        observations: [input.observations, input.transportDocument ? "Necessário levar guia de transporte" : ""].filter(Boolean).join(" | "),
       })
     } catch (cexErr) {
       return { success: false, error: errorMessage(cexErr) || "Erro na comunicação com a Correos Express" }
@@ -574,6 +576,7 @@ export async function scheduleCttPickupAction(input: {
           email: input.sender.email,
         },
         observations: input.observations,
+        transportDocument: input.transportDocument,
       })
     } catch (cttErr) {
       return { success: false, error: errorMessage(cttErr) || "Erro na comunicação com os CTT Expresso" }
@@ -624,6 +627,7 @@ export async function scheduleCttPickupAction(input: {
           heaviest_weight_kg: heaviestWeightKg,
           period: `${input.startHour}-${input.endHour}`,
           observations: input.observations,
+          transport_document: input.transportDocument || false,
           created_at: new Date().toISOString(),
           requested_at: requestedAt,
           requested_by: requestedBy,

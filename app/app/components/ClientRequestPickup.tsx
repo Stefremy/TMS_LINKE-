@@ -88,7 +88,7 @@ export function ClientRequestPickup({ initialPage = emptyPage, initialError = ""
       <fieldset disabled={busy || suspended} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-3"><label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Data pretendida<input type="date" name="date" min={today} defaultValue={today} required className={inputClass} /></label>
           <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Período pretendido<select name="period" value={period} onChange={event => setPeriod(event.target.value)} className={inputClass}>{(carrier === "ctt_expresso" ? CTT_PICKUP_PERIODS : CORREOS_PICKUP_PERIODS).map(option => <option key={option} value={option}>{option}</option>)}</select></label>
-          <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Transportadora<select name="carrier" value={carrier} onChange={event => { setCarrier(event.target.value); setPeriod(event.target.value === "ctt_expresso" ? "09:00-19:00" : "10:00-13:00") }} className={inputClass}><option value="ctt_expresso">CTT Expresso</option><option value="correos_express">Correos Express</option></select></label>
+          <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Transportadora<select name="carrier" value={carrier} onChange={event => { setCarrier(event.target.value); setPeriod(event.target.value === "ctt_expresso" ? "09:00-19:00" : "09:00-17:00") }} className={inputClass}><option value="ctt_expresso">CTT Expresso</option><option value="correos_express">Correos Express</option></select></label>
         </div>
         <div className="grid gap-4 sm:grid-cols-3"><label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">N.º de volumes<input type="number" name="volumes" min={1} max={1000} step={1} required value={volumes} onChange={event => setVolumes(Number(event.target.value))} className={inputClass} /></label>
           <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Peso total (kg)<input type="number" name="weightKg" min={0.001} max={20000} step={0.001} required className={inputClass} /></label>
@@ -106,7 +106,7 @@ export function ClientRequestPickup({ initialPage = emptyPage, initialError = ""
           </select>
         </label>
         <PickupAddressFields key={JSON.stringify([selectedLocationId, pickupAddress])} values={pickupAddress} />
-        <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Observações (opcional)<textarea name="notes" rows={2} maxLength={500} className={inputClass} placeholder="Acesso ao armazém, campainha, instruções úteis…" /></label>
+        <label className="block space-y-1 text-xs font-medium text-[var(--text-secondary)]">Observações (opcional, máx. 50 caracteres)<textarea name="notes" rows={2} maxLength={50} className={inputClass} placeholder="Acesso ao armazém, campainha, instruções úteis…" /></label>
         <p className="text-xs text-[var(--text-secondary)]">A data e o período são preferências, sujeitos a confirmação pela equipa e pela transportadora.</p>
         <button type="submit" className={primaryButton}>{busy ? <Loader2 size={16} className="animate-spin" /> : <CalendarDays size={16} />}Enviar pedido à Linke</button>
       </fieldset>

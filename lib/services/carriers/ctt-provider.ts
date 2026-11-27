@@ -219,6 +219,7 @@ export class CttProvider implements CarrierProvider {
           Email: input.sender.email
         },
         Observacoes: input.observations || "",
+        GuiaTransporte: input.transportDocument,
       })
 
       if (result.Success && result.PickUpID) {

@@ -147,6 +147,7 @@ test('Ops prefills new bookings from the profile and uses the submitted contact 
     './PickupManagement': { PickupDetailsDialog: () => null, PickupSearchPanel: () => null },
     './PickupCutoffNotice': { PickupCutoffNotice: () => null }, './PickupStatus': { PickupStatus: () => null },
     './ClientPickupRequestsPanel': { ClientPickupRequestsPanel: function Requests() {} },
+    '@/components/ui/popover': { Popover: () => null, PopoverContent: () => null, PopoverTrigger: () => null },
   })
   const { RecolhasClient } = isolated('app/ops/envios/recolhas/RecolhasClient.tsx')
   const pickupClient = { ...client, code: 'A', name: client.short_name, pickup_contact_name: 'Marta', pickup_mobile_phone: '922222222' }
@@ -154,7 +155,7 @@ test('Ops prefills new bookings from the profile and uses the submitted contact 
   const button = label => render().find(node => node.type === 'button' && [node.props.children].flat().some(child =>
     typeof child === 'string' && child.trim() === label))
   button('Nova Recolha').props.onClick()
-  render().find(node => node.type === 'select' && flatten(node.props.children).some(option => option.props.value === client.id)).props.onChange({ target: { value: client.id } })
+  render().find(node => node.type?.name === 'ClientPicker').props.onChange(client.id)
   let form = render()
   assert.equal(form.find(node => node.props.placeholder === 'Nome de quem entrega').props.value, 'Marta')
   assert.equal(form.find(node => node.props.name === 'pickupMobilePhone').props.value, '922222222')

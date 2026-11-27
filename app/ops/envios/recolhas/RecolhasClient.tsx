@@ -16,7 +16,6 @@ import {
   ChevronRight,
   Hash,
   Weight,
-  RefreshCw,
   Info,
   Building2,
   ChevronDown,
@@ -25,7 +24,6 @@ import {
   Check,
   Search,
   Filter,
-  ArrowRight,
 } from "lucide-react"
 import { scheduleCttPickupAction } from "@/app/actions/ctt"
 import { getCarrierLogo } from "@/lib/carrier-logos"
@@ -40,6 +38,11 @@ import type { ClientPickupRequest, PickupRequestPage } from "@/lib/client-pickup
 import { scheduleClientPickupRequestAction } from "@/app/actions/client-pickup-requests"
 import { ClientPickupRequestsPanel } from "./ClientPickupRequestsPanel"
 import { PICKUP_REQUESTS_CHANGED_EVENT } from "@/lib/pickup-request-notifications"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+
+// Field limits from CTT RecolhasWS v1.4 ("CTT API/RecolhasWS_ V1 4.pdf", error list).
+// Observations: the manual says 200, but the live WS rejects >50 (EW0074).
+const CTT_LIMITS = { name: 100, contact: 50, address: 100, city: 100, email: 50, phone: 15, observations: 50 } as const
 
 interface MappedClient {
   id: string
@@ -116,8 +119,6 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
 
   // Carrier Selection
   // Find first CTT and first Correos connection
-  const firstCtt = carrierConnections.find(c => c.carrier_code === "ctt_expresso")
-  const firstCorreos = carrierConnections.find(c => c.carrier_code === "correos_express")
   
   const [selectedCarrierCode, setSelectedCarrierCode] = React.useState<"ctt_expresso" | "correos_express">(
     (carrierConnections[0]?.carrier_code === "correos_express" ? "correos_express" : "ctt_expresso")
@@ -130,7 +131,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
   // Switch carrier code and update connection ID to match
   const handleSelectCarrierTab = (code: "ctt_expresso" | "correos_express") => {
     setSelectedCarrierCode(code)
-    setPeriod(code === "ctt_expresso" ? "09:00-19:00" : "10:00-13:00")
+    setPeriod(code === "ctt_expresso" ? "09:00-19:00" : "09:00-17:00")
     const matchingConn = carrierConnections.find(c => c.carrier_code === code)
     if (matchingConn) {
       setSelectedCarrierId(matchingConn.id)
@@ -146,7 +147,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
   // Client & Form fields
   const [selectedClientId, setSelectedClientId] = React.useState("")
   const [date, setDate] = React.useState(tomorrowDate())
-  const [period, setPeriod] = React.useState(carrierConnections[0]?.carrier_code === "correos_express" ? "10:00-13:00" : "09:00-19:00")
+  const [period, setPeriod] = React.useState(carrierConnections[0]?.carrier_code === "correos_express" ? "09:00-17:00" : "09:00-19:00")
   const [volumes, setVolumes] = React.useState(1)
   const [weightKg, setWeightKg] = React.useState(1)
   const [heaviestWeightKg, setHeaviestWeightKg] = React.useState(1)
@@ -190,7 +191,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
     const pickup = request.pickup
     handleSelectCarrierTab(pickup.carrier)
     setActiveRequest(request); setSelectedClientId(request.client_id)
-    setDate(pickup.date); setPeriod(pickup.period); setVolumes(pickup.volumes)
+    setDate(pickup.date); setPeriod(pickup.carrier === "correos_express" ? "09:00-17:00" : pickup.period); setVolumes(pickup.volumes)
     setWeightKg(pickup.weightKg); setHeaviestWeightKg(pickup.heaviestWeightKg)
     setSenderName(pickup.name); setSenderContact(pickup.contact); setSenderEmail(pickup.email)
     setSenderAddress(pickup.address); setSenderZip(pickup.postal); setSenderCity(pickup.city)
@@ -212,6 +213,9 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
     if (next === 1) setHeaviestWeightKg(weightKg)
   }
 
+  // CTT has a TransportDocument flag; Correos allows 300 chars of observations.
+  const observationsMax = selectedCarrierCode === "ctt_expresso" ? CTT_LIMITS.observations : 300
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (submissionLock.current) return
@@ -229,6 +233,21 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
       })
       return
     }
+    // Prefilled client data bypasses maxLength, so check before sending (CTT rejects the whole pickup).
+    const tooLong = isCttActive && ([
+      ["Nome / Empresa", senderName, CTT_LIMITS.name],
+      ["Contacto", senderContact, CTT_LIMITS.contact],
+      ["Morada", senderAddress, CTT_LIMITS.address],
+      ["Localidade", senderCity, CTT_LIMITS.city],
+      ["Email", senderEmail, CTT_LIMITS.email],
+      ["Telefone", senderPhone, CTT_LIMITS.phone],
+      ["Telemóvel", senderMobile, CTT_LIMITS.phone],
+      ["Observações", observations, observationsMax],
+    ] as const).find(([, value, max]) => value.trim().length > max)
+    if (tooLong) {
+      setResult({ success: false, error: `O campo «${tooLong[0]}» tem ${tooLong[1].trim().length} caracteres; os CTT aceitam no máximo ${tooLong[2]}. Encurte-o antes de agendar.` })
+      return
+    }
     if (volumes > 1 && (!Number.isFinite(heaviestWeightKg) || heaviestWeightKg <= 0 || heaviestWeightKg > weightKg)) {
       setResult({ success: false, error: "O peso do volume mais pesado deve ser maior que 0 e não pode ultrapassar o peso total." })
       return
@@ -237,9 +256,6 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
     setLoading(true)
     setResult(null)
     try {
-      const baseObs = observations
-      const guideObs = guideStatus === "Necessário levar" ? " | Necessário levar guia de transporte" : ""
-      const finalObs = `${baseObs}${guideObs}`
 
       const [startHour, endHour] = period.split("-")
 
@@ -270,7 +286,8 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
           city: senderCity,
           ...submittedContact,
         },
-        observations: finalObs || undefined,
+        observations: observations.trim() || undefined,
+        transportDocument: guideStatus === "Necessário levar",
       }
       const res = activeRequest ? await scheduleClientPickupRequestAction(activeRequest.id, booking) : await scheduleCttPickupAction(booking)
       setResult(res)
@@ -624,82 +641,85 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
             {result && (result.success || result.Success) ? (
               /* ── Success State ── */
               <div className="space-y-4">
-                <div className="p-6 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-                    <CheckCircle2 className="w-7 h-7" />
+                <div className="p-5 bg-[var(--status-success-soft)] border border-[var(--status-success)] rounded-xl flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-xl bg-[var(--status-success)] flex items-center justify-center text-white shrink-0">
+                    <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-emerald-800 dark:text-emerald-300">
-                      Recolha Agendada com Sucesso!
+                    <h3 className="text-base font-bold text-[var(--text-primary)]">
+                      Recolha agendada com sucesso
                     </h3>
-                    <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-1">
+                    <p className="text-sm text-[var(--text-secondary)] mt-1">
                       O pedido de recolha foi confirmado nos WebServices da {result.carrier_name || (selectedCarrierCode === "correos_express" ? "Correos Express" : "CTT Expresso")}.
                       O estafeta passará na morada indicada na janela horária estabelecida.
                     </p>
-                    {result.metadata_saved === false && <p role="alert" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                    {result.metadata_saved === false && <p role="alert" className="mt-3 rounded-lg border border-[var(--status-warning)] bg-[var(--status-warning-soft)] px-3 py-2 text-sm font-medium text-[var(--text-primary)]">
                       A transportadora aceitou a recolha, mas os dados detalhados não foram arquivados no TMS. Guarde a referência {result.pickupNumber} e contacte a administração para recuperar este registo.
                     </p>}
-                    {result.request_update_warning && <p role="alert" className="mt-3 text-sm font-medium text-amber-900">{result.request_update_warning}</p>}
-                    {result.notification_warning && <p role="alert" className="mt-3 text-sm font-medium text-amber-900">{result.notification_warning}</p>}
+                    {result.request_update_warning && <p role="alert" className="mt-3 rounded-lg border border-[var(--status-warning)] bg-[var(--status-warning-soft)] px-3 py-2 text-sm font-medium text-[var(--text-primary)]">{result.request_update_warning}</p>}
+                    {result.notification_warning && <p role="alert" className="mt-3 rounded-lg border border-[var(--status-warning)] bg-[var(--status-warning-soft)] px-3 py-2 text-sm font-medium text-[var(--text-primary)]">{result.notification_warning}</p>}
                   </div>
                 </div>
 
-                <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl p-5 space-y-3 shadow-xs">
+                <div className="bg-[var(--surface-bg)] border border-[var(--border-subtle)] rounded-xl p-5 shadow-sm">
                   <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Detalhes da Confirmação</span>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-100 dark:bg-slate-800 text-[var(--text-secondary)] border border-slate-200 dark:border-slate-700">
+                    <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-widest">Detalhes da confirmação</span>
+                    <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[var(--surface-muted)] text-[var(--text-primary)] border border-[var(--border-strong)]">
                       {result.carrier_name || (selectedCarrierCode === "correos_express" ? "Correos Express" : "CTT Expresso")}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]">
-                    <span className="text-sm text-slate-500 flex items-center gap-2">
-                      <Hash className="w-4 h-4 text-indigo-500" />
-                      PickUp ID ({result.carrier_name || (selectedCarrierCode === "correos_express" ? "Correos" : "CTT")})
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-indigo-700 dark:text-indigo-400 text-lg tracking-wider">
-                        {result.pickupNumber || result.PickUpID}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(result.pickupNumber || result.PickUpID || "")}
-                        className="p-1 text-slate-400 hover:text-slate-700 transition-colors"
-                        title="Copiar PickUp ID"
-                      >
-                        {copiedId === (result.pickupNumber || result.PickUpID) ? (
-                          <Check className="w-4 h-4 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
+                  <dl className="divide-y divide-[var(--border-subtle)]">
+                    <div className="flex items-center justify-between gap-4 py-3">
+                      <dt className="text-sm text-[var(--text-secondary)] flex items-center gap-2">
+                        <Hash className="w-4 h-4 text-[var(--accent)]" />
+                        PickUp ID ({result.carrier_name || (selectedCarrierCode === "correos_express" ? "Correos" : "CTT")})
+                      </dt>
+                      <dd className="flex items-center gap-2">
+                        <span className="font-mono font-black text-[var(--accent)] text-lg tracking-wider">
+                          {result.pickupNumber || result.PickUpID}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(result.pickupNumber || result.PickUpID || "")}
+                          className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-muted)] transition-colors"
+                          title="Copiar PickUp ID"
+                          aria-label="Copiar PickUp ID"
+                        >
+                          {copiedId === (result.pickupNumber || result.PickUpID) ? (
+                            <Check className="w-4 h-4 text-[var(--status-success)]" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </dd>
                     </div>
-                  </div>
 
-                  <div className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]">
-                    <span className="text-sm text-slate-500 flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /> Data de Recolha</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">{date}</span>
-                  </div>
+                    <div className="flex items-center justify-between gap-4 py-3">
+                      <dt className="text-sm text-[var(--text-secondary)] flex items-center gap-2"><Calendar className="w-4 h-4" /> Data de recolha</dt>
+                      <dd className="font-semibold text-[var(--text-primary)]">{date.split("-").reverse().join("/")}</dd>
+                    </div>
 
-                  <div className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)]">
-                    <span className="text-sm text-slate-500 flex items-center gap-2"><Clock className="w-4 h-4 text-slate-400" /> Período Previsto</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200">{period}</span>
-                  </div>
+                    <div className="flex items-center justify-between gap-4 py-3">
+                      <dt className="text-sm text-[var(--text-secondary)] flex items-center gap-2"><Clock className="w-4 h-4" /> Período previsto</dt>
+                      <dd className="font-semibold text-[var(--text-primary)]">{period.replace("-", " – ")}</dd>
+                    </div>
 
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-slate-500 flex items-center gap-2"><MapPin className="w-4 h-4 text-slate-400" /> Morada de Recolha</span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-right">
-                      {senderAddress}<br />
-                      <span className="text-slate-400 font-normal text-xs">{senderZip} {senderCity}</span>
-                    </span>
-                  </div>
+                    <div className="flex items-start justify-between gap-4 py-3">
+                      <dt className="text-sm text-[var(--text-secondary)] flex items-center gap-2 shrink-0"><MapPin className="w-4 h-4" /> Morada de recolha</dt>
+                      <dd className="font-semibold text-[var(--text-primary)] text-right">
+                        {senderAddress}
+                        <span className="block text-[var(--text-secondary)] font-normal text-xs mt-0.5">{senderZip} {senderCity}</span>
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
                   <button
                     type="button"
                     onClick={() => { setView("list"); setResult(null); window.location.reload() }}
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors border border-[var(--border-subtle)]"
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-[var(--text-primary)] bg-[var(--surface-bg)] hover:bg-[var(--surface-muted)] rounded-lg transition-colors border border-[var(--border-strong)]"
                   >
                     Ver Lista de Recolhas
                   </button>
@@ -736,16 +756,16 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                     <p className="mt-1 text-xs text-[var(--text-secondary)]">Empresa que solicita a recolha. Pode editar estes contactos para esta marcação; são independentes do local de recolha.</p>
                     <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                       <label className="block text-xs font-semibold text-[var(--text-secondary)]">Contacto *
-                        <input name="requesterName" required maxLength={50} defaultValue={requesterContact?.name || ""} autoComplete="section-ctt-requester organization" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
+                        <input name="requesterName" required maxLength={CTT_LIMITS.contact} defaultValue={requesterContact?.name || ""} autoComplete="section-ctt-requester organization" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
                       </label>
                       <label className="block text-xs font-semibold text-[var(--text-secondary)]">Email
-                        <input name="requesterEmail" type="email" maxLength={50} defaultValue={requesterContact?.email || ""} autoComplete="section-ctt-requester email" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
+                        <input name="requesterEmail" type="email" maxLength={CTT_LIMITS.email} defaultValue={requesterContact?.email || ""} autoComplete="section-ctt-requester email" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
                       </label>
                       <label className="block text-xs font-semibold text-[var(--text-secondary)]">Telefone
-                        <input name="requesterPhone" type="tel" defaultValue={requesterContact?.phone || DEFAULT_CTT_REQUESTER_PHONE} autoComplete="section-ctt-requester-phone tel" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
+                        <input name="requesterPhone" type="tel" maxLength={CTT_LIMITS.phone} defaultValue={requesterContact?.phone || DEFAULT_CTT_REQUESTER_PHONE} autoComplete="section-ctt-requester-phone tel" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
                       </label>
                       <label className="block text-xs font-semibold text-[var(--text-secondary)]">Telemóvel
-                        <input name="requesterMobile" type="tel" defaultValue={requesterContact?.mobilePhone || ""} autoComplete="section-ctt-requester-mobile tel" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
+                        <input name="requesterMobile" type="tel" maxLength={CTT_LIMITS.phone} defaultValue={requesterContact?.mobilePhone || ""} autoComplete="section-ctt-requester-mobile tel" className="mt-1 w-full rounded-lg border border-[var(--border-strong)] bg-[var(--surface-bg)] px-3 py-2 text-sm text-[var(--text-primary)]" />
                       </label>
                     </div>
                     <p className="mt-3 text-xs text-[var(--text-secondary)]">Se deixar o telefone vazio, será usado {DEFAULT_CTT_REQUESTER_PHONE} como contacto do solicitante. O telemóvel e os contactos do local de recolha mantêm os seus próprios valores.</p>
@@ -868,23 +888,12 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                       <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                         Cliente Associado (Preenche Morada)
                       </label>
-                      <div className="relative">
-                        <Building2 className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                        <select
-                          value={selectedClientId}
-                          disabled={!!activeRequest}
-                          onChange={e => handleClientChange(e.target.value)}
-                          className="w-full pl-9 pr-8 border border-slate-300 dark:border-slate-700 rounded-lg py-2 text-xs font-medium text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                          <option value="">— Recolha Interna / Sem Cliente —</option>
-                          {clients.map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.code ? `[${c.code}] ` : ""}{c.name}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                      </div>
+                      <ClientPicker
+                        clients={clients}
+                        value={selectedClientId}
+                        disabled={!!activeRequest}
+                        onChange={handleClientChange}
+                      />
                       {selectedClientId && (
                         <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1.5 font-medium flex items-center gap-1">
                           <Check className="w-3 h-3" /> Dados de morada preenchidos automaticamente
@@ -907,11 +916,11 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                         required
                         type="date"
                         value={date}
-                        min={isCttActive ? todayDate() : tomorrowDate()}
+                        min={todayDate()}
                         onChange={e => setDate(e.target.value)}
                         className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                       />
-                      {isCttActive && <button type="button" onClick={() => setDate(todayDate())} className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline">Selecionar hoje</button>}
+                      <button type="button" onClick={() => setDate(todayDate())} className="mt-2 text-xs font-semibold text-[var(--accent)] hover:underline">Selecionar hoje</button>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Período de Recolha *</label>
@@ -923,13 +932,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                         {isCttActive ? (
                           <option value="09:00-19:00">09h00 - 19h00 — Dia inteiro</option>
                         ) : (
-                          <>
-                            <option value="08:00-10:00">08h00 - 10h00</option>
-                            <option value="10:00-13:00">10h00 - 13h00</option>
-                            <option value="13:00-16:00">13h00 - 16h00</option>
-                            <option value="16:00-19:00">16h00 - 19h00</option>
-                            <option value="19:00-22:00">19h00 - 22h00</option>
-                          </>
+                          <option value="09:00-17:00">09h00 - 17h00 — Dia inteiro</option>
                         )}
                       </select>
                     </div>
@@ -958,7 +961,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                           <input
                             required
                             type="text"
-                            value={senderName}
+                            maxLength={CTT_LIMITS.name} value={senderName}
                             onChange={e => setSenderName(e.target.value)}
                             placeholder="Armazém / Empresa"
                             className="w-full pl-9 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
@@ -969,7 +972,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                         <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Pessoa de Contacto</label>
                         <input
                           type="text"
-                          value={senderContact}
+                          maxLength={CTT_LIMITS.contact} value={senderContact}
                           onChange={e => setSenderContact(e.target.value)}
                           placeholder="Nome de quem entrega"
                           className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
@@ -994,7 +997,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                       <input
                         required
                         type="text"
-                        value={senderAddress}
+                        maxLength={CTT_LIMITS.address} value={senderAddress}
                         onChange={e => setSenderAddress(e.target.value)}
                         placeholder="Rua Principal, 100"
                         className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
@@ -1007,7 +1010,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                         <input
                           required
                           type="text"
-                          value={senderZip}
+                          maxLength={10} value={senderZip}
                           onChange={e => setSenderZip(e.target.value)}
                           placeholder="0000-000"
                           className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
@@ -1018,7 +1021,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                         <input
                           required
                           type="text"
-                          value={senderCity}
+                          maxLength={CTT_LIMITS.city} value={senderCity}
                           onChange={e => setSenderCity(e.target.value)}
                           placeholder="Porto"
                           className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
@@ -1031,7 +1034,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                         <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">Email</label>
                         <input
                           type="email"
-                          value={senderEmail}
+                          maxLength={CTT_LIMITS.email} value={senderEmail}
                           onChange={e => setSenderEmail(e.target.value)}
                           placeholder="contacto@empresa.pt"
                           className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
@@ -1045,7 +1048,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                             type="tel"
                             name="pickupPhone"
                             autoComplete="section-pickup-phone tel"
-                            value={senderPhone}
+                            maxLength={CTT_LIMITS.phone} value={senderPhone}
                             onChange={e => setSenderPhone(e.target.value)}
                             className="w-full pl-9 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                           />
@@ -1059,7 +1062,7 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                             type="tel"
                             name="pickupMobilePhone"
                             autoComplete="section-pickup-mobile tel"
-                            value={senderMobile}
+                            maxLength={CTT_LIMITS.phone} value={senderMobile}
                             onChange={e => setSenderMobile(e.target.value)}
                             className="w-full pl-9 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                           />
@@ -1199,10 +1202,14 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
                   <textarea
                     rows={2}
                     value={observations}
+                    maxLength={observationsMax}
                     onChange={e => setObservations(e.target.value)}
                     placeholder="Ex: Tocar ao portão azul, recolher na secção de expedição 2…"
                     className="w-full border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-200 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-slate-800"
                   />
+                  <p className={`mt-1 text-right text-[11px] ${observations.length > observationsMax ? "text-red-600 font-semibold" : "text-slate-400"}`}>
+                    {observations.length}/{observationsMax}
+                  </p>
                 </div>
 
                 {/* Submit Bar */}
@@ -1245,5 +1252,94 @@ export function RecolhasClient({ recolhas: initialRecolhas, clients, carrierConn
       )}
       {openedPickup && <PickupDetailsDialog key={`${openedPickup.source}:${openedPickup.id}`} selected={openedPickup} onClose={() => setOpenedPickup(null)} onUpdated={pickup => setUpdatedPickups(previous => ({ ...previous, [pickup.id]: pickup }))} />}
     </div>
+  )
+}
+
+const normalize = (v?: string) => (v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+
+function ClientPicker({ clients, value, disabled, onChange }: {
+  clients: MappedClient[]
+  value: string
+  disabled?: boolean
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [query, setQuery] = React.useState("")
+  const [active, setActive] = React.useState(0)
+  const listRef = React.useRef<HTMLUListElement>(null)
+  const selected = clients.find(c => c.id === value)
+
+  const terms = normalize(query).split(/\s+/).filter(Boolean)
+  const filtered = terms.length
+    ? clients.filter(c => {
+        const hay = normalize(`${c.code} ${c.name} ${c.city} ${c.postal_code} ${c.email}`)
+        return terms.every(t => hay.includes(t))
+      })
+    : clients
+  // index 0 = "Recolha Interna / Sem Cliente"
+  const options = [{ id: "", label: "— Recolha Interna / Sem Cliente —", sub: "" },
+    ...filtered.map(c => ({ id: c.id, label: `${c.code ? `[${c.code}] ` : ""}${c.name}`, sub: [c.postal_code, c.city].filter(Boolean).join(" ") }))]
+
+  const pick = (id: string) => { onChange(id); setOpen(false); setQuery("") }
+
+  React.useEffect(() => {
+    listRef.current?.querySelector(`[data-idx="${active}"]`)?.scrollIntoView({ block: "nearest" })
+  }, [active])
+
+  return (
+    <Popover open={open} onOpenChange={o => { setOpen(o); if (!o) setQuery("") }}>
+      <PopoverTrigger asChild disabled={disabled}>
+        <button
+          type="button"
+          className="relative w-full pl-9 pr-8 border border-slate-300 dark:border-slate-700 rounded-lg py-2 text-xs font-medium text-left text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60 truncate"
+        >
+          <Building2 className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          {selected ? `${selected.code ? `[${selected.code}] ` : ""}${selected.name}` : "— Recolha Interna / Sem Cliente —"}
+          <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="!p-0 !w-[var(--radix-popover-trigger-width)] min-w-[280px]">
+        <div className="relative border-b border-[var(--border-subtle)]">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            autoFocus
+            value={query}
+            onChange={e => { setQuery(e.target.value); setActive(0) }}
+            onKeyDown={e => {
+              if (e.key === "ArrowDown") { e.preventDefault(); setActive(i => Math.min(i + 1, options.length - 1)) }
+              else if (e.key === "ArrowUp") { e.preventDefault(); setActive(i => Math.max(i - 1, 0)) }
+              else if (e.key === "Enter") { e.preventDefault(); if (options[active]) pick(options[active].id) }
+            }}
+            placeholder="Procurar por código, nome, cidade ou email…"
+            role="combobox"
+            aria-expanded
+            aria-controls="client-picker-list"
+            aria-activedescendant={`client-opt-${active}`}
+            className="w-full bg-transparent pl-9 pr-3 py-2.5 text-xs text-[var(--text-primary)] placeholder:text-slate-400 focus:outline-none"
+          />
+        </div>
+        <ul ref={listRef} id="client-picker-list" role="listbox" className="max-h-72 overflow-y-auto py-1">
+          {options.map((o, i) => (
+            <li
+              key={o.id || "none"}
+              id={`client-opt-${i}`}
+              data-idx={i}
+              role="option"
+              aria-selected={o.id === value}
+              onMouseEnter={() => setActive(i)}
+              onMouseDown={e => { e.preventDefault(); pick(o.id) }}
+              className={`flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer ${i === active ? "bg-indigo-50 dark:bg-indigo-500/15" : ""}`}
+            >
+              <Check className={`w-3.5 h-3.5 shrink-0 text-indigo-600 ${o.id === value ? "" : "invisible"}`} />
+              <span className="truncate font-medium text-[var(--text-primary)]">{o.label}</span>
+              {o.sub && <span className="ml-auto shrink-0 text-[10px] text-slate-400">{o.sub}</span>}
+            </li>
+          ))}
+          {filtered.length === 0 && (
+            <li className="px-3 py-3 text-xs text-slate-400 text-center">Nenhum cliente encontrado para “{query}”</li>
+          )}
+        </ul>
+      </PopoverContent>
+    </Popover>
   )
 }

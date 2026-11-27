@@ -3,7 +3,7 @@ import { z } from "zod"
 export { PICKUP_REQUEST_ACTION, PICKUP_REQUEST_PERMISSION, formatPickupTimestamp, pickupWhen } from "./pickup-request-notifications"
 export const PICKUP_REQUEST_PAGE_SIZE = 25
 export const CTT_PICKUP_PERIODS = ["09:00-19:00"] as const
-export const CORREOS_PICKUP_PERIODS = ["08:00-10:00", "10:00-13:00", "13:00-16:00", "16:00-19:00", "19:00-22:00"] as const
+export const CORREOS_PICKUP_PERIODS = ["09:00-17:00"] as const // Correos Express pickup window
 export const PICKUP_PERIODS = [...CTT_PICKUP_PERIODS, ...CORREOS_PICKUP_PERIODS] as const
 export function pickupRequestToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
@@ -35,7 +35,7 @@ export const pickupRequestSchema = z.object({
   volumes: z.number().int().min(1).max(1000), weightKg: z.number().finite().positive().max(20000),
   heaviestWeightKg: z.number().finite().positive().max(20000),
   ...pickupAddressSchema.shape,
-  notes: z.string().trim().max(500),
+  notes: z.string().trim().max(50, "As observações podem ter no máximo 50 caracteres."), // CTT rejects >50 (EW0074)
 }).strict().superRefine((value, ctx) => {
   const periods: readonly string[] = value.carrier === "ctt_expresso" ? CTT_PICKUP_PERIODS : CORREOS_PICKUP_PERIODS
   if (!periods.includes(value.period)) ctx.addIssue({ code: "custom", path: ["period"], message: "Selecione um período disponível para a transportadora." })

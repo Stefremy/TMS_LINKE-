@@ -141,7 +141,7 @@ function buildNewOfferPickUpXml(creds: CTTConnectionCredentials, input: CTTPicku
             </pick:PickupAddress>
             <pick:TotalObjects>${input.QuantidadeVolumes || 1}</pick:TotalObjects>
             <pick:TotalWeight>${totalWeight}</pick:TotalWeight>
-            <pick:TransportDocument>0</pick:TransportDocument>
+            <pick:TransportDocument>${input.GuiaTransporte ? 1 : 0}</pick:TransportDocument>
           </pick:PickUpData>
         </tem:Input>
       </tem:NewOfferPickUp>

@@ -209,6 +209,7 @@ export interface CTTPickupRequestInput {
   PesoKg: number
   PesoObjetoMaisPesadoKg?: number
   Observacoes?: string
+  GuiaTransporte?: boolean
 }
 
 export interface CTTPickupRequestOutput {

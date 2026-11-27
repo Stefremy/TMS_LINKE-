@@ -53,6 +53,24 @@ test('NewOfferPickUp omits the period for 09:00–19:00 and uses SAP codes for t
   assert.equal(requests.length, 6, 'invalid windows must be blocked before calling CTT')
 })
 
+test('the transport guide is sent as the TransportDocument flag, not as observation text', async () => {
+  const requests = []
+  const load = createLoader({ './ctt-soap-client': { CTTSoapClient: class {
+    static escapeXml(value) { return String(value ?? '') }
+    async callSoap(options) { requests.push(options); return { NewOfferPickUpResponse: { NewOfferPickUpResult: { Status: 'Success', PickUpID: 'MOCK-ONLY' } } } }
+  } } })
+  const { CTTPickupService } = load('lib/services/ctt/ctt-pickup.service.ts')
+  const creds = { auth_id: 'a', client_number: '1', contract_number: '2', environment: 'production' }
+  const input = { DataRecolha: '2026-11-28', HoraInicio: '09:00', HoraFim: '19:00', Destination: 'PT',
+    BiggestObjectDimensionsCm: { Length: 40, Width: 30, Height: 20 }, QuantidadeVolumes: 1, PesoKg: 1, Observacoes: 'Tocar à campainha',
+    Expedidor: { Nome: 'Teste', Morada: 'Rua Teste', CP4: '1000', CP3: '001', Localidade: 'Lisboa', Telefone: '253123456' } }
+  await new CTTPickupService().newOfferPickUp(creds, { ...input, GuiaTransporte: true })
+  assert.match(requests.at(-1).soapBodyXml, /<pick:TransportDocument>1<\/pick:TransportDocument>/)
+  assert.match(requests.at(-1).soapBodyXml, /<pick:Observations>Tocar à campainha<\/pick:Observations>/)
+  await new CTTPickupService().newOfferPickUp(creds, input)
+  assert.match(requests.at(-1).soapBodyXml, /<pick:TransportDocument>0<\/pick:TransportDocument>/)
+})
+
 test('requester defaults and manual overrides stay separate from pickup location contacts', async () => {
   let soapRequest
   const loadService = createLoader({

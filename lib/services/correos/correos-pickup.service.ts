@@ -3,8 +3,8 @@ import { errorMessage } from "@/lib/errors"
 import { CorreosRestClient } from "./correos-rest-client"
 import { CorreosCredentials } from "./types"
 
-const PROD_ENDPOINT = "https://www.cexpr.es/wspsc/apiRestGrabacionRecogidak8s/json/grabacionRecogida"
-const TEST_ENDPOINT = "https://www.test.cexpr.es/wspsc/apiRestGrabacionRecogidak8s/json/grabacionRecogida"
+const PROD_ENDPOINT = "https://www.cexpr.es/wspsc/apiRestGrabacionRecogidaEnviok8s/json/grabarRecogida"
+const TEST_ENDPOINT = "https://www.test.cexpr.es/wspsc/apiRestGrabacionRecogidaEnviok8s/json/grabarRecogida"
 
 export interface CorreosPickupInput {
   date: string // YYYY-MM-DD
@@ -67,60 +67,57 @@ export class CorreosPickupService {
     const rawZip = (input.sender.zip || "").trim()
     const cleanZip = rawZip.replace(/\D/g, "")
     const formattedPTZip = cleanZip.length === 7 ? `${cleanZip.slice(0, 4)}-${cleanZip.slice(4)}` : rawZip
+    const hhmm = (h: string) => (/^\d{4}$/.test(h) ? `${h.slice(0, 2)}:${h.slice(2)}` : h.slice(0, 5))
+    const observ = [
+      input.observations || "",
+      input.volumes > 1 && input.heaviestWeightKg ? `Peso do volume mais pesado: ${input.heaviestWeightKg} kg` : "",
+    ].filter(Boolean).join(" | ")
 
-    const payload: Record<string, unknown> = {
+    // Field names and limits per DC_SP_WS_GrabacionRecogidaRest_v01.09 §4.1 (grabarRecogida).
+    const payload: Record<string, string> = {
       solicitante: creds.solicitante,
-      codRte: creds.codRte,
-      fecha,
-      horaDesde: input.startHour.replace(":", ""),
-      horaHasta: input.endHour.replace(":", ""),
-      nomRte: input.sender.name,
-      contacRte: input.sender.contact || input.sender.name,
-      dirRte: isPT ? `${input.sender.address} - CP: ${formattedPTZip}`.slice(0, 100) : input.sender.address,
-      pobRte: input.sender.city.slice(0, 40),
-      codPosNacRte: !isPT ? input.sender.zip : "",
-      codPosIntRte: isPT ? formattedPTZip : "",
-      paisISORte: input.sender.country || "PT",
-      telefRte: input.sender.phone.replace(/\D/g, ""),
-      emailRte: input.sender.email || "",
-      bultos: String(input.volumes || 1),
+      refRecogida: `LNK${Date.now()}`, // required and must be unique (error 104 on duplicates)
+      fechaRecogida: fecha,
+      horaDesde1: hhmm(input.startHour),
+      horaHasta1: hhmm(input.endHour),
+      clienteRecogida: creds.codRte,
+      nomRemit: input.sender.name.slice(0, 40),
+      dirRecog: (isPT ? `${input.sender.address} - CP: ${formattedPTZip}` : input.sender.address).slice(0, 300),
+      poblRecog: input.sender.city.slice(0, 50),
+      // shortcut: the docs only define a 5-digit Spanish cpRecog; PT format unconfirmed, ask CEX integration team.
+      cpRecog: isPT ? formattedPTZip : rawZip,
+      contRecog: (input.sender.contact || input.sender.name).slice(0, 50),
+      tlfnoRecog: input.sender.phone.replace(/\D/g, "").slice(0, 20),
+      emailRecog: (input.sender.email || "").slice(0, 100),
+      observ: observ.slice(0, 300),
+      // shortcut: product 63 is the docs' example; confirm the pickup product for this contract with CEX.
+      producto: "63",
       kilos: String(input.weightKg || 1),
-      observac: [
-        input.observations || "",
-        input.volumes > 1 && input.heaviestWeightKg
-          ? `Peso do volume mais pesado: ${input.heaviestWeightKg} kg`
-          : "",
-      ].filter(Boolean).join(" | ").slice(0, 100),
+      bultos: String(input.volumes || 1),
+      tipoPortes: "P",
+      latente: "0",
     }
 
     try {
-      const response = await this.client.request<{ codigoRetorno?: number; numRecogida?: string | number; datosResultado?: string | number; mensajeRetorno?: string }>(endpoint, creds, payload)
-      if (response && (response.codigoRetorno === 0 || response.numRecogida || response.datosResultado)) {
-        const pickupNum = response.datosResultado || response.numRecogida || `CEX-${Date.now().toString().slice(-8)}`
+      const response = await this.client.request<{ resultado?: string | number | null; numRecogida?: string | number | null; codError?: number; mensError?: string | null; codigoRetorno?: number; mensajeRetorno?: string }>(endpoint, creds, payload)
+      // Only a number issued by Correos counts as booked; never invent one.
+      if (String(response?.resultado) === "1" && response?.numRecogida) {
         return {
           success: true,
-          pickupNumber: String(pickupNum),
+          pickupNumber: String(response.numRecogida),
           rawResponse: response,
         }
       }
 
+      const code = response?.codError ?? response?.codigoRetorno
+      const message = response?.mensError || response?.mensajeRetorno
       return {
         success: false,
-        error: response?.mensajeRetorno || "Falha ao registar recolha na Correos Express",
+        error: message ? `Correos Express (${code ?? "?"}): ${message}` : "Falha ao registar recolha na Correos Express",
         rawResponse: response,
       }
     } catch (err) {
       console.warn("Correos Express Pickup API call:", errorMessage(err))
-
-      // Se for ambiente de teste ou QA e a rota do microserviço da Correos Express não estiver exposta
-      if (creds.environment === "test" || creds.solicitante === "1" || errorMessage(err)?.includes("404")) {
-        const fallbackPickup = `CEX-REC-${Math.floor(100000 + Math.random() * 900000)}`
-        return {
-          success: true,
-          pickupNumber: fallbackPickup,
-        }
-      }
-
       return {
         success: false,
         error: `Erro Correos Express: ${errorMessage(err)}`,
