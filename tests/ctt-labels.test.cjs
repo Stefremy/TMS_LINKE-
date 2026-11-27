@@ -40,11 +40,11 @@ test('customs documents and acceptance certificates are never used as a transpor
 })
 
 const tenant='11111111-1111-1111-1111-111111111111',owner='22222222-2222-2222-2222-222222222222',id='33333333-3333-4333-8333-333333333333'
-function retrieval({snapshot={},native={},otherOwner=false}={}){
+function retrieval({snapshot={},native={},otherOwner=false,role='client'}={}){
  const client=otherOwner?'other-store':owner
- const db=fakeSupabase({shipments:[{id,tenant_id:tenant,client_id:client,carrier_tracking_number:'CE000000001PT',carrier_code:'ctt',...native}],
+ const db=fakeSupabase({shipments:[{id,tenant_id:tenant,client_id:client,carrier_tracking_number:'CE000000001PT',carrier_code:'ctt',status:'pendente',...native}],
   audit_log:[{tenant_id:tenant,action:'shipment_data',created_at:'2026-10-26',details:{id,client_id:client,carrier_tracking_number:'CE000000001PT',carrier_code:'ctt',...snapshot}}]})
- const api=createLoader({'@/lib/supabase/server':{createAdminClient:()=>db.client},'@/lib/auth/context':{requireUser:async()=>({role:'client',tenant_id:tenant,client_id:owner})},
+ const api=createLoader({'@/lib/supabase/server':{createAdminClient:()=>db.client},'@/lib/auth/context':{requireUser:async()=>({role,tenant_id:tenant,client_id:owner})},
   '@/lib/services/correos/correos-label-customizer':{},'@/lib/label-utils':{}})('lib/services/shipments/shipment-fetcher.ts')
  return{db,api}
 }
@@ -58,6 +58,15 @@ test('stored carrier PDFs can be retrieved from rawResponse.ShipmentData[0].Docu
  const h=retrieval({snapshot:{rawResponse:{ShipmentData:[{FirstObject:'CE000000001PT',LabelList:[],DocumentsList:[{FileName:'CE000000001PT.pdf',File:pdf}]}]}}})
  assert.equal(await h.api.fetchShipmentLabel(id),pdf)
  assert.equal(h.db.writes.length,0)
+})
+test('a client cannot print after the first status update, even through a stale saved reference; staff can until delivery',async()=>{
+ const saved={ctt_documents:[{FileName:'guia.pdf',File:pdf}],status:'pendente'}
+ for(const status of ['entrada_rede','recolhido','em_distribuicao','incidencia','devolvido']){
+  assert.equal(await retrieval({snapshot:saved,native:{status}}).api.fetchShipmentLabel(id),null,status)
+  assert.equal(await retrieval({snapshot:{...saved,ctt_object_id:'OBJ1'},native:{status}}).api.fetchShipmentLabel('OBJ1'),null,`snapshot reference ${status}`)
+  assert.equal(await retrieval({snapshot:saved,native:{status},role:'employee'}).api.fetchShipmentLabel(id),pdf,`staff ${status}`)
+ }
+ assert.equal(await retrieval({snapshot:saved,native:{status:'entregue'},role:'employee'}).api.fetchShipmentLabel(id),null)
 })
 test('missing official labels return unavailable and never generate substitute carrier labels',async()=>{
  const h=retrieval()

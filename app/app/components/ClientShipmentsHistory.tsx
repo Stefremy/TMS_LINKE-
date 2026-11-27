@@ -1,4 +1,5 @@
 "use client"
+import { clientCanPrintLabel, CLIENT_LABEL_LOCKED_MESSAGE } from "@/lib/shipments/label-access"
 import { toast } from "sonner"
 import type { ShipmentRecord, ShipmentTimelineEvent } from "@/lib/services/shipments/types"
 import { errorMessage } from "@/lib/errors"
@@ -72,6 +73,7 @@ export function ClientShipmentsHistory() {
 
   const printLabel = async (envioItem: ShipmentRecord) => {
     if (["anulado", "cancelado"].includes(envioItem.status || "")) { toast.error("Este envio foi anulado. Já não é possível imprimir a etiqueta."); return }
+    if (!clientCanPrintLabel(envioItem.status)) { toast.error(CLIENT_LABEL_LOCKED_MESSAGE); return }
     const label = await fetchLabelForShipment(envioItem)
     if (label) {
       printCttLabel(label)
@@ -82,6 +84,7 @@ export function ClientShipmentsHistory() {
 
   const downloadLabel = async (envioItem: ShipmentRecord, ref: string) => {
     if (["anulado", "cancelado"].includes(envioItem.status || "")) { toast.error("Este envio foi anulado. Já não é possível imprimir a etiqueta."); return }
+    if (!clientCanPrintLabel(envioItem.status)) { toast.error(CLIENT_LABEL_LOCKED_MESSAGE); return }
     const label = await fetchLabelForShipment(envioItem, ref)
     if (label) {
       const carrier = (envioItem?.transportadora || envioItem?.servico || "").toLowerCase().includes("correos") ? "Correos" : "CTT"
@@ -245,6 +248,7 @@ export function ClientShipmentsHistory() {
       {/* Detalhes do Envio Modal */}
       <ClientSupportRequestDialog key={supportShipment?.id ?? "none"} open={!!supportShipment} onOpenChange={open => { if (!open) setSupportShipment(null) }} prefill={supportShipment ? shipmentSupportPrefill(supportShipment) : undefined} />
       <ClientShipmentDetailModal 
+        clientView
         shipment={selectedShipment} 
         onClose={() => setSelectedShipment(null)} 
         onUpdateShipment={(updated) => {
@@ -480,9 +484,9 @@ export function ClientShipmentsHistory() {
                         <button
                           type="button"
                           onClick={() => printLabel(envio)}
-                          disabled={["anulado", "cancelado"].includes(envio.status || "")}
+                          disabled={!clientCanPrintLabel(envio.status)}
                           aria-label={`Imprimir etiqueta do envio ${tracking}`}
-                          className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-lg border border-[var(--border-strong)] transition-colors cursor-pointer"
+                          className="disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--accent)] hover:bg-[var(--accent-soft)] rounded-lg border border-[var(--border-strong)] transition-colors cursor-pointer"
                           title="Imprimir Etiqueta"
                         >
                           <Printer className="w-3.5 h-3.5" />
@@ -490,9 +494,9 @@ export function ClientShipmentsHistory() {
                         <button
                           type="button"
                           onClick={() => downloadLabel(envio, tracking)}
-                          disabled={["anulado", "cancelado"].includes(envio.status || "")}
+                          disabled={!clientCanPrintLabel(envio.status)}
                           aria-label={`Descarregar etiqueta PDF do envio ${tracking}`}
-                          className="inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--text-secondary)] hover:bg-[var(--surface-dim)] rounded-lg border border-[var(--border-strong)] transition-colors cursor-pointer"
+                          className="disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none inline-flex items-center justify-center min-w-11 min-h-11 text-[var(--text-secondary)] hover:bg-[var(--surface-dim)] rounded-lg border border-[var(--border-strong)] transition-colors cursor-pointer"
                           title="Descarregar PDF"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -634,8 +638,8 @@ export function ClientShipmentsHistory() {
                               setOpenDropdownId(null);
                               printLabel(envio);
                             }}
-                            disabled={["anulado", "cancelado"].includes(envio.status || "")}
-                            className="w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
+                            disabled={!clientCanPrintLabel(envio.status)}
+                            className="disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
                           >
                             <Printer className="w-3.5 h-3.5 text-[var(--accent)]" />
                             <span>Imprimir Etiqueta CTT</span>
@@ -645,8 +649,8 @@ export function ClientShipmentsHistory() {
                               setOpenDropdownId(null);
                               downloadLabel(envio, envio.tracking_number || envio.id);
                             }}
-                            disabled={["anulado", "cancelado"].includes(envio.status || "")}
-                            className="w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
+                            disabled={!clientCanPrintLabel(envio.status)}
+                            className="disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none w-full px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] flex items-center gap-2 transition-colors cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
                             <span>Descarregar PDF</span>

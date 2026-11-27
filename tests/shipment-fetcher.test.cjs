@@ -114,3 +114,13 @@ test('pickup display uses Lisbon date/time instead of the server timezone and ha
  assert.deepEqual(pickup.pickupDateDisplay('2026-10-22T23:30:00Z'),{date:'23/10/2026',time:'00:30'})
  assert.equal(pickup.pickupDateDisplay(null),null);assert.equal(pickup.pickupDateDisplay('invalid'),null)
 })
+test('Tracking tabs filter by status before the limit, so older delivered shipments are not cut off by newer active ones',async()=>{
+  const at=n=>`2026-10-${String(n).padStart(2,'0')}T10:00:00Z`
+  const rows=[...Array.from({length:20},(_,i)=>({...row(`active${i}`),status:'pendente',created_at:at(20+Math.floor(i/3))})),
+    {...row('old-delivered'),status:'entregue',created_at:at(1)},{...row('foreign-delivered',A,OTHER_TENANT),status:'entregue',created_at:at(2)}]
+  const h=harness({rows})
+  const delivered=await h.api.fetchShipments({limit:15,statuses:['entregue','devolvido']})
+  assert.deepEqual(delivered.map(s=>s.id),['old-delivered'])
+  const active=await h.api.fetchShipments({limit:15,statuses:['pendente','recolhido','entrada_rede','em_distribuicao']})
+  assert.equal(active.length,15);assert.ok(active.every(s=>s.status==='pendente'))
+})

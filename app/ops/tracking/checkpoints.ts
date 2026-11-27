@@ -36,7 +36,8 @@ function isResolved(coordinate: GeoCoordinate) {
 
 export async function buildTrackingCheckpoints(
   events: TrackingEventInput[],
-  options: { destination: GeoCoordinate; delivered: boolean; country: string }
+  // useApi false: never wait for the external geocoder; unknown places are marked for a later lookup.
+  options: { destination: GeoCoordinate; delivered: boolean; country: string; useApi?: boolean }
 ): Promise<ShipmentPickagem[]> {
   const checkpoints: ShipmentPickagem[] = []
   for (const [index, event] of events.entries()) {
@@ -45,6 +46,7 @@ export async function buildTrackingCheckpoints(
     const isDelivery = event.event_code === "EMI"
       || /^(?:(?:objeto|envio|encomenda) )?(?:entregue|entrega conseguida)\b/i.test(description)
     let coordinate: GeoCoordinate | null = null
+    let geocode: ShipmentPickagem["geocode"]
 
     if (isDelivery) {
       if (isResolved(options.destination)) coordinate = options.destination
@@ -53,9 +55,10 @@ export async function buildTrackingCheckpoints(
       // would search for "OBR" instead of the explicitly named Braga centre.
       const known = resolveLocationCoordinate(location)
       const resolved = isResolved(known) ? known : await resolveCoordinates({
-        city: location, country: options.country, useApi: true,
+        city: location, country: options.country, useApi: options.useApi !== false,
       })
       if (isResolved(resolved)) coordinate = resolved
+      else if (options.useApi === false) geocode = { city: location, country: options.country }
     }
 
     const timestamp = event.timestamp || event.created_at || ""
@@ -76,6 +79,7 @@ export async function buildTrackingCheckpoints(
       status: isLast && !options.delivered ? "current" : "completed",
       isCurrentPosition: isLast,
       description,
+      ...(geocode ? { geocode } : {}),
     })
   }
   return checkpoints

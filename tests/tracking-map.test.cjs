@@ -266,3 +266,16 @@ test('timeline explains the unlocated reading without removing it', async () => 
   assert.match(html, /1 com localização/)
   assert.doesNotMatch(html, /Porto Norte/)
 })
+
+test('with useApi false the page never waits for the external geocoder and marks unknown places for a later lookup', async () => {
+  const h = harness()
+  const checkpoints = await h.buildTrackingCheckpoints([
+    scan('Recolha Efetuada (CLD VILA DESCONHECIDA)', 'EMP'),
+    scan('Chegada ao Nó Cliente (Nó Cliente)', 'EMO'),
+  ], { ...options, useApi: false })
+  assert.ok(h.queries.every(q => q.useApi === false))
+  assert.deepEqual(checkpoints[0].geocode, { city: 'CLD VILA DESCONHECIDA', country: 'PT' })
+  assert.equal(checkpoints[0].lat, null)
+  assert.equal(checkpoints[1].geocode, undefined, 'generic client nodes are never looked up')
+  assert.equal(checkpoints.length, 2, 'the timeline keeps every event')
+})

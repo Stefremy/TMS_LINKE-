@@ -99,9 +99,47 @@ export function DeliveryTrackingClient({
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false)
 
   // Current selected shipment
-  const selectedShipment = useMemo(() => {
+  const baseSelectedShipment = useMemo(() => {
     return allShipments.find(s => s.id === selectedShipmentId) || allShipments[0]
   }, [allShipments, selectedShipmentId])
+
+  // Places the server did not wait for are located now, only for the shipment being viewed.
+  const [placeCoords, setPlaceCoords] = useState<Record<string, { lat: number; lng: number; name?: string; district?: string } | null>>({})
+  const placeKey = (g: { city: string; country: string }) => `${g.country}|${g.city.toLowerCase()}`
+  const pendingPlaces = useMemo(() => {
+    const seen = new Map<string, { city: string; country: string }>()
+    for (const p of baseSelectedShipment?.pickagens || []) if (p.geocode && !(placeKey(p.geocode) in placeCoords)) seen.set(placeKey(p.geocode), p.geocode)
+    return [...seen.values()].slice(0, 10)
+  }, [baseSelectedShipment, placeCoords])
+  const pendingKey = pendingPlaces.map(placeKey).join(";")
+  useEffect(() => {
+    if (!pendingKey) return
+    let cancelled = false
+    fetch("/api/geo/places", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ places: pendingPlaces }) })
+      .then(res => res.ok ? res.json() : { results: [] })
+      .catch(() => ({ results: [] }))
+      .then((data: { results?: { city: string; country: string; coordinate: { lat: number; lng: number; name?: string; district?: string } | null }[] }) => {
+        if (cancelled) return
+        // Failed lookups are recorded as null so they are not retried on every render.
+        const next: Record<string, { lat: number; lng: number; name?: string; district?: string } | null> = {}
+        for (const p of pendingPlaces) next[placeKey(p)] = null
+        for (const r of data.results || []) next[placeKey(r)] = r.coordinate
+        setPlaceCoords(prev => ({ ...prev, ...next }))
+      })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- pendingKey identifies pendingPlaces
+  }, [pendingKey])
+  const selectedShipment = useMemo(() => {
+    if (!baseSelectedShipment) return baseSelectedShipment
+    let changed = false
+    const pickagens = baseSelectedShipment.pickagens.map(p => {
+      const c = p.geocode ? placeCoords[placeKey(p.geocode)] : undefined
+      if (!c) return p
+      changed = true
+      return { ...p, lat: c.lat, lng: c.lng, locationName: c.name || p.locationName, city: c.district || p.city }
+    })
+    return changed ? { ...baseSelectedShipment, pickagens } : baseSelectedShipment
+  }, [baseSelectedShipment, placeCoords])
 
   // Status counts for filter tabs
   const counts = useMemo(() => {

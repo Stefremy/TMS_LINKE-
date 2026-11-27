@@ -3,6 +3,7 @@ import { Metadata } from "next"
 import Link from "next/link"
 import { requirePortalStore } from "@/lib/client-portal/access"
 import { getShipmentsAction } from "@/app/actions/shipments"
+import { TRACKING_ACTIVE_STATUSES, TRACKING_DELIVERED_STATUSES } from "@/lib/shipments/tracking-tabs"
 import { createAdminClient } from "@/lib/supabase/server"
 import { loadShipmentParcelSummaries } from "@/lib/services/shipments/shipment-parcel-summaries"
 import type { ParcelSummary } from "@/lib/services/shipments/parcel-summary"
@@ -48,8 +49,9 @@ export default async function ClientTrackingPage({
     const allFetched = await getShipmentsAction({
       includeLabels: false,
       clientId: client.id,
-      limit: searchQ ? 50 : 100,
+      limit: searchQ ? 50 : 25,
       search: searchQ || undefined,
+      statuses: searchQ ? undefined : isDeliveredTab ? TRACKING_DELIVERED_STATUSES : TRACKING_ACTIVE_STATUSES,
     })
     const clientOnlyShipments = (allFetched || []).filter((s) => s.client_id === client.id)
 
@@ -122,6 +124,7 @@ export default async function ClientTrackingPage({
           destination: destCoord,
           delivered: ["entregue", "devolvido", "entregue_pudo"].includes(s.status),
           country: isCorreos ? "" : "PT",
+          useApi: false,
         })
 
         const completedScans = pickagens.filter((p) => p.status === "completed" || p.status === "current").length

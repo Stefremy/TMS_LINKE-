@@ -3,6 +3,7 @@ import React from "react"
 import { Metadata } from "next"
 import { DeliveryTrackingClient } from "./components/DeliveryTrackingClient"
 import { getShipmentsAction } from "@/app/actions/shipments"
+import { TRACKING_ACTIVE_STATUSES, TRACKING_DELIVERED_STATUSES } from "@/lib/shipments/tracking-tabs"
 import { getClientesAction } from "@/app/actions/clientes"
 import { loadShipmentParcelSummaries } from "@/lib/services/shipments/shipment-parcel-summaries"
 import type { ParcelSummary } from "@/lib/services/shipments/parcel-summary"
@@ -54,7 +55,8 @@ export default async function OpsTrackingPage(props: {
   let realShipmentsMapped: TrackingShipment[] = []
 
   try {
-    const shipments = await getShipmentsAction({ includeLabels: false, limit: searchQ ? 50 : 100, search: searchQ || undefined })
+    const shipments = await getShipmentsAction({ includeLabels: false, limit: searchQ ? 50 : 15, search: searchQ || undefined,
+      statuses: searchQ ? undefined : isDeliveredTab ? TRACKING_DELIVERED_STATUSES : TRACKING_ACTIVE_STATUSES })
     const activeShipments = (shipments || []).filter(
       (s) => {
         // Search is applied in the database (Linke ref, carrier code, recipient).
@@ -125,6 +127,7 @@ export default async function OpsTrackingPage(props: {
           destination: destCoord,
           delivered: ["entregue", "devolvido", "entregue_pudo"].includes(s.status),
           country: isCorreos ? "" : "PT",
+          useApi: false,
         })
 
         const completedScans = pickagens.filter(p => p.status === "completed" || p.status === "current").length

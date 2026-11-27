@@ -17,7 +17,7 @@ export const SHIPMENT_LIST_COLUMNS = "id, tenant_id, client_id, tracking_number,
 /**
  * Fetches shipments from the DB shipments table without downloading heavy base64 label blobs unless requested.
  */
-export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string; search?: string } = {}): Promise<ShipmentRecord[]> {
+export async function fetchShipments(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string; search?: string; statuses?: string[] } = {}): Promise<ShipmentRecord[]> {
   const ctx = await requireUser()
   if (!ctx.tenant_id) throw new Error("Conta sem empresa associada.")
   const supabase = createAdminClient()
@@ -37,6 +37,10 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
     }
     if (options.createdAfter) {
       shipmentsQuery = shipmentsQuery.gte("created_at", options.createdAfter)
+    }
+    // Filter before the limit, otherwise older rows of the wanted status are cut off.
+    if (options.statuses?.length) {
+      shipmentsQuery = shipmentsQuery.in("status", options.statuses)
     }
     // Search in the database (not over the latest N rows) across Linke and carrier references.
     // PostgREST filter syntax characters are stripped so user input cannot alter the filter.
@@ -93,6 +97,7 @@ export async function fetchShipments(options: { includeLabels?: boolean; limit?:
 import { getCttShipmentLabels } from "@/lib/services/ctt/shipment-label"
 import { combineCarrierLabels } from "@/lib/services/shipments/label-bundle"
 import { applyLinkeLogoToCttLabel } from "@/lib/services/ctt/ctt-label-customizer"
+import { clientCanPrintLabel } from "@/lib/shipments/label-access"
 
 /** Retrieve only saved official carrier labels, never create another shipment or a substitute label. */
 export async function fetchShipmentLabel(identifier: string): Promise<string | null> {
@@ -107,7 +112,8 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
     if (ctx.role === "client") query = query.eq("client_id", ctx.client_id)
     query = isValidUuid(cleanId) ? query.eq("id", cleanId)
       : query.or(`tracking_number.eq.${cleanId},carrier_tracking_number.eq.${cleanId}`)
-    const { data: shipment } = await query.limit(1).maybeSingle()
+    const { data: shipment, error: shipmentError } = await query.limit(1).maybeSingle()
+    if (shipmentError && ctx.role === "client") return null
     let snapshot: ShipmentRecord | null = null
     const fields = shipment || isValidUuid(cleanId) ? ["id"] : ["carrier_tracking_number", "ctt_object_id", "tracking_number"]
     for (const field of fields) {
@@ -122,6 +128,18 @@ export async function fetchShipmentLabel(identifier: string): Promise<string | n
     if (!saved) return null
     // Envios anulados: ninguém (cliente ou operação) pode voltar a imprimir/descarregar etiquetas.
     if (["anulado", "cancelado"].includes(shipment?.status || "")) return null
+    let status: string | null | undefined = shipment?.status
+    // Found only through its saved snapshot: the live status still decides, never the snapshot's old one.
+    if (!shipment) {
+      const live = isValidUuid(String(saved.id || ""))
+        ? await supabase.from("shipments").select("status").eq("tenant_id", ctx.tenant_id).eq("id", saved.id).maybeSingle()
+        : null
+      if (live?.error) return null
+      status = live?.data?.status ?? saved.status
+    }
+    // Delivered labels are deleted by the database; refuse any leftover copy too.
+    if (status === "entregue") return null
+    if (ctx.role === "client" && !clientCanPrintLabel(status)) return null
     const rawOutputs = saved.rawResponse?.ShipmentData || []
     const storedLabels = saved.carrier_labels?.length ? saved.carrier_labels : rawOutputs.flatMap(getCttShipmentLabels)
     let label = saved.ctt_label_base64 || saved.carrier_label_base64 || saved.labelBase64 ||

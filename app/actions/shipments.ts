@@ -47,7 +47,7 @@ function generateLinkeTrackingNumber() {
   return `LTK${randomInt(1_000_000, 10_000_000)}`
 }
 
-export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string; search?: string } = {}): Promise<ShipmentRecord[]> {
+export async function getShipmentsAction(options: { includeLabels?: boolean; limit?: number; createdAfter?: string; clientId?: string; search?: string; statuses?: string[] } = {}): Promise<ShipmentRecord[]> {
   return fetchShipments(options)
 }
 

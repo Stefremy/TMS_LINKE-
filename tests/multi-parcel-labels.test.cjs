@@ -104,7 +104,7 @@ test('CTT provider returns all parcel labels across shipment outputs, preserving
 test('authorized reprints recover every retained CTT label even when an older cache contains only the first page',async()=>{
  const files=await Promise.all([1,2,3].map(n=>fixture(n)))
  const id='22222222-2222-4222-8222-222222222222'
- const db=fakeSupabase({shipments:[{id,tenant_id:'tenant',client_id:'own-client',carrier_code:'ctt'}],audit_log:[{
+ const db=fakeSupabase({shipments:[{id,tenant_id:'tenant',client_id:'own-client',carrier_code:'ctt',status:'pendente'}],audit_log:[{
   tenant_id:'tenant',action:'shipment_data',details:{id,client_id:'own-client',carrier_code:'ctt',ctt_label_base64:files[0],
    rawResponse:{ShipmentData:[{LabelList:files.map((Label,n)=>({FileName:`label-${n}.pdf`,Label}))}]}}}]})
  const api=createLoader({'pdf-lib':pdfLib,'@/lib/supabase/server':{createAdminClient:()=>db.client},

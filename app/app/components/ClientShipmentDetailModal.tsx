@@ -1,4 +1,5 @@
 "use client"
+import { clientCanPrintLabel, CLIENT_LABEL_LOCKED_MESSAGE } from "@/lib/shipments/label-access"
 import { toast } from "sonner"
 import { confirmAction } from "@/components/ui/confirm-dialog"
 import { useDialogA11y } from "@/components/ui/use-dialog-a11y"
@@ -64,12 +65,15 @@ interface ClientShipmentDetailModalProps {
   shipment: ShipmentRecord | null
   onClose: () => void
   onUpdateShipment?: (updated: ShipmentRecord) => void
+  /** Client portal: printing is locked after the first status update. Ops keeps printing until delivery. */
+  clientView?: boolean
 }
 
 export function ClientShipmentDetailModal({ 
   shipment, 
   onClose, 
-  onUpdateShipment 
+  onUpdateShipment,
+  clientView = false
 }: ClientShipmentDetailModalProps) {
   // Outside the client portal (Ops) there is no store scope: fall back to the Ops tracking page.
   const basePath = useOptionalClientScope()?.basePath ?? "/ops"
@@ -167,6 +171,9 @@ setTimelineEvents(data || [])
     return rawLabel
   }
 
+  const labelLock = currentShipment?.status === "entregue" ? "Envio entregue: a etiqueta foi eliminada."
+    : clientView && !clientCanPrintLabel(currentShipment?.status) ? CLIENT_LABEL_LOCKED_MESSAGE : ""
+
   const fetchLabelForShipment = async (): Promise<string | null> => {
     const rawLabel = await fetchOfficialShipmentLabel(currentShipment, getShipmentLabelAction, [carrierTracking, tracking])
     return resolveLabel(rawLabel)
@@ -175,6 +182,7 @@ setTimelineEvents(data || [])
   // 1. Imprimir Etiqueta
   const printLabel = async () => {
     if (["anulado", "cancelado"].includes(currentShipment?.status || "")) { toast.error("Este envio foi anulado. Já não é possível imprimir a etiqueta."); return }
+    if (labelLock) { toast.error(labelLock); return }
     const label = await fetchLabelForShipment()
     if (label) {
       printCttLabel(label)
@@ -186,6 +194,7 @@ setTimelineEvents(data || [])
   // 2. Descarregar Etiqueta PDF
   const downloadLabel = async () => {
     if (["anulado", "cancelado"].includes(currentShipment?.status || "")) { toast.error("Este envio foi anulado. Já não é possível imprimir a etiqueta."); return }
+    if (labelLock) { toast.error(labelLock); return }
     const label = await fetchLabelForShipment()
     if (label) {
       const carrier = (currentShipment?.carrier_code || currentShipment?.service_type || currentShipment?.servico || "").toLowerCase().includes("correos")
@@ -417,8 +426,8 @@ setTimelineEvents(data || [])
             <button
               type="button"
               onClick={printLabel}
-              disabled={["anulado", "cancelado"].includes(currentShipment?.status || "")}
-              className="px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              disabled={Boolean(labelLock) || ["anulado", "cancelado"].includes(currentShipment?.status || "")}
+              className="disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none px-3 py-1.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Imprimir etiqueta em nova janela"
             >
               <Printer className="w-3.5 h-3.5" />
@@ -428,8 +437,8 @@ setTimelineEvents(data || [])
             <button
               type="button"
               onClick={downloadLabel}
-              disabled={["anulado", "cancelado"].includes(currentShipment?.status || "")}
-              className="px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              disabled={Boolean(labelLock) || ["anulado", "cancelado"].includes(currentShipment?.status || "")}
+              className="disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none px-3 py-1.5 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Descarregar etiqueta em PDF"
             >
               <Download className="w-3.5 h-3.5 text-[var(--text-tertiary)]" />
@@ -980,8 +989,8 @@ setTimelineEvents(data || [])
             <button
               type="button"
               onClick={printLabel}
-              disabled={["anulado", "cancelado"].includes(currentShipment?.status || "")}
-              className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              disabled={Boolean(labelLock) || ["anulado", "cancelado"].includes(currentShipment?.status || "")}
+              className="disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-md text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Imprimir Etiqueta</span>
@@ -990,8 +999,8 @@ setTimelineEvents(data || [])
             <button
               type="button"
               onClick={downloadLabel}
-              disabled={["anulado", "cancelado"].includes(currentShipment?.status || "")}
-              className="px-4 py-2 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              disabled={Boolean(labelLock) || ["anulado", "cancelado"].includes(currentShipment?.status || "")}
+              className="disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none px-4 py-2 bg-[var(--surface-bg)] border border-[var(--border-strong)] hover:bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-md text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
             >
               <Download className="w-3.5 h-3.5 text-[var(--accent)]" />
               <span>Descarregar PDF</span>

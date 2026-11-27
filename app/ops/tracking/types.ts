@@ -17,6 +17,8 @@ export interface ShipmentPickagem {
   scannerDevice?: string
   description?: string
   isCurrentPosition?: boolean
+  /** Place still to be located on the map after the page opens (external lookup is slow). */
+  geocode?: { city: string; country: string }
 }
 
 export interface ShipmentDocumentation {
